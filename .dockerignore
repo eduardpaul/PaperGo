@@ -1,0 +1,7 @@
+.git
+.tools
+.cache
+.env
+data
+bin
+coverage.out

@@ -1,0 +1,142 @@
+package dms
+
+import (
+	"context"
+	entsql "entgo.io/ent/dialect/sql"
+	"papergo/ent"
+	"papergo/ent/resource"
+	"strings"
+)
+
+const MaxDepth = 32
+
+func impliedActions(action string) []string {
+	switch action {
+	case "read":
+		return []string{"read", "read_draft", "write", "publish", "manage"}
+	case "read_draft":
+		return []string{"read_draft", "write", "publish", "manage"}
+	case "write":
+		return []string{"write", "manage"}
+	case "publish":
+		return []string{"publish", "manage"}
+	default:
+		return []string{action}
+	}
+}
+
+// This SQL is isolated so a future database adapter can replace it. Additive
+// grants apply at the nearest exclusive scope; inherited resources have no ACL.
+func permissionSQL(idColumn, subject, action string) (string, []any) {
+	actions := impliedActions(action)
+	args := []any{subject}
+	marks := make([]string, len(actions))
+	for i, a := range actions {
+		marks[i] = "?"
+		args = append(args, a)
+	}
+	query := `EXISTS (WITH RECURSIVE acl(id,parent_id,inherit_permissions,depth) AS (
+ SELECT root.id,root.parent_id,root.inherit_permissions,0 FROM resources root WHERE root.id=` + idColumn + `
+ UNION ALL SELECT p.id,p.parent_id,p.inherit_permissions,a.depth+1
+ FROM resources p JOIN acl a ON p.id=a.parent_id WHERE a.inherit_permissions AND a.depth<32
+ ) SELECT 1 FROM acl a JOIN grants g ON g.resource_id=a.id
+ WHERE NOT a.inherit_permissions AND g.subject=? AND g.effect='allow' AND g.action IN (` + strings.Join(marks, ",") + `))`
+	return query, args
+}
+func permissionPredicate(subject, action string) func(*entsql.Selector) {
+	return func(sel *entsql.Selector) {
+		query, args := permissionSQL(sel.C(resource.FieldID), subject, action)
+		sel.Where(entsql.ExprP(query, args...))
+	}
+}
+func (s *Service) allowedMany(ctx context.Context, subject, action string, roots []*ent.Resource) (map[string]bool, error) {
+	out := map[string]bool{}
+	if len(roots) == 0 {
+		return out, nil
+	}
+	ids := make([]string, 0, len(roots))
+	for _, r := range roots {
+		ids = append(ids, r.ID)
+	}
+	allowed, err := s.Client.Resource.Query().Where(resource.IDIn(ids...), permissionPredicate(subject, action)).IDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range allowed {
+		out[id] = true
+	}
+	return out, nil
+}
+func (s *Service) authorize(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
+	r, err := s.Client.Resource.Get(ctx, id)
+	if ent.IsNotFound(err) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	allowed, err := s.allowedMany(ctx, subject, action, []*ent.Resource{r})
+	if err != nil {
+		return nil, err
+	}
+	if !allowed[id] {
+		return nil, ErrForbidden
+	}
+	return r, nil
+}
+func surfaceSQL(idColumn, subject, surface string) (string, []any) {
+	if surface == "head" || surface == "published" {
+		return "'" + surface + "'", nil
+	}
+	query, args := permissionSQL(idColumn, subject, "read_draft")
+	return "CASE WHEN " + query + " THEN 'head' ELSE 'published' END", args
+}
+func visibleSQL(idColumn, subject, surface string) (string, []any) {
+	selected, args := surfaceSQL(idColumn, subject, surface)
+	query := `EXISTS (SELECT 1 FROM resources vr WHERE vr.id=` + idColumn + ` AND (vr.kind<>'item' OR EXISTS (SELECT 1 FROM item_surfaces vs WHERE vs.item_id=vr.id AND vs.surface=` + selected + `)))`
+	return query, args
+}
+func (s *Service) GetSurface(ctx context.Context, subject, id, surface string) (*ent.Resource, error) {
+	if !s.transaction {
+		return read(ctx, s, func(t *Service) (*ent.Resource, error) { return t.GetSurface(ctx, subject, id, surface) })
+	}
+	if surface == "" {
+		surface = "auto"
+	}
+	if surface != "auto" && surface != "head" && surface != "published" {
+		return nil, invalid("surface must be auto, head or published")
+	}
+	r, err := s.authorize(ctx, subject, id, "read")
+	if err != nil {
+		return nil, err
+	}
+	if r.Kind != resource.KindItem {
+		return r, nil
+	}
+	draft, err := s.allowedMany(ctx, subject, "read_draft", []*ent.Resource{r})
+	if err != nil {
+		return nil, err
+	}
+	if surface == "head" && !draft[id] {
+		return nil, ErrForbidden
+	}
+	selected := r.PublishedRevisionID
+	if surface == "head" || (surface == "auto" && draft[id]) {
+		selected = r.HeadRevisionID
+	}
+	if selected == nil {
+		return nil, ErrNotFound
+	}
+	revision, err := s.Client.ItemRevision.Get(ctx, *selected)
+	if err != nil {
+		return nil, err
+	}
+	if err = overlayRevision(r, revision); err != nil {
+		return nil, err
+	}
+	if !draft[id] || surface == "published" {
+		r.HeadRevisionID = nil
+		r.NextRevisionNumber = 0
+	}
+	return r, nil
+}
