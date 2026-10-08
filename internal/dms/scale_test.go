@@ -1,12 +1,15 @@
 package dms
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"papergo/ent/itemsurface"
 	"reflect"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestCollectionPassesSpanBatches(t *testing.T) {
@@ -147,3 +150,17 @@ func TestBrowseCandidateAndScanPathsAgree(t *testing.T) {
 }
 
 func num(i int) json.Number { return json.Number(strconv.Itoa(i)) }
+
+func TestWriterQueueHonorsCancellation(t *testing.T) {
+	s, w, _ := fixture(t)
+	s.writeMu <- struct{}{} // another writer holds the slot
+	ctx, cancel := context.WithTimeout(testContext, 50*time.Millisecond)
+	defer cancel()
+	if _, err := s.Create(ctx, "alice", w.ID, CreateResource{Kind: "list", Name: "Queued"}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("queued writer ignored its deadline", err)
+	}
+	<-s.writeMu
+	if _, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Next"}); err != nil {
+		t.Fatal("writer slot not usable after a cancelled wait", err)
+	}
+}

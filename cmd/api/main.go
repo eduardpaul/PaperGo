@@ -48,7 +48,7 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("initialize authentication: %w", err)
 	}
-	a := &httpapi.API{DMS: dms.NewService(db.Client), Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, Ready: func(ctx context.Context) error {
+	a := &httpapi.API{DMS: dms.NewService(db.Client), Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
 			return err
 		}
