@@ -4,6 +4,10 @@ Smart folders save live queries across lists and libraries. They store definitio
 
 Create a definition with `POST /v1/smart-folders`, browse with GET, and read or replace it at `/v1/smart-folders/{id}`. Optional `workspace_id` narrows browsing. Personal definitions do not appear in workspace audit feeds. Shared definition mutations are audited.
 
+Each workspace supports up to 100 shared definitions. Their mutations also advance the workspace ETag. Workspace managers can GET `/v1/workspaces/{id}/smart-folders/export` and POST `/v1/workspaces/{id}/smart-folders/import` with a current workspace `If-Match`. Both responses carry the workspace ETag. Packages contain `folders` with names, descriptions and definitions, excluding personal folders and ownership IDs. Collection names and template/content-type keys stay portable; selected terms become `term_set_key` plus a root-to-leaf `path` of term names. The target taxonomy must exist. Filter literals remain literal.
+
+Import atomically merges shared definitions by exact name, creates missing definitions, replaces changed definitions and preserves IDs. Reapplying an identical package creates no revisions, audit events or version changes. An invalid term path, duplicate name, invalid definition, quota violation or stale ETag rolls back the whole package. Import reports `created`, `updated`, `workspace_version` and the affected definitions. It leaves other definitions intact.
+
 ```json
 {
   "name": "Open invoices",

@@ -78,6 +78,20 @@ func TestSmartFolderRESTDefinitionsQueriesAndActions(t *testing.T) {
 	if response.Code != 200 {
 		t.Fatal("unclassify deleted item", response.Code)
 	}
+	// Shared definitions are portable and import is protected by the workspace ETag.
+	export := request(h, "GET", "/v1/workspaces/"+w.ID+"/smart-folders/export", "", testToken, "", "")
+	if export.Code != 200 || export.Header().Get("ETag") == "" {
+		t.Fatal(export.Code, export.Body.String())
+	}
+	importPath := "/v1/workspaces/" + w.ID + "/smart-folders/import"
+	imported := request(h, "POST", importPath, export.Body.String(), testToken, "", "application/json")
+	if imported.Code != 428 {
+		t.Fatal(imported.Code, imported.Body.String())
+	}
+	imported = request(h, "POST", importPath, export.Body.String(), testToken, export.Header().Get("ETag"), "application/json")
+	if imported.Code != 200 || imported.Header().Get("ETag") != export.Header().Get("ETag") {
+		t.Fatal(imported.Code, imported.Body.String())
+	}
 	response = request(h, "DELETE", "/v1/smart-folders/"+f.ID, "", testToken, `"1"`, "")
 	if response.Code != 204 {
 		t.Fatal(response.Code, response.Body.String())

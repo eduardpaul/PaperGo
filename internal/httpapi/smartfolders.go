@@ -6,6 +6,18 @@ import (
 )
 
 func (a *API) registerSmartFolders(m *http.ServeMux) {
+	m.HandleFunc("GET /v1/workspaces/{id}/smart-folders/export", func(w http.ResponseWriter, r *http.Request) {
+		out, version, err := a.DMS.ExportSmartFolders(r.Context(), subject(r), r.PathValue("id"))
+		if err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		etag(w, version)
+		respond(w, 200, out)
+	})
+	m.HandleFunc("POST /v1/workspaces/{id}/smart-folders/import", foundationMutation(a, 200, true, func(r *http.Request, in dms.SmartFolderPackage, v int) (any, error) {
+		return a.DMS.ImportSmartFolders(r.Context(), subject(r), r.PathValue("id"), v, in)
+	}))
 	m.HandleFunc("POST /v1/smart-folders/{id}/items", func(w http.ResponseWriter, r *http.Request) {
 		var in dms.SmartFolderDrop
 		if !a.decode(w, r, &in) {

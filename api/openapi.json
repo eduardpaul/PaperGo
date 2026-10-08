@@ -3,7 +3,7 @@
   "info": {
     "title": "PaperGo headless DMS",
     "version": "0.4.0",
-    "description": "One organization per SQLite deployment. Immutable schema/content revisions, SharePoint-style exclusive permission scopes, head/published projections, rich typed fields, reusable templates, saved queries, taxonomy, and typed relationships. Libraries with webdav_enabled are also served over WebDAV (RFC 4918 class 1 and 2) at /webdav/{libraryID}/, outside this contract; WebDAV accepts these bearer tokens or HTTP Basic with a WebDAV credential password."
+    "description": "One organization per SQLite deployment. Immutable schema/content revisions, SharePoint-style exclusive permission scopes, head/published projections, rich typed fields, reusable templates, saved queries, personal/shared smart folders with cross-collection navigation and classification, taxonomy, and typed relationships. Libraries with webdav_enabled are also served over WebDAV (RFC 4918 class 1 and 2) at /webdav/{libraryID}/, outside this contract; WebDAV accepts these bearer tokens or HTTP Basic with a WebDAV credential password."
   },
   "servers": [
     {
@@ -5904,6 +5904,107 @@
           }
         }
       ]
+    },
+    "/v1/workspaces/{id}/smart-folders/export": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "in": "path",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Portable package",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Current quoted numeric workspace version"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolderPackage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "summary": "Export portable shared definitions (workspace manage required)",
+        "operationId": "exportSmartFolders"
+      }
+    },
+    "/v1/workspaces/{id}/smart-folders/import": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "in": "path",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderPackage"
+              }
+            }
+          },
+          "required": true
+        },
+        "summary": "Atomically merge portable shared definitions (workspace manage required)",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "operationId": "importSmartFolders",
+        "responses": {
+          "200": {
+            "description": "Import result",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Current quoted numeric workspace version"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolderImportResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8264,7 +8365,7 @@
             "type": "string"
           }
         },
-        "description": "Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition.",
+        "description": "Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.",
         "additionalProperties": false,
         "type": "object",
         "required": [
@@ -8565,6 +8666,166 @@
           }
         },
         "additionalProperties": false
+      },
+      "SmartFolderTermRef": {
+        "description": "Taxonomy set key and root-to-leaf term names, resolved in the target workspace.",
+        "required": [
+          "term_set_key",
+          "path"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "maxItems": 32,
+            "minItems": 1,
+            "items": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "term_set_key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          }
+        },
+        "type": "object"
+      },
+      "PortableSmartFolderDefinition": {
+        "properties": {
+          "collections": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "terms": {
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/SmartFolderTermRef"
+            },
+            "type": "array"
+          },
+          "templates": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "filter": {
+            "$ref": "#/components/schemas/FilterExpr"
+          },
+          "group_by": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmartFolderGroupBy"
+            }
+          },
+          "term_match": {
+            "default": "all",
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ]
+          },
+          "include_folders": {
+            "type": "boolean",
+            "default": false
+          },
+          "content_types": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "description": "Portable shared definition: named selectors and term paths, with filter literals retained literally.",
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "PortableSmartFolder": {
+        "required": [
+          "name",
+          "definition"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "definition": {
+            "$ref": "#/components/schemas/PortableSmartFolderDefinition"
+          }
+        },
+        "type": "object"
+      },
+      "SmartFolderPackage": {
+        "description": "Shared definitions only; personal folders and ownership IDs are excluded. Imports merge by exact unique name, preserve IDs and leave other definitions intact. Target taxonomy must exist. Any invalid entry rolls back the entire package. Identical reapplication changes no versions or audit records.",
+        "required": [
+          "folders"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "folders": {
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/PortableSmartFolder"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SmartFolderImportResult": {
+        "required": [
+          "created",
+          "updated",
+          "workspace_version",
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmartFolder"
+            }
+          },
+          "created": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "workspace_version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "type": "object"
       }
     }
   }

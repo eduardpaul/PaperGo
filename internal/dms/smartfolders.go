@@ -14,6 +14,7 @@ import (
 
 const MaxSmartCollections = 100
 const MaxSmartGroupLevels = 3
+const MaxSharedSmartFolders = 100
 
 type SmartFolderGroupBy struct {
 	Field string `json:"field"`
@@ -173,6 +174,9 @@ func (s *Service) auditSmartFolder(ctx context.Context, subject, action string, 
 	if f.WorkspaceID == nil || f.OwnerID != nil {
 		return nil
 	}
+	if err := s.Client.Resource.UpdateOneID(*f.WorkspaceID).SetUpdatedBy(subject).AddVersion(1).Exec(ctx); err != nil {
+		return err
+	}
 	return s.audit(ctx, subject, action, &ent.Resource{ID: *f.WorkspaceID, WorkspaceID: *f.WorkspaceID}, map[string]any{"smart_folder_id": f.ID, "version": f.Version, "personal": f.OwnerID != nil})
 }
 
@@ -186,6 +190,13 @@ func (s *Service) createSmartFolder(ctx context.Context, subject string, in Smar
 	if !in.Personal {
 		if _, err := s.workspace(ctx, subject, *in.WorkspaceID, "manage"); err != nil {
 			return nil, err
+		}
+		count, err := s.Client.SmartFolder.Query().Where(smartfolder.WorkspaceIDEQ(*in.WorkspaceID), smartfolder.OwnerIDIsNil()).Count(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if count >= MaxSharedSmartFolders {
+			return nil, invalid("at most 100 shared smart folders per workspace")
 		}
 	}
 	raw, err := json.Marshal(in.Definition)
@@ -235,23 +246,28 @@ func (s *Service) UpdateSmartFolder(ctx context.Context, subject, id string, ver
 		if old.Version != version {
 			return ErrConflict
 		}
-		if (old.OwnerID != nil) != in.Personal || (old.WorkspaceID == nil) != (in.WorkspaceID == nil) || (old.WorkspaceID != nil && *old.WorkspaceID != *in.WorkspaceID) {
-			return invalid("smart folder ownership and workspace are immutable")
-		}
-		if e = t.validateSmartFolder(ctx, subject, in); e != nil {
-			return e
-		}
-		raw, e := json.Marshal(in.Definition)
-		if e != nil {
-			return e
-		}
-		out, e = t.Client.SmartFolder.UpdateOne(old).SetName(in.Name).SetDescription(in.Description).SetDefinition(raw).SetUpdatedBy(subject).AddVersion(1).Save(ctx)
-		if e != nil {
-			return e
-		}
-		return t.auditSmartFolder(ctx, subject, "smart_folder.update", out)
+		out, e = t.updateSmartFolder(ctx, subject, old, in)
+		return e
 	})
 	return
+}
+
+func (s *Service) updateSmartFolder(ctx context.Context, subject string, old *ent.SmartFolder, in SmartFolderInput) (*ent.SmartFolder, error) {
+	if (old.OwnerID != nil) != in.Personal || (old.WorkspaceID == nil) != (in.WorkspaceID == nil) || (old.WorkspaceID != nil && *old.WorkspaceID != *in.WorkspaceID) {
+		return nil, invalid("smart folder ownership and workspace are immutable")
+	}
+	if err := s.validateSmartFolder(ctx, subject, in); err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(in.Definition)
+	if err != nil {
+		return nil, err
+	}
+	out, err := s.Client.SmartFolder.UpdateOne(old).SetName(in.Name).SetDescription(in.Description).SetDefinition(raw).SetUpdatedBy(subject).AddVersion(1).Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return out, s.auditSmartFolder(ctx, subject, "smart_folder.update", out)
 }
 
 func (s *Service) DeleteSmartFolder(ctx context.Context, subject, id string, version int) error {

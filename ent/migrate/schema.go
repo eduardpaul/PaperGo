@@ -876,6 +876,11 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{TermsColumns[10], TermsColumns[0]},
 			},
+			{
+				Name:    "term_parent_id",
+				Unique:  false,
+				Columns: []*schema.Column{TermsColumns[9]},
+			},
 		},
 	}
 	// TermSetsColumns holds the columns for the "term_sets" table.

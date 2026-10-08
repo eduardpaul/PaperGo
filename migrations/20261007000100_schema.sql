@@ -162,6 +162,7 @@ CREATE UNIQUE INDEX schematemplate_workspace_id_key ON schema_templates(workspac
 CREATE UNIQUE INDEX termset_workspace_id_key ON term_sets(workspace_id,key);
 CREATE UNIQUE INDEX term_term_set_id_normalized_name ON terms(term_set_id,normalized_name);
 CREATE INDEX term_term_set_id_id ON terms(term_set_id,id);
+CREATE INDEX term_parent_id ON terms(parent_id);
 CREATE UNIQUE INDEX listview_container_id_name ON list_views(container_id,name);
 CREATE INDEX listview_container_id_id ON list_views(container_id,id);
 CREATE UNIQUE INDEX listview_one_default ON list_views(container_id) WHERE is_default=1;
