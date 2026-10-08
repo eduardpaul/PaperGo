@@ -142,6 +142,8 @@ Success returns HTTP 200 with `{"data":[{"action":"create","id":"NEW_ITEM_ID","v
 
 Operation failures return the usual problem status/code (for example 403, 404, 409, or 422) plus a zero-based `operation_index`; no partial results are returned. Invalid batch size and collection-level failures have no operation index. Unknown JSON fields and malformed bodies return 400. A rejected batch leaves no changes and can be corrected and resubmitted. Bulk requests do not deduplicate retries: a successful create submitted again creates another item, while repeating an existing-item mutation with its old version conflicts.
 
+Run `go test ./internal/dms -run '^$' -bench BenchmarkItemUpdates -benchmem` to compare individual and bulk updates at 1, 10, and 100 items per workload. The benchmark uses indexed exact integers, automatic publication, retained revisions, and the actual SQLite schema; it reports items per second and allocations, excluding fixture setup.
+
 ## Controlled taxonomy
 
 | Method | Route | Purpose |

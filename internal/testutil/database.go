@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func Database(t *testing.T) *database.Database {
+func Database(t testing.TB) *database.Database {
 	t.Helper()
 	db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -29,7 +29,7 @@ func Database(t *testing.T) *database.Database {
 	return db
 }
 
-func MigrationFiles(t *testing.T) []migrate.File {
+func MigrationFiles(t testing.TB) []migrate.File {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
 	dir, err := migrate.NewLocalDir(filepath.Join(filepath.Dir(file), "..", "..", "migrations"))
