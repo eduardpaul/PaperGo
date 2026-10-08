@@ -3,10 +3,12 @@ package dms
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"papergo/ent"
 	"papergo/ent/businesskey"
 	"papergo/ent/fieldvalue"
 	"papergo/internal/model"
+	"sync"
 	"testing"
 )
 
@@ -254,4 +256,87 @@ func TestTemplatesTargetContentTypeAndRules(t *testing.T) {
 	create(t, s, l.ID, "item", "Plain", nil)
 	bulkFails(t, s, "alice", l.ID, 0, nil, BulkOperation{Action: "create", Create: &BulkCreate{Name: "Backwards", ContentTypeID: typ.ID, Values: map[string]any{"start": "2026-10-08", "end": "2026-10-07"}}})
 	bulkOK(t, s, "alice", l.ID, BulkOperation{Action: "create", Create: &BulkCreate{Name: "Event", ContentTypeID: typ.ID, Values: map[string]any{"start": "2026-10-08", "end": "2026-10-09"}}})
+}
+
+func TestConcurrentBulkUniqueKeysHaveOneWholeBatchWinner(t *testing.T) {
+	s, _, l := fixture(t)
+	fieldOK(t, s, l.ID, CreateField{Key: "code", Label: "Code", Type: "text", Indexed: true, Options: model.FieldOptions{Unique: true}})
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			_, errs[i] = s.Bulk(testContext, "alice", l.ID, BulkRequest{Operations: []BulkOperation{
+				{Action: "create", Create: &BulkCreate{Name: fmt.Sprintf("Writer %d", i), Values: map[string]any{"code": fmt.Sprintf("own-%d", i)}}},
+				{Action: "create", Create: &BulkCreate{Name: "Shared", Values: map[string]any{"code": "same"}}},
+			}})
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	winners := 0
+	for _, err := range errs {
+		if err == nil {
+			winners++
+		} else {
+			var failure *BulkError
+			if !errors.As(err, &failure) || failure.Index != 1 || !errors.Is(err, ErrConflict) {
+				t.Fatal(err)
+			}
+		}
+	}
+	count, err := s.Client.BusinessKey.Query().Where(businesskey.ContainerIDEQ(l.ID)).Count(testContext)
+	if err != nil || count != 2 || winners != 1 {
+		t.Fatal("partial batch claims", count, winners, err)
+	}
+	got, err := s.Query(testContext, "alice", l.ID, QueryRequest{})
+	if err != nil || got.Total != 2 {
+		t.Fatal(got, err)
+	}
+}
+
+func TestUniqueKeyRebuildAcrossBatchesAndInsertChunks(t *testing.T) {
+	s, _, l := fixture(t)
+	fields := []*ent.FieldDefinition{}
+	for i := 0; i < 6; i++ {
+		key := fmt.Sprintf("key_%d", i)
+		fields = append(fields, fieldOK(t, s, l.ID, CreateField{Key: key, Label: key, Type: "text", Indexed: true, Options: model.FieldOptions{Unique: i != 0}}))
+	}
+	ops := []BulkOperation{}
+	for i := 0; i < 100; i++ {
+		values := map[string]any{}
+		for _, d := range fields {
+			values[d.Key] = fmt.Sprintf("value-%d", i)
+		}
+		ops = append(ops, BulkOperation{Action: "create", Create: &BulkCreate{Name: fmt.Sprintf("Item %d", i), Values: values}})
+	}
+	items := bulkOK(t, s, "alice", l.ID, ops...)
+	ops = nil
+	for _, item := range items {
+		ops = append(ops, BulkOperation{Action: "publish", ID: item.ID, Version: item.Version})
+	}
+	bulkOK(t, s, "alice", l.ID, ops...)
+	// Force multiple read batches while each batch produces >500 inserts.
+	previous := surfaceBatch
+	surfaceBatch = 90
+	defer func() { surfaceBatch = previous }()
+	options := model.FieldOptions{Unique: true}
+	if _, err := s.UpdateField(testContext, "alice", l.ID, fields[0].ID, latest(t, s, l.ID).Version, UpdateField{Options: &options}); err != nil {
+		t.Fatal(err)
+	}
+	count, err := s.Client.BusinessKey.Query().Where(businesskey.ContainerIDEQ(l.ID)).Count(testContext)
+	if err != nil || count != 600 {
+		t.Fatal("rebuild/dedup", count, err)
+	}
+	options.Unique = false
+	if _, err = s.UpdateField(testContext, "alice", l.ID, fields[0].ID, latest(t, s, l.ID).Version, UpdateField{Options: &options}); err != nil {
+		t.Fatal(err)
+	}
+	count, err = s.Client.BusinessKey.Query().Where(businesskey.ContainerIDEQ(l.ID)).Count(testContext)
+	if err != nil || count != 500 {
+		t.Fatal("cleared claim policy", count, err)
+	}
 }

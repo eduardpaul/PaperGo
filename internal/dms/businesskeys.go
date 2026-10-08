@@ -21,11 +21,8 @@ func (s *Service) syncBusinessKeys(ctx context.Context, r *ent.Resource) error {
 }
 
 func (s *Service) claimBusinessKeys(ctx context.Context, item, collection string, defs []*ent.FieldDefinition) error {
-	unique := false
-	for _, d := range defs {
-		unique = unique || d.Options.Unique
-	}
-	if !unique {
+	defs = uniqueDefinitions(defs)
+	if len(defs) == 0 {
 		return nil
 	}
 	if _, err := s.Client.BusinessKey.Delete().Where(businesskey.ItemIDEQ(item)).Exec(ctx); err != nil {
@@ -35,35 +32,52 @@ func (s *Service) claimBusinessKeys(ctx context.Context, item, collection string
 	if err != nil {
 		return err
 	}
+	rows, err := s.businessKeyRows(collection, surfaces, defs)
+	if err != nil {
+		return err
+	}
+	return s.Client.BusinessKey.CreateBulk(rows...).Exec(ctx)
+}
+
+func uniqueDefinitions(defs []*ent.FieldDefinition) []*ent.FieldDefinition {
+	out := []*ent.FieldDefinition{}
+	for _, d := range defs {
+		if d.Options.Unique {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+func (s *Service) businessKeyRows(collection string, surfaces []*ent.ItemSurface, defs []*ent.FieldDefinition) ([]*ent.BusinessKeyCreate, error) {
 	seen := map[string]bool{}
+	rows := []*ent.BusinessKeyCreate{}
 	for _, surface := range surfaces {
 		values, err := decodeValues(surface.Payload)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, d := range defs {
-			if !d.Options.Unique || values[d.Key] == nil {
+			if values[d.Key] == nil {
 				continue
 			}
 			value, err := queryValue(d, values[d.Key])
 			if err != nil {
-				return err
+				return nil, err
 			}
 			raw, err := json.Marshal(value)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			key := d.Key + "\x00" + string(raw)
+			key := surface.ItemID + "\x00" + d.Key + "\x00" + string(raw)
 			if seen[key] {
 				continue
 			}
 			seen[key] = true
-			if _, err := s.Client.BusinessKey.Create().SetContainerID(collection).SetItemID(item).SetFieldKey(d.Key).SetValue(string(raw)).Save(ctx); err != nil {
-				return err
-			}
+			rows = append(rows, s.Client.BusinessKey.Create().SetContainerID(collection).SetItemID(surface.ItemID).SetFieldKey(d.Key).SetValue(string(raw)))
 		}
 	}
-	return nil
+	return rows, nil
 }
 
 func (s *Service) rebuildBusinessKeys(ctx context.Context, collection string) error {
@@ -74,15 +88,48 @@ func (s *Service) rebuildBusinessKeys(ctx context.Context, collection string) er
 	if _, err = s.Client.BusinessKey.Delete().Where(businesskey.ContainerIDEQ(collection)).Exec(ctx); err != nil {
 		return err
 	}
+	defs = uniqueDefinitions(defs)
+	if len(defs) == 0 {
+		return nil
+	}
 	for after := ""; ; {
 		items, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil(), resource.IDGT(after)).Order(ent.Asc(resource.FieldID)).Select(resource.FieldID).Limit(surfaceBatch).All(ctx)
 		if err != nil {
 			return err
 		}
+		if len(items) == 0 {
+			return nil
+		}
+		ids := make([]string, len(items))
+		for i, item := range items {
+			ids[i] = item.ID
+		}
+		surfaces, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDIn(ids...)).All(ctx)
+		if err != nil {
+			return err
+		}
+		byItem := map[string][]*ent.ItemSurface{}
+		for _, surface := range surfaces {
+			byItem[surface.ItemID] = append(byItem[surface.ItemID], surface)
+		}
+		// Decode at most one item's two surfaces at a time and flush bounded
+		// inserts. Rebuilding never issues a query or delete per item.
+		rows := []*ent.BusinessKeyCreate{}
 		for _, item := range items {
-			if err := s.claimBusinessKeys(ctx, item.ID, collection, defs); err != nil {
+			built, err := s.businessKeyRows(collection, byItem[item.ID], defs)
+			if err != nil {
 				return err
 			}
+			rows = append(rows, built...)
+			for len(rows) >= 500 {
+				if err := s.Client.BusinessKey.CreateBulk(rows[:500]...).Exec(ctx); err != nil {
+					return err
+				}
+				rows = rows[500:]
+			}
+		}
+		if err := s.Client.BusinessKey.CreateBulk(rows...).Exec(ctx); err != nil {
+			return err
 		}
 		if len(items) < surfaceBatch {
 			return nil
