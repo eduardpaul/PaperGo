@@ -5195,6 +5195,75 @@
           }
         }
       }
+    },
+    "/v1/resources/{id}/bulk": {
+      "post": {
+        "summary": "Apply an atomic batch of item operations",
+        "operationId": "bulkItems",
+        "description": "1..100 item creates, updates/moves, publishes, unpublishes or deletes in one list/library and one transaction. Requires collection read and per-operation write/publish permissions. Existing items require a positive current version in the body and may occur only once. No collection If-Match is required. Folder operations and blob transfers are excluded. Create parent_id defaults to the collection; all targets and destinations stay in it. All revisions, projections, relationships and audit effects roll back on any failure, which reports operation_index when applicable. No retry deduplication. Request body limit: 1 MiB.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "All operations committed. Compact results follow request order; no collection ETag.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5238,6 +5307,11 @@
           },
           "request_id": {
             "type": "string"
+          },
+          "operation_index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Zero-based failing operation index for bulk item errors. Omitted for batch-wide errors."
           }
         },
         "required": [
@@ -6846,6 +6920,257 @@
           "data"
         ],
         "additionalProperties": false
+      },
+      "BulkCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "BulkUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "parent_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Destination collection or folder in the same collection."
+          }
+        }
+      },
+      "BulkOperation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "type": "string",
+                "const": "create"
+              },
+              "create": {
+                "$ref": "#/components/schemas/BulkCreate"
+              },
+              "parent_id": {
+                "type": "string",
+                "description": "Existing folder in this collection. Defaults to the collection."
+              }
+            },
+            "required": [
+              "action",
+              "create"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "type": "string",
+                "const": "update"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Item in this collection. Each existing item may occur only once."
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Current resource lock version; stale versions roll back the entire batch."
+              },
+              "update": {
+                "$ref": "#/components/schemas/BulkUpdate"
+              }
+            },
+            "required": [
+              "action",
+              "id",
+              "version",
+              "update"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "type": "string",
+                "const": "publish"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Item in this collection. Each existing item may occur only once."
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Current resource lock version; stale versions roll back the entire batch."
+              }
+            },
+            "required": [
+              "action",
+              "id",
+              "version"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "type": "string",
+                "const": "unpublish"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Item in this collection. Each existing item may occur only once."
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Current resource lock version; stale versions roll back the entire batch."
+              }
+            },
+            "required": [
+              "action",
+              "id",
+              "version"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "type": "string",
+                "const": "delete"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Item in this collection. Each existing item may occur only once."
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Current resource lock version; stale versions roll back the entire batch."
+              }
+            },
+            "required": [
+              "action",
+              "id",
+              "version"
+            ]
+          }
+        ]
+      },
+      "BulkRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operations"
+        ],
+        "properties": {
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/BulkOperation"
+            }
+          }
+        }
+      },
+      "BulkResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "id",
+          "version"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "update",
+              "publish",
+              "unpublish",
+              "delete"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Committed resource lock version, including the tombstone version for deletes."
+          }
+        }
+      },
+      "BulkResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/BulkResult"
+            }
+          }
+        }
       }
     }
   }

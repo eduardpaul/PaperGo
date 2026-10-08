@@ -59,6 +59,9 @@ func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFun
 	}
 }
 func (a *API) registerFoundation(m *http.ServeMux) {
+	m.HandleFunc("POST /v1/resources/{id}/bulk", foundationMutation(a, 200, false, func(r *http.Request, in dms.BulkRequest, v int) (any, error) {
+		return a.DMS.Bulk(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
 	m.HandleFunc("GET /v1/workspaces/{id}/templates", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.Templates(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	}))

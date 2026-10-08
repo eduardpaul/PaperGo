@@ -108,6 +108,40 @@ A view stores name, columns, query, layout (table/board/calendar/gallery), and i
 
 View management requires collection manage permission. Reading and execution require read, and saved configuration grants no access to content. PUT and DELETE use the view's ETag. View execution accepts only surface, after, and limit; the stored query controls filtering and sorting.
 
+## Bulk item operations
+
+POST `/v1/resources/{collectionID}/bulk` applies 1..100 operations to items in one list or library. The request body is limited to 1 MiB. All operations execute in request order under one writer acquisition and one transaction; any failure rolls back resources, revisions, publication events, relationships, projections, and audit events together. Collection read access is required, followed by the same per-item permissions and validation as individual mutations.
+
+```json
+{
+  "operations": [
+    {
+      "action": "create",
+      "create": {"name": "New invoice", "values": {"amount": "125.00"}}
+    },
+    {
+      "action": "update",
+      "id": "ITEM_ID",
+      "version": 3,
+      "update": {"tags": ["reviewed"], "parent_id": "FOLDER_ID"}
+    },
+    {"action": "publish", "id": "ANOTHER_ITEM_ID", "version": 2}
+  ]
+}
+```
+
+Actions:
+
+- `create`: requires `create` with name and optional tags/values. Optional top-level `parent_id` chooses an existing folder in the collection; omission creates directly in the collection. Defaults and automatic publication follow collection settings. Library items start without a blob, uploaded through the content endpoint.
+- `update`: requires id, positive current resource version, and `update` with name, tags, values, or parent_id. Values replace the complete custom-value object; moves stay within the collection. Collection settings cannot be changed through bulk operations.
+- `publish`, `unpublish`, `delete`: require id and positive current resource version, with no create/update payload. Explicit publication still requires an enabled publication policy and, for library items, an attached blob.
+
+Each existing item may appear only once in a request. Targets must be items, so folders and their potentially unbounded descendants are excluded. Newly created items cannot be referenced by later operations in the same request. Submit larger workloads as separate batches; each batch commits independently.
+
+Success returns HTTP 200 with `{"data":[{"action":"create","id":"NEW_ITEM_ID","version":1},...]}` in request order. Existing-item operations return the consumed version plus one, including deletes. Results omit content payloads. There is no response ETag or collection-level If-Match: each existing-item operation supplies its own numeric `version`.
+
+Operation failures return the usual problem status/code (for example 403, 404, 409, or 422) plus a zero-based `operation_index`; no partial results are returned. Invalid batch size and collection-level failures have no operation index. Unknown JSON fields and malformed bodies return 400. A rejected batch leaves no changes and can be corrected and resubmitted. Bulk requests do not deduplicate retries: a successful create submitted again creates another item, while repeating an existing-item mutation with its old version conflicts.
+
 ## Controlled taxonomy
 
 | Method | Route | Purpose |

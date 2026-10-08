@@ -160,32 +160,44 @@ func respond(w http.ResponseWriter, status int, body any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }
-func (a *API) problem(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+func (a *API) problem(w http.ResponseWriter, r *http.Request, status int, code, message string, operationIndex ...int) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	id, _ := r.Context().Value(requestKey{}).(string)
-	_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "detail": message, "request_id": id})
+	body := map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "detail": message, "request_id": id}
+	if len(operationIndex) > 0 {
+		body["operation_index"] = operationIndex[0]
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }
 func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
+	var bulk *dms.BulkError
+	var operationIndex []int
+	if errors.As(err, &bulk) {
+		operationIndex = []int{bulk.Index}
+	}
+	problem := func(status int, code, message string) {
+		a.problem(w, r, status, code, message, operationIndex...)
+	}
 	var validation *dms.ValidationError
 	var max *http.MaxBytesError
 	switch {
 	case errors.As(err, &validation):
-		a.problem(w, r, 422, "validation_failed", validation.Error())
+		problem(422, "validation_failed", validation.Error())
 	case errors.Is(err, dms.ErrNotFound):
-		a.problem(w, r, 404, "not_found", "resource not found")
+		problem(404, "not_found", "resource not found")
 	case errors.Is(err, dms.ErrForbidden):
-		a.problem(w, r, 403, "forbidden", "access denied")
+		problem(403, "forbidden", "access denied")
 	case errors.Is(err, dms.ErrConflict):
-		a.problem(w, r, 409, "conflict", "version conflict or duplicate")
+		problem(409, "conflict", "version conflict or duplicate")
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &max):
-		a.problem(w, r, 413, "payload_too_large", "request body exceeds size limit")
+		problem(413, "payload_too_large", "request body exceeds size limit")
 	case errors.Is(err, context.DeadlineExceeded) && errors.Is(r.Context().Err(), context.DeadlineExceeded):
 		w.Header().Set("Retry-After", "1")
-		a.problem(w, r, 503, "timeout", "request exceeded the server time limit")
+		problem(503, "timeout", "request exceeded the server time limit")
 	default:
 		a.Logger.ErrorContext(r.Context(), "request failed", "error", err, "request_id", r.Context().Value(requestKey{}))
-		a.problem(w, r, 500, "internal_error", "request could not be completed")
+		problem(500, "internal_error", "request could not be completed")
 	}
 }
 func (a *API) decode(w http.ResponseWriter, r *http.Request, dst any) bool {
