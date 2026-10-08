@@ -10,17 +10,17 @@ import (
 	"strings"
 )
 
+// Every relationship has a type; its name, direction, attributes and
+// cardinality all come from that type.
 type CreateRelationship struct {
-	TypeID      string         `json:"type_id,omitempty"`
-	TargetID    string         `json:"target_id"`
-	Name        string         `json:"name"`
-	InverseName string         `json:"inverse_name,omitempty"`
-	Metadata    map[string]any `json:"metadata"`
+	TypeID   string         `json:"type_id"`
+	TargetID string         `json:"target_id"`
+	Metadata map[string]any `json:"metadata"`
 }
 
 func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateRelationship) (out *ent.Relationship, err error) {
-	if in.TypeID == "" && (!fieldKey.MatchString(in.Name) || (in.InverseName != "" && !fieldKey.MatchString(in.InverseName))) {
-		return nil, invalid("relationship names must match [a-z][a-z0-9_]{0,63}")
+	if in.TypeID == "" {
+		return nil, invalid("type_id is required")
 	}
 	if sourceID == in.TargetID {
 		return nil, invalid("self relationships are not supported")
@@ -47,54 +47,42 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 		if source.WorkspaceID != target.WorkspaceID {
 			return invalid("relationships must remain within one workspace")
 		}
+		typ, e := t.Client.RelationshipType.Get(ctx, in.TypeID)
+		if ent.IsNotFound(e) {
+			return invalid("unknown relationship type")
+		}
+		if e != nil {
+			return e
+		}
+		if typ.WorkspaceID != source.WorkspaceID {
+			return invalid("relationship type belongs to another workspace")
+		}
+		if e = normalizeMetadata(typ.Attributes, in.Metadata); e != nil {
+			return e
+		}
 		sourceKey, targetKey := sourceID, in.TargetID
-		directed := true
-		if in.TypeID != "" {
-			typ, e := t.Client.RelationshipType.Get(ctx, in.TypeID)
-			if ent.IsNotFound(e) {
-				return invalid("unknown relationship type")
+		if !typ.Directed && sourceKey > targetKey {
+			sourceKey, targetKey = targetKey, sourceKey
+		}
+		for i, max := range []*int{typ.MaxOutgoing, typ.MaxIncoming} {
+			if max == nil {
+				continue
 			}
+			q := t.Client.Relationship.Query().Where(relationship.TypeIDEQ(typ.ID))
+			if i == 0 {
+				q.Where(relationship.SourceIDEQ(sourceKey))
+			} else {
+				q.Where(relationship.TargetIDEQ(targetKey))
+			}
+			n, e := q.Count(ctx)
 			if e != nil {
 				return e
 			}
-			if typ.WorkspaceID != source.WorkspaceID {
-				return invalid("relationship type belongs to another workspace")
-			}
-			if (in.Name != "" && in.Name != typ.Key) || in.InverseName != "" {
-				return invalid("typed relationships derive their name from the type")
-			}
-			in.Name = typ.Key
-			directed = typ.Directed
-			if e = normalizeMetadata(typ.Attributes, in.Metadata); e != nil {
-				return e
-			}
-			if !directed && sourceKey > targetKey {
-				sourceKey, targetKey = targetKey, sourceKey
-			}
-			for i, max := range []*int{typ.MaxOutgoing, typ.MaxIncoming} {
-				if max == nil {
-					continue
-				}
-				q := t.Client.Relationship.Query().Where(relationship.TypeIDEQ(typ.ID))
-				if i == 0 {
-					q.Where(relationship.SourceIDEQ(sourceKey))
-				} else {
-					q.Where(relationship.TargetIDEQ(targetKey))
-				}
-				n, e := q.Count(ctx)
-				if e != nil {
-					return e
-				}
-				if n >= *max {
-					return ErrConflict
-				}
+			if n >= *max {
+				return ErrConflict
 			}
 		}
-		builder := t.Client.Relationship.Create().SetWorkspaceID(source.WorkspaceID).SetSourceID(sourceKey).SetTargetID(targetKey).SetName(in.Name).SetInverseName(in.InverseName).SetMetadata(in.Metadata).SetDirected(directed)
-		if in.TypeID != "" {
-			builder.SetTypeID(in.TypeID)
-		}
-		out, e = builder.Save(ctx)
+		out, e = t.Client.Relationship.Create().SetWorkspaceID(source.WorkspaceID).SetSourceID(sourceKey).SetTargetID(targetKey).SetTypeID(typ.ID).SetName(typ.Key).SetMetadata(in.Metadata).SetDirected(typ.Directed).Save(ctx)
 		if e != nil {
 			return e
 		}
@@ -121,7 +109,7 @@ func (s *Service) Relationships(ctx context.Context, subject, itemID, direction,
 	case "incoming":
 		q.Where(relationship.Or(relationship.TargetIDEQ(itemID), relationship.And(relationship.DirectedEQ(false), relationship.SourceIDEQ(itemID))))
 		if name != "" {
-			q.Where(relationship.Or(relationship.NameEQ(name), relationship.InverseNameEQ(name)))
+			q.Where(relationship.NameEQ(name))
 		}
 	default:
 		return Page[*ent.Relationship]{}, invalid("direction must be outgoing or incoming")

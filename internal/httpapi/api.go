@@ -24,6 +24,9 @@ type API struct {
 	Logger    *slog.Logger
 	Ready     func(context.Context) error
 	MaxUpload int64
+	// MaxInFlight and RequestTimeout bound API work; zero disables each.
+	MaxInFlight    int
+	RequestTimeout time.Duration
 }
 type subjectKey struct{}
 type requestKey struct{}
@@ -68,8 +71,55 @@ func (a *API) Handler() http.Handler {
 		}
 		respond(w, 200, map[string]string{"status": "ok"})
 	})
-	root.Handle("/", a.authenticate(api))
+	root.Handle("/", a.authenticate(a.limit(api)))
 	return a.observe(root)
+}
+
+// admissionWait is how long a request may queue for a slot before it is shed.
+const admissionWait = time.Second
+
+// limit sheds load instead of queueing without bound: past MaxInFlight
+// concurrent requests a caller waits at most admissionWait, then gets 503 with
+// Retry-After. Admitted reads are cancelled after RequestTimeout. Blob
+// transfers stream for long periods under their own deadlines, so they bypass both.
+func (a *API) limit(next http.Handler) http.Handler {
+	var slots chan struct{}
+	if a.MaxInFlight > 0 {
+		slots = make(chan struct{}, a.MaxInFlight)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/content") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if slots != nil {
+			select {
+			case slots <- struct{}{}:
+			default:
+				wait := time.NewTimer(admissionWait)
+				select {
+				case slots <- struct{}{}:
+					wait.Stop()
+				case <-wait.C:
+					w.Header().Set("Retry-After", "1")
+					a.problem(w, r, 503, "overloaded", "server is at capacity; retry shortly")
+					return
+				case <-r.Context().Done():
+					wait.Stop()
+					return
+				}
+			}
+			defer func() { <-slots }()
+		}
+		// Only reads are time-boxed: mutations are serialized and some (index
+		// rebuilds, template adoption, bulk publish) legitimately span a collection.
+		if a.RequestTimeout > 0 && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+			ctx, cancel := context.WithTimeout(r.Context(), a.RequestTimeout)
+			defer cancel()
+			r = r.WithContext(ctx)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 func respond(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -96,6 +146,9 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		a.problem(w, r, 409, "conflict", "version conflict or duplicate")
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &max):
 		a.problem(w, r, 413, "payload_too_large", "request body exceeds size limit")
+	case errors.Is(err, context.DeadlineExceeded) && errors.Is(r.Context().Err(), context.DeadlineExceeded):
+		w.Header().Set("Retry-After", "1")
+		a.problem(w, r, 503, "timeout", "request exceeded the server time limit")
 	default:
 		a.Logger.ErrorContext(r.Context(), "request failed", "error", err, "request_id", r.Context().Value(requestKey{}))
 		a.problem(w, r, 500, "internal_error", "request could not be completed")

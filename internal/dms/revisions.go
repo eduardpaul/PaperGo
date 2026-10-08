@@ -203,9 +203,18 @@ func (s *Service) indexSurface(ctx context.Context, projection *ent.ItemSurface,
 	if _, err := s.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDEQ(projection.ID)).Exec(ctx); err != nil {
 		return err
 	}
-	values, err := decodeValues(projection.Payload)
+	rows, err := s.fieldValueRows(projection, defs)
 	if err != nil {
 		return err
+	}
+	return s.insertFieldValues(ctx, rows)
+}
+
+// fieldValueRows builds the indexed field_values rows of one surface without writing them.
+func (s *Service) fieldValueRows(projection *ent.ItemSurface, defs []*ent.FieldDefinition) ([]*ent.FieldValueCreate, error) {
+	values, err := decodeValues(projection.Payload)
+	if err != nil {
+		return nil, err
 	}
 	rows := []*ent.FieldValueCreate{}
 	for _, d := range defs {
@@ -225,25 +234,25 @@ func (s *Service) indexSurface(ctx context.Context, projection *ent.ItemSurface,
 			case "datetime":
 				date, err := time.Parse(time.RFC3339, v.(string))
 				if err != nil {
-					return err
+					return nil, err
 				}
 				b.SetValueText(date.UTC().Format("2006-01-02T15:04:05.000000000Z"))
 			case "integer":
 				n, err := integer(v)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				b.SetValueInteger(n)
 			case "decimal":
 				_, n, err := decimal(v, d.Scale)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				b.SetValueInteger(n)
 			case "number":
 				n, err := number(v)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				b.SetValueNumber(n)
 			case "boolean":
@@ -252,10 +261,14 @@ func (s *Service) indexSurface(ctx context.Context, projection *ent.ItemSurface,
 			rows = append(rows, b)
 		}
 	}
-	// Chunked to stay well under SQLite's bound-parameter limit.
+	return rows, nil
+}
+
+// insertFieldValues is chunked to stay well under SQLite's bound-parameter limit.
+func (s *Service) insertFieldValues(ctx context.Context, rows []*ent.FieldValueCreate) error {
 	for len(rows) > 0 {
 		n := min(len(rows), 500)
-		if err = s.Client.FieldValue.CreateBulk(rows[:n]...).Exec(ctx); err != nil {
+		if err := s.Client.FieldValue.CreateBulk(rows[:n]...).Exec(ctx); err != nil {
 			return err
 		}
 		rows = rows[n:]

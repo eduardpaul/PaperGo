@@ -4,6 +4,7 @@ import (
 	"context"
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
+	"papergo/ent/fieldvalue"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/schemarevision"
@@ -132,23 +133,32 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	if len(keys) == 0 {
 		return nil
 	}
-	heads, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID), itemsurface.SurfaceEQ(itemsurface.SurfaceHead)).Select(itemsurface.FieldPayload).All(ctx)
-	if e != nil {
-		return e
-	}
-	for _, h := range heads {
-		values, e := decodeValues(h.Payload)
+	for after := ""; ; {
+		heads, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID), itemsurface.SurfaceEQ(itemsurface.SurfaceHead), itemsurface.ItemIDGT(after)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(surfaceBatch).Select(itemsurface.FieldItemID, itemsurface.FieldPayload).All(ctx)
 		if e != nil {
 			return e
 		}
-		for _, key := range keys {
-			if emptyValue(values[key]) {
-				return invalid("required fields on populated collections need a default or a value on every item: " + key)
+		for _, h := range heads {
+			values, e := decodeValues(h.Payload)
+			if e != nil {
+				return e
+			}
+			for _, key := range keys {
+				if emptyValue(values[key]) {
+					return invalid("required fields on populated collections need a default or a value on every item: " + key)
+				}
 			}
 		}
+		if len(heads) < surfaceBatch {
+			return nil
+		}
+		after = heads[len(heads)-1].ItemID
 	}
-	return nil
 }
+
+// surfaceBatch bounds whole-collection passes: memory stays flat and IN lists
+// stay far below SQLite's bound-variable limit (32766) however large the collection.
+var surfaceBatch = 500
 
 // rebuildSurfaces re-derives the field_values index of every surface in the
 // collection. Only index membership changes need it; surface rows are untouched.
@@ -157,10 +167,33 @@ func (s *Service) rebuildSurfaces(ctx context.Context, containerID string) error
 	if e != nil {
 		return e
 	}
-	projections, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID)).All(ctx)
-	if e != nil {
-		return e
+	// Collections share few schema revisions, so their definitions are cached across batches.
+	indexed := map[string][]*ent.FieldDefinition{}
+	// Paging each surface by item_id walks the (container_id, surface, item_id)
+	// index; any other order makes every batch rescan the whole collection.
+	for _, surface := range []itemsurface.Surface{itemsurface.SurfaceHead, itemsurface.SurfacePublished} {
+		for after := ""; ; {
+			projections, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID), itemsurface.SurfaceEQ(surface), itemsurface.ItemIDGT(after)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(surfaceBatch).All(ctx)
+			if e != nil {
+				return e
+			}
+			if len(projections) > 0 {
+				if e = s.reindexBatch(ctx, projections, current, indexed); e != nil {
+					return e
+				}
+			}
+			if len(projections) < surfaceBatch {
+				break
+			}
+			after = projections[len(projections)-1].ItemID
+		}
 	}
+	return nil
+}
+
+// reindexBatch replaces the field_values of a batch of surfaces with one delete
+// and a few bulk inserts, rather than two statements per surface.
+func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurface, current []*ent.FieldDefinition, indexed map[string][]*ent.FieldDefinition) error {
 	revisionIDs := make([]string, 0, len(projections))
 	for _, p := range projections {
 		revisionIDs = append(revisionIDs, p.RevisionID)
@@ -170,31 +203,46 @@ func (s *Service) rebuildSurfaces(ctx context.Context, containerID string) error
 		return e
 	}
 	schemaOf := map[string]string{}
-	schemaIDs := []string{}
+	missing := map[string]bool{}
 	for _, rev := range revisions {
 		schemaOf[rev.ID] = rev.SchemaRevisionID
-		schemaIDs = append(schemaIDs, rev.SchemaRevisionID)
+		if _, ok := indexed[rev.SchemaRevisionID]; !ok {
+			missing[rev.SchemaRevisionID] = true
+		}
 	}
-	schemas, e := s.Client.SchemaRevision.Query().Where(schemarevision.IDIn(schemaIDs...)).All(ctx)
-	if e != nil {
-		return e
-	}
-	indexed := map[string][]*ent.FieldDefinition{}
-	for _, schema := range schemas {
-		defs, e := definitions(schema.Definition)
+	if len(missing) > 0 {
+		schemaIDs := make([]string, 0, len(missing))
+		for id := range missing {
+			schemaIDs = append(schemaIDs, id)
+		}
+		schemas, e := s.Client.SchemaRevision.Query().Where(schemarevision.IDIn(schemaIDs...)).All(ctx)
 		if e != nil {
 			return e
 		}
-		indexed[schema.ID] = indexedDefinitions(current, defs)
+		for _, schema := range schemas {
+			defs, e := definitions(schema.Definition)
+			if e != nil {
+				return e
+			}
+			indexed[schema.ID] = indexedDefinitions(current, defs)
+		}
 	}
+	surfaceIDs := make([]string, 0, len(projections))
+	rows := []*ent.FieldValueCreate{}
 	for _, p := range projections {
 		defs, ok := indexed[schemaOf[p.RevisionID]]
 		if !ok {
 			return ErrNotFound
 		}
-		if e = s.indexSurface(ctx, p, defs); e != nil {
+		built, e := s.fieldValueRows(p, defs)
+		if e != nil {
 			return e
 		}
+		surfaceIDs = append(surfaceIDs, p.ID)
+		rows = append(rows, built...)
 	}
-	return nil
+	if _, e = s.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDIn(surfaceIDs...)).Exec(ctx); e != nil {
+		return e
+	}
+	return s.insertFieldValues(ctx, rows)
 }

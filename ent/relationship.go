@@ -30,10 +30,8 @@ type Relationship struct {
 	TargetID string `json:"target_id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
-	// InverseName holds the value of the "inverse_name" field.
-	InverseName string `json:"inverse_name,omitempty"`
 	// TypeID holds the value of the "type_id" field.
-	TypeID *string `json:"type_id,omitempty"`
+	TypeID string `json:"type_id,omitempty"`
 	// Directed holds the value of the "directed" field.
 	Directed bool `json:"directed,omitempty"`
 	// Version holds the value of the "version" field.
@@ -103,7 +101,7 @@ func (*Relationship) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case relationship.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case relationship.FieldID, relationship.FieldWorkspaceID, relationship.FieldSourceID, relationship.FieldTargetID, relationship.FieldName, relationship.FieldInverseName, relationship.FieldTypeID:
+		case relationship.FieldID, relationship.FieldWorkspaceID, relationship.FieldSourceID, relationship.FieldTargetID, relationship.FieldName, relationship.FieldTypeID:
 			values[i] = new(sql.NullString)
 		case relationship.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -158,18 +156,11 @@ func (_m *Relationship) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Name = value.String
 			}
-		case relationship.FieldInverseName:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field inverse_name", values[i])
-			} else if value.Valid {
-				_m.InverseName = value.String
-			}
 		case relationship.FieldTypeID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type_id", values[i])
 			} else if value.Valid {
-				_m.TypeID = new(string)
-				*_m.TypeID = value.String
+				_m.TypeID = value.String
 			}
 		case relationship.FieldDirected:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -257,13 +248,8 @@ func (_m *Relationship) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	builder.WriteString("inverse_name=")
-	builder.WriteString(_m.InverseName)
-	builder.WriteString(", ")
-	if v := _m.TypeID; v != nil {
-		builder.WriteString("type_id=")
-		builder.WriteString(*v)
-	}
+	builder.WriteString("type_id=")
+	builder.WriteString(_m.TypeID)
 	builder.WriteString(", ")
 	builder.WriteString("directed=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Directed))

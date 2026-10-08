@@ -372,7 +372,7 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if edge.TypeID == nil || edge.Name != "owns" || edge.Metadata["weight"] != "1.20" {
+	if edge.TypeID != typ.ID || edge.Name != "owns" || edge.Metadata["weight"] != "1.20" {
 		t.Fatal("typed edge normalization", edge)
 	}
 	if _, e = s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: typ.ID, TargetID: c.ID, Metadata: map[string]any{"weight": "1.20"}}); !errors.Is(e, ErrConflict) {

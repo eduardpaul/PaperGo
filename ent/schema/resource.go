@@ -29,6 +29,8 @@ func (Resource) Fields() []ent.Field {
 		field.Int("next_revision_number").Default(1).Positive(),
 		field.Bool("publishing_enabled").Default(false),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
+		// Nearest exclusive ACL scope, maintained by database triggers; never set by the API.
+		field.String("scope_id").Optional().Nillable().MaxLen(36),
 	}
 }
 func (Resource) Edges() []ent.Edge {
@@ -53,8 +55,10 @@ func (Resource) Edges() []ent.Edge {
 func (Resource) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("workspace_id", "kind", "id"),
-		index.Fields("workspace_id", "id"),
-		index.Fields("parent_id", "id"),
+		// scope_id makes these covering for permission checks, so rows a subject
+		// cannot read are rejected without loading them.
+		index.Fields("workspace_id", "id", "scope_id"),
+		index.Fields("parent_id", "id", "scope_id"),
 		index.Fields("container_id", "id"),
 	}
 }

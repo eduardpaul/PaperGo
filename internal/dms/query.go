@@ -74,6 +74,44 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if in.After != "" {
 		q.Where(resource.IDGT(in.After))
 	}
+	var fieldPredicate func(*entsql.Selector)
+	candidates := []candidateSet{}
+	if in.FilterField != "" {
+		predicate, candidate, err := s.fieldFilter(ctx, subject, in)
+		if err != nil {
+			return Page[*ent.Resource]{}, err
+		}
+		fieldPredicate = predicate
+		candidates = append(candidates, candidate)
+	}
+	if in.Tag != "" {
+		candidates = append(candidates, candidateSet{
+			sql:          "SELECT resource_id FROM resource_tags WHERE tag=? UNION ALL SELECT p.item_id FROM item_surface_tags t JOIN item_surfaces p ON p.id=t.surface_id WHERE t.tag=?",
+			args:         []any{in.Tag, in.Tag},
+			estimate:     "SELECT 1 FROM resource_tags WHERE tag=? UNION ALL SELECT 1 FROM item_surface_tags WHERE tag=?",
+			estimateArgs: []any{in.Tag, in.Tag},
+		})
+	}
+	if strings.TrimSpace(in.Search) != "" {
+		phrase := ftsPhrase(in.Search)
+		candidates = append(candidates, candidateSet{
+			sql:          "SELECT rr.id FROM resources rr WHERE rr.rowid IN (SELECT rowid FROM resource_search WHERE resource_search MATCH ?) AND rr.kind<>'item' UNION ALL SELECT s.item_id FROM item_surfaces s WHERE s.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)",
+			args:         []any{phrase, phrase},
+			estimate:     "SELECT 1 FROM resource_search WHERE resource_search MATCH ? UNION ALL SELECT 1 FROM item_surface_search WHERE item_surface_search MATCH ?",
+			estimateArgs: []any{phrase, phrase},
+		})
+	}
+	for _, c := range candidates {
+		small, err := s.selective(ctx, c)
+		if err != nil {
+			return Page[*ent.Resource]{}, err
+		}
+		if small {
+			q.Where(func(sel *entsql.Selector) {
+				sel.Where(entsql.ExprP(sel.C(resource.FieldID)+" IN ("+c.sql+")", c.args...))
+			})
+		}
+	}
 	action := "read"
 	if in.Surface == "head" {
 		action = "read_draft"
@@ -97,19 +135,16 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		phrase := ftsPhrase(in.Search)
 		q.Where(func(sel *entsql.Selector) {
 			selected, args := surfaceSQL(sel.C(resource.FieldID), subject, in.Surface)
-			query := "(" + sel.C(resource.FieldKind) + "<>'item' AND " + sel.C(resource.FieldID) + " IN (SELECT id FROM resource_search WHERE resource_search MATCH ?) OR " + sel.C(resource.FieldKind) + "='item' AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND p.id IN (SELECT id FROM item_surface_search WHERE item_surface_search MATCH ?)))"
+			// FTS rowids are content-table rowids; the UNINDEXED id column would cost a lookup per match.
+			query := "(" + sel.C(resource.FieldKind) + "<>'item' AND " + sel.C("rowid") + " IN (SELECT rowid FROM resource_search WHERE resource_search MATCH ?) OR " + sel.C(resource.FieldKind) + "='item' AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)))"
 			values := []any{phrase}
 			values = append(values, args...)
 			values = append(values, phrase)
 			sel.Where(entsql.ExprP(query, values...))
 		})
 	}
-	if in.FilterField != "" {
-		predicate, err := s.fieldFilter(ctx, subject, in)
-		if err != nil {
-			return Page[*ent.Resource]{}, err
-		}
-		q.Where(predicate)
+	if fieldPredicate != nil {
+		q.Where(fieldPredicate)
 	}
 	rows, err := q.Order(ent.Asc(resource.FieldID)).Limit(pageSize(in.Limit) + 1).All(ctx)
 	if err != nil {
@@ -120,6 +155,32 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		return out, err
 	}
 	return out, nil
+}
+
+// candidateSet is an index-only superset of the resource IDs a filter can match.
+// A small set drives the query, so per-row ACL walks run only on candidates; a
+// large one is left to the ID-ordered scan, which fills a page after few rows.
+type candidateSet struct {
+	sql, estimate      string
+	args, estimateArgs []any
+}
+
+var candidateDriveLimit = 1000
+
+// selective counts at most candidateDriveLimit+1 index entries, so it stays cheap for broad filters.
+func (s *Service) selective(ctx context.Context, c candidateSet) (bool, error) {
+	rows, err := s.Client.QueryContext(ctx, "SELECT count(*) FROM ("+c.estimate+" LIMIT ?)", append(append([]any{}, c.estimateArgs...), candidateDriveLimit+1)...)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	n := 0
+	if rows.Next() {
+		if err = rows.Scan(&n); err != nil {
+			return false, err
+		}
+	}
+	return n <= candidateDriveLimit, rows.Err()
 }
 
 // ftsPhrase treats input as a literal phrase, never as executable FTS query syntax.

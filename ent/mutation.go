@@ -7958,7 +7958,6 @@ type RelationshipMutation struct {
 	created_at               *time.Time
 	workspace_id             *string
 	name                     *string
-	inverse_name             *string
 	directed                 *bool
 	version                  *int
 	addversion               *int
@@ -8259,55 +8258,6 @@ func (m *RelationshipMutation) ResetName() {
 	m.name = nil
 }
 
-// SetInverseName sets the "inverse_name" field.
-func (m *RelationshipMutation) SetInverseName(s string) {
-	m.inverse_name = &s
-}
-
-// InverseName returns the value of the "inverse_name" field in the mutation.
-func (m *RelationshipMutation) InverseName() (r string, exists bool) {
-	v := m.inverse_name
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldInverseName returns the old "inverse_name" field's value of the Relationship entity.
-// If the Relationship object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RelationshipMutation) OldInverseName(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldInverseName is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldInverseName requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldInverseName: %w", err)
-	}
-	return oldValue.InverseName, nil
-}
-
-// ClearInverseName clears the value of the "inverse_name" field.
-func (m *RelationshipMutation) ClearInverseName() {
-	m.inverse_name = nil
-	m.clearedFields[relationship.FieldInverseName] = struct{}{}
-}
-
-// InverseNameCleared returns if the "inverse_name" field was cleared in this mutation.
-func (m *RelationshipMutation) InverseNameCleared() bool {
-	_, ok := m.clearedFields[relationship.FieldInverseName]
-	return ok
-}
-
-// ResetInverseName resets all changes to the "inverse_name" field.
-func (m *RelationshipMutation) ResetInverseName() {
-	m.inverse_name = nil
-	delete(m.clearedFields, relationship.FieldInverseName)
-}
-
 // SetTypeID sets the "type_id" field.
 func (m *RelationshipMutation) SetTypeID(s string) {
 	m.relationship_type = &s
@@ -8325,7 +8275,7 @@ func (m *RelationshipMutation) TypeID() (r string, exists bool) {
 // OldTypeID returns the old "type_id" field's value of the Relationship entity.
 // If the Relationship object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RelationshipMutation) OldTypeID(ctx context.Context) (v *string, err error) {
+func (m *RelationshipMutation) OldTypeID(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTypeID is only allowed on UpdateOne operations")
 	}
@@ -8339,22 +8289,9 @@ func (m *RelationshipMutation) OldTypeID(ctx context.Context) (v *string, err er
 	return oldValue.TypeID, nil
 }
 
-// ClearTypeID clears the value of the "type_id" field.
-func (m *RelationshipMutation) ClearTypeID() {
-	m.relationship_type = nil
-	m.clearedFields[relationship.FieldTypeID] = struct{}{}
-}
-
-// TypeIDCleared returns if the "type_id" field was cleared in this mutation.
-func (m *RelationshipMutation) TypeIDCleared() bool {
-	_, ok := m.clearedFields[relationship.FieldTypeID]
-	return ok
-}
-
 // ResetTypeID resets all changes to the "type_id" field.
 func (m *RelationshipMutation) ResetTypeID() {
 	m.relationship_type = nil
-	delete(m.clearedFields, relationship.FieldTypeID)
 }
 
 // SetDirected sets the "directed" field.
@@ -8498,7 +8435,7 @@ func (m *RelationshipMutation) ClearRelationshipType() {
 
 // RelationshipTypeCleared reports if the "relationship_type" edge to the RelationshipType entity was cleared.
 func (m *RelationshipMutation) RelationshipTypeCleared() bool {
-	return m.TypeIDCleared() || m.clearedrelationship_type
+	return m.clearedrelationship_type
 }
 
 // RelationshipTypeID returns the "relationship_type" edge ID in the mutation.
@@ -8613,7 +8550,7 @@ func (m *RelationshipMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RelationshipMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 9)
 	if m.created_at != nil {
 		fields = append(fields, relationship.FieldCreatedAt)
 	}
@@ -8628,9 +8565,6 @@ func (m *RelationshipMutation) Fields() []string {
 	}
 	if m.name != nil {
 		fields = append(fields, relationship.FieldName)
-	}
-	if m.inverse_name != nil {
-		fields = append(fields, relationship.FieldInverseName)
 	}
 	if m.relationship_type != nil {
 		fields = append(fields, relationship.FieldTypeID)
@@ -8662,8 +8596,6 @@ func (m *RelationshipMutation) Field(name string) (ent.Value, bool) {
 		return m.TargetID()
 	case relationship.FieldName:
 		return m.Name()
-	case relationship.FieldInverseName:
-		return m.InverseName()
 	case relationship.FieldTypeID:
 		return m.TypeID()
 	case relationship.FieldDirected:
@@ -8691,8 +8623,6 @@ func (m *RelationshipMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldTargetID(ctx)
 	case relationship.FieldName:
 		return m.OldName(ctx)
-	case relationship.FieldInverseName:
-		return m.OldInverseName(ctx)
 	case relationship.FieldTypeID:
 		return m.OldTypeID(ctx)
 	case relationship.FieldDirected:
@@ -8744,13 +8674,6 @@ func (m *RelationshipMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetName(v)
-		return nil
-	case relationship.FieldInverseName:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetInverseName(v)
 		return nil
 	case relationship.FieldTypeID:
 		v, ok := value.(string)
@@ -8824,14 +8747,7 @@ func (m *RelationshipMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *RelationshipMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(relationship.FieldInverseName) {
-		fields = append(fields, relationship.FieldInverseName)
-	}
-	if m.FieldCleared(relationship.FieldTypeID) {
-		fields = append(fields, relationship.FieldTypeID)
-	}
-	return fields
+	return nil
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -8844,14 +8760,6 @@ func (m *RelationshipMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *RelationshipMutation) ClearField(name string) error {
-	switch name {
-	case relationship.FieldInverseName:
-		m.ClearInverseName()
-		return nil
-	case relationship.FieldTypeID:
-		m.ClearTypeID()
-		return nil
-	}
 	return fmt.Errorf("unknown Relationship nullable field %s", name)
 }
 
@@ -8873,9 +8781,6 @@ func (m *RelationshipMutation) ResetField(name string) error {
 		return nil
 	case relationship.FieldName:
 		m.ResetName()
-		return nil
-	case relationship.FieldInverseName:
-		m.ResetInverseName()
 		return nil
 	case relationship.FieldTypeID:
 		m.ResetTypeID()
@@ -10195,6 +10100,7 @@ type ResourceMutation struct {
 	addnext_revision_number   *int
 	publishing_enabled        *bool
 	updated_at                *time.Time
+	scope_id                  *string
 	clearedFields             map[string]struct{}
 	children                  map[string]struct{}
 	removedchildren           map[string]struct{}
@@ -11041,6 +10947,55 @@ func (m *ResourceMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
+// SetScopeID sets the "scope_id" field.
+func (m *ResourceMutation) SetScopeID(s string) {
+	m.scope_id = &s
+}
+
+// ScopeID returns the value of the "scope_id" field in the mutation.
+func (m *ResourceMutation) ScopeID() (r string, exists bool) {
+	v := m.scope_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScopeID returns the old "scope_id" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldScopeID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScopeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScopeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScopeID: %w", err)
+	}
+	return oldValue.ScopeID, nil
+}
+
+// ClearScopeID clears the value of the "scope_id" field.
+func (m *ResourceMutation) ClearScopeID() {
+	m.scope_id = nil
+	m.clearedFields[resource.FieldScopeID] = struct{}{}
+}
+
+// ScopeIDCleared returns if the "scope_id" field was cleared in this mutation.
+func (m *ResourceMutation) ScopeIDCleared() bool {
+	_, ok := m.clearedFields[resource.FieldScopeID]
+	return ok
+}
+
+// ResetScopeID resets all changes to the "scope_id" field.
+func (m *ResourceMutation) ResetScopeID() {
+	m.scope_id = nil
+	delete(m.clearedFields, resource.FieldScopeID)
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by ids.
 func (m *ResourceMutation) AddChildIDs(ids ...string) {
 	if m.children == nil {
@@ -11750,7 +11705,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -11799,6 +11754,9 @@ func (m *ResourceMutation) Fields() []string {
 	if m.updated_at != nil {
 		fields = append(fields, resource.FieldUpdatedAt)
 	}
+	if m.scope_id != nil {
+		fields = append(fields, resource.FieldScopeID)
+	}
 	return fields
 }
 
@@ -11839,6 +11797,8 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.PublishingEnabled()
 	case resource.FieldUpdatedAt:
 		return m.UpdatedAt()
+	case resource.FieldScopeID:
+		return m.ScopeID()
 	}
 	return nil, false
 }
@@ -11880,6 +11840,8 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldPublishingEnabled(ctx)
 	case resource.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
+	case resource.FieldScopeID:
+		return m.OldScopeID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Resource field %s", name)
 }
@@ -12001,6 +11963,13 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUpdatedAt(v)
 		return nil
+	case resource.FieldScopeID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScopeID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Resource field %s", name)
 }
@@ -12073,6 +12042,9 @@ func (m *ResourceMutation) ClearedFields() []string {
 	if m.FieldCleared(resource.FieldSchemaHeadID) {
 		fields = append(fields, resource.FieldSchemaHeadID)
 	}
+	if m.FieldCleared(resource.FieldScopeID) {
+		fields = append(fields, resource.FieldScopeID)
+	}
 	return fields
 }
 
@@ -12101,6 +12073,9 @@ func (m *ResourceMutation) ClearField(name string) error {
 		return nil
 	case resource.FieldSchemaHeadID:
 		m.ClearSchemaHeadID()
+		return nil
+	case resource.FieldScopeID:
+		m.ClearScopeID()
 		return nil
 	}
 	return fmt.Errorf("unknown Resource nullable field %s", name)
@@ -12157,6 +12132,9 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldUpdatedAt:
 		m.ResetUpdatedAt()
+		return nil
+	case resource.FieldScopeID:
+		m.ResetScopeID()
 		return nil
 	}
 	return fmt.Errorf("unknown Resource field %s", name)

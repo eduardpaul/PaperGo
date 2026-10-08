@@ -5538,42 +5538,24 @@
       "CreateRelationship": {
         "type": "object",
         "properties": {
+          "type_id": {
+            "type": "string",
+            "description": "Relationship type; it supplies the name, direction, attributes and cardinality."
+          },
           "target_id": {
             "type": "string",
             "format": "uuid"
           },
-          "name": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{0,63}$"
-          },
-          "inverse_name": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{0,63}$"
-          },
           "metadata": {
             "type": "object",
             "additionalProperties": true
-          },
-          "type_id": {
-            "type": "string"
           }
         },
         "required": [
+          "type_id",
           "target_id"
         ],
-        "additionalProperties": false,
-        "anyOf": [
-          {
-            "required": [
-              "name"
-            ]
-          },
-          {
-            "required": [
-              "type_id"
-            ]
-          }
-        ]
+        "additionalProperties": false
       },
       "Relationship": {
         "type": "object",
@@ -5591,10 +5573,8 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
-          },
-          "inverse_name": {
-            "type": "string"
+            "type": "string",
+            "description": "Key of the relationship type."
           },
           "metadata": {
             "type": "object",
@@ -5605,10 +5585,7 @@
             "format": "date-time"
           },
           "type_id": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           },
           "directed": {
             "type": "boolean"

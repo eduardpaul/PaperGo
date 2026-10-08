@@ -204,6 +204,26 @@ func (_u *ResourceUpdate) SetUpdatedAt(v time.Time) *ResourceUpdate {
 	return _u
 }
 
+// SetScopeID sets the "scope_id" field.
+func (_u *ResourceUpdate) SetScopeID(v string) *ResourceUpdate {
+	_u.mutation.SetScopeID(v)
+	return _u
+}
+
+// SetNillableScopeID sets the "scope_id" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableScopeID(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetScopeID(*v)
+	}
+	return _u
+}
+
+// ClearScopeID clears the value of the "scope_id" field.
+func (_u *ResourceUpdate) ClearScopeID() *ResourceUpdate {
+	_u.mutation.ClearScopeID()
+	return _u
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by IDs.
 func (_u *ResourceUpdate) AddChildIDs(ids ...string) *ResourceUpdate {
 	_u.mutation.AddChildIDs(ids...)
@@ -655,6 +675,11 @@ func (_u *ResourceUpdate) check() error {
 			return &ValidationError{Name: "next_revision_number", err: fmt.Errorf(`ent: validator failed for field "Resource.next_revision_number": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ScopeID(); ok {
+		if err := resource.ScopeIDValidator(v); err != nil {
+			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -704,6 +729,12 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.ScopeID(); ok {
+		_spec.SetField(resource.FieldScopeID, field.TypeString, value)
+	}
+	if _u.mutation.ScopeIDCleared() {
+		_spec.ClearField(resource.FieldScopeID, field.TypeString)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1430,6 +1461,26 @@ func (_u *ResourceUpdateOne) SetUpdatedAt(v time.Time) *ResourceUpdateOne {
 	return _u
 }
 
+// SetScopeID sets the "scope_id" field.
+func (_u *ResourceUpdateOne) SetScopeID(v string) *ResourceUpdateOne {
+	_u.mutation.SetScopeID(v)
+	return _u
+}
+
+// SetNillableScopeID sets the "scope_id" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableScopeID(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetScopeID(*v)
+	}
+	return _u
+}
+
+// ClearScopeID clears the value of the "scope_id" field.
+func (_u *ResourceUpdateOne) ClearScopeID() *ResourceUpdateOne {
+	_u.mutation.ClearScopeID()
+	return _u
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by IDs.
 func (_u *ResourceUpdateOne) AddChildIDs(ids ...string) *ResourceUpdateOne {
 	_u.mutation.AddChildIDs(ids...)
@@ -1894,6 +1945,11 @@ func (_u *ResourceUpdateOne) check() error {
 			return &ValidationError{Name: "next_revision_number", err: fmt.Errorf(`ent: validator failed for field "Resource.next_revision_number": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ScopeID(); ok {
+		if err := resource.ScopeIDValidator(v); err != nil {
+			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1960,6 +2016,12 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.ScopeID(); ok {
+		_spec.SetField(resource.FieldScopeID, field.TypeString, value)
+	}
+	if _u.mutation.ScopeIDCleared() {
+		_spec.ClearField(resource.FieldScopeID, field.TypeString)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{

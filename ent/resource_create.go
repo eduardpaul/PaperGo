@@ -211,6 +211,20 @@ func (_c *ResourceCreate) SetNillableUpdatedAt(v *time.Time) *ResourceCreate {
 	return _c
 }
 
+// SetScopeID sets the "scope_id" field.
+func (_c *ResourceCreate) SetScopeID(v string) *ResourceCreate {
+	_c.mutation.SetScopeID(v)
+	return _c
+}
+
+// SetNillableScopeID sets the "scope_id" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableScopeID(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetScopeID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ResourceCreate) SetID(v string) *ResourceCreate {
 	_c.mutation.SetID(v)
@@ -543,6 +557,11 @@ func (_c *ResourceCreate) check() error {
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Resource.updated_at"`)}
 	}
+	if v, ok := _c.mutation.ScopeID(); ok {
+		if err := resource.ScopeIDValidator(v); err != nil {
+			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
+		}
+	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := resource.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "Resource.id": %w`, err)}
@@ -626,6 +645,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if value, ok := _c.mutation.ScopeID(); ok {
+		_spec.SetField(resource.FieldScopeID, field.TypeString, value)
+		_node.ScopeID = &value
 	}
 	if nodes := _c.mutation.ChildrenIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

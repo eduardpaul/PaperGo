@@ -73,8 +73,8 @@ func (d *Database) CheckSchema(ctx context.Context) error {
 	if err := d.SQL.QueryRowContext(ctx, "SELECT version FROM atlas_schema_revisions WHERE applied = total AND (error IS NULL OR error = '') ORDER BY version DESC LIMIT 1").Scan(&version); err != nil {
 		return fmt.Errorf("apply Atlas migrations before starting the API: %w", err)
 	}
-	if version != "20261007000500" {
-		return fmt.Errorf("database migration version %s is incompatible with this API; expected 20261007000500", version)
+	if version != "20261007000100" {
+		return fmt.Errorf("database migration version %s is incompatible with this API; expected 20261007000100", version)
 	}
 	if _, err := d.SQL.ExecContext(ctx, "SELECT id FROM item_surface_search LIMIT 0"); err != nil {
 		return fmt.Errorf("search migration is missing: %w", err)

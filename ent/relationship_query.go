@@ -490,10 +490,7 @@ func (_q *RelationshipQuery) loadRelationshipType(ctx context.Context, query *Re
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*Relationship)
 	for i := range nodes {
-		if nodes[i].TypeID == nil {
-			continue
-		}
-		fk := *nodes[i].TypeID
+		fk := nodes[i].TypeID
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}

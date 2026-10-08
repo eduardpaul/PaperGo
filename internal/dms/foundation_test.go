@@ -280,6 +280,7 @@ func TestAuthorizedPaginationAndRelationships(t *testing.T) {
 	}
 	visible := map[string]bool{source.ID: true}
 	links := map[string]bool{}
+	typ := referencesType(t, s, w.ID)
 	for i := 0; i < 16; i++ {
 		r := create(t, s, list.ID, "item", fmt.Sprintf("Item %02d", i), nil)
 		if i%3 == 0 {
@@ -288,7 +289,7 @@ func TestAuthorizedPaginationAndRelationships(t *testing.T) {
 			}
 			visible[r.ID] = true
 		}
-		link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{TargetID: r.ID, Name: "references"})
+		link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: r.ID})
 		if err != nil {
 			t.Fatal(err)
 		}

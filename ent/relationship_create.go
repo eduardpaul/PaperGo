@@ -60,31 +60,9 @@ func (_c *RelationshipCreate) SetName(v string) *RelationshipCreate {
 	return _c
 }
 
-// SetInverseName sets the "inverse_name" field.
-func (_c *RelationshipCreate) SetInverseName(v string) *RelationshipCreate {
-	_c.mutation.SetInverseName(v)
-	return _c
-}
-
-// SetNillableInverseName sets the "inverse_name" field if the given value is not nil.
-func (_c *RelationshipCreate) SetNillableInverseName(v *string) *RelationshipCreate {
-	if v != nil {
-		_c.SetInverseName(*v)
-	}
-	return _c
-}
-
 // SetTypeID sets the "type_id" field.
 func (_c *RelationshipCreate) SetTypeID(v string) *RelationshipCreate {
 	_c.mutation.SetTypeID(v)
-	return _c
-}
-
-// SetNillableTypeID sets the "type_id" field if the given value is not nil.
-func (_c *RelationshipCreate) SetNillableTypeID(v *string) *RelationshipCreate {
-	if v != nil {
-		_c.SetTypeID(*v)
-	}
 	return _c
 }
 
@@ -139,14 +117,6 @@ func (_c *RelationshipCreate) SetNillableID(v *string) *RelationshipCreate {
 // SetRelationshipTypeID sets the "relationship_type" edge to the RelationshipType entity by ID.
 func (_c *RelationshipCreate) SetRelationshipTypeID(id string) *RelationshipCreate {
 	_c.mutation.SetRelationshipTypeID(id)
-	return _c
-}
-
-// SetNillableRelationshipTypeID sets the "relationship_type" edge to the RelationshipType entity by ID if the given value is not nil.
-func (_c *RelationshipCreate) SetNillableRelationshipTypeID(id *string) *RelationshipCreate {
-	if id != nil {
-		_c = _c.SetRelationshipTypeID(*id)
-	}
 	return _c
 }
 
@@ -259,9 +229,12 @@ func (_c *RelationshipCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Relationship.name": %w`, err)}
 		}
 	}
-	if v, ok := _c.mutation.InverseName(); ok {
-		if err := relationship.InverseNameValidator(v); err != nil {
-			return &ValidationError{Name: "inverse_name", err: fmt.Errorf(`ent: validator failed for field "Relationship.inverse_name": %w`, err)}
+	if _, ok := _c.mutation.TypeID(); !ok {
+		return &ValidationError{Name: "type_id", err: errors.New(`ent: missing required field "Relationship.type_id"`)}
+	}
+	if v, ok := _c.mutation.TypeID(); ok {
+		if err := relationship.TypeIDValidator(v); err != nil {
+			return &ValidationError{Name: "type_id", err: fmt.Errorf(`ent: validator failed for field "Relationship.type_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Directed(); !ok {
@@ -282,6 +255,9 @@ func (_c *RelationshipCreate) check() error {
 		if err := relationship.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "Relationship.id": %w`, err)}
 		}
+	}
+	if len(_c.mutation.RelationshipTypeIDs()) == 0 {
+		return &ValidationError{Name: "relationship_type", err: errors.New(`ent: missing required edge "Relationship.relationship_type"`)}
 	}
 	if len(_c.mutation.SourceIDs()) == 0 {
 		return &ValidationError{Name: "source", err: errors.New(`ent: missing required edge "Relationship.source"`)}
@@ -336,10 +312,6 @@ func (_c *RelationshipCreate) createSpec() (*Relationship, *sqlgraph.CreateSpec)
 		_spec.SetField(relationship.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := _c.mutation.InverseName(); ok {
-		_spec.SetField(relationship.FieldInverseName, field.TypeString, value)
-		_node.InverseName = value
-	}
 	if value, ok := _c.mutation.Directed(); ok {
 		_spec.SetField(relationship.FieldDirected, field.TypeBool, value)
 		_node.Directed = value
@@ -366,7 +338,7 @@ func (_c *RelationshipCreate) createSpec() (*Relationship, *sqlgraph.CreateSpec)
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.TypeID = &nodes[0]
+		_node.TypeID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.SourceIDs(); len(nodes) > 0 {

@@ -141,15 +141,11 @@ POST an item's existing relationships endpoint with:
 
 The type supplies the stable relationship name. Typed attributes are validated and normalized; cardinality allocation is transactional. Keys and direction are immutable. Attribute schemas cannot change while edges use a type; label changes are allowed. Lowering cardinality cannot invalidate existing edges.
 
-Legacy named directional relationships remain supported. Links stay within one workspace, with source write and target read on creation. For symmetric edges, either endpoint can act as the authorized source when editing or removing the edge. Query visibility still requires both endpoints to have authorized visible content.
+Every relationship requires a type. Links stay within one workspace, with source write and target read on creation. For symmetric edges, either endpoint can act as the authorized source when editing or removing the edge. Query visibility still requires both endpoints to have authorized visible content.
 
 Creation returns an edge ETag. PATCH and DELETE require the edge If-Match. PATCH replaces metadata rather than merging it. Edge versions are independent of item lock versions. Edges remain live and are not frozen by item publication.
 
-## Migration and verification
+## Verification
 
-Migration 20261007000500 adds configuration tables/options and replaces only the derived field-value table while copying existing scalar indexes. Content/schema/publication history and blob metadata are retained.
-
-Legacy inherited resources carrying local additive grants become exclusive scopes populated with their prior effective grant union; an audit event records each conversion. This preserves access at upgrade time. Those copied scopes subsequently behave independently of ancestor grant changes. Existing exclusive scopes and ordinary inherited resources retain their behavior.
-
-Tests cover populated upgrades, foreign-key/integrity checks, exact defaults and filters, schema pairing, template adoption rollback, multi-value index rebuilds, taxonomy/reference validation, exclusive-scope copy/reset, reader/draft query visibility, counts/groups/pagination, view concurrency, typed attributes, symmetric duplicates, and concurrent cardinality. The OpenAPI contract documents all registered routes.
+Tests cover foreign-key/integrity checks, exact defaults and filters, schema pairing, template adoption rollback, multi-value index rebuilds, taxonomy/reference validation, exclusive-scope copy/reset, reader/draft query visibility, counts/groups/pagination, view concurrency, typed attributes, symmetric duplicates, and concurrent cardinality. The OpenAPI contract documents all registered routes.
 

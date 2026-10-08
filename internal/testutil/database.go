@@ -3,7 +3,6 @@ package testutil
 import (
 	"ariga.io/atlas/sql/migrate"
 	"context"
-	"os"
 	"papergo/internal/database"
 	"path/filepath"
 	"runtime"
@@ -11,10 +10,6 @@ import (
 )
 
 func Database(t *testing.T) *database.Database {
-	return DatabaseThrough(t, "")
-}
-
-func DatabaseThrough(t *testing.T, version string) *database.Database {
 	t.Helper()
 	db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -23,9 +18,6 @@ func DatabaseThrough(t *testing.T, version string) *database.Database {
 	t.Cleanup(func() { db.Close() })
 	files := MigrationFiles(t)
 	for _, f := range files {
-		if version != "" && f.Version() > version {
-			break
-		}
 		if _, err = db.SQL.ExecContext(context.Background(), string(f.Bytes())); err != nil {
 			t.Fatalf("apply %s: %v", f.Name(), err)
 		}
@@ -55,13 +47,4 @@ func MigrationFiles(t *testing.T) []migrate.File {
 		t.Fatal("no versioned migrations")
 	}
 	return files
-}
-
-func ReadFile(t *testing.T, path string) []byte {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
 }

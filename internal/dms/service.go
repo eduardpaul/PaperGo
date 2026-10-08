@@ -11,24 +11,30 @@ import (
 	"papergo/ent/resource"
 	"papergo/internal/model"
 	"strings"
-	"sync"
 	"time"
 )
 
 type Service struct {
 	Client      *ent.Client
-	writeMu     *sync.Mutex
+	writeMu     chan struct{}
 	transaction bool
 }
 
-func NewService(client *ent.Client) *Service { return &Service{Client: client, writeMu: &sync.Mutex{}} }
+func NewService(client *ent.Client) *Service {
+	return &Service{Client: client, writeMu: make(chan struct{}, 1)}
+}
 
 // Mutations include authorization, version checks and audit records in one
 // transaction. SQLite WAL allows concurrent readers; one writer per process
 // avoids deferred-transaction upgrades racing with another application writer.
+// Waiting for the writer slot honors ctx, so a timed-out request leaves the queue.
 func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
+	select {
+	case s.writeMu <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-s.writeMu }()
 	tx, err := s.Client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return err

@@ -90,11 +90,6 @@ func Name(v string) predicate.Relationship {
 	return predicate.Relationship(sql.FieldEQ(FieldName, v))
 }
 
-// InverseName applies equality check predicate on the "inverse_name" field. It's identical to InverseNameEQ.
-func InverseName(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldEQ(FieldInverseName, v))
-}
-
 // TypeID applies equality check predicate on the "type_id" field. It's identical to TypeIDEQ.
 func TypeID(v string) predicate.Relationship {
 	return predicate.Relationship(sql.FieldEQ(FieldTypeID, v))
@@ -410,81 +405,6 @@ func NameContainsFold(v string) predicate.Relationship {
 	return predicate.Relationship(sql.FieldContainsFold(FieldName, v))
 }
 
-// InverseNameEQ applies the EQ predicate on the "inverse_name" field.
-func InverseNameEQ(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldEQ(FieldInverseName, v))
-}
-
-// InverseNameNEQ applies the NEQ predicate on the "inverse_name" field.
-func InverseNameNEQ(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldNEQ(FieldInverseName, v))
-}
-
-// InverseNameIn applies the In predicate on the "inverse_name" field.
-func InverseNameIn(vs ...string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldIn(FieldInverseName, vs...))
-}
-
-// InverseNameNotIn applies the NotIn predicate on the "inverse_name" field.
-func InverseNameNotIn(vs ...string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldNotIn(FieldInverseName, vs...))
-}
-
-// InverseNameGT applies the GT predicate on the "inverse_name" field.
-func InverseNameGT(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldGT(FieldInverseName, v))
-}
-
-// InverseNameGTE applies the GTE predicate on the "inverse_name" field.
-func InverseNameGTE(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldGTE(FieldInverseName, v))
-}
-
-// InverseNameLT applies the LT predicate on the "inverse_name" field.
-func InverseNameLT(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldLT(FieldInverseName, v))
-}
-
-// InverseNameLTE applies the LTE predicate on the "inverse_name" field.
-func InverseNameLTE(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldLTE(FieldInverseName, v))
-}
-
-// InverseNameContains applies the Contains predicate on the "inverse_name" field.
-func InverseNameContains(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldContains(FieldInverseName, v))
-}
-
-// InverseNameHasPrefix applies the HasPrefix predicate on the "inverse_name" field.
-func InverseNameHasPrefix(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldHasPrefix(FieldInverseName, v))
-}
-
-// InverseNameHasSuffix applies the HasSuffix predicate on the "inverse_name" field.
-func InverseNameHasSuffix(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldHasSuffix(FieldInverseName, v))
-}
-
-// InverseNameIsNil applies the IsNil predicate on the "inverse_name" field.
-func InverseNameIsNil() predicate.Relationship {
-	return predicate.Relationship(sql.FieldIsNull(FieldInverseName))
-}
-
-// InverseNameNotNil applies the NotNil predicate on the "inverse_name" field.
-func InverseNameNotNil() predicate.Relationship {
-	return predicate.Relationship(sql.FieldNotNull(FieldInverseName))
-}
-
-// InverseNameEqualFold applies the EqualFold predicate on the "inverse_name" field.
-func InverseNameEqualFold(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldEqualFold(FieldInverseName, v))
-}
-
-// InverseNameContainsFold applies the ContainsFold predicate on the "inverse_name" field.
-func InverseNameContainsFold(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldContainsFold(FieldInverseName, v))
-}
-
 // TypeIDEQ applies the EQ predicate on the "type_id" field.
 func TypeIDEQ(v string) predicate.Relationship {
 	return predicate.Relationship(sql.FieldEQ(FieldTypeID, v))
@@ -538,16 +458,6 @@ func TypeIDHasPrefix(v string) predicate.Relationship {
 // TypeIDHasSuffix applies the HasSuffix predicate on the "type_id" field.
 func TypeIDHasSuffix(v string) predicate.Relationship {
 	return predicate.Relationship(sql.FieldHasSuffix(FieldTypeID, v))
-}
-
-// TypeIDIsNil applies the IsNil predicate on the "type_id" field.
-func TypeIDIsNil() predicate.Relationship {
-	return predicate.Relationship(sql.FieldIsNull(FieldTypeID))
-}
-
-// TypeIDNotNil applies the NotNil predicate on the "type_id" field.
-func TypeIDNotNil() predicate.Relationship {
-	return predicate.Relationship(sql.FieldNotNull(FieldTypeID))
 }
 
 // TypeIDEqualFold applies the EqualFold predicate on the "type_id" field.
