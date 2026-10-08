@@ -135,8 +135,9 @@ type PutFile struct {
 	FileConditions
 	Blob BlobInput
 	// Tags and Values describe a new file; replacing content keeps its metadata.
-	Tags   []string
-	Values map[string]any
+	Tags          []string
+	Values        map[string]any
+	ContentTypeID string
 }
 
 // PutFile stores content at path in one transaction: it creates the item with
@@ -157,7 +158,7 @@ func (s *Service) PutFile(ctx context.Context, subject, libraryID string, path [
 			}
 			id = existing.ID
 		} else {
-			r, e := t.create(ctx, subject, parent.ID, CreateResource{Kind: "item", Name: path[len(path)-1], Tags: in.Tags, Values: in.Values}, &in.Blob)
+			r, e := t.create(ctx, subject, parent.ID, CreateResource{Kind: "item", Name: path[len(path)-1], Tags: in.Tags, Values: in.Values, ContentTypeID: in.ContentTypeID}, &in.Blob)
 			if e != nil {
 				return e
 			}

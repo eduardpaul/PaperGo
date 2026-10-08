@@ -10,9 +10,10 @@ import (
 const MaxBulkOperations = 100
 
 type BulkCreate struct {
-	Name   string         `json:"name"`
-	Tags   []string       `json:"tags,omitempty"`
-	Values map[string]any `json:"values,omitempty"`
+	ContentTypeID string         `json:"content_type_id,omitempty"`
+	Name          string         `json:"name"`
+	Tags          []string       `json:"tags,omitempty"`
+	Values        map[string]any `json:"values,omitempty"`
 }
 
 type BulkUpdate struct {
@@ -138,7 +139,7 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 		if p.ID != collectionID && (p.Kind != resource.KindFolder || p.ContainerID == nil || *p.ContainerID != collectionID) {
 			return result, invalid("create parent must belong to this collection")
 		}
-		r, err := s.create(ctx, subject, parentID, CreateResource{Kind: "item", Name: op.Create.Name, Tags: op.Create.Tags, Values: op.Create.Values}, nil)
+		r, err := s.create(ctx, subject, parentID, CreateResource{Kind: "item", Name: op.Create.Name, Tags: op.Create.Tags, Values: op.Create.Values, ContentTypeID: op.Create.ContentTypeID}, nil)
 		if err != nil {
 			return result, err
 		}

@@ -28,6 +28,8 @@ type Resource struct {
 	ParentID *string `json:"parent_id,omitempty"`
 	// ContainerID holds the value of the "container_id" field.
 	ContainerID *string `json:"container_id,omitempty"`
+	// ContentTypeID holds the value of the "content_type_id" field.
+	ContentTypeID *string `json:"content_type_id,omitempty"`
 	// Kind holds the value of the "kind" field.
 	Kind resource.Kind `json:"kind,omitempty"`
 	// Name holds the value of the "name" field.
@@ -263,7 +265,7 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case resource.FieldVersion, resource.FieldNextRevisionNumber:
 			values[i] = new(sql.NullInt64)
-		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldKind, resource.FieldName, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey:
+		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey:
 			values[i] = new(sql.NullString)
 		case resource.FieldCreatedAt, resource.FieldUpdatedAt, resource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -313,6 +315,13 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ContainerID = new(string)
 				*_m.ContainerID = value.String
+			}
+		case resource.FieldContentTypeID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field content_type_id", values[i])
+			} else if value.Valid {
+				_m.ContentTypeID = new(string)
+				*_m.ContentTypeID = value.String
 			}
 		case resource.FieldKind:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -556,6 +565,11 @@ func (_m *Resource) String() string {
 	builder.WriteString(", ")
 	if v := _m.ContainerID; v != nil {
 		builder.WriteString("container_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ContentTypeID; v != nil {
+		builder.WriteString("content_type_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

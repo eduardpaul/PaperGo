@@ -254,7 +254,7 @@ func (h *Handler) lock(w http.ResponseWriter, r *request) error {
 	status := http.StatusOK
 	if existing == nil {
 		// Locking an unmapped URL creates an empty file (RFC 4918 §7.3).
-		if _, _, err = h.store(r, r.path, bytes.NewReader(nil), contentType(r.path[len(r.path)-1], ""), dms.FileConditions{IfNoneMatch: "*"}, nil, nil); err != nil {
+		if _, _, err = h.store(r, r.path, bytes.NewReader(nil), contentType(r.path[len(r.path)-1], ""), dms.FileConditions{IfNoneMatch: "*"}, nil, nil, ""); err != nil {
 			h.locks.remove(l.token)
 			return err
 		}

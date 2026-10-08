@@ -119,6 +119,9 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 	if e = s.overlayHead(ctx, out); e != nil {
 		return nil, e
 	}
+	if e = s.syncBusinessKeys(ctx, out); e != nil {
+		return nil, e
+	}
 	return out, s.audit(ctx, subject, "item.unpublish", out, map[string]any{"revision_id": rev.ID})
 }
 func (s *Service) Publications(ctx context.Context, subject, id string, after, limit int) ([]*ent.Publication, error) {
@@ -204,7 +207,7 @@ func (s *Service) attachBlob(ctx context.Context, subject, id string, version in
 	if e != nil {
 		return nil, e
 	}
-	if _, e = s.recordRevision(ctx, subject, r, &out.ID); e != nil {
+	if _, e = s.recordRevision(ctx, subject, r, &out.ID, true); e != nil {
 		return nil, e
 	}
 	return out, s.audit(ctx, subject, "blob.attach", r, map[string]any{"blob_id": out.ID, "size": in.Size, "sha256": in.SHA256})

@@ -275,6 +275,9 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 		return invalid("choices belong to choice fields")
 	}
 	o := d.Options
+	if o.Unique && (!d.Indexed || o.Multiple || typ == "number") {
+		return invalid("unique business keys require an indexed scalar field with an exact type")
+	}
 	if len(o.Description) > 4096 {
 		return invalid("description exceeds 4096 bytes")
 	}

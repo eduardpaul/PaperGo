@@ -1507,7 +1507,39 @@
           "in": "path",
           "required": true
         }
-      ]
+      ],
+      "delete": {
+        "operationId": "deleteField",
+        "summary": "Remove field from the active schema (manage required)",
+        "description": "Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicit replacement values reject removed keys.",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "headers": {
+              "ETag": {
+                "description": "New collection version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Field removed"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     },
     "/v1/resources/{id}/schemas": {
       "parameters": [
@@ -5264,6 +5296,180 @@
           }
         }
       }
+    },
+    "/v1/resources/{id}/content-types": {
+      "parameters": [
+        {
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "in": "path",
+          "name": "id"
+        }
+      ],
+      "get": {
+        "operationId": "listContentTypes",
+        "summary": "List collection content types",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ContentType"
+                  },
+                  "maxItems": 32,
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createContentType",
+        "summary": "Create a collection content type (manage required)",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Current quoted numeric entity ETag. Creation uses the collection ETag; replacement uses the content type ETag.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContentTypeInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentType"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Quoted numeric entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/content-types/{id}": {
+      "parameters": [
+        {
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "in": "path",
+          "name": "id"
+        }
+      ],
+      "get": {
+        "operationId": "getContentType",
+        "summary": "Read content type",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentType"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Quoted numeric entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateContentType",
+        "summary": "Replace content type fields and rules (manage required)",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Current quoted numeric entity ETag. Creation uses the collection ETag; replacement uses the content type ETag.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContentTypeInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentType"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Quoted numeric entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5428,6 +5634,12 @@
             "type": "string",
             "readOnly": true,
             "description": "Creation actor or selected content revision modification actor."
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "description": "Immutable item content type assignment. Absent for other resource kinds."
           }
         },
         "required": [
@@ -5478,6 +5690,11 @@
             "default": false,
             "description": "Libraries only. Serves the library's folders and files at /webdav/{id}/.",
             "type": "boolean"
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Collection content type ID. Omission selects the collection default."
           }
         },
         "required": [
@@ -5647,6 +5864,11 @@
           },
           "options": {
             "$ref": "#/components/schemas/FieldOptions"
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Collection content type ID. Omission selects the collection default."
           }
         },
         "required": [
@@ -6059,6 +6281,10 @@
           "schema_revision_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid"
           }
         },
         "type": "object",
@@ -6072,7 +6298,8 @@
           "tags",
           "payload",
           "created_by",
-          "created_at"
+          "created_at",
+          "content_type_id"
         ]
       },
       "SchemaRevision": {
@@ -6145,7 +6372,8 @@
                 },
                 "type": "array"
               }
-            }
+            },
+            "description": "Frozen collection field catalog and content_types array with ID, key, name, field_keys, rules and is_default. Each item revision uses its immutable content_type_id within this snapshot."
           }
         },
         "type": "object",
@@ -6197,6 +6425,11 @@
           },
           "term_set_id": {
             "type": "string"
+          },
+          "unique": {
+            "type": "boolean",
+            "default": false,
+            "description": "Collection-wide exact, case-sensitive business key covering both head and published values. Requires indexed=true and a scalar type other than approximate number. Nulls do not reserve a key. Collisions return 409 and roll back the entire mutation or bulk batch."
           }
         },
         "required": [],
@@ -6234,9 +6467,16 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CreateField"
+              "$ref": "#/components/schemas/TemplateField"
             },
             "maxItems": 200
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationRule"
+            },
+            "maxItems": 32,
+            "type": "array"
           }
         },
         "required": [
@@ -6252,12 +6492,18 @@
           "template_version": {
             "type": "integer",
             "minimum": 1
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Collection content type ID. Omission selects the collection default."
           }
         },
         "required": [
           "template_version"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Apply compatible shared catalog field definitions and merge rules by key into the selected content type (default when omitted), recording one frozen collection schema. Other type memberships are retained."
       },
       "TermSetInput": {
         "type": "object",
@@ -6454,6 +6700,11 @@
           "tag": {
             "type": "string",
             "maxLength": 64
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type."
           }
         },
         "required": [],
@@ -6956,6 +7207,11 @@
           "values": {
             "type": "object",
             "additionalProperties": true
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Collection content type ID. Omission selects the collection default."
           }
         }
       },
@@ -7181,6 +7437,262 @@
             }
           }
         }
+      },
+      "ValidationRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "field",
+          "op",
+          "message"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "field": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "eq",
+              "ne",
+              "gt",
+              "gte",
+              "lt",
+              "lte",
+              "required_if"
+            ]
+          },
+          "other_field": {
+            "type": "string"
+          },
+          "when_field": {
+            "type": "string"
+          },
+          "when_value": {
+            "description": "Non-null scalar value compatible with when_field"
+          },
+          "message": {
+            "minLength": 1,
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "description": "Comparisons require other_field of the same scalar type and decimal scale; null operands skip comparison. required_if requires when_field and non-null when_value and requires field when those values are equal. Ordered comparisons exclude boolean, choice, lookup and term. Maximum 32 rules per type.",
+        "oneOf": [
+          {
+            "required": [
+              "when_field",
+              "when_value"
+            ],
+            "properties": {
+              "op": {
+                "const": "required_if"
+              }
+            },
+            "not": {
+              "required": [
+                "other_field"
+              ]
+            }
+          },
+          {
+            "required": [
+              "other_field"
+            ],
+            "properties": {
+              "op": {
+                "enum": [
+                  "eq",
+                  "ne",
+                  "gt",
+                  "gte",
+                  "lt",
+                  "lte"
+                ]
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "when_field"
+                  ]
+                },
+                {
+                  "required": [
+                    "when_value"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "ContentTypeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "field_keys"
+        ],
+        "properties": {
+          "key": {
+            "description": "Required for creation, immutable. May be omitted for replacement.",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "maxLength": 255,
+            "type": "string"
+          },
+          "field_keys": {
+            "description": "Keys from the shared collection field catalog.",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true,
+            "maxItems": 200,
+            "type": "array"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationRule"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "is_default": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "description": "At most 32 content types per collection, with exactly one default. Replacements validate existing heads against the proposed fields and rules atomically. Selecting a default advances the former default type version."
+      },
+      "ContentType": {
+        "type": "object",
+        "required": [
+          "id",
+          "container_id",
+          "key",
+          "name",
+          "field_keys",
+          "rules",
+          "is_default",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "container_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "field_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationRule"
+            }
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "TemplateField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "note",
+              "email",
+              "url",
+              "date",
+              "datetime",
+              "choice",
+              "integer",
+              "decimal",
+              "number",
+              "boolean",
+              "lookup",
+              "term"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "indexed": {
+            "default": false,
+            "description": "Opt-in typed query projection. Changes rebuild both surfaces atomically.",
+            "type": "boolean"
+          },
+          "scale": {
+            "default": 0,
+            "minimum": 0,
+            "description": "Immutable decimal scale; zero for all other field types. Scaled units must fit signed 64 bits.",
+            "type": "integer",
+            "maximum": 9
+          },
+          "options": {
+            "$ref": "#/components/schemas/FieldOptions"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type"
+        ],
+        "additionalProperties": false
       }
     }
   }

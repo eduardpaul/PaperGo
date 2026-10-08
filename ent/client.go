@@ -13,6 +13,8 @@ import (
 
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
+	"papergo/ent/businesskey"
+	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
@@ -46,6 +48,10 @@ type Client struct {
 	AuditEvent *AuditEventClient
 	// Blob is the client for interacting with the Blob builders.
 	Blob *BlobClient
+	// BusinessKey is the client for interacting with the BusinessKey builders.
+	BusinessKey *BusinessKeyClient
+	// ContentType is the client for interacting with the ContentType builders.
+	ContentType *ContentTypeClient
 	// FieldDefinition is the client for interacting with the FieldDefinition builders.
 	FieldDefinition *FieldDefinitionClient
 	// FieldValue is the client for interacting with the FieldValue builders.
@@ -89,6 +95,8 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AuditEvent = NewAuditEventClient(c.config)
 	c.Blob = NewBlobClient(c.config)
+	c.BusinessKey = NewBusinessKeyClient(c.config)
+	c.ContentType = NewContentTypeClient(c.config)
 	c.FieldDefinition = NewFieldDefinitionClient(c.config)
 	c.FieldValue = NewFieldValueClient(c.config)
 	c.Grant = NewGrantClient(c.config)
@@ -198,6 +206,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:           cfg,
 		AuditEvent:       NewAuditEventClient(cfg),
 		Blob:             NewBlobClient(cfg),
+		BusinessKey:      NewBusinessKeyClient(cfg),
+		ContentType:      NewContentTypeClient(cfg),
 		FieldDefinition:  NewFieldDefinitionClient(cfg),
 		FieldValue:       NewFieldValueClient(cfg),
 		Grant:            NewGrantClient(cfg),
@@ -234,6 +244,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:           cfg,
 		AuditEvent:       NewAuditEventClient(cfg),
 		Blob:             NewBlobClient(cfg),
+		BusinessKey:      NewBusinessKeyClient(cfg),
+		ContentType:      NewContentTypeClient(cfg),
 		FieldDefinition:  NewFieldDefinitionClient(cfg),
 		FieldValue:       NewFieldValueClient(cfg),
 		Grant:            NewGrantClient(cfg),
@@ -278,10 +290,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuditEvent, c.Blob, c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision,
-		c.ItemSurface, c.ListView, c.Publication, c.Relationship, c.RelationshipType,
-		c.Resource, c.SchemaRevision, c.SchemaTemplate, c.Term, c.TermSet,
-		c.WebDAVCredential,
+		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.FieldDefinition,
+		c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface, c.ListView,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.Term, c.TermSet, c.WebDAVCredential,
 	} {
 		n.Use(hooks...)
 	}
@@ -291,10 +303,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuditEvent, c.Blob, c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision,
-		c.ItemSurface, c.ListView, c.Publication, c.Relationship, c.RelationshipType,
-		c.Resource, c.SchemaRevision, c.SchemaTemplate, c.Term, c.TermSet,
-		c.WebDAVCredential,
+		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.FieldDefinition,
+		c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface, c.ListView,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.Term, c.TermSet, c.WebDAVCredential,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -307,6 +319,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AuditEvent.mutate(ctx, m)
 	case *BlobMutation:
 		return c.Blob.mutate(ctx, m)
+	case *BusinessKeyMutation:
+		return c.BusinessKey.mutate(ctx, m)
+	case *ContentTypeMutation:
+		return c.ContentType.mutate(ctx, m)
 	case *FieldDefinitionMutation:
 		return c.FieldDefinition.mutate(ctx, m)
 	case *FieldValueMutation:
@@ -621,6 +637,320 @@ func (c *BlobClient) mutate(ctx context.Context, m *BlobMutation) (Value, error)
 		return (&BlobDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Blob mutation op: %q", m.Op())
+	}
+}
+
+// BusinessKeyClient is a client for the BusinessKey schema.
+type BusinessKeyClient struct {
+	config
+}
+
+// NewBusinessKeyClient returns a client for the BusinessKey from the given config.
+func NewBusinessKeyClient(c config) *BusinessKeyClient {
+	return &BusinessKeyClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `businesskey.Hooks(f(g(h())))`.
+func (c *BusinessKeyClient) Use(hooks ...Hook) {
+	c.hooks.BusinessKey = append(c.hooks.BusinessKey, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `businesskey.Intercept(f(g(h())))`.
+func (c *BusinessKeyClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BusinessKey = append(c.inters.BusinessKey, interceptors...)
+}
+
+// Create returns a builder for creating a BusinessKey entity.
+func (c *BusinessKeyClient) Create() *BusinessKeyCreate {
+	mutation := newBusinessKeyMutation(c.config, OpCreate)
+	return &BusinessKeyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BusinessKey entities.
+func (c *BusinessKeyClient) CreateBulk(builders ...*BusinessKeyCreate) *BusinessKeyCreateBulk {
+	return &BusinessKeyCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BusinessKeyClient) MapCreateBulk(slice any, setFunc func(*BusinessKeyCreate, int)) *BusinessKeyCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BusinessKeyCreateBulk{err: fmt.Errorf("calling to BusinessKeyClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BusinessKeyCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BusinessKeyCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BusinessKey.
+func (c *BusinessKeyClient) Update() *BusinessKeyUpdate {
+	mutation := newBusinessKeyMutation(c.config, OpUpdate)
+	return &BusinessKeyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BusinessKeyClient) UpdateOne(_m *BusinessKey) *BusinessKeyUpdateOne {
+	mutation := newBusinessKeyMutation(c.config, OpUpdateOne, withBusinessKey(_m))
+	return &BusinessKeyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BusinessKeyClient) UpdateOneID(id string) *BusinessKeyUpdateOne {
+	mutation := newBusinessKeyMutation(c.config, OpUpdateOne, withBusinessKeyID(id))
+	return &BusinessKeyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BusinessKey.
+func (c *BusinessKeyClient) Delete() *BusinessKeyDelete {
+	mutation := newBusinessKeyMutation(c.config, OpDelete)
+	return &BusinessKeyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BusinessKeyClient) DeleteOne(_m *BusinessKey) *BusinessKeyDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BusinessKeyClient) DeleteOneID(id string) *BusinessKeyDeleteOne {
+	builder := c.Delete().Where(businesskey.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BusinessKeyDeleteOne{builder}
+}
+
+// Query returns a query builder for BusinessKey.
+func (c *BusinessKeyClient) Query() *BusinessKeyQuery {
+	return &BusinessKeyQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBusinessKey},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BusinessKey entity by its id.
+func (c *BusinessKeyClient) Get(ctx context.Context, id string) (*BusinessKey, error) {
+	return c.Query().Where(businesskey.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BusinessKeyClient) GetX(ctx context.Context, id string) *BusinessKey {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryItem queries the item edge of a BusinessKey.
+func (c *BusinessKeyClient) QueryItem(_m *BusinessKey) *ResourceQuery {
+	query := (&ResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(businesskey.Table, businesskey.FieldID, id),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, businesskey.ItemTable, businesskey.ItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryContainer queries the container edge of a BusinessKey.
+func (c *BusinessKeyClient) QueryContainer(_m *BusinessKey) *ResourceQuery {
+	query := (&ResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(businesskey.Table, businesskey.FieldID, id),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, businesskey.ContainerTable, businesskey.ContainerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *BusinessKeyClient) Hooks() []Hook {
+	return c.hooks.BusinessKey
+}
+
+// Interceptors returns the client interceptors.
+func (c *BusinessKeyClient) Interceptors() []Interceptor {
+	return c.inters.BusinessKey
+}
+
+func (c *BusinessKeyClient) mutate(ctx context.Context, m *BusinessKeyMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BusinessKeyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BusinessKeyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BusinessKeyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BusinessKeyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BusinessKey mutation op: %q", m.Op())
+	}
+}
+
+// ContentTypeClient is a client for the ContentType schema.
+type ContentTypeClient struct {
+	config
+}
+
+// NewContentTypeClient returns a client for the ContentType from the given config.
+func NewContentTypeClient(c config) *ContentTypeClient {
+	return &ContentTypeClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `contenttype.Hooks(f(g(h())))`.
+func (c *ContentTypeClient) Use(hooks ...Hook) {
+	c.hooks.ContentType = append(c.hooks.ContentType, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `contenttype.Intercept(f(g(h())))`.
+func (c *ContentTypeClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ContentType = append(c.inters.ContentType, interceptors...)
+}
+
+// Create returns a builder for creating a ContentType entity.
+func (c *ContentTypeClient) Create() *ContentTypeCreate {
+	mutation := newContentTypeMutation(c.config, OpCreate)
+	return &ContentTypeCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ContentType entities.
+func (c *ContentTypeClient) CreateBulk(builders ...*ContentTypeCreate) *ContentTypeCreateBulk {
+	return &ContentTypeCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ContentTypeClient) MapCreateBulk(slice any, setFunc func(*ContentTypeCreate, int)) *ContentTypeCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ContentTypeCreateBulk{err: fmt.Errorf("calling to ContentTypeClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ContentTypeCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ContentTypeCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ContentType.
+func (c *ContentTypeClient) Update() *ContentTypeUpdate {
+	mutation := newContentTypeMutation(c.config, OpUpdate)
+	return &ContentTypeUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ContentTypeClient) UpdateOne(_m *ContentType) *ContentTypeUpdateOne {
+	mutation := newContentTypeMutation(c.config, OpUpdateOne, withContentType(_m))
+	return &ContentTypeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ContentTypeClient) UpdateOneID(id string) *ContentTypeUpdateOne {
+	mutation := newContentTypeMutation(c.config, OpUpdateOne, withContentTypeID(id))
+	return &ContentTypeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ContentType.
+func (c *ContentTypeClient) Delete() *ContentTypeDelete {
+	mutation := newContentTypeMutation(c.config, OpDelete)
+	return &ContentTypeDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ContentTypeClient) DeleteOne(_m *ContentType) *ContentTypeDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ContentTypeClient) DeleteOneID(id string) *ContentTypeDeleteOne {
+	builder := c.Delete().Where(contenttype.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ContentTypeDeleteOne{builder}
+}
+
+// Query returns a query builder for ContentType.
+func (c *ContentTypeClient) Query() *ContentTypeQuery {
+	return &ContentTypeQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeContentType},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ContentType entity by its id.
+func (c *ContentTypeClient) Get(ctx context.Context, id string) (*ContentType, error) {
+	return c.Query().Where(contenttype.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ContentTypeClient) GetX(ctx context.Context, id string) *ContentType {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryContainer queries the container edge of a ContentType.
+func (c *ContentTypeClient) QueryContainer(_m *ContentType) *ResourceQuery {
+	query := (&ResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(contenttype.Table, contenttype.FieldID, id),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, contenttype.ContainerTable, contenttype.ContainerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ContentTypeClient) Hooks() []Hook {
+	return c.hooks.ContentType
+}
+
+// Interceptors returns the client interceptors.
+func (c *ContentTypeClient) Interceptors() []Interceptor {
+	return c.inters.ContentType
+}
+
+func (c *ContentTypeClient) mutate(ctx context.Context, m *ContentTypeMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ContentTypeCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ContentTypeUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ContentTypeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ContentTypeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ContentType mutation op: %q", m.Op())
 	}
 }
 
@@ -3246,14 +3576,15 @@ func (c *WebDAVCredentialClient) mutate(ctx context.Context, m *WebDAVCredential
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditEvent, Blob, FieldDefinition, FieldValue, Grant, ItemRevision, ItemSurface,
-		ListView, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, Term, TermSet, WebDAVCredential []ent.Hook
+		AuditEvent, Blob, BusinessKey, ContentType, FieldDefinition, FieldValue, Grant,
+		ItemRevision, ItemSurface, ListView, Publication, Relationship,
+		RelationshipType, Resource, SchemaRevision, SchemaTemplate, Term, TermSet,
+		WebDAVCredential []ent.Hook
 	}
 	inters struct {
-		AuditEvent, Blob, FieldDefinition, FieldValue, Grant, ItemRevision, ItemSurface,
-		ListView, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, Term, TermSet,
+		AuditEvent, Blob, BusinessKey, ContentType, FieldDefinition, FieldValue, Grant,
+		ItemRevision, ItemSurface, ListView, Publication, Relationship,
+		RelationshipType, Resource, SchemaRevision, SchemaTemplate, Term, TermSet,
 		WebDAVCredential []ent.Interceptor
 	}
 )

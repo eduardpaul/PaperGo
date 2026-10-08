@@ -12,6 +12,12 @@ type AuditEvent func(*sql.Selector)
 // Blob is the predicate function for blob builders.
 type Blob func(*sql.Selector)
 
+// BusinessKey is the predicate function for businesskey builders.
+type BusinessKey func(*sql.Selector)
+
+// ContentType is the predicate function for contenttype builders.
+type ContentType func(*sql.Selector)
+
 // FieldDefinition is the predicate function for fielddefinition builders.
 type FieldDefinition func(*sql.Selector)
 

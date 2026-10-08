@@ -80,6 +80,11 @@ func ContainerID(v string) predicate.ItemRevision {
 	return predicate.ItemRevision(sql.FieldEQ(FieldContainerID, v))
 }
 
+// ContentTypeID applies equality check predicate on the "content_type_id" field. It's identical to ContentTypeIDEQ.
+func ContentTypeID(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldEQ(FieldContentTypeID, v))
+}
+
 // SchemaRevisionID applies equality check predicate on the "schema_revision_id" field. It's identical to SchemaRevisionIDEQ.
 func SchemaRevisionID(v string) predicate.ItemRevision {
 	return predicate.ItemRevision(sql.FieldEQ(FieldSchemaRevisionID, v))
@@ -273,6 +278,71 @@ func ContainerIDEqualFold(v string) predicate.ItemRevision {
 // ContainerIDContainsFold applies the ContainsFold predicate on the "container_id" field.
 func ContainerIDContainsFold(v string) predicate.ItemRevision {
 	return predicate.ItemRevision(sql.FieldContainsFold(FieldContainerID, v))
+}
+
+// ContentTypeIDEQ applies the EQ predicate on the "content_type_id" field.
+func ContentTypeIDEQ(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldEQ(FieldContentTypeID, v))
+}
+
+// ContentTypeIDNEQ applies the NEQ predicate on the "content_type_id" field.
+func ContentTypeIDNEQ(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldNEQ(FieldContentTypeID, v))
+}
+
+// ContentTypeIDIn applies the In predicate on the "content_type_id" field.
+func ContentTypeIDIn(vs ...string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldIn(FieldContentTypeID, vs...))
+}
+
+// ContentTypeIDNotIn applies the NotIn predicate on the "content_type_id" field.
+func ContentTypeIDNotIn(vs ...string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldNotIn(FieldContentTypeID, vs...))
+}
+
+// ContentTypeIDGT applies the GT predicate on the "content_type_id" field.
+func ContentTypeIDGT(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldGT(FieldContentTypeID, v))
+}
+
+// ContentTypeIDGTE applies the GTE predicate on the "content_type_id" field.
+func ContentTypeIDGTE(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldGTE(FieldContentTypeID, v))
+}
+
+// ContentTypeIDLT applies the LT predicate on the "content_type_id" field.
+func ContentTypeIDLT(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldLT(FieldContentTypeID, v))
+}
+
+// ContentTypeIDLTE applies the LTE predicate on the "content_type_id" field.
+func ContentTypeIDLTE(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldLTE(FieldContentTypeID, v))
+}
+
+// ContentTypeIDContains applies the Contains predicate on the "content_type_id" field.
+func ContentTypeIDContains(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldContains(FieldContentTypeID, v))
+}
+
+// ContentTypeIDHasPrefix applies the HasPrefix predicate on the "content_type_id" field.
+func ContentTypeIDHasPrefix(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldHasPrefix(FieldContentTypeID, v))
+}
+
+// ContentTypeIDHasSuffix applies the HasSuffix predicate on the "content_type_id" field.
+func ContentTypeIDHasSuffix(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldHasSuffix(FieldContentTypeID, v))
+}
+
+// ContentTypeIDEqualFold applies the EqualFold predicate on the "content_type_id" field.
+func ContentTypeIDEqualFold(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldEqualFold(FieldContentTypeID, v))
+}
+
+// ContentTypeIDContainsFold applies the ContainsFold predicate on the "content_type_id" field.
+func ContentTypeIDContainsFold(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldContainsFold(FieldContentTypeID, v))
 }
 
 // SchemaRevisionIDEQ applies the EQ predicate on the "schema_revision_id" field.

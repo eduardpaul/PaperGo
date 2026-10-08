@@ -5,6 +5,7 @@ import "encoding/json"
 // FieldOptions is retained in immutable effective schema snapshots.
 // String bounds preserve exact integer and decimal precision.
 type FieldOptions struct {
+	Unique            bool            `json:"unique,omitempty"`
 	Description       string          `json:"description,omitempty"`
 	DefaultValue      json.RawMessage `json:"default_value,omitempty"`
 	MaxLength         *int            `json:"max_length,omitempty"`

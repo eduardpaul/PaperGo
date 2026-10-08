@@ -70,6 +70,94 @@ var (
 			},
 		},
 	}
+	// BusinessKeysColumns holds the columns for the "business_keys" table.
+	BusinessKeysColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "field_key", Type: field.TypeString},
+		{Name: "value", Type: field.TypeString},
+		{Name: "item_id", Type: field.TypeString, Size: 36},
+		{Name: "container_id", Type: field.TypeString, Size: 36},
+	}
+	// BusinessKeysTable holds the schema information for the "business_keys" table.
+	BusinessKeysTable = &schema.Table{
+		Name:       "business_keys",
+		Columns:    BusinessKeysColumns,
+		PrimaryKey: []*schema.Column{BusinessKeysColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "business_keys_resources_item",
+				Columns:    []*schema.Column{BusinessKeysColumns[4]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "business_keys_resources_container",
+				Columns:    []*schema.Column{BusinessKeysColumns[5]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "businesskey_container_id_field_key_value",
+				Unique:  true,
+				Columns: []*schema.Column{BusinessKeysColumns[5], BusinessKeysColumns[2], BusinessKeysColumns[3]},
+			},
+			{
+				Name:    "businesskey_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{BusinessKeysColumns[4]},
+			},
+		},
+	}
+	// ContentTypesColumns holds the columns for the "content_types" table.
+	ContentTypesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "key", Type: field.TypeString, Size: 64},
+		{Name: "name", Type: field.TypeString, Size: 255},
+		{Name: "field_keys", Type: field.TypeJSON},
+		{Name: "rules", Type: field.TypeJSON},
+		{Name: "is_default", Type: field.TypeBool, Default: false},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "container_id", Type: field.TypeString, Size: 36},
+	}
+	// ContentTypesTable holds the schema information for the "content_types" table.
+	ContentTypesTable = &schema.Table{
+		Name:       "content_types",
+		Columns:    ContentTypesColumns,
+		PrimaryKey: []*schema.Column{ContentTypesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "content_types_resources_container",
+				Columns:    []*schema.Column{ContentTypesColumns[9]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "contenttype_container_id_key",
+				Unique:  true,
+				Columns: []*schema.Column{ContentTypesColumns[9], ContentTypesColumns[2]},
+			},
+			{
+				Name:    "contenttype_container_id_id",
+				Unique:  true,
+				Columns: []*schema.Column{ContentTypesColumns[9], ContentTypesColumns[0]},
+			},
+			{
+				Name:    "contenttype_container_id",
+				Unique:  true,
+				Columns: []*schema.Column{ContentTypesColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "is_default=1",
+				},
+			},
+		},
+	}
 	// FieldDefinitionsColumns holds the columns for the "field_definitions" table.
 	FieldDefinitionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -203,6 +291,7 @@ var (
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "container_id", Type: field.TypeString},
+		{Name: "content_type_id", Type: field.TypeString},
 		{Name: "revision_number", Type: field.TypeInt},
 		{Name: "name", Type: field.TypeString, Size: 255},
 		{Name: "tags", Type: field.TypeJSON},
@@ -220,19 +309,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "item_revisions_blobs_blob",
-				Columns:    []*schema.Column{ItemRevisionsColumns[8]},
+				Columns:    []*schema.Column{ItemRevisionsColumns[9]},
 				RefColumns: []*schema.Column{BlobsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "item_revisions_resources_revisions",
-				Columns:    []*schema.Column{ItemRevisionsColumns[9]},
+				Columns:    []*schema.Column{ItemRevisionsColumns[10]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "item_revisions_schema_revisions_items",
-				Columns:    []*schema.Column{ItemRevisionsColumns[10]},
+				Columns:    []*schema.Column{ItemRevisionsColumns[11]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -241,12 +330,12 @@ var (
 			{
 				Name:    "itemrevision_item_id_revision_number",
 				Unique:  true,
-				Columns: []*schema.Column{ItemRevisionsColumns[9], ItemRevisionsColumns[3]},
+				Columns: []*schema.Column{ItemRevisionsColumns[10], ItemRevisionsColumns[4]},
 			},
 			{
 				Name:    "itemrevision_item_id_id",
 				Unique:  true,
-				Columns: []*schema.Column{ItemRevisionsColumns[9], ItemRevisionsColumns[0]},
+				Columns: []*schema.Column{ItemRevisionsColumns[10], ItemRevisionsColumns[0]},
 			},
 		},
 	}
@@ -513,6 +602,7 @@ var (
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "workspace_id", Type: field.TypeString, Size: 36},
+		{Name: "content_type_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "kind", Type: field.TypeEnum, Enums: []string{"workspace", "list", "library", "folder", "item"}},
 		{Name: "name", Type: field.TypeString, Size: 255},
 		{Name: "tags", Type: field.TypeJSON},
@@ -542,31 +632,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[18]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[19]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_head_revision",
+				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[20]},
-				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_published_revision",
+				Symbol:     "resources_item_revisions_head_revision",
 				Columns:    []*schema.Column{ResourcesColumns[21]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_schema_revisions_schema_head",
+				Symbol:     "resources_item_revisions_published_revision",
 				Columns:    []*schema.Column{ResourcesColumns[22]},
+				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "resources_schema_revisions_schema_head",
+				Columns:    []*schema.Column{ResourcesColumns[23]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -575,27 +665,32 @@ var (
 			{
 				Name:    "resource_workspace_id_kind_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[3], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[4], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_workspace_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[15]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[16]},
 			},
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[18], ResourcesColumns[0], ResourcesColumns[15]},
+				Columns: []*schema.Column{ResourcesColumns[19], ResourcesColumns[0], ResourcesColumns[16]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[19], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[20], ResourcesColumns[0]},
+			},
+			{
+				Name:    "resource_container_id_content_type_id_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[20], ResourcesColumns[3], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[18], ResourcesColumns[16]},
+				Columns: []*schema.Column{ResourcesColumns[19], ResourcesColumns[17]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
 				},
@@ -774,6 +869,8 @@ var (
 	Tables = []*schema.Table{
 		AuditEventsTable,
 		BlobsTable,
+		BusinessKeysTable,
+		ContentTypesTable,
 		FieldDefinitionsTable,
 		FieldValuesTable,
 		GrantsTable,
@@ -794,6 +891,9 @@ var (
 
 func init() {
 	BlobsTable.ForeignKeys[0].RefTable = ResourcesTable
+	BusinessKeysTable.ForeignKeys[0].RefTable = ResourcesTable
+	BusinessKeysTable.ForeignKeys[1].RefTable = ResourcesTable
+	ContentTypesTable.ForeignKeys[0].RefTable = ResourcesTable
 	FieldDefinitionsTable.ForeignKeys[0].RefTable = ResourcesTable
 	FieldValuesTable.ForeignKeys[0].RefTable = ItemSurfacesTable
 	GrantsTable.ForeignKeys[0].RefTable = ResourcesTable

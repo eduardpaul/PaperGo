@@ -3,10 +3,12 @@ package dms
 import (
 	"context"
 	"papergo/ent"
+	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
+	"papergo/ent/resource"
 	"papergo/ent/schemarevision"
 	"papergo/internal/model"
 )
@@ -66,6 +68,9 @@ func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID
 		if in.Required != nil {
 			candidate.Required = *in.Required
 		}
+		if in.Indexed != nil {
+			candidate.Indexed = *in.Indexed
+		}
 		if in.Choices != nil {
 			candidate.Choices = *in.Choices
 		}
@@ -117,6 +122,11 @@ func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID
 				return e
 			}
 		}
+		if d.Options.Unique != candidate.Options.Unique {
+			if e = t.rebuildBusinessKeys(ctx, containerID); e != nil {
+				return e
+			}
+		}
 		return t.audit(ctx, subject, "field.update", c, map[string]any{"field_id": fieldID, "key": d.Key})
 	})
 	return
@@ -133,10 +143,35 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	if len(keys) == 0 {
 		return nil
 	}
+	types, err := s.Client.ContentType.Query().Where(contenttype.ContainerIDEQ(containerID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	membership := map[string]map[string]bool{}
+	for _, typ := range types {
+		membership[typ.ID] = map[string]bool{}
+		for _, key := range typ.FieldKeys {
+			membership[typ.ID][key] = true
+		}
+	}
 	for after := ""; ; {
 		heads, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID), itemsurface.SurfaceEQ(itemsurface.SurfaceHead), itemsurface.ItemIDGT(after)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(surfaceBatch).Select(itemsurface.FieldItemID, itemsurface.FieldPayload).All(ctx)
 		if e != nil {
 			return e
+		}
+		ids := []string{}
+		for _, head := range heads {
+			ids = append(ids, head.ItemID)
+		}
+		items, e := s.Client.Resource.Query().Where(resource.IDIn(ids...)).Select(resource.FieldID, resource.FieldContentTypeID).All(ctx)
+		if e != nil {
+			return e
+		}
+		itemTypes := map[string]string{}
+		for _, item := range items {
+			if item.ContentTypeID != nil {
+				itemTypes[item.ID] = *item.ContentTypeID
+			}
 		}
 		for _, h := range heads {
 			values, e := decodeValues(h.Payload)
@@ -144,6 +179,9 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 				return e
 			}
 			for _, key := range keys {
+				if !membership[itemTypes[h.ItemID]][key] {
+					continue
+				}
 				if emptyValue(values[key]) {
 					return invalid("required fields on populated collections need a default or a value on every item: " + key)
 				}

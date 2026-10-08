@@ -23,6 +23,8 @@ const (
 	FieldParentID = "parent_id"
 	// FieldContainerID holds the string denoting the container_id field in the database.
 	FieldContainerID = "container_id"
+	// FieldContentTypeID holds the string denoting the content_type_id field in the database.
+	FieldContentTypeID = "content_type_id"
 	// FieldKind holds the string denoting the kind field in the database.
 	FieldKind = "kind"
 	// FieldName holds the string denoting the name field in the database.
@@ -193,6 +195,7 @@ var Columns = []string{
 	FieldWorkspaceID,
 	FieldParentID,
 	FieldContainerID,
+	FieldContentTypeID,
 	FieldKind,
 	FieldName,
 	FieldTags,
@@ -232,6 +235,8 @@ var (
 	ParentIDValidator func(string) error
 	// ContainerIDValidator is a validator for the "container_id" field. It is called by the builders before save.
 	ContainerIDValidator func(string) error
+	// ContentTypeIDValidator is a validator for the "content_type_id" field. It is called by the builders before save.
+	ContentTypeIDValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
 	// DefaultTags holds the default value on creation for the "tags" field.
@@ -322,6 +327,11 @@ func ByParentID(opts ...sql.OrderTermOption) OrderOption {
 // ByContainerID orders the results by the container_id field.
 func ByContainerID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldContainerID, opts...).ToFunc()
+}
+
+// ByContentTypeID orders the results by the content_type_id field.
+func ByContentTypeID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContentTypeID, opts...).ToFunc()
 }
 
 // ByKind orders the results by the kind field.

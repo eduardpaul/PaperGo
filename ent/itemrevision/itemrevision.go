@@ -20,6 +20,8 @@ const (
 	FieldItemID = "item_id"
 	// FieldContainerID holds the string denoting the container_id field in the database.
 	FieldContainerID = "container_id"
+	// FieldContentTypeID holds the string denoting the content_type_id field in the database.
+	FieldContentTypeID = "content_type_id"
 	// FieldSchemaRevisionID holds the string denoting the schema_revision_id field in the database.
 	FieldSchemaRevisionID = "schema_revision_id"
 	// FieldBlobID holds the string denoting the blob_id field in the database.
@@ -71,6 +73,7 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldItemID,
 	FieldContainerID,
+	FieldContentTypeID,
 	FieldSchemaRevisionID,
 	FieldBlobID,
 	FieldRevisionNumber,
@@ -126,6 +129,11 @@ func ByItemID(opts ...sql.OrderTermOption) OrderOption {
 // ByContainerID orders the results by the container_id field.
 func ByContainerID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldContainerID, opts...).ToFunc()
+}
+
+// ByContentTypeID orders the results by the content_type_id field.
+func ByContentTypeID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContentTypeID, opts...).ToFunc()
 }
 
 // BySchemaRevisionID orders the results by the schema_revision_id field.

@@ -28,6 +28,8 @@ type ItemRevision struct {
 	ItemID string `json:"item_id,omitempty"`
 	// ContainerID holds the value of the "container_id" field.
 	ContainerID string `json:"container_id,omitempty"`
+	// ContentTypeID holds the value of the "content_type_id" field.
+	ContentTypeID string `json:"content_type_id,omitempty"`
 	// SchemaRevisionID holds the value of the "schema_revision_id" field.
 	SchemaRevisionID string `json:"schema_revision_id,omitempty"`
 	// BlobID holds the value of the "blob_id" field.
@@ -103,7 +105,7 @@ func (*ItemRevision) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case itemrevision.FieldRevisionNumber:
 			values[i] = new(sql.NullInt64)
-		case itemrevision.FieldID, itemrevision.FieldItemID, itemrevision.FieldContainerID, itemrevision.FieldSchemaRevisionID, itemrevision.FieldBlobID, itemrevision.FieldName, itemrevision.FieldCreatedBy:
+		case itemrevision.FieldID, itemrevision.FieldItemID, itemrevision.FieldContainerID, itemrevision.FieldContentTypeID, itemrevision.FieldSchemaRevisionID, itemrevision.FieldBlobID, itemrevision.FieldName, itemrevision.FieldCreatedBy:
 			values[i] = new(sql.NullString)
 		case itemrevision.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -145,6 +147,12 @@ func (_m *ItemRevision) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field container_id", values[i])
 			} else if value.Valid {
 				_m.ContainerID = value.String
+			}
+		case itemrevision.FieldContentTypeID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field content_type_id", values[i])
+			} else if value.Valid {
+				_m.ContentTypeID = value.String
 			}
 		case itemrevision.FieldSchemaRevisionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -252,6 +260,9 @@ func (_m *ItemRevision) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("container_id=")
 	builder.WriteString(_m.ContainerID)
+	builder.WriteString(", ")
+	builder.WriteString("content_type_id=")
+	builder.WriteString(_m.ContentTypeID)
 	builder.WriteString(", ")
 	builder.WriteString("schema_revision_id=")
 	builder.WriteString(_m.SchemaRevisionID)

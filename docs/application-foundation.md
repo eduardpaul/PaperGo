@@ -40,7 +40,7 @@ Field creation retains key, label, type, required, choices, indexed, and decimal
 }
 ```
 
-Options include description, default_value (a JSON value), max_length, minimum/maximum (exact numeric strings), multiple, lookup_container_id, and term_set_id. Text/choice/reference fields can have multiple values; arrays contain at most 100 non-null members and duplicate normalized values are removed. Required arrays must remain nonempty.
+Options include description, default_value (a JSON value), max_length, minimum/maximum (exact numeric strings), multiple, lookup_container_id, term_set_id, and unique. Text/choice/reference fields can have multiple values; arrays contain at most 100 non-null members and duplicate normalized values are removed. Required arrays must remain nonempty.
 
 Email fields accept a plain address; URL fields accept an absolute HTTP(S) URL without credentials; date fields use YYYY-MM-DD; datetimes normalize to UTC. Defaults fill absent fields when writing a revision; explicit null remains null for optional fields. Defaults are validated before saving field definitions. Required fields can be added to populated collections when they have a valid default, without rewriting old revisions.
 
@@ -60,11 +60,29 @@ Templates are workspace-managed schema definitions with stable keys and concurre
 | GET / PUT | /v1/templates/{id} | Read or replace a template |
 | POST | /v1/resources/{id}/templates/{templateID}/apply | Explicitly adopt a template into a collection |
 
-Create a template with key, name, optional description, and a fields array using field-creation bodies. Updating a template requires its own If-Match and does not change consumers.
+Create a template with key, name, optional description, a fields array, and optional cross-field rules. Template fields cannot select a content type. Updating a template requires its own If-Match and does not change consumers.
 
-Applying requires the current collection If-Match and `{"template_version":1}`. The adoption adds fields and updates compatible existing definitions, retains other collection fields, rebuilds query projections, and records exactly one new effective schema revision in one transaction. Incompatible field identities or stale template versions reject the entire operation. Audit events record the template ID/version and resulting schema revision.
+Applying requires the current collection If-Match and `{"template_version":1,"content_type_id":"..."}`; omitting content_type_id selects the default type. Adoption adds fields to that type, updates compatible shared catalog definitions, merges rules by stable key, rebuilds query projections and business key claims, and records exactly one new effective schema revision in one transaction. Other type memberships remain intact. Incompatible field identities, invalid existing heads, duplicate keys or stale versions reject the entire operation. Audit events record the template ID/version, content type and resulting schema revision.
 
-Existing item revisions keep their previous schema. Later content edits adopt the collection's effective schema; publishing an older revision does not reinterpret it. Templates can be reused across collections within their workspace. Multiple content types per collection are not introduced by this template model.
+Existing item revisions keep their frozen schema. Later content edits adopt their type within the collection's effective schema; publishing an older revision does not reinterpret it. Templates can be reused across collections within their workspace.
+
+## Content types, business keys and cross-field rules
+
+Each collection has a shared catalog of at most 200 fields and up to 32 content types. A new collection has one default type with key `item`. Creating a field assigns it to the selected `content_type_id`, or the default type when omitted. Types select catalog keys with `field_keys`; a shared key has one field definition across the collection. Each item has an immutable `content_type_id`; omitted on creation, it selects the current default. Bulk creates accept the same selector, and every bulk content update validates against its assigned type.
+
+| Method | Route | Concurrency |
+| --- | --- | --- |
+| GET / POST | /v1/resources/{id}/content-types | Creation requires collection If-Match |
+| GET / PUT | /v1/content-types/{id} | Replacement requires content type If-Match |
+| DELETE | /v1/resources/{id}/fields/{fieldID} | Collection If-Match; returns the new collection ETag |
+
+Content type creation and replacement require manage access. Bodies contain key (required on creation, immutable), name, field_keys, optional rules and is_default. Exactly one type is default. Selecting a new default advances the former default's version; replacing the current default cannot clear it until another type is selected. Field and rule changes validate existing heads in bounded batches before recording the schema. Required fields and rules apply only to their assigned types. Frozen collection schemas retain every type's ID, keys and rules, and each item revision records its type ID.
+
+`options.unique=true` creates a collection-wide business key. It requires an indexed scalar field and excludes approximate `number` and multiple values. Equality is exact and case-sensitive after field normalization; integers and decimals retain full precision. Optional nulls reserve nothing. Both head and published values remain reserved by an item; a draft change releases its former key only when that value leaves both surfaces. Unpublishing and deletion release the applicable claims. Enabling uniqueness validates existing surfaces atomically. Collisions return 409; bulk errors identify the failing operation and roll back all mutations. Constraints are checked in operation order, so key swaps that temporarily collide are rejected.
+
+Cross-field validation supports up to 32 declarative rules per type. A rule has a stable key, field, op and message. Comparisons use other_field of the same scalar type and decimal scale and support eq/ne/gt/gte/lt/lte; ordered operators exclude boolean, choice, lookup and term. Comparisons skip null operands. Conditional requirements use `{"key":"approval_code","field":"code","op":"required_if","when_field":"approved","when_value":true,"message":"Approved items need a code"}`. Defaults and field normalization run before rules on every new content revision. Templates can define and adopt these rules.
+
+Deleting a field removes it from the active catalog, all type memberships, query indexes and key claims. Rules and saved views that reference it must first be edited or removed. Immutable content and schema revisions retain their original values and definitions. Later edits or blob uploads omit removed values when carrying content forward; explicit replacement payloads reject undeclared keys. Removed keys cannot be reused.
 
 ## Typed queries and saved views
 
@@ -91,7 +109,7 @@ The response contains resource `data`, authorized `total` before pagination, and
 
 A filter node is one condition or an AND/OR/NOT group, with at most 32 nodes and depth 6. Operators: eq, ne, gt/gte/lt/lte, in, contains, missing, present. Operator/type compatibility is enforced. Custom fields must be indexed; system fields use `$id`, `$name`, and `$tags` to avoid collisions with custom keys. Multi-value equality matches any member; ne means present with no equal member. Sort/group fields must be scalar. Default sort is $id ascending.
 
-Optional query parent_id restricts direct children of a collection or one of its folders. Search is a literal FTS phrase, and tag applies to the selected content surface. Missing optional values have no typed index row.
+Optional query content_type_id restricts items and usable query fields to one collection type. Omitting it queries all types with the shared catalog. Optional query parent_id restricts direct children of a collection or one of its folders. Search is a literal FTS phrase, and tag applies to the selected content surface. Missing optional values have no typed index row.
 
 POST the same request to `/query/groups` for a separately paginated collection of `{"value":...,"count":...}` groups. Counts use all authorized matching items before pagination. Integer and decimal group keys are exact strings, boolean keys are booleans, and missing keys are null. Group cursors cannot be used as row cursors.
 

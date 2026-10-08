@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"papergo/ent"
+	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/itemrevision"
@@ -27,7 +28,9 @@ type SchemaField struct {
 	Scale    int                `json:"scale"`
 }
 type SchemaDefinition struct {
-	Fields []SchemaField `json:"fields"`
+	Fields       []SchemaField          `json:"fields"`
+	ContentTypes []SchemaContentType    `json:"content_types"`
+	Rules        []model.ValidationRule `json:"rules,omitempty"`
 }
 
 func decodeValues(raw json.RawMessage) (map[string]any, error) {
@@ -49,6 +52,14 @@ func (s *Service) recordSchema(ctx context.Context, actor string, c *ent.Resourc
 	for _, d := range defs {
 		definition.Fields = append(definition.Fields, schemaField(d))
 	}
+	types, err := s.Client.ContentType.Query().Where(contenttype.ContainerIDEQ(c.ID)).Order(ent.Asc(contenttype.FieldKey)).All(ctx)
+	if err != nil {
+		return err
+	}
+	definition.ContentTypes = []SchemaContentType{}
+	for _, typ := range types {
+		definition.ContentTypes = append(definition.ContentTypes, SchemaContentType{ID: typ.ID, Key: typ.Key, Name: typ.Name, FieldKeys: typ.FieldKeys, Rules: typ.Rules, IsDefault: typ.IsDefault})
+	}
 	number := 1
 	if c.SchemaHeadID != nil {
 		prev, err := s.Client.SchemaRevision.Get(ctx, *c.SchemaHeadID)
@@ -65,7 +76,7 @@ func (s *Service) recordSchema(ctx context.Context, actor string, c *ent.Resourc
 	if err != nil {
 		return err
 	}
-	b := s.Client.Resource.UpdateOneID(c.ID).SetSchemaHeadID(rev.ID)
+	b := s.Client.Resource.UpdateOneID(c.ID).SetSchemaHeadID(rev.ID).SetUpdatedBy(actor)
 	if c.SchemaHeadID != nil {
 		b.AddVersion(1)
 	}
@@ -104,7 +115,7 @@ func overlayRevision(r *ent.Resource, rev *ent.ItemRevision) error {
 	r.UpdatedBy = rev.CreatedBy
 	return nil
 }
-func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resource, newBlobID *string) (*ent.ItemRevision, error) {
+func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resource, newBlobID *string, carry bool) (*ent.ItemRevision, error) {
 	if r.ContainerID == nil {
 		return nil, invalid("item has no container")
 	}
@@ -119,9 +130,22 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	if err != nil {
 		return nil, err
 	}
-	defs, err := definitions(schema.Definition)
+	if r.ContentTypeID == nil {
+		return nil, invalid("item has no content type")
+	}
+	defs, rules, err := typedDefinitions(schema.Definition, *r.ContentTypeID)
 	if err != nil {
 		return nil, err
+	}
+	if carry {
+		known := definitionMap(defs)
+		values := map[string]any{}
+		for key, value := range r.Values {
+			if known[key] != nil {
+				values[key] = value
+			}
+		}
+		r.Values = values
 	}
 	var previous map[string]any
 	blobID := newBlobID
@@ -141,15 +165,18 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	if err = s.normalizeItemValues(ctx, actor, r.WorkspaceID, defs, r.Values, previous); err != nil {
 		return nil, err
 	}
+	if err = evaluateRules(defs, rules, r.Values); err != nil {
+		return nil, err
+	}
 	raw, err := json.Marshal(r.Values)
 	if err != nil {
 		return nil, err
 	}
-	rev, err := s.Client.ItemRevision.Create().SetItemID(r.ID).SetContainerID(c.ID).SetSchemaRevisionID(schema.ID).SetRevisionNumber(r.NextRevisionNumber).SetName(r.Name).SetTags(r.Tags).SetPayload(raw).SetCreatedBy(actor).SetNillableBlobID(blobID).Save(ctx)
+	rev, err := s.Client.ItemRevision.Create().SetItemID(r.ID).SetContainerID(c.ID).SetContentTypeID(*r.ContentTypeID).SetSchemaRevisionID(schema.ID).SetRevisionNumber(r.NextRevisionNumber).SetName(r.Name).SetTags(r.Tags).SetPayload(raw).SetCreatedBy(actor).SetNillableBlobID(blobID).Save(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if err = s.Client.Resource.UpdateOneID(r.ID).SetHeadRevisionID(rev.ID).SetValues(r.Values).AddNextRevisionNumber(1).Exec(ctx); err != nil {
+	if err = s.Client.Resource.UpdateOneID(r.ID).SetHeadRevisionID(rev.ID).SetValues(r.Values).SetUpdatedBy(actor).AddNextRevisionNumber(1).Exec(ctx); err != nil {
 		return nil, err
 	}
 	r.HeadRevisionID = &rev.ID
@@ -179,7 +206,10 @@ func (s *Service) replaceSurface(ctx context.Context, r *ent.Resource, rev *ent.
 	if err != nil {
 		return err
 	}
-	return s.indexSurface(ctx, projection, indexedDefinitions(current, defs))
+	if err = s.indexSurface(ctx, projection, indexedDefinitions(current, defs)); err != nil {
+		return err
+	}
+	return s.claimBusinessKeys(ctx, r.ID, *r.ContainerID, current)
 }
 
 // indexedDefinitions copies a revision's definitions, marking a field indexed only
@@ -284,7 +314,7 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 	if err != nil {
 		return nil, err
 	}
-	defs, err := definitions(schema.Definition)
+	defs, _, err := typedDefinitions(schema.Definition, rev.ContentTypeID)
 	if err != nil {
 		return nil, err
 	}

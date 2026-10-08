@@ -35,6 +35,8 @@ func entityETag(w http.ResponseWriter, v any) {
 		etag(w, x.Version)
 	case *ent.SchemaTemplate:
 		etag(w, x.Version)
+	case *ent.ContentType:
+		etag(w, x.Version)
 	case *ent.TermSet:
 		etag(w, x.Version)
 	case *ent.Term:
@@ -59,6 +61,30 @@ func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFun
 	}
 }
 func (a *API) registerFoundation(m *http.ServeMux) {
+	m.HandleFunc("GET /v1/resources/{id}/content-types", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.ContentTypes(r.Context(), subject(r), r.PathValue("id"))
+	}))
+	m.HandleFunc("POST /v1/resources/{id}/content-types", foundationMutation(a, 201, true, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
+		return a.DMS.CreateContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
+	}))
+	m.HandleFunc("GET /v1/content-types/{id}", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.GetContentType(r.Context(), subject(r), r.PathValue("id"))
+	}))
+	m.HandleFunc("PUT /v1/content-types/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
+		return a.DMS.UpdateContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
+	}))
+	m.HandleFunc("DELETE /v1/resources/{id}/fields/{fieldID}", func(w http.ResponseWriter, r *http.Request) {
+		v, ok := a.version(w, r)
+		if !ok {
+			return
+		}
+		if err := a.DMS.DeleteField(r.Context(), subject(r), r.PathValue("id"), r.PathValue("fieldID"), v); err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		etag(w, v+1)
+		w.WriteHeader(204)
+	})
 	m.HandleFunc("POST /v1/resources/{id}/bulk", foundationMutation(a, 200, false, func(r *http.Request, in dms.BulkRequest, v int) (any, error) {
 		return a.DMS.Bulk(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
@@ -73,7 +99,7 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 		return a.DMS.UpdateTemplate(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
 	m.HandleFunc("POST /v1/resources/{id}/templates/{templateID}/apply", foundationMutation(a, 200, true, func(r *http.Request, in dms.ApplyTemplateInput, v int) (any, error) {
-		return a.DMS.ApplyTemplate(r.Context(), subject(r), r.PathValue("id"), r.PathValue("templateID"), v, in.TemplateVersion)
+		return a.DMS.ApplyTemplate(r.Context(), subject(r), r.PathValue("id"), r.PathValue("templateID"), v, in.TemplateVersion, in.ContentTypeID)
 	}))
 	m.HandleFunc("POST /v1/resources/{id}/query", foundationMutation(a, 200, false, func(r *http.Request, in dms.QueryRequest, v int) (any, error) {
 		return a.DMS.Query(r.Context(), subject(r), r.PathValue("id"), in)

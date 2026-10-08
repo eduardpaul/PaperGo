@@ -15,6 +15,7 @@ func (ItemRevision) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("item_id").Immutable(),
 		field.String("container_id").Immutable(),
+		field.String("content_type_id").Immutable(),
 		field.String("schema_revision_id").Immutable(),
 		field.String("blob_id").Optional().Nillable().Immutable(),
 		field.Int("revision_number").Positive().Immutable(),

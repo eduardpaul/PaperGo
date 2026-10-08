@@ -10,7 +10,7 @@ CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT 
 CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT REFERENCES item_revisions(id), PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `name` text NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT NOT NULL REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL));
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind='item')=(content_type_id IS NOT NULL)), FOREIGN KEY(container_id,content_type_id) REFERENCES content_types(container_id,id));
 CREATE TABLE resource_tags (
   resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
   tag TEXT NOT NULL,
@@ -20,13 +20,26 @@ CREATE TABLE schema_revisions (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, container_id TEXT NOT NULL REFERENCES resources(id),
  revision_number INTEGER NOT NULL CHECK(revision_number>0), definition JSON NOT NULL CHECK(json_valid(definition) AND json_type(definition)='object'), created_by TEXT NOT NULL
 );
+CREATE TABLE content_types (
+ id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
+ container_id TEXT NOT NULL REFERENCES resources(id), key TEXT NOT NULL, name TEXT NOT NULL,
+ field_keys JSON NOT NULL CHECK(json_valid(field_keys) AND json_type(field_keys)='array'),
+ rules JSON NOT NULL CHECK(json_valid(rules) AND json_type(rules)='array'),
+ is_default BOOLEAN NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
+);
+CREATE TABLE business_keys (
+ id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
+ container_id TEXT NOT NULL REFERENCES resources(id), item_id TEXT NOT NULL REFERENCES resources(id),
+ field_key TEXT NOT NULL, value TEXT NOT NULL
+);
 CREATE TABLE item_revisions (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
  item_id TEXT NOT NULL REFERENCES resources(id), container_id TEXT NOT NULL REFERENCES resources(id),
- schema_revision_id TEXT NOT NULL, revision_number INTEGER NOT NULL CHECK(revision_number>0),
+ schema_revision_id TEXT NOT NULL, content_type_id TEXT NOT NULL, revision_number INTEGER NOT NULL CHECK(revision_number>0),
  name TEXT NOT NULL, tags JSON NOT NULL CHECK(json_valid(tags) AND json_type(tags)='array'), payload JSON NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
  created_by TEXT NOT NULL, blob_id TEXT REFERENCES blobs(id),
- FOREIGN KEY(container_id,schema_revision_id) REFERENCES schema_revisions(container_id,id)
+ FOREIGN KEY(container_id,schema_revision_id) REFERENCES schema_revisions(container_id,id),
+ FOREIGN KEY(container_id,content_type_id) REFERENCES content_types(container_id,id)
 );
 CREATE TABLE item_surfaces (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, item_id TEXT NOT NULL REFERENCES resources(id),
@@ -104,6 +117,12 @@ CREATE INDEX `relationship_target_id_name_id` ON `relationships` (`target_id`, `
 CREATE INDEX `resource_workspace_id_kind_id` ON `resources` (`workspace_id`, `kind`, `id`);
 CREATE INDEX `resource_parent_id_id_scope_id` ON `resources` (`parent_id`, `id`, `scope_id`);
 CREATE INDEX `resource_container_id_id` ON `resources` (`container_id`, `id`);
+CREATE INDEX resource_container_id_content_type_id_id ON resources(container_id,content_type_id,id);
+CREATE UNIQUE INDEX contenttype_container_id_key ON content_types(container_id,key);
+CREATE UNIQUE INDEX contenttype_container_id_id ON content_types(container_id,id);
+CREATE UNIQUE INDEX contenttype_container_id ON content_types(container_id) WHERE is_default=1;
+CREATE UNIQUE INDEX businesskey_container_id_field_key_value ON business_keys(container_id,field_key,value);
+CREATE INDEX businesskey_item_id ON business_keys(item_id);
 CREATE INDEX resource_tags_by_resource ON resource_tags(resource_id,tag);
 CREATE INDEX resource_workspace_id_id_scope_id ON resources(workspace_id,id,scope_id);
 CREATE UNIQUE INDEX resource_parent_id_name_key ON resources(parent_id,name_key) WHERE name_key IS NOT NULL;
@@ -192,9 +211,9 @@ CREATE TRIGGER resource_validate_insert BEFORE INSERT ON resources BEGIN
           OR (p.kind='folder' AND new.container_id=p.container_id))))
   ) THEN RAISE(ABORT,'invalid containment') END;
 END;
-CREATE TRIGGER resource_immutable_ownership BEFORE UPDATE OF id,workspace_id,container_id,kind ON resources BEGIN
+CREATE TRIGGER resource_immutable_ownership BEFORE UPDATE OF id,workspace_id,container_id,kind,content_type_id ON resources BEGIN
   SELECT CASE WHEN new.id IS NOT old.id OR new.workspace_id IS NOT old.workspace_id
-    OR new.container_id IS NOT old.container_id OR new.kind IS NOT old.kind
+    OR new.container_id IS NOT old.container_id OR new.kind IS NOT old.kind OR new.content_type_id IS NOT old.content_type_id
     THEN RAISE(ABORT,'resource ownership is immutable') END;
 END;
 -- Folders and items move only within their collection, never below themselves.
@@ -272,10 +291,22 @@ END;
 CREATE TRIGGER schema_revision_immutable BEFORE UPDATE ON schema_revisions BEGIN SELECT RAISE(ABORT,'schema revision is immutable'); END;
 CREATE TRIGGER schema_revision_retained BEFORE DELETE ON schema_revisions BEGIN SELECT RAISE(ABORT,'schema revisions are retained'); END;
 CREATE TRIGGER item_revision_validate BEFORE INSERT ON item_revisions BEGIN
- SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.item_id AND kind='item' AND container_id=new.container_id)
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.item_id AND kind='item' AND container_id=new.container_id AND content_type_id=new.content_type_id)
+ OR NOT EXISTS(SELECT 1 FROM schema_revisions s, json_each(s.definition,'$.content_types') t WHERE s.id=new.schema_revision_id AND json_extract(t.value,'$.id')=new.content_type_id)
  OR (new.blob_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM blobs WHERE id=new.blob_id AND item_id=new.item_id))
  THEN RAISE(ABORT,'invalid revision ownership') END;
 END;
+CREATE TRIGGER content_type_validate BEFORE INSERT ON content_types BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.container_id AND kind IN ('list','library')) THEN RAISE(ABORT,'invalid content type collection') END;
+END;
+CREATE TRIGGER content_type_identity BEFORE UPDATE OF id,key,container_id ON content_types BEGIN
+ SELECT CASE WHEN new.id IS NOT old.id OR new.key IS NOT old.key OR new.container_id IS NOT old.container_id THEN RAISE(ABORT,'content type identity is immutable') END;
+END;
+CREATE TRIGGER business_key_validate BEFORE INSERT ON business_keys BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.item_id AND kind='item' AND container_id=new.container_id AND deleted_at IS NULL)
+ THEN RAISE(ABORT,'invalid business key owner') END;
+END;
+CREATE TRIGGER business_key_immutable BEFORE UPDATE ON business_keys BEGIN SELECT RAISE(ABORT,'business key claims are immutable'); END;
 CREATE TRIGGER item_revision_immutable BEFORE UPDATE ON item_revisions BEGIN SELECT RAISE(ABORT,'item revision is immutable'); END;
 CREATE TRIGGER item_revision_retained BEFORE DELETE ON item_revisions BEGIN SELECT RAISE(ABORT,'item revisions are retained'); END;
 CREATE TRIGGER resource_revision_pointers BEFORE UPDATE OF head_revision_id,published_revision_id,schema_head_id,publishing_enabled,webdav_enabled ON resources BEGIN

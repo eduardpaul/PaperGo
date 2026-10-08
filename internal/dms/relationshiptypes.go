@@ -45,6 +45,9 @@ func relationshipPolicy(in RelationshipTypeInput) (json.RawMessage, error) {
 	schema := SchemaDefinition{Fields: []SchemaField{}}
 	seen := map[string]bool{}
 	for _, f := range in.Attributes {
+		if f.ContentTypeID != "" || f.Options.Unique {
+			return nil, invalid("relationship attributes cannot select content types or unique business keys")
+		}
 		d := fieldFromInput(f)
 		if seen[d.Key] {
 			return nil, invalid("duplicate attribute")

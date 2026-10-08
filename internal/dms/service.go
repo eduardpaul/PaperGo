@@ -77,6 +77,7 @@ func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, e
 }
 
 type CreateResource struct {
+	ContentTypeID     string         `json:"content_type_id,omitempty"`
 	Kind              string         `json:"kind"`
 	Name              string         `json:"name"`
 	Tags              []string       `json:"tags"`
@@ -121,6 +122,9 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if content != nil && in.Kind != "item" {
 		return nil, invalid("only items have content")
 	}
+	if in.ContentTypeID != "" && in.Kind != "item" {
+		return nil, invalid("content_type_id belongs to items")
+	}
 	id := uuid.NewString()
 	workspaceID := id
 	var parent *ent.Resource
@@ -159,6 +163,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if e != nil {
 		return nil, e
 	}
+	var typeID *string
 	if in.Kind == "item" {
 		if containerID == nil {
 			return nil, invalid("item must belong to a list or library")
@@ -167,7 +172,12 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		if e != nil {
 			return nil, e
 		}
-		if e = normalizeValues(defs, in.Values); e != nil {
+		typ, e := s.contentType(ctx, *containerID, in.ContentTypeID)
+		if e != nil {
+			return nil, e
+		}
+		typeID = &typ.ID
+		if e = normalizeValues(selectDefinitions(defs, typ.FieldKeys), in.Values); e != nil {
 			return nil, e
 		}
 	} else if len(in.Values) > 0 {
@@ -175,6 +185,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	}
 	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetTags(in.Tags).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
 	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
+	builder.SetNillableContentTypeID(typeID)
 	if parent != nil {
 		builder.SetParentID(parent.ID)
 	} else {
@@ -191,6 +202,9 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		}
 	}
 	if out.Kind == resource.KindList || out.Kind == resource.KindLibrary {
+		if _, e = s.Client.ContentType.Create().SetContainerID(out.ID).SetKey("item").SetName("Item").SetIsDefault(true).Save(ctx); e != nil {
+			return nil, e
+		}
 		if e = s.recordSchema(ctx, subject, out); e != nil {
 			return nil, e
 		}
@@ -206,7 +220,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			blobID = &b.ID
 			details["blob_id"] = b.ID
 		}
-		if _, e = s.recordRevision(ctx, subject, out, blobID); e != nil {
+		if _, e = s.recordRevision(ctx, subject, out, blobID, false); e != nil {
 			return nil, e
 		}
 	}
@@ -349,7 +363,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		// A move alone changes location, not content, so it records no revision.
 		if content {
 			out.Values = r.Values
-			if _, e = s.recordRevision(ctx, subject, out, nil); e != nil {
+			if _, e = s.recordRevision(ctx, subject, out, nil, in.Values == nil); e != nil {
 				return nil, e
 			}
 			if out, e = s.Client.Resource.Get(ctx, id); e != nil {
@@ -465,6 +479,7 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int) e
 	}
 	for _, statement := range []string{
 		`DELETE FROM field_values WHERE item_id IN (` + subtree + `)`,
+		`DELETE FROM business_keys WHERE item_id IN (` + subtree + `)`,
 		`DELETE FROM item_surfaces WHERE item_id IN (` + subtree + `)`,
 	} {
 		if _, err = s.Client.ExecContext(ctx, statement, id); err != nil {
@@ -511,14 +526,15 @@ func (s *Service) fileNameKey(ctx context.Context, kind resource.Kind, container
 func nameKey(name string) string { return strings.ToLower(name) }
 
 type CreateField struct {
-	Options  model.FieldOptions `json:"options,omitempty"`
-	Key      string             `json:"key"`
-	Label    string             `json:"label"`
-	Type     string             `json:"type"`
-	Required bool               `json:"required"`
-	Choices  []string           `json:"choices"`
-	Indexed  bool               `json:"indexed"`
-	Scale    int                `json:"scale"`
+	ContentTypeID string             `json:"content_type_id,omitempty"`
+	Options       model.FieldOptions `json:"options,omitempty"`
+	Key           string             `json:"key"`
+	Label         string             `json:"label"`
+	Type          string             `json:"type"`
+	Required      bool               `json:"required"`
+	Choices       []string           `json:"choices"`
+	Indexed       bool               `json:"indexed"`
+	Scale         int                `json:"scale"`
 }
 
 func (s *Service) CreateField(ctx context.Context, subject, containerID string, in CreateField) (out *ent.FieldDefinition, err error) {
@@ -541,6 +557,17 @@ func (s *Service) CreateField(ctx context.Context, subject, containerID string, 
 func (s *Service) createField(ctx context.Context, subject string, c *ent.Resource, in CreateField) (*ent.FieldDefinition, error) {
 	if c.Kind != "list" && c.Kind != "library" {
 		return nil, invalid("fields belong to collections")
+	}
+	typ, e := s.contentType(ctx, c.ID, in.ContentTypeID)
+	if e != nil {
+		return nil, e
+	}
+	var used bool
+	if e = s.scan(ctx, []any{&used}, "SELECT EXISTS(SELECT 1 FROM schema_revisions sr, json_each(sr.definition,'$.fields') f WHERE sr.container_id=? AND json_extract(f.value,'$.id')=?)", c.ID, in.Key); e != nil {
+		return nil, e
+	}
+	if used {
+		return nil, invalid("field keys cannot be reused; use a new key")
 	}
 	d := fieldFromInput(in)
 	if d.Choices == nil {
@@ -565,7 +592,7 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 		return nil, invalid("at most 200 fields per collection")
 	}
 	if d.Required && len(d.Options.DefaultValue) == 0 {
-		exists, e := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil()).Exist(ctx)
+		exists, e := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.ContentTypeIDEQ(typ.ID), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil()).Exist(ctx)
 		if e != nil {
 			return nil, e
 		}
@@ -573,7 +600,14 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 			return nil, invalid("required fields on populated collections need a default")
 		}
 	}
-	return s.Client.FieldDefinition.Create().SetContainerID(c.ID).SetKey(d.Key).SetLabel(d.Label).SetType(d.Type).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetScale(d.Scale).SetOptions(d.Options).Save(ctx)
+	out, e := s.Client.FieldDefinition.Create().SetContainerID(c.ID).SetKey(d.Key).SetLabel(d.Label).SetType(d.Type).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetScale(d.Scale).SetOptions(d.Options).Save(ctx)
+	if e != nil {
+		return nil, e
+	}
+	if e = s.Client.ContentType.UpdateOne(typ).SetFieldKeys(append(append([]string{}, typ.FieldKeys...), d.Key)).AddVersion(1).Exec(ctx); e != nil {
+		return nil, e
+	}
+	return out, nil
 }
 func (s *Service) Fields(ctx context.Context, subject, id string) ([]*ent.FieldDefinition, error) {
 	if !s.transaction {

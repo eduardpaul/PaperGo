@@ -47,7 +47,7 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	l, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, l.Version, tpl.Version)
+	l, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, l.Version, tpl.Version, "")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -73,10 +73,10 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 	if *c.SchemaHeadID != *l.SchemaHeadID {
 		t.Fatal("editing a template changed its consumers")
 	}
-	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version-1); !errors.Is(e, ErrConflict) {
+	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version-1, ""); !errors.Is(e, ErrConflict) {
 		t.Fatal("template version ignored", e)
 	}
-	c, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version)
+	c, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version, "")
 	if e != nil {
 		t.Fatal(e)
 	}

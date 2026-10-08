@@ -27,12 +27,13 @@ type SortSpec struct {
 	Direction string `json:"direction,omitempty"`
 }
 type QuerySpec struct {
-	Filter   *FilterExpr `json:"filter,omitempty"`
-	Sort     SortSpec    `json:"sort,omitempty"`
-	GroupBy  string      `json:"group_by,omitempty"`
-	ParentID string      `json:"parent_id,omitempty"`
-	Search   string      `json:"search,omitempty"`
-	Tag      string      `json:"tag,omitempty"`
+	ContentTypeID string      `json:"content_type_id,omitempty"`
+	Filter        *FilterExpr `json:"filter,omitempty"`
+	Sort          SortSpec    `json:"sort,omitempty"`
+	GroupBy       string      `json:"group_by,omitempty"`
+	ParentID      string      `json:"parent_id,omitempty"`
+	Search        string      `json:"search,omitempty"`
+	Tag           string      `json:"tag,omitempty"`
 }
 type QueryRequest struct {
 	Query   QuerySpec `json:"query"`
@@ -316,6 +317,13 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 	for _, d := range defs {
 		compiler.defs[d.Key] = d
 	}
+	if in.Query.ContentTypeID != "" {
+		typ, e := s.contentType(ctx, c.ID, in.Query.ContentTypeID)
+		if e != nil {
+			return compiledQuery{}, e
+		}
+		compiler.defs = definitionMap(selectDefinitions(defs, typ.FieldKeys))
+	}
 	rankField := in.Query.Sort.Field
 	if rankField == "" {
 		rankField = "$id"
@@ -343,6 +351,10 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 	args = append(args, surfaceArgs...)
 	args = append(args, c.ID)
 	text := "SELECT r.id," + rank + " AS sort_value FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind='item'"
+	if in.Query.ContentTypeID != "" {
+		text += " AND r.content_type_id=?"
+		args = append(args, in.Query.ContentTypeID)
+	}
 	if in.Query.ParentID != "" {
 		parent, e := s.authorize(ctx, subject, in.Query.ParentID, "read")
 		if e != nil {

@@ -19,6 +19,7 @@ func (Resource) Fields() []ent.Field {
 		// Folders and items can move within their collection; triggers keep containment valid.
 		field.String("parent_id").Optional().Nillable().MaxLen(36),
 		field.String("container_id").Optional().Nillable().Immutable().MaxLen(36),
+		field.String("content_type_id").Optional().Nillable().Immutable().MaxLen(36),
 		field.Enum("kind").Values("workspace", "list", "library", "folder", "item").Immutable(),
 		field.String("name").NotEmpty().MaxLen(255),
 		field.JSON("tags", []string{}).Default([]string{}),
@@ -71,6 +72,7 @@ func (Resource) Indexes() []ent.Index {
 		index.Fields("workspace_id", "id", "scope_id"),
 		index.Fields("parent_id", "id", "scope_id"),
 		index.Fields("container_id", "id"),
+		index.Fields("container_id", "content_type_id", "id"),
 		index.Fields("parent_id", "name_key").Unique().Annotations(entsql.IndexWhere("name_key IS NOT NULL")),
 	}
 }

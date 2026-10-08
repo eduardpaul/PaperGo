@@ -32,6 +32,30 @@ func (f BlobFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BlobMutation", m)
 }
 
+// The BusinessKeyFunc type is an adapter to allow the use of ordinary
+// function as BusinessKey mutator.
+type BusinessKeyFunc func(context.Context, *ent.BusinessKeyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BusinessKeyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BusinessKeyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BusinessKeyMutation", m)
+}
+
+// The ContentTypeFunc type is an adapter to allow the use of ordinary
+// function as ContentType mutator.
+type ContentTypeFunc func(context.Context, *ent.ContentTypeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ContentTypeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ContentTypeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContentTypeMutation", m)
+}
+
 // The FieldDefinitionFunc type is an adapter to allow the use of ordinary
 // function as FieldDefinition mutator.
 type FieldDefinitionFunc func(context.Context, *ent.FieldDefinitionMutation) (ent.Value, error)

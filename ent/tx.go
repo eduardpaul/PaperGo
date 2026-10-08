@@ -18,6 +18,10 @@ type Tx struct {
 	AuditEvent *AuditEventClient
 	// Blob is the client for interacting with the Blob builders.
 	Blob *BlobClient
+	// BusinessKey is the client for interacting with the BusinessKey builders.
+	BusinessKey *BusinessKeyClient
+	// ContentType is the client for interacting with the ContentType builders.
+	ContentType *ContentTypeClient
 	// FieldDefinition is the client for interacting with the FieldDefinition builders.
 	FieldDefinition *FieldDefinitionClient
 	// FieldValue is the client for interacting with the FieldValue builders.
@@ -181,6 +185,8 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.AuditEvent = NewAuditEventClient(tx.config)
 	tx.Blob = NewBlobClient(tx.config)
+	tx.BusinessKey = NewBusinessKeyClient(tx.config)
+	tx.ContentType = NewContentTypeClient(tx.config)
 	tx.FieldDefinition = NewFieldDefinitionClient(tx.config)
 	tx.FieldValue = NewFieldValueClient(tx.config)
 	tx.Grant = NewGrantClient(tx.config)

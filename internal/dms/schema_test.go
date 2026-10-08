@@ -61,14 +61,14 @@ func TestApplyTemplateCannotRequireMissingValues(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, latest(t, s, l.ID).Version, tpl.Version); e == nil {
+	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, latest(t, s, l.ID).Version, tpl.Version, ""); e == nil {
 		t.Fatal("template made a field required over missing values")
 	}
 	tpl, e = s.UpdateTemplate(testContext, "alice", tpl.ID, tpl.Version, TemplateInput{Name: "Strict", Fields: []CreateField{{Key: "status", Label: "Status", Type: "text", Required: true, Options: fieldDefault(t, "open")}}})
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, latest(t, s, l.ID).Version, tpl.Version); e != nil {
+	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, latest(t, s, l.ID).Version, tpl.Version, ""); e != nil {
 		t.Fatal("required with default", e)
 	}
 }

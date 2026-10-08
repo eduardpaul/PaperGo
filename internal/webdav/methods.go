@@ -66,7 +66,7 @@ func (h *Handler) put(w http.ResponseWriter, r *request) error {
 		return storage.ErrTooLarge
 	}
 	body := transfer.Reader(http.MaxBytesReader(w, r.Body, h.MaxUpload), w)
-	f, created, err := h.store(r, r.path, body, contentType(r.path[len(r.path)-1], r.Header.Get("Content-Type")), cond, nil, nil)
+	f, created, err := h.store(r, r.path, body, contentType(r.path[len(r.path)-1], r.Header.Get("Content-Type")), cond, nil, nil, "")
 	if err != nil {
 		return err
 	}
@@ -81,12 +81,12 @@ func (h *Handler) put(w http.ResponseWriter, r *request) error {
 
 // store writes body to blob storage, then commits it as the file at path.
 // Bytes of a rejected commit are removed again.
-func (h *Handler) store(r *request, path []string, body io.Reader, mediaType string, cond dms.FileConditions, tags []string, values map[string]any) (*dms.File, bool, error) {
+func (h *Handler) store(r *request, path []string, body io.Reader, mediaType string, cond dms.FileConditions, tags []string, values map[string]any, typeID string) (*dms.File, bool, error) {
 	object, err := h.Storage.Put(r.Context(), body, h.MaxUpload)
 	if err != nil {
 		return nil, false, err
 	}
-	in := dms.PutFile{FileConditions: cond, Tags: tags, Values: values, Blob: dms.BlobInput{ObjectKey: object.Key, Filename: path[len(path)-1], ContentType: mediaType, Size: object.Size, SHA256: object.SHA256}}
+	in := dms.PutFile{FileConditions: cond, Tags: tags, Values: values, ContentTypeID: typeID, Blob: dms.BlobInput{ObjectKey: object.Key, Filename: path[len(path)-1], ContentType: mediaType, Size: object.Size, SHA256: object.SHA256}}
 	f, created, err := h.DMS.PutFile(r.Context(), r.subject, r.library, path, in)
 	if err != nil {
 		if cleanupErr := h.Storage.Delete(context.WithoutCancel(r.Context()), object.Key); cleanupErr != nil {
@@ -279,7 +279,17 @@ func (h *Handler) copyTree(r *request, f *dms.File, from, to []string, infinite 
 			defer file.Close()
 			content = file
 		}
-		_, _, err := h.store(r, to, content, f.ContentType(), dms.FileConditions{}, f.Tags, f.Values)
+		typ, err := h.DMS.GetContentType(r.Context(), r.subject, *f.Resource.ContentTypeID)
+		if err != nil {
+			return err
+		}
+		values := map[string]any{}
+		for _, key := range typ.FieldKeys {
+			if value, ok := f.Values[key]; ok {
+				values[key] = value
+			}
+		}
+		_, _, err = h.store(r, to, content, f.ContentType(), dms.FileConditions{}, f.Tags, values, typ.ID)
 		return err
 	}
 	if _, err := h.DMS.MakeFolder(r.Context(), r.subject, r.library, to); err != nil {

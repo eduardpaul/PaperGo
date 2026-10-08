@@ -39,14 +39,14 @@ func TestTemplateAdoptionRevalidatesReferenceDefaults(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	l, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, l.Version, tpl.Version)
+	l, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, l.Version, tpl.Version, "")
 	if e != nil {
 		t.Fatal(e)
 	}
 	if _, e = s.UpdateTerm(testContext, "alice", term.ID, term.Version, TermInput{Name: "Retired", Deprecated: true}); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, l.Version, tpl.Version); e == nil {
+	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, l.Version, tpl.Version, ""); e == nil {
 		t.Fatal("deprecated template default was adopted")
 	}
 	current := latest(t, s, l.ID)

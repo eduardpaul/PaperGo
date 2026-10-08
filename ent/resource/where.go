@@ -85,6 +85,11 @@ func ContainerID(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldContainerID, v))
 }
 
+// ContentTypeID applies equality check predicate on the "content_type_id" field. It's identical to ContentTypeIDEQ.
+func ContentTypeID(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldContentTypeID, v))
+}
+
 // Name applies equality check predicate on the "name" field. It's identical to NameEQ.
 func Name(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldName, v))
@@ -413,6 +418,81 @@ func ContainerIDEqualFold(v string) predicate.Resource {
 // ContainerIDContainsFold applies the ContainsFold predicate on the "container_id" field.
 func ContainerIDContainsFold(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldContainsFold(FieldContainerID, v))
+}
+
+// ContentTypeIDEQ applies the EQ predicate on the "content_type_id" field.
+func ContentTypeIDEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldContentTypeID, v))
+}
+
+// ContentTypeIDNEQ applies the NEQ predicate on the "content_type_id" field.
+func ContentTypeIDNEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldContentTypeID, v))
+}
+
+// ContentTypeIDIn applies the In predicate on the "content_type_id" field.
+func ContentTypeIDIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldContentTypeID, vs...))
+}
+
+// ContentTypeIDNotIn applies the NotIn predicate on the "content_type_id" field.
+func ContentTypeIDNotIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldContentTypeID, vs...))
+}
+
+// ContentTypeIDGT applies the GT predicate on the "content_type_id" field.
+func ContentTypeIDGT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldContentTypeID, v))
+}
+
+// ContentTypeIDGTE applies the GTE predicate on the "content_type_id" field.
+func ContentTypeIDGTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldContentTypeID, v))
+}
+
+// ContentTypeIDLT applies the LT predicate on the "content_type_id" field.
+func ContentTypeIDLT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldContentTypeID, v))
+}
+
+// ContentTypeIDLTE applies the LTE predicate on the "content_type_id" field.
+func ContentTypeIDLTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldContentTypeID, v))
+}
+
+// ContentTypeIDContains applies the Contains predicate on the "content_type_id" field.
+func ContentTypeIDContains(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContains(FieldContentTypeID, v))
+}
+
+// ContentTypeIDHasPrefix applies the HasPrefix predicate on the "content_type_id" field.
+func ContentTypeIDHasPrefix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasPrefix(FieldContentTypeID, v))
+}
+
+// ContentTypeIDHasSuffix applies the HasSuffix predicate on the "content_type_id" field.
+func ContentTypeIDHasSuffix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasSuffix(FieldContentTypeID, v))
+}
+
+// ContentTypeIDIsNil applies the IsNil predicate on the "content_type_id" field.
+func ContentTypeIDIsNil() predicate.Resource {
+	return predicate.Resource(sql.FieldIsNull(FieldContentTypeID))
+}
+
+// ContentTypeIDNotNil applies the NotNil predicate on the "content_type_id" field.
+func ContentTypeIDNotNil() predicate.Resource {
+	return predicate.Resource(sql.FieldNotNull(FieldContentTypeID))
+}
+
+// ContentTypeIDEqualFold applies the EqualFold predicate on the "content_type_id" field.
+func ContentTypeIDEqualFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEqualFold(FieldContentTypeID, v))
+}
+
+// ContentTypeIDContainsFold applies the ContainsFold predicate on the "content_type_id" field.
+func ContentTypeIDContainsFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContainsFold(FieldContentTypeID, v))
 }
 
 // KindEQ applies the EQ predicate on the "kind" field.

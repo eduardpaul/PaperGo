@@ -43,7 +43,8 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 | Tags on all content | Built-in tags on every resource, with a normalized indexed projection maintained by database triggers. |
 | Read-heavy browsing and search | Keyset pagination and permission filtering before LIMIT; FTS5 and tags on the selected head/published surface; optional typed field indexes for exact filters and ranges. Multi-step reads use a consistent database snapshot. |
 | Enterprise backend foundation | Fail-closed bearer authentication, production OIDC, transactional audit events, optimistic concurrency, strict JSON, upload limits, structured logs, health probes, graceful shutdown and non-root container build. |
-| Reusable application schemas | Workspace templates with explicit, version-checked collection adoption; immutable effective schemas. |
+| Reusable application schemas | Shared field catalogs, multiple collection content types, cross-field rules, active-field removal and templates with version-checked adoption; immutable effective schemas. |
+| Business keys | Indexed scalar uniqueness across head and published values, enforced transactionally for single and bulk writes. |
 | Saved views and controlled taxonomy | Bounded typed queries, sorting, pagination, authorized totals/grouping; stable hierarchical terms with localized labels, synonyms, and deprecation. |
 
 ## API

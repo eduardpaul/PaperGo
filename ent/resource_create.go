@@ -75,6 +75,20 @@ func (_c *ResourceCreate) SetNillableContainerID(v *string) *ResourceCreate {
 	return _c
 }
 
+// SetContentTypeID sets the "content_type_id" field.
+func (_c *ResourceCreate) SetContentTypeID(v string) *ResourceCreate {
+	_c.mutation.SetContentTypeID(v)
+	return _c
+}
+
+// SetNillableContentTypeID sets the "content_type_id" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableContentTypeID(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetContentTypeID(*v)
+	}
+	return _c
+}
+
 // SetKind sets the "kind" field.
 func (_c *ResourceCreate) SetKind(v resource.Kind) *ResourceCreate {
 	_c.mutation.SetKind(v)
@@ -592,6 +606,11 @@ func (_c *ResourceCreate) check() error {
 			return &ValidationError{Name: "container_id", err: fmt.Errorf(`ent: validator failed for field "Resource.container_id": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.ContentTypeID(); ok {
+		if err := resource.ContentTypeIDValidator(v); err != nil {
+			return &ValidationError{Name: "content_type_id", err: fmt.Errorf(`ent: validator failed for field "Resource.content_type_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Kind(); !ok {
 		return &ValidationError{Name: "kind", err: errors.New(`ent: missing required field "Resource.kind"`)}
 	}
@@ -705,6 +724,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.WorkspaceID(); ok {
 		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
 		_node.WorkspaceID = value
+	}
+	if value, ok := _c.mutation.ContentTypeID(); ok {
+		_spec.SetField(resource.FieldContentTypeID, field.TypeString, value)
+		_node.ContentTypeID = &value
 	}
 	if value, ok := _c.mutation.Kind(); ok {
 		_spec.SetField(resource.FieldKind, field.TypeEnum, value)

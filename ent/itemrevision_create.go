@@ -50,6 +50,12 @@ func (_c *ItemRevisionCreate) SetContainerID(v string) *ItemRevisionCreate {
 	return _c
 }
 
+// SetContentTypeID sets the "content_type_id" field.
+func (_c *ItemRevisionCreate) SetContentTypeID(v string) *ItemRevisionCreate {
+	_c.mutation.SetContentTypeID(v)
+	return _c
+}
+
 // SetSchemaRevisionID sets the "schema_revision_id" field.
 func (_c *ItemRevisionCreate) SetSchemaRevisionID(v string) *ItemRevisionCreate {
 	_c.mutation.SetSchemaRevisionID(v)
@@ -185,6 +191,9 @@ func (_c *ItemRevisionCreate) check() error {
 	if _, ok := _c.mutation.ContainerID(); !ok {
 		return &ValidationError{Name: "container_id", err: errors.New(`ent: missing required field "ItemRevision.container_id"`)}
 	}
+	if _, ok := _c.mutation.ContentTypeID(); !ok {
+		return &ValidationError{Name: "content_type_id", err: errors.New(`ent: missing required field "ItemRevision.content_type_id"`)}
+	}
 	if _, ok := _c.mutation.SchemaRevisionID(); !ok {
 		return &ValidationError{Name: "schema_revision_id", err: errors.New(`ent: missing required field "ItemRevision.schema_revision_id"`)}
 	}
@@ -271,6 +280,10 @@ func (_c *ItemRevisionCreate) createSpec() (*ItemRevision, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.ContainerID(); ok {
 		_spec.SetField(itemrevision.FieldContainerID, field.TypeString, value)
 		_node.ContainerID = value
+	}
+	if value, ok := _c.mutation.ContentTypeID(); ok {
+		_spec.SetField(itemrevision.FieldContentTypeID, field.TypeString, value)
+		_node.ContentTypeID = value
 	}
 	if value, ok := _c.mutation.RevisionNumber(); ok {
 		_spec.SetField(itemrevision.FieldRevisionNumber, field.TypeInt, value)

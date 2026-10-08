@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
+	"papergo/ent/businesskey"
+	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
@@ -44,6 +46,8 @@ const (
 	// Node types.
 	TypeAuditEvent       = "AuditEvent"
 	TypeBlob             = "Blob"
+	TypeBusinessKey      = "BusinessKey"
+	TypeContentType      = "ContentType"
 	TypeFieldDefinition  = "FieldDefinition"
 	TypeFieldValue       = "FieldValue"
 	TypeGrant            = "Grant"
@@ -1494,6 +1498,1540 @@ func (m *BlobMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Blob edge %s", name)
+}
+
+// BusinessKeyMutation represents an operation that mutates the BusinessKey nodes in the graph.
+type BusinessKeyMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	created_at       *time.Time
+	field_key        *string
+	value            *string
+	clearedFields    map[string]struct{}
+	item             *string
+	cleareditem      bool
+	container        *string
+	clearedcontainer bool
+	done             bool
+	oldValue         func(context.Context) (*BusinessKey, error)
+	predicates       []predicate.BusinessKey
+}
+
+var _ ent.Mutation = (*BusinessKeyMutation)(nil)
+
+// businesskeyOption allows management of the mutation configuration using functional options.
+type businesskeyOption func(*BusinessKeyMutation)
+
+// newBusinessKeyMutation creates new mutation for the BusinessKey entity.
+func newBusinessKeyMutation(c config, op Op, opts ...businesskeyOption) *BusinessKeyMutation {
+	m := &BusinessKeyMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBusinessKey,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBusinessKeyID sets the ID field of the mutation.
+func withBusinessKeyID(id string) businesskeyOption {
+	return func(m *BusinessKeyMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BusinessKey
+		)
+		m.oldValue = func(ctx context.Context) (*BusinessKey, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BusinessKey.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBusinessKey sets the old BusinessKey of the mutation.
+func withBusinessKey(node *BusinessKey) businesskeyOption {
+	return func(m *BusinessKeyMutation) {
+		m.oldValue = func(context.Context) (*BusinessKey, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BusinessKeyMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BusinessKeyMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of BusinessKey entities.
+func (m *BusinessKeyMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BusinessKeyMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BusinessKeyMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BusinessKey.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BusinessKeyMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BusinessKeyMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BusinessKey entity.
+// If the BusinessKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BusinessKeyMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BusinessKeyMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetContainerID sets the "container_id" field.
+func (m *BusinessKeyMutation) SetContainerID(s string) {
+	m.container = &s
+}
+
+// ContainerID returns the value of the "container_id" field in the mutation.
+func (m *BusinessKeyMutation) ContainerID() (r string, exists bool) {
+	v := m.container
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContainerID returns the old "container_id" field's value of the BusinessKey entity.
+// If the BusinessKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BusinessKeyMutation) OldContainerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContainerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContainerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContainerID: %w", err)
+	}
+	return oldValue.ContainerID, nil
+}
+
+// ResetContainerID resets all changes to the "container_id" field.
+func (m *BusinessKeyMutation) ResetContainerID() {
+	m.container = nil
+}
+
+// SetItemID sets the "item_id" field.
+func (m *BusinessKeyMutation) SetItemID(s string) {
+	m.item = &s
+}
+
+// ItemID returns the value of the "item_id" field in the mutation.
+func (m *BusinessKeyMutation) ItemID() (r string, exists bool) {
+	v := m.item
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldItemID returns the old "item_id" field's value of the BusinessKey entity.
+// If the BusinessKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BusinessKeyMutation) OldItemID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldItemID: %w", err)
+	}
+	return oldValue.ItemID, nil
+}
+
+// ResetItemID resets all changes to the "item_id" field.
+func (m *BusinessKeyMutation) ResetItemID() {
+	m.item = nil
+}
+
+// SetFieldKey sets the "field_key" field.
+func (m *BusinessKeyMutation) SetFieldKey(s string) {
+	m.field_key = &s
+}
+
+// FieldKey returns the value of the "field_key" field in the mutation.
+func (m *BusinessKeyMutation) FieldKey() (r string, exists bool) {
+	v := m.field_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFieldKey returns the old "field_key" field's value of the BusinessKey entity.
+// If the BusinessKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BusinessKeyMutation) OldFieldKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFieldKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFieldKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFieldKey: %w", err)
+	}
+	return oldValue.FieldKey, nil
+}
+
+// ResetFieldKey resets all changes to the "field_key" field.
+func (m *BusinessKeyMutation) ResetFieldKey() {
+	m.field_key = nil
+}
+
+// SetValue sets the "value" field.
+func (m *BusinessKeyMutation) SetValue(s string) {
+	m.value = &s
+}
+
+// Value returns the value of the "value" field in the mutation.
+func (m *BusinessKeyMutation) Value() (r string, exists bool) {
+	v := m.value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldValue returns the old "value" field's value of the BusinessKey entity.
+// If the BusinessKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BusinessKeyMutation) OldValue(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldValue: %w", err)
+	}
+	return oldValue.Value, nil
+}
+
+// ResetValue resets all changes to the "value" field.
+func (m *BusinessKeyMutation) ResetValue() {
+	m.value = nil
+}
+
+// ClearItem clears the "item" edge to the Resource entity.
+func (m *BusinessKeyMutation) ClearItem() {
+	m.cleareditem = true
+	m.clearedFields[businesskey.FieldItemID] = struct{}{}
+}
+
+// ItemCleared reports if the "item" edge to the Resource entity was cleared.
+func (m *BusinessKeyMutation) ItemCleared() bool {
+	return m.cleareditem
+}
+
+// ItemIDs returns the "item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ItemID instead. It exists only for internal usage by the builders.
+func (m *BusinessKeyMutation) ItemIDs() (ids []string) {
+	if id := m.item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetItem resets all changes to the "item" edge.
+func (m *BusinessKeyMutation) ResetItem() {
+	m.item = nil
+	m.cleareditem = false
+}
+
+// ClearContainer clears the "container" edge to the Resource entity.
+func (m *BusinessKeyMutation) ClearContainer() {
+	m.clearedcontainer = true
+	m.clearedFields[businesskey.FieldContainerID] = struct{}{}
+}
+
+// ContainerCleared reports if the "container" edge to the Resource entity was cleared.
+func (m *BusinessKeyMutation) ContainerCleared() bool {
+	return m.clearedcontainer
+}
+
+// ContainerIDs returns the "container" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ContainerID instead. It exists only for internal usage by the builders.
+func (m *BusinessKeyMutation) ContainerIDs() (ids []string) {
+	if id := m.container; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetContainer resets all changes to the "container" edge.
+func (m *BusinessKeyMutation) ResetContainer() {
+	m.container = nil
+	m.clearedcontainer = false
+}
+
+// Where appends a list predicates to the BusinessKeyMutation builder.
+func (m *BusinessKeyMutation) Where(ps ...predicate.BusinessKey) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BusinessKeyMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BusinessKeyMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BusinessKey, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BusinessKeyMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BusinessKeyMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BusinessKey).
+func (m *BusinessKeyMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BusinessKeyMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.created_at != nil {
+		fields = append(fields, businesskey.FieldCreatedAt)
+	}
+	if m.container != nil {
+		fields = append(fields, businesskey.FieldContainerID)
+	}
+	if m.item != nil {
+		fields = append(fields, businesskey.FieldItemID)
+	}
+	if m.field_key != nil {
+		fields = append(fields, businesskey.FieldFieldKey)
+	}
+	if m.value != nil {
+		fields = append(fields, businesskey.FieldValue)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BusinessKeyMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case businesskey.FieldCreatedAt:
+		return m.CreatedAt()
+	case businesskey.FieldContainerID:
+		return m.ContainerID()
+	case businesskey.FieldItemID:
+		return m.ItemID()
+	case businesskey.FieldFieldKey:
+		return m.FieldKey()
+	case businesskey.FieldValue:
+		return m.Value()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BusinessKeyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case businesskey.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case businesskey.FieldContainerID:
+		return m.OldContainerID(ctx)
+	case businesskey.FieldItemID:
+		return m.OldItemID(ctx)
+	case businesskey.FieldFieldKey:
+		return m.OldFieldKey(ctx)
+	case businesskey.FieldValue:
+		return m.OldValue(ctx)
+	}
+	return nil, fmt.Errorf("unknown BusinessKey field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BusinessKeyMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case businesskey.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case businesskey.FieldContainerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContainerID(v)
+		return nil
+	case businesskey.FieldItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetItemID(v)
+		return nil
+	case businesskey.FieldFieldKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFieldKey(v)
+		return nil
+	case businesskey.FieldValue:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetValue(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BusinessKey field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BusinessKeyMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BusinessKeyMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BusinessKeyMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown BusinessKey numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BusinessKeyMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BusinessKeyMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BusinessKeyMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown BusinessKey nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BusinessKeyMutation) ResetField(name string) error {
+	switch name {
+	case businesskey.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case businesskey.FieldContainerID:
+		m.ResetContainerID()
+		return nil
+	case businesskey.FieldItemID:
+		m.ResetItemID()
+		return nil
+	case businesskey.FieldFieldKey:
+		m.ResetFieldKey()
+		return nil
+	case businesskey.FieldValue:
+		m.ResetValue()
+		return nil
+	}
+	return fmt.Errorf("unknown BusinessKey field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BusinessKeyMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.item != nil {
+		edges = append(edges, businesskey.EdgeItem)
+	}
+	if m.container != nil {
+		edges = append(edges, businesskey.EdgeContainer)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BusinessKeyMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case businesskey.EdgeItem:
+		if id := m.item; id != nil {
+			return []ent.Value{*id}
+		}
+	case businesskey.EdgeContainer:
+		if id := m.container; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BusinessKeyMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BusinessKeyMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BusinessKeyMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.cleareditem {
+		edges = append(edges, businesskey.EdgeItem)
+	}
+	if m.clearedcontainer {
+		edges = append(edges, businesskey.EdgeContainer)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BusinessKeyMutation) EdgeCleared(name string) bool {
+	switch name {
+	case businesskey.EdgeItem:
+		return m.cleareditem
+	case businesskey.EdgeContainer:
+		return m.clearedcontainer
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BusinessKeyMutation) ClearEdge(name string) error {
+	switch name {
+	case businesskey.EdgeItem:
+		m.ClearItem()
+		return nil
+	case businesskey.EdgeContainer:
+		m.ClearContainer()
+		return nil
+	}
+	return fmt.Errorf("unknown BusinessKey unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BusinessKeyMutation) ResetEdge(name string) error {
+	switch name {
+	case businesskey.EdgeItem:
+		m.ResetItem()
+		return nil
+	case businesskey.EdgeContainer:
+		m.ResetContainer()
+		return nil
+	}
+	return fmt.Errorf("unknown BusinessKey edge %s", name)
+}
+
+// ContentTypeMutation represents an operation that mutates the ContentType nodes in the graph.
+type ContentTypeMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	created_at       *time.Time
+	key              *string
+	name             *string
+	field_keys       *[]string
+	appendfield_keys []string
+	rules            *[]model.ValidationRule
+	appendrules      []model.ValidationRule
+	is_default       *bool
+	version          *int
+	addversion       *int
+	updated_at       *time.Time
+	clearedFields    map[string]struct{}
+	container        *string
+	clearedcontainer bool
+	done             bool
+	oldValue         func(context.Context) (*ContentType, error)
+	predicates       []predicate.ContentType
+}
+
+var _ ent.Mutation = (*ContentTypeMutation)(nil)
+
+// contenttypeOption allows management of the mutation configuration using functional options.
+type contenttypeOption func(*ContentTypeMutation)
+
+// newContentTypeMutation creates new mutation for the ContentType entity.
+func newContentTypeMutation(c config, op Op, opts ...contenttypeOption) *ContentTypeMutation {
+	m := &ContentTypeMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeContentType,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withContentTypeID sets the ID field of the mutation.
+func withContentTypeID(id string) contenttypeOption {
+	return func(m *ContentTypeMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ContentType
+		)
+		m.oldValue = func(ctx context.Context) (*ContentType, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ContentType.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withContentType sets the old ContentType of the mutation.
+func withContentType(node *ContentType) contenttypeOption {
+	return func(m *ContentTypeMutation) {
+		m.oldValue = func(context.Context) (*ContentType, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ContentTypeMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ContentTypeMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ContentType entities.
+func (m *ContentTypeMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ContentTypeMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ContentTypeMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ContentType.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ContentTypeMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ContentTypeMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ContentTypeMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetContainerID sets the "container_id" field.
+func (m *ContentTypeMutation) SetContainerID(s string) {
+	m.container = &s
+}
+
+// ContainerID returns the value of the "container_id" field in the mutation.
+func (m *ContentTypeMutation) ContainerID() (r string, exists bool) {
+	v := m.container
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContainerID returns the old "container_id" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldContainerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContainerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContainerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContainerID: %w", err)
+	}
+	return oldValue.ContainerID, nil
+}
+
+// ResetContainerID resets all changes to the "container_id" field.
+func (m *ContentTypeMutation) ResetContainerID() {
+	m.container = nil
+}
+
+// SetKey sets the "key" field.
+func (m *ContentTypeMutation) SetKey(s string) {
+	m.key = &s
+}
+
+// Key returns the value of the "key" field in the mutation.
+func (m *ContentTypeMutation) Key() (r string, exists bool) {
+	v := m.key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKey returns the old "key" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKey: %w", err)
+	}
+	return oldValue.Key, nil
+}
+
+// ResetKey resets all changes to the "key" field.
+func (m *ContentTypeMutation) ResetKey() {
+	m.key = nil
+}
+
+// SetName sets the "name" field.
+func (m *ContentTypeMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *ContentTypeMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *ContentTypeMutation) ResetName() {
+	m.name = nil
+}
+
+// SetFieldKeys sets the "field_keys" field.
+func (m *ContentTypeMutation) SetFieldKeys(s []string) {
+	m.field_keys = &s
+	m.appendfield_keys = nil
+}
+
+// FieldKeys returns the value of the "field_keys" field in the mutation.
+func (m *ContentTypeMutation) FieldKeys() (r []string, exists bool) {
+	v := m.field_keys
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFieldKeys returns the old "field_keys" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldFieldKeys(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFieldKeys is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFieldKeys requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFieldKeys: %w", err)
+	}
+	return oldValue.FieldKeys, nil
+}
+
+// AppendFieldKeys adds s to the "field_keys" field.
+func (m *ContentTypeMutation) AppendFieldKeys(s []string) {
+	m.appendfield_keys = append(m.appendfield_keys, s...)
+}
+
+// AppendedFieldKeys returns the list of values that were appended to the "field_keys" field in this mutation.
+func (m *ContentTypeMutation) AppendedFieldKeys() ([]string, bool) {
+	if len(m.appendfield_keys) == 0 {
+		return nil, false
+	}
+	return m.appendfield_keys, true
+}
+
+// ResetFieldKeys resets all changes to the "field_keys" field.
+func (m *ContentTypeMutation) ResetFieldKeys() {
+	m.field_keys = nil
+	m.appendfield_keys = nil
+}
+
+// SetRules sets the "rules" field.
+func (m *ContentTypeMutation) SetRules(mr []model.ValidationRule) {
+	m.rules = &mr
+	m.appendrules = nil
+}
+
+// Rules returns the value of the "rules" field in the mutation.
+func (m *ContentTypeMutation) Rules() (r []model.ValidationRule, exists bool) {
+	v := m.rules
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRules returns the old "rules" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldRules(ctx context.Context) (v []model.ValidationRule, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRules is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRules requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRules: %w", err)
+	}
+	return oldValue.Rules, nil
+}
+
+// AppendRules adds mr to the "rules" field.
+func (m *ContentTypeMutation) AppendRules(mr []model.ValidationRule) {
+	m.appendrules = append(m.appendrules, mr...)
+}
+
+// AppendedRules returns the list of values that were appended to the "rules" field in this mutation.
+func (m *ContentTypeMutation) AppendedRules() ([]model.ValidationRule, bool) {
+	if len(m.appendrules) == 0 {
+		return nil, false
+	}
+	return m.appendrules, true
+}
+
+// ResetRules resets all changes to the "rules" field.
+func (m *ContentTypeMutation) ResetRules() {
+	m.rules = nil
+	m.appendrules = nil
+}
+
+// SetIsDefault sets the "is_default" field.
+func (m *ContentTypeMutation) SetIsDefault(b bool) {
+	m.is_default = &b
+}
+
+// IsDefault returns the value of the "is_default" field in the mutation.
+func (m *ContentTypeMutation) IsDefault() (r bool, exists bool) {
+	v := m.is_default
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsDefault returns the old "is_default" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldIsDefault(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsDefault is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsDefault requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsDefault: %w", err)
+	}
+	return oldValue.IsDefault, nil
+}
+
+// ResetIsDefault resets all changes to the "is_default" field.
+func (m *ContentTypeMutation) ResetIsDefault() {
+	m.is_default = nil
+}
+
+// SetVersion sets the "version" field.
+func (m *ContentTypeMutation) SetVersion(i int) {
+	m.version = &i
+	m.addversion = nil
+}
+
+// Version returns the value of the "version" field in the mutation.
+func (m *ContentTypeMutation) Version() (r int, exists bool) {
+	v := m.version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersion returns the old "version" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
+	}
+	return oldValue.Version, nil
+}
+
+// AddVersion adds i to the "version" field.
+func (m *ContentTypeMutation) AddVersion(i int) {
+	if m.addversion != nil {
+		*m.addversion += i
+	} else {
+		m.addversion = &i
+	}
+}
+
+// AddedVersion returns the value that was added to the "version" field in this mutation.
+func (m *ContentTypeMutation) AddedVersion() (r int, exists bool) {
+	v := m.addversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVersion resets all changes to the "version" field.
+func (m *ContentTypeMutation) ResetVersion() {
+	m.version = nil
+	m.addversion = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ContentTypeMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ContentTypeMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ContentTypeMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearContainer clears the "container" edge to the Resource entity.
+func (m *ContentTypeMutation) ClearContainer() {
+	m.clearedcontainer = true
+	m.clearedFields[contenttype.FieldContainerID] = struct{}{}
+}
+
+// ContainerCleared reports if the "container" edge to the Resource entity was cleared.
+func (m *ContentTypeMutation) ContainerCleared() bool {
+	return m.clearedcontainer
+}
+
+// ContainerIDs returns the "container" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ContainerID instead. It exists only for internal usage by the builders.
+func (m *ContentTypeMutation) ContainerIDs() (ids []string) {
+	if id := m.container; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetContainer resets all changes to the "container" edge.
+func (m *ContentTypeMutation) ResetContainer() {
+	m.container = nil
+	m.clearedcontainer = false
+}
+
+// Where appends a list predicates to the ContentTypeMutation builder.
+func (m *ContentTypeMutation) Where(ps ...predicate.ContentType) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ContentTypeMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ContentTypeMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ContentType, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ContentTypeMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ContentTypeMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ContentType).
+func (m *ContentTypeMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ContentTypeMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.created_at != nil {
+		fields = append(fields, contenttype.FieldCreatedAt)
+	}
+	if m.container != nil {
+		fields = append(fields, contenttype.FieldContainerID)
+	}
+	if m.key != nil {
+		fields = append(fields, contenttype.FieldKey)
+	}
+	if m.name != nil {
+		fields = append(fields, contenttype.FieldName)
+	}
+	if m.field_keys != nil {
+		fields = append(fields, contenttype.FieldFieldKeys)
+	}
+	if m.rules != nil {
+		fields = append(fields, contenttype.FieldRules)
+	}
+	if m.is_default != nil {
+		fields = append(fields, contenttype.FieldIsDefault)
+	}
+	if m.version != nil {
+		fields = append(fields, contenttype.FieldVersion)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, contenttype.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ContentTypeMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case contenttype.FieldCreatedAt:
+		return m.CreatedAt()
+	case contenttype.FieldContainerID:
+		return m.ContainerID()
+	case contenttype.FieldKey:
+		return m.Key()
+	case contenttype.FieldName:
+		return m.Name()
+	case contenttype.FieldFieldKeys:
+		return m.FieldKeys()
+	case contenttype.FieldRules:
+		return m.Rules()
+	case contenttype.FieldIsDefault:
+		return m.IsDefault()
+	case contenttype.FieldVersion:
+		return m.Version()
+	case contenttype.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ContentTypeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case contenttype.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case contenttype.FieldContainerID:
+		return m.OldContainerID(ctx)
+	case contenttype.FieldKey:
+		return m.OldKey(ctx)
+	case contenttype.FieldName:
+		return m.OldName(ctx)
+	case contenttype.FieldFieldKeys:
+		return m.OldFieldKeys(ctx)
+	case contenttype.FieldRules:
+		return m.OldRules(ctx)
+	case contenttype.FieldIsDefault:
+		return m.OldIsDefault(ctx)
+	case contenttype.FieldVersion:
+		return m.OldVersion(ctx)
+	case contenttype.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ContentType field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ContentTypeMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case contenttype.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case contenttype.FieldContainerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContainerID(v)
+		return nil
+	case contenttype.FieldKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKey(v)
+		return nil
+	case contenttype.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case contenttype.FieldFieldKeys:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFieldKeys(v)
+		return nil
+	case contenttype.FieldRules:
+		v, ok := value.([]model.ValidationRule)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRules(v)
+		return nil
+	case contenttype.FieldIsDefault:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsDefault(v)
+		return nil
+	case contenttype.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersion(v)
+		return nil
+	case contenttype.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ContentType field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ContentTypeMutation) AddedFields() []string {
+	var fields []string
+	if m.addversion != nil {
+		fields = append(fields, contenttype.FieldVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ContentTypeMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case contenttype.FieldVersion:
+		return m.AddedVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ContentTypeMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case contenttype.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ContentType numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ContentTypeMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ContentTypeMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ContentTypeMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ContentType nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ContentTypeMutation) ResetField(name string) error {
+	switch name {
+	case contenttype.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case contenttype.FieldContainerID:
+		m.ResetContainerID()
+		return nil
+	case contenttype.FieldKey:
+		m.ResetKey()
+		return nil
+	case contenttype.FieldName:
+		m.ResetName()
+		return nil
+	case contenttype.FieldFieldKeys:
+		m.ResetFieldKeys()
+		return nil
+	case contenttype.FieldRules:
+		m.ResetRules()
+		return nil
+	case contenttype.FieldIsDefault:
+		m.ResetIsDefault()
+		return nil
+	case contenttype.FieldVersion:
+		m.ResetVersion()
+		return nil
+	case contenttype.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ContentType field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ContentTypeMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.container != nil {
+		edges = append(edges, contenttype.EdgeContainer)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ContentTypeMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case contenttype.EdgeContainer:
+		if id := m.container; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ContentTypeMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ContentTypeMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ContentTypeMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedcontainer {
+		edges = append(edges, contenttype.EdgeContainer)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ContentTypeMutation) EdgeCleared(name string) bool {
+	switch name {
+	case contenttype.EdgeContainer:
+		return m.clearedcontainer
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ContentTypeMutation) ClearEdge(name string) error {
+	switch name {
+	case contenttype.EdgeContainer:
+		m.ClearContainer()
+		return nil
+	}
+	return fmt.Errorf("unknown ContentType unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ContentTypeMutation) ResetEdge(name string) error {
+	switch name {
+	case contenttype.EdgeContainer:
+		m.ResetContainer()
+		return nil
+	}
+	return fmt.Errorf("unknown ContentType edge %s", name)
 }
 
 // FieldDefinitionMutation represents an operation that mutates the FieldDefinition nodes in the graph.
@@ -4293,6 +5831,7 @@ type ItemRevisionMutation struct {
 	id                     *string
 	created_at             *time.Time
 	container_id           *string
+	content_type_id        *string
 	revision_number        *int
 	addrevision_number     *int
 	name                   *string
@@ -4523,6 +6062,42 @@ func (m *ItemRevisionMutation) OldContainerID(ctx context.Context) (v string, er
 // ResetContainerID resets all changes to the "container_id" field.
 func (m *ItemRevisionMutation) ResetContainerID() {
 	m.container_id = nil
+}
+
+// SetContentTypeID sets the "content_type_id" field.
+func (m *ItemRevisionMutation) SetContentTypeID(s string) {
+	m.content_type_id = &s
+}
+
+// ContentTypeID returns the value of the "content_type_id" field in the mutation.
+func (m *ItemRevisionMutation) ContentTypeID() (r string, exists bool) {
+	v := m.content_type_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContentTypeID returns the old "content_type_id" field's value of the ItemRevision entity.
+// If the ItemRevision object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemRevisionMutation) OldContentTypeID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContentTypeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContentTypeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContentTypeID: %w", err)
+	}
+	return oldValue.ContentTypeID, nil
+}
+
+// ResetContentTypeID resets all changes to the "content_type_id" field.
+func (m *ItemRevisionMutation) ResetContentTypeID() {
+	m.content_type_id = nil
 }
 
 // SetSchemaRevisionID sets the "schema_revision_id" field.
@@ -4955,7 +6530,7 @@ func (m *ItemRevisionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ItemRevisionMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.created_at != nil {
 		fields = append(fields, itemrevision.FieldCreatedAt)
 	}
@@ -4964,6 +6539,9 @@ func (m *ItemRevisionMutation) Fields() []string {
 	}
 	if m.container_id != nil {
 		fields = append(fields, itemrevision.FieldContainerID)
+	}
+	if m.content_type_id != nil {
+		fields = append(fields, itemrevision.FieldContentTypeID)
 	}
 	if m.schema_revision != nil {
 		fields = append(fields, itemrevision.FieldSchemaRevisionID)
@@ -5000,6 +6578,8 @@ func (m *ItemRevisionMutation) Field(name string) (ent.Value, bool) {
 		return m.ItemID()
 	case itemrevision.FieldContainerID:
 		return m.ContainerID()
+	case itemrevision.FieldContentTypeID:
+		return m.ContentTypeID()
 	case itemrevision.FieldSchemaRevisionID:
 		return m.SchemaRevisionID()
 	case itemrevision.FieldBlobID:
@@ -5029,6 +6609,8 @@ func (m *ItemRevisionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldItemID(ctx)
 	case itemrevision.FieldContainerID:
 		return m.OldContainerID(ctx)
+	case itemrevision.FieldContentTypeID:
+		return m.OldContentTypeID(ctx)
 	case itemrevision.FieldSchemaRevisionID:
 		return m.OldSchemaRevisionID(ctx)
 	case itemrevision.FieldBlobID:
@@ -5072,6 +6654,13 @@ func (m *ItemRevisionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetContainerID(v)
+		return nil
+	case itemrevision.FieldContentTypeID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContentTypeID(v)
 		return nil
 	case itemrevision.FieldSchemaRevisionID:
 		v, ok := value.(string)
@@ -5203,6 +6792,9 @@ func (m *ItemRevisionMutation) ResetField(name string) error {
 		return nil
 	case itemrevision.FieldContainerID:
 		m.ResetContainerID()
+		return nil
+	case itemrevision.FieldContentTypeID:
+		m.ResetContentTypeID()
 		return nil
 	case itemrevision.FieldSchemaRevisionID:
 		m.ResetSchemaRevisionID()
@@ -10306,6 +11898,7 @@ type ResourceMutation struct {
 	id                        *string
 	created_at                *time.Time
 	workspace_id              *string
+	content_type_id           *string
 	kind                      *resource.Kind
 	name                      *string
 	tags                      *[]string
@@ -10642,6 +12235,55 @@ func (m *ResourceMutation) ContainerIDCleared() bool {
 func (m *ResourceMutation) ResetContainerID() {
 	m.container = nil
 	delete(m.clearedFields, resource.FieldContainerID)
+}
+
+// SetContentTypeID sets the "content_type_id" field.
+func (m *ResourceMutation) SetContentTypeID(s string) {
+	m.content_type_id = &s
+}
+
+// ContentTypeID returns the value of the "content_type_id" field in the mutation.
+func (m *ResourceMutation) ContentTypeID() (r string, exists bool) {
+	v := m.content_type_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContentTypeID returns the old "content_type_id" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldContentTypeID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContentTypeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContentTypeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContentTypeID: %w", err)
+	}
+	return oldValue.ContentTypeID, nil
+}
+
+// ClearContentTypeID clears the value of the "content_type_id" field.
+func (m *ResourceMutation) ClearContentTypeID() {
+	m.content_type_id = nil
+	m.clearedFields[resource.FieldContentTypeID] = struct{}{}
+}
+
+// ContentTypeIDCleared returns if the "content_type_id" field was cleared in this mutation.
+func (m *ResourceMutation) ContentTypeIDCleared() bool {
+	_, ok := m.clearedFields[resource.FieldContentTypeID]
+	return ok
+}
+
+// ResetContentTypeID resets all changes to the "content_type_id" field.
+func (m *ResourceMutation) ResetContentTypeID() {
+	m.content_type_id = nil
+	delete(m.clearedFields, resource.FieldContentTypeID)
 }
 
 // SetKind sets the "kind" field.
@@ -12134,7 +13776,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -12146,6 +13788,9 @@ func (m *ResourceMutation) Fields() []string {
 	}
 	if m.container != nil {
 		fields = append(fields, resource.FieldContainerID)
+	}
+	if m.content_type_id != nil {
+		fields = append(fields, resource.FieldContentTypeID)
 	}
 	if m.kind != nil {
 		fields = append(fields, resource.FieldKind)
@@ -12217,6 +13862,8 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.ParentID()
 	case resource.FieldContainerID:
 		return m.ContainerID()
+	case resource.FieldContentTypeID:
+		return m.ContentTypeID()
 	case resource.FieldKind:
 		return m.Kind()
 	case resource.FieldName:
@@ -12270,6 +13917,8 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldParentID(ctx)
 	case resource.FieldContainerID:
 		return m.OldContainerID(ctx)
+	case resource.FieldContentTypeID:
+		return m.OldContentTypeID(ctx)
 	case resource.FieldKind:
 		return m.OldKind(ctx)
 	case resource.FieldName:
@@ -12342,6 +13991,13 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetContainerID(v)
+		return nil
+	case resource.FieldContentTypeID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContentTypeID(v)
 		return nil
 	case resource.FieldKind:
 		v, ok := value.(resource.Kind)
@@ -12532,6 +14188,9 @@ func (m *ResourceMutation) ClearedFields() []string {
 	if m.FieldCleared(resource.FieldContainerID) {
 		fields = append(fields, resource.FieldContainerID)
 	}
+	if m.FieldCleared(resource.FieldContentTypeID) {
+		fields = append(fields, resource.FieldContentTypeID)
+	}
 	if m.FieldCleared(resource.FieldHeadRevisionID) {
 		fields = append(fields, resource.FieldHeadRevisionID)
 	}
@@ -12570,6 +14229,9 @@ func (m *ResourceMutation) ClearField(name string) error {
 	case resource.FieldContainerID:
 		m.ClearContainerID()
 		return nil
+	case resource.FieldContentTypeID:
+		m.ClearContentTypeID()
+		return nil
 	case resource.FieldHeadRevisionID:
 		m.ClearHeadRevisionID()
 		return nil
@@ -12607,6 +14269,9 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldContainerID:
 		m.ResetContainerID()
+		return nil
+	case resource.FieldContentTypeID:
+		m.ResetContentTypeID()
 		return nil
 	case resource.FieldKind:
 		m.ResetKind()
