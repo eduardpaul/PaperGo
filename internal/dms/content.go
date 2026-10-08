@@ -158,45 +158,57 @@ func (s *Service) CanUpload(ctx context.Context, subject, id string, version int
 	return nil
 }
 func (s *Service) AttachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (out *ent.Blob, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		var e error
+		out, e = t.attachBlob(ctx, subject, id, version, in)
+		return e
+	})
+	return
+}
+
+// attachBlob records a new content revision pinning the blob, inside a write transaction.
+func (s *Service) attachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (*ent.Blob, error) {
+	if e := s.CanUpload(ctx, subject, id, version); e != nil {
+		return nil, e
+	}
+	r, e := s.Client.Resource.Get(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	if e = s.overlayHead(ctx, r); e != nil {
+		return nil, e
+	}
+	n, e := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC()).Save(ctx)
+	if e != nil {
+		return nil, e
+	}
+	if n != 1 {
+		return nil, ErrConflict
+	}
+	r.Version++
+	out, e := s.createBlob(ctx, id, in)
+	if e != nil {
+		return nil, e
+	}
+	if _, e = s.recordRevision(ctx, subject, r, &out.ID); e != nil {
+		return nil, e
+	}
+	return out, s.audit(ctx, subject, "blob.attach", r, map[string]any{"blob_id": out.ID, "size": in.Size, "sha256": in.SHA256})
+}
+
+// createBlob stores the metadata of the item's next blob version.
+func (s *Service) createBlob(ctx context.Context, itemID string, in BlobInput) (*ent.Blob, error) {
 	if !filenameValid(in.Filename) || in.Size < 0 || len(in.SHA256) != 64 || len(in.ContentType) > 255 || in.ContentType == "" || in.ObjectKey == "" {
 		return nil, invalid("invalid blob metadata")
 	}
-	err = s.write(ctx, func(t *Service) error {
-		if e := t.CanUpload(ctx, subject, id, version); e != nil {
-			return e
-		}
-		r, e := t.Client.Resource.Get(ctx, id)
-		if e != nil {
-			return e
-		}
-		if e = t.overlayHead(ctx, r); e != nil {
-			return e
-		}
-		n, e := t.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC()).Save(ctx)
-		if e != nil {
-			return e
-		}
-		if n != 1 {
-			return ErrConflict
-		}
-		r.Version++
-		blobVersion := 1
-		last, e := t.Client.Blob.Query().Where(blob.ItemIDEQ(id)).Order(ent.Desc(blob.FieldVersion)).First(ctx)
-		if e == nil {
-			blobVersion = last.Version + 1
-		} else if !ent.IsNotFound(e) {
-			return e
-		}
-		out, e = t.Client.Blob.Create().SetItemID(id).SetVersion(blobVersion).SetObjectKey(in.ObjectKey).SetFilename(in.Filename).SetContentType(in.ContentType).SetSize(in.Size).SetSha256(in.SHA256).Save(ctx)
-		if e != nil {
-			return e
-		}
-		if _, e = t.recordRevision(ctx, subject, r, &out.ID); e != nil {
-			return e
-		}
-		return t.audit(ctx, subject, "blob.attach", r, map[string]any{"blob_id": out.ID, "size": in.Size, "sha256": in.SHA256})
-	})
-	return
+	version := 1
+	last, err := s.Client.Blob.Query().Where(blob.ItemIDEQ(itemID)).Order(ent.Desc(blob.FieldVersion)).First(ctx)
+	if err == nil {
+		version = last.Version + 1
+	} else if !ent.IsNotFound(err) {
+		return nil, err
+	}
+	return s.Client.Blob.Create().SetItemID(itemID).SetVersion(version).SetObjectKey(in.ObjectKey).SetFilename(in.Filename).SetContentType(in.ContentType).SetSize(in.Size).SetSha256(in.SHA256).Save(ctx)
 }
 func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent.Blob, error) {
 	if !s.transaction {

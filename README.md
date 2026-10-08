@@ -31,7 +31,9 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
 | Requirement | Implementation |
 | --- | --- |
-| Workspaces, lists, libraries, folders and items | One typed resource hierarchy. A workspace contains lists/libraries; those contain folders/items. Items have one immutable list/library container, including when nested under folders. |
+| Workspaces, lists, libraries, folders and items | One typed resource hierarchy. A workspace contains lists/libraries; those contain folders/items. Items have one immutable list/library container, including when nested under folders; folders and items move freely within it. Library folders and items carry file names, unique among siblings ignoring case. |
+| Delete folders and items | Deleting a folder or item removes it and everything below it from every read, search, query and relationship, and frees its name. The rows remain as final tombstones, so revisions, publications and audit history are retained. |
+| WebDAV access to libraries | Optional per library (`webdav_enabled`). Windows Explorer, macOS Finder and Office can browse, open, create, overwrite, rename, move, copy, lock and delete files and folders, with the same permissions, publishing and history as the REST API. |
 | Flexible SharePoint-style fields | Per-container typed fields and immutable schema revisions. Types: text/note/email/url/date/datetime, choice, number/integer/decimal, boolean, lookup and term; defaults, bounds, length limits, and indexed multi-values. Unknown fields, wrong types and missing required values are rejected. |
 | Library as blob plus list item | A library item has the same metadata and permission behavior as a list item, plus immutable blob revisions stored outside SQLite. |
 | Unique permissions at every level | SharePoint-style inheritance: only the nearest exclusive scope supplies additive read/read_draft/write/publish/manage grants. Break, copy, or reset inheritance explicitly. Manage implies all actions; write/publish imply draft and published read. Denies are rejected. |
@@ -51,7 +53,7 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | Method | Route | Purpose |
 | --- | --- | --- |
 | POST / GET | `/v1/workspaces` | Create a workspace / list accessible workspaces |
-| GET / PATCH | `/v1/resources/{id}` | Read / update names, tags and item values |
+| GET / PATCH / DELETE | `/v1/resources/{id}` | Read / update names, tags, item values, `parent_id` (move) and collection settings / delete a folder or item |
 | POST / GET | `/v1/resources/{id}/children` | Create / browse children |
 | GET | `/v1/resources?workspace_id=...&q=...&tag=...` | Workspace search and tag filtering; optional `parent_id` narrows to direct children |
 | POST / GET | `/v1/resources/{id}/fields` | Add / read list or library field definitions |
@@ -66,9 +68,12 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | GET | `/v1/items/{id}/schema?surface=auto` | Immutable schema of the caller's visible content revision |
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |
 | GET | `/v1/workspaces/{id}/audit` | Workspace manager audit feed |
+| POST / GET | `/v1/webdav-credentials` | Issue / list the caller's WebDAV app passwords |
+| DELETE | `/v1/webdav-credentials/{id}` | Revoke one of the caller's WebDAV app passwords |
+| WebDAV | `/webdav/{libraryID}/...` | A WebDAV-enabled library as a network drive; see [WebDAV](#webdav) |
 | GET | `/health/live`, `/health/ready` | Process liveness / database and migration readiness |
 
-Read/update responses carry a quoted numeric `ETag`. PATCH, catalog PUT, view/relationship DELETE, template application, ACL replacement, blob upload, publish and unpublish require `If-Match: "<current version>"`. Missing preconditions return 428; stale versions return 409. These mutations consume a lock version; publishing an already published head returns 409. Content `revision_number`, blob `version`, and resource lock `version` are independent counters. Upload returns `resource_version` and an ETag for the resource. Publication event `version` records the lock version consumed by the transition. PATCH `values` replaces the whole custom-value object.
+Read/update responses carry a quoted numeric `ETag`. PATCH, resource DELETE, catalog PUT, view/relationship DELETE, template application, ACL replacement, blob upload, publish and unpublish require `If-Match: "<current version>"`. Missing preconditions return 428; stale versions return 409. These mutations consume a lock version; publishing an already published head returns 409. Content `revision_number`, blob `version`, and resource lock `version` are independent counters. Upload returns `resource_version` and an ETag for the resource. Publication event `version` records the lock version consumed by the transition. PATCH `values` replaces the whole custom-value object.
 
 GET resources and browsing support `surface=auto|head|published`. Auto chooses head for draft readers and published for ordinary readers. An unpublished item returns 404 to a reader; explicit head requests require draft access. Names, tags, values, search matches, field filters and downloads all use the chosen surface. Readers cannot download draft or arbitrary historical blobs. A published resource's lock version may advance when editors save drafts; its `updated_at` describes the selected content revision.
 
@@ -124,6 +129,30 @@ The link takes its name, direction, attribute schema and cardinality from the ty
 
 ACL and publication visibility filtering happen before LIMIT, so hidden rows neither shorten pages nor supply cursors. Search treats input as a literal FTS phrase, uses Unicode tokenization, and returns stable ID order, not relevance order. FTS indexes metadata text but does not extract PDF/Office document contents. Browsing a scope requires read access to that scope; explicitly granted items remain accessible directly by ID. Relationships are live, separately audited edges; publication does not freeze a relationship graph.
 
+Move a folder or item with PATCH `{"parent_id":"<folder or collection id>"}`: the target must be in the same list or library, not below the moved folder, and writable by the caller. A move consumes a lock version but creates no content revision; inheriting resources take the new location's permission scope. DELETE `/v1/resources/{id}` with `If-Match` deletes a folder or item and everything below it; it requires write access to all of it, removes relationships to the deleted items, and records one `resource.delete` audit event. Workspaces, lists and libraries cannot be deleted. Deletion is final, but the tombstones keep every revision, publication and audit event.
+
+## WebDAV
+
+A library created with `"webdav_enabled": true`, or updated to it by a manager, is also served at `https://<host>/webdav/<libraryID>/` (RFC 4918 class 1 and 2). Its folders are collections and its items are files whose bytes are the caller's visible revision: head for draft readers, published for ordinary readers. Every request runs through the same service as the REST API, so permissions, publishing, validation, revisions and audit events are identical. Libraries without the flag and paths the caller cannot read return 404.
+
+WebDAV accepts the API bearer token or HTTP Basic. Windows Explorer and macOS Finder only use Basic, so each user issues an app password with `POST /v1/webdav-credentials` and `{"label":"Laptop"}` (optionally `expires_at`). The response shows `password` once; sign in with any user name and that password. Only its SHA-256 is stored, each principal can hold 20, and `DELETE /v1/webdav-credentials/{id}` revokes one.
+
+To connect from Windows, choose **Map network drive** in Explorer and enter `https://<host>/webdav/<libraryID>/`, or run `net use Z: https://<host>/webdav/<libraryID>/ /user:me <password>`. Windows sends Basic credentials only over HTTPS unless `BasicAuthLevel` is set to `2` under `HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`, which local HTTP development needs (restart the WebClient service afterwards). The Windows client also rejects files above its `FileSizeLimitInBytes` (50 MB by default); the server limit is `MAX_UPLOAD_BYTES`.
+
+| WebDAV | Effect |
+| --- | --- |
+| PROPFIND | Depth `0` or `1`; `infinity` is refused with `propfind-finite-depth`. A folder lists at most 10,000 entries. |
+| GET / HEAD | Download the visible content, with Range and conditional requests. |
+| PUT | Create an item whose first revision holds the content, or add a content revision to an existing file. `If-Match` and `If-None-Match` are honored. |
+| MKCOL | Create a folder. |
+| MOVE | Rename or move within the library in one transaction, replacing the destination unless `Overwrite: F`. Destinations in other libraries return 502, so clients copy and delete instead. |
+| COPY | Create new items carrying the source's bytes, tags and field values; copying onto an existing file adds a content revision. COPY and MOVE refuse (403) a destination that is the source itself, contains it, or lies inside it. |
+| DELETE | Delete the folder or file and everything below it, as the REST API does. |
+| LOCK / UNLOCK | Exclusive or shared write locks of at most one hour, refreshable, held in memory and released on restart. |
+| PROPPATCH | Live DAV properties are refused; others, such as Windows timestamps, are acknowledged but not stored. |
+
+New files take the library's field defaults; a library with a required field that has no default refuses new files with 403 and the reason. In a library with publishing enabled, writes are drafts: readers keep the published names and bytes until an editor publishes. File names follow the library rules above, and each saved version (Windows writes an empty file before its content) becomes a content revision.
+
 ## Schema changes
 
 PaperGo is unreleased, so the whole database schema lives in one file, `migrations/20261007000100_schema.sql`, which is edited in place. Do not add migration files, backfills, upgrade paths or compatibility code (see [AGENTS.md](AGENTS.md)). Local databases are disposable: delete `data/` and apply the schema again.
@@ -142,11 +171,11 @@ atlas migrate apply --env local
 
 ## Deployment and scaling
 
-Use one API process with a local persistent disk. SQLite runs WAL mode, foreign-key enforcement, a 5-second busy timeout and FULL synchronous durability. An in-process mutex serializes application writes; readers use a bounded connection pool. Do not run multiple API replicas against a shared network filesystem. See [SQLite's WAL documentation](https://www.sqlite.org/wal.html).
+Use one API process with a local persistent disk. SQLite runs WAL mode, foreign-key enforcement, a 5-second busy timeout and FULL synchronous durability. An in-process mutex serializes application writes, and WebDAV locks live in the same process; readers use a bounded connection pool. Do not run multiple API replicas against a shared network filesystem. See [SQLite's WAL documentation](https://www.sqlite.org/wal.html).
 
 For production, set `APP_ENV=production`, `AUTH_MODE=oidc`, an HTTPS `OIDC_ISSUER`, and the API audience in `OIDC_AUDIENCE`. The provider must issue signed JWT bearer tokens with issuer, audience, subject and expiry claims; opaque tokens require a separate introspection adapter. The audience must be registered for this API. Development authentication is rejected in production. Terminate TLS at the ingress, enforce deployment request/rate limits there, and apply migrations before starting the API. The Docker image runs as UID 65532 and needs a writable persistent `/data` volume. Docker is not installed in the current workspace, so image verification requires CI or another host.
 
-Back up SQLite with its online backup API or `VACUUM INTO` and back up the referenced blob files consistently; copying only the `.db` file while WAL is active is not a valid backup. Blobs are created before their metadata transaction; ordinary failed writes clean up the object, while a process crash between those steps can leave an unreferenced file. A deployment should reconcile such orphan files after a grace period. Publication/blob revision retention and resource deletion policies need to be defined before adding destructive endpoints.
+Back up SQLite with its online backup API or `VACUUM INTO` and back up the referenced blob files consistently; copying only the `.db` file while WAL is active is not a valid backup. Blobs are created before their metadata transaction; ordinary failed writes clean up the object, while a process crash between those steps can leave an unreferenced file. A deployment should reconcile such orphan files after a grace period. Deleted resources keep their blobs, because their revisions are retained; purging tombstones and pruning old revisions need explicit retention rules first.
 
 This is an initial backend foundation, not a completed enterprise certification or deployment. Group ACLs, S3 storage, antivirus scanning, quotas, workflow approval, idempotency keys, document text extraction, tracing/metrics export and restore tooling remain future extensions. Performance has functional coverage; representative load benchmarks and SLOs still need a target workload.
 

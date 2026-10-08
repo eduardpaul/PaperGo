@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PaperGo headless DMS",
-    "version": "0.3.0",
-    "description": "One organization per SQLite deployment. Immutable schema/content revisions, SharePoint-style exclusive permission scopes, head/published projections, rich typed fields, reusable templates, saved queries, taxonomy, and typed relationships."
+    "version": "0.4.0",
+    "description": "One organization per SQLite deployment. Immutable schema/content revisions, SharePoint-style exclusive permission scopes, head/published projections, rich typed fields, reusable templates, saved queries, taxonomy, and typed relationships. Libraries with webdav_enabled are also served over WebDAV (RFC 4918 class 1 and 2) at /webdav/{libraryID}/, outside this contract; WebDAV accepts these bearer tokens or HTTP Basic with a WebDAV credential password."
   },
   "servers": [
     {
@@ -412,6 +412,114 @@
                 "$ref": "#/components/schemas/UpdateResource"
               }
             }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a folder or item with everything below it (write required on all of it)",
+        "description": "Deleted resources become retained tombstones: they disappear from every read, search, query and relationship, their names become free, and their revisions, publications and audit events are kept. Deletion cannot be undone.",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/webdav-credentials": {
+      "get": {
+        "summary": "List the caller's WebDAV credentials",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "maxItems": 20,
+                      "items": {
+                        "$ref": "#/components/schemas/WebDAVCredential"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "summary": "Issue a WebDAV app password for the caller (at most 20)",
+        "description": "Clients such as Windows Explorer authenticate to /webdav/ with HTTP Basic: any user name and this password. The password is returned only in this response; only its SHA-256 is stored.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebDAVCredentialInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewWebDAVCredential"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/webdav-credentials/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Revoke one of the caller's WebDAV credentials",
+        "responses": {
+          "204": {
+            "description": "Revoked"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -5174,7 +5282,8 @@
           "name": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 255
+            "maxLength": 255,
+            "description": "Library folders and items are file names: unique among live siblings ignoring case, without / \\ or control characters."
           },
           "tags": {
             "type": "array",
@@ -5190,6 +5299,11 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Values validated by the revision schema. Integers remain exact JSON numbers; decimals are canonical strings. Use an exact-number parser for 64-bit JSON integers."
+          },
+          "webdav_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Libraries only. Serves the library's folders and files at /webdav/{id}/."
           },
           "inherit_permissions": {
             "type": "boolean"
@@ -5275,6 +5389,11 @@
             "default": false,
             "description": "Lists/libraries only. False publishes content changes immediately. Changing policy requires manage access; disabling publishes all current heads atomically.",
             "type": "boolean"
+          },
+          "webdav_enabled": {
+            "default": false,
+            "description": "Libraries only. Serves the library's folders and files at /webdav/{id}/.",
+            "type": "boolean"
           }
         },
         "required": [
@@ -5309,10 +5428,87 @@
             "default": false,
             "description": "Lists/libraries only. False publishes content changes immediately. Changing policy requires manage access; disabling publishes all current heads atomically.",
             "type": "boolean"
+          },
+          "webdav_enabled": {
+            "description": "Libraries only; changing it requires manage access.",
+            "type": "boolean"
+          },
+          "parent_id": {
+            "description": "Moves a folder or item below another folder of the same list or library, or to its top level. Requires write access to the new parent. A move alone creates no content revision; inheriting resources take the new parent's permission scope.",
+            "type": "string",
+            "format": "uuid"
           }
         },
         "required": [],
         "additionalProperties": false
+      },
+      "WebDAVCredentialInput": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Trimmed name identifying the device or client."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Optional future expiry; credentials without one last until revoked."
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "WebDAVCredential": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "subject",
+          "label"
+        ]
+      },
+      "NewWebDAVCredential": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WebDAVCredential"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "password": {
+                "type": "string",
+                "description": "Shown once. Use it as the HTTP Basic password for /webdav/ with any user name."
+              }
+            },
+            "required": [
+              "password"
+            ]
+          }
+        ]
       },
       "CreateField": {
         "type": "object",

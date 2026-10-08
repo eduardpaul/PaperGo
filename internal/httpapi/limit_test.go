@@ -13,7 +13,7 @@ func TestLimitShedsExcessAndExemptsBlobTransfers(t *testing.T) {
 	release := make(chan struct{})
 	entered := make(chan struct{}, 4)
 	a := &API{Logger: slog.New(slog.NewJSONHandler(testLog{t}, nil)), MaxInFlight: 1}
-	h := a.limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := a.limiter()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		entered <- struct{}{}
 		<-release
 		w.WriteHeader(204)
@@ -60,7 +60,7 @@ func TestLimitShedsExcessAndExemptsBlobTransfers(t *testing.T) {
 
 func TestRequestTimeoutBecomesRetryable503(t *testing.T) {
 	a := &API{Logger: slog.New(slog.NewJSONHandler(testLog{t}, nil)), RequestTimeout: 20 * time.Millisecond}
-	h := a.limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := a.limiter()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
 		a.failure(w, r, r.Context().Err())
 	}))
@@ -71,7 +71,7 @@ func TestRequestTimeoutBecomesRetryable503(t *testing.T) {
 	}
 	// Mutations may span a whole collection (index rebuilds), so they get no deadline.
 	var deadline bool
-	a.limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	a.limiter()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, deadline = r.Context().Deadline()
 	})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("PATCH", "/v1/resources/x/fields/y", nil))
 	if deadline {
@@ -83,5 +83,25 @@ func TestRequestTimeoutBecomesRetryable503(t *testing.T) {
 	a.failure(w, r, context.DeadlineExceeded)
 	if w.Code != 500 {
 		t.Fatal("foreign deadline mapped as request timeout", w.Code)
+	}
+}
+
+func TestOnlyStreamedTransfersBypassAdmission(t *testing.T) {
+	for _, c := range []struct {
+		method, path string
+		transfer     bool
+	}{
+		{"GET", "/v1/items/x/content", true},
+		{"PUT", "/v1/items/x/content", true},
+		{"POST", "/v1/items/x/content", false},
+		{"GET", "/v1/resources/x/content", false},
+		{"GET", "/webdav/lib/file.pdf", true},
+		{"PUT", "/webdav/lib/file.pdf", true},
+		{"COPY", "/webdav/lib/folder", false},
+		{"PROPFIND", "/webdav/lib/content", false},
+	} {
+		if got := transferRequest(httptest.NewRequest(c.method, c.path, nil)); got != c.transfer {
+			t.Errorf("%s %s: transfer %v", c.method, c.path, got)
+		}
 	}
 }

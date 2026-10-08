@@ -82,14 +82,26 @@ type CreateResource struct {
 	Tags              []string       `json:"tags"`
 	Values            map[string]any `json:"values"`
 	PublishingEnabled bool           `json:"publishing_enabled"`
+	WebDAVEnabled     bool           `json:"webdav_enabled"`
 }
 
 func (s *Service) Create(ctx context.Context, subject, parentID string, in CreateResource) (out *ent.Resource, err error) {
-	if err = validateName(in.Name); err != nil {
-		return
+	err = s.write(ctx, func(t *Service) error {
+		var e error
+		out, e = t.create(ctx, subject, parentID, in, nil)
+		return e
+	})
+	return
+}
+
+// create inserts a resource inside a write transaction. A library item may be
+// created with its first blob, so its first revision already carries content.
+func (s *Service) create(ctx context.Context, subject, parentID string, in CreateResource, content *BlobInput) (*ent.Resource, error) {
+	if err := validateName(in.Name); err != nil {
+		return nil, err
 	}
-	if err = validateTags(in.Tags); err != nil {
-		return
+	if err := validateTags(in.Tags); err != nil {
+		return nil, err
 	}
 	if in.Tags == nil {
 		in.Tags = []string{}
@@ -103,99 +115,125 @@ func (s *Service) Create(ctx context.Context, subject, parentID string, in Creat
 	if in.PublishingEnabled && in.Kind != "list" && in.Kind != "library" {
 		return nil, invalid("publishing_enabled belongs to lists and libraries")
 	}
-	err = s.write(ctx, func(t *Service) error {
-		id := uuid.NewString()
-		workspaceID := id
-		var parent *ent.Resource
-		var containerID *string
-		if parentID != "" {
-			var e error
-			parent, e = t.authorize(ctx, subject, parentID, "write")
-			if e != nil {
-				return e
-			}
-			workspaceID = parent.WorkspaceID
-			valid := false
-			switch string(parent.Kind) {
-			case "workspace":
-				valid = in.Kind == "list" || in.Kind == "library"
-			case "list", "library":
-				valid = in.Kind == "folder" || in.Kind == "item"
-				v := parent.ID
-				containerID = &v
-			case "folder":
-				valid = in.Kind == "folder" || in.Kind == "item"
-				containerID = parent.ContainerID
-			}
-			if !valid {
-				return invalid("invalid parent for resource kind")
-			}
-			for r, depth := parent, 1; r != nil; depth++ {
-				if depth >= MaxDepth {
-					return invalid("maximum hierarchy depth reached")
-				}
-				if r.ParentID == nil {
-					break
-				}
-				r, e = t.Client.Resource.Get(ctx, *r.ParentID)
-				if e != nil {
-					return e
-				}
-			}
-		}
-		if in.Kind == "item" {
-			if containerID == nil {
-				return invalid("item must belong to a list or library")
-			}
-			defs, e := t.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(*containerID)).All(ctx)
-			if e != nil {
-				return e
-			}
-			if e = normalizeValues(defs, in.Values); e != nil {
-				return e
-			}
-		} else if len(in.Values) > 0 {
-			return invalid("custom values are supported on items only")
-		}
-		builder := t.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetTags(in.Tags).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled)
-		if parent != nil {
-			builder.SetParentID(parent.ID)
-		} else {
-			builder.SetInheritPermissions(false)
-		}
+	if in.WebDAVEnabled && in.Kind != "library" {
+		return nil, invalid("webdav_enabled belongs to libraries")
+	}
+	if content != nil && in.Kind != "item" {
+		return nil, invalid("only items have content")
+	}
+	id := uuid.NewString()
+	workspaceID := id
+	var parent *ent.Resource
+	var containerID *string
+	if parentID != "" {
 		var e error
-		out, e = builder.Save(ctx)
+		parent, e = s.authorize(ctx, subject, parentID, "write")
 		if e != nil {
-			return e
+			return nil, e
 		}
-		if parent == nil {
-			_, e = t.Client.Grant.Create().SetResourceID(out.ID).SetSubject(subject).SetAction(grant.ActionManage).SetEffect(grant.EffectAllow).Save(ctx)
+		workspaceID = parent.WorkspaceID
+		valid := false
+		switch string(parent.Kind) {
+		case "workspace":
+			valid = in.Kind == "list" || in.Kind == "library"
+		case "list", "library":
+			valid = in.Kind == "folder" || in.Kind == "item"
+			v := parent.ID
+			containerID = &v
+		case "folder":
+			valid = in.Kind == "folder" || in.Kind == "item"
+			containerID = parent.ContainerID
+		}
+		if !valid {
+			return nil, invalid("invalid parent for resource kind")
+		}
+		depth, e := s.depth(ctx, parent)
+		if e != nil {
+			return nil, e
+		}
+		if depth >= MaxDepth {
+			return nil, invalid("maximum hierarchy depth reached")
+		}
+	}
+	key, e := s.fileNameKey(ctx, resource.Kind(in.Kind), containerID, in.Name)
+	if e != nil {
+		return nil, e
+	}
+	if in.Kind == "item" {
+		if containerID == nil {
+			return nil, invalid("item must belong to a list or library")
+		}
+		defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(*containerID)).All(ctx)
+		if e != nil {
+			return nil, e
+		}
+		if e = normalizeValues(defs, in.Values); e != nil {
+			return nil, e
+		}
+	} else if len(in.Values) > 0 {
+		return nil, invalid("custom values are supported on items only")
+	}
+	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetTags(in.Tags).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
+	if parent != nil {
+		builder.SetParentID(parent.ID)
+	} else {
+		builder.SetInheritPermissions(false)
+	}
+	out, e := builder.Save(ctx)
+	if e != nil {
+		return nil, e
+	}
+	if parent == nil {
+		_, e = s.Client.Grant.Create().SetResourceID(out.ID).SetSubject(subject).SetAction(grant.ActionManage).SetEffect(grant.EffectAllow).Save(ctx)
+		if e != nil {
+			return nil, e
+		}
+	}
+	if out.Kind == resource.KindList || out.Kind == resource.KindLibrary {
+		if e = s.recordSchema(ctx, subject, out); e != nil {
+			return nil, e
+		}
+	}
+	details := map[string]any{"kind": in.Kind}
+	if out.Kind == resource.KindItem {
+		var blobID *string
+		if content != nil {
+			b, e := s.createBlob(ctx, out.ID, *content)
 			if e != nil {
-				return e
+				return nil, e
 			}
+			blobID = &b.ID
+			details["blob_id"] = b.ID
 		}
-		if out.Kind == resource.KindList || out.Kind == resource.KindLibrary {
-			if e = t.recordSchema(ctx, subject, out); e != nil {
-				return e
-			}
+		if _, e = s.recordRevision(ctx, subject, out, blobID); e != nil {
+			return nil, e
 		}
-		if out.Kind == resource.KindItem {
-			if _, e = t.recordRevision(ctx, subject, out, nil); e != nil {
-				return e
-			}
+	}
+	out, e = s.Client.Resource.Get(ctx, out.ID)
+	if e != nil {
+		return nil, e
+	}
+	if out.Kind == resource.KindItem {
+		if e = s.overlayHead(ctx, out); e != nil {
+			return nil, e
 		}
-		out, e = t.Client.Resource.Get(ctx, out.ID)
-		if e != nil {
-			return e
+	}
+	return out, s.audit(ctx, subject, "resource.create", out, details)
+}
+
+// depth counts r and its ancestors.
+func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
+	depth := 1
+	for ; r.ParentID != nil; depth++ {
+		if depth > MaxDepth {
+			return depth, invalid("invalid hierarchy depth")
 		}
-		if out.Kind == resource.KindItem {
-			if e = t.overlayHead(ctx, out); e != nil {
-				return e
-			}
+		var err error
+		if r, err = s.Client.Resource.Get(ctx, *r.ParentID); err != nil {
+			return depth, err
 		}
-		return t.audit(ctx, subject, "resource.create", out, map[string]any{"kind": in.Kind})
-	})
-	return
+	}
+	return depth, nil
 }
 
 type UpdateResource struct {
@@ -203,104 +241,272 @@ type UpdateResource struct {
 	Tags              *[]string       `json:"tags,omitempty"`
 	Values            *map[string]any `json:"values,omitempty"`
 	PublishingEnabled *bool           `json:"publishing_enabled,omitempty"`
+	WebDAVEnabled     *bool           `json:"webdav_enabled,omitempty"`
+	// ParentID moves a folder or item to another folder of the same collection.
+	ParentID *string `json:"parent_id,omitempty"`
 }
 
 func (s *Service) Update(ctx context.Context, subject, id string, version int, in UpdateResource) (out *ent.Resource, err error) {
-	if in.Name == nil && in.Tags == nil && in.Values == nil && in.PublishingEnabled == nil {
-		return nil, invalid("at least one change is required")
-	}
-	if in.Name != nil {
-		if err = validateName(*in.Name); err != nil {
-			return
-		}
-	}
-	if in.Tags != nil {
-		if err = validateTags(*in.Tags); err != nil {
-			return
-		}
-	}
 	err = s.write(ctx, func(t *Service) error {
-		r, e := t.authorize(ctx, subject, id, "write")
-		if e != nil {
-			return e
-		}
-		if r.Version != version {
-			return ErrConflict
-		}
-		if in.PublishingEnabled != nil {
-			if r.Kind != resource.KindList && r.Kind != resource.KindLibrary {
-				return invalid("publishing_enabled belongs to lists and libraries")
-			}
-			if _, e = t.authorize(ctx, subject, id, "manage"); e != nil {
-				return e
-			}
-		}
-		if r.Kind == resource.KindItem {
-			if e = t.overlayHead(ctx, r); e != nil {
-				return e
-			}
-		}
-		if in.Values != nil && (r.Kind != resource.KindItem || r.ContainerID == nil) {
-			return invalid("only items support custom values")
-		}
-		// Item values are validated and normalized once, by recordRevision below.
-		if r.Kind == resource.KindItem {
-			if in.Name != nil {
-				r.Name = *in.Name
-			}
-			if in.Tags != nil {
-				r.Tags = *in.Tags
-			}
-			if in.Values != nil {
-				r.Values = *in.Values
-			}
-		}
-		b := t.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC())
-		if in.Name != nil {
-			b.SetName(*in.Name)
-		}
-		if in.Tags != nil {
-			b.SetTags(*in.Tags)
-		}
-		if r.Kind == resource.KindItem {
-			b.SetValues(r.Values)
-		}
-		if in.PublishingEnabled != nil {
-			b.SetPublishingEnabled(*in.PublishingEnabled)
-		}
-		n, e := b.Save(ctx)
-		if e != nil {
-			return e
-		}
-		if n != 1 {
-			return ErrConflict
-		}
-		out, e = t.Client.Resource.Get(ctx, id)
-		if e != nil {
-			return e
-		}
-		if out.Kind == resource.KindItem {
-			out.Values = r.Values
-			if _, e = t.recordRevision(ctx, subject, out, nil); e != nil {
-				return e
-			}
-			out, e = t.Client.Resource.Get(ctx, id)
-			if e != nil {
-				return e
-			}
-			if e = t.overlayHead(ctx, out); e != nil {
-				return e
-			}
-		}
-		if in.PublishingEnabled != nil && !*in.PublishingEnabled {
-			if e = t.publishAllHeads(ctx, subject, out); e != nil {
-				return e
-			}
-		}
-		return t.audit(ctx, subject, "resource.update", out, map[string]any{"version": out.Version})
+		var e error
+		out, e = t.update(ctx, subject, id, version, in)
+		return e
 	})
 	return
 }
+func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*ent.Resource, error) {
+	content := in.Name != nil || in.Tags != nil || in.Values != nil
+	if !content && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.ParentID == nil {
+		return nil, invalid("at least one change is required")
+	}
+	if in.Name != nil {
+		if err := validateName(*in.Name); err != nil {
+			return nil, err
+		}
+	}
+	if in.Tags != nil {
+		if err := validateTags(*in.Tags); err != nil {
+			return nil, err
+		}
+	}
+	r, e := s.authorize(ctx, subject, id, "write")
+	if e != nil {
+		return nil, e
+	}
+	if r.Version != version {
+		return nil, ErrConflict
+	}
+	if in.PublishingEnabled != nil || in.WebDAVEnabled != nil {
+		if in.PublishingEnabled != nil && r.Kind != resource.KindList && r.Kind != resource.KindLibrary {
+			return nil, invalid("publishing_enabled belongs to lists and libraries")
+		}
+		if in.WebDAVEnabled != nil && r.Kind != resource.KindLibrary {
+			return nil, invalid("webdav_enabled belongs to libraries")
+		}
+		if _, e = s.authorize(ctx, subject, id, "manage"); e != nil {
+			return nil, e
+		}
+	}
+	if r.Kind == resource.KindItem {
+		if e = s.overlayHead(ctx, r); e != nil {
+			return nil, e
+		}
+	}
+	if in.Values != nil && (r.Kind != resource.KindItem || r.ContainerID == nil) {
+		return nil, invalid("only items support custom values")
+	}
+	moved := in.ParentID != nil && (r.ParentID == nil || *in.ParentID != *r.ParentID)
+	b := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC())
+	if moved {
+		if e = s.checkMove(ctx, subject, r, *in.ParentID); e != nil {
+			return nil, e
+		}
+		b.SetParentID(*in.ParentID)
+	}
+	if in.Name != nil {
+		key, e := s.fileNameKey(ctx, r.Kind, r.ContainerID, *in.Name)
+		if e != nil {
+			return nil, e
+		}
+		b.SetName(*in.Name).SetNillableNameKey(key)
+	}
+	// Item values are validated and normalized once, by recordRevision below.
+	if r.Kind == resource.KindItem {
+		if in.Name != nil {
+			r.Name = *in.Name
+		}
+		if in.Tags != nil {
+			r.Tags = *in.Tags
+		}
+		if in.Values != nil {
+			r.Values = *in.Values
+		}
+		b.SetValues(r.Values)
+	}
+	if in.Tags != nil {
+		b.SetTags(*in.Tags)
+	}
+	if in.PublishingEnabled != nil {
+		b.SetPublishingEnabled(*in.PublishingEnabled)
+	}
+	if in.WebDAVEnabled != nil {
+		b.SetWebdavEnabled(*in.WebDAVEnabled)
+	}
+	n, e := b.Save(ctx)
+	if e != nil {
+		return nil, e
+	}
+	if n != 1 {
+		return nil, ErrConflict
+	}
+	out, e := s.Client.Resource.Get(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	if out.Kind == resource.KindItem {
+		// A move alone changes location, not content, so it records no revision.
+		if content {
+			out.Values = r.Values
+			if _, e = s.recordRevision(ctx, subject, out, nil); e != nil {
+				return nil, e
+			}
+			if out, e = s.Client.Resource.Get(ctx, id); e != nil {
+				return nil, e
+			}
+		}
+		if e = s.overlayHead(ctx, out); e != nil {
+			return nil, e
+		}
+	}
+	if in.PublishingEnabled != nil && !*in.PublishingEnabled {
+		if e = s.publishAllHeads(ctx, subject, out); e != nil {
+			return nil, e
+		}
+	}
+	details := map[string]any{"version": out.Version}
+	if moved {
+		details["from_parent_id"] = *r.ParentID
+		details["parent_id"] = *in.ParentID
+	}
+	return out, s.audit(ctx, subject, "resource.update", out, details)
+}
+
+// checkMove validates moving r below parentID: both ends need write access,
+// the parent must belong to r's collection, and the subtree must stay within
+// MaxDepth without entering itself. Triggers repeat the containment rules.
+func (s *Service) checkMove(ctx context.Context, subject string, r *ent.Resource, parentID string) error {
+	if r.Kind != resource.KindFolder && r.Kind != resource.KindItem {
+		return invalid("only folders and items can move")
+	}
+	p, err := s.authorize(ctx, subject, parentID, "write")
+	if err != nil {
+		return err
+	}
+	if r.ContainerID == nil || (p.ID != *r.ContainerID && (p.Kind != resource.KindFolder || p.ContainerID == nil || *p.ContainerID != *r.ContainerID)) {
+		return invalid("folders and items move only within their collection")
+	}
+	// One walk up from the new parent both rejects entering r and counts depth.
+	depth := 1
+	for a := p; a.ParentID != nil; depth++ {
+		if a.ID == r.ID {
+			return invalid("a folder cannot move into itself")
+		}
+		if depth > MaxDepth {
+			return invalid("invalid hierarchy depth")
+		}
+		if a, err = s.Client.Resource.Get(ctx, *a.ParentID); err != nil {
+			return err
+		}
+	}
+	height, err := s.subtreeHeight(ctx, r.ID)
+	if err != nil {
+		return err
+	}
+	if depth+height > MaxDepth {
+		return invalid("maximum hierarchy depth reached")
+	}
+	return nil
+}
+
+// subtreeHeight counts the levels of id and its live descendants.
+func (s *Service) subtreeHeight(ctx context.Context, id string) (int, error) {
+	var height int
+	err := s.scan(ctx, []any{&height}, `WITH RECURSIVE sub(id,depth) AS (SELECT ?,1 UNION ALL SELECT c.id,sub.depth+1 FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL AND sub.depth<=?) SELECT max(depth) FROM sub`, id, MaxDepth)
+	return height, err
+}
+
+// scan reads the single row of an aggregate query.
+func (s *Service) scan(ctx context.Context, dest []any, query string, args ...any) error {
+	rows, err := s.Client.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err = rows.Err(); err == nil {
+			err = sql.ErrNoRows
+		}
+		return err
+	}
+	if err = rows.Scan(dest...); err != nil {
+		return err
+	}
+	return rows.Close()
+}
+
+// Delete turns a folder or item, with everything below it, into retained
+// tombstones. Their revisions, publications and audit history stay; derived
+// read projections and live relationships go, so they vanish from every read.
+func (s *Service) Delete(ctx context.Context, subject, id string, version int) error {
+	return s.write(ctx, func(t *Service) error { return t.delete(ctx, subject, id, version) })
+}
+func (s *Service) delete(ctx context.Context, subject, id string, version int) error {
+	r, err := s.authorize(ctx, subject, id, "write")
+	if err != nil {
+		return err
+	}
+	if r.Version != version {
+		return ErrConflict
+	}
+	if r.Kind != resource.KindFolder && r.Kind != resource.KindItem {
+		return invalid("only folders and items can be deleted")
+	}
+	subtree := `WITH RECURSIVE sub(id) AS (SELECT ? UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL) SELECT id FROM sub`
+	writable, args := permissionSQL("r.id", subject, "write")
+	var total, allowed int
+	if err = s.scan(ctx, []any{&total, &allowed}, `SELECT count(*), coalesce(sum(CASE WHEN `+writable+` THEN 1 ELSE 0 END),0) FROM resources r WHERE r.id IN (`+subtree+`)`, append(args, id)...); err != nil {
+		return err
+	}
+	// Removing a folder removes content the caller may not otherwise change.
+	if allowed != total {
+		return ErrForbidden
+	}
+	for _, statement := range []string{
+		`DELETE FROM field_values WHERE item_id IN (` + subtree + `)`,
+		`DELETE FROM item_surfaces WHERE item_id IN (` + subtree + `)`,
+	} {
+		if _, err = s.Client.ExecContext(ctx, statement, id); err != nil {
+			return err
+		}
+	}
+	unlinked, err := s.Client.ExecContext(ctx, `DELETE FROM relationships WHERE source_id IN (`+subtree+`) OR target_id IN (`+subtree+`)`, id, id)
+	if err != nil {
+		return err
+	}
+	links, err := unlinked.RowsAffected()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	if _, err = s.Client.ExecContext(ctx, `UPDATE resources SET deleted_at=?, name_key=NULL, version=version+1, updated_at=? WHERE id IN (`+subtree+`)`, now, now, id); err != nil {
+		return err
+	}
+	return s.audit(ctx, subject, "resource.delete", r, map[string]any{"version": version + 1, "descendants": total - 1, "relationships": links})
+}
+
+// fileNameKey is the unique, case-insensitive name of a library folder or item,
+// and nil for other resources. Library names must be usable as file names.
+func (s *Service) fileNameKey(ctx context.Context, kind resource.Kind, containerID *string, name string) (*string, error) {
+	if (kind != resource.KindFolder && kind != resource.KindItem) || containerID == nil {
+		return nil, nil
+	}
+	c, err := s.Client.Resource.Get(ctx, *containerID)
+	if err != nil {
+		return nil, err
+	}
+	if c.Kind != resource.KindLibrary {
+		return nil, nil
+	}
+	if !filenameValid(name) {
+		return nil, invalid("library folder and file names cannot contain / \\ or control characters")
+	}
+	key := nameKey(name)
+	return &key, nil
+}
+
+// nameKey folds case like Windows and macOS file systems, which treat names
+// differing only in case as the same file. It matches SQL unicode_lower.
+func nameKey(name string) string { return strings.ToLower(name) }
 
 type CreateField struct {
 	Options  model.FieldOptions `json:"options,omitempty"`
@@ -357,7 +563,7 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 		return nil, invalid("at most 200 fields per collection")
 	}
 	if d.Required && len(d.Options.DefaultValue) == 0 {
-		exists, e := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindEQ(resource.KindItem)).Exist(ctx)
+		exists, e := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil()).Exist(ctx)
 		if e != nil {
 			return nil, e
 		}

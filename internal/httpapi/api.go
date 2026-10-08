@@ -12,6 +12,8 @@ import (
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
+	"papergo/internal/transfer"
+	"papergo/internal/webdav"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +29,8 @@ type API struct {
 	// MaxInFlight and RequestTimeout bound API work; zero disables each.
 	MaxInFlight    int
 	RequestTimeout time.Duration
+	// WebDAV serves WebDAV-enabled libraries under webdav.Prefix with its own authentication.
+	WebDAV *webdav.Handler
 }
 type subjectKey struct{}
 type requestKey struct{}
@@ -40,6 +44,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("GET /v1/resources", a.browse)
 	api.HandleFunc("GET /v1/resources/{id}", a.get)
 	api.HandleFunc("PATCH /v1/resources/{id}", a.update)
+	api.HandleFunc("DELETE /v1/resources/{id}", a.delete)
 	api.HandleFunc("GET /v1/resources/{id}/children", a.children)
 	api.HandleFunc("POST /v1/resources/{id}/children", a.create)
 	api.HandleFunc("GET /v1/resources/{id}/fields", a.fields)
@@ -59,6 +64,9 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)
 	api.HandleFunc("GET /v1/workspaces/{id}/audit", a.audit)
+	api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
+	api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
+	api.HandleFunc("DELETE /v1/webdav-credentials/{id}", a.revokeWebDAVCredential)
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
 	root := http.NewServeMux()
 	root.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]string{"status": "ok"}) })
@@ -71,55 +79,81 @@ func (a *API) Handler() http.Handler {
 		}
 		respond(w, 200, map[string]string{"status": "ok"})
 	})
-	root.Handle("/", a.authenticate(a.limit(api)))
+	limit := a.limiter()
+	root.Handle("/", a.authenticate(limit(api)))
+	if a.WebDAV != nil {
+		dav := limit(a.WebDAV)
+		root.Handle(webdav.Prefix, dav)
+		root.Handle(strings.TrimSuffix(webdav.Prefix, "/"), dav)
+		// Windows and Office discover WebDAV support at the server root.
+		root.Handle("OPTIONS /{$}", a.WebDAV)
+	}
 	return a.observe(root)
 }
 
 // admissionWait is how long a request may queue for a slot before it is shed.
 const admissionWait = time.Second
 
-// limit sheds load instead of queueing without bound: past MaxInFlight
-// concurrent requests a caller waits at most admissionWait, then gets 503 with
-// Retry-After. Admitted reads are cancelled after RequestTimeout. Blob
-// transfers stream for long periods under their own deadlines, so they bypass both.
-func (a *API) limit(next http.Handler) http.Handler {
+// limiter returns middleware that sheds load instead of queueing without bound:
+// past MaxInFlight concurrent requests, across every handler it wraps, a caller
+// waits at most admissionWait, then gets 503 with Retry-After. Admitted reads
+// are cancelled after RequestTimeout. Content transfers stream for long periods
+// under their own deadlines, so they bypass both.
+func (a *API) limiter() func(http.Handler) http.Handler {
 	var slots chan struct{}
 	if a.MaxInFlight > 0 {
 		slots = make(chan struct{}, a.MaxInFlight)
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/content") {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if slots != nil {
-			select {
-			case slots <- struct{}{}:
-			default:
-				wait := time.NewTimer(admissionWait)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if transferRequest(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if slots != nil {
 				select {
 				case slots <- struct{}{}:
-					wait.Stop()
-				case <-wait.C:
-					w.Header().Set("Retry-After", "1")
-					a.problem(w, r, 503, "overloaded", "server is at capacity; retry shortly")
-					return
-				case <-r.Context().Done():
-					wait.Stop()
-					return
+				default:
+					wait := time.NewTimer(admissionWait)
+					select {
+					case slots <- struct{}{}:
+						wait.Stop()
+					case <-wait.C:
+						w.Header().Set("Retry-After", "1")
+						a.problem(w, r, 503, "overloaded", "server is at capacity; retry shortly")
+						return
+					case <-r.Context().Done():
+						wait.Stop()
+						return
+					}
 				}
+				defer func() { <-slots }()
 			}
-			defer func() { <-slots }()
-		}
-		// Only reads are time-boxed: mutations are serialized and some (index
-		// rebuilds, template adoption, bulk publish) legitimately span a collection.
-		if a.RequestTimeout > 0 && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-			ctx, cancel := context.WithTimeout(r.Context(), a.RequestTimeout)
-			defer cancel()
-			r = r.WithContext(ctx)
-		}
-		next.ServeHTTP(w, r)
-	})
+			// Only reads are time-boxed: mutations are serialized and some (index
+			// rebuilds, template adoption, bulk publish) legitimately span a collection.
+			if a.RequestTimeout > 0 && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == "PROPFIND") {
+				ctx, cancel := context.WithTimeout(r.Context(), a.RequestTimeout)
+				defer cancel()
+				r = r.WithContext(ctx)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// transferRequest reports requests that stream a body: blob downloads and
+// uploads, and WebDAV file GET/PUT. COPY and every other method do database work.
+func transferRequest(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodPut:
+	default:
+		return false
+	}
+	if strings.HasPrefix(r.URL.Path, webdav.Prefix) {
+		return true
+	}
+	parts := strings.Split(r.URL.Path, "/")
+	return len(parts) == 5 && parts[1] == "v1" && parts[2] == "items" && parts[4] == "content"
 }
 func respond(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -261,6 +295,17 @@ func (a *API) update(w http.ResponseWriter, r *http.Request) {
 	etag(w, out.Version)
 	respond(w, 200, out)
 }
+func (a *API) delete(w http.ResponseWriter, r *http.Request) {
+	version, ok := a.version(w, r)
+	if !ok {
+		return
+	}
+	if err := a.DMS.Delete(r.Context(), subject(r), r.PathValue("id"), version); err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	w.WriteHeader(204)
+}
 func (a *API) children(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("after"), Limit: queryInt(r, "limit"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")})
@@ -400,7 +445,7 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUpload)
-	object, err := a.Storage.Put(r.Context(), progressReader{r.Body, http.NewResponseController(w)}, a.MaxUpload)
+	object, err := a.Storage.Put(r.Context(), transfer.Reader(r.Body, w), a.MaxUpload)
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -431,36 +476,8 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", b.ContentType)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": b.Filename}))
 	w.Header().Set("ETag", strconv.Quote(b.Sha256))
-	http.ServeContent(progressWriter{w, http.NewResponseController(w)}, r, b.Filename, b.CreatedAt, file)
+	http.ServeContent(transfer.Writer(w), r, b.Filename, b.CreatedAt, file)
 }
-
-// Content transfers can be far larger than the server-wide read/write timeouts
-// allow, so they bound stalls instead: each chunk moved extends the deadlines.
-const transferStall = 60 * time.Second
-
-type progressReader struct {
-	io.Reader
-	rc *http.ResponseController
-}
-
-func (p progressReader) Read(b []byte) (int, error) {
-	deadline := time.Now().Add(transferStall)
-	// Unsupported writers (e.g. test recorders) simply keep the server defaults.
-	_ = p.rc.SetReadDeadline(deadline)
-	_ = p.rc.SetWriteDeadline(deadline)
-	return p.Reader.Read(b)
-}
-
-type progressWriter struct {
-	http.ResponseWriter
-	rc *http.ResponseController
-}
-
-func (p progressWriter) Write(b []byte) (int, error) {
-	_ = p.rc.SetWriteDeadline(time.Now().Add(transferStall))
-	return p.ResponseWriter.Write(b)
-}
-func (p progressWriter) Unwrap() http.ResponseWriter { return p.ResponseWriter }
 func (a *API) audit(w http.ResponseWriter, r *http.Request) {
 	out, err := a.DMS.Audit(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	if err != nil {
@@ -472,14 +489,8 @@ func (a *API) audit(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.Fields(r.Header.Get("Authorization"))
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || len(parts[1]) > 8192 {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			a.problem(w, r, 401, "unauthorized", "valid bearer authentication is required")
-			return
-		}
-		id, err := a.Auth.Verify(r.Context(), parts[1])
-		if err != nil || id == "" {
+		id, err := auth.Authenticate(r, a.Auth)
+		if err != nil {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			a.problem(w, r, 401, "unauthorized", "valid bearer authentication is required")
 			return

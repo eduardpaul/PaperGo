@@ -40,6 +40,7 @@ func permissionSQL(idColumn, subject, action string) (string, []any) {
  WHERE acl.id=` + idColumn + ` AND g.subject=? AND g.effect='allow' AND g.action IN (` + strings.Join(marks, ",") + `))`
 	return query, args
 }
+
 // permissionPredicate filters resources rows by their own scope_id, which the
 // browse indexes cover, so unreadable rows are skipped without a table lookup.
 func permissionPredicate(subject, action string) func(*entsql.Selector) {
@@ -74,7 +75,7 @@ func (s *Service) allowedMany(ctx context.Context, subject, action string, roots
 }
 func (s *Service) authorize(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
 	r, err := s.Client.Resource.Get(ctx, id)
-	if ent.IsNotFound(err) {
+	if ent.IsNotFound(err) || err == nil && r.DeletedAt != nil {
 		return nil, ErrNotFound
 	}
 	if err != nil {

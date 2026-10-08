@@ -3,6 +3,7 @@
 package migrate
 
 import (
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/dialect/sql/schema"
 	"entgo.io/ent/schema/field"
 )
@@ -496,8 +497,11 @@ var (
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "next_revision_number", Type: field.TypeInt, Default: 1},
 		{Name: "publishing_enabled", Type: field.TypeBool, Default: false},
+		{Name: "webdav_enabled", Type: field.TypeBool, Default: false},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "scope_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "name_key", Type: field.TypeString, Nullable: true, Size: 1024},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "parent_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "container_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "head_revision_id", Type: field.TypeString, Nullable: true, Size: 36},
@@ -512,31 +516,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[13]},
+				Columns:    []*schema.Column{ResourcesColumns[16]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_resources_contained_items",
-				Columns:    []*schema.Column{ResourcesColumns[14]},
+				Columns:    []*schema.Column{ResourcesColumns[17]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_item_revisions_head_revision",
-				Columns:    []*schema.Column{ResourcesColumns[15]},
+				Columns:    []*schema.Column{ResourcesColumns[18]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_item_revisions_published_revision",
-				Columns:    []*schema.Column{ResourcesColumns[16]},
+				Columns:    []*schema.Column{ResourcesColumns[19]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_schema_revisions_schema_head",
-				Columns:    []*schema.Column{ResourcesColumns[17]},
+				Columns:    []*schema.Column{ResourcesColumns[20]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -550,17 +554,25 @@ var (
 			{
 				Name:    "resource_workspace_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[12]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[13]},
 			},
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[13], ResourcesColumns[0], ResourcesColumns[12]},
+				Columns: []*schema.Column{ResourcesColumns[16], ResourcesColumns[0], ResourcesColumns[13]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[14], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[17], ResourcesColumns[0]},
+			},
+			{
+				Name:    "resource_parent_id_name_key",
+				Unique:  true,
+				Columns: []*schema.Column{ResourcesColumns[16], ResourcesColumns[14]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "name_key IS NOT NULL",
+				},
 			},
 		},
 	}
@@ -710,6 +722,28 @@ var (
 			},
 		},
 	}
+	// WebdavCredentialsColumns holds the columns for the "webdav_credentials" table.
+	WebdavCredentialsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "subject", Type: field.TypeString, Size: 255},
+		{Name: "label", Type: field.TypeString, Size: 400},
+		{Name: "secret_hash", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
+	}
+	// WebdavCredentialsTable holds the schema information for the "webdav_credentials" table.
+	WebdavCredentialsTable = &schema.Table{
+		Name:       "webdav_credentials",
+		Columns:    WebdavCredentialsColumns,
+		PrimaryKey: []*schema.Column{WebdavCredentialsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "webdavcredential_subject_id",
+				Unique:  false,
+				Columns: []*schema.Column{WebdavCredentialsColumns[2], WebdavCredentialsColumns[0]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuditEventsTable,
@@ -728,6 +762,7 @@ var (
 		SchemaTemplatesTable,
 		TermsTable,
 		TermSetsTable,
+		WebdavCredentialsTable,
 	}
 )
 
@@ -758,4 +793,7 @@ func init() {
 	TermsTable.ForeignKeys[0].RefTable = TermsTable
 	TermsTable.ForeignKeys[1].RefTable = TermSetsTable
 	TermSetsTable.ForeignKeys[0].RefTable = ResourcesTable
+	WebdavCredentialsTable.Annotation = &entsql.Annotation{
+		Table: "webdav_credentials",
+	}
 }

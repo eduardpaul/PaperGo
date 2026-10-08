@@ -125,6 +125,11 @@ func PublishingEnabled(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldPublishingEnabled, v))
 }
 
+// WebdavEnabled applies equality check predicate on the "webdav_enabled" field. It's identical to WebdavEnabledEQ.
+func WebdavEnabled(v bool) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldWebdavEnabled, v))
+}
+
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldUpdatedAt, v))
@@ -133,6 +138,16 @@ func UpdatedAt(v time.Time) predicate.Resource {
 // ScopeID applies equality check predicate on the "scope_id" field. It's identical to ScopeIDEQ.
 func ScopeID(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldScopeID, v))
+}
+
+// NameKey applies equality check predicate on the "name_key" field. It's identical to NameKeyEQ.
+func NameKey(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldNameKey, v))
+}
+
+// DeletedAt applies equality check predicate on the "deleted_at" field. It's identical to DeletedAtEQ.
+func DeletedAt(v time.Time) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDeletedAt, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -800,6 +815,16 @@ func PublishingEnabledNEQ(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldNEQ(FieldPublishingEnabled, v))
 }
 
+// WebdavEnabledEQ applies the EQ predicate on the "webdav_enabled" field.
+func WebdavEnabledEQ(v bool) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldWebdavEnabled, v))
+}
+
+// WebdavEnabledNEQ applies the NEQ predicate on the "webdav_enabled" field.
+func WebdavEnabledNEQ(v bool) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldWebdavEnabled, v))
+}
+
 // UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
 func UpdatedAtEQ(v time.Time) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldUpdatedAt, v))
@@ -913,6 +938,131 @@ func ScopeIDEqualFold(v string) predicate.Resource {
 // ScopeIDContainsFold applies the ContainsFold predicate on the "scope_id" field.
 func ScopeIDContainsFold(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldContainsFold(FieldScopeID, v))
+}
+
+// NameKeyEQ applies the EQ predicate on the "name_key" field.
+func NameKeyEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldNameKey, v))
+}
+
+// NameKeyNEQ applies the NEQ predicate on the "name_key" field.
+func NameKeyNEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldNameKey, v))
+}
+
+// NameKeyIn applies the In predicate on the "name_key" field.
+func NameKeyIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldNameKey, vs...))
+}
+
+// NameKeyNotIn applies the NotIn predicate on the "name_key" field.
+func NameKeyNotIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldNameKey, vs...))
+}
+
+// NameKeyGT applies the GT predicate on the "name_key" field.
+func NameKeyGT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldNameKey, v))
+}
+
+// NameKeyGTE applies the GTE predicate on the "name_key" field.
+func NameKeyGTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldNameKey, v))
+}
+
+// NameKeyLT applies the LT predicate on the "name_key" field.
+func NameKeyLT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldNameKey, v))
+}
+
+// NameKeyLTE applies the LTE predicate on the "name_key" field.
+func NameKeyLTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldNameKey, v))
+}
+
+// NameKeyContains applies the Contains predicate on the "name_key" field.
+func NameKeyContains(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContains(FieldNameKey, v))
+}
+
+// NameKeyHasPrefix applies the HasPrefix predicate on the "name_key" field.
+func NameKeyHasPrefix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasPrefix(FieldNameKey, v))
+}
+
+// NameKeyHasSuffix applies the HasSuffix predicate on the "name_key" field.
+func NameKeyHasSuffix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasSuffix(FieldNameKey, v))
+}
+
+// NameKeyIsNil applies the IsNil predicate on the "name_key" field.
+func NameKeyIsNil() predicate.Resource {
+	return predicate.Resource(sql.FieldIsNull(FieldNameKey))
+}
+
+// NameKeyNotNil applies the NotNil predicate on the "name_key" field.
+func NameKeyNotNil() predicate.Resource {
+	return predicate.Resource(sql.FieldNotNull(FieldNameKey))
+}
+
+// NameKeyEqualFold applies the EqualFold predicate on the "name_key" field.
+func NameKeyEqualFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEqualFold(FieldNameKey, v))
+}
+
+// NameKeyContainsFold applies the ContainsFold predicate on the "name_key" field.
+func NameKeyContainsFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContainsFold(FieldNameKey, v))
+}
+
+// DeletedAtEQ applies the EQ predicate on the "deleted_at" field.
+func DeletedAtEQ(v time.Time) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDeletedAt, v))
+}
+
+// DeletedAtNEQ applies the NEQ predicate on the "deleted_at" field.
+func DeletedAtNEQ(v time.Time) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldDeletedAt, v))
+}
+
+// DeletedAtIn applies the In predicate on the "deleted_at" field.
+func DeletedAtIn(vs ...time.Time) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldDeletedAt, vs...))
+}
+
+// DeletedAtNotIn applies the NotIn predicate on the "deleted_at" field.
+func DeletedAtNotIn(vs ...time.Time) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldDeletedAt, vs...))
+}
+
+// DeletedAtGT applies the GT predicate on the "deleted_at" field.
+func DeletedAtGT(v time.Time) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldDeletedAt, v))
+}
+
+// DeletedAtGTE applies the GTE predicate on the "deleted_at" field.
+func DeletedAtGTE(v time.Time) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldDeletedAt, v))
+}
+
+// DeletedAtLT applies the LT predicate on the "deleted_at" field.
+func DeletedAtLT(v time.Time) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldDeletedAt, v))
+}
+
+// DeletedAtLTE applies the LTE predicate on the "deleted_at" field.
+func DeletedAtLTE(v time.Time) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldDeletedAt, v))
+}
+
+// DeletedAtIsNil applies the IsNil predicate on the "deleted_at" field.
+func DeletedAtIsNil() predicate.Resource {
+	return predicate.Resource(sql.FieldIsNull(FieldDeletedAt))
+}
+
+// DeletedAtNotNil applies the NotNil predicate on the "deleted_at" field.
+func DeletedAtNotNil() predicate.Resource {
+	return predicate.Resource(sql.FieldNotNull(FieldDeletedAt))
 }
 
 // HasChildren applies the HasEdge predicate on the "children" edge.

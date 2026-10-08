@@ -313,7 +313,7 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 	return event, nil
 }
 func (s *Service) publishAllHeads(ctx context.Context, actor string, c *ent.Resource) error {
-	rows, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindEQ(resource.KindItem)).All(ctx)
+	rows, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil()).All(ctx)
 	if err != nil {
 		return err
 	}

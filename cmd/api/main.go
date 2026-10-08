@@ -14,6 +14,7 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
 	"papergo/internal/storage"
+	"papergo/internal/webdav"
 	"syscall"
 	"time"
 )
@@ -48,12 +49,13 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("initialize authentication: %w", err)
 	}
-	a := &httpapi.API{DMS: dms.NewService(db.Client), Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
+	service := dms.NewService(db.Client)
+	a := &httpapi.API{DMS: service, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
 			return err
 		}
 		return db.CheckSchema(ctx)
-	}}
+	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload)}
 	// Content uploads/downloads extend these deadlines while data keeps flowing.
 	server := &http.Server{Addr: c.Address, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

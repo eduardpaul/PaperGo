@@ -24,6 +24,7 @@ import (
 	"papergo/ent/schematemplate"
 	"papergo/ent/term"
 	"papergo/ent/termset"
+	"papergo/ent/webdavcredential"
 	"papergo/internal/model"
 	"sync"
 	"time"
@@ -57,6 +58,7 @@ const (
 	TypeSchemaTemplate   = "SchemaTemplate"
 	TypeTerm             = "Term"
 	TypeTermSet          = "TermSet"
+	TypeWebDAVCredential = "WebDAVCredential"
 )
 
 // AuditEventMutation represents an operation that mutates the AuditEvent nodes in the graph.
@@ -10099,8 +10101,11 @@ type ResourceMutation struct {
 	next_revision_number      *int
 	addnext_revision_number   *int
 	publishing_enabled        *bool
+	webdav_enabled            *bool
 	updated_at                *time.Time
 	scope_id                  *string
+	name_key                  *string
+	deleted_at                *time.Time
 	clearedFields             map[string]struct{}
 	children                  map[string]struct{}
 	removedchildren           map[string]struct{}
@@ -10911,6 +10916,42 @@ func (m *ResourceMutation) ResetPublishingEnabled() {
 	m.publishing_enabled = nil
 }
 
+// SetWebdavEnabled sets the "webdav_enabled" field.
+func (m *ResourceMutation) SetWebdavEnabled(b bool) {
+	m.webdav_enabled = &b
+}
+
+// WebdavEnabled returns the value of the "webdav_enabled" field in the mutation.
+func (m *ResourceMutation) WebdavEnabled() (r bool, exists bool) {
+	v := m.webdav_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebdavEnabled returns the old "webdav_enabled" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldWebdavEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebdavEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebdavEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebdavEnabled: %w", err)
+	}
+	return oldValue.WebdavEnabled, nil
+}
+
+// ResetWebdavEnabled resets all changes to the "webdav_enabled" field.
+func (m *ResourceMutation) ResetWebdavEnabled() {
+	m.webdav_enabled = nil
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (m *ResourceMutation) SetUpdatedAt(t time.Time) {
 	m.updated_at = &t
@@ -10994,6 +11035,104 @@ func (m *ResourceMutation) ScopeIDCleared() bool {
 func (m *ResourceMutation) ResetScopeID() {
 	m.scope_id = nil
 	delete(m.clearedFields, resource.FieldScopeID)
+}
+
+// SetNameKey sets the "name_key" field.
+func (m *ResourceMutation) SetNameKey(s string) {
+	m.name_key = &s
+}
+
+// NameKey returns the value of the "name_key" field in the mutation.
+func (m *ResourceMutation) NameKey() (r string, exists bool) {
+	v := m.name_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNameKey returns the old "name_key" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldNameKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNameKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNameKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNameKey: %w", err)
+	}
+	return oldValue.NameKey, nil
+}
+
+// ClearNameKey clears the value of the "name_key" field.
+func (m *ResourceMutation) ClearNameKey() {
+	m.name_key = nil
+	m.clearedFields[resource.FieldNameKey] = struct{}{}
+}
+
+// NameKeyCleared returns if the "name_key" field was cleared in this mutation.
+func (m *ResourceMutation) NameKeyCleared() bool {
+	_, ok := m.clearedFields[resource.FieldNameKey]
+	return ok
+}
+
+// ResetNameKey resets all changes to the "name_key" field.
+func (m *ResourceMutation) ResetNameKey() {
+	m.name_key = nil
+	delete(m.clearedFields, resource.FieldNameKey)
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (m *ResourceMutation) SetDeletedAt(t time.Time) {
+	m.deleted_at = &t
+}
+
+// DeletedAt returns the value of the "deleted_at" field in the mutation.
+func (m *ResourceMutation) DeletedAt() (r time.Time, exists bool) {
+	v := m.deleted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedAt returns the old "deleted_at" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldDeletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedAt: %w", err)
+	}
+	return oldValue.DeletedAt, nil
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (m *ResourceMutation) ClearDeletedAt() {
+	m.deleted_at = nil
+	m.clearedFields[resource.FieldDeletedAt] = struct{}{}
+}
+
+// DeletedAtCleared returns if the "deleted_at" field was cleared in this mutation.
+func (m *ResourceMutation) DeletedAtCleared() bool {
+	_, ok := m.clearedFields[resource.FieldDeletedAt]
+	return ok
+}
+
+// ResetDeletedAt resets all changes to the "deleted_at" field.
+func (m *ResourceMutation) ResetDeletedAt() {
+	m.deleted_at = nil
+	delete(m.clearedFields, resource.FieldDeletedAt)
 }
 
 // AddChildIDs adds the "children" edge to the Resource entity by ids.
@@ -11705,7 +11844,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 20)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -11751,11 +11890,20 @@ func (m *ResourceMutation) Fields() []string {
 	if m.publishing_enabled != nil {
 		fields = append(fields, resource.FieldPublishingEnabled)
 	}
+	if m.webdav_enabled != nil {
+		fields = append(fields, resource.FieldWebdavEnabled)
+	}
 	if m.updated_at != nil {
 		fields = append(fields, resource.FieldUpdatedAt)
 	}
 	if m.scope_id != nil {
 		fields = append(fields, resource.FieldScopeID)
+	}
+	if m.name_key != nil {
+		fields = append(fields, resource.FieldNameKey)
+	}
+	if m.deleted_at != nil {
+		fields = append(fields, resource.FieldDeletedAt)
 	}
 	return fields
 }
@@ -11795,10 +11943,16 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.NextRevisionNumber()
 	case resource.FieldPublishingEnabled:
 		return m.PublishingEnabled()
+	case resource.FieldWebdavEnabled:
+		return m.WebdavEnabled()
 	case resource.FieldUpdatedAt:
 		return m.UpdatedAt()
 	case resource.FieldScopeID:
 		return m.ScopeID()
+	case resource.FieldNameKey:
+		return m.NameKey()
+	case resource.FieldDeletedAt:
+		return m.DeletedAt()
 	}
 	return nil, false
 }
@@ -11838,10 +11992,16 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldNextRevisionNumber(ctx)
 	case resource.FieldPublishingEnabled:
 		return m.OldPublishingEnabled(ctx)
+	case resource.FieldWebdavEnabled:
+		return m.OldWebdavEnabled(ctx)
 	case resource.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
 	case resource.FieldScopeID:
 		return m.OldScopeID(ctx)
+	case resource.FieldNameKey:
+		return m.OldNameKey(ctx)
+	case resource.FieldDeletedAt:
+		return m.OldDeletedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown Resource field %s", name)
 }
@@ -11956,6 +12116,13 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPublishingEnabled(v)
 		return nil
+	case resource.FieldWebdavEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebdavEnabled(v)
+		return nil
 	case resource.FieldUpdatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -11969,6 +12136,20 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetScopeID(v)
+		return nil
+	case resource.FieldNameKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNameKey(v)
+		return nil
+	case resource.FieldDeletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedAt(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Resource field %s", name)
@@ -12045,6 +12226,12 @@ func (m *ResourceMutation) ClearedFields() []string {
 	if m.FieldCleared(resource.FieldScopeID) {
 		fields = append(fields, resource.FieldScopeID)
 	}
+	if m.FieldCleared(resource.FieldNameKey) {
+		fields = append(fields, resource.FieldNameKey)
+	}
+	if m.FieldCleared(resource.FieldDeletedAt) {
+		fields = append(fields, resource.FieldDeletedAt)
+	}
 	return fields
 }
 
@@ -12076,6 +12263,12 @@ func (m *ResourceMutation) ClearField(name string) error {
 		return nil
 	case resource.FieldScopeID:
 		m.ClearScopeID()
+		return nil
+	case resource.FieldNameKey:
+		m.ClearNameKey()
+		return nil
+	case resource.FieldDeletedAt:
+		m.ClearDeletedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Resource nullable field %s", name)
@@ -12130,11 +12323,20 @@ func (m *ResourceMutation) ResetField(name string) error {
 	case resource.FieldPublishingEnabled:
 		m.ResetPublishingEnabled()
 		return nil
+	case resource.FieldWebdavEnabled:
+		m.ResetWebdavEnabled()
+		return nil
 	case resource.FieldUpdatedAt:
 		m.ResetUpdatedAt()
 		return nil
 	case resource.FieldScopeID:
 		m.ResetScopeID()
+		return nil
+	case resource.FieldNameKey:
+		m.ResetNameKey()
+		return nil
+	case resource.FieldDeletedAt:
+		m.ResetDeletedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Resource field %s", name)
@@ -16009,4 +16211,574 @@ func (m *TermSetMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown TermSet edge %s", name)
+}
+
+// WebDAVCredentialMutation represents an operation that mutates the WebDAVCredential nodes in the graph.
+type WebDAVCredentialMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *string
+	created_at    *time.Time
+	subject       *string
+	label         *string
+	secret_hash   *string
+	expires_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*WebDAVCredential, error)
+	predicates    []predicate.WebDAVCredential
+}
+
+var _ ent.Mutation = (*WebDAVCredentialMutation)(nil)
+
+// webdavcredentialOption allows management of the mutation configuration using functional options.
+type webdavcredentialOption func(*WebDAVCredentialMutation)
+
+// newWebDAVCredentialMutation creates new mutation for the WebDAVCredential entity.
+func newWebDAVCredentialMutation(c config, op Op, opts ...webdavcredentialOption) *WebDAVCredentialMutation {
+	m := &WebDAVCredentialMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeWebDAVCredential,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withWebDAVCredentialID sets the ID field of the mutation.
+func withWebDAVCredentialID(id string) webdavcredentialOption {
+	return func(m *WebDAVCredentialMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *WebDAVCredential
+		)
+		m.oldValue = func(ctx context.Context) (*WebDAVCredential, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().WebDAVCredential.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withWebDAVCredential sets the old WebDAVCredential of the mutation.
+func withWebDAVCredential(node *WebDAVCredential) webdavcredentialOption {
+	return func(m *WebDAVCredentialMutation) {
+		m.oldValue = func(context.Context) (*WebDAVCredential, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m WebDAVCredentialMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m WebDAVCredentialMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of WebDAVCredential entities.
+func (m *WebDAVCredentialMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *WebDAVCredentialMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *WebDAVCredentialMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().WebDAVCredential.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *WebDAVCredentialMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *WebDAVCredentialMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the WebDAVCredential entity.
+// If the WebDAVCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WebDAVCredentialMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *WebDAVCredentialMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetSubject sets the "subject" field.
+func (m *WebDAVCredentialMutation) SetSubject(s string) {
+	m.subject = &s
+}
+
+// Subject returns the value of the "subject" field in the mutation.
+func (m *WebDAVCredentialMutation) Subject() (r string, exists bool) {
+	v := m.subject
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubject returns the old "subject" field's value of the WebDAVCredential entity.
+// If the WebDAVCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WebDAVCredentialMutation) OldSubject(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubject is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubject requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubject: %w", err)
+	}
+	return oldValue.Subject, nil
+}
+
+// ResetSubject resets all changes to the "subject" field.
+func (m *WebDAVCredentialMutation) ResetSubject() {
+	m.subject = nil
+}
+
+// SetLabel sets the "label" field.
+func (m *WebDAVCredentialMutation) SetLabel(s string) {
+	m.label = &s
+}
+
+// Label returns the value of the "label" field in the mutation.
+func (m *WebDAVCredentialMutation) Label() (r string, exists bool) {
+	v := m.label
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLabel returns the old "label" field's value of the WebDAVCredential entity.
+// If the WebDAVCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WebDAVCredentialMutation) OldLabel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLabel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLabel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLabel: %w", err)
+	}
+	return oldValue.Label, nil
+}
+
+// ResetLabel resets all changes to the "label" field.
+func (m *WebDAVCredentialMutation) ResetLabel() {
+	m.label = nil
+}
+
+// SetSecretHash sets the "secret_hash" field.
+func (m *WebDAVCredentialMutation) SetSecretHash(s string) {
+	m.secret_hash = &s
+}
+
+// SecretHash returns the value of the "secret_hash" field in the mutation.
+func (m *WebDAVCredentialMutation) SecretHash() (r string, exists bool) {
+	v := m.secret_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSecretHash returns the old "secret_hash" field's value of the WebDAVCredential entity.
+// If the WebDAVCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WebDAVCredentialMutation) OldSecretHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSecretHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSecretHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSecretHash: %w", err)
+	}
+	return oldValue.SecretHash, nil
+}
+
+// ResetSecretHash resets all changes to the "secret_hash" field.
+func (m *WebDAVCredentialMutation) ResetSecretHash() {
+	m.secret_hash = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *WebDAVCredentialMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *WebDAVCredentialMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the WebDAVCredential entity.
+// If the WebDAVCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WebDAVCredentialMutation) OldExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (m *WebDAVCredentialMutation) ClearExpiresAt() {
+	m.expires_at = nil
+	m.clearedFields[webdavcredential.FieldExpiresAt] = struct{}{}
+}
+
+// ExpiresAtCleared returns if the "expires_at" field was cleared in this mutation.
+func (m *WebDAVCredentialMutation) ExpiresAtCleared() bool {
+	_, ok := m.clearedFields[webdavcredential.FieldExpiresAt]
+	return ok
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *WebDAVCredentialMutation) ResetExpiresAt() {
+	m.expires_at = nil
+	delete(m.clearedFields, webdavcredential.FieldExpiresAt)
+}
+
+// Where appends a list predicates to the WebDAVCredentialMutation builder.
+func (m *WebDAVCredentialMutation) Where(ps ...predicate.WebDAVCredential) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the WebDAVCredentialMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *WebDAVCredentialMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.WebDAVCredential, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *WebDAVCredentialMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *WebDAVCredentialMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (WebDAVCredential).
+func (m *WebDAVCredentialMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *WebDAVCredentialMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.created_at != nil {
+		fields = append(fields, webdavcredential.FieldCreatedAt)
+	}
+	if m.subject != nil {
+		fields = append(fields, webdavcredential.FieldSubject)
+	}
+	if m.label != nil {
+		fields = append(fields, webdavcredential.FieldLabel)
+	}
+	if m.secret_hash != nil {
+		fields = append(fields, webdavcredential.FieldSecretHash)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, webdavcredential.FieldExpiresAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *WebDAVCredentialMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case webdavcredential.FieldCreatedAt:
+		return m.CreatedAt()
+	case webdavcredential.FieldSubject:
+		return m.Subject()
+	case webdavcredential.FieldLabel:
+		return m.Label()
+	case webdavcredential.FieldSecretHash:
+		return m.SecretHash()
+	case webdavcredential.FieldExpiresAt:
+		return m.ExpiresAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *WebDAVCredentialMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case webdavcredential.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case webdavcredential.FieldSubject:
+		return m.OldSubject(ctx)
+	case webdavcredential.FieldLabel:
+		return m.OldLabel(ctx)
+	case webdavcredential.FieldSecretHash:
+		return m.OldSecretHash(ctx)
+	case webdavcredential.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown WebDAVCredential field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WebDAVCredentialMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case webdavcredential.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case webdavcredential.FieldSubject:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubject(v)
+		return nil
+	case webdavcredential.FieldLabel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLabel(v)
+		return nil
+	case webdavcredential.FieldSecretHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSecretHash(v)
+		return nil
+	case webdavcredential.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown WebDAVCredential field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *WebDAVCredentialMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *WebDAVCredentialMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WebDAVCredentialMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown WebDAVCredential numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *WebDAVCredentialMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(webdavcredential.FieldExpiresAt) {
+		fields = append(fields, webdavcredential.FieldExpiresAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *WebDAVCredentialMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *WebDAVCredentialMutation) ClearField(name string) error {
+	switch name {
+	case webdavcredential.FieldExpiresAt:
+		m.ClearExpiresAt()
+		return nil
+	}
+	return fmt.Errorf("unknown WebDAVCredential nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *WebDAVCredentialMutation) ResetField(name string) error {
+	switch name {
+	case webdavcredential.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case webdavcredential.FieldSubject:
+		m.ResetSubject()
+		return nil
+	case webdavcredential.FieldLabel:
+		m.ResetLabel()
+		return nil
+	case webdavcredential.FieldSecretHash:
+		m.ResetSecretHash()
+		return nil
+	case webdavcredential.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	}
+	return fmt.Errorf("unknown WebDAVCredential field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *WebDAVCredentialMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *WebDAVCredentialMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *WebDAVCredentialMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *WebDAVCredentialMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *WebDAVCredentialMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *WebDAVCredentialMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *WebDAVCredentialMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown WebDAVCredential unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *WebDAVCredentialMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown WebDAVCredential edge %s", name)
 }

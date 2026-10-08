@@ -45,10 +45,16 @@ const (
 	FieldNextRevisionNumber = "next_revision_number"
 	// FieldPublishingEnabled holds the string denoting the publishing_enabled field in the database.
 	FieldPublishingEnabled = "publishing_enabled"
+	// FieldWebdavEnabled holds the string denoting the webdav_enabled field in the database.
+	FieldWebdavEnabled = "webdav_enabled"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
 	// FieldScopeID holds the string denoting the scope_id field in the database.
 	FieldScopeID = "scope_id"
+	// FieldNameKey holds the string denoting the name_key field in the database.
+	FieldNameKey = "name_key"
+	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
+	FieldDeletedAt = "deleted_at"
 	// EdgeChildren holds the string denoting the children edge name in mutations.
 	EdgeChildren = "children"
 	// EdgeParent holds the string denoting the parent edge name in mutations.
@@ -194,8 +200,11 @@ var Columns = []string{
 	FieldSchemaHeadID,
 	FieldNextRevisionNumber,
 	FieldPublishingEnabled,
+	FieldWebdavEnabled,
 	FieldUpdatedAt,
 	FieldScopeID,
+	FieldNameKey,
+	FieldDeletedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -235,12 +244,16 @@ var (
 	NextRevisionNumberValidator func(int) error
 	// DefaultPublishingEnabled holds the default value on creation for the "publishing_enabled" field.
 	DefaultPublishingEnabled bool
+	// DefaultWebdavEnabled holds the default value on creation for the "webdav_enabled" field.
+	DefaultWebdavEnabled bool
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
 	// ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
 	ScopeIDValidator func(string) error
+	// NameKeyValidator is a validator for the "name_key" field. It is called by the builders before save.
+	NameKeyValidator func(string) error
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() string
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -346,6 +359,11 @@ func ByPublishingEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPublishingEnabled, opts...).ToFunc()
 }
 
+// ByWebdavEnabled orders the results by the webdav_enabled field.
+func ByWebdavEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebdavEnabled, opts...).ToFunc()
+}
+
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
@@ -354,6 +372,16 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByScopeID orders the results by the scope_id field.
 func ByScopeID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldScopeID, opts...).ToFunc()
+}
+
+// ByNameKey orders the results by the name_key field.
+func ByNameKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNameKey, opts...).ToFunc()
+}
+
+// ByDeletedAt orders the results by the deleted_at field.
+func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
 }
 
 // ByChildrenCount orders the results by children count.

@@ -53,3 +53,6 @@ type Term func(*sql.Selector)
 
 // TermSet is the predicate function for termset builders.
 type TermSet func(*sql.Selector)
+
+// WebDAVCredential is the predicate function for webdavcredential builders.
+type WebDAVCredential func(*sql.Selector)

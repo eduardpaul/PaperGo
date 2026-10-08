@@ -50,10 +50,16 @@ type Resource struct {
 	NextRevisionNumber int `json:"next_revision_number,omitempty"`
 	// PublishingEnabled holds the value of the "publishing_enabled" field.
 	PublishingEnabled bool `json:"publishing_enabled,omitempty"`
+	// WebdavEnabled holds the value of the "webdav_enabled" field.
+	WebdavEnabled bool `json:"webdav_enabled,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// ScopeID holds the value of the "scope_id" field.
 	ScopeID *string `json:"scope_id,omitempty"`
+	// NameKey holds the value of the "name_key" field.
+	NameKey *string `json:"-"`
+	// DeletedAt holds the value of the "deleted_at" field.
+	DeletedAt *time.Time `json:"-"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ResourceQuery when eager-loading is set.
 	Edges        ResourceEdges `json:"edges"`
@@ -249,13 +255,13 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case resource.FieldTags, resource.FieldValues:
 			values[i] = new([]byte)
-		case resource.FieldInheritPermissions, resource.FieldPublishingEnabled:
+		case resource.FieldInheritPermissions, resource.FieldPublishingEnabled, resource.FieldWebdavEnabled:
 			values[i] = new(sql.NullBool)
 		case resource.FieldVersion, resource.FieldNextRevisionNumber:
 			values[i] = new(sql.NullInt64)
-		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldKind, resource.FieldName, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldScopeID:
+		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldKind, resource.FieldName, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldScopeID, resource.FieldNameKey:
 			values[i] = new(sql.NullString)
-		case resource.FieldCreatedAt, resource.FieldUpdatedAt:
+		case resource.FieldCreatedAt, resource.FieldUpdatedAt, resource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -377,6 +383,12 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.PublishingEnabled = value.Bool
 			}
+		case resource.FieldWebdavEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field webdav_enabled", values[i])
+			} else if value.Valid {
+				_m.WebdavEnabled = value.Bool
+			}
 		case resource.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
@@ -389,6 +401,20 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ScopeID = new(string)
 				*_m.ScopeID = value.String
+			}
+		case resource.FieldNameKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field name_key", values[i])
+			} else if value.Valid {
+				_m.NameKey = new(string)
+				*_m.NameKey = value.String
+			}
+		case resource.FieldDeletedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field deleted_at", values[i])
+			} else if value.Valid {
+				_m.DeletedAt = new(time.Time)
+				*_m.DeletedAt = value.Time
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -556,12 +582,25 @@ func (_m *Resource) String() string {
 	builder.WriteString("publishing_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.PublishingEnabled))
 	builder.WriteString(", ")
+	builder.WriteString("webdav_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.WebdavEnabled))
+	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	if v := _m.ScopeID; v != nil {
 		builder.WriteString("scope_id=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.NameKey; v != nil {
+		builder.WriteString("name_key=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.DeletedAt; v != nil {
+		builder.WriteString("deleted_at=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')
 	return builder.String()

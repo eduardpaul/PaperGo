@@ -50,7 +50,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if len(in.Search) > 256 {
 		return Page[*ent.Resource]{}, invalid("search is limited to 256 bytes")
 	}
-	q := s.Client.Resource.Query()
+	q := s.Client.Resource.Query().Where(resource.DeletedAtIsNil())
 	if in.ParentID != "" {
 		if _, err := s.authorize(ctx, subject, in.ParentID, "read"); err != nil {
 			return Page[*ent.Resource]{}, err
@@ -151,7 +151,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		return Page[*ent.Resource]{}, err
 	}
 	out := entityPage(rows, in.Limit, func(v *ent.Resource) string { return v.ID })
-	if err = s.overlayPage(ctx, subject, in.Surface, out.Data); err != nil {
+	if _, err = s.overlayPage(ctx, subject, in.Surface, out.Data); err != nil {
 		return out, err
 	}
 	return out, nil
@@ -188,7 +188,9 @@ func ftsPhrase(search string) string {
 	return `"` + strings.ReplaceAll(strings.TrimSpace(search), `"`, `""`) + `"`
 }
 
-func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows []*ent.Resource) error {
+// overlayPage applies each item's selected surface and returns the selected revision
+// of every item, keyed by item ID, with its creation time and blob.
+func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows []*ent.Resource) (map[string]*ent.ItemRevision, error) {
 	ids := []string{}
 	items := []*ent.Resource{}
 	for _, r := range rows {
@@ -198,15 +200,15 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 		}
 	}
 	if len(ids) == 0 {
-		return nil
+		return nil, nil
 	}
 	draft, err := s.allowedMany(ctx, subject, "read_draft", items)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	projections, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDIn(ids...)).All(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	lookup := map[string]*ent.ItemSurface{}
 	revisionIDs := []string{}
@@ -214,14 +216,15 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 		lookup[p.ItemID+":"+string(p.Surface)] = p
 		revisionIDs = append(revisionIDs, p.RevisionID)
 	}
-	revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.IDIn(revisionIDs...)).Select(itemrevision.FieldID, itemrevision.FieldCreatedAt).All(ctx)
+	revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.IDIn(revisionIDs...)).Select(itemrevision.FieldID, itemrevision.FieldCreatedAt, itemrevision.FieldBlobID).All(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	revisionLookup := map[string]*ent.ItemRevision{}
 	for _, rev := range revisions {
 		revisionLookup[rev.ID] = rev
 	}
+	selectedRevisions := make(map[string]*ent.ItemRevision, len(items))
 	for _, r := range items {
 		selected := "published"
 		if surface == "head" || (surface == "auto" && draft[r.ID]) {
@@ -229,22 +232,23 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 		}
 		p := lookup[r.ID+":"+selected]
 		if p == nil {
-			return ErrNotFound
+			return nil, ErrNotFound
 		}
 		values, err := decodeValues(p.Payload)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		r.Name = p.Name
 		r.Tags = p.Tags
 		r.Values = values
 		if rev := revisionLookup[p.RevisionID]; rev != nil {
 			r.UpdatedAt = rev.CreatedAt
+			selectedRevisions[r.ID] = rev
 		}
 		if selected == "published" {
 			r.HeadRevisionID = nil
 			r.NextRevisionNumber = 0
 		}
 	}
-	return nil
+	return selectedRevisions, nil
 }
