@@ -95,6 +95,26 @@ func Name(v string) predicate.ItemSurface {
 	return predicate.ItemSurface(sql.FieldEQ(FieldName, v))
 }
 
+// ItemCreatedAt applies equality check predicate on the "item_created_at" field. It's identical to ItemCreatedAtEQ.
+func ItemCreatedAt(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedBy applies equality check predicate on the "item_created_by" field. It's identical to ItemCreatedByEQ.
+func ItemCreatedBy(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldItemCreatedBy, v))
+}
+
+// ModifiedAt applies equality check predicate on the "modified_at" field. It's identical to ModifiedAtEQ.
+func ModifiedAt(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldModifiedAt, v))
+}
+
+// ModifiedBy applies equality check predicate on the "modified_by" field. It's identical to ModifiedByEQ.
+func ModifiedBy(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldModifiedBy, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.ItemSurface {
 	return predicate.ItemSurface(sql.FieldEQ(FieldCreatedAt, v))
@@ -478,6 +498,266 @@ func NameEqualFold(v string) predicate.ItemSurface {
 // NameContainsFold applies the ContainsFold predicate on the "name" field.
 func NameContainsFold(v string) predicate.ItemSurface {
 	return predicate.ItemSurface(sql.FieldContainsFold(FieldName, v))
+}
+
+// ItemCreatedAtEQ applies the EQ predicate on the "item_created_at" field.
+func ItemCreatedAtEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtNEQ applies the NEQ predicate on the "item_created_at" field.
+func ItemCreatedAtNEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNEQ(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtIn applies the In predicate on the "item_created_at" field.
+func ItemCreatedAtIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldIn(FieldItemCreatedAt, vs...))
+}
+
+// ItemCreatedAtNotIn applies the NotIn predicate on the "item_created_at" field.
+func ItemCreatedAtNotIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNotIn(FieldItemCreatedAt, vs...))
+}
+
+// ItemCreatedAtGT applies the GT predicate on the "item_created_at" field.
+func ItemCreatedAtGT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGT(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtGTE applies the GTE predicate on the "item_created_at" field.
+func ItemCreatedAtGTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGTE(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtLT applies the LT predicate on the "item_created_at" field.
+func ItemCreatedAtLT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLT(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtLTE applies the LTE predicate on the "item_created_at" field.
+func ItemCreatedAtLTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLTE(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtContains applies the Contains predicate on the "item_created_at" field.
+func ItemCreatedAtContains(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContains(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtHasPrefix applies the HasPrefix predicate on the "item_created_at" field.
+func ItemCreatedAtHasPrefix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasPrefix(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtHasSuffix applies the HasSuffix predicate on the "item_created_at" field.
+func ItemCreatedAtHasSuffix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasSuffix(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtEqualFold applies the EqualFold predicate on the "item_created_at" field.
+func ItemCreatedAtEqualFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEqualFold(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedAtContainsFold applies the ContainsFold predicate on the "item_created_at" field.
+func ItemCreatedAtContainsFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContainsFold(FieldItemCreatedAt, v))
+}
+
+// ItemCreatedByEQ applies the EQ predicate on the "item_created_by" field.
+func ItemCreatedByEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByNEQ applies the NEQ predicate on the "item_created_by" field.
+func ItemCreatedByNEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNEQ(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByIn applies the In predicate on the "item_created_by" field.
+func ItemCreatedByIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldIn(FieldItemCreatedBy, vs...))
+}
+
+// ItemCreatedByNotIn applies the NotIn predicate on the "item_created_by" field.
+func ItemCreatedByNotIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNotIn(FieldItemCreatedBy, vs...))
+}
+
+// ItemCreatedByGT applies the GT predicate on the "item_created_by" field.
+func ItemCreatedByGT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGT(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByGTE applies the GTE predicate on the "item_created_by" field.
+func ItemCreatedByGTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGTE(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByLT applies the LT predicate on the "item_created_by" field.
+func ItemCreatedByLT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLT(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByLTE applies the LTE predicate on the "item_created_by" field.
+func ItemCreatedByLTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLTE(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByContains applies the Contains predicate on the "item_created_by" field.
+func ItemCreatedByContains(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContains(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByHasPrefix applies the HasPrefix predicate on the "item_created_by" field.
+func ItemCreatedByHasPrefix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasPrefix(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByHasSuffix applies the HasSuffix predicate on the "item_created_by" field.
+func ItemCreatedByHasSuffix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasSuffix(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByEqualFold applies the EqualFold predicate on the "item_created_by" field.
+func ItemCreatedByEqualFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEqualFold(FieldItemCreatedBy, v))
+}
+
+// ItemCreatedByContainsFold applies the ContainsFold predicate on the "item_created_by" field.
+func ItemCreatedByContainsFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContainsFold(FieldItemCreatedBy, v))
+}
+
+// ModifiedAtEQ applies the EQ predicate on the "modified_at" field.
+func ModifiedAtEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldModifiedAt, v))
+}
+
+// ModifiedAtNEQ applies the NEQ predicate on the "modified_at" field.
+func ModifiedAtNEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNEQ(FieldModifiedAt, v))
+}
+
+// ModifiedAtIn applies the In predicate on the "modified_at" field.
+func ModifiedAtIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldIn(FieldModifiedAt, vs...))
+}
+
+// ModifiedAtNotIn applies the NotIn predicate on the "modified_at" field.
+func ModifiedAtNotIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNotIn(FieldModifiedAt, vs...))
+}
+
+// ModifiedAtGT applies the GT predicate on the "modified_at" field.
+func ModifiedAtGT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGT(FieldModifiedAt, v))
+}
+
+// ModifiedAtGTE applies the GTE predicate on the "modified_at" field.
+func ModifiedAtGTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGTE(FieldModifiedAt, v))
+}
+
+// ModifiedAtLT applies the LT predicate on the "modified_at" field.
+func ModifiedAtLT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLT(FieldModifiedAt, v))
+}
+
+// ModifiedAtLTE applies the LTE predicate on the "modified_at" field.
+func ModifiedAtLTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLTE(FieldModifiedAt, v))
+}
+
+// ModifiedAtContains applies the Contains predicate on the "modified_at" field.
+func ModifiedAtContains(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContains(FieldModifiedAt, v))
+}
+
+// ModifiedAtHasPrefix applies the HasPrefix predicate on the "modified_at" field.
+func ModifiedAtHasPrefix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasPrefix(FieldModifiedAt, v))
+}
+
+// ModifiedAtHasSuffix applies the HasSuffix predicate on the "modified_at" field.
+func ModifiedAtHasSuffix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasSuffix(FieldModifiedAt, v))
+}
+
+// ModifiedAtEqualFold applies the EqualFold predicate on the "modified_at" field.
+func ModifiedAtEqualFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEqualFold(FieldModifiedAt, v))
+}
+
+// ModifiedAtContainsFold applies the ContainsFold predicate on the "modified_at" field.
+func ModifiedAtContainsFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContainsFold(FieldModifiedAt, v))
+}
+
+// ModifiedByEQ applies the EQ predicate on the "modified_by" field.
+func ModifiedByEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldModifiedBy, v))
+}
+
+// ModifiedByNEQ applies the NEQ predicate on the "modified_by" field.
+func ModifiedByNEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNEQ(FieldModifiedBy, v))
+}
+
+// ModifiedByIn applies the In predicate on the "modified_by" field.
+func ModifiedByIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldIn(FieldModifiedBy, vs...))
+}
+
+// ModifiedByNotIn applies the NotIn predicate on the "modified_by" field.
+func ModifiedByNotIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNotIn(FieldModifiedBy, vs...))
+}
+
+// ModifiedByGT applies the GT predicate on the "modified_by" field.
+func ModifiedByGT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGT(FieldModifiedBy, v))
+}
+
+// ModifiedByGTE applies the GTE predicate on the "modified_by" field.
+func ModifiedByGTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGTE(FieldModifiedBy, v))
+}
+
+// ModifiedByLT applies the LT predicate on the "modified_by" field.
+func ModifiedByLT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLT(FieldModifiedBy, v))
+}
+
+// ModifiedByLTE applies the LTE predicate on the "modified_by" field.
+func ModifiedByLTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLTE(FieldModifiedBy, v))
+}
+
+// ModifiedByContains applies the Contains predicate on the "modified_by" field.
+func ModifiedByContains(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContains(FieldModifiedBy, v))
+}
+
+// ModifiedByHasPrefix applies the HasPrefix predicate on the "modified_by" field.
+func ModifiedByHasPrefix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasPrefix(FieldModifiedBy, v))
+}
+
+// ModifiedByHasSuffix applies the HasSuffix predicate on the "modified_by" field.
+func ModifiedByHasSuffix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasSuffix(FieldModifiedBy, v))
+}
+
+// ModifiedByEqualFold applies the EqualFold predicate on the "modified_by" field.
+func ModifiedByEqualFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEqualFold(FieldModifiedBy, v))
+}
+
+// ModifiedByContainsFold applies the ContainsFold predicate on the "modified_by" field.
+func ModifiedByContainsFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContainsFold(FieldModifiedBy, v))
 }
 
 // HasItem applies the HasEdge predicate on the "item" edge.

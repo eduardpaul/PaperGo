@@ -54,6 +54,10 @@ type Resource struct {
 	WebdavEnabled bool `json:"webdav_enabled,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// CreatedBy holds the value of the "created_by" field.
+	CreatedBy string `json:"created_by,omitempty"`
+	// UpdatedBy holds the value of the "updated_by" field.
+	UpdatedBy string `json:"updated_by,omitempty"`
 	// ScopeID holds the value of the "scope_id" field.
 	ScopeID *string `json:"scope_id,omitempty"`
 	// NameKey holds the value of the "name_key" field.
@@ -259,7 +263,7 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case resource.FieldVersion, resource.FieldNextRevisionNumber:
 			values[i] = new(sql.NullInt64)
-		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldKind, resource.FieldName, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldScopeID, resource.FieldNameKey:
+		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldKind, resource.FieldName, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey:
 			values[i] = new(sql.NullString)
 		case resource.FieldCreatedAt, resource.FieldUpdatedAt, resource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -394,6 +398,18 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
+			}
+		case resource.FieldCreatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field created_by", values[i])
+			} else if value.Valid {
+				_m.CreatedBy = value.String
+			}
+		case resource.FieldUpdatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
+			} else if value.Valid {
+				_m.UpdatedBy = value.String
 			}
 		case resource.FieldScopeID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -587,6 +603,12 @@ func (_m *Resource) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("created_by=")
+	builder.WriteString(_m.CreatedBy)
+	builder.WriteString(", ")
+	builder.WriteString("updated_by=")
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	if v := _m.ScopeID; v != nil {
 		builder.WriteString("scope_id=")

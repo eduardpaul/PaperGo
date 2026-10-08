@@ -68,12 +68,24 @@ type queryCompiler struct {
 	nodes int
 }
 
+func queryTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000000000Z") }
+
+func systemField(key string) (string, *ent.FieldDefinition) {
+	columns := map[string]string{"$id": "r.id", "$name": "p.name", "$created_at": "p.item_created_at", "$created_by": "p.item_created_by", "$modified_at": "p.modified_at", "$modified_by": "p.modified_by"}
+	column, ok := columns[key]
+	if !ok {
+		return "", nil
+	}
+	typ := fielddefinition.TypeText
+	if key == "$created_at" || key == "$modified_at" {
+		typ = fielddefinition.TypeDatetime
+	}
+	return column, &ent.FieldDefinition{Type: typ}
+}
+
 func (q *queryCompiler) column(field string) (string, []any, string, error) {
-	switch field {
-	case "$id":
-		return "r.id", nil, "text", nil
-	case "$name":
-		return "p.name", nil, "text", nil
+	if column, d := systemField(field); d != nil {
+		return column, nil, "text", nil
 	}
 	d := q.defs[field]
 	if d == nil || !d.Indexed {
@@ -176,10 +188,10 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 	if op == "" {
 		op = "eq"
 	}
-	var d *ent.FieldDefinition
-	builtin := f.Field == "$name" || f.Field == "$id"
+	col, d := systemField(f.Field)
+	builtin := d != nil
 	if builtin {
-		d = &ent.FieldDefinition{Type: fielddefinition.TypeText}
+		// System metadata belongs to the selected immutable content surface.
 	} else if f.Field == "$tags" {
 		if op != "eq" && op != "ne" {
 			return "", nil, invalid("tags support eq and ne")
@@ -203,17 +215,12 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 			return "", nil, invalid("query fields must exist and be indexed: " + f.Field)
 		}
 	}
-	col, _ := indexColumn(d)
 	prefix := ""
 	args := []any{}
 	if !builtin {
+		col, _ = indexColumn(d)
 		prefix = "f.surface_id=p.id AND f.field_key=? AND f.field_type=? AND f.scale=?"
 		args = []any{f.Field, string(d.Type), d.Scale}
-	} else {
-		col = "p.name"
-		if f.Field == "$id" {
-			col = "r.id"
-		}
 	}
 	if op == "missing" || op == "present" {
 		if len(f.Value) > 0 {

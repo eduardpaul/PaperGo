@@ -49,6 +49,10 @@ const (
 	FieldWebdavEnabled = "webdav_enabled"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// FieldCreatedBy holds the string denoting the created_by field in the database.
+	FieldCreatedBy = "created_by"
+	// FieldUpdatedBy holds the string denoting the updated_by field in the database.
+	FieldUpdatedBy = "updated_by"
 	// FieldScopeID holds the string denoting the scope_id field in the database.
 	FieldScopeID = "scope_id"
 	// FieldNameKey holds the string denoting the name_key field in the database.
@@ -202,6 +206,8 @@ var Columns = []string{
 	FieldPublishingEnabled,
 	FieldWebdavEnabled,
 	FieldUpdatedAt,
+	FieldCreatedBy,
+	FieldUpdatedBy,
 	FieldScopeID,
 	FieldNameKey,
 	FieldDeletedAt,
@@ -250,6 +256,10 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultCreatedBy holds the default value on creation for the "created_by" field.
+	DefaultCreatedBy string
+	// DefaultUpdatedBy holds the default value on creation for the "updated_by" field.
+	DefaultUpdatedBy string
 	// ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
 	ScopeIDValidator func(string) error
 	// NameKeyValidator is a validator for the "name_key" field. It is called by the builders before save.
@@ -367,6 +377,16 @@ func ByWebdavEnabled(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+}
+
+// ByCreatedBy orders the results by the created_by field.
+func ByCreatedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatedBy, opts...).ToFunc()
+}
+
+// ByUpdatedBy orders the results by the updated_by field.
+func ByUpdatedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpdatedBy, opts...).ToFunc()
 }
 
 // ByScopeID orders the results by the scope_id field.

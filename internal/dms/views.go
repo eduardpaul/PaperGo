@@ -36,7 +36,7 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 	if e != nil {
 		return e
 	}
-	known := map[string]bool{"$id": true, "$name": true, "$tags": true}
+	known := map[string]bool{"$id": true, "$name": true, "$tags": true, "$created_at": true, "$created_by": true, "$modified_at": true, "$modified_by": true}
 	for _, d := range defs {
 		known[d.Key] = true
 	}

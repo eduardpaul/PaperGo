@@ -241,6 +241,7 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 		r.Name = p.Name
 		r.Tags = p.Tags
 		r.Values = values
+		r.UpdatedBy = p.ModifiedBy
 		if rev := revisionLookup[p.RevisionID]; rev != nil {
 			r.UpdatedAt = rev.CreatedAt
 			selectedRevisions[r.ID] = rev

@@ -33,6 +33,14 @@ const (
 	FieldTags = "tags"
 	// FieldPayload holds the string denoting the payload field in the database.
 	FieldPayload = "payload"
+	// FieldItemCreatedAt holds the string denoting the item_created_at field in the database.
+	FieldItemCreatedAt = "item_created_at"
+	// FieldItemCreatedBy holds the string denoting the item_created_by field in the database.
+	FieldItemCreatedBy = "item_created_by"
+	// FieldModifiedAt holds the string denoting the modified_at field in the database.
+	FieldModifiedAt = "modified_at"
+	// FieldModifiedBy holds the string denoting the modified_by field in the database.
+	FieldModifiedBy = "modified_by"
 	// EdgeItem holds the string denoting the item edge name in mutations.
 	EdgeItem = "item"
 	// EdgeRevision holds the string denoting the revision edge name in mutations.
@@ -67,6 +75,10 @@ var Columns = []string{
 	FieldName,
 	FieldTags,
 	FieldPayload,
+	FieldItemCreatedAt,
+	FieldItemCreatedBy,
+	FieldModifiedAt,
+	FieldModifiedBy,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -152,6 +164,26 @@ func ByRevisionID(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByItemCreatedAt orders the results by the item_created_at field.
+func ByItemCreatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldItemCreatedAt, opts...).ToFunc()
+}
+
+// ByItemCreatedBy orders the results by the item_created_by field.
+func ByItemCreatedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldItemCreatedBy, opts...).ToFunc()
+}
+
+// ByModifiedAt orders the results by the modified_at field.
+func ByModifiedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldModifiedAt, opts...).ToFunc()
+}
+
+// ByModifiedBy orders the results by the modified_by field.
+func ByModifiedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldModifiedBy, opts...).ToFunc()
 }
 
 // ByItemField orders the results by item field.

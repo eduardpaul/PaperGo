@@ -85,6 +85,30 @@ func (_c *ItemSurfaceCreate) SetPayload(v jsontext.Value) *ItemSurfaceCreate {
 	return _c
 }
 
+// SetItemCreatedAt sets the "item_created_at" field.
+func (_c *ItemSurfaceCreate) SetItemCreatedAt(v string) *ItemSurfaceCreate {
+	_c.mutation.SetItemCreatedAt(v)
+	return _c
+}
+
+// SetItemCreatedBy sets the "item_created_by" field.
+func (_c *ItemSurfaceCreate) SetItemCreatedBy(v string) *ItemSurfaceCreate {
+	_c.mutation.SetItemCreatedBy(v)
+	return _c
+}
+
+// SetModifiedAt sets the "modified_at" field.
+func (_c *ItemSurfaceCreate) SetModifiedAt(v string) *ItemSurfaceCreate {
+	_c.mutation.SetModifiedAt(v)
+	return _c
+}
+
+// SetModifiedBy sets the "modified_by" field.
+func (_c *ItemSurfaceCreate) SetModifiedBy(v string) *ItemSurfaceCreate {
+	_c.mutation.SetModifiedBy(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ItemSurfaceCreate) SetID(v string) *ItemSurfaceCreate {
 	_c.mutation.SetID(v)
@@ -188,6 +212,18 @@ func (_c *ItemSurfaceCreate) check() error {
 	if _, ok := _c.mutation.Payload(); !ok {
 		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "ItemSurface.payload"`)}
 	}
+	if _, ok := _c.mutation.ItemCreatedAt(); !ok {
+		return &ValidationError{Name: "item_created_at", err: errors.New(`ent: missing required field "ItemSurface.item_created_at"`)}
+	}
+	if _, ok := _c.mutation.ItemCreatedBy(); !ok {
+		return &ValidationError{Name: "item_created_by", err: errors.New(`ent: missing required field "ItemSurface.item_created_by"`)}
+	}
+	if _, ok := _c.mutation.ModifiedAt(); !ok {
+		return &ValidationError{Name: "modified_at", err: errors.New(`ent: missing required field "ItemSurface.modified_at"`)}
+	}
+	if _, ok := _c.mutation.ModifiedBy(); !ok {
+		return &ValidationError{Name: "modified_by", err: errors.New(`ent: missing required field "ItemSurface.modified_by"`)}
+	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := itemsurface.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "ItemSurface.id": %w`, err)}
@@ -261,6 +297,22 @@ func (_c *ItemSurfaceCreate) createSpec() (*ItemSurface, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Payload(); ok {
 		_spec.SetField(itemsurface.FieldPayload, field.TypeJSON, value)
 		_node.Payload = value
+	}
+	if value, ok := _c.mutation.ItemCreatedAt(); ok {
+		_spec.SetField(itemsurface.FieldItemCreatedAt, field.TypeString, value)
+		_node.ItemCreatedAt = value
+	}
+	if value, ok := _c.mutation.ItemCreatedBy(); ok {
+		_spec.SetField(itemsurface.FieldItemCreatedBy, field.TypeString, value)
+		_node.ItemCreatedBy = value
+	}
+	if value, ok := _c.mutation.ModifiedAt(); ok {
+		_spec.SetField(itemsurface.FieldModifiedAt, field.TypeString, value)
+		_node.ModifiedAt = value
+	}
+	if value, ok := _c.mutation.ModifiedBy(); ok {
+		_spec.SetField(itemsurface.FieldModifiedBy, field.TypeString, value)
+		_node.ModifiedBy = value
 	}
 	if nodes := _c.mutation.ItemIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

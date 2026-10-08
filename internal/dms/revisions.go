@@ -101,6 +101,7 @@ func overlayRevision(r *ent.Resource, rev *ent.ItemRevision) error {
 	r.Tags = append([]string{}, rev.Tags...)
 	r.Values = values
 	r.UpdatedAt = rev.CreatedAt
+	r.UpdatedBy = rev.CreatedBy
 	return nil
 }
 func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resource, newBlobID *string) (*ent.ItemRevision, error) {
@@ -171,9 +172,9 @@ func (s *Service) replaceSurface(ctx context.Context, r *ent.Resource, rev *ent.
 	existing, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(r.ID), itemsurface.SurfaceEQ(surface)).Only(ctx)
 	var projection *ent.ItemSurface
 	if ent.IsNotFound(err) {
-		projection, err = s.Client.ItemSurface.Create().SetItemID(r.ID).SetContainerID(*r.ContainerID).SetWorkspaceID(r.WorkspaceID).SetSurface(surface).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).Save(ctx)
+		projection, err = s.Client.ItemSurface.Create().SetItemID(r.ID).SetContainerID(*r.ContainerID).SetWorkspaceID(r.WorkspaceID).SetSurface(surface).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetItemCreatedAt(queryTime(r.CreatedAt)).SetItemCreatedBy(r.CreatedBy).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
 	} else if err == nil {
-		projection, err = s.Client.ItemSurface.UpdateOne(existing).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).Save(ctx)
+		projection, err = s.Client.ItemSurface.UpdateOne(existing).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
 	}
 	if err != nil {
 		return err

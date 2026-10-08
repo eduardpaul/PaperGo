@@ -174,6 +174,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		return nil, invalid("custom values are supported on items only")
 	}
 	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetTags(in.Tags).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
+	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
 	if parent != nil {
 		builder.SetParentID(parent.ID)
 	} else {
@@ -297,6 +298,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	}
 	moved := in.ParentID != nil && (r.ParentID == nil || *in.ParentID != *r.ParentID)
 	b := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC())
+	b.SetUpdatedBy(subject)
 	if moved {
 		if e = s.checkMove(ctx, subject, r, *in.ParentID); e != nil {
 			return nil, e

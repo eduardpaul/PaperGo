@@ -185,3 +185,8 @@ Creation returns an edge ETag. PATCH and DELETE require the edge If-Match. PATCH
 
 Tests cover foreign-key/integrity checks, exact defaults and filters, schema pairing, template adoption rollback, multi-value index rebuilds, taxonomy/reference validation, exclusive-scope copy/reset, reader/draft query visibility, counts/groups/pagination, view concurrency, typed attributes, symmetric duplicates, and concurrent cardinality. The OpenAPI contract documents all registered routes.
 
+
+## Indexed system metadata
+
+Queries, grouping and saved views accept $created_at, $created_by, $modified_at, and $modified_by alongside $id, $name and $tags. Modification time and actor describe the selected immutable content revision: readers cannot infer draft actors or times. Creation metadata describes item creation. Times accept RFC3339 values and normalize to UTC with nanosecond precision. Dedicated collection/surface indexes cover these metadata fields; no custom field configuration is needed.
+

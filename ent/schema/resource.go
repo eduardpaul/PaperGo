@@ -33,6 +33,8 @@ func (Resource) Fields() []ent.Field {
 		// Libraries only: exposes the library's folders and files over WebDAV.
 		field.Bool("webdav_enabled").Default(false),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
+		field.String("created_by").Default("").Immutable(),
+		field.String("updated_by").Default(""),
 		// Nearest exclusive ACL scope, maintained by database triggers; never set by the API.
 		field.String("scope_id").Optional().Nillable().MaxLen(36),
 		// Case-folded head name of a live library folder or item. Its unique index

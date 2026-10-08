@@ -5418,6 +5418,16 @@
             "minimum": 1,
             "description": "Internal content counter; omitted from published read surfaces.",
             "type": "integer"
+          },
+          "created_by": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Creation actor or selected content revision modification actor."
+          },
+          "updated_by": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Creation actor or selected content revision modification actor."
           }
         },
         "required": [
@@ -6448,7 +6458,7 @@
         },
         "required": [],
         "additionalProperties": false,
-        "description": "Collection-wide item query, including folder descendants. Optional parent_id restricts direct children. One scalar sort field plus ID tie-breaker, missing values last. Default sort is $id. Group counts use the separate groups endpoint."
+        "description": "Collection query over visible surfaces. System fields: $id, $name, $tags, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision."
       },
       "QueryRequest": {
         "type": "object",

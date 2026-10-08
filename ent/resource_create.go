@@ -225,6 +225,34 @@ func (_c *ResourceCreate) SetNillableUpdatedAt(v *time.Time) *ResourceCreate {
 	return _c
 }
 
+// SetCreatedBy sets the "created_by" field.
+func (_c *ResourceCreate) SetCreatedBy(v string) *ResourceCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
+}
+
+// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableCreatedBy(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
+	}
+	return _c
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (_c *ResourceCreate) SetUpdatedBy(v string) *ResourceCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
+}
+
+// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableUpdatedBy(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
+	}
+	return _c
+}
+
 // SetScopeID sets the "scope_id" field.
 func (_c *ResourceCreate) SetScopeID(v string) *ResourceCreate {
 	_c.mutation.SetScopeID(v)
@@ -527,6 +555,14 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.CreatedBy(); !ok {
+		v := resource.DefaultCreatedBy
+		_c.mutation.SetCreatedBy(v)
+	}
+	if _, ok := _c.mutation.UpdatedBy(); !ok {
+		v := resource.DefaultUpdatedBy
+		_c.mutation.SetUpdatedBy(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := resource.DefaultID()
 		_c.mutation.SetID(v)
@@ -605,6 +641,12 @@ func (_c *ResourceCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Resource.updated_at"`)}
+	}
+	if _, ok := _c.mutation.CreatedBy(); !ok {
+		return &ValidationError{Name: "created_by", err: errors.New(`ent: missing required field "Resource.created_by"`)}
+	}
+	if _, ok := _c.mutation.UpdatedBy(); !ok {
+		return &ValidationError{Name: "updated_by", err: errors.New(`ent: missing required field "Resource.updated_by"`)}
 	}
 	if v, ok := _c.mutation.ScopeID(); ok {
 		if err := resource.ScopeIDValidator(v); err != nil {
@@ -703,6 +745,14 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if value, ok := _c.mutation.CreatedBy(); ok {
+		_spec.SetField(resource.FieldCreatedBy, field.TypeString, value)
+		_node.CreatedBy = value
+	}
+	if value, ok := _c.mutation.UpdatedBy(); ok {
+		_spec.SetField(resource.FieldUpdatedBy, field.TypeString, value)
+		_node.UpdatedBy = value
 	}
 	if value, ok := _c.mutation.ScopeID(); ok {
 		_spec.SetField(resource.FieldScopeID, field.TypeString, value)

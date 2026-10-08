@@ -5354,6 +5354,10 @@ type ItemSurfaceMutation struct {
 	appendtags      []string
 	payload         *jsontext.Value
 	appendpayload   jsontext.Value
+	item_created_at *string
+	item_created_by *string
+	modified_at     *string
+	modified_by     *string
 	clearedFields   map[string]struct{}
 	item            *string
 	cleareditem     bool
@@ -5822,6 +5826,150 @@ func (m *ItemSurfaceMutation) ResetPayload() {
 	m.appendpayload = nil
 }
 
+// SetItemCreatedAt sets the "item_created_at" field.
+func (m *ItemSurfaceMutation) SetItemCreatedAt(s string) {
+	m.item_created_at = &s
+}
+
+// ItemCreatedAt returns the value of the "item_created_at" field in the mutation.
+func (m *ItemSurfaceMutation) ItemCreatedAt() (r string, exists bool) {
+	v := m.item_created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldItemCreatedAt returns the old "item_created_at" field's value of the ItemSurface entity.
+// If the ItemSurface object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemSurfaceMutation) OldItemCreatedAt(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldItemCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldItemCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldItemCreatedAt: %w", err)
+	}
+	return oldValue.ItemCreatedAt, nil
+}
+
+// ResetItemCreatedAt resets all changes to the "item_created_at" field.
+func (m *ItemSurfaceMutation) ResetItemCreatedAt() {
+	m.item_created_at = nil
+}
+
+// SetItemCreatedBy sets the "item_created_by" field.
+func (m *ItemSurfaceMutation) SetItemCreatedBy(s string) {
+	m.item_created_by = &s
+}
+
+// ItemCreatedBy returns the value of the "item_created_by" field in the mutation.
+func (m *ItemSurfaceMutation) ItemCreatedBy() (r string, exists bool) {
+	v := m.item_created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldItemCreatedBy returns the old "item_created_by" field's value of the ItemSurface entity.
+// If the ItemSurface object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemSurfaceMutation) OldItemCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldItemCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldItemCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldItemCreatedBy: %w", err)
+	}
+	return oldValue.ItemCreatedBy, nil
+}
+
+// ResetItemCreatedBy resets all changes to the "item_created_by" field.
+func (m *ItemSurfaceMutation) ResetItemCreatedBy() {
+	m.item_created_by = nil
+}
+
+// SetModifiedAt sets the "modified_at" field.
+func (m *ItemSurfaceMutation) SetModifiedAt(s string) {
+	m.modified_at = &s
+}
+
+// ModifiedAt returns the value of the "modified_at" field in the mutation.
+func (m *ItemSurfaceMutation) ModifiedAt() (r string, exists bool) {
+	v := m.modified_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModifiedAt returns the old "modified_at" field's value of the ItemSurface entity.
+// If the ItemSurface object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemSurfaceMutation) OldModifiedAt(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModifiedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModifiedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModifiedAt: %w", err)
+	}
+	return oldValue.ModifiedAt, nil
+}
+
+// ResetModifiedAt resets all changes to the "modified_at" field.
+func (m *ItemSurfaceMutation) ResetModifiedAt() {
+	m.modified_at = nil
+}
+
+// SetModifiedBy sets the "modified_by" field.
+func (m *ItemSurfaceMutation) SetModifiedBy(s string) {
+	m.modified_by = &s
+}
+
+// ModifiedBy returns the value of the "modified_by" field in the mutation.
+func (m *ItemSurfaceMutation) ModifiedBy() (r string, exists bool) {
+	v := m.modified_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModifiedBy returns the old "modified_by" field's value of the ItemSurface entity.
+// If the ItemSurface object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemSurfaceMutation) OldModifiedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModifiedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModifiedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModifiedBy: %w", err)
+	}
+	return oldValue.ModifiedBy, nil
+}
+
+// ResetModifiedBy resets all changes to the "modified_by" field.
+func (m *ItemSurfaceMutation) ResetModifiedBy() {
+	m.modified_by = nil
+}
+
 // ClearItem clears the "item" edge to the Resource entity.
 func (m *ItemSurfaceMutation) ClearItem() {
 	m.cleareditem = true
@@ -5910,7 +6058,7 @@ func (m *ItemSurfaceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ItemSurfaceMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 13)
 	if m.created_at != nil {
 		fields = append(fields, itemsurface.FieldCreatedAt)
 	}
@@ -5938,6 +6086,18 @@ func (m *ItemSurfaceMutation) Fields() []string {
 	if m.payload != nil {
 		fields = append(fields, itemsurface.FieldPayload)
 	}
+	if m.item_created_at != nil {
+		fields = append(fields, itemsurface.FieldItemCreatedAt)
+	}
+	if m.item_created_by != nil {
+		fields = append(fields, itemsurface.FieldItemCreatedBy)
+	}
+	if m.modified_at != nil {
+		fields = append(fields, itemsurface.FieldModifiedAt)
+	}
+	if m.modified_by != nil {
+		fields = append(fields, itemsurface.FieldModifiedBy)
+	}
 	return fields
 }
 
@@ -5964,6 +6124,14 @@ func (m *ItemSurfaceMutation) Field(name string) (ent.Value, bool) {
 		return m.Tags()
 	case itemsurface.FieldPayload:
 		return m.Payload()
+	case itemsurface.FieldItemCreatedAt:
+		return m.ItemCreatedAt()
+	case itemsurface.FieldItemCreatedBy:
+		return m.ItemCreatedBy()
+	case itemsurface.FieldModifiedAt:
+		return m.ModifiedAt()
+	case itemsurface.FieldModifiedBy:
+		return m.ModifiedBy()
 	}
 	return nil, false
 }
@@ -5991,6 +6159,14 @@ func (m *ItemSurfaceMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldTags(ctx)
 	case itemsurface.FieldPayload:
 		return m.OldPayload(ctx)
+	case itemsurface.FieldItemCreatedAt:
+		return m.OldItemCreatedAt(ctx)
+	case itemsurface.FieldItemCreatedBy:
+		return m.OldItemCreatedBy(ctx)
+	case itemsurface.FieldModifiedAt:
+		return m.OldModifiedAt(ctx)
+	case itemsurface.FieldModifiedBy:
+		return m.OldModifiedBy(ctx)
 	}
 	return nil, fmt.Errorf("unknown ItemSurface field %s", name)
 }
@@ -6062,6 +6238,34 @@ func (m *ItemSurfaceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPayload(v)
+		return nil
+	case itemsurface.FieldItemCreatedAt:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetItemCreatedAt(v)
+		return nil
+	case itemsurface.FieldItemCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetItemCreatedBy(v)
+		return nil
+	case itemsurface.FieldModifiedAt:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModifiedAt(v)
+		return nil
+	case itemsurface.FieldModifiedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModifiedBy(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ItemSurface field %s", name)
@@ -6138,6 +6342,18 @@ func (m *ItemSurfaceMutation) ResetField(name string) error {
 		return nil
 	case itemsurface.FieldPayload:
 		m.ResetPayload()
+		return nil
+	case itemsurface.FieldItemCreatedAt:
+		m.ResetItemCreatedAt()
+		return nil
+	case itemsurface.FieldItemCreatedBy:
+		m.ResetItemCreatedBy()
+		return nil
+	case itemsurface.FieldModifiedAt:
+		m.ResetModifiedAt()
+		return nil
+	case itemsurface.FieldModifiedBy:
+		m.ResetModifiedBy()
 		return nil
 	}
 	return fmt.Errorf("unknown ItemSurface field %s", name)
@@ -10103,6 +10319,8 @@ type ResourceMutation struct {
 	publishing_enabled        *bool
 	webdav_enabled            *bool
 	updated_at                *time.Time
+	created_by                *string
+	updated_by                *string
 	scope_id                  *string
 	name_key                  *string
 	deleted_at                *time.Time
@@ -10988,6 +11206,78 @@ func (m *ResourceMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
+// SetCreatedBy sets the "created_by" field.
+func (m *ResourceMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *ResourceMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *ResourceMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *ResourceMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *ResourceMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *ResourceMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+}
+
 // SetScopeID sets the "scope_id" field.
 func (m *ResourceMutation) SetScopeID(s string) {
 	m.scope_id = &s
@@ -11844,7 +12134,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 22)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -11895,6 +12185,12 @@ func (m *ResourceMutation) Fields() []string {
 	}
 	if m.updated_at != nil {
 		fields = append(fields, resource.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, resource.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, resource.FieldUpdatedBy)
 	}
 	if m.scope_id != nil {
 		fields = append(fields, resource.FieldScopeID)
@@ -11947,6 +12243,10 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.WebdavEnabled()
 	case resource.FieldUpdatedAt:
 		return m.UpdatedAt()
+	case resource.FieldCreatedBy:
+		return m.CreatedBy()
+	case resource.FieldUpdatedBy:
+		return m.UpdatedBy()
 	case resource.FieldScopeID:
 		return m.ScopeID()
 	case resource.FieldNameKey:
@@ -11996,6 +12296,10 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldWebdavEnabled(ctx)
 	case resource.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
+	case resource.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case resource.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
 	case resource.FieldScopeID:
 		return m.OldScopeID(ctx)
 	case resource.FieldNameKey:
@@ -12129,6 +12433,20 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUpdatedAt(v)
+		return nil
+	case resource.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case resource.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
 		return nil
 	case resource.FieldScopeID:
 		v, ok := value.(string)
@@ -12328,6 +12646,12 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldUpdatedAt:
 		m.ResetUpdatedAt()
+		return nil
+	case resource.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case resource.FieldUpdatedBy:
+		m.ResetUpdatedBy()
 		return nil
 	case resource.FieldScopeID:
 		m.ResetScopeID()

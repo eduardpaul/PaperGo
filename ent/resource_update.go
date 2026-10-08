@@ -238,6 +238,20 @@ func (_u *ResourceUpdate) SetUpdatedAt(v time.Time) *ResourceUpdate {
 	return _u
 }
 
+// SetUpdatedBy sets the "updated_by" field.
+func (_u *ResourceUpdate) SetUpdatedBy(v string) *ResourceUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
+}
+
+// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableUpdatedBy(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
+	}
+	return _u
+}
+
 // SetScopeID sets the "scope_id" field.
 func (_u *ResourceUpdate) SetScopeID(v string) *ResourceUpdate {
 	_u.mutation.SetScopeID(v)
@@ -827,6 +841,9 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.UpdatedBy(); ok {
+		_spec.SetField(resource.FieldUpdatedBy, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ScopeID(); ok {
 		_spec.SetField(resource.FieldScopeID, field.TypeString, value)
@@ -1634,6 +1651,20 @@ func (_u *ResourceUpdateOne) SetUpdatedAt(v time.Time) *ResourceUpdateOne {
 	return _u
 }
 
+// SetUpdatedBy sets the "updated_by" field.
+func (_u *ResourceUpdateOne) SetUpdatedBy(v string) *ResourceUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
+}
+
+// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableUpdatedBy(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
+	}
+	return _u
+}
+
 // SetScopeID sets the "scope_id" field.
 func (_u *ResourceUpdateOne) SetScopeID(v string) *ResourceUpdateOne {
 	_u.mutation.SetScopeID(v)
@@ -2253,6 +2284,9 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.UpdatedBy(); ok {
+		_spec.SetField(resource.FieldUpdatedBy, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ScopeID(); ok {
 		_spec.SetField(resource.FieldScopeID, field.TypeString, value)

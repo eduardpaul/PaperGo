@@ -82,6 +82,62 @@ func (_u *ItemSurfaceUpdate) AppendPayload(v jsontext.Value) *ItemSurfaceUpdate 
 	return _u
 }
 
+// SetItemCreatedAt sets the "item_created_at" field.
+func (_u *ItemSurfaceUpdate) SetItemCreatedAt(v string) *ItemSurfaceUpdate {
+	_u.mutation.SetItemCreatedAt(v)
+	return _u
+}
+
+// SetNillableItemCreatedAt sets the "item_created_at" field if the given value is not nil.
+func (_u *ItemSurfaceUpdate) SetNillableItemCreatedAt(v *string) *ItemSurfaceUpdate {
+	if v != nil {
+		_u.SetItemCreatedAt(*v)
+	}
+	return _u
+}
+
+// SetItemCreatedBy sets the "item_created_by" field.
+func (_u *ItemSurfaceUpdate) SetItemCreatedBy(v string) *ItemSurfaceUpdate {
+	_u.mutation.SetItemCreatedBy(v)
+	return _u
+}
+
+// SetNillableItemCreatedBy sets the "item_created_by" field if the given value is not nil.
+func (_u *ItemSurfaceUpdate) SetNillableItemCreatedBy(v *string) *ItemSurfaceUpdate {
+	if v != nil {
+		_u.SetItemCreatedBy(*v)
+	}
+	return _u
+}
+
+// SetModifiedAt sets the "modified_at" field.
+func (_u *ItemSurfaceUpdate) SetModifiedAt(v string) *ItemSurfaceUpdate {
+	_u.mutation.SetModifiedAt(v)
+	return _u
+}
+
+// SetNillableModifiedAt sets the "modified_at" field if the given value is not nil.
+func (_u *ItemSurfaceUpdate) SetNillableModifiedAt(v *string) *ItemSurfaceUpdate {
+	if v != nil {
+		_u.SetModifiedAt(*v)
+	}
+	return _u
+}
+
+// SetModifiedBy sets the "modified_by" field.
+func (_u *ItemSurfaceUpdate) SetModifiedBy(v string) *ItemSurfaceUpdate {
+	_u.mutation.SetModifiedBy(v)
+	return _u
+}
+
+// SetNillableModifiedBy sets the "modified_by" field if the given value is not nil.
+func (_u *ItemSurfaceUpdate) SetNillableModifiedBy(v *string) *ItemSurfaceUpdate {
+	if v != nil {
+		_u.SetModifiedBy(*v)
+	}
+	return _u
+}
+
 // SetRevision sets the "revision" edge to the ItemRevision entity.
 func (_u *ItemSurfaceUpdate) SetRevision(v *ItemRevision) *ItemSurfaceUpdate {
 	return _u.SetRevisionID(v.ID)
@@ -166,6 +222,18 @@ func (_u *ItemSurfaceUpdate) sqlSave(ctx context.Context) (_node int, err error)
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, itemsurface.FieldPayload, value)
 		})
+	}
+	if value, ok := _u.mutation.ItemCreatedAt(); ok {
+		_spec.SetField(itemsurface.FieldItemCreatedAt, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ItemCreatedBy(); ok {
+		_spec.SetField(itemsurface.FieldItemCreatedBy, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ModifiedAt(); ok {
+		_spec.SetField(itemsurface.FieldModifiedAt, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ModifiedBy(); ok {
+		_spec.SetField(itemsurface.FieldModifiedBy, field.TypeString, value)
 	}
 	if _u.mutation.RevisionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -265,6 +333,62 @@ func (_u *ItemSurfaceUpdateOne) SetPayload(v jsontext.Value) *ItemSurfaceUpdateO
 // AppendPayload appends value to the "payload" field.
 func (_u *ItemSurfaceUpdateOne) AppendPayload(v jsontext.Value) *ItemSurfaceUpdateOne {
 	_u.mutation.AppendPayload(v)
+	return _u
+}
+
+// SetItemCreatedAt sets the "item_created_at" field.
+func (_u *ItemSurfaceUpdateOne) SetItemCreatedAt(v string) *ItemSurfaceUpdateOne {
+	_u.mutation.SetItemCreatedAt(v)
+	return _u
+}
+
+// SetNillableItemCreatedAt sets the "item_created_at" field if the given value is not nil.
+func (_u *ItemSurfaceUpdateOne) SetNillableItemCreatedAt(v *string) *ItemSurfaceUpdateOne {
+	if v != nil {
+		_u.SetItemCreatedAt(*v)
+	}
+	return _u
+}
+
+// SetItemCreatedBy sets the "item_created_by" field.
+func (_u *ItemSurfaceUpdateOne) SetItemCreatedBy(v string) *ItemSurfaceUpdateOne {
+	_u.mutation.SetItemCreatedBy(v)
+	return _u
+}
+
+// SetNillableItemCreatedBy sets the "item_created_by" field if the given value is not nil.
+func (_u *ItemSurfaceUpdateOne) SetNillableItemCreatedBy(v *string) *ItemSurfaceUpdateOne {
+	if v != nil {
+		_u.SetItemCreatedBy(*v)
+	}
+	return _u
+}
+
+// SetModifiedAt sets the "modified_at" field.
+func (_u *ItemSurfaceUpdateOne) SetModifiedAt(v string) *ItemSurfaceUpdateOne {
+	_u.mutation.SetModifiedAt(v)
+	return _u
+}
+
+// SetNillableModifiedAt sets the "modified_at" field if the given value is not nil.
+func (_u *ItemSurfaceUpdateOne) SetNillableModifiedAt(v *string) *ItemSurfaceUpdateOne {
+	if v != nil {
+		_u.SetModifiedAt(*v)
+	}
+	return _u
+}
+
+// SetModifiedBy sets the "modified_by" field.
+func (_u *ItemSurfaceUpdateOne) SetModifiedBy(v string) *ItemSurfaceUpdateOne {
+	_u.mutation.SetModifiedBy(v)
+	return _u
+}
+
+// SetNillableModifiedBy sets the "modified_by" field if the given value is not nil.
+func (_u *ItemSurfaceUpdateOne) SetNillableModifiedBy(v *string) *ItemSurfaceUpdateOne {
+	if v != nil {
+		_u.SetModifiedBy(*v)
+	}
 	return _u
 }
 
@@ -382,6 +506,18 @@ func (_u *ItemSurfaceUpdateOne) sqlSave(ctx context.Context) (_node *ItemSurface
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, itemsurface.FieldPayload, value)
 		})
+	}
+	if value, ok := _u.mutation.ItemCreatedAt(); ok {
+		_spec.SetField(itemsurface.FieldItemCreatedAt, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ItemCreatedBy(); ok {
+		_spec.SetField(itemsurface.FieldItemCreatedBy, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ModifiedAt(); ok {
+		_spec.SetField(itemsurface.FieldModifiedAt, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ModifiedBy(); ok {
+		_spec.SetField(itemsurface.FieldModifiedBy, field.TypeString, value)
 	}
 	if _u.mutation.RevisionCleared() {
 		edge := &sqlgraph.EdgeSpec{

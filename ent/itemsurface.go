@@ -39,6 +39,14 @@ type ItemSurface struct {
 	Tags []string `json:"tags,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload jsontext.Value `json:"payload,omitempty"`
+	// ItemCreatedAt holds the value of the "item_created_at" field.
+	ItemCreatedAt string `json:"item_created_at,omitempty"`
+	// ItemCreatedBy holds the value of the "item_created_by" field.
+	ItemCreatedBy string `json:"item_created_by,omitempty"`
+	// ModifiedAt holds the value of the "modified_at" field.
+	ModifiedAt string `json:"modified_at,omitempty"`
+	// ModifiedBy holds the value of the "modified_by" field.
+	ModifiedBy string `json:"modified_by,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ItemSurfaceQuery when eager-loading is set.
 	Edges        ItemSurfaceEdges `json:"edges"`
@@ -85,7 +93,7 @@ func (*ItemSurface) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case itemsurface.FieldTags, itemsurface.FieldPayload:
 			values[i] = new([]byte)
-		case itemsurface.FieldID, itemsurface.FieldItemID, itemsurface.FieldContainerID, itemsurface.FieldWorkspaceID, itemsurface.FieldSurface, itemsurface.FieldRevisionID, itemsurface.FieldName:
+		case itemsurface.FieldID, itemsurface.FieldItemID, itemsurface.FieldContainerID, itemsurface.FieldWorkspaceID, itemsurface.FieldSurface, itemsurface.FieldRevisionID, itemsurface.FieldName, itemsurface.FieldItemCreatedAt, itemsurface.FieldItemCreatedBy, itemsurface.FieldModifiedAt, itemsurface.FieldModifiedBy:
 			values[i] = new(sql.NullString)
 		case itemsurface.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -168,6 +176,30 @@ func (_m *ItemSurface) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field payload: %w", err)
 				}
 			}
+		case itemsurface.FieldItemCreatedAt:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field item_created_at", values[i])
+			} else if value.Valid {
+				_m.ItemCreatedAt = value.String
+			}
+		case itemsurface.FieldItemCreatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field item_created_by", values[i])
+			} else if value.Valid {
+				_m.ItemCreatedBy = value.String
+			}
+		case itemsurface.FieldModifiedAt:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field modified_at", values[i])
+			} else if value.Valid {
+				_m.ModifiedAt = value.String
+			}
+		case itemsurface.FieldModifiedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field modified_by", values[i])
+			} else if value.Valid {
+				_m.ModifiedBy = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -240,6 +272,18 @@ func (_m *ItemSurface) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Payload))
+	builder.WriteString(", ")
+	builder.WriteString("item_created_at=")
+	builder.WriteString(_m.ItemCreatedAt)
+	builder.WriteString(", ")
+	builder.WriteString("item_created_by=")
+	builder.WriteString(_m.ItemCreatedBy)
+	builder.WriteString(", ")
+	builder.WriteString("modified_at=")
+	builder.WriteString(_m.ModifiedAt)
+	builder.WriteString(", ")
+	builder.WriteString("modified_by=")
+	builder.WriteString(_m.ModifiedBy)
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -10,7 +10,7 @@ CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT 
 CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT REFERENCES item_revisions(id), PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `name` text NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT NOT NULL REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL));
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL));
 CREATE TABLE resource_tags (
   resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
   tag TEXT NOT NULL,
@@ -33,6 +33,7 @@ CREATE TABLE item_surfaces (
  container_id TEXT NOT NULL REFERENCES resources(id), workspace_id TEXT NOT NULL,
  surface TEXT NOT NULL CHECK(surface IN ('head','published')), revision_id TEXT NOT NULL,
  name TEXT NOT NULL, tags JSON NOT NULL CHECK(json_valid(tags) AND json_type(tags)='array'), payload JSON NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
+ item_created_at TEXT NOT NULL, item_created_by TEXT NOT NULL, modified_at TEXT NOT NULL, modified_by TEXT NOT NULL,
  FOREIGN KEY(item_id,revision_id) REFERENCES item_revisions(item_id,id)
 );
 CREATE TABLE item_surface_tags(surface_id TEXT NOT NULL REFERENCES item_surfaces(id) ON DELETE CASCADE,tag TEXT NOT NULL,PRIMARY KEY(tag,surface_id)) WITHOUT ROWID;
@@ -382,3 +383,11 @@ END;
 CREATE TRIGGER relationship_policy_identity BEFORE UPDATE OF workspace_id,key,directed ON relationship_types BEGIN
  SELECT CASE WHEN new.workspace_id IS NOT old.workspace_id OR new.key IS NOT old.key OR new.directed IS NOT old.directed THEN RAISE(ABORT,'relationship policy identity is immutable') END;
 END;
+
+CREATE INDEX itemsurface_container_id_surface_modified_at_item_id ON item_surfaces(container_id,surface,modified_at,item_id);
+
+CREATE INDEX itemsurface_container_id_surface_modified_by_item_id ON item_surfaces(container_id,surface,modified_by,item_id);
+
+CREATE INDEX itemsurface_container_id_surface_item_created_at_item_id ON item_surfaces(container_id,surface,item_created_at,item_id);
+
+CREATE INDEX itemsurface_container_id_surface_item_created_by_item_id ON item_surfaces(container_id,surface,item_created_by,item_id);

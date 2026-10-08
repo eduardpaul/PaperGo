@@ -260,6 +260,10 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "tags", Type: field.TypeJSON},
 		{Name: "payload", Type: field.TypeJSON},
+		{Name: "item_created_at", Type: field.TypeString},
+		{Name: "item_created_by", Type: field.TypeString},
+		{Name: "modified_at", Type: field.TypeString},
+		{Name: "modified_by", Type: field.TypeString},
 		{Name: "item_id", Type: field.TypeString, Size: 36},
 		{Name: "revision_id", Type: field.TypeString, Size: 36},
 	}
@@ -271,13 +275,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "item_surfaces_resources_item",
-				Columns:    []*schema.Column{ItemSurfacesColumns[8]},
+				Columns:    []*schema.Column{ItemSurfacesColumns[12]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "item_surfaces_item_revisions_revision",
-				Columns:    []*schema.Column{ItemSurfacesColumns[9]},
+				Columns:    []*schema.Column{ItemSurfacesColumns[13]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -286,17 +290,37 @@ var (
 			{
 				Name:    "itemsurface_item_id_surface",
 				Unique:  true,
-				Columns: []*schema.Column{ItemSurfacesColumns[8], ItemSurfacesColumns[4]},
+				Columns: []*schema.Column{ItemSurfacesColumns[12], ItemSurfacesColumns[4]},
 			},
 			{
 				Name:    "itemsurface_workspace_id_surface_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[3], ItemSurfacesColumns[4], ItemSurfacesColumns[8]},
+				Columns: []*schema.Column{ItemSurfacesColumns[3], ItemSurfacesColumns[4], ItemSurfacesColumns[12]},
 			},
 			{
 				Name:    "itemsurface_container_id_surface_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[8]},
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[12]},
+			},
+			{
+				Name:    "itemsurface_container_id_surface_modified_at_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[10], ItemSurfacesColumns[12]},
+			},
+			{
+				Name:    "itemsurface_container_id_surface_modified_by_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[11], ItemSurfacesColumns[12]},
+			},
+			{
+				Name:    "itemsurface_container_id_surface_item_created_at_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[8], ItemSurfacesColumns[12]},
+			},
+			{
+				Name:    "itemsurface_container_id_surface_item_created_by_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[9], ItemSurfacesColumns[12]},
 			},
 		},
 	}
@@ -499,6 +523,8 @@ var (
 		{Name: "publishing_enabled", Type: field.TypeBool, Default: false},
 		{Name: "webdav_enabled", Type: field.TypeBool, Default: false},
 		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Default: ""},
+		{Name: "updated_by", Type: field.TypeString, Default: ""},
 		{Name: "scope_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "name_key", Type: field.TypeString, Nullable: true, Size: 1024},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
@@ -516,31 +542,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[16]},
+				Columns:    []*schema.Column{ResourcesColumns[18]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_resources_contained_items",
-				Columns:    []*schema.Column{ResourcesColumns[17]},
+				Columns:    []*schema.Column{ResourcesColumns[19]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_item_revisions_head_revision",
-				Columns:    []*schema.Column{ResourcesColumns[18]},
+				Columns:    []*schema.Column{ResourcesColumns[20]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_item_revisions_published_revision",
-				Columns:    []*schema.Column{ResourcesColumns[19]},
+				Columns:    []*schema.Column{ResourcesColumns[21]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_schema_revisions_schema_head",
-				Columns:    []*schema.Column{ResourcesColumns[20]},
+				Columns:    []*schema.Column{ResourcesColumns[22]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -554,22 +580,22 @@ var (
 			{
 				Name:    "resource_workspace_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[13]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[15]},
 			},
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[16], ResourcesColumns[0], ResourcesColumns[13]},
+				Columns: []*schema.Column{ResourcesColumns[18], ResourcesColumns[0], ResourcesColumns[15]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[17], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[19], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[16], ResourcesColumns[14]},
+				Columns: []*schema.Column{ResourcesColumns[18], ResourcesColumns[16]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
 				},
