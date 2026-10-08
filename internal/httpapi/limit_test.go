@@ -69,6 +69,14 @@ func TestRequestTimeoutBecomesRetryable503(t *testing.T) {
 	if w.Code != 503 || w.Header().Get("Retry-After") == "" {
 		t.Fatalf("timeout: %d %s", w.Code, w.Body.String())
 	}
+	// Mutations may span a whole collection (index rebuilds), so they get no deadline.
+	var deadline bool
+	a.limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, deadline = r.Context().Deadline()
+	})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("PATCH", "/v1/resources/x/fields/y", nil))
+	if deadline {
+		t.Fatal("mutation was given the read timeout")
+	}
 	// A deadline that is not the request's own stays an internal error.
 	w = httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/v1/workspaces", nil)

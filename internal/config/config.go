@@ -21,7 +21,7 @@ type Config struct {
 	MaxUpload    int64
 	// MaxInFlight bounds concurrent API requests; excess requests are shed with 503.
 	MaxInFlight int
-	// RequestTimeout cancels API work that outlives it; blob transfers are exempt.
+	// RequestTimeout cancels API reads that outlive it; mutations and blob transfers are exempt.
 	RequestTimeout time.Duration
 }
 

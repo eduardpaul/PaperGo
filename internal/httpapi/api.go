@@ -80,7 +80,7 @@ const admissionWait = time.Second
 
 // limit sheds load instead of queueing without bound: past MaxInFlight
 // concurrent requests a caller waits at most admissionWait, then gets 503 with
-// Retry-After. Admitted requests are cancelled after RequestTimeout. Blob
+// Retry-After. Admitted reads are cancelled after RequestTimeout. Blob
 // transfers stream for long periods under their own deadlines, so they bypass both.
 func (a *API) limit(next http.Handler) http.Handler {
 	var slots chan struct{}
@@ -111,7 +111,9 @@ func (a *API) limit(next http.Handler) http.Handler {
 			}
 			defer func() { <-slots }()
 		}
-		if a.RequestTimeout > 0 {
+		// Only reads are time-boxed: mutations are serialized and some (index
+		// rebuilds, template adoption, bulk publish) legitimately span a collection.
+		if a.RequestTimeout > 0 && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
 			ctx, cancel := context.WithTimeout(r.Context(), a.RequestTimeout)
 			defer cancel()
 			r = r.WithContext(ctx)
