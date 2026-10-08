@@ -46,6 +46,8 @@ type Tx struct {
 	Term *TermClient
 	// TermSet is the client for interacting with the TermSet builders.
 	TermSet *TermSetClient
+	// WebDAVCredential is the client for interacting with the WebDAVCredential builders.
+	WebDAVCredential *WebDAVCredentialClient
 
 	// lazily loaded.
 	client     *Client
@@ -193,6 +195,7 @@ func (tx *Tx) init() {
 	tx.SchemaTemplate = NewSchemaTemplateClient(tx.config)
 	tx.Term = NewTermClient(tx.config)
 	tx.TermSet = NewTermSetClient(tx.config)
+	tx.WebDAVCredential = NewWebDAVCredentialClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

@@ -36,6 +36,26 @@ func (_u *ResourceUpdate) Where(ps ...predicate.Resource) *ResourceUpdate {
 	return _u
 }
 
+// SetParentID sets the "parent_id" field.
+func (_u *ResourceUpdate) SetParentID(v string) *ResourceUpdate {
+	_u.mutation.SetParentID(v)
+	return _u
+}
+
+// SetNillableParentID sets the "parent_id" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableParentID(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetParentID(*v)
+	}
+	return _u
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (_u *ResourceUpdate) ClearParentID() *ResourceUpdate {
+	_u.mutation.ClearParentID()
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *ResourceUpdate) SetName(v string) *ResourceUpdate {
 	_u.mutation.SetName(v)
@@ -198,6 +218,20 @@ func (_u *ResourceUpdate) SetNillablePublishingEnabled(v *bool) *ResourceUpdate 
 	return _u
 }
 
+// SetWebdavEnabled sets the "webdav_enabled" field.
+func (_u *ResourceUpdate) SetWebdavEnabled(v bool) *ResourceUpdate {
+	_u.mutation.SetWebdavEnabled(v)
+	return _u
+}
+
+// SetNillableWebdavEnabled sets the "webdav_enabled" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableWebdavEnabled(v *bool) *ResourceUpdate {
+	if v != nil {
+		_u.SetWebdavEnabled(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ResourceUpdate) SetUpdatedAt(v time.Time) *ResourceUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -224,6 +258,46 @@ func (_u *ResourceUpdate) ClearScopeID() *ResourceUpdate {
 	return _u
 }
 
+// SetNameKey sets the "name_key" field.
+func (_u *ResourceUpdate) SetNameKey(v string) *ResourceUpdate {
+	_u.mutation.SetNameKey(v)
+	return _u
+}
+
+// SetNillableNameKey sets the "name_key" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableNameKey(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetNameKey(*v)
+	}
+	return _u
+}
+
+// ClearNameKey clears the value of the "name_key" field.
+func (_u *ResourceUpdate) ClearNameKey() *ResourceUpdate {
+	_u.mutation.ClearNameKey()
+	return _u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *ResourceUpdate) SetDeletedAt(v time.Time) *ResourceUpdate {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableDeletedAt(v *time.Time) *ResourceUpdate {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *ResourceUpdate) ClearDeletedAt() *ResourceUpdate {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by IDs.
 func (_u *ResourceUpdate) AddChildIDs(ids ...string) *ResourceUpdate {
 	_u.mutation.AddChildIDs(ids...)
@@ -237,6 +311,11 @@ func (_u *ResourceUpdate) AddChildren(v ...*Resource) *ResourceUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.AddChildIDs(ids...)
+}
+
+// SetParent sets the "parent" edge to the Resource entity.
+func (_u *ResourceUpdate) SetParent(v *Resource) *ResourceUpdate {
+	return _u.SetParentID(v.ID)
 }
 
 // AddContainedItemIDs adds the "contained_items" edge to the Resource entity by IDs.
@@ -413,6 +492,12 @@ func (_u *ResourceUpdate) RemoveChildren(v ...*Resource) *ResourceUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveChildIDs(ids...)
+}
+
+// ClearParent clears the "parent" edge to the Resource entity.
+func (_u *ResourceUpdate) ClearParent() *ResourceUpdate {
+	_u.mutation.ClearParent()
+	return _u
 }
 
 // ClearContainedItems clears all "contained_items" edges to the Resource entity.
@@ -660,6 +745,11 @@ func (_u *ResourceUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ResourceUpdate) check() error {
+	if v, ok := _u.mutation.ParentID(); ok {
+		if err := resource.ParentIDValidator(v); err != nil {
+			return &ValidationError{Name: "parent_id", err: fmt.Errorf(`ent: validator failed for field "Resource.parent_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := resource.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Resource.name": %w`, err)}
@@ -678,6 +768,11 @@ func (_u *ResourceUpdate) check() error {
 	if v, ok := _u.mutation.ScopeID(); ok {
 		if err := resource.ScopeIDValidator(v); err != nil {
 			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.NameKey(); ok {
+		if err := resource.NameKeyValidator(v); err != nil {
+			return &ValidationError{Name: "name_key", err: fmt.Errorf(`ent: validator failed for field "Resource.name_key": %w`, err)}
 		}
 	}
 	return nil
@@ -727,6 +822,9 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.PublishingEnabled(); ok {
 		_spec.SetField(resource.FieldPublishingEnabled, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.WebdavEnabled(); ok {
+		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
 	}
@@ -735,6 +833,18 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ScopeIDCleared() {
 		_spec.ClearField(resource.FieldScopeID, field.TypeString)
+	}
+	if value, ok := _u.mutation.NameKey(); ok {
+		_spec.SetField(resource.FieldNameKey, field.TypeString, value)
+	}
+	if _u.mutation.NameKeyCleared() {
+		_spec.ClearField(resource.FieldNameKey, field.TypeString)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(resource.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(resource.FieldDeletedAt, field.TypeTime)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -772,6 +882,35 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Table:   resource.ChildrenTable,
 			Columns: []string{resource.ChildrenColumn},
 			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ParentCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ParentTable,
+			Columns: []string{resource.ParentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ParentIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ParentTable,
+			Columns: []string{resource.ParentColumn},
+			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
 			},
@@ -1293,6 +1432,26 @@ type ResourceUpdateOne struct {
 	mutation *ResourceMutation
 }
 
+// SetParentID sets the "parent_id" field.
+func (_u *ResourceUpdateOne) SetParentID(v string) *ResourceUpdateOne {
+	_u.mutation.SetParentID(v)
+	return _u
+}
+
+// SetNillableParentID sets the "parent_id" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableParentID(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetParentID(*v)
+	}
+	return _u
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (_u *ResourceUpdateOne) ClearParentID() *ResourceUpdateOne {
+	_u.mutation.ClearParentID()
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *ResourceUpdateOne) SetName(v string) *ResourceUpdateOne {
 	_u.mutation.SetName(v)
@@ -1455,6 +1614,20 @@ func (_u *ResourceUpdateOne) SetNillablePublishingEnabled(v *bool) *ResourceUpda
 	return _u
 }
 
+// SetWebdavEnabled sets the "webdav_enabled" field.
+func (_u *ResourceUpdateOne) SetWebdavEnabled(v bool) *ResourceUpdateOne {
+	_u.mutation.SetWebdavEnabled(v)
+	return _u
+}
+
+// SetNillableWebdavEnabled sets the "webdav_enabled" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableWebdavEnabled(v *bool) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetWebdavEnabled(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ResourceUpdateOne) SetUpdatedAt(v time.Time) *ResourceUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -1481,6 +1654,46 @@ func (_u *ResourceUpdateOne) ClearScopeID() *ResourceUpdateOne {
 	return _u
 }
 
+// SetNameKey sets the "name_key" field.
+func (_u *ResourceUpdateOne) SetNameKey(v string) *ResourceUpdateOne {
+	_u.mutation.SetNameKey(v)
+	return _u
+}
+
+// SetNillableNameKey sets the "name_key" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableNameKey(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetNameKey(*v)
+	}
+	return _u
+}
+
+// ClearNameKey clears the value of the "name_key" field.
+func (_u *ResourceUpdateOne) ClearNameKey() *ResourceUpdateOne {
+	_u.mutation.ClearNameKey()
+	return _u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *ResourceUpdateOne) SetDeletedAt(v time.Time) *ResourceUpdateOne {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableDeletedAt(v *time.Time) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *ResourceUpdateOne) ClearDeletedAt() *ResourceUpdateOne {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by IDs.
 func (_u *ResourceUpdateOne) AddChildIDs(ids ...string) *ResourceUpdateOne {
 	_u.mutation.AddChildIDs(ids...)
@@ -1494,6 +1707,11 @@ func (_u *ResourceUpdateOne) AddChildren(v ...*Resource) *ResourceUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.AddChildIDs(ids...)
+}
+
+// SetParent sets the "parent" edge to the Resource entity.
+func (_u *ResourceUpdateOne) SetParent(v *Resource) *ResourceUpdateOne {
+	return _u.SetParentID(v.ID)
 }
 
 // AddContainedItemIDs adds the "contained_items" edge to the Resource entity by IDs.
@@ -1670,6 +1888,12 @@ func (_u *ResourceUpdateOne) RemoveChildren(v ...*Resource) *ResourceUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveChildIDs(ids...)
+}
+
+// ClearParent clears the "parent" edge to the Resource entity.
+func (_u *ResourceUpdateOne) ClearParent() *ResourceUpdateOne {
+	_u.mutation.ClearParent()
+	return _u
 }
 
 // ClearContainedItems clears all "contained_items" edges to the Resource entity.
@@ -1930,6 +2154,11 @@ func (_u *ResourceUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ResourceUpdateOne) check() error {
+	if v, ok := _u.mutation.ParentID(); ok {
+		if err := resource.ParentIDValidator(v); err != nil {
+			return &ValidationError{Name: "parent_id", err: fmt.Errorf(`ent: validator failed for field "Resource.parent_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := resource.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Resource.name": %w`, err)}
@@ -1948,6 +2177,11 @@ func (_u *ResourceUpdateOne) check() error {
 	if v, ok := _u.mutation.ScopeID(); ok {
 		if err := resource.ScopeIDValidator(v); err != nil {
 			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.NameKey(); ok {
+		if err := resource.NameKeyValidator(v); err != nil {
+			return &ValidationError{Name: "name_key", err: fmt.Errorf(`ent: validator failed for field "Resource.name_key": %w`, err)}
 		}
 	}
 	return nil
@@ -2014,6 +2248,9 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	if value, ok := _u.mutation.PublishingEnabled(); ok {
 		_spec.SetField(resource.FieldPublishingEnabled, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.WebdavEnabled(); ok {
+		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
 	}
@@ -2022,6 +2259,18 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if _u.mutation.ScopeIDCleared() {
 		_spec.ClearField(resource.FieldScopeID, field.TypeString)
+	}
+	if value, ok := _u.mutation.NameKey(); ok {
+		_spec.SetField(resource.FieldNameKey, field.TypeString, value)
+	}
+	if _u.mutation.NameKeyCleared() {
+		_spec.ClearField(resource.FieldNameKey, field.TypeString)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(resource.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(resource.FieldDeletedAt, field.TypeTime)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2059,6 +2308,35 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 			Table:   resource.ChildrenTable,
 			Columns: []string{resource.ChildrenColumn},
 			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ParentCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ParentTable,
+			Columns: []string{resource.ParentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ParentIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ParentTable,
+			Columns: []string{resource.ParentColumn},
+			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
 			},

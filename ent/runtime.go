@@ -20,6 +20,7 @@ import (
 	"papergo/ent/schematemplate"
 	"papergo/ent/term"
 	"papergo/ent/termset"
+	"papergo/ent/webdavcredential"
 	"papergo/internal/model"
 	"time"
 )
@@ -722,16 +723,24 @@ func init() {
 	resourceDescPublishingEnabled := resourceFields[13].Descriptor()
 	// resource.DefaultPublishingEnabled holds the default value on creation for the publishing_enabled field.
 	resource.DefaultPublishingEnabled = resourceDescPublishingEnabled.Default.(bool)
+	// resourceDescWebdavEnabled is the schema descriptor for webdav_enabled field.
+	resourceDescWebdavEnabled := resourceFields[14].Descriptor()
+	// resource.DefaultWebdavEnabled holds the default value on creation for the webdav_enabled field.
+	resource.DefaultWebdavEnabled = resourceDescWebdavEnabled.Default.(bool)
 	// resourceDescUpdatedAt is the schema descriptor for updated_at field.
-	resourceDescUpdatedAt := resourceFields[14].Descriptor()
+	resourceDescUpdatedAt := resourceFields[15].Descriptor()
 	// resource.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	resource.DefaultUpdatedAt = resourceDescUpdatedAt.Default.(func() time.Time)
 	// resource.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	resource.UpdateDefaultUpdatedAt = resourceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// resourceDescScopeID is the schema descriptor for scope_id field.
-	resourceDescScopeID := resourceFields[15].Descriptor()
+	resourceDescScopeID := resourceFields[16].Descriptor()
 	// resource.ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
 	resource.ScopeIDValidator = resourceDescScopeID.Validators[0].(func(string) error)
+	// resourceDescNameKey is the schema descriptor for name_key field.
+	resourceDescNameKey := resourceFields[17].Descriptor()
+	// resource.NameKeyValidator is a validator for the "name_key" field. It is called by the builders before save.
+	resource.NameKeyValidator = resourceDescNameKey.Validators[0].(func(string) error)
 	// resourceDescID is the schema descriptor for id field.
 	resourceDescID := resourceMixinFields0[0].Descriptor()
 	// resource.DefaultID holds the default value on creation for the id field.
@@ -862,4 +871,73 @@ func init() {
 	termset.DefaultID = termsetDescID.Default.(func() string)
 	// termset.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	termset.IDValidator = termsetDescID.Validators[0].(func(string) error)
+	webdavcredentialMixin := schema.WebDAVCredential{}.Mixin()
+	webdavcredentialMixinFields0 := webdavcredentialMixin[0].Fields()
+	_ = webdavcredentialMixinFields0
+	webdavcredentialFields := schema.WebDAVCredential{}.Fields()
+	_ = webdavcredentialFields
+	// webdavcredentialDescCreatedAt is the schema descriptor for created_at field.
+	webdavcredentialDescCreatedAt := webdavcredentialMixinFields0[1].Descriptor()
+	// webdavcredential.DefaultCreatedAt holds the default value on creation for the created_at field.
+	webdavcredential.DefaultCreatedAt = webdavcredentialDescCreatedAt.Default.(func() time.Time)
+	// webdavcredentialDescSubject is the schema descriptor for subject field.
+	webdavcredentialDescSubject := webdavcredentialFields[0].Descriptor()
+	// webdavcredential.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	webdavcredential.SubjectValidator = func() func(string) error {
+		validators := webdavcredentialDescSubject.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(subject string) error {
+			for _, fn := range fns {
+				if err := fn(subject); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// webdavcredentialDescLabel is the schema descriptor for label field.
+	webdavcredentialDescLabel := webdavcredentialFields[1].Descriptor()
+	// webdavcredential.LabelValidator is a validator for the "label" field. It is called by the builders before save.
+	webdavcredential.LabelValidator = func() func(string) error {
+		validators := webdavcredentialDescLabel.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(label string) error {
+			for _, fn := range fns {
+				if err := fn(label); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// webdavcredentialDescSecretHash is the schema descriptor for secret_hash field.
+	webdavcredentialDescSecretHash := webdavcredentialFields[2].Descriptor()
+	// webdavcredential.SecretHashValidator is a validator for the "secret_hash" field. It is called by the builders before save.
+	webdavcredential.SecretHashValidator = func() func(string) error {
+		validators := webdavcredentialDescSecretHash.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(secret_hash string) error {
+			for _, fn := range fns {
+				if err := fn(secret_hash); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// webdavcredentialDescID is the schema descriptor for id field.
+	webdavcredentialDescID := webdavcredentialMixinFields0[0].Descriptor()
+	// webdavcredential.DefaultID holds the default value on creation for the id field.
+	webdavcredential.DefaultID = webdavcredentialDescID.Default.(func() string)
+	// webdavcredential.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	webdavcredential.IDValidator = webdavcredentialDescID.Validators[0].(func(string) error)
 }

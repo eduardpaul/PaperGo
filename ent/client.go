@@ -27,6 +27,7 @@ import (
 	"papergo/ent/schematemplate"
 	"papergo/ent/term"
 	"papergo/ent/termset"
+	"papergo/ent/webdavcredential"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -73,6 +74,8 @@ type Client struct {
 	Term *TermClient
 	// TermSet is the client for interacting with the TermSet builders.
 	TermSet *TermSetClient
+	// WebDAVCredential is the client for interacting with the WebDAVCredential builders.
+	WebDAVCredential *WebDAVCredentialClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -100,6 +103,7 @@ func (c *Client) init() {
 	c.SchemaTemplate = NewSchemaTemplateClient(c.config)
 	c.Term = NewTermClient(c.config)
 	c.TermSet = NewTermSetClient(c.config)
+	c.WebDAVCredential = NewWebDAVCredentialClient(c.config)
 }
 
 type (
@@ -208,6 +212,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SchemaTemplate:   NewSchemaTemplateClient(cfg),
 		Term:             NewTermClient(cfg),
 		TermSet:          NewTermSetClient(cfg),
+		WebDAVCredential: NewWebDAVCredentialClient(cfg),
 	}, nil
 }
 
@@ -243,6 +248,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SchemaTemplate:   NewSchemaTemplateClient(cfg),
 		Term:             NewTermClient(cfg),
 		TermSet:          NewTermSetClient(cfg),
+		WebDAVCredential: NewWebDAVCredentialClient(cfg),
 	}, nil
 }
 
@@ -275,6 +281,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuditEvent, c.Blob, c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision,
 		c.ItemSurface, c.ListView, c.Publication, c.Relationship, c.RelationshipType,
 		c.Resource, c.SchemaRevision, c.SchemaTemplate, c.Term, c.TermSet,
+		c.WebDAVCredential,
 	} {
 		n.Use(hooks...)
 	}
@@ -287,6 +294,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuditEvent, c.Blob, c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision,
 		c.ItemSurface, c.ListView, c.Publication, c.Relationship, c.RelationshipType,
 		c.Resource, c.SchemaRevision, c.SchemaTemplate, c.Term, c.TermSet,
+		c.WebDAVCredential,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -327,6 +335,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Term.mutate(ctx, m)
 	case *TermSetMutation:
 		return c.TermSet.mutate(ctx, m)
+	case *WebDAVCredentialMutation:
+		return c.WebDAVCredential.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -3100,17 +3110,151 @@ func (c *TermSetClient) mutate(ctx context.Context, m *TermSetMutation) (Value, 
 	}
 }
 
+// WebDAVCredentialClient is a client for the WebDAVCredential schema.
+type WebDAVCredentialClient struct {
+	config
+}
+
+// NewWebDAVCredentialClient returns a client for the WebDAVCredential from the given config.
+func NewWebDAVCredentialClient(c config) *WebDAVCredentialClient {
+	return &WebDAVCredentialClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `webdavcredential.Hooks(f(g(h())))`.
+func (c *WebDAVCredentialClient) Use(hooks ...Hook) {
+	c.hooks.WebDAVCredential = append(c.hooks.WebDAVCredential, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `webdavcredential.Intercept(f(g(h())))`.
+func (c *WebDAVCredentialClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WebDAVCredential = append(c.inters.WebDAVCredential, interceptors...)
+}
+
+// Create returns a builder for creating a WebDAVCredential entity.
+func (c *WebDAVCredentialClient) Create() *WebDAVCredentialCreate {
+	mutation := newWebDAVCredentialMutation(c.config, OpCreate)
+	return &WebDAVCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WebDAVCredential entities.
+func (c *WebDAVCredentialClient) CreateBulk(builders ...*WebDAVCredentialCreate) *WebDAVCredentialCreateBulk {
+	return &WebDAVCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WebDAVCredentialClient) MapCreateBulk(slice any, setFunc func(*WebDAVCredentialCreate, int)) *WebDAVCredentialCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WebDAVCredentialCreateBulk{err: fmt.Errorf("calling to WebDAVCredentialClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WebDAVCredentialCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WebDAVCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WebDAVCredential.
+func (c *WebDAVCredentialClient) Update() *WebDAVCredentialUpdate {
+	mutation := newWebDAVCredentialMutation(c.config, OpUpdate)
+	return &WebDAVCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WebDAVCredentialClient) UpdateOne(_m *WebDAVCredential) *WebDAVCredentialUpdateOne {
+	mutation := newWebDAVCredentialMutation(c.config, OpUpdateOne, withWebDAVCredential(_m))
+	return &WebDAVCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WebDAVCredentialClient) UpdateOneID(id string) *WebDAVCredentialUpdateOne {
+	mutation := newWebDAVCredentialMutation(c.config, OpUpdateOne, withWebDAVCredentialID(id))
+	return &WebDAVCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WebDAVCredential.
+func (c *WebDAVCredentialClient) Delete() *WebDAVCredentialDelete {
+	mutation := newWebDAVCredentialMutation(c.config, OpDelete)
+	return &WebDAVCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WebDAVCredentialClient) DeleteOne(_m *WebDAVCredential) *WebDAVCredentialDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WebDAVCredentialClient) DeleteOneID(id string) *WebDAVCredentialDeleteOne {
+	builder := c.Delete().Where(webdavcredential.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WebDAVCredentialDeleteOne{builder}
+}
+
+// Query returns a query builder for WebDAVCredential.
+func (c *WebDAVCredentialClient) Query() *WebDAVCredentialQuery {
+	return &WebDAVCredentialQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWebDAVCredential},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a WebDAVCredential entity by its id.
+func (c *WebDAVCredentialClient) Get(ctx context.Context, id string) (*WebDAVCredential, error) {
+	return c.Query().Where(webdavcredential.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WebDAVCredentialClient) GetX(ctx context.Context, id string) *WebDAVCredential {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *WebDAVCredentialClient) Hooks() []Hook {
+	return c.hooks.WebDAVCredential
+}
+
+// Interceptors returns the client interceptors.
+func (c *WebDAVCredentialClient) Interceptors() []Interceptor {
+	return c.inters.WebDAVCredential
+}
+
+func (c *WebDAVCredentialClient) mutate(ctx context.Context, m *WebDAVCredentialMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WebDAVCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WebDAVCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WebDAVCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WebDAVCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown WebDAVCredential mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
 		AuditEvent, Blob, FieldDefinition, FieldValue, Grant, ItemRevision, ItemSurface,
 		ListView, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, Term, TermSet []ent.Hook
+		SchemaRevision, SchemaTemplate, Term, TermSet, WebDAVCredential []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, FieldDefinition, FieldValue, Grant, ItemRevision, ItemSurface,
 		ListView, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, Term, TermSet []ent.Interceptor
+		SchemaRevision, SchemaTemplate, Term, TermSet,
+		WebDAVCredential []ent.Interceptor
 	}
 )
 

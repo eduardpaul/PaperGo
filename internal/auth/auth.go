@@ -7,6 +7,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"net/http"
 	"papergo/internal/config"
+	"strings"
 	"time"
 )
 
@@ -23,6 +24,22 @@ func (d Development) Verify(_ context.Context, token string) (string, error) {
 		return "", errors.New("invalid token")
 	}
 	return d.Subject, nil
+}
+
+var ErrUnauthenticated = errors.New("valid bearer authentication is required")
+
+// Authenticate verifies the request's "Authorization: Bearer" token and returns
+// its subject. Every HTTP surface uses it, so all accept exactly the same tokens.
+func Authenticate(r *http.Request, v Verifier) (string, error) {
+	parts := strings.Fields(r.Header.Get("Authorization"))
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || len(parts[1]) > 8192 {
+		return "", ErrUnauthenticated
+	}
+	subject, err := v.Verify(r.Context(), parts[1])
+	if err != nil || subject == "" {
+		return "", ErrUnauthenticated
+	}
+	return subject, nil
 }
 
 type OIDC struct{ verifier *oidc.IDTokenVerifier }

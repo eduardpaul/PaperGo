@@ -10,7 +10,7 @@ CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT 
 CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT REFERENCES item_revisions(id), PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `name` text NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT NOT NULL REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL);
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL));
 CREATE TABLE resource_tags (
   resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
   tag TEXT NOT NULL,
@@ -71,6 +71,10 @@ CREATE TABLE list_views (
  query JSON NOT NULL CHECK(json_valid(query) AND json_type(query)='object'),layout TEXT NOT NULL DEFAULT 'table' CHECK(layout IN ('table','board','calendar','gallery')),
  is_default BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
 );
+CREATE TABLE webdav_credentials (
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,subject TEXT NOT NULL,label TEXT NOT NULL,
+ secret_hash TEXT NOT NULL CHECK(length(secret_hash)=64),expires_at DATETIME
+);
 CREATE TABLE relationship_types (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,workspace_id TEXT NOT NULL REFERENCES resources(id),
  key TEXT NOT NULL,label TEXT NOT NULL,inverse_label TEXT NOT NULL DEFAULT '',directed BOOLEAN NOT NULL DEFAULT 1,
@@ -101,6 +105,9 @@ CREATE INDEX `resource_parent_id_id_scope_id` ON `resources` (`parent_id`, `id`,
 CREATE INDEX `resource_container_id_id` ON `resources` (`container_id`, `id`);
 CREATE INDEX resource_tags_by_resource ON resource_tags(resource_id,tag);
 CREATE INDEX resource_workspace_id_id_scope_id ON resources(workspace_id,id,scope_id);
+CREATE UNIQUE INDEX resource_parent_id_name_key ON resources(parent_id,name_key) WHERE name_key IS NOT NULL;
+CREATE UNIQUE INDEX webdav_credentials_secret_hash_key ON webdav_credentials(secret_hash);
+CREATE INDEX webdavcredential_subject_id ON webdav_credentials(subject,id);
 CREATE INDEX relationship_source_id_id ON relationships(source_id,id);
 CREATE INDEX relationship_target_id_id ON relationships(target_id,id);
 CREATE UNIQUE INDEX schemarevision_container_id_revision_number ON schema_revisions(container_id,revision_number);
@@ -146,12 +153,18 @@ CREATE TRIGGER resource_search_update AFTER UPDATE OF name,tags,"values" ON reso
 END;
 -- scope_id is the nearest exclusive ACL scope (ancestor-or-self), so permission
 -- checks are one indexed lookup. Triggers own it; the API never writes it.
--- parent_id is immutable, so a scope changes only on insert or when a resource
--- breaks or resets inheritance; then every descendant reached through
+-- A scope changes on insert, when a resource breaks or resets inheritance, or
+-- when an inheriting resource moves; then every descendant reached through
 -- inheriting resources follows it, while nested exclusive scopes keep their own.
 CREATE TRIGGER resource_scope_insert AFTER INSERT ON resources BEGIN
   UPDATE resources SET scope_id=CASE WHEN new.inherit_permissions THEN (SELECT p.scope_id FROM resources p WHERE p.id=new.parent_id) ELSE new.id END
    WHERE id=new.id;
+END;
+CREATE TRIGGER resource_scope_move AFTER UPDATE OF parent_id ON resources WHEN new.inherit_permissions AND new.parent_id IS NOT old.parent_id BEGIN
+  UPDATE resources SET scope_id=(SELECT p.scope_id FROM resources p WHERE p.id=new.parent_id)
+   WHERE id IN (WITH RECURSIVE sub(id) AS (
+    SELECT new.id UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.inherit_permissions
+   ) SELECT id FROM sub);
 END;
 CREATE TRIGGER resource_scope_inheritance AFTER UPDATE OF inherit_permissions ON resources WHEN old.inherit_permissions IS NOT new.inherit_permissions BEGIN
   UPDATE resources SET scope_id=CASE WHEN new.inherit_permissions THEN (SELECT p.scope_id FROM resources p WHERE p.id=new.parent_id) ELSE new.id END
@@ -178,11 +191,30 @@ CREATE TRIGGER resource_validate_insert BEFORE INSERT ON resources BEGIN
           OR (p.kind='folder' AND new.container_id=p.container_id))))
   ) THEN RAISE(ABORT,'invalid containment') END;
 END;
-CREATE TRIGGER resource_immutable_ownership BEFORE UPDATE OF id,workspace_id,parent_id,container_id,kind ON resources BEGIN
+CREATE TRIGGER resource_immutable_ownership BEFORE UPDATE OF id,workspace_id,container_id,kind ON resources BEGIN
   SELECT CASE WHEN new.id IS NOT old.id OR new.workspace_id IS NOT old.workspace_id
-    OR new.parent_id IS NOT old.parent_id OR new.container_id IS NOT old.container_id OR new.kind IS NOT old.kind
+    OR new.container_id IS NOT old.container_id OR new.kind IS NOT old.kind
     THEN RAISE(ABORT,'resource ownership is immutable') END;
 END;
+-- Folders and items move only within their collection, never below themselves.
+CREATE TRIGGER resource_validate_move BEFORE UPDATE OF parent_id ON resources WHEN new.parent_id IS NOT old.parent_id BEGIN
+  SELECT CASE WHEN new.kind NOT IN ('folder','item') OR new.deleted_at IS NOT NULL OR NOT EXISTS (
+    SELECT 1 FROM resources p WHERE p.id=new.parent_id AND p.workspace_id=new.workspace_id AND p.deleted_at IS NULL
+      AND ((p.kind IN ('list','library') AND p.id=new.container_id) OR (p.kind='folder' AND p.container_id=new.container_id))
+  ) THEN RAISE(ABORT,'invalid containment') END;
+  SELECT CASE WHEN EXISTS (WITH RECURSIVE up(id) AS (
+    SELECT new.parent_id UNION ALL SELECT r.parent_id FROM resources r JOIN up ON r.id=up.id WHERE r.parent_id IS NOT NULL
+  ) SELECT 1 FROM up WHERE id=new.id) THEN RAISE(ABORT,'resource cannot move below itself') END;
+END;
+-- Deletion is final and retains the row, its revisions and its audit trail.
+CREATE TRIGGER resource_tombstone BEFORE UPDATE ON resources WHEN old.deleted_at IS NOT NULL BEGIN
+  SELECT CASE WHEN new.deleted_at IS NOT old.deleted_at OR new.parent_id IS NOT old.parent_id OR new.name IS NOT old.name OR new.name_key IS NOT NULL
+    THEN RAISE(ABORT,'deleted resources are retained') END;
+END;
+CREATE TRIGGER resource_delete_validate BEFORE UPDATE OF deleted_at ON resources WHEN old.deleted_at IS NULL AND new.deleted_at IS NOT NULL BEGIN
+  SELECT CASE WHEN new.kind NOT IN ('folder','item') THEN RAISE(ABORT,'only folders and items can be deleted') END;
+END;
+CREATE TRIGGER webdav_credential_immutable BEFORE UPDATE ON webdav_credentials BEGIN SELECT RAISE(ABORT,'credentials are immutable; revoke and create another'); END;
 CREATE TRIGGER relationship_validate_insert BEFORE INSERT ON relationships BEGIN
   SELECT CASE WHEN new.source_id=new.target_id OR NOT EXISTS (
     SELECT 1 FROM resources s JOIN resources t ON t.id=new.target_id
@@ -245,11 +277,11 @@ CREATE TRIGGER item_revision_validate BEFORE INSERT ON item_revisions BEGIN
 END;
 CREATE TRIGGER item_revision_immutable BEFORE UPDATE ON item_revisions BEGIN SELECT RAISE(ABORT,'item revision is immutable'); END;
 CREATE TRIGGER item_revision_retained BEFORE DELETE ON item_revisions BEGIN SELECT RAISE(ABORT,'item revisions are retained'); END;
-CREATE TRIGGER resource_revision_pointers BEFORE UPDATE OF head_revision_id,published_revision_id,schema_head_id,publishing_enabled ON resources BEGIN
+CREATE TRIGGER resource_revision_pointers BEFORE UPDATE OF head_revision_id,published_revision_id,schema_head_id,publishing_enabled,webdav_enabled ON resources BEGIN
  SELECT CASE WHEN (new.head_revision_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.head_revision_id AND item_id=new.id))
  OR (new.published_revision_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.published_revision_id AND item_id=new.id))
  OR (new.schema_head_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM schema_revisions WHERE id=new.schema_head_id AND container_id=new.id))
- OR (new.publishing_enabled AND new.kind NOT IN ('list','library'))
+ OR (new.publishing_enabled AND new.kind NOT IN ('list','library')) OR (new.webdav_enabled AND new.kind<>'library')
  THEN RAISE(ABORT,'invalid revision pointer') END;
 END;
 CREATE TRIGGER publication_revision_validate BEFORE INSERT ON publications BEGIN
@@ -259,7 +291,8 @@ END;
 CREATE TRIGGER publication_retained BEFORE DELETE ON publications BEGIN SELECT RAISE(ABORT,'publication events are retained'); END;
 CREATE TRIGGER resource_revision_insert BEFORE INSERT ON resources BEGIN
  SELECT CASE WHEN new.head_revision_id IS NOT NULL OR new.published_revision_id IS NOT NULL OR new.schema_head_id IS NOT NULL
- OR (new.publishing_enabled AND new.kind NOT IN ('list','library')) OR new.next_revision_number<>1
+ OR (new.publishing_enabled AND new.kind NOT IN ('list','library')) OR (new.webdav_enabled AND new.kind<>'library')
+ OR new.next_revision_number<>1 OR new.deleted_at IS NOT NULL
  THEN RAISE(ABORT,'invalid initial revision state') END;
 END;
 CREATE TRIGGER resource_revision_counter BEFORE UPDATE OF next_revision_number ON resources BEGIN

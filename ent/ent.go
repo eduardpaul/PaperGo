@@ -22,6 +22,7 @@ import (
 	"papergo/ent/schematemplate"
 	"papergo/ent/term"
 	"papergo/ent/termset"
+	"papergo/ent/webdavcredential"
 	"reflect"
 	"sync"
 
@@ -104,6 +105,7 @@ func checkColumn(t, c string) error {
 			schematemplate.Table:   schematemplate.ValidColumn,
 			term.Table:             term.ValidColumn,
 			termset.Table:          termset.ValidColumn,
+			webdavcredential.Table: webdavcredential.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

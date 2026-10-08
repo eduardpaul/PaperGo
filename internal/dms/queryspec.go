@@ -506,7 +506,7 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 			for _, id := range ids {
 				out.Data = append(out.Data, lookup[id])
 			}
-			if e = t.overlayPage(ctx, subject, in.Surface, out.Data); e != nil {
+			if _, e = t.overlayPage(ctx, subject, in.Surface, out.Data); e != nil {
 				return out, e
 			}
 		}

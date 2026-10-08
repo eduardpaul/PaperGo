@@ -197,6 +197,20 @@ func (_c *ResourceCreate) SetNillablePublishingEnabled(v *bool) *ResourceCreate 
 	return _c
 }
 
+// SetWebdavEnabled sets the "webdav_enabled" field.
+func (_c *ResourceCreate) SetWebdavEnabled(v bool) *ResourceCreate {
+	_c.mutation.SetWebdavEnabled(v)
+	return _c
+}
+
+// SetNillableWebdavEnabled sets the "webdav_enabled" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableWebdavEnabled(v *bool) *ResourceCreate {
+	if v != nil {
+		_c.SetWebdavEnabled(*v)
+	}
+	return _c
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_c *ResourceCreate) SetUpdatedAt(v time.Time) *ResourceCreate {
 	_c.mutation.SetUpdatedAt(v)
@@ -221,6 +235,34 @@ func (_c *ResourceCreate) SetScopeID(v string) *ResourceCreate {
 func (_c *ResourceCreate) SetNillableScopeID(v *string) *ResourceCreate {
 	if v != nil {
 		_c.SetScopeID(*v)
+	}
+	return _c
+}
+
+// SetNameKey sets the "name_key" field.
+func (_c *ResourceCreate) SetNameKey(v string) *ResourceCreate {
+	_c.mutation.SetNameKey(v)
+	return _c
+}
+
+// SetNillableNameKey sets the "name_key" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableNameKey(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetNameKey(*v)
+	}
+	return _c
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (_c *ResourceCreate) SetDeletedAt(v time.Time) *ResourceCreate {
+	_c.mutation.SetDeletedAt(v)
+	return _c
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableDeletedAt(v *time.Time) *ResourceCreate {
+	if v != nil {
+		_c.SetDeletedAt(*v)
 	}
 	return _c
 }
@@ -477,6 +519,10 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultPublishingEnabled
 		_c.mutation.SetPublishingEnabled(v)
 	}
+	if _, ok := _c.mutation.WebdavEnabled(); !ok {
+		v := resource.DefaultWebdavEnabled
+		_c.mutation.SetWebdavEnabled(v)
+	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := resource.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
@@ -554,12 +600,20 @@ func (_c *ResourceCreate) check() error {
 	if _, ok := _c.mutation.PublishingEnabled(); !ok {
 		return &ValidationError{Name: "publishing_enabled", err: errors.New(`ent: missing required field "Resource.publishing_enabled"`)}
 	}
+	if _, ok := _c.mutation.WebdavEnabled(); !ok {
+		return &ValidationError{Name: "webdav_enabled", err: errors.New(`ent: missing required field "Resource.webdav_enabled"`)}
+	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Resource.updated_at"`)}
 	}
 	if v, ok := _c.mutation.ScopeID(); ok {
 		if err := resource.ScopeIDValidator(v); err != nil {
 			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.NameKey(); ok {
+		if err := resource.NameKeyValidator(v); err != nil {
+			return &ValidationError{Name: "name_key", err: fmt.Errorf(`ent: validator failed for field "Resource.name_key": %w`, err)}
 		}
 	}
 	if v, ok := _c.mutation.ID(); ok {
@@ -642,6 +696,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 		_spec.SetField(resource.FieldPublishingEnabled, field.TypeBool, value)
 		_node.PublishingEnabled = value
 	}
+	if value, ok := _c.mutation.WebdavEnabled(); ok {
+		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
+		_node.WebdavEnabled = value
+	}
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
@@ -649,6 +707,14 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ScopeID(); ok {
 		_spec.SetField(resource.FieldScopeID, field.TypeString, value)
 		_node.ScopeID = &value
+	}
+	if value, ok := _c.mutation.NameKey(); ok {
+		_spec.SetField(resource.FieldNameKey, field.TypeString, value)
+		_node.NameKey = &value
+	}
+	if value, ok := _c.mutation.DeletedAt(); ok {
+		_spec.SetField(resource.FieldDeletedAt, field.TypeTime, value)
+		_node.DeletedAt = &value
 	}
 	if nodes := _c.mutation.ChildrenIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

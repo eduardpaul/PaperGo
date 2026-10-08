@@ -8,6 +8,7 @@ import (
 	"papergo/ent/relationship"
 	"papergo/ent/resource"
 	"strings"
+	"unicode"
 )
 
 // Every relationship has a type; its name, direction, attributes and
@@ -146,6 +147,8 @@ func (s *Service) itemLink(ctx context.Context, itemID, linkID string) (*ent.Rel
 	return link, nil
 }
 
+// filenameValid accepts names usable as file names: no path separators,
+// control characters or dot segments.
 func filenameValid(name string) bool {
-	return strings.TrimSpace(name) != "" && len(name) <= 255 && !strings.ContainsAny(name, "/\\\r\n\x00") && name != "." && name != ".."
+	return strings.TrimSpace(name) != "" && len(name) <= 255 && !strings.ContainsAny(name, "/\\") && !strings.ContainsFunc(name, unicode.IsControl) && name != "." && name != ".."
 }
