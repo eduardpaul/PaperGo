@@ -5768,6 +5768,142 @@
           }
         }
       }
+    },
+    "/v1/smart-folders/{id}/items": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderDrop"
+              }
+            }
+          }
+        },
+        "operationId": "classifySmartFolder",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "Item with current ETag",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "Item with current ETag",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Classify or create an item in a smart folder"
+      },
+      "parameters": [
+        {
+          "required": true,
+          "name": "id",
+          "in": "path",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/v1/smart-folders/{id}/items/{itemID}": {
+      "delete": {
+        "description": "Requires item If-Match and current folder_version. Clears matching equality values/tags and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "Item with current ETag",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "required": true,
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "operationId": "unclassifySmartFolder",
+        "summary": "Remove classification while preserving item name and location",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderUnclassify"
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "required": true,
+          "name": "id",
+          "in": "path",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "required": true,
+          "name": "itemID",
+          "in": "path",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -8329,6 +8465,106 @@
         "required": [
           "data"
         ]
+      },
+      "SmartFolderDrop": {
+        "required": [
+          "folder_version",
+          "collection_id"
+        ],
+        "properties": {
+          "parent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "create": {
+            "$ref": "#/components/schemas/BulkCreate"
+          },
+          "item_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "folder_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "path": {
+            "maxItems": 3,
+            "description": "One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped.",
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 65536
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "oneOf": [
+          {
+            "required": [
+              "item_id",
+              "version"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "create"
+                  ]
+                },
+                {
+                  "required": [
+                    "parent_id"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "required": [
+              "create"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "version"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "description": "Classify existing item or create one through ordinary item validation/revisions/publication. Current folder_version is required. Inferred AND equalities, selected terms and writable path fields are applied; non-inferable predicates must already fit. The write rolls back unless the head matches the folder/path. Existing items retain location; new parent_id must belong to collection."
+      },
+      "SmartFolderUnclassify": {
+        "required": [
+          "folder_version"
+        ],
+        "type": "object",
+        "properties": {
+          "folder_version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

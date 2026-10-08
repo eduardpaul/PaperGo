@@ -6,6 +6,26 @@ import (
 )
 
 func (a *API) registerSmartFolders(m *http.ServeMux) {
+	m.HandleFunc("POST /v1/smart-folders/{id}/items", func(w http.ResponseWriter, r *http.Request) {
+		var in dms.SmartFolderDrop
+		if !a.decode(w, r, &in) {
+			return
+		}
+		out, created, err := a.DMS.ClassifySmartFolder(r.Context(), subject(r), r.PathValue("id"), in)
+		if err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		etag(w, out.Version)
+		status := 200
+		if created {
+			status = 201
+		}
+		respond(w, status, out)
+	})
+	m.HandleFunc("DELETE /v1/smart-folders/{id}/items/{itemID}", foundationMutation(a, 200, true, func(r *http.Request, in dms.SmartFolderUnclassify, v int) (any, error) {
+		return a.DMS.UnclassifySmartFolder(r.Context(), subject(r), r.PathValue("id"), r.PathValue("itemID"), in.FolderVersion, v)
+	}))
 	m.HandleFunc("POST /v1/smart-folders/{id}/query", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderQueryRequest, v int) (any, error) {
 		return a.DMS.QuerySmartFolder(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
