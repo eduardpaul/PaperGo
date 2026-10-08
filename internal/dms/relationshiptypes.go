@@ -10,13 +10,13 @@ import (
 )
 
 type RelationshipTypeInput struct {
-	Key          string        `json:"key"`
-	Label        string        `json:"label"`
-	InverseLabel string        `json:"inverse_label"`
+	Key          string        `json:"key" pattern:"^[a-z][a-z0-9_]{0,63}$" doc:"Immutable key; relationships report it as their name."`
+	Label        string        `json:"label" minLength:"1" maxLength:"255"`
+	InverseLabel string        `json:"inverse_label" required:"false" maxLength:"255" doc:"Directed types only."`
 	Directed     bool          `json:"directed"`
-	MaxIncoming  *int          `json:"max_incoming,omitempty"`
-	MaxOutgoing  *int          `json:"max_outgoing,omitempty"`
-	Attributes   []CreateField `json:"attributes"`
+	MaxIncoming  *int          `json:"max_incoming,omitempty" minimum:"1" maximum:"1000" doc:"Directed types only."`
+	MaxOutgoing  *int          `json:"max_outgoing,omitempty" minimum:"1" maximum:"1000" doc:"Directed types only."`
+	Attributes   []CreateField `json:"attributes" required:"false" maxItems:"64" doc:"Relationship metadata definitions."`
 }
 
 func relationshipPolicy(in RelationshipTypeInput) (json.RawMessage, error) {
@@ -179,7 +179,7 @@ func normalizeMetadata(raw json.RawMessage, values map[string]any) error {
 }
 
 type UpdateRelationship struct {
-	Metadata map[string]any `json:"metadata"`
+	Metadata map[string]any `json:"metadata" doc:"Replaces all attribute values."`
 }
 
 func (s *Service) UpdateRelationship(ctx context.Context, subject, itemID, linkID string, version int, in UpdateRelationship) (out *ent.Relationship, err error) {

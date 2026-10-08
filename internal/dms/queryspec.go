@@ -15,31 +15,31 @@ import (
 )
 
 type FilterExpr struct {
-	And   []FilterExpr    `json:"and,omitempty"`
-	Or    []FilterExpr    `json:"or,omitempty"`
+	And   []FilterExpr    `json:"and,omitempty" maxItems:"32"`
+	Or    []FilterExpr    `json:"or,omitempty" maxItems:"32"`
 	Not   *FilterExpr     `json:"not,omitempty"`
-	Field string          `json:"field,omitempty"`
-	Op    string          `json:"op,omitempty"`
-	Value json.RawMessage `json:"value,omitempty"`
+	Field string          `json:"field,omitempty" doc:"Indexed field key or system field ($id, $name, $tags, $created_at, $created_by, $modified_at, $modified_by)."`
+	Op    string          `json:"op,omitempty" enum:"eq,ne,gt,gte,lt,lte,in,contains,missing,present"`
+	Value json.RawMessage `json:"value,omitempty" doc:"Typed operand; an array for in."`
 }
 type SortSpec struct {
 	Field     string `json:"field,omitempty"`
-	Direction string `json:"direction,omitempty"`
+	Direction string `json:"direction,omitempty" enum:"asc,desc"`
 }
 type QuerySpec struct {
-	ContentTypeID string      `json:"content_type_id,omitempty"`
+	ContentTypeID string      `json:"content_type_id,omitempty" format:"uuid" doc:"Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type."`
 	Filter        *FilterExpr `json:"filter,omitempty"`
 	Sort          SortSpec    `json:"sort,omitempty"`
-	GroupBy       string      `json:"group_by,omitempty"`
-	ParentID      string      `json:"parent_id,omitempty"`
-	Search        string      `json:"search,omitempty"`
-	Tag           string      `json:"tag,omitempty"`
+	GroupBy       string      `json:"group_by,omitempty" doc:"Field key for /query/groups."`
+	ParentID      string      `json:"parent_id,omitempty" doc:"Restricts results to direct children of this folder."`
+	Search        string      `json:"search,omitempty" maxLength:"256" doc:"Full-text search over the selected surface."`
+	Tag           string      `json:"tag,omitempty" maxLength:"64"`
 }
 type QueryRequest struct {
-	Query   QuerySpec `json:"query"`
-	Surface string    `json:"surface,omitempty"`
-	After   string    `json:"after,omitempty"`
-	Limit   int       `json:"limit,omitempty"`
+	Query   QuerySpec `json:"query" required:"false"`
+	Surface string    `json:"surface,omitempty" enum:"auto,head,published" doc:"Defaults to auto: head for draft readers and published for ordinary readers. Head requires draft access."`
+	After   string    `json:"after,omitempty" doc:"Opaque cursor from next_cursor."`
+	Limit   int       `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"Maximum results; defaults to 50."`
 }
 type QueryResult struct {
 	Data       []*ent.Resource `json:"data"`

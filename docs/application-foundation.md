@@ -158,7 +158,7 @@ Each existing item may appear only once in a request. Targets must be items, so 
 
 Success returns HTTP 200 with `{"data":[{"action":"create","id":"NEW_ITEM_ID","version":1},...]}` in request order. Existing-item operations return the consumed version plus one, including deletes. Results omit content payloads. There is no response ETag or collection-level If-Match: each existing-item operation supplies its own numeric `version`.
 
-Operation failures return the usual problem status/code (for example 403, 404, 409, or 422) plus a zero-based `operation_index`; no partial results are returned. Invalid batch size and collection-level failures have no operation index. Unknown JSON fields and malformed bodies return 400. A rejected batch leaves no changes and can be corrected and resubmitted. Bulk requests do not deduplicate retries: a successful create submitted again creates another item, while repeating an existing-item mutation with its old version conflicts.
+Operation failures return the usual problem status/code (for example 403, 404, 409, or 422) plus a zero-based `operation_index`; no partial results are returned. Invalid batch size and collection-level failures have no operation index. Unknown JSON fields return 422 with their location in `errors`; malformed bodies return 400. A rejected batch leaves no changes and can be corrected and resubmitted. Bulk requests do not deduplicate retries: a successful create submitted again creates another item, while repeating an existing-item mutation with its old version conflicts.
 
 Run `go test ./internal/dms -run '^$' -bench BenchmarkItemUpdates -benchmem` to compare individual and bulk updates at 1, 10, and 100 items per workload. The benchmark uses indexed exact integers, automatic publication, retained revisions, and the actual SQLite schema; it reports items per second and allocations, excluding fixture setup.
 
@@ -201,7 +201,7 @@ Creation returns an edge ETag. PATCH and DELETE require the edge If-Match. PATCH
 
 ## Verification
 
-Tests cover foreign-key/integrity checks, exact defaults and filters, schema pairing, template adoption rollback, multi-value index rebuilds, taxonomy/reference validation, exclusive-scope copy/reset, reader/draft query visibility, counts/groups/pagination, view concurrency, typed attributes, symmetric duplicates, and concurrent cardinality. The OpenAPI contract documents all registered routes.
+Tests cover foreign-key/integrity checks, exact defaults and filters, schema pairing, template adoption rollback, multi-value index rebuilds, taxonomy/reference validation, exclusive-scope copy/reset, reader/draft query visibility, counts/groups/pagination, view concurrency, typed attributes, symmetric duplicates, and concurrent cardinality. The OpenAPI contract is generated from the HTTP handlers; tests fail when `api/openapi.json` is stale or a test response deviates from it.
 
 
 ## Indexed system metadata

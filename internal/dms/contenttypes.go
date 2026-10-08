@@ -13,11 +13,11 @@ import (
 )
 
 type ContentTypeInput struct {
-	Key       string                 `json:"key"`
-	Name      string                 `json:"name"`
-	FieldKeys []string               `json:"field_keys"`
-	Rules     []model.ValidationRule `json:"rules,omitempty"`
-	IsDefault bool                   `json:"is_default"`
+	Key       string                 `json:"key" required:"false" pattern:"^[a-z][a-z0-9_]{0,63}$" doc:"Required for creation, immutable. May be omitted for replacement."`
+	Name      string                 `json:"name" minLength:"1" maxLength:"255"`
+	FieldKeys []string               `json:"field_keys" maxItems:"200" uniqueItems:"true" doc:"Keys from the shared collection field catalog."`
+	Rules     []model.ValidationRule `json:"rules,omitempty" maxItems:"32"`
+	IsDefault bool                   `json:"is_default" required:"false" doc:"Selecting a default advances the former default type version."`
 }
 
 type SchemaContentType struct {

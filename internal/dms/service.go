@@ -77,13 +77,13 @@ func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, e
 }
 
 type CreateResource struct {
-	ContentTypeID     string         `json:"content_type_id,omitempty"`
-	Kind              string         `json:"kind"`
-	Name              string         `json:"name"`
-	Tags              []string       `json:"tags"`
-	Values            map[string]any `json:"values"`
-	PublishingEnabled bool           `json:"publishing_enabled"`
-	WebDAVEnabled     bool           `json:"webdav_enabled"`
+	ContentTypeID     string         `json:"content_type_id,omitempty" format:"uuid" doc:"Item content type in the collection. Omission selects the collection default."`
+	Kind              string         `json:"kind" enum:"list,library,folder,item" doc:"Workspaces are created at POST /v1/workspaces."`
+	Name              string         `json:"name" minLength:"1" maxLength:"255" doc:"Library folders and items are file names: unique among live siblings ignoring case, without / \\ or control characters."`
+	Tags              []string       `json:"tags" required:"false" maxItems:"50" uniqueItems:"true" doc:"Unique, nonempty, trimmed tags of at most 64 characters."`
+	Values            map[string]any `json:"values" required:"false" doc:"Item field values validated by the collection schema. Integers are exact; decimals may be numbers or canonical strings."`
+	PublishingEnabled bool           `json:"publishing_enabled" required:"false" doc:"Lists/libraries only. False publishes content changes immediately; true keeps a separate published revision."`
+	WebDAVEnabled     bool           `json:"webdav_enabled" required:"false" doc:"Libraries only. Serves the library's folders and files at /webdav/{id}/."`
 }
 
 func (s *Service) Create(ctx context.Context, subject, parentID string, in CreateResource) (out *ent.Resource, err error) {
@@ -252,13 +252,13 @@ func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
 }
 
 type UpdateResource struct {
-	Name              *string         `json:"name,omitempty"`
-	Tags              *[]string       `json:"tags,omitempty"`
-	Values            *map[string]any `json:"values,omitempty"`
-	PublishingEnabled *bool           `json:"publishing_enabled,omitempty"`
-	WebDAVEnabled     *bool           `json:"webdav_enabled,omitempty"`
+	Name              *string         `json:"name,omitempty" minLength:"1" maxLength:"255"`
+	Tags              *[]string       `json:"tags,omitempty" maxItems:"50" uniqueItems:"true" doc:"Replaces all tags."`
+	Values            *map[string]any `json:"values,omitempty" doc:"Replaces the whole custom-value object."`
+	PublishingEnabled *bool           `json:"publishing_enabled,omitempty" doc:"Lists/libraries only. Changing policy requires manage access; disabling publishes all current heads atomically."`
+	WebDAVEnabled     *bool           `json:"webdav_enabled,omitempty" doc:"Libraries only; changing it requires manage access."`
 	// ParentID moves a folder or item to another folder of the same collection.
-	ParentID *string `json:"parent_id,omitempty"`
+	ParentID *string `json:"parent_id,omitempty" format:"uuid" doc:"Moves a folder or item below another folder of the same list or library, or to its top level. Requires write access to the new parent. A move alone creates no content revision; inheriting resources take the new parent's permission scope."`
 }
 
 func (s *Service) Update(ctx context.Context, subject, id string, version int, in UpdateResource) (out *ent.Resource, err error) {
@@ -526,15 +526,15 @@ func (s *Service) fileNameKey(ctx context.Context, kind resource.Kind, container
 func nameKey(name string) string { return strings.ToLower(name) }
 
 type CreateField struct {
-	ContentTypeID string             `json:"content_type_id,omitempty"`
+	ContentTypeID string             `json:"content_type_id,omitempty" format:"uuid" doc:"Content type that receives the field. Omission selects the collection default."`
 	Options       model.FieldOptions `json:"options,omitempty"`
-	Key           string             `json:"key"`
-	Label         string             `json:"label"`
-	Type          string             `json:"type"`
-	Required      bool               `json:"required"`
-	Choices       []string           `json:"choices"`
-	Indexed       bool               `json:"indexed"`
-	Scale         int                `json:"scale"`
+	Key           string             `json:"key" pattern:"^[a-z][a-z0-9_]{0,63}$" doc:"Immutable field key."`
+	Label         string             `json:"label" minLength:"1" maxLength:"255"`
+	Type          string             `json:"type" enum:"text,note,email,url,date,datetime,choice,integer,decimal,number,boolean,lookup,term" doc:"Immutable field type."`
+	Required      bool               `json:"required" required:"false"`
+	Choices       []string           `json:"choices" required:"false" doc:"Allowed values of choice fields."`
+	Indexed       bool               `json:"indexed" required:"false" doc:"Opt-in typed query projection. Changes rebuild both surfaces atomically."`
+	Scale         int                `json:"scale" required:"false" minimum:"0" maximum:"9" doc:"Immutable decimal scale; zero for all other field types. Scaled units must fit signed 64 bits."`
 }
 
 func (s *Service) CreateField(ctx context.Context, subject, containerID string, in CreateField) (out *ent.FieldDefinition, err error) {
@@ -620,16 +620,16 @@ func (s *Service) Fields(ctx context.Context, subject, id string) ([]*ent.FieldD
 }
 
 type Permission struct {
-	Subject string `json:"subject"`
-	Action  string `json:"action"`
-	Effect  string `json:"effect"`
+	Subject string `json:"subject" minLength:"1" maxLength:"255" doc:"OIDC subject of the principal."`
+	Action  string `json:"action" enum:"read,read_draft,write,publish,manage"`
+	Effect  string `json:"effect" required:"false" enum:"allow" doc:"Only allow grants exist; denies are rejected."`
 }
 type Permissions struct {
-	CopyInherited   bool         `json:"copy_inherited,omitempty"`
-	ScopeID         string       `json:"scope_id,omitempty"`
-	EffectiveGrants []Permission `json:"effective_grants,omitempty"`
+	CopyInherited   bool         `json:"copy_inherited,omitempty" doc:"Break inheritance and copy the effective inherited grants. Requires inherit=false."`
+	ScopeID         string       `json:"scope_id,omitempty" readOnly:"true" doc:"Nearest exclusive scope that supplies permissions."`
+	EffectiveGrants []Permission `json:"effective_grants,omitempty" readOnly:"true" doc:"Grants that apply, from this resource or its nearest exclusive ancestor."`
 	Inherit         bool         `json:"inherit"`
-	Grants          []Permission `json:"grants"`
+	Grants          []Permission `json:"grants" required:"false" maxItems:"200" doc:"Local grants; empty while inheriting."`
 }
 
 func (s *Service) SetPermissions(ctx context.Context, subject, id string, version int, in Permissions) (out *ent.Resource, err error) {

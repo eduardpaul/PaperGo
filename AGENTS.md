@@ -9,3 +9,7 @@ PaperGo is being built from scratch. It has never been released and has no deplo
 - **No migrations.** The whole schema is one file, `migrations/20261007000100_schema.sql`. Edit it in place, keep `ent/schema` in sync (`go generate ./ent`), then run `atlas migrate hash --dir file://migrations`. Never add another migration file.
 - **No backfills, upgrade paths or upgrade tests.** No data needs to survive a schema change. Local databases are disposable: delete `data/` and run `atlas migrate apply --env local`.
 - **Docs describe the current app only.** Do not document past behaviour, conversions or "previously" notes.
+
+## The REST contract is generated
+
+`api/openapi.json` is generated from `internal/httpapi` (Huma). Describe operations there with `register(...)`, request and response Go types and their struct tags, then run `go generate ./internal/httpapi`. Never edit the JSON by hand. Handlers return the response models in `internal/httpapi/models.go`, never Ent entities.

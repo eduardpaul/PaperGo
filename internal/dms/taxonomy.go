@@ -29,9 +29,9 @@ func validateDescription(s string) error {
 }
 
 type TermSetInput struct {
-	Key         string `json:"key"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Key         string `json:"key" pattern:"^[a-z][a-z0-9_]{0,63}$"`
+	Name        string `json:"name" minLength:"1" maxLength:"255"`
+	Description string `json:"description" required:"false" maxLength:"4096"`
 }
 
 func (s *Service) CreateTermSet(ctx context.Context, subject, workspaceID string, in TermSetInput) (out *ent.TermSet, err error) {
@@ -101,11 +101,11 @@ func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, vers
 }
 
 type TermInput struct {
-	Name       string            `json:"name"`
-	ParentID   *string           `json:"parent_id,omitempty"`
-	Labels     map[string]string `json:"labels"`
-	Synonyms   []string          `json:"synonyms"`
-	Deprecated bool              `json:"deprecated"`
+	Name       string            `json:"name" minLength:"1" maxLength:"255"`
+	ParentID   *string           `json:"parent_id,omitempty" format:"uuid" doc:"Parent term in the same set; omit for a root term."`
+	Labels     map[string]string `json:"labels" required:"false" maxProperties:"30" doc:"Localized labels by language tag."`
+	Synonyms   []string          `json:"synonyms" required:"false" maxItems:"50"`
+	Deprecated bool              `json:"deprecated" required:"false"`
 }
 
 func normalizeTerm(in *TermInput) error {
