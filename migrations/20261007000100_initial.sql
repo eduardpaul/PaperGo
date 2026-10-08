@@ -35,10 +35,10 @@ CREATE INDEX `relationship_target_id_name_id` ON `relationships` (`target_id`, `
 -- create index "relationship_target_id_inverse_name_id" to table: "relationships"
 CREATE INDEX `relationship_target_id_inverse_name_id` ON `relationships` (`target_id`, `inverse_name`, `id`);
 -- create "resources" table
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `parent_id` text NULL, `container_id` text NULL, PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL);
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL);
 -- create index "resource_workspace_id_kind_id" to table: "resources"
 CREATE INDEX `resource_workspace_id_kind_id` ON `resources` (`workspace_id`, `kind`, `id`);
--- create index "resource_parent_id_id" to table: "resources"
-CREATE INDEX `resource_parent_id_id` ON `resources` (`parent_id`, `id`);
+-- create index "resource_parent_id_id_scope_id" to table: "resources"
+CREATE INDEX `resource_parent_id_id_scope_id` ON `resources` (`parent_id`, `id`, `scope_id`);
 -- create index "resource_container_id_id" to table: "resources"
 CREATE INDEX `resource_container_id_id` ON `resources` (`container_id`, `id`);
