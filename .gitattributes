@@ -1,0 +1,3 @@
+# Atlas checksums cover bytes, so migration files must retain LF on every host.
+migrations/*.sql text eol=lf
+migrations/atlas.sum text eol=lf
