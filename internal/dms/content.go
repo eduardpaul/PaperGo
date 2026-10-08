@@ -14,98 +14,112 @@ import (
 
 func (s *Service) Publish(ctx context.Context, subject, id string, version int) (out *ent.Publication, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		r, e := t.authorize(ctx, subject, id, "publish")
-		if e != nil {
-			return e
-		}
-		if r.Kind != resource.KindItem || r.ContainerID == nil || r.HeadRevisionID == nil {
-			return invalid("only items can be published")
-		}
-		if r.Version != version {
-			return ErrConflict
-		}
-		c, e := t.Client.Resource.Get(ctx, *r.ContainerID)
-		if e != nil {
-			return e
-		}
-		if !c.PublishingEnabled {
-			return invalid("publishing is automatic for this container")
-		}
-		rev, e := t.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
-		if e != nil {
-			return e
-		}
-		if c.Kind == resource.KindLibrary && rev.BlobID == nil {
-			return invalid("library items need a blob before explicit publishing")
-		}
-		out, e = t.publishRevision(ctx, subject, r, rev, true)
-		if e != nil {
-			return e
-		}
-		return t.audit(ctx, subject, "item.publish", r, map[string]any{"revision_id": rev.ID, "publication_id": out.ID})
+		var e error
+		out, e = t.publish(ctx, subject, id, version)
+		return e
 	})
 	return
 }
+
+// publish applies the transition inside the caller's write transaction.
+func (s *Service) publish(ctx context.Context, subject, id string, version int) (*ent.Publication, error) {
+	r, e := s.authorize(ctx, subject, id, "publish")
+	if e != nil {
+		return nil, e
+	}
+	if r.Kind != resource.KindItem || r.ContainerID == nil || r.HeadRevisionID == nil {
+		return nil, invalid("only items can be published")
+	}
+	if r.Version != version {
+		return nil, ErrConflict
+	}
+	c, e := s.Client.Resource.Get(ctx, *r.ContainerID)
+	if e != nil {
+		return nil, e
+	}
+	if !c.PublishingEnabled {
+		return nil, invalid("publishing is automatic for this container")
+	}
+	rev, e := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
+	if e != nil {
+		return nil, e
+	}
+	if c.Kind == resource.KindLibrary && rev.BlobID == nil {
+		return nil, invalid("library items need a blob before explicit publishing")
+	}
+	out, e := s.publishRevision(ctx, subject, r, rev, true)
+	if e != nil {
+		return nil, e
+	}
+	return out, s.audit(ctx, subject, "item.publish", r, map[string]any{"revision_id": rev.ID, "publication_id": out.ID})
+}
 func (s *Service) Unpublish(ctx context.Context, subject, id string, version int) (out *ent.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		r, e := t.authorize(ctx, subject, id, "publish")
-		if e != nil {
-			return e
-		}
-		if r.Kind != resource.KindItem || r.ContainerID == nil {
-			return invalid("only items can be unpublished")
-		}
-		if r.Version != version {
-			return ErrConflict
-		}
-		if r.PublishedRevisionID == nil {
-			return ErrConflict
-		}
-		c, e := t.Client.Resource.Get(ctx, *r.ContainerID)
-		if e != nil {
-			return e
-		}
-		if !c.PublishingEnabled {
-			return invalid("enable publishing before unpublishing items")
-		}
-		rev, e := t.Client.ItemRevision.Get(ctx, *r.PublishedRevisionID)
-		if e != nil {
-			return e
-		}
-		raw, e := json.Marshal(map[string]any{"revision_id": rev.ID})
-		if e != nil {
-			return e
-		}
-		if _, e = t.Client.Publication.Create().SetItemID(id).SetRevisionID(rev.ID).SetVersion(version).SetAction(publication.ActionUnpublish).SetPublishedBy(subject).SetSnapshot(raw).Save(ctx); e != nil {
-			return e
-		}
-		ids, e := t.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(id), itemsurface.SurfaceEQ(itemsurface.SurfacePublished)).IDs(ctx)
-		if e != nil {
-			return e
-		}
-		if _, e = t.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDIn(ids...)).Exec(ctx); e != nil {
-			return e
-		}
-		if _, e = t.Client.ItemSurface.Delete().Where(itemsurface.IDIn(ids...)).Exec(ctx); e != nil {
-			return e
-		}
-		n, e := t.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).ClearPublishedRevisionID().AddVersion(1).Save(ctx)
-		if e != nil {
-			return e
-		}
-		if n != 1 {
-			return ErrConflict
-		}
-		out, e = t.Client.Resource.Get(ctx, id)
-		if e != nil {
-			return e
-		}
-		if e = t.overlayHead(ctx, out); e != nil {
-			return e
-		}
-		return t.audit(ctx, subject, "item.unpublish", out, map[string]any{"revision_id": rev.ID})
+		var e error
+		out, e = t.unpublish(ctx, subject, id, version)
+		return e
 	})
 	return
+}
+
+// unpublish applies the transition inside the caller's write transaction.
+func (s *Service) unpublish(ctx context.Context, subject, id string, version int) (*ent.Resource, error) {
+	r, e := s.authorize(ctx, subject, id, "publish")
+	if e != nil {
+		return nil, e
+	}
+	if r.Kind != resource.KindItem || r.ContainerID == nil {
+		return nil, invalid("only items can be unpublished")
+	}
+	if r.Version != version {
+		return nil, ErrConflict
+	}
+	if r.PublishedRevisionID == nil {
+		return nil, ErrConflict
+	}
+	c, e := s.Client.Resource.Get(ctx, *r.ContainerID)
+	if e != nil {
+		return nil, e
+	}
+	if !c.PublishingEnabled {
+		return nil, invalid("enable publishing before unpublishing items")
+	}
+	rev, e := s.Client.ItemRevision.Get(ctx, *r.PublishedRevisionID)
+	if e != nil {
+		return nil, e
+	}
+	raw, e := json.Marshal(map[string]any{"revision_id": rev.ID})
+	if e != nil {
+		return nil, e
+	}
+	if _, e = s.Client.Publication.Create().SetItemID(id).SetRevisionID(rev.ID).SetVersion(version).SetAction(publication.ActionUnpublish).SetPublishedBy(subject).SetSnapshot(raw).Save(ctx); e != nil {
+		return nil, e
+	}
+	ids, e := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(id), itemsurface.SurfaceEQ(itemsurface.SurfacePublished)).IDs(ctx)
+	if e != nil {
+		return nil, e
+	}
+	if _, e = s.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDIn(ids...)).Exec(ctx); e != nil {
+		return nil, e
+	}
+	if _, e = s.Client.ItemSurface.Delete().Where(itemsurface.IDIn(ids...)).Exec(ctx); e != nil {
+		return nil, e
+	}
+	n, e := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).ClearPublishedRevisionID().AddVersion(1).Save(ctx)
+	if e != nil {
+		return nil, e
+	}
+	if n != 1 {
+		return nil, ErrConflict
+	}
+	out, e := s.Client.Resource.Get(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	if e = s.overlayHead(ctx, out); e != nil {
+		return nil, e
+	}
+	return out, s.audit(ctx, subject, "item.unpublish", out, map[string]any{"revision_id": rev.ID})
 }
 func (s *Service) Publications(ctx context.Context, subject, id string, after, limit int) ([]*ent.Publication, error) {
 	if !s.transaction {
