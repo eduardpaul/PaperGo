@@ -35,18 +35,23 @@ func permissionSQL(idColumn, subject, action string) (string, []any) {
 		marks[i] = "?"
 		args = append(args, a)
 	}
-	query := `EXISTS (WITH RECURSIVE acl(id,parent_id,inherit_permissions,depth) AS (
- SELECT root.id,root.parent_id,root.inherit_permissions,0 FROM resources root WHERE root.id=` + idColumn + `
- UNION ALL SELECT p.id,p.parent_id,p.inherit_permissions,a.depth+1
- FROM resources p JOIN acl a ON p.id=a.parent_id WHERE a.inherit_permissions AND a.depth<32
- ) SELECT 1 FROM acl a JOIN grants g ON g.resource_id=a.id
- WHERE NOT a.inherit_permissions AND g.subject=? AND g.effect='allow' AND g.action IN (` + strings.Join(marks, ",") + `))`
+	// scope_id, maintained by triggers, is the nearest exclusive ancestor-or-self.
+	query := `EXISTS (SELECT 1 FROM resources acl JOIN grants g ON g.resource_id=acl.scope_id
+ WHERE acl.id=` + idColumn + ` AND g.subject=? AND g.effect='allow' AND g.action IN (` + strings.Join(marks, ",") + `))`
 	return query, args
 }
+// permissionPredicate filters resources rows by their own scope_id, which the
+// browse indexes cover, so unreadable rows are skipped without a table lookup.
 func permissionPredicate(subject, action string) func(*entsql.Selector) {
 	return func(sel *entsql.Selector) {
-		query, args := permissionSQL(sel.C(resource.FieldID), subject, action)
-		sel.Where(entsql.ExprP(query, args...))
+		actions := impliedActions(action)
+		args := []any{subject}
+		marks := make([]string, len(actions))
+		for i, a := range actions {
+			marks[i] = "?"
+			args = append(args, a)
+		}
+		sel.Where(entsql.ExprP(sel.C(resource.FieldScopeID)+` IN (SELECT resource_id FROM grants WHERE subject=? AND effect='allow' AND action IN (`+strings.Join(marks, ",")+`))`, args...))
 	}
 }
 func (s *Service) allowedMany(ctx context.Context, subject, action string, roots []*ent.Resource) (map[string]bool, error) {

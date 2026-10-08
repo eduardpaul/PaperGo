@@ -53,11 +53,19 @@ func TestApplicationUpgradePreservesIndexesHistoryAndAugmentedACLs(t *testing.T)
 		t.Fatal(e)
 	}
 	defer tx.Rollback()
-	if _, e = tx.Exec(string(files[len(files)-1].Bytes())); e != nil {
-		t.Fatal(e)
+	for _, f := range files {
+		if f.Version() <= "20261007000400" {
+			continue
+		}
+		if _, e = tx.Exec(string(f.Bytes())); e != nil {
+			t.Fatal(f.Name(), e)
+		}
 	}
 	if e = tx.Commit(); e != nil {
 		t.Fatal(e)
+	}
+	if stale := staleScopes(t, db.SQL); len(stale) > 0 {
+		t.Fatal("upgrade left scope_id unset or stale", stale)
 	}
 	s := dms.NewService(db.Client)
 	for _, actor := range []string{"reader", "carol", "alice"} {

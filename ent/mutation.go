@@ -10195,6 +10195,7 @@ type ResourceMutation struct {
 	addnext_revision_number   *int
 	publishing_enabled        *bool
 	updated_at                *time.Time
+	scope_id                  *string
 	clearedFields             map[string]struct{}
 	children                  map[string]struct{}
 	removedchildren           map[string]struct{}
@@ -11041,6 +11042,55 @@ func (m *ResourceMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
+// SetScopeID sets the "scope_id" field.
+func (m *ResourceMutation) SetScopeID(s string) {
+	m.scope_id = &s
+}
+
+// ScopeID returns the value of the "scope_id" field in the mutation.
+func (m *ResourceMutation) ScopeID() (r string, exists bool) {
+	v := m.scope_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScopeID returns the old "scope_id" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldScopeID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScopeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScopeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScopeID: %w", err)
+	}
+	return oldValue.ScopeID, nil
+}
+
+// ClearScopeID clears the value of the "scope_id" field.
+func (m *ResourceMutation) ClearScopeID() {
+	m.scope_id = nil
+	m.clearedFields[resource.FieldScopeID] = struct{}{}
+}
+
+// ScopeIDCleared returns if the "scope_id" field was cleared in this mutation.
+func (m *ResourceMutation) ScopeIDCleared() bool {
+	_, ok := m.clearedFields[resource.FieldScopeID]
+	return ok
+}
+
+// ResetScopeID resets all changes to the "scope_id" field.
+func (m *ResourceMutation) ResetScopeID() {
+	m.scope_id = nil
+	delete(m.clearedFields, resource.FieldScopeID)
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by ids.
 func (m *ResourceMutation) AddChildIDs(ids ...string) {
 	if m.children == nil {
@@ -11750,7 +11800,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -11799,6 +11849,9 @@ func (m *ResourceMutation) Fields() []string {
 	if m.updated_at != nil {
 		fields = append(fields, resource.FieldUpdatedAt)
 	}
+	if m.scope_id != nil {
+		fields = append(fields, resource.FieldScopeID)
+	}
 	return fields
 }
 
@@ -11839,6 +11892,8 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.PublishingEnabled()
 	case resource.FieldUpdatedAt:
 		return m.UpdatedAt()
+	case resource.FieldScopeID:
+		return m.ScopeID()
 	}
 	return nil, false
 }
@@ -11880,6 +11935,8 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldPublishingEnabled(ctx)
 	case resource.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
+	case resource.FieldScopeID:
+		return m.OldScopeID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Resource field %s", name)
 }
@@ -12001,6 +12058,13 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUpdatedAt(v)
 		return nil
+	case resource.FieldScopeID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScopeID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Resource field %s", name)
 }
@@ -12073,6 +12137,9 @@ func (m *ResourceMutation) ClearedFields() []string {
 	if m.FieldCleared(resource.FieldSchemaHeadID) {
 		fields = append(fields, resource.FieldSchemaHeadID)
 	}
+	if m.FieldCleared(resource.FieldScopeID) {
+		fields = append(fields, resource.FieldScopeID)
+	}
 	return fields
 }
 
@@ -12101,6 +12168,9 @@ func (m *ResourceMutation) ClearField(name string) error {
 		return nil
 	case resource.FieldSchemaHeadID:
 		m.ClearSchemaHeadID()
+		return nil
+	case resource.FieldScopeID:
+		m.ClearScopeID()
 		return nil
 	}
 	return fmt.Errorf("unknown Resource nullable field %s", name)
@@ -12157,6 +12227,9 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldUpdatedAt:
 		m.ResetUpdatedAt()
+		return nil
+	case resource.FieldScopeID:
+		m.ResetScopeID()
 		return nil
 	}
 	return fmt.Errorf("unknown Resource field %s", name)

@@ -728,6 +728,10 @@ func init() {
 	resource.DefaultUpdatedAt = resourceDescUpdatedAt.Default.(func() time.Time)
 	// resource.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	resource.UpdateDefaultUpdatedAt = resourceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// resourceDescScopeID is the schema descriptor for scope_id field.
+	resourceDescScopeID := resourceFields[15].Descriptor()
+	// resource.ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
+	resource.ScopeIDValidator = resourceDescScopeID.Validators[0].(func(string) error)
 	// resourceDescID is the schema descriptor for id field.
 	resourceDescID := resourceMixinFields0[0].Descriptor()
 	// resource.DefaultID holds the default value on creation for the id field.
