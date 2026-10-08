@@ -15,12 +15,13 @@ import (
 )
 
 type FilterExpr struct {
-	And   []FilterExpr    `json:"and,omitempty"`
-	Or    []FilterExpr    `json:"or,omitempty"`
-	Not   *FilterExpr     `json:"not,omitempty"`
-	Field string          `json:"field,omitempty"`
-	Op    string          `json:"op,omitempty"`
-	Value json.RawMessage `json:"value,omitempty"`
+	And      []FilterExpr    `json:"and,omitempty"`
+	Or       []FilterExpr    `json:"or,omitempty"`
+	Not      *FilterExpr     `json:"not,omitempty"`
+	Field    string          `json:"field,omitempty"`
+	Op       string          `json:"op,omitempty"`
+	Value    json.RawMessage `json:"value,omitempty"`
+	ValueRef string          `json:"value_ref,omitempty"`
 }
 type SortSpec struct {
 	Field     string `json:"field,omitempty"`
@@ -300,6 +301,16 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 	if c.Kind != "list" && c.Kind != "library" {
 		return compiledQuery{}, invalid("queries require a collection")
 	}
+	defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID)).All(ctx)
+	if e != nil {
+		return compiledQuery{}, e
+	}
+	return s.compileCollectionQuery(ctx, subject, c, defs, in, grouped)
+}
+
+// The caller has authorized c in the current snapshot. Smart folders load the
+// collection catalog in batches and reuse this same typed SQL compiler.
+func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c *ent.Resource, defs []*ent.FieldDefinition, in QueryRequest, grouped bool) (compiledQuery, error) {
 	if in.Surface == "" {
 		in.Surface = "auto"
 	}
@@ -309,10 +320,11 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 	if len(in.Query.Search) > 256 || len(in.Query.Tag) > 64 {
 		return compiledQuery{}, invalid("search or tag exceeds size limit")
 	}
-	defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID)).All(ctx)
+	resolved, e := resolveFilter(in.Query.Filter, subject, time.Now().UTC(), definitionMap(defs))
 	if e != nil {
 		return compiledQuery{}, e
 	}
+	in.Query.Filter = resolved
 	compiler := queryCompiler{defs: map[string]*ent.FieldDefinition{}}
 	for _, d := range defs {
 		compiler.defs[d.Key] = d
@@ -475,6 +487,12 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 		if e != nil {
 			return QueryResult{}, e
 		}
+		return t.queryCompiled(ctx, subject, in, q)
+	})
+}
+
+func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery) (QueryResult, error) {
+	return read(ctx, s, func(t *Service) (QueryResult, error) {
 		where, afterArgs, e := keyset(q, in.After, false)
 		if e != nil {
 			return QueryResult{}, e
@@ -549,6 +567,12 @@ func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, 
 		if e != nil {
 			return Page[QueryGroup]{}, e
 		}
+		return t.queryGroupsCompiled(ctx, in, q)
+	})
+}
+
+func (s *Service) queryGroupsCompiled(ctx context.Context, in QueryRequest, q compiledQuery) (Page[QueryGroup], error) {
+	return read(ctx, s, func(t *Service) (Page[QueryGroup], error) {
 		where, afterArgs, e := keyset(q, in.After, true)
 		if e != nil {
 			return Page[QueryGroup]{}, e

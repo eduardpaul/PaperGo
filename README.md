@@ -46,6 +46,7 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 | Reusable application schemas | Shared field catalogs, multiple collection content types, cross-field rules, active-field removal and templates with version-checked adoption; immutable effective schemas. |
 | Business keys | Indexed scalar uniqueness across head and published values, enforced transactionally for single and bulk writes. |
 | Saved views and controlled taxonomy | Bounded typed queries, sorting, pagination, authorized totals/grouping; stable hierarchical terms with localized labels, synonyms, and deprecation. |
+| Smart folders | Private or shared live queries across collections, descendant-term matching, metadata navigation, UTC-relative filters and physical folder inclusion. See [smart folders](docs/smart-folders.md). |
 
 ## API
 

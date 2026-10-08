@@ -606,6 +606,7 @@ var (
 		{Name: "kind", Type: field.TypeEnum, Enums: []string{"workspace", "list", "library", "folder", "item"}},
 		{Name: "name", Type: field.TypeString, Size: 255},
 		{Name: "tags", Type: field.TypeJSON},
+		{Name: "template_keys", Type: field.TypeJSON},
 		{Name: "values", Type: field.TypeJSON},
 		{Name: "inherit_permissions", Type: field.TypeBool, Default: true},
 		{Name: "version", Type: field.TypeInt, Default: 1},
@@ -632,31 +633,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[19]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[20]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_head_revision",
+				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[21]},
-				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_published_revision",
+				Symbol:     "resources_item_revisions_head_revision",
 				Columns:    []*schema.Column{ResourcesColumns[22]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_schema_revisions_schema_head",
+				Symbol:     "resources_item_revisions_published_revision",
 				Columns:    []*schema.Column{ResourcesColumns[23]},
+				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "resources_schema_revisions_schema_head",
+				Columns:    []*schema.Column{ResourcesColumns[24]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -668,29 +669,34 @@ var (
 				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[4], ResourcesColumns[0]},
 			},
 			{
+				Name:    "resource_kind_id_workspace_id_scope_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[4], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[17]},
+			},
+			{
 				Name:    "resource_workspace_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[16]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[17]},
 			},
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[19], ResourcesColumns[0], ResourcesColumns[16]},
+				Columns: []*schema.Column{ResourcesColumns[20], ResourcesColumns[0], ResourcesColumns[17]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[20], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[21], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_content_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[20], ResourcesColumns[3], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[21], ResourcesColumns[3], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[19], ResourcesColumns[17]},
+				Columns: []*schema.Column{ResourcesColumns[20], ResourcesColumns[18]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
 				},
@@ -762,6 +768,67 @@ var (
 				Name:    "schematemplate_workspace_id_key",
 				Unique:  true,
 				Columns: []*schema.Column{SchemaTemplatesColumns[8], SchemaTemplatesColumns[2]},
+			},
+		},
+	}
+	// SmartFoldersColumns holds the columns for the "smart_folders" table.
+	SmartFoldersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "owner_id", Type: field.TypeString, Nullable: true, Size: 255},
+		{Name: "name", Type: field.TypeString, Size: 255},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "definition", Type: field.TypeJSON},
+		{Name: "created_by", Type: field.TypeString},
+		{Name: "updated_by", Type: field.TypeString},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "workspace_id", Type: field.TypeString, Nullable: true, Size: 36},
+	}
+	// SmartFoldersTable holds the schema information for the "smart_folders" table.
+	SmartFoldersTable = &schema.Table{
+		Name:       "smart_folders",
+		Columns:    SmartFoldersColumns,
+		PrimaryKey: []*schema.Column{SmartFoldersColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "smart_folders_resources_workspace",
+				Columns:    []*schema.Column{SmartFoldersColumns[10]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "smartfolder_owner_id_id",
+				Unique:  false,
+				Columns: []*schema.Column{SmartFoldersColumns[2], SmartFoldersColumns[0]},
+			},
+			{
+				Name:    "smartfolder_workspace_id_id",
+				Unique:  false,
+				Columns: []*schema.Column{SmartFoldersColumns[10], SmartFoldersColumns[0]},
+			},
+			{
+				Name:    "smartfolder_workspace_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{SmartFoldersColumns[10], SmartFoldersColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "owner_id IS NULL",
+				},
+			},
+			{
+				Name:    "smartfolder_owner_id_workspace_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{SmartFoldersColumns[2], SmartFoldersColumns[10], SmartFoldersColumns[3]},
+			},
+			{
+				Name:    "smartfolder_owner_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{SmartFoldersColumns[2], SmartFoldersColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "workspace_id IS NULL",
+				},
 			},
 		},
 	}
@@ -883,6 +950,7 @@ var (
 		ResourcesTable,
 		SchemaRevisionsTable,
 		SchemaTemplatesTable,
+		SmartFoldersTable,
 		TermsTable,
 		TermSetsTable,
 		WebdavCredentialsTable,
@@ -916,6 +984,7 @@ func init() {
 	ResourcesTable.ForeignKeys[4].RefTable = SchemaRevisionsTable
 	SchemaRevisionsTable.ForeignKeys[0].RefTable = ResourcesTable
 	SchemaTemplatesTable.ForeignKeys[0].RefTable = ResourcesTable
+	SmartFoldersTable.ForeignKeys[0].RefTable = ResourcesTable
 	TermsTable.ForeignKeys[0].RefTable = TermsTable
 	TermsTable.ForeignKeys[1].RefTable = TermSetsTable
 	TermSetsTable.ForeignKeys[0].RefTable = ResourcesTable

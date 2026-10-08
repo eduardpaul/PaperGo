@@ -107,6 +107,12 @@ func (_c *ResourceCreate) SetTags(v []string) *ResourceCreate {
 	return _c
 }
 
+// SetTemplateKeys sets the "template_keys" field.
+func (_c *ResourceCreate) SetTemplateKeys(v []string) *ResourceCreate {
+	_c.mutation.SetTemplateKeys(v)
+	return _c
+}
+
 // SetValues sets the "values" field.
 func (_c *ResourceCreate) SetValues(v map[string]interface{}) *ResourceCreate {
 	_c.mutation.SetValues(v)
@@ -541,6 +547,10 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultTags
 		_c.mutation.SetTags(v)
 	}
+	if _, ok := _c.mutation.TemplateKeys(); !ok {
+		v := resource.DefaultTemplateKeys
+		_c.mutation.SetTemplateKeys(v)
+	}
 	if _, ok := _c.mutation.Values(); !ok {
 		v := resource.DefaultValues
 		_c.mutation.SetValues(v)
@@ -629,6 +639,9 @@ func (_c *ResourceCreate) check() error {
 	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		return &ValidationError{Name: "tags", err: errors.New(`ent: missing required field "Resource.tags"`)}
+	}
+	if _, ok := _c.mutation.TemplateKeys(); !ok {
+		return &ValidationError{Name: "template_keys", err: errors.New(`ent: missing required field "Resource.template_keys"`)}
 	}
 	if _, ok := _c.mutation.Values(); !ok {
 		return &ValidationError{Name: "values", err: errors.New(`ent: missing required field "Resource.values"`)}
@@ -740,6 +753,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Tags(); ok {
 		_spec.SetField(resource.FieldTags, field.TypeJSON, value)
 		_node.Tags = value
+	}
+	if value, ok := _c.mutation.TemplateKeys(); ok {
+		_spec.SetField(resource.FieldTemplateKeys, field.TypeJSON, value)
+		_node.TemplateKeys = value
 	}
 	if value, ok := _c.mutation.Values(); ok {
 		_spec.SetField(resource.FieldValues, field.TypeJSON, value)

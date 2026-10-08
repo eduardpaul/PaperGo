@@ -54,6 +54,9 @@ type SchemaRevision func(*sql.Selector)
 // SchemaTemplate is the predicate function for schematemplate builders.
 type SchemaTemplate func(*sql.Selector)
 
+// SmartFolder is the predicate function for smartfolder builders.
+type SmartFolder func(*sql.Selector)
+
 // Term is the predicate function for term builders.
 type Term func(*sql.Selector)
 

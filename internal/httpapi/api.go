@@ -39,6 +39,7 @@ func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(
 func (a *API) Handler() http.Handler {
 	api := http.NewServeMux()
 	a.registerFoundation(api)
+	a.registerSmartFolders(api)
 	api.HandleFunc("GET /v1/workspaces", a.browse)
 	api.HandleFunc("POST /v1/workspaces", a.workspace)
 	api.HandleFunc("GET /v1/resources", a.browse)

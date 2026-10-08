@@ -31,6 +31,8 @@ const (
 	FieldName = "name"
 	// FieldTags holds the string denoting the tags field in the database.
 	FieldTags = "tags"
+	// FieldTemplateKeys holds the string denoting the template_keys field in the database.
+	FieldTemplateKeys = "template_keys"
 	// FieldValues holds the string denoting the values field in the database.
 	FieldValues = "values"
 	// FieldInheritPermissions holds the string denoting the inherit_permissions field in the database.
@@ -199,6 +201,7 @@ var Columns = []string{
 	FieldKind,
 	FieldName,
 	FieldTags,
+	FieldTemplateKeys,
 	FieldValues,
 	FieldInheritPermissions,
 	FieldVersion,
@@ -241,6 +244,8 @@ var (
 	NameValidator func(string) error
 	// DefaultTags holds the default value on creation for the "tags" field.
 	DefaultTags []string
+	// DefaultTemplateKeys holds the default value on creation for the "template_keys" field.
+	DefaultTemplateKeys []string
 	// DefaultValues holds the default value on creation for the "values" field.
 	DefaultValues map[string]interface{}
 	// DefaultInheritPermissions holds the default value on creation for the "inherit_permissions" field.

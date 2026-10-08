@@ -27,6 +27,7 @@ import (
 	"papergo/ent/resource"
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
+	"papergo/ent/smartfolder"
 	"papergo/ent/term"
 	"papergo/ent/termset"
 	"papergo/ent/webdavcredential"
@@ -76,6 +77,8 @@ type Client struct {
 	SchemaRevision *SchemaRevisionClient
 	// SchemaTemplate is the client for interacting with the SchemaTemplate builders.
 	SchemaTemplate *SchemaTemplateClient
+	// SmartFolder is the client for interacting with the SmartFolder builders.
+	SmartFolder *SmartFolderClient
 	// Term is the client for interacting with the Term builders.
 	Term *TermClient
 	// TermSet is the client for interacting with the TermSet builders.
@@ -109,6 +112,7 @@ func (c *Client) init() {
 	c.Resource = NewResourceClient(c.config)
 	c.SchemaRevision = NewSchemaRevisionClient(c.config)
 	c.SchemaTemplate = NewSchemaTemplateClient(c.config)
+	c.SmartFolder = NewSmartFolderClient(c.config)
 	c.Term = NewTermClient(c.config)
 	c.TermSet = NewTermSetClient(c.config)
 	c.WebDAVCredential = NewWebDAVCredentialClient(c.config)
@@ -220,6 +224,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Resource:         NewResourceClient(cfg),
 		SchemaRevision:   NewSchemaRevisionClient(cfg),
 		SchemaTemplate:   NewSchemaTemplateClient(cfg),
+		SmartFolder:      NewSmartFolderClient(cfg),
 		Term:             NewTermClient(cfg),
 		TermSet:          NewTermSetClient(cfg),
 		WebDAVCredential: NewWebDAVCredentialClient(cfg),
@@ -258,6 +263,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Resource:         NewResourceClient(cfg),
 		SchemaRevision:   NewSchemaRevisionClient(cfg),
 		SchemaTemplate:   NewSchemaTemplateClient(cfg),
+		SmartFolder:      NewSmartFolderClient(cfg),
 		Term:             NewTermClient(cfg),
 		TermSet:          NewTermSetClient(cfg),
 		WebDAVCredential: NewWebDAVCredentialClient(cfg),
@@ -293,7 +299,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.FieldDefinition,
 		c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface, c.ListView,
 		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.Term, c.TermSet, c.WebDAVCredential,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermSet,
+		c.WebDAVCredential,
 	} {
 		n.Use(hooks...)
 	}
@@ -306,7 +313,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.FieldDefinition,
 		c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface, c.ListView,
 		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.Term, c.TermSet, c.WebDAVCredential,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermSet,
+		c.WebDAVCredential,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -347,6 +355,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SchemaRevision.mutate(ctx, m)
 	case *SchemaTemplateMutation:
 		return c.SchemaTemplate.mutate(ctx, m)
+	case *SmartFolderMutation:
+		return c.SmartFolder.mutate(ctx, m)
 	case *TermMutation:
 		return c.Term.mutate(ctx, m)
 	case *TermSetMutation:
@@ -3094,6 +3104,155 @@ func (c *SchemaTemplateClient) mutate(ctx context.Context, m *SchemaTemplateMuta
 	}
 }
 
+// SmartFolderClient is a client for the SmartFolder schema.
+type SmartFolderClient struct {
+	config
+}
+
+// NewSmartFolderClient returns a client for the SmartFolder from the given config.
+func NewSmartFolderClient(c config) *SmartFolderClient {
+	return &SmartFolderClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `smartfolder.Hooks(f(g(h())))`.
+func (c *SmartFolderClient) Use(hooks ...Hook) {
+	c.hooks.SmartFolder = append(c.hooks.SmartFolder, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `smartfolder.Intercept(f(g(h())))`.
+func (c *SmartFolderClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SmartFolder = append(c.inters.SmartFolder, interceptors...)
+}
+
+// Create returns a builder for creating a SmartFolder entity.
+func (c *SmartFolderClient) Create() *SmartFolderCreate {
+	mutation := newSmartFolderMutation(c.config, OpCreate)
+	return &SmartFolderCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SmartFolder entities.
+func (c *SmartFolderClient) CreateBulk(builders ...*SmartFolderCreate) *SmartFolderCreateBulk {
+	return &SmartFolderCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SmartFolderClient) MapCreateBulk(slice any, setFunc func(*SmartFolderCreate, int)) *SmartFolderCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SmartFolderCreateBulk{err: fmt.Errorf("calling to SmartFolderClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SmartFolderCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SmartFolderCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SmartFolder.
+func (c *SmartFolderClient) Update() *SmartFolderUpdate {
+	mutation := newSmartFolderMutation(c.config, OpUpdate)
+	return &SmartFolderUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SmartFolderClient) UpdateOne(_m *SmartFolder) *SmartFolderUpdateOne {
+	mutation := newSmartFolderMutation(c.config, OpUpdateOne, withSmartFolder(_m))
+	return &SmartFolderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SmartFolderClient) UpdateOneID(id string) *SmartFolderUpdateOne {
+	mutation := newSmartFolderMutation(c.config, OpUpdateOne, withSmartFolderID(id))
+	return &SmartFolderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SmartFolder.
+func (c *SmartFolderClient) Delete() *SmartFolderDelete {
+	mutation := newSmartFolderMutation(c.config, OpDelete)
+	return &SmartFolderDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SmartFolderClient) DeleteOne(_m *SmartFolder) *SmartFolderDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SmartFolderClient) DeleteOneID(id string) *SmartFolderDeleteOne {
+	builder := c.Delete().Where(smartfolder.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SmartFolderDeleteOne{builder}
+}
+
+// Query returns a query builder for SmartFolder.
+func (c *SmartFolderClient) Query() *SmartFolderQuery {
+	return &SmartFolderQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSmartFolder},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SmartFolder entity by its id.
+func (c *SmartFolderClient) Get(ctx context.Context, id string) (*SmartFolder, error) {
+	return c.Query().Where(smartfolder.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SmartFolderClient) GetX(ctx context.Context, id string) *SmartFolder {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryWorkspace queries the workspace edge of a SmartFolder.
+func (c *SmartFolderClient) QueryWorkspace(_m *SmartFolder) *ResourceQuery {
+	query := (&ResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(smartfolder.Table, smartfolder.FieldID, id),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, smartfolder.WorkspaceTable, smartfolder.WorkspaceColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SmartFolderClient) Hooks() []Hook {
+	return c.hooks.SmartFolder
+}
+
+// Interceptors returns the client interceptors.
+func (c *SmartFolderClient) Interceptors() []Interceptor {
+	return c.inters.SmartFolder
+}
+
+func (c *SmartFolderClient) mutate(ctx context.Context, m *SmartFolderMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SmartFolderCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SmartFolderUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SmartFolderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SmartFolderDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SmartFolder mutation op: %q", m.Op())
+	}
+}
+
 // TermClient is a client for the Term schema.
 type TermClient struct {
 	config
@@ -3578,14 +3737,14 @@ type (
 	hooks struct {
 		AuditEvent, Blob, BusinessKey, ContentType, FieldDefinition, FieldValue, Grant,
 		ItemRevision, ItemSurface, ListView, Publication, Relationship,
-		RelationshipType, Resource, SchemaRevision, SchemaTemplate, Term, TermSet,
-		WebDAVCredential []ent.Hook
+		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
+		TermSet, WebDAVCredential []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BusinessKey, ContentType, FieldDefinition, FieldValue, Grant,
 		ItemRevision, ItemSurface, ListView, Publication, Relationship,
-		RelationshipType, Resource, SchemaRevision, SchemaTemplate, Term, TermSet,
-		WebDAVCredential []ent.Interceptor
+		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
+		TermSet, WebDAVCredential []ent.Interceptor
 	}
 )
 

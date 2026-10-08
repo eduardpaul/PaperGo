@@ -256,6 +256,14 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e = t.rebuildBusinessKeys(ctx, c.ID); e != nil {
 			return e
 		}
+		if !slices.Contains(c.TemplateKeys, tpl.Key) {
+			if len(c.TemplateKeys) >= 100 {
+				return invalid("at most 100 adopted template keys per collection")
+			}
+			if e = t.Client.Resource.UpdateOneID(c.ID).SetTemplateKeys(append(slices.Clone(c.TemplateKeys), tpl.Key)).Exec(ctx); e != nil {
+				return e
+			}
+		}
 		out, e = t.Client.Resource.Get(ctx, c.ID)
 		if e != nil {
 			return e

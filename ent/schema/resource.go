@@ -23,6 +23,8 @@ func (Resource) Fields() []ent.Field {
 		field.Enum("kind").Values("workspace", "list", "library", "folder", "item").Immutable(),
 		field.String("name").NotEmpty().MaxLen(255),
 		field.JSON("tags", []string{}).Default([]string{}),
+		// Keys of schema templates explicitly adopted into a collection.
+		field.JSON("template_keys", []string{}).Default([]string{}),
 		field.JSON("values", map[string]any{}).Default(map[string]any{}),
 		field.Bool("inherit_permissions").Default(true),
 		field.Int("version").Default(1).Positive(),
@@ -67,6 +69,7 @@ func (Resource) Edges() []ent.Edge {
 func (Resource) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("workspace_id", "kind", "id"),
+		index.Fields("kind", "id", "workspace_id", "scope_id"),
 		// scope_id makes these covering for permission checks, so rows a subject
 		// cannot read are rejected without loading them.
 		index.Fields("workspace_id", "id", "scope_id"),

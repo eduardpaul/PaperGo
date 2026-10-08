@@ -37,6 +37,8 @@ func entityETag(w http.ResponseWriter, v any) {
 		etag(w, x.Version)
 	case *ent.ContentType:
 		etag(w, x.Version)
+	case *ent.SmartFolder:
+		etag(w, x.Version)
 	case *ent.TermSet:
 		etag(w, x.Version)
 	case *ent.Term:

@@ -10,7 +10,7 @@ CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT 
 CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT REFERENCES item_revisions(id), PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `name` text NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT NOT NULL REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind='item')=(content_type_id IS NOT NULL)), FOREIGN KEY(container_id,content_type_id) REFERENCES content_types(container_id,id));
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind='item')=(content_type_id IS NOT NULL)), FOREIGN KEY(container_id,content_type_id) REFERENCES content_types(container_id,id));
 CREATE TABLE resource_tags (
   resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
   tag TEXT NOT NULL,
@@ -89,6 +89,14 @@ CREATE TABLE webdav_credentials (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,subject TEXT NOT NULL,label TEXT NOT NULL,
  secret_hash TEXT NOT NULL CHECK(length(secret_hash)=64),expires_at DATETIME
 );
+CREATE TABLE smart_folders (
+ id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
+ workspace_id TEXT REFERENCES resources(id), owner_id TEXT,
+ name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+ definition JSON NOT NULL CHECK(json_valid(definition) AND json_type(definition)='object'),
+ created_by TEXT NOT NULL, updated_by TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
+ CHECK(workspace_id IS NOT NULL OR owner_id IS NOT NULL), CHECK(owner_id IS NULL OR length(owner_id)>0)
+);
 CREATE TABLE relationship_types (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,workspace_id TEXT NOT NULL REFERENCES resources(id),
  key TEXT NOT NULL,label TEXT NOT NULL,inverse_label TEXT NOT NULL DEFAULT '',directed BOOLEAN NOT NULL DEFAULT 1,
@@ -115,6 +123,12 @@ CREATE INDEX `grant_subject_resource_id` ON `grants` (`subject`, `resource_id`);
 CREATE INDEX `relationship_source_id_name_id` ON `relationships` (`source_id`, `name`, `id`);
 CREATE INDEX `relationship_target_id_name_id` ON `relationships` (`target_id`, `name`, `id`);
 CREATE INDEX `resource_workspace_id_kind_id` ON `resources` (`workspace_id`, `kind`, `id`);
+CREATE INDEX resource_kind_id_workspace_id_scope_id ON resources(kind,id,workspace_id,scope_id);
+CREATE INDEX smartfolder_owner_id_id ON smart_folders(owner_id,id);
+CREATE INDEX smartfolder_workspace_id_id ON smart_folders(workspace_id,id);
+CREATE UNIQUE INDEX smartfolder_workspace_id_name ON smart_folders(workspace_id,name) WHERE owner_id IS NULL;
+CREATE UNIQUE INDEX smartfolder_owner_id_workspace_id_name ON smart_folders(owner_id,workspace_id,name);
+CREATE UNIQUE INDEX smartfolder_owner_id_name ON smart_folders(owner_id,name) WHERE workspace_id IS NULL;
 CREATE INDEX `resource_parent_id_id_scope_id` ON `resources` (`parent_id`, `id`, `scope_id`);
 CREATE INDEX `resource_container_id_id` ON `resources` (`container_id`, `id`);
 CREATE INDEX resource_container_id_content_type_id_id ON resources(container_id,content_type_id,id);
@@ -235,6 +249,12 @@ CREATE TRIGGER resource_delete_validate BEFORE UPDATE OF deleted_at ON resources
   SELECT CASE WHEN new.kind NOT IN ('folder','item') THEN RAISE(ABORT,'only folders and items can be deleted') END;
 END;
 CREATE TRIGGER webdav_credential_immutable BEFORE UPDATE ON webdav_credentials BEGIN SELECT RAISE(ABORT,'credentials are immutable; revoke and create another'); END;
+CREATE TRIGGER smart_folder_workspace BEFORE INSERT ON smart_folders BEGIN
+ SELECT CASE WHEN new.workspace_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND kind='workspace') THEN RAISE(ABORT,'smart folders require a workspace') END;
+END;
+CREATE TRIGGER smart_folder_identity BEFORE UPDATE OF id,workspace_id,owner_id,created_by ON smart_folders BEGIN
+ SELECT CASE WHEN new.id IS NOT old.id OR new.workspace_id IS NOT old.workspace_id OR new.owner_id IS NOT old.owner_id OR new.created_by IS NOT old.created_by THEN RAISE(ABORT,'smart folder ownership is immutable') END;
+END;
 CREATE TRIGGER relationship_validate_insert BEFORE INSERT ON relationships BEGIN
   SELECT CASE WHEN new.source_id=new.target_id OR NOT EXISTS (
     SELECT 1 FROM resources s JOIN resources t ON t.id=new.target_id

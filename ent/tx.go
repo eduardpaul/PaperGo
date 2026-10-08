@@ -46,6 +46,8 @@ type Tx struct {
 	SchemaRevision *SchemaRevisionClient
 	// SchemaTemplate is the client for interacting with the SchemaTemplate builders.
 	SchemaTemplate *SchemaTemplateClient
+	// SmartFolder is the client for interacting with the SmartFolder builders.
+	SmartFolder *SmartFolderClient
 	// Term is the client for interacting with the Term builders.
 	Term *TermClient
 	// TermSet is the client for interacting with the TermSet builders.
@@ -199,6 +201,7 @@ func (tx *Tx) init() {
 	tx.Resource = NewResourceClient(tx.config)
 	tx.SchemaRevision = NewSchemaRevisionClient(tx.config)
 	tx.SchemaTemplate = NewSchemaTemplateClient(tx.config)
+	tx.SmartFolder = NewSmartFolderClient(tx.config)
 	tx.Term = NewTermClient(tx.config)
 	tx.TermSet = NewTermSetClient(tx.config)
 	tx.WebDAVCredential = NewWebDAVCredentialClient(tx.config)
