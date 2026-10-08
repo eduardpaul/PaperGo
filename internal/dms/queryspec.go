@@ -336,13 +336,6 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 	args = append(args, surfaceArgs...)
 	args = append(args, c.ID)
 	text := "SELECT r.id," + rank + " AS sort_value FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind='item'"
-	action := "read"
-	if in.Surface == "head" {
-		action = "read_draft"
-	}
-	acl, aclArgs := permissionSQL("r.id", subject, action)
-	text += " AND " + acl
-	args = append(args, aclArgs...)
 	if in.Query.ParentID != "" {
 		parent, e := s.authorize(ctx, subject, in.Query.ParentID, "read")
 		if e != nil {
@@ -368,9 +361,19 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 	}
 	if strings.TrimSpace(in.Query.Search) != "" {
 		phrase := ftsPhrase(in.Query.Search)
-		text += " AND p.id IN (SELECT id FROM item_surface_search WHERE item_surface_search MATCH ?)"
+		// FTS rowids are item_surfaces rowids; reading the UNINDEXED id column costs a content-table lookup per match.
+		text += " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)"
 		args = append(args, phrase)
 	}
+	// SQLite evaluates these terms in order: cheap index filters first, so the
+	// recursive ACL walk runs only on rows that already match.
+	action := "read"
+	if in.Surface == "head" {
+		action = "read_draft"
+	}
+	acl, aclArgs := permissionSQL("r.id", subject, action)
+	text += " AND " + acl
+	args = append(args, aclArgs...)
 	fingerprint, _ := json.Marshal(struct {
 		Subject, Collection, Surface, Schema string
 		Query                                QuerySpec

@@ -91,9 +91,16 @@ func surfaceSQL(idColumn, subject, surface string) (string, []any) {
 	query, args := permissionSQL(idColumn, subject, "read_draft")
 	return "CASE WHEN " + query + " THEN 'head' ELSE 'published' END", args
 }
+
+// When an item has both surfaces, either selection is visible, so the cheap
+// index probes short-circuit the recursive read_draft walk in surfaceSQL.
 func visibleSQL(idColumn, subject, surface string) (string, []any) {
 	selected, args := surfaceSQL(idColumn, subject, surface)
-	query := `EXISTS (SELECT 1 FROM resources vr WHERE vr.id=` + idColumn + ` AND (vr.kind<>'item' OR EXISTS (SELECT 1 FROM item_surfaces vs WHERE vs.item_id=vr.id AND vs.surface=` + selected + `)))`
+	both := ""
+	if surface != "head" && surface != "published" {
+		both = ` OR EXISTS (SELECT 1 FROM item_surfaces vh WHERE vh.item_id=vr.id AND vh.surface='head') AND EXISTS (SELECT 1 FROM item_surfaces vp WHERE vp.item_id=vr.id AND vp.surface='published')`
+	}
+	query := `EXISTS (SELECT 1 FROM resources vr WHERE vr.id=` + idColumn + ` AND (vr.kind<>'item'` + both + ` OR EXISTS (SELECT 1 FROM item_surfaces vs WHERE vs.item_id=vr.id AND vs.surface=` + selected + `)))`
 	return query, args
 }
 func (s *Service) GetSurface(ctx context.Context, subject, id, surface string) (*ent.Resource, error) {
