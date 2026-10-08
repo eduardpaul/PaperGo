@@ -25,6 +25,43 @@ type smartCandidate struct {
 	types      []*ent.ContentType
 }
 
+type smartQueryBranch struct {
+	query           compiledQuery
+	collectionIndex int
+	collections     []any
+}
+
+// Equivalent schema/predicate branches differ only in their collection ID.
+// Coalescing them reduces SQL preparation and repeats ACL/surface predicates
+// once per distinct shape rather than once per collection.
+func addSmartBranch(branches *[]smartQueryBranch, byShape map[string]int, q compiledQuery, collectionIndex int) {
+	otherArgs := append([]any{}, q.args[:collectionIndex]...)
+	otherArgs = append(otherArgs, q.args[collectionIndex+1:]...)
+	raw, _ := json.Marshal(struct {
+		SQL  string
+		Args []any
+	}{q.sql, otherArgs})
+	key := string(raw)
+	if i, ok := byShape[key]; ok {
+		(*branches)[i].collections = append((*branches)[i].collections, q.args[collectionIndex])
+		return
+	}
+	byShape[key] = len(*branches)
+	*branches = append(*branches, smartQueryBranch{q, collectionIndex, []any{q.args[collectionIndex]}})
+}
+
+func smartBranchSQL(branch smartQueryBranch) (string, []any) {
+	marks := make([]string, len(branch.collections))
+	for i := range marks {
+		marks[i] = "?"
+	}
+	text := strings.Replace(branch.query.sql, "r.container_id=?", "r.container_id IN ("+strings.Join(marks, ",")+")", 1)
+	args := append([]any{}, branch.query.args[:branch.collectionIndex]...)
+	args = append(args, branch.collections...)
+	args = append(args, branch.query.args[branch.collectionIndex+1:]...)
+	return text, args
+}
+
 type SmartFolderEntry struct {
 	WorkspaceID    string        `json:"workspace_id"`
 	CollectionID   string        `json:"collection_id"`
@@ -300,7 +337,7 @@ func (s *Service) smartPhysicalQuery(subject string, c smartCandidate, item comp
 	args := append([]any{}, item.args[:rankArgs]...)
 	args = append(args, item.args[rankArgs+len(surfaceArgs):]...)
 	projection := ` FROM resources r JOIN (SELECT id,item_created_at,item_created_by,modified_at,modified_by,name,tags FROM (SELECT id,papergo_time(created_at) item_created_at,created_by item_created_by,papergo_time(updated_at) modified_at,updated_by modified_by,name,tags FROM resources WHERE kind='folder')) p ON p.id=r.id`
-	text := item.sql[:start] + projection + strings.Replace(item.sql[where:], "r.kind='item'", "r.kind='folder'", 1)
+	text := item.sql[:start] + projection + strings.Replace(item.sql[where:], "r.kind='item'", "r.kind='folder' AND r.deleted_at IS NULL", 1)
 	text = strings.ReplaceAll(text, "FROM item_surface_tags", "FROM (SELECT f.id surface_id,j.value tag FROM resources f,json_each(f.tags) j WHERE f.kind='folder')")
 	return compiledQuery{sql: text, args: args}, nil
 }
@@ -323,8 +360,9 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 	if err != nil {
 		return compiledQuery{}, nil, err
 	}
-	parts := []string{}
-	args := []any{}
+	branches := []smartQueryBranch{}
+	byShape := map[string]int{}
+	_, surfaceArgs := surfaceSQL("r.id", subject, in.Surface)
 	schemas := []string{}
 	var firstError error
 	var rankDef *ent.FieldDefinition
@@ -386,18 +424,24 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 			q.sql = strings.Replace(q.sql, "SELECT r.id,p.modified_at AS sort_value", "SELECT r.id,"+col+" AS sort_value", 1)
 			q.args = append(rankArgs, q.args...)
 		}
-		parts = append(parts, q.sql)
-		args = append(args, q.args...)
+		rankArgumentCount := strings.Count(q.sql[:strings.Index(q.sql, " FROM resources r")], "?")
+		addSmartBranch(&branches, byShape, q, rankArgumentCount+len(surfaceArgs))
 		if d.IncludeFolders && len(roots) == 0 && len(d.ContentTypes) == 0 {
 			folderQuery, err := s.smartPhysicalQuery(subject, c, q, in.Surface)
 			if err != nil {
 				return compiledQuery{}, nil, err
 			}
-			parts = append(parts, folderQuery.sql)
-			args = append(args, folderQuery.args...)
+			addSmartBranch(&branches, byShape, folderQuery, rankArgumentCount)
 		}
 		schemas = append(schemas, *c.collection.SchemaHeadID)
 		usable = append(usable, c)
+	}
+	parts := []string{}
+	args := []any{}
+	for _, branch := range branches {
+		sql, values := smartBranchSQL(branch)
+		parts = append(parts, sql)
+		args = append(args, values...)
 	}
 	if len(parts) == 0 {
 		if firstError != nil {

@@ -18,6 +18,8 @@ The item schema endpoint follows the same visibility rules as content and return
 
 Indexes are opt-in to bound write amplification. Typed equality/range queries are scoped to a collection and fixed operators; neither arbitrary SQL nor JSON paths are accepted. Integer values and scaled decimal units use signed 64-bit storage. Decimal content is represented as a canonical string, so its precision survives HTTP serialization and history reads.
 
+Smart folders store private or shared query definitions separately from resources. A bounded collection scan and batched catalogs feed SQL UNION branches over selected content surfaces; a recursive taxonomy CTE matches descendants through indexed term parents and field values. Navigation groups and authorized counts use the same SQL pipeline. Packages resolve target taxonomy leaves and ancestors in batches, and import/classification writes use the transaction and item validation pipeline. See [smart folders](smart-folders.md) for ownership, limits and routes.
+
 ## Transactions and concurrency
 
 One service instance serializes writes for the SQLite deployment. Authorization, lock checks, revision allocation, pointers, projections, publication events and audit entries commit together. Failed writes roll back all database effects. `If-Match` uses a resource lock version; content revision numbers and blob revision numbers have separate lifecycles. Publish/unpublish and permission changes consume lock versions without creating content revisions.

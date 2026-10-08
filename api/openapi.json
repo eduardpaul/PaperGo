@@ -5490,16 +5490,6 @@
             "$ref": "#/components/responses/Problem"
           }
         },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/"
-              }
-            }
-          }
-        },
         "parameters": [
           {
             "in": "query",
@@ -5558,7 +5548,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/"
+                "$ref": "#/components/schemas/SmartFolderInput"
               }
             }
           }
@@ -5602,16 +5592,6 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/"
-              }
-            }
-          }
         }
       },
       "put": {
@@ -5645,7 +5625,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/"
+                "$ref": "#/components/schemas/SmartFolderInput"
               }
             }
           }
@@ -5720,7 +5700,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/"
+                "$ref": "#/components/schemas/SmartFolderQueryRequest"
               }
             }
           }
@@ -5762,7 +5742,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/"
+                "$ref": "#/components/schemas/SmartFolderQueryRequest"
               }
             }
           }
@@ -8339,7 +8319,7 @@
             "uniqueItems": true
           }
         },
-        "description": "Live query across at most 100 readable collections. Name/key selectors ignore case. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have system metadata only and are excluded when term/content-type selectors are present.",
+        "description": "Live query across at most 100 readable collections. Name/key selectors ignore case. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have system metadata only and are excluded when term/content-type selectors are present. Equivalent collection predicates share one SQL branch; distinct shapes use UNION ALL. Queries are bounded to 30,000 SQL parameters.",
         "additionalProperties": false,
         "type": "object"
       },

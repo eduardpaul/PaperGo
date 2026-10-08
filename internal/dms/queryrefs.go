@@ -84,6 +84,9 @@ func resolveFilter(f *FilterExpr, subject string, now time.Time, defs map[string
 			if len(f.Value) > 0 {
 				return nil, invalid("give either value or value_ref")
 			}
+			if f.ValueRef != "me" && f.Field == "$tags" {
+				return nil, invalid("date value_ref requires a date or datetime field")
+			}
 			value, e := relativeValue(f.ValueRef, subject, now)
 			if e != nil {
 				return nil, e

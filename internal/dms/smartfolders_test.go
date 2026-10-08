@@ -43,6 +43,13 @@ func TestSmartFolderPhysicalFoldersAndExactTimes(t *testing.T) {
 	if err != nil || rows.Total != 1 {
 		t.Fatal(rows, err)
 	}
+	if err = s.Delete(testContext, "alice", folder.ID, folder.Version); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
+	if err != nil || rows.Total != 0 || len(rows.Data) != 0 {
+		t.Fatal("deleted folder remains visible", rows, err)
+	}
 }
 
 func TestSmartFolderOwnershipConcurrencyAndDefinitions(t *testing.T) {
@@ -119,6 +126,9 @@ func TestRelativeFiltersAreTypedAndBounded(t *testing.T) {
 		}
 	}
 	if _, err := resolveFilter(&FilterExpr{Field: "owner", ValueRef: "today"}, "alice", now, defs); !isValidation(err) {
+		t.Fatal(err)
+	}
+	if _, err := resolveFilter(&FilterExpr{Field: "$tags", ValueRef: "today"}, "alice", now, defs); !isValidation(err) {
 		t.Fatal(err)
 	}
 	if _, err := resolveFilter(&FilterExpr{Field: "due", Value: json.RawMessage(`"2026-10-08"`), ValueRef: "today"}, "alice", now, defs); !isValidation(err) {

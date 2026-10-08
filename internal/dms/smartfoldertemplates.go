@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"papergo/ent"
 	"papergo/ent/smartfolder"
-	"papergo/ent/term"
-	"papergo/ent/termset"
 	"slices"
 	"strings"
 )
@@ -134,44 +132,83 @@ func (s *Service) ExportSmartFolders(ctx context.Context, subject, workspace str
 	return out.pkg, out.version, err
 }
 
-func (s *Service) resolveSmartTermRef(ctx context.Context, workspace string, ref SmartFolderTermRef, cache map[string]string) (string, error) {
-	if !fieldKey.MatchString(ref.TermSetKey) || len(ref.Path) < 1 || len(ref.Path) > 32 {
-		return "", invalid("term references require a term_set_key and 1..32 path names")
+func smartTermRefKey(ref SmartFolderTermRef) string {
+	path := make([]string, len(ref.Path))
+	for i, v := range ref.Path {
+		path[i] = strings.ToLower(strings.TrimSpace(v))
 	}
-	keyRaw, _ := json.Marshal(ref)
-	key := string(keyRaw)
-	if id, ok := cache[key]; ok {
-		return id, nil
+	raw, _ := json.Marshal(SmartFolderTermRef{ref.TermSetKey, path})
+	return string(raw)
+}
+
+// Term names are unique inside a term set. Fetch requested leaves by their
+// indexed (set,name) keys, then fetch all required ancestors in one recursive
+// query. Import cost does not multiply by the depth of each term path.
+func (s *Service) resolveSmartPackageTerms(ctx context.Context, workspace string, pkg SmartFolderPackage) (map[string]string, error) {
+	type leaf struct {
+		Set  string `json:"set"`
+		Name string `json:"name"`
 	}
-	set, e := s.Client.TermSet.Query().Where(termset.WorkspaceIDEQ(workspace), termset.KeyEQ(ref.TermSetKey)).Only(ctx)
-	if ent.IsNotFound(e) {
-		return "", invalid("unknown target term set: " + ref.TermSetKey)
-	}
-	if e != nil {
-		return "", e
-	}
-	parent := ""
-	for _, name := range ref.Path {
-		if e = validateName(name); e != nil {
-			return "", e
+	requested := map[string]SmartFolderTermRef{}
+	leaves := []leaf{}
+	seen := map[leaf]bool{}
+	for _, f := range pkg.Folders {
+		if len(f.Definition.Terms) > 20 {
+			return nil, invalid("at most 20 terms per smart folder")
 		}
-		q := s.Client.Term.Query().Where(term.TermSetIDEQ(set.ID), term.NormalizedNameEQ(strings.ToLower(strings.TrimSpace(name))))
-		if parent == "" {
-			q.Where(term.ParentIDIsNil())
-		} else {
-			q.Where(term.ParentIDEQ(parent))
+		for _, ref := range f.Definition.Terms {
+			if !fieldKey.MatchString(ref.TermSetKey) || len(ref.Path) < 1 || len(ref.Path) > 32 {
+				return nil, invalid("term references require a term_set_key and 1..32 path names")
+			}
+			for _, name := range ref.Path {
+				if err := validateName(name); err != nil {
+					return nil, err
+				}
+			}
+			requested[smartTermRefKey(ref)] = ref
+			v := leaf{ref.TermSetKey, strings.ToLower(strings.TrimSpace(ref.Path[len(ref.Path)-1]))}
+			if !seen[v] {
+				seen[v] = true
+				leaves = append(leaves, v)
+			}
 		}
-		v, e := q.Only(ctx)
-		if ent.IsNotFound(e) {
-			return "", invalid("unknown target term path in " + ref.TermSetKey)
-		}
-		if e != nil {
-			return "", e
-		}
-		parent = v.ID
 	}
-	cache[key] = parent
-	return parent, nil
+	out := map[string]string{}
+	if len(leaves) == 0 {
+		return out, nil
+	}
+	raw, _ := json.Marshal(leaves)
+	rows, err := s.Client.QueryContext(ctx, `SELECT t.id FROM json_each(?) j JOIN term_sets ts ON ts.workspace_id=? AND ts.key=json_extract(j.value,'$.set') JOIN terms t ON t.term_set_id=ts.id AND t.normalized_name=json_extract(j.value,'$.name')`, string(raw), workspace)
+	if err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	paths, err := s.smartTermPaths(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for id, ref := range paths {
+		out[smartTermRefKey(ref)] = id
+	}
+	for key, ref := range requested {
+		if out[key] == "" {
+			return nil, invalid("unknown target term path in " + ref.TermSetKey)
+		}
+	}
+	return out, nil
 }
 
 // Import merges shared definitions by exact name. It checks the workspace ETag
@@ -197,7 +234,10 @@ func (s *Service) ImportSmartFolders(ctx context.Context, subject, workspace str
 			byName[f.Name] = f
 		}
 		seen := map[string]bool{}
-		cache := map[string]string{}
+		refs, e := t.resolveSmartPackageTerms(ctx, workspace, pkg)
+		if e != nil {
+			return e
+		}
 		out = SmartFolderImportResult{Data: []*ent.SmartFolder{}}
 		for _, portable := range pkg.Folders {
 			if seen[portable.Name] {
@@ -210,11 +250,7 @@ func (s *Service) ImportSmartFolders(ctx context.Context, subject, workspace str
 			}
 			ids := []string{}
 			for _, ref := range p.Terms {
-				id, e := t.resolveSmartTermRef(ctx, workspace, ref, cache)
-				if e != nil {
-					return e
-				}
-				ids = append(ids, id)
+				ids = append(ids, refs[smartTermRefKey(ref)])
 			}
 			d := SmartFolderDefinition{p.Collections, p.Templates, p.ContentTypes, ids, p.TermMatch, p.Filter, p.GroupBy, p.IncludeFolders}
 			in := SmartFolderInput{Name: portable.Name, Description: portable.Description, WorkspaceID: &workspace, Definition: d}
