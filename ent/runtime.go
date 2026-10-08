@@ -574,22 +574,22 @@ func init() {
 			return nil
 		}
 	}()
-	// relationshipDescInverseName is the schema descriptor for inverse_name field.
-	relationshipDescInverseName := relationshipFields[4].Descriptor()
-	// relationship.InverseNameValidator is a validator for the "inverse_name" field. It is called by the builders before save.
-	relationship.InverseNameValidator = relationshipDescInverseName.Validators[0].(func(string) error)
+	// relationshipDescTypeID is the schema descriptor for type_id field.
+	relationshipDescTypeID := relationshipFields[4].Descriptor()
+	// relationship.TypeIDValidator is a validator for the "type_id" field. It is called by the builders before save.
+	relationship.TypeIDValidator = relationshipDescTypeID.Validators[0].(func(string) error)
 	// relationshipDescDirected is the schema descriptor for directed field.
-	relationshipDescDirected := relationshipFields[6].Descriptor()
+	relationshipDescDirected := relationshipFields[5].Descriptor()
 	// relationship.DefaultDirected holds the default value on creation for the directed field.
 	relationship.DefaultDirected = relationshipDescDirected.Default.(bool)
 	// relationshipDescVersion is the schema descriptor for version field.
-	relationshipDescVersion := relationshipFields[7].Descriptor()
+	relationshipDescVersion := relationshipFields[6].Descriptor()
 	// relationship.DefaultVersion holds the default value on creation for the version field.
 	relationship.DefaultVersion = relationshipDescVersion.Default.(int)
 	// relationship.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	relationship.VersionValidator = relationshipDescVersion.Validators[0].(func(int) error)
 	// relationshipDescMetadata is the schema descriptor for metadata field.
-	relationshipDescMetadata := relationshipFields[8].Descriptor()
+	relationshipDescMetadata := relationshipFields[7].Descriptor()
 	// relationship.DefaultMetadata holds the default value on creation for the metadata field.
 	relationship.DefaultMetadata = relationshipDescMetadata.Default.(map[string]interface{})
 	// relationshipDescID is the schema descriptor for id field.

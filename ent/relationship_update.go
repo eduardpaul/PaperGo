@@ -41,26 +41,6 @@ func (_u *RelationshipUpdate) SetNillableName(v *string) *RelationshipUpdate {
 	return _u
 }
 
-// SetInverseName sets the "inverse_name" field.
-func (_u *RelationshipUpdate) SetInverseName(v string) *RelationshipUpdate {
-	_u.mutation.SetInverseName(v)
-	return _u
-}
-
-// SetNillableInverseName sets the "inverse_name" field if the given value is not nil.
-func (_u *RelationshipUpdate) SetNillableInverseName(v *string) *RelationshipUpdate {
-	if v != nil {
-		_u.SetInverseName(*v)
-	}
-	return _u
-}
-
-// ClearInverseName clears the value of the "inverse_name" field.
-func (_u *RelationshipUpdate) ClearInverseName() *RelationshipUpdate {
-	_u.mutation.ClearInverseName()
-	return _u
-}
-
 // SetVersion sets the "version" field.
 func (_u *RelationshipUpdate) SetVersion(v int) *RelationshipUpdate {
 	_u.mutation.ResetVersion()
@@ -127,15 +107,13 @@ func (_u *RelationshipUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Relationship.name": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.InverseName(); ok {
-		if err := relationship.InverseNameValidator(v); err != nil {
-			return &ValidationError{Name: "inverse_name", err: fmt.Errorf(`ent: validator failed for field "Relationship.inverse_name": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := relationship.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Relationship.version": %w`, err)}
 		}
+	}
+	if _u.mutation.RelationshipTypeCleared() && len(_u.mutation.RelationshipTypeIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Relationship.relationship_type"`)
 	}
 	if _u.mutation.SourceCleared() && len(_u.mutation.SourceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Relationship.source"`)
@@ -160,12 +138,6 @@ func (_u *RelationshipUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(relationship.FieldName, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.InverseName(); ok {
-		_spec.SetField(relationship.FieldInverseName, field.TypeString, value)
-	}
-	if _u.mutation.InverseNameCleared() {
-		_spec.ClearField(relationship.FieldInverseName, field.TypeString)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(relationship.FieldVersion, field.TypeInt, value)
@@ -207,26 +179,6 @@ func (_u *RelationshipUpdateOne) SetNillableName(v *string) *RelationshipUpdateO
 	if v != nil {
 		_u.SetName(*v)
 	}
-	return _u
-}
-
-// SetInverseName sets the "inverse_name" field.
-func (_u *RelationshipUpdateOne) SetInverseName(v string) *RelationshipUpdateOne {
-	_u.mutation.SetInverseName(v)
-	return _u
-}
-
-// SetNillableInverseName sets the "inverse_name" field if the given value is not nil.
-func (_u *RelationshipUpdateOne) SetNillableInverseName(v *string) *RelationshipUpdateOne {
-	if v != nil {
-		_u.SetInverseName(*v)
-	}
-	return _u
-}
-
-// ClearInverseName clears the value of the "inverse_name" field.
-func (_u *RelationshipUpdateOne) ClearInverseName() *RelationshipUpdateOne {
-	_u.mutation.ClearInverseName()
 	return _u
 }
 
@@ -309,15 +261,13 @@ func (_u *RelationshipUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Relationship.name": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.InverseName(); ok {
-		if err := relationship.InverseNameValidator(v); err != nil {
-			return &ValidationError{Name: "inverse_name", err: fmt.Errorf(`ent: validator failed for field "Relationship.inverse_name": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := relationship.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Relationship.version": %w`, err)}
 		}
+	}
+	if _u.mutation.RelationshipTypeCleared() && len(_u.mutation.RelationshipTypeIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Relationship.relationship_type"`)
 	}
 	if _u.mutation.SourceCleared() && len(_u.mutation.SourceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Relationship.source"`)
@@ -359,12 +309,6 @@ func (_u *RelationshipUpdateOne) sqlSave(ctx context.Context) (_node *Relationsh
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(relationship.FieldName, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.InverseName(); ok {
-		_spec.SetField(relationship.FieldInverseName, field.TypeString, value)
-	}
-	if _u.mutation.InverseNameCleared() {
-		_spec.ClearField(relationship.FieldInverseName, field.TypeString)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(relationship.FieldVersion, field.TypeInt, value)

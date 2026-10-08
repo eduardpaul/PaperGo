@@ -382,11 +382,10 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "workspace_id", Type: field.TypeString, Size: 36},
 		{Name: "name", Type: field.TypeString, Size: 64},
-		{Name: "inverse_name", Type: field.TypeString, Nullable: true, Size: 64},
 		{Name: "directed", Type: field.TypeBool, Default: true},
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "metadata", Type: field.TypeJSON},
-		{Name: "type_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "type_id", Type: field.TypeString, Size: 36},
 		{Name: "source_id", Type: field.TypeString, Size: 36},
 		{Name: "target_id", Type: field.TypeString, Size: 36},
 	}
@@ -398,19 +397,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "relationships_relationship_types_relationships",
-				Columns:    []*schema.Column{RelationshipsColumns[8]},
+				Columns:    []*schema.Column{RelationshipsColumns[7]},
 				RefColumns: []*schema.Column{RelationshipTypesColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "relationships_resources_outgoing",
-				Columns:    []*schema.Column{RelationshipsColumns[9]},
+				Columns:    []*schema.Column{RelationshipsColumns[8]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "relationships_resources_incoming",
-				Columns:    []*schema.Column{RelationshipsColumns[10]},
+				Columns:    []*schema.Column{RelationshipsColumns[9]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -419,42 +418,32 @@ var (
 			{
 				Name:    "relationship_type_id_source_id_target_id",
 				Unique:  true,
-				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[9], RelationshipsColumns[10]},
+				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[8], RelationshipsColumns[9]},
 			},
 			{
 				Name:    "relationship_type_id_target_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[10]},
-			},
-			{
-				Name:    "relationship_source_id_name_target_id",
-				Unique:  true,
-				Columns: []*schema.Column{RelationshipsColumns[9], RelationshipsColumns[3], RelationshipsColumns[10]},
+				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[9]},
 			},
 			{
 				Name:    "relationship_source_id_name_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[9], RelationshipsColumns[3], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[3], RelationshipsColumns[0]},
 			},
 			{
 				Name:    "relationship_source_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[9], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[0]},
 			},
 			{
 				Name:    "relationship_target_id_name_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[10], RelationshipsColumns[3], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[9], RelationshipsColumns[3], RelationshipsColumns[0]},
 			},
 			{
 				Name:    "relationship_target_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[10], RelationshipsColumns[0]},
-			},
-			{
-				Name:    "relationship_target_id_inverse_name_id",
-				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[10], RelationshipsColumns[4], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[9], RelationshipsColumns[0]},
 			},
 		},
 	}

@@ -24,8 +24,6 @@ const (
 	FieldTargetID = "target_id"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
-	// FieldInverseName holds the string denoting the inverse_name field in the database.
-	FieldInverseName = "inverse_name"
 	// FieldTypeID holds the string denoting the type_id field in the database.
 	FieldTypeID = "type_id"
 	// FieldDirected holds the string denoting the directed field in the database.
@@ -73,7 +71,6 @@ var Columns = []string{
 	FieldSourceID,
 	FieldTargetID,
 	FieldName,
-	FieldInverseName,
 	FieldTypeID,
 	FieldDirected,
 	FieldVersion,
@@ -101,8 +98,8 @@ var (
 	TargetIDValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
-	// InverseNameValidator is a validator for the "inverse_name" field. It is called by the builders before save.
-	InverseNameValidator func(string) error
+	// TypeIDValidator is a validator for the "type_id" field. It is called by the builders before save.
+	TypeIDValidator func(string) error
 	// DefaultDirected holds the default value on creation for the "directed" field.
 	DefaultDirected bool
 	// DefaultVersion holds the default value on creation for the "version" field.
@@ -148,11 +145,6 @@ func ByTargetID(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
-}
-
-// ByInverseName orders the results by the inverse_name field.
-func ByInverseName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldInverseName, opts...).ToFunc()
 }
 
 // ByTypeID orders the results by the type_id field.

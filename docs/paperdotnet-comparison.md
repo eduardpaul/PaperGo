@@ -25,8 +25,8 @@ The following core definitions are implemented in [Lists entities](https://githu
 | IndexedField | Embedded indexing plan: Field, Kind, Column, ValueField, Ready. | FieldDefinition.indexed plus typed FieldValue projections; no fixed column-slot allocation. |
 | ItemValue | Multi-valued identifier index: ItemId, Field, Value GUID, ListId. | No multi-valued custom field/reference indexes yet. |
 | AclEntry | Grant: ScopeId, PrincipalId, PrincipalType, Level, ListId, WorkspaceId. Principals include users, groups, and workspace roles. | Grant supports read/read_draft/write/publish/manage against resource ancestry; no group directory. |
-| ItemRelation | Edge: FirstItemId, SecondItemId, TypeId, Directed, Attributes JSON, Version. | Relationship has source_id, target_id, name, inverse_name, metadata; currently directional and within one workspace. |
-| ItemRelationshipType | Relationship policy: taxonomy-backed Id, Directed, InverseLabel, MaxIncoming, MaxOutgoing. | Names are currently free strings; no relationship-type definition or cardinality policy. |
+| ItemRelation | Edge: FirstItemId, SecondItemId, TypeId, Directed, Attributes JSON, Version. | Relationship has source_id, target_id, required type_id, the type key as name, directed, version and validated metadata; always within one workspace. |
+| ItemRelationshipType | Relationship policy: taxonomy-backed Id, Directed, InverseLabel, MaxIncoming, MaxOutgoing. | RelationshipType has a stable workspace key, label, inverse_label, directed flag, optional max_incoming/max_outgoing and an attribute schema; every link requires one. |
 | ListView | Saved presentation/query: ListId, Name, Columns, Filter, OrderBy, GroupBy, Layout, IsDefault. | No saved view entity or compound query specification. |
 | SmartFolder | Virtual collection: optional WorkspaceId/OwnerId, Name, Description, Definition JSON. | Folders are physical containment only; no cross-list saved queries. |
 | ItemChange | Ordered delta marker: Sequence, ListId, ItemId, ScopeId, FromScopeId, Kind, At. | AuditEvent records actions, but there is no dedicated synchronization feed. |

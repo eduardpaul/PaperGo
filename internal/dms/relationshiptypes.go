@@ -200,19 +200,15 @@ func (s *Service) UpdateRelationship(ctx context.Context, subject, itemID, linkI
 				return e
 			}
 		}
-		if old.TypeID != nil {
-			typ, e := t.Client.RelationshipType.Get(ctx, *old.TypeID)
-			if e != nil {
-				return e
-			}
-			if e = normalizeMetadata(typ.Attributes, in.Metadata); e != nil {
-				return e
-			}
-		} else {
-			b, e := json.Marshal(in.Metadata)
-			if e != nil || len(b) > 16*1024 {
-				return invalid("metadata exceeds 16 KiB")
-			}
+		if b, e := json.Marshal(in.Metadata); e != nil || len(b) > 16*1024 {
+			return invalid("metadata exceeds 16 KiB")
+		}
+		typ, e := t.Client.RelationshipType.Get(ctx, old.TypeID)
+		if e != nil {
+			return e
+		}
+		if e = normalizeMetadata(typ.Attributes, in.Metadata); e != nil {
+			return e
 		}
 		out, e = t.Client.Relationship.UpdateOne(old).SetMetadata(in.Metadata).AddVersion(1).Save(ctx)
 		if e != nil {

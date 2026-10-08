@@ -35,7 +35,7 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 | Flexible SharePoint-style fields | Per-container typed fields and immutable schema revisions. Types: text/note/email/url/date/datetime, choice, number/integer/decimal, boolean, lookup and term; defaults, bounds, length limits, and indexed multi-values. Unknown fields, wrong types and missing required values are rejected. |
 | Library as blob plus list item | A library item has the same metadata and permission behavior as a list item, plus immutable blob revisions stored outside SQLite. |
 | Unique permissions at every level | SharePoint-style inheritance: only the nearest exclusive scope supplies additive read/read_draft/write/publish/manage grants. Break, copy, or reset inheritance explicitly. Manage implies all actions; write/publish imply draft and published read. Denies are rejected. |
-| Named directional item relationships | Legacy named links plus typed directed/symmetric policies, validated attributes, cardinality limits, and edge ETags. Indexed incoming/outgoing queries require visible, authorized endpoints before pagination. Cross-workspace links are rejected. |
+| Typed item relationships | Every link has a workspace relationship type supplying its key, directed/symmetric policy, validated attributes, cardinality limits, and edge ETags. Indexed incoming/outgoing queries require visible, authorized endpoints before pagination. Cross-workspace links are rejected. |
 | Publish any list/library item | Publishing disabled by default: new items, edits and uploads are automatically published. With publishing enabled, changes create drafts and explicit publish/unpublish controls the published pointer. Ordinary readers see published revisions only. Library revisions pin their blob. |
 | Preserve content history | Every item create, metadata edit and upload stores an immutable revision tied to its schema revision. Head and published surfaces are independent. Lifecycle/ACL changes advance the lock version without creating content revisions. |
 | Tags on all content | Built-in tags on every resource, with a normalized indexed projection maintained by database triggers. |
@@ -114,31 +114,31 @@ Break item permission inheritance using PUT `/permissions` and its current `If-M
 
 Reset with `{"inherit":true,"grants":[]}`, or break and copy with `{"inherit":false,"copy_inherited":true}`. Inherited resources cannot carry local grants. GET permissions identifies the effective scope and grants. An ACL replacement that removes the caller's manage access is rolled back. A workspace creator receives manage access atomically. Every authenticated principal can create its own workspace. Subject values are exact OIDC `sub` claims; groups and organization provisioning are not implemented.
 
-Create an outgoing relationship:
+Create a relationship type in the workspace (`POST /v1/workspaces/{id}/relationship-types`), then link items with it:
 
 ```json
-{"target_id":"<another-item-id>","name":"references","inverse_name":"referenced_by","metadata":{"purpose":"supporting_document"}}
+{"type_id":"<relationship-type-id>","target_id":"<another-item-id>","metadata":{}}
 ```
+
+The link takes its name, direction, attribute schema and cardinality from the type.
 
 ACL and publication visibility filtering happen before LIMIT, so hidden rows neither shorten pages nor supply cursors. Search treats input as a literal FTS phrase, uses Unicode tokenization, and returns stable ID order, not relevance order. FTS indexes metadata text but does not extract PDF/Office document contents. Browsing a scope requires read access to that scope; explicitly granted items remain accessible directly by ID. Relationships are live, separately audited edges; publication does not freeze a relationship graph.
 
-## Migrations and schema changes
+## Schema changes
 
-`ent/schema/` defines entity fields and generated access code. Versioned migrations also define composite ownership foreign keys and SQLite-specific search, tags, type checks and immutable-history triggers. Preserve these constraints when evolving the schema; an Ent-generated table diff alone does not express the complete database contract.
+PaperGo is unreleased, so the whole database schema lives in one file, `migrations/20261007000100_schema.sql`, which is edited in place. Do not add migration files, backfills, upgrade paths or compatibility code (see [AGENTS.md](AGENTS.md)). Local databases are disposable: delete `data/` and apply the schema again.
 
-Migration `20261007000400` freezes existing field definitions, retains saved publication snapshots as revisions, and appends each current draft. Previously overwritten drafts cannot be recovered. Existing collections keep explicit publishing enabled to preserve their behavior; new collections default to automatic publishing. The migration aborts atomically if legacy deny grants exist. Review those ACLs and replace them with additive grants and inheritance boundaries before applying it; the API never silently converts denies into allows.
+`ent/schema/` defines entity fields and generated access code. The schema file also defines composite ownership foreign keys and SQLite-specific search, tags, type checks, immutable-history and permission-scope triggers, which an Ent-generated table diff does not express.
 
 ```powershell
 go generate ./ent
-# Use a disposable dev database with the EXISTING migrations applied first.
-atlas migrate apply --dir file://migrations --url 'sqlite://data/schema-dev.db?_fk=1'
-go run ./cmd/schema-diff -name add_field -dev-db data/schema-dev.db
-atlas migrate validate --env local
-# Review the SQL before applying it to a deployment database.
+# Edit migrations/20261007000100_schema.sql to match ent/schema, then:
+atlas migrate hash --dir file://migrations
+Remove-Item -Recurse -Force data; New-Item -ItemType Directory data | Out-Null
 atlas migrate apply --env local
 ```
 
-`schema-diff` compares Ent tables against the supplied database. It does not automatically rewrite the custom FTS/tag tables or triggers. Inspect generated SQL for accidental removal of these objects, adjust it, then run `atlas migrate hash --dir file://migrations`. Update the expected migration version in `internal/database/database.go` whenever the deployment schema changes. The API never auto-migrates and refuses to start on an incompatible revision.
+`go run ./cmd/schema-diff -dev-db <disposable db>` prints the SQL Ent would need, which helps when editing the schema file; do not commit its output as a new migration. The API never auto-migrates and refuses to start unless the schema revision in `internal/database/database.go` is applied.
 
 ## Deployment and scaling
 

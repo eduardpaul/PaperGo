@@ -1,6 +1,2 @@
-h1:XoCxy+/HKNpySUFzckzgueLD1H2WwhHLjMRB8zKSCRg=
-20261007000100_initial.sql h1:0hjvhKStlre9Ak0H30tiap6YFg/0y6aWukbRsK68Dcs=
-20261007000200_search_integrity.sql h1:+I6mWd5SIe+YiBjUNnXAYBbr8AKBcHXu6a0+kDguRjk=
-20261007000300_read_indexes.sql h1:l4efo3SmSov9OnMcHtAiaA5rw2pjUo5sCYbooxZnfMA=
-20261007000400_content_foundation.sql h1:xa5XbW0jbncWtJDUnMlvsveNcDfWosKbVN93kjTi1/I=
-20261007000500_application_foundation.sql h1:oX15eDLk43ujvFWkbTQq6s1PJd54B8+5jaR+IaNw2WI=
+h1:lFmTBC3wFrpmXuECrF8qKW8Rt3sh54P0IQKMm/dDW/0=
+20261007000100_schema.sql h1:ThXYB4TkfrZFlc4JL/Srxh/LooCFYdpOBobcqWcDejw=

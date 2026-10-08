@@ -139,15 +139,16 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	s, w, list := fixture(t)
 	source := create(t, s, list.ID, "item", "Source", nil)
 	target := create(t, s, list.ID, "item", "Target", nil)
-	link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{TargetID: target.ID, Name: "references", InverseName: "referenced_by"})
+	typ := referencesType(t, s, w.ID)
+	link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	incoming, err := s.Relationships(testContext, "alice", target.ID, "incoming", "referenced_by", "", 10)
+	incoming, err := s.Relationships(testContext, "alice", target.ID, "incoming", "references", "", 10)
 	if err != nil || len(incoming.Data) != 1 || incoming.Data[0].ID != link.ID {
 		t.Fatalf("incoming relationship: %+v %v", incoming, err)
 	}
-	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TargetID: target.ID, Name: "references"}); !errors.Is(err, ErrConflict) {
+	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("duplicate relationship accepted: %v", err)
 	}
 	_, err = s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"bob", "read_draft", "allow"}}})
@@ -165,8 +166,12 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	w2 := create(t, s, "", "workspace", "Other", nil)
 	l2 := create(t, s, w2.ID, "list", "Other list", nil)
 	i2 := create(t, s, l2.ID, "item", "Other item", nil)
-	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TargetID: i2.ID, Name: "cross_workspace"}); err == nil {
+	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: i2.ID}); err == nil {
 		t.Fatal("cross-workspace link accepted")
+	}
+	var validation *ValidationError
+	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TargetID: target.ID}); !errors.As(err, &validation) {
+		t.Fatal("untyped relationship accepted", err)
 	}
 }
 func TestConcurrentUpdatesHaveOneWinner(t *testing.T) {
@@ -211,4 +216,12 @@ func TestLibraryRequiresBlobForPublishing(t *testing.T) {
 	if _, err := s.Publish(testContext, "alice", item.ID, 1); err == nil {
 		t.Fatal("library item published without content")
 	}
+}
+func referencesType(t *testing.T, s *Service, workspaceID string) *ent.RelationshipType {
+	t.Helper()
+	typ, err := s.CreateRelationshipType(testContext, "alice", workspaceID, RelationshipTypeInput{Key: "references", Label: "References", InverseLabel: "Referenced by", Directed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return typ
 }
