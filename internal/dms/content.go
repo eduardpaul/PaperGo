@@ -47,7 +47,7 @@ func (s *Service) publish(ctx context.Context, subject, id string, version int) 
 	if c.Kind == resource.KindLibrary && rev.BlobID == nil {
 		return nil, invalid("library items need a blob before explicit publishing")
 	}
-	out, e := s.publishRevision(ctx, subject, r, rev, true)
+	out, e := s.publishRevision(ctx, subject, r, rev, true, nil)
 	if e != nil {
 		return nil, e
 	}

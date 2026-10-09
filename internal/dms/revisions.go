@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	entsql "entgo.io/ent/dialect/sql"
 	"papergo/ent"
 	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
@@ -185,7 +186,7 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 		return nil, err
 	}
 	if !c.PublishingEnabled {
-		if _, err = s.publishRevision(ctx, actor, r, rev, false); err != nil {
+		if _, err = s.publishRevision(ctx, actor, r, rev, false, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -306,13 +307,21 @@ func (s *Service) insertFieldValues(ctx context.Context, rows []*ent.FieldValueC
 	}
 	return nil
 }
-func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Resource, rev *ent.ItemRevision, explicit bool) (*ent.Publication, error) {
+// publishRevision reuses schema revisions from schemas, which may be nil, and
+// adds the ones it loads.
+func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Resource, rev *ent.ItemRevision, explicit bool, schemas map[string]*ent.SchemaRevision) (*ent.Publication, error) {
 	if explicit && r.PublishedRevisionID != nil && *r.PublishedRevisionID == rev.ID {
 		return nil, ErrConflict
 	}
-	schema, err := s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID)
-	if err != nil {
-		return nil, err
+	schema := schemas[rev.SchemaRevisionID]
+	if schema == nil {
+		var err error
+		if schema, err = s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID); err != nil {
+			return nil, err
+		}
+		if schemas != nil {
+			schemas[schema.ID] = schema
+		}
 	}
 	defs, _, err := typedDefinitions(schema.Definition, rev.ContentTypeID)
 	if err != nil {
@@ -343,27 +352,43 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 	r.PublishedRevisionID = &rev.ID
 	return event, nil
 }
+// publishAllHeads publishes every unpublished head in surfaceBatch pages, so
+// memory stays flat and head revisions and schemas load once per batch.
 func (s *Service) publishAllHeads(ctx context.Context, actor string, c *ent.Resource) error {
-	rows, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil()).All(ctx)
-	if err != nil {
-		return err
+	unpublished := func(sel *entsql.Selector) {
+		sel.Where(entsql.ExprP("(" + sel.C(resource.FieldPublishedRevisionID) + " IS NULL OR " + sel.C(resource.FieldHeadRevisionID) + " IS NULL OR " + sel.C(resource.FieldPublishedRevisionID) + "<>" + sel.C(resource.FieldHeadRevisionID) + ")"))
 	}
-	for _, r := range rows {
-		if r.HeadRevisionID == nil {
-			return invalid("item has no head revision")
-		}
-		if r.PublishedRevisionID != nil && *r.PublishedRevisionID == *r.HeadRevisionID {
-			continue
-		}
-		rev, err := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
+	schemas := map[string]*ent.SchemaRevision{}
+	for after := ""; ; {
+		rows, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil(), resource.IDGT(after), unpublished).Order(ent.Asc(resource.FieldID)).Limit(surfaceBatch).All(ctx)
 		if err != nil {
 			return err
 		}
-		if _, err = s.publishRevision(ctx, actor, r, rev, true); err != nil {
+		heads := make([]string, 0, len(rows))
+		for _, r := range rows {
+			if r.HeadRevisionID == nil {
+				return invalid("item has no head revision")
+			}
+			heads = append(heads, *r.HeadRevisionID)
+		}
+		revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.IDIn(heads...)).All(ctx)
+		if err != nil {
 			return err
 		}
+		byID := make(map[string]*ent.ItemRevision, len(revisions))
+		for _, rev := range revisions {
+			byID[rev.ID] = rev
+		}
+		for _, r := range rows {
+			if _, err = s.publishRevision(ctx, actor, r, byID[*r.HeadRevisionID], true, schemas); err != nil {
+				return err
+			}
+		}
+		if len(rows) < surfaceBatch {
+			return nil
+		}
+		after = rows[len(rows)-1].ID
 	}
-	return nil
 }
 func (s *Service) Revisions(ctx context.Context, subject, id string, after, limit int) ([]*ent.ItemRevision, error) {
 	if !s.transaction {

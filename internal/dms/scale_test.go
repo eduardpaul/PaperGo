@@ -65,6 +65,19 @@ func TestCollectionPassesSpanBatches(t *testing.T) {
 	if _, err = s.UpdateField(testContext, "alice", list.ID, owner.ID, latest(t, s, list.ID).Version, UpdateField{Required: &required}); err == nil {
 		t.Fatal("required check missed an item outside the first batch")
 	}
+	automatic := false
+	if _, err = s.Update(testContext, "alice", list.ID, latest(t, s, list.ID).Version, UpdateResource{PublishingEnabled: &automatic}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range items {
+		r := current(t, s, id)
+		if r.PublishedRevisionID == nil || *r.PublishedRevisionID != *r.HeadRevisionID {
+			t.Fatalf("automatic publishing skipped %s", id)
+		}
+	}
+	if published, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(list.ID), itemsurface.SurfaceEQ(itemsurface.SurfacePublished)).Count(testContext); err != nil || published != len(items) {
+		t.Fatalf("published surfaces: %d %v", published, err)
+	}
 }
 
 // The candidate-driven plan and the ID-ordered scan must return identical pages.
