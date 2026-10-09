@@ -115,8 +115,9 @@ type KeywordCount struct {
 	Count int      `json:"count"`
 }
 
-// PopularKeywords counts the items whose current content holds each keyword,
-// most used first, for managers deciding what to promote.
+// PopularKeywords counts the items whose current content holds each keyword
+// in a keywords field or a term field of the keywords set, most used first,
+// for managers deciding what to promote.
 func (s *Service) PopularKeywords(ctx context.Context, subject, workspaceID string, top int) ([]KeywordCount, error) {
 	if top < 1 || top > 100 {
 		top = maxKeywordSuggestions
@@ -133,7 +134,7 @@ func (s *Service) PopularKeywords(ctx context.Context, subject, workspaceID stri
 FROM field_definitions fd JOIN resources c ON c.id=fd.container_id AND c.workspace_id=? AND c.deleted_at IS NULL
 JOIN field_values f ON f.container_id=fd.container_id AND f.surface='head' AND f.field_key=fd.key
 JOIN terms t ON t.id=f.value_text AND t.deprecated=0 AND (t.term_set_id=? OR t.available_as_keyword)
-WHERE fd.type='term' AND fd.indexed AND json_extract(fd.options,'$.term_set_id')=?
+WHERE fd.indexed AND (fd.type='keywords' OR fd.type='term' AND json_extract(fd.options,'$.term_set_id')=?)
 GROUP BY f.value_text ORDER BY n DESC,f.value_text LIMIT ?`, workspaceID, set.ID, set.ID, top)
 		if e != nil {
 			return nil, e

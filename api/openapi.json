@@ -10361,7 +10361,8 @@
               "number",
               "boolean",
               "lookup",
-              "term"
+              "term",
+              "keywords"
             ]
           },
           "required": {
@@ -10431,7 +10432,8 @@
               "number",
               "boolean",
               "lookup",
-              "term"
+              "term",
+              "keywords"
             ]
           },
           "required": {
@@ -11111,6 +11113,7 @@
               "lte",
               "in",
               "contains",
+              "under",
               "missing",
               "present"
             ]
@@ -11315,6 +11318,10 @@
         "type": "object",
         "properties": {
           "value": {},
+          "label": {
+            "type": "string",
+            "description": "Name of the term of a term or keywords group, when the caller can read the workspace's taxonomy."
+          },
           "count": {
             "type": "integer"
           }
@@ -12018,7 +12025,8 @@
               "number",
               "boolean",
               "lookup",
-              "term"
+              "term",
+              "keywords"
             ]
           },
           "required": {

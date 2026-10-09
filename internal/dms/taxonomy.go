@@ -332,6 +332,40 @@ func (s *Service) termViews(ctx context.Context, rows []*ent.Term) ([]TermView, 
 	return out, nil
 }
 
+// termNames names the terms among ids that subject can read; a merged term
+// takes the name of the term it was merged into.
+func (s *Service) termNames(ctx context.Context, subject string, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, e := s.Client.Term.Query().Where(term.IDIn(ids...)).WithTermSet().WithMergedInto().All(ctx)
+	if e != nil {
+		return nil, e
+	}
+	readable := map[string]bool{}
+	for _, v := range rows {
+		ws := v.Edges.TermSet.WorkspaceID
+		ok, seen := readable[ws]
+		if !seen {
+			_, e = s.workspace(ctx, subject, ws, "read")
+			if e != nil && !errors.Is(e, ErrForbidden) && !errors.Is(e, ErrNotFound) {
+				return nil, e
+			}
+			ok = e == nil
+			readable[ws] = ok
+		}
+		if !ok {
+			continue
+		}
+		out[v.ID] = v.Name
+		if v.Edges.MergedInto != nil {
+			out[v.ID] = v.Edges.MergedInto.Name
+		}
+	}
+	return out, nil
+}
+
 type TermInput struct {
 	Name string `json:"name"`
 	// ParentID places a new term; use the move operation to change it.

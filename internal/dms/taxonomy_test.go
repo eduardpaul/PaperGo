@@ -1,7 +1,9 @@
 package dms
 
 import (
+	"encoding/json"
 	"errors"
+	"papergo/ent"
 	"papergo/ent/domainevent"
 	"papergo/internal/model"
 	"strings"
@@ -349,5 +351,138 @@ func TestImportTermsCSV(t *testing.T) {
 				t.Fatal("import into the system group")
 			}
 		}
+	}
+}
+
+func TestTermAndKeywordsFieldValues(t *testing.T) {
+	s, w, l := fixture(t)
+	group := testTermGroup(s, w.ID)
+	regions, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: group, Key: "regions", Name: "Regions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	topics, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: group, Key: "topics", Name: "Topics", IsOpen: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	europe := mustTerm(t, s, regions.ID, TermInput{Name: "Europe"})
+	america := mustTerm(t, s, regions.ID, TermInput{Name: "America"})
+	spain := mustTerm(t, s, regions.ID, TermInput{Name: "Spain", ParentID: &europe.ID, Labels: map[string]string{"es": "España"}, Synonyms: []string{"Iberia"}})
+	mustTerm(t, s, regions.ID, TermInput{Name: "Georgia", ParentID: &europe.ID})
+	mustTerm(t, s, regions.ID, TermInput{Name: "Georgia", ParentID: &america.ID})
+	if _, err = s.CreateField(testContext, "alice", l.ID, CreateField{Key: "tagged", Label: "Tagged", Type: "keywords", Options: model.FieldOptions{Multiple: true}}); err == nil {
+		t.Fatal("unindexed keywords field")
+	}
+	for _, f := range []CreateField{
+		{Key: "region", Label: "Region", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: regions.ID}},
+		{Key: "topics", Label: "Topics", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: topics.ID, Multiple: true}},
+		{Key: "keywords", Label: "Keywords", Type: "keywords", Indexed: true, Options: model.FieldOptions{Multiple: true}},
+	} {
+		if _, err = s.CreateField(testContext, "alice", l.ID, f); err != nil {
+			t.Fatal(f.Key, err)
+		}
+	}
+	item := func(name string, values map[string]any) (*ent.Resource, error) {
+		return s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: name, Values: values})
+	}
+	for label, want := range map[string]string{"georgia": "matches several", "Atlantis": "closed term set"} {
+		if _, err = item("Bad", map[string]any{"region": label}); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s: %v", label, err)
+		}
+	}
+	if _, err = item("Bad", map[string]any{"region": america.ID + "x"}); err == nil {
+		t.Fatal("unknown label")
+	}
+	madrid, err := item("Madrid", map[string]any{"region": "españa", "topics": []any{"Finance", " finance "}, "keywords": []any{"Lunch", "lunch"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if madrid.Values["region"] != spain.ID || len(madrid.Values["topics"].([]any)) != 1 || len(madrid.Values["keywords"].([]any)) != 1 {
+		t.Fatal("labels resolve to term IDs", madrid.Values)
+	}
+	finance, _ := s.Term(testContext, "alice", madrid.Values["topics"].([]any)[0].(string))
+	lunch, _ := s.Term(testContext, "alice", madrid.Values["keywords"].([]any)[0].(string))
+	if finance.Name != "Finance" || finance.TermSetID != topics.ID || lunch.Name != "Lunch" || lunch.ParentID != nil {
+		t.Fatal("open sets get new terms", finance.Term, lunch.Term)
+	}
+	if _, err = item("Wrong set", map[string]any{"keywords": []any{spain.ID}}); err == nil {
+		t.Fatal("a managed term is not a keyword")
+	}
+	if _, err = s.UpdateTerm(testContext, "alice", spain.ID, spain.Version, TermInput{Name: "Spain", Labels: spain.Labels, Synonyms: spain.Synonyms, AvailableAsKeyword: true}); err != nil {
+		t.Fatal(err)
+	}
+	paris, err := item("Paris", map[string]any{"region": "Europe", "topics": []any{"Money"}, "keywords": []any{spain.ID, "iberia"}})
+	if err != nil || len(paris.Values["keywords"].([]any)) != 1 {
+		t.Fatal("promoted terms are keywords, found by synonym", paris.Values, err)
+	}
+
+	money, _ := s.Term(testContext, "alice", paris.Values["topics"].([]any)[0].(string))
+	if _, err = s.MergeTerm(testContext, "alice", money.ID, money.Version, MergeTermInput{TargetTermID: finance.ID}); err != nil {
+		t.Fatal(err)
+	}
+	query := func(f FilterExpr) []string {
+		t.Helper()
+		raw, _ := json.Marshal(f)
+		var spec FilterExpr
+		_ = json.Unmarshal(raw, &spec)
+		page, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &spec, Sort: SortSpec{Field: "$name"}}})
+		if err != nil {
+			t.Fatal(f, err)
+		}
+		names := []string{}
+		for _, r := range page.Data {
+			names = append(names, r.Name)
+		}
+		return names
+	}
+	value := func(v any) json.RawMessage { raw, _ := json.Marshal(v); return raw }
+	if got := query(FilterExpr{Field: "topics", Op: "eq", Value: value(finance.ID)}); strings.Join(got, ",") != "Madrid,Paris" {
+		t.Fatal("eq matches terms merged into the value", got)
+	}
+	if got := query(FilterExpr{Field: "region", Op: "under", Value: value(europe.ID)}); strings.Join(got, ",") != "Madrid,Paris" {
+		t.Fatal("under matches the term and its descendants", got)
+	}
+	if got := query(FilterExpr{Field: "region", Op: "under", Value: value(spain.ID)}); strings.Join(got, ",") != "Madrid" {
+		t.Fatal("under a leaf", got)
+	}
+	if got := query(FilterExpr{Field: "region", Op: "ne", Value: value(europe.ID)}); strings.Join(got, ",") != "Madrid" {
+		t.Fatal("ne", got)
+	}
+	if got := query(FilterExpr{Field: "topics", Op: "in", Value: value([]string{money.ID})}); strings.Join(got, ",") != "Paris" {
+		t.Fatal("in on a merged term", got)
+	}
+	if _, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "$name", Op: "under", Value: value("x")}}}); err == nil {
+		t.Fatal("under on a text field")
+	}
+
+	name := "Paris, France"
+	updated, err := s.Update(testContext, "alice", paris.ID, latest(t, s, paris.ID).Version, UpdateResource{Name: &name})
+	if err != nil || updated.Values["topics"].([]any)[0] != finance.ID {
+		t.Fatal("a write replaces merged terms", updated.Values, err)
+	}
+	groups, err := s.QueryGroups(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{GroupBy: "region"}})
+	if err != nil || len(groups.Data) != 2 {
+		t.Fatal("groups", groups, err)
+	}
+	for _, g := range groups.Data {
+		if g.Value == spain.ID && g.Label != "Spain" || g.Value == europe.ID && g.Label != "Europe" {
+			t.Fatal("group labels", groups.Data)
+		}
+	}
+	found, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Search: "iberia"}})
+	if err != nil || len(found.Data) != 2 {
+		t.Fatal("search finds term synonyms", found, err)
+	}
+	found, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Search: "españa"}})
+	if err != nil || len(found.Data) != 2 {
+		t.Fatal("search finds localized labels", found, err)
+	}
+	found, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Search: "lunch"}})
+	if err != nil || len(found.Data) != 1 || found.Data[0].ID != madrid.ID {
+		t.Fatal("search finds keywords", found, err)
+	}
+	popular, err := s.PopularKeywords(testContext, "alice", w.ID, 10)
+	if err != nil || len(popular) != 2 {
+		t.Fatal("popular counts keywords fields", popular, err)
 	}
 }

@@ -13,7 +13,6 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/resource"
 	"papergo/ent/term"
-	"papergo/ent/termset"
 	"strconv"
 	"strings"
 	"time"
@@ -552,34 +551,20 @@ func (s *Service) SmartFolderGroups(ctx context.Context, subject, id string, in 
 			}
 			out.Data = append(out.Data, SmartFolderGroup{g.Value, label, g.Count})
 		}
-		if q.rankDef != nil && q.rankDef.Type == "term" {
-			set, err := t.Client.TermSet.Query().Where(termset.IDEQ(q.rankDef.Options.TermSetID)).Only(ctx)
-			if err != nil {
-				return SmartFolderGroupsResult{}, err
-			}
-			if _, err = t.workspace(ctx, subject, set.WorkspaceID, "read"); err != nil {
-				if errors.Is(err, ErrForbidden) {
-					return out, nil
-				}
-				return SmartFolderGroupsResult{}, err
-			}
+		if q.rankDef != nil && (q.rankDef.Type == "term" || q.rankDef.Type == "keywords") {
 			ids := []string{}
 			for _, g := range out.Data {
 				if id, ok := g.Value.(string); ok {
 					ids = append(ids, id)
 				}
 			}
-			names, err := t.Client.Term.Query().Where(term.IDIn(ids...), term.TermSetIDEQ(set.ID)).All(ctx)
+			names, err := t.termNames(ctx, subject, ids)
 			if err != nil {
 				return SmartFolderGroupsResult{}, err
 			}
-			byID := map[string]string{}
-			for _, term := range names {
-				byID[term.ID] = term.Name
-			}
 			for i := range out.Data {
-				if id, ok := out.Data[i].Value.(string); ok && byID[id] != "" {
-					out.Data[i].Label = byID[id]
+				if id, ok := out.Data[i].Value.(string); ok && names[id] != "" {
+					out.Data[i].Label = names[id]
 				}
 			}
 		}

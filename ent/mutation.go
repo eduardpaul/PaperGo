@@ -7895,6 +7895,7 @@ type ItemSurfaceMutation struct {
 	appendtags      []string
 	payload         *jsontext.Value
 	appendpayload   jsontext.Value
+	term_text       *string
 	item_created_at *string
 	item_created_by *string
 	modified_at     *string
@@ -8367,6 +8368,42 @@ func (m *ItemSurfaceMutation) ResetPayload() {
 	m.appendpayload = nil
 }
 
+// SetTermText sets the "term_text" field.
+func (m *ItemSurfaceMutation) SetTermText(s string) {
+	m.term_text = &s
+}
+
+// TermText returns the value of the "term_text" field in the mutation.
+func (m *ItemSurfaceMutation) TermText() (r string, exists bool) {
+	v := m.term_text
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTermText returns the old "term_text" field's value of the ItemSurface entity.
+// If the ItemSurface object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemSurfaceMutation) OldTermText(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTermText is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTermText requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTermText: %w", err)
+	}
+	return oldValue.TermText, nil
+}
+
+// ResetTermText resets all changes to the "term_text" field.
+func (m *ItemSurfaceMutation) ResetTermText() {
+	m.term_text = nil
+}
+
 // SetItemCreatedAt sets the "item_created_at" field.
 func (m *ItemSurfaceMutation) SetItemCreatedAt(s string) {
 	m.item_created_at = &s
@@ -8599,7 +8636,7 @@ func (m *ItemSurfaceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ItemSurfaceMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
 	if m.created_at != nil {
 		fields = append(fields, itemsurface.FieldCreatedAt)
 	}
@@ -8626,6 +8663,9 @@ func (m *ItemSurfaceMutation) Fields() []string {
 	}
 	if m.payload != nil {
 		fields = append(fields, itemsurface.FieldPayload)
+	}
+	if m.term_text != nil {
+		fields = append(fields, itemsurface.FieldTermText)
 	}
 	if m.item_created_at != nil {
 		fields = append(fields, itemsurface.FieldItemCreatedAt)
@@ -8665,6 +8705,8 @@ func (m *ItemSurfaceMutation) Field(name string) (ent.Value, bool) {
 		return m.Tags()
 	case itemsurface.FieldPayload:
 		return m.Payload()
+	case itemsurface.FieldTermText:
+		return m.TermText()
 	case itemsurface.FieldItemCreatedAt:
 		return m.ItemCreatedAt()
 	case itemsurface.FieldItemCreatedBy:
@@ -8700,6 +8742,8 @@ func (m *ItemSurfaceMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldTags(ctx)
 	case itemsurface.FieldPayload:
 		return m.OldPayload(ctx)
+	case itemsurface.FieldTermText:
+		return m.OldTermText(ctx)
 	case itemsurface.FieldItemCreatedAt:
 		return m.OldItemCreatedAt(ctx)
 	case itemsurface.FieldItemCreatedBy:
@@ -8779,6 +8823,13 @@ func (m *ItemSurfaceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPayload(v)
+		return nil
+	case itemsurface.FieldTermText:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTermText(v)
 		return nil
 	case itemsurface.FieldItemCreatedAt:
 		v, ok := value.(string)
@@ -8883,6 +8934,9 @@ func (m *ItemSurfaceMutation) ResetField(name string) error {
 		return nil
 	case itemsurface.FieldPayload:
 		m.ResetPayload()
+		return nil
+	case itemsurface.FieldTermText:
+		m.ResetTermText()
 		return nil
 	case itemsurface.FieldItemCreatedAt:
 		m.ResetItemCreatedAt()

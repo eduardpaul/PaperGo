@@ -82,6 +82,20 @@ func (_u *ItemSurfaceUpdate) AppendPayload(v jsontext.Value) *ItemSurfaceUpdate 
 	return _u
 }
 
+// SetTermText sets the "term_text" field.
+func (_u *ItemSurfaceUpdate) SetTermText(v string) *ItemSurfaceUpdate {
+	_u.mutation.SetTermText(v)
+	return _u
+}
+
+// SetNillableTermText sets the "term_text" field if the given value is not nil.
+func (_u *ItemSurfaceUpdate) SetNillableTermText(v *string) *ItemSurfaceUpdate {
+	if v != nil {
+		_u.SetTermText(*v)
+	}
+	return _u
+}
+
 // SetItemCreatedAt sets the "item_created_at" field.
 func (_u *ItemSurfaceUpdate) SetItemCreatedAt(v string) *ItemSurfaceUpdate {
 	_u.mutation.SetItemCreatedAt(v)
@@ -223,6 +237,9 @@ func (_u *ItemSurfaceUpdate) sqlSave(ctx context.Context) (_node int, err error)
 			sqljson.Append(u, itemsurface.FieldPayload, value)
 		})
 	}
+	if value, ok := _u.mutation.TermText(); ok {
+		_spec.SetField(itemsurface.FieldTermText, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.ItemCreatedAt(); ok {
 		_spec.SetField(itemsurface.FieldItemCreatedAt, field.TypeString, value)
 	}
@@ -333,6 +350,20 @@ func (_u *ItemSurfaceUpdateOne) SetPayload(v jsontext.Value) *ItemSurfaceUpdateO
 // AppendPayload appends value to the "payload" field.
 func (_u *ItemSurfaceUpdateOne) AppendPayload(v jsontext.Value) *ItemSurfaceUpdateOne {
 	_u.mutation.AppendPayload(v)
+	return _u
+}
+
+// SetTermText sets the "term_text" field.
+func (_u *ItemSurfaceUpdateOne) SetTermText(v string) *ItemSurfaceUpdateOne {
+	_u.mutation.SetTermText(v)
+	return _u
+}
+
+// SetNillableTermText sets the "term_text" field if the given value is not nil.
+func (_u *ItemSurfaceUpdateOne) SetNillableTermText(v *string) *ItemSurfaceUpdateOne {
+	if v != nil {
+		_u.SetTermText(*v)
+	}
 	return _u
 }
 
@@ -506,6 +537,9 @@ func (_u *ItemSurfaceUpdateOne) sqlSave(ctx context.Context) (_node *ItemSurface
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, itemsurface.FieldPayload, value)
 		})
+	}
+	if value, ok := _u.mutation.TermText(); ok {
+		_spec.SetField(itemsurface.FieldTermText, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ItemCreatedAt(); ok {
 		_spec.SetField(itemsurface.FieldItemCreatedAt, field.TypeString, value)

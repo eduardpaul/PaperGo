@@ -138,6 +138,7 @@ const (
 	FieldTypeDate     FieldType = "date"
 	FieldTypeLookup   FieldType = "lookup"
 	FieldTypeTerm     FieldType = "term"
+	FieldTypeKeywords FieldType = "keywords"
 )
 
 func (ft FieldType) String() string {
@@ -147,7 +148,7 @@ func (ft FieldType) String() string {
 // FieldTypeValidator is a validator for the "field_type" field enum values. It is called by the builders before save.
 func FieldTypeValidator(ft FieldType) error {
 	switch ft {
-	case FieldTypeText, FieldTypeNumber, FieldTypeInteger, FieldTypeDecimal, FieldTypeBoolean, FieldTypeDatetime, FieldTypeChoice, FieldTypeNote, FieldTypeEmail, FieldTypeURL, FieldTypeDate, FieldTypeLookup, FieldTypeTerm:
+	case FieldTypeText, FieldTypeNumber, FieldTypeInteger, FieldTypeDecimal, FieldTypeBoolean, FieldTypeDatetime, FieldTypeChoice, FieldTypeNote, FieldTypeEmail, FieldTypeURL, FieldTypeDate, FieldTypeLookup, FieldTypeTerm, FieldTypeKeywords:
 		return nil
 	default:
 		return fmt.Errorf("fieldvalue: invalid enum value for field_type field: %q", ft)

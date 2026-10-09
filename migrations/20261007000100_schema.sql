@@ -48,6 +48,7 @@ CREATE TABLE item_surfaces (
  container_id TEXT NOT NULL REFERENCES resources(id), workspace_id TEXT NOT NULL,
  surface TEXT NOT NULL CHECK(surface IN ('head','published')), revision_id TEXT NOT NULL,
  name TEXT NOT NULL, tags JSON NOT NULL CHECK(json_valid(tags) AND json_type(tags)='array'), payload JSON NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
+ term_text TEXT NOT NULL DEFAULT '',
  item_created_at TEXT NOT NULL, item_created_by TEXT NOT NULL, modified_at TEXT NOT NULL, modified_by TEXT NOT NULL,
  FOREIGN KEY(item_id,revision_id) REFERENCES item_revisions(item_id,id)
 );
@@ -58,7 +59,7 @@ CREATE TABLE "field_values" (
  scale INTEGER NOT NULL DEFAULT 0, ordinal INTEGER NOT NULL DEFAULT 0 CHECK(ordinal>=0 AND ordinal<100),
  value_text TEXT, value_integer INTEGER, value_number REAL, value_boolean BOOLEAN,
  CHECK((value_text IS NOT NULL)+(value_integer IS NOT NULL)+(value_number IS NOT NULL)+(value_boolean IS NOT NULL)=1),
- CHECK((field_type IN ('text','note','email','url','date','lookup','term','choice','datetime') AND value_text IS NOT NULL)
+ CHECK((field_type IN ('text','note','email','url','date','lookup','term','keywords','choice','datetime') AND value_text IS NOT NULL)
  OR (field_type IN ('integer','decimal') AND value_integer IS NOT NULL)
  OR (field_type='number' AND value_number IS NOT NULL)
  OR (field_type='boolean' AND value_boolean IS NOT NULL AND value_boolean IN (0,1))),
@@ -166,7 +167,7 @@ CREATE VIRTUAL TABLE resource_search USING fts5(
   id UNINDEXED, name, tags, "values",
   content='resources', content_rowid='rowid', tokenize='unicode61'
 );
-CREATE VIRTUAL TABLE item_surface_search USING fts5(id UNINDEXED,name,tags,payload,content='item_surfaces',content_rowid='rowid',tokenize='unicode61');
+CREATE VIRTUAL TABLE item_surface_search USING fts5(id UNINDEXED,name,tags,payload,term_text,content='item_surfaces',content_rowid='rowid',tokenize='unicode61');
 
 -- Indexes
 CREATE INDEX `auditevent_workspace_id_created_at` ON `audit_events` (`workspace_id`, `created_at`);
@@ -376,14 +377,14 @@ CREATE TRIGGER audit_retained BEFORE DELETE ON audit_events BEGIN
 END;
 CREATE TRIGGER publication_immutable BEFORE UPDATE ON publications BEGIN SELECT RAISE(ABORT,'publication snapshots are immutable'); END;
 CREATE TRIGGER item_surface_search_insert AFTER INSERT ON item_surfaces BEGIN
- INSERT INTO item_surface_search(rowid,id,name,tags,payload) VALUES(new.rowid,new.id,new.name,new.tags,new.payload);
+ INSERT INTO item_surface_search(rowid,id,name,tags,payload,term_text) VALUES(new.rowid,new.id,new.name,new.tags,new.payload,new.term_text);
 END;
 CREATE TRIGGER item_surface_search_delete AFTER DELETE ON item_surfaces BEGIN
- INSERT INTO item_surface_search(item_surface_search,rowid,id,name,tags,payload) VALUES('delete',old.rowid,old.id,old.name,old.tags,old.payload);
+ INSERT INTO item_surface_search(item_surface_search,rowid,id,name,tags,payload,term_text) VALUES('delete',old.rowid,old.id,old.name,old.tags,old.payload,old.term_text);
 END;
 CREATE TRIGGER item_surface_search_update AFTER UPDATE ON item_surfaces BEGIN
- INSERT INTO item_surface_search(item_surface_search,rowid,id,name,tags,payload) VALUES('delete',old.rowid,old.id,old.name,old.tags,old.payload);
- INSERT INTO item_surface_search(rowid,id,name,tags,payload) VALUES(new.rowid,new.id,new.name,new.tags,new.payload);
+ INSERT INTO item_surface_search(item_surface_search,rowid,id,name,tags,payload,term_text) VALUES('delete',old.rowid,old.id,old.name,old.tags,old.payload,old.term_text);
+ INSERT INTO item_surface_search(rowid,id,name,tags,payload,term_text) VALUES(new.rowid,new.id,new.name,new.tags,new.payload,new.term_text);
 END;
 CREATE TRIGGER item_surface_tags_insert AFTER INSERT ON item_surfaces BEGIN INSERT INTO item_surface_tags SELECT new.id,value FROM json_each(new.tags); END;
 CREATE TRIGGER item_surface_tags_update AFTER UPDATE OF tags ON item_surfaces BEGIN
@@ -464,7 +465,7 @@ CREATE TRIGGER grant_exclusive_scope_update BEFORE UPDATE OF resource_id ON gran
  SELECT CASE WHEN EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND inherit_permissions) THEN RAISE(ABORT,'grants require an exclusive permission scope') END;
 END;
 CREATE TRIGGER field_type_validate BEFORE INSERT ON field_definitions BEGIN
- SELECT CASE WHEN new.type NOT IN ('text','note','email','url','date','lookup','term','choice','datetime','integer','decimal','number','boolean') OR new.scale<0 OR new.scale>9 OR (new.type<>'decimal' AND new.scale<>0)
+ SELECT CASE WHEN new.type NOT IN ('text','note','email','url','date','lookup','term','keywords','choice','datetime','integer','decimal','number','boolean') OR new.scale<0 OR new.scale>9 OR (new.type<>'decimal' AND new.scale<>0)
  THEN RAISE(ABORT,'invalid field type or scale') END;
 END;
 CREATE TRIGGER field_options_identity BEFORE UPDATE OF options ON field_definitions BEGIN

@@ -502,6 +502,10 @@ func init() {
 	itemsurfaceDescCreatedAt := itemsurfaceMixinFields0[1].Descriptor()
 	// itemsurface.DefaultCreatedAt holds the default value on creation for the created_at field.
 	itemsurface.DefaultCreatedAt = itemsurfaceDescCreatedAt.Default.(func() time.Time)
+	// itemsurfaceDescTermText is the schema descriptor for term_text field.
+	itemsurfaceDescTermText := itemsurfaceFields[8].Descriptor()
+	// itemsurface.DefaultTermText holds the default value on creation for the term_text field.
+	itemsurface.DefaultTermText = itemsurfaceDescTermText.Default.(string)
 	// itemsurfaceDescID is the schema descriptor for id field.
 	itemsurfaceDescID := itemsurfaceMixinFields0[0].Descriptor()
 	// itemsurface.DefaultID holds the default value on creation for the id field.

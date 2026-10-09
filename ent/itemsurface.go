@@ -39,6 +39,8 @@ type ItemSurface struct {
 	Tags []string `json:"tags,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload jsontext.Value `json:"payload,omitempty"`
+	// TermText holds the value of the "term_text" field.
+	TermText string `json:"term_text,omitempty"`
 	// ItemCreatedAt holds the value of the "item_created_at" field.
 	ItemCreatedAt string `json:"item_created_at,omitempty"`
 	// ItemCreatedBy holds the value of the "item_created_by" field.
@@ -93,7 +95,7 @@ func (*ItemSurface) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case itemsurface.FieldTags, itemsurface.FieldPayload:
 			values[i] = new([]byte)
-		case itemsurface.FieldID, itemsurface.FieldItemID, itemsurface.FieldContainerID, itemsurface.FieldWorkspaceID, itemsurface.FieldSurface, itemsurface.FieldRevisionID, itemsurface.FieldName, itemsurface.FieldItemCreatedAt, itemsurface.FieldItemCreatedBy, itemsurface.FieldModifiedAt, itemsurface.FieldModifiedBy:
+		case itemsurface.FieldID, itemsurface.FieldItemID, itemsurface.FieldContainerID, itemsurface.FieldWorkspaceID, itemsurface.FieldSurface, itemsurface.FieldRevisionID, itemsurface.FieldName, itemsurface.FieldTermText, itemsurface.FieldItemCreatedAt, itemsurface.FieldItemCreatedBy, itemsurface.FieldModifiedAt, itemsurface.FieldModifiedBy:
 			values[i] = new(sql.NullString)
 		case itemsurface.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -175,6 +177,12 @@ func (_m *ItemSurface) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.Payload); err != nil {
 					return fmt.Errorf("unmarshal field payload: %w", err)
 				}
+			}
+		case itemsurface.FieldTermText:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field term_text", values[i])
+			} else if value.Valid {
+				_m.TermText = value.String
 			}
 		case itemsurface.FieldItemCreatedAt:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -272,6 +280,9 @@ func (_m *ItemSurface) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Payload))
+	builder.WriteString(", ")
+	builder.WriteString("term_text=")
+	builder.WriteString(_m.TermText)
 	builder.WriteString(", ")
 	builder.WriteString("item_created_at=")
 	builder.WriteString(_m.ItemCreatedAt)

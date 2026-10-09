@@ -24,7 +24,7 @@ type fieldNormalizer func(*ent.FieldDefinition, any) (any, error)
 var fieldTypes = map[string]fieldNormalizer{
 	"text": normalizeString, "note": normalizeString, "choice": normalizeChoice,
 	"email": normalizeEmail, "url": normalizeURL, "date": normalizeDate,
-	"datetime": normalizeDateTime, "lookup": normalizeIdentifier, "term": normalizeIdentifier,
+	"datetime": normalizeDateTime, "lookup": normalizeIdentifier, "term": normalizeTermRef, "keywords": normalizeTermRef,
 	"integer": normalizeInteger, "decimal": normalizeDecimal, "number": normalizeNumber, "boolean": normalizeBoolean,
 }
 
@@ -106,6 +106,19 @@ func normalizeIdentifier(d *ent.FieldDefinition, v any) (any, error) {
 	x, ok := v.(string)
 	if !ok || strings.TrimSpace(x) != x || x == "" || len(x) > 36 {
 		return nil, invalid("expected reference ID")
+	}
+	return x, nil
+}
+
+// normalizeTermRef accepts a term ID or a term label; normalizeItemValues
+// resolves labels to IDs.
+func normalizeTermRef(d *ent.FieldDefinition, v any) (any, error) {
+	x, ok := v.(string)
+	if ok {
+		x = strings.TrimSpace(x)
+	}
+	if !ok || !utf8.ValidString(x) || x == "" || utf8.RuneCountInString(x) > 255 {
+		return nil, invalid("expected a term ID or label")
 	}
 	return x, nil
 }
@@ -286,11 +299,14 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 			return invalid("max_length requires a text field and must be 1..65536")
 		}
 	}
-	if o.Multiple && !(typ == "choice" || typ == "term" || typ == "lookup" || typ == "text" || typ == "email" || typ == "url") {
+	if o.Multiple && !(typ == "choice" || typ == "term" || typ == "keywords" || typ == "lookup" || typ == "text" || typ == "email" || typ == "url") {
 		return invalid("multiple requires a text, choice or reference field")
 	}
 	if (typ == "lookup") != (o.LookupContainerID != "") || (typ == "term") != (o.TermSetID != "") {
 		return invalid("reference fields require their matching reference scope")
+	}
+	if typ == "keywords" && !d.Indexed {
+		return invalid("keywords fields must be indexed")
 	}
 	if o.Minimum != nil || o.Maximum != nil {
 		if typ != "number" && typ != "integer" && typ != "decimal" {
@@ -378,7 +394,7 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject, workspaceID 
 		return e
 	}
 	for _, d := range defs {
-		if d.Type != "term" && d.Type != "lookup" {
+		if d.Type != "term" && d.Type != "keywords" && d.Type != "lookup" {
 			continue
 		}
 		if values[d.Key] == nil {
@@ -402,30 +418,29 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject, workspaceID 
 				}
 			}
 		}
+		if d.Type != "lookup" {
+			resolved, e := s.resolveTermValues(ctx, workspaceID, d, current, old)
+			if e != nil {
+				return e
+			}
+			if d.Options.Multiple {
+				values[d.Key] = resolved
+			} else {
+				values[d.Key] = resolved[0]
+			}
+			continue
+		}
 		for _, v := range current {
 			id := v.(string)
-			if d.Type == "term" {
-				t, e := s.Client.Term.Get(ctx, id)
-				if ent.IsNotFound(e) {
-					return invalid("unknown term for field: " + d.Key)
-				}
-				if e != nil {
-					return e
-				}
-				if t.TermSetID != d.Options.TermSetID || (t.Deprecated && !old[id]) {
-					return invalid("term must be active and belong to the configured term set")
-				}
-			} else {
-				if old[id] {
-					continue
-				}
-				r, e := s.Get(ctx, subject, id)
-				if e != nil {
-					return e
-				}
-				if r.Kind != "item" || r.ContainerID == nil || *r.ContainerID != d.Options.LookupContainerID || r.WorkspaceID != workspaceID {
-					return invalid("lookup target belongs to a different collection")
-				}
+			if old[id] {
+				continue
+			}
+			r, e := s.Get(ctx, subject, id)
+			if e != nil {
+				return e
+			}
+			if r.Kind != "item" || r.ContainerID == nil || *r.ContainerID != d.Options.LookupContainerID || r.WorkspaceID != workspaceID {
+				return invalid("lookup target belongs to a different collection")
 			}
 		}
 	}

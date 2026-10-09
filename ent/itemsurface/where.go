@@ -95,6 +95,11 @@ func Name(v string) predicate.ItemSurface {
 	return predicate.ItemSurface(sql.FieldEQ(FieldName, v))
 }
 
+// TermText applies equality check predicate on the "term_text" field. It's identical to TermTextEQ.
+func TermText(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldTermText, v))
+}
+
 // ItemCreatedAt applies equality check predicate on the "item_created_at" field. It's identical to ItemCreatedAtEQ.
 func ItemCreatedAt(v string) predicate.ItemSurface {
 	return predicate.ItemSurface(sql.FieldEQ(FieldItemCreatedAt, v))
@@ -498,6 +503,71 @@ func NameEqualFold(v string) predicate.ItemSurface {
 // NameContainsFold applies the ContainsFold predicate on the "name" field.
 func NameContainsFold(v string) predicate.ItemSurface {
 	return predicate.ItemSurface(sql.FieldContainsFold(FieldName, v))
+}
+
+// TermTextEQ applies the EQ predicate on the "term_text" field.
+func TermTextEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEQ(FieldTermText, v))
+}
+
+// TermTextNEQ applies the NEQ predicate on the "term_text" field.
+func TermTextNEQ(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNEQ(FieldTermText, v))
+}
+
+// TermTextIn applies the In predicate on the "term_text" field.
+func TermTextIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldIn(FieldTermText, vs...))
+}
+
+// TermTextNotIn applies the NotIn predicate on the "term_text" field.
+func TermTextNotIn(vs ...string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldNotIn(FieldTermText, vs...))
+}
+
+// TermTextGT applies the GT predicate on the "term_text" field.
+func TermTextGT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGT(FieldTermText, v))
+}
+
+// TermTextGTE applies the GTE predicate on the "term_text" field.
+func TermTextGTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldGTE(FieldTermText, v))
+}
+
+// TermTextLT applies the LT predicate on the "term_text" field.
+func TermTextLT(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLT(FieldTermText, v))
+}
+
+// TermTextLTE applies the LTE predicate on the "term_text" field.
+func TermTextLTE(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldLTE(FieldTermText, v))
+}
+
+// TermTextContains applies the Contains predicate on the "term_text" field.
+func TermTextContains(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContains(FieldTermText, v))
+}
+
+// TermTextHasPrefix applies the HasPrefix predicate on the "term_text" field.
+func TermTextHasPrefix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasPrefix(FieldTermText, v))
+}
+
+// TermTextHasSuffix applies the HasSuffix predicate on the "term_text" field.
+func TermTextHasSuffix(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldHasSuffix(FieldTermText, v))
+}
+
+// TermTextEqualFold applies the EqualFold predicate on the "term_text" field.
+func TermTextEqualFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldEqualFold(FieldTermText, v))
+}
+
+// TermTextContainsFold applies the ContainsFold predicate on the "term_text" field.
+func TermTextContainsFold(v string) predicate.ItemSurface {
+	return predicate.ItemSurface(sql.FieldContainsFold(FieldTermText, v))
 }
 
 // ItemCreatedAtEQ applies the EQ predicate on the "item_created_at" field.
