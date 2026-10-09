@@ -18,6 +18,9 @@ type BusinessKey func(*sql.Selector)
 // ContentType is the predicate function for contenttype builders.
 type ContentType func(*sql.Selector)
 
+// DomainEvent is the predicate function for domainevent builders.
+type DomainEvent func(*sql.Selector)
+
 // FieldDefinition is the predicate function for fielddefinition builders.
 type FieldDefinition func(*sql.Selector)
 

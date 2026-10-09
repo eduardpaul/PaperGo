@@ -71,6 +71,8 @@ func stepTx(ctx dbos.Context, r *Runner, name string, fn func(context.Context, *
 		if err = tx.Commit(); err != nil {
 			return nil, err
 		}
+		// The step may have logged events (item changes, workflow events).
+		r.Wake()
 		return out, nil
 	}, dbos.WithStepName(name), dbos.WithStepMaxRetries(3), dbos.WithStepBaseInterval(200*time.Millisecond), dbos.WithStepRetryPredicate(transient))
 }

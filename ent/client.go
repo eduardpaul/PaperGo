@@ -15,6 +15,7 @@ import (
 	"papergo/ent/blob"
 	"papergo/ent/businesskey"
 	"papergo/ent/contenttype"
+	"papergo/ent/domainevent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
@@ -57,6 +58,8 @@ type Client struct {
 	BusinessKey *BusinessKeyClient
 	// ContentType is the client for interacting with the ContentType builders.
 	ContentType *ContentTypeClient
+	// DomainEvent is the client for interacting with the DomainEvent builders.
+	DomainEvent *DomainEventClient
 	// FieldDefinition is the client for interacting with the FieldDefinition builders.
 	FieldDefinition *FieldDefinitionClient
 	// FieldValue is the client for interacting with the FieldValue builders.
@@ -112,6 +115,7 @@ func (c *Client) init() {
 	c.Blob = NewBlobClient(c.config)
 	c.BusinessKey = NewBusinessKeyClient(c.config)
 	c.ContentType = NewContentTypeClient(c.config)
+	c.DomainEvent = NewDomainEventClient(c.config)
 	c.FieldDefinition = NewFieldDefinitionClient(c.config)
 	c.FieldValue = NewFieldValueClient(c.config)
 	c.Grant = NewGrantClient(c.config)
@@ -228,6 +232,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Blob:             NewBlobClient(cfg),
 		BusinessKey:      NewBusinessKeyClient(cfg),
 		ContentType:      NewContentTypeClient(cfg),
+		DomainEvent:      NewDomainEventClient(cfg),
 		FieldDefinition:  NewFieldDefinitionClient(cfg),
 		FieldValue:       NewFieldValueClient(cfg),
 		Grant:            NewGrantClient(cfg),
@@ -271,6 +276,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Blob:             NewBlobClient(cfg),
 		BusinessKey:      NewBusinessKeyClient(cfg),
 		ContentType:      NewContentTypeClient(cfg),
+		DomainEvent:      NewDomainEventClient(cfg),
 		FieldDefinition:  NewFieldDefinitionClient(cfg),
 		FieldValue:       NewFieldValueClient(cfg),
 		Grant:            NewGrantClient(cfg),
@@ -320,9 +326,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.FieldDefinition,
-		c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface, c.ListView,
-		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.DomainEvent,
+		c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface,
+		c.ListView, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermSet,
 		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowTrigger,
 		c.WorkflowVersion,
@@ -335,9 +341,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.FieldDefinition,
-		c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface, c.ListView,
-		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.DomainEvent,
+		c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface,
+		c.ListView, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermSet,
 		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowTrigger,
 		c.WorkflowVersion,
@@ -357,6 +363,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.BusinessKey.mutate(ctx, m)
 	case *ContentTypeMutation:
 		return c.ContentType.mutate(ctx, m)
+	case *DomainEventMutation:
+		return c.DomainEvent.mutate(ctx, m)
 	case *FieldDefinitionMutation:
 		return c.FieldDefinition.mutate(ctx, m)
 	case *FieldValueMutation:
@@ -995,6 +1003,139 @@ func (c *ContentTypeClient) mutate(ctx context.Context, m *ContentTypeMutation) 
 		return (&ContentTypeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ContentType mutation op: %q", m.Op())
+	}
+}
+
+// DomainEventClient is a client for the DomainEvent schema.
+type DomainEventClient struct {
+	config
+}
+
+// NewDomainEventClient returns a client for the DomainEvent from the given config.
+func NewDomainEventClient(c config) *DomainEventClient {
+	return &DomainEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `domainevent.Hooks(f(g(h())))`.
+func (c *DomainEventClient) Use(hooks ...Hook) {
+	c.hooks.DomainEvent = append(c.hooks.DomainEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `domainevent.Intercept(f(g(h())))`.
+func (c *DomainEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DomainEvent = append(c.inters.DomainEvent, interceptors...)
+}
+
+// Create returns a builder for creating a DomainEvent entity.
+func (c *DomainEventClient) Create() *DomainEventCreate {
+	mutation := newDomainEventMutation(c.config, OpCreate)
+	return &DomainEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DomainEvent entities.
+func (c *DomainEventClient) CreateBulk(builders ...*DomainEventCreate) *DomainEventCreateBulk {
+	return &DomainEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DomainEventClient) MapCreateBulk(slice any, setFunc func(*DomainEventCreate, int)) *DomainEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DomainEventCreateBulk{err: fmt.Errorf("calling to DomainEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DomainEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DomainEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DomainEvent.
+func (c *DomainEventClient) Update() *DomainEventUpdate {
+	mutation := newDomainEventMutation(c.config, OpUpdate)
+	return &DomainEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DomainEventClient) UpdateOne(_m *DomainEvent) *DomainEventUpdateOne {
+	mutation := newDomainEventMutation(c.config, OpUpdateOne, withDomainEvent(_m))
+	return &DomainEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DomainEventClient) UpdateOneID(id string) *DomainEventUpdateOne {
+	mutation := newDomainEventMutation(c.config, OpUpdateOne, withDomainEventID(id))
+	return &DomainEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DomainEvent.
+func (c *DomainEventClient) Delete() *DomainEventDelete {
+	mutation := newDomainEventMutation(c.config, OpDelete)
+	return &DomainEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DomainEventClient) DeleteOne(_m *DomainEvent) *DomainEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DomainEventClient) DeleteOneID(id string) *DomainEventDeleteOne {
+	builder := c.Delete().Where(domainevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DomainEventDeleteOne{builder}
+}
+
+// Query returns a query builder for DomainEvent.
+func (c *DomainEventClient) Query() *DomainEventQuery {
+	return &DomainEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDomainEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DomainEvent entity by its id.
+func (c *DomainEventClient) Get(ctx context.Context, id string) (*DomainEvent, error) {
+	return c.Query().Where(domainevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DomainEventClient) GetX(ctx context.Context, id string) *DomainEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DomainEventClient) Hooks() []Hook {
+	return c.hooks.DomainEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *DomainEventClient) Interceptors() []Interceptor {
+	return c.inters.DomainEvent
+}
+
+func (c *DomainEventClient) mutate(ctx context.Context, m *DomainEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DomainEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DomainEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DomainEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DomainEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DomainEvent mutation op: %q", m.Op())
 	}
 }
 
@@ -4301,18 +4442,18 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditEvent, Blob, BusinessKey, ContentType, FieldDefinition, FieldValue, Grant,
-		ItemRevision, ItemSurface, ListView, Publication, Relationship,
-		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
-		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowTrigger,
-		WorkflowVersion []ent.Hook
+		AuditEvent, Blob, BusinessKey, ContentType, DomainEvent, FieldDefinition,
+		FieldValue, Grant, ItemRevision, ItemSurface, ListView, Publication,
+		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
+		SmartFolder, Term, TermSet, WebDAVCredential, Workflow, WorkflowRun,
+		WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
-		AuditEvent, Blob, BusinessKey, ContentType, FieldDefinition, FieldValue, Grant,
-		ItemRevision, ItemSurface, ListView, Publication, Relationship,
-		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
-		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowTrigger,
-		WorkflowVersion []ent.Interceptor
+		AuditEvent, Blob, BusinessKey, ContentType, DomainEvent, FieldDefinition,
+		FieldValue, Grant, ItemRevision, ItemSurface, ListView, Publication,
+		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
+		SmartFolder, Term, TermSet, WebDAVCredential, Workflow, WorkflowRun,
+		WorkflowTrigger, WorkflowVersion []ent.Interceptor
 	}
 )
 

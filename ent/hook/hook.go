@@ -56,6 +56,18 @@ func (f ContentTypeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContentTypeMutation", m)
 }
 
+// The DomainEventFunc type is an adapter to allow the use of ordinary
+// function as DomainEvent mutator.
+type DomainEventFunc func(context.Context, *ent.DomainEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DomainEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DomainEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DomainEventMutation", m)
+}
+
 // The FieldDefinitionFunc type is an adapter to allow the use of ordinary
 // function as FieldDefinition mutator.
 type FieldDefinitionFunc func(context.Context, *ent.FieldDefinitionMutation) (ent.Value, error)

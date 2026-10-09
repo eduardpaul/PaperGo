@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"papergo/ent"
 	"papergo/ent/contenttype"
 	"papergo/ent/resource"
@@ -501,7 +499,7 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			if err = workspace(ctx, t, subject, w.WorkspaceID, "manage"); err != nil {
 				return err
 			}
-			e := dms.Event{ID: uuid.NewString(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, Actor: subject, Data: data}
+			e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, Actor: subject, Data: data}
 			t.Emit(ctx, e)
 			runs = append(runs, RunID(w.ID, e.ID))
 			return nil
@@ -531,7 +529,7 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 					return dms.Invalid("item " + itemID + " does not meet the workflow's condition")
 				}
 			}
-			e := dms.Event{ID: uuid.NewString(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, CollectionID: *r.ContainerID, ResourceID: itemID, Actor: subject, Data: data}
+			e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, CollectionID: *r.ContainerID, ResourceID: itemID, Actor: subject, Data: data}
 			t.Emit(ctx, e)
 			runs = append(runs, RunID(w.ID, e.ID))
 		}
@@ -540,10 +538,13 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 	return
 }
 
-// Match finds the runs a committed write's events start, records them, and
-// returns their inputs for the runner to enqueue in the same transaction.
-// Events at MaxDepth or deeper start nothing, which stops workflows that
-// keep triggering each other.
+// Match finds the runs that logged events start, records them, and returns
+// their inputs for the runner to enqueue in the dispatch transaction. The
+// dispatcher calls it for undispatched events, on whichever node claims
+// them. Events at MaxDepth or deeper start nothing, which stops workflows
+// that keep triggering each other. A condition that cannot be evaluated
+// (a field no longer indexed, the author lost access) still starts the run,
+// which then fails with the reason, so the problem is visible.
 func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput, error) {
 	var out []RunInput
 	versions := map[string]*matchable{}
@@ -603,12 +604,24 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 				m = &matchable{w: w, v: v, def: def}
 				versions[w.ID] = m
 			}
-			ok, err := m.matches(ctx, t, e)
-			if err != nil || !ok {
-				if err != nil {
-					return nil, err
-				}
+			ok, err := m.accepts(ctx, t, e)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
 				continue
+			}
+			conditionErr := ""
+			if m.def.Condition != nil && e.Type != TriggerManual && e.Type != TriggerSchedule {
+				if e.ResourceID == "" || e.CollectionID == "" {
+					continue
+				}
+				holds, err := matches(ctx, t, m.v.CreatedBy, e.CollectionID, e.ResourceID, m.def.Condition)
+				if err != nil {
+					conditionErr = err.Error()
+				} else if !holds {
+					continue
+				}
 			}
 			runID := RunID(w.ID, e.ID)
 			exists, err := t.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(w.ID), workflowrun.EventIDEQ(e.ID)).Exist(ctx)
@@ -625,7 +638,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 			if _, err = c.Save(ctx); err != nil {
 				return nil, err
 			}
-			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: e.ResourceID, Event: e}
+			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: e.ResourceID, Event: e, ConditionError: conditionErr}
 			if e.Type == dms.EventItemDeleted {
 				in.ItemID = ""
 			}
@@ -644,9 +657,8 @@ type matchable struct {
 	def Definition
 }
 
-// matches reports whether any trigger of e's type accepts e and the
-// workflow's condition holds for e's item.
-func (m *matchable) matches(ctx context.Context, t *dms.Service, e dms.Event) (bool, error) {
+// accepts reports whether any trigger of e's type accepts e.
+func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (bool, error) {
 	if e.Type == TriggerManual || e.Type == TriggerSchedule {
 		// Targeted events were checked when they were raised.
 		return true, nil
@@ -674,16 +686,7 @@ func (m *matchable) matches(ctx context.Context, t *dms.Service, e dms.Event) (b
 		accepted = true
 		break
 	}
-	if !accepted {
-		return false, nil
-	}
-	if m.def.Condition == nil {
-		return true, nil
-	}
-	if e.ResourceID == "" || e.CollectionID == "" {
-		return false, nil
-	}
-	return matches(ctx, t, m.v.CreatedBy, e.CollectionID, e.ResourceID, m.def.Condition)
+	return accepted, nil
 }
 
 // Tick raises the schedule events that are due at now and moves each

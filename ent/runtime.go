@@ -7,6 +7,7 @@ import (
 	"papergo/ent/blob"
 	"papergo/ent/businesskey"
 	"papergo/ent/contenttype"
+	"papergo/ent/domainevent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
@@ -246,6 +247,28 @@ func init() {
 	contenttype.DefaultID = contenttypeDescID.Default.(func() string)
 	// contenttype.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	contenttype.IDValidator = contenttypeDescID.Validators[0].(func(string) error)
+	domaineventFields := schema.DomainEvent{}.Fields()
+	_ = domaineventFields
+	// domaineventDescCreatedAt is the schema descriptor for created_at field.
+	domaineventDescCreatedAt := domaineventFields[1].Descriptor()
+	// domainevent.DefaultCreatedAt holds the default value on creation for the created_at field.
+	domainevent.DefaultCreatedAt = domaineventDescCreatedAt.Default.(func() time.Time)
+	// domaineventDescType is the schema descriptor for type field.
+	domaineventDescType := domaineventFields[2].Descriptor()
+	// domainevent.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	domainevent.TypeValidator = domaineventDescType.Validators[0].(func(string) error)
+	// domaineventDescWorkspaceID is the schema descriptor for workspace_id field.
+	domaineventDescWorkspaceID := domaineventFields[3].Descriptor()
+	// domainevent.WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
+	domainevent.WorkspaceIDValidator = domaineventDescWorkspaceID.Validators[0].(func(string) error)
+	// domaineventDescData is the schema descriptor for data field.
+	domaineventDescData := domaineventFields[7].Descriptor()
+	// domainevent.DefaultData holds the default value on creation for the data field.
+	domainevent.DefaultData = domaineventDescData.Default.(map[string]interface{})
+	// domaineventDescDepth is the schema descriptor for depth field.
+	domaineventDescDepth := domaineventFields[8].Descriptor()
+	// domainevent.DepthValidator is a validator for the "depth" field. It is called by the builders before save.
+	domainevent.DepthValidator = domaineventDescDepth.Validators[0].(func(int) error)
 	fielddefinitionMixin := schema.FieldDefinition{}.Mixin()
 	fielddefinitionMixinFields0 := fielddefinitionMixin[0].Fields()
 	_ = fielddefinitionMixinFields0

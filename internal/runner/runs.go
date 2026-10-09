@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"papergo/ent"
+	"papergo/ent/domainevent"
 	"papergo/ent/workflowrun"
 	"papergo/internal/dms"
 )
@@ -203,9 +204,35 @@ func (r *Runner) row(ctx context.Context, subject, id string) (*ent.WorkflowRun,
 	})
 }
 
+// pending returns a manual run whose event is logged but not dispatched yet:
+// the ID that StartRuns returned exists before the dispatcher records it.
+func (r *Runner) pending(ctx context.Context, subject, id string) (Run, error) {
+	return dms.Read(ctx, r.dms, func(t *dms.Service) (Run, error) {
+		rest, ok := strings.CutPrefix(id, "wf:")
+		workflowID, eventID, ok2 := strings.Cut(rest, ":")
+		if !ok || !ok2 {
+			return Run{}, dms.ErrNotFound
+		}
+		e, err := t.Client.DomainEvent.Get(ctx, eventID)
+		if ent.IsNotFound(err) || err == nil && (e.DispatchedAt != nil || e.Data["workflow_id"] != workflowID) {
+			return Run{}, dms.ErrNotFound
+		}
+		if err != nil {
+			return Run{}, err
+		}
+		if err = manage(ctx, t, subject, e.WorkspaceID); err != nil {
+			return Run{}, err
+		}
+		return Run{ID: id, WorkflowID: workflowID, WorkspaceID: e.WorkspaceID, ItemID: e.ResourceID, EventID: e.ID, EventType: e.Type, Depth: e.Depth, Actor: e.Actor, Status: "queued", CreatedAt: e.CreatedAt}, nil
+	})
+}
+
 // Run returns one run with its result and steps to workspace managers.
 func (r *Runner) Run(ctx context.Context, subject, id string) (Run, error) {
 	row, err := r.row(ctx, subject, id)
+	if errors.Is(err, dms.ErrNotFound) {
+		return r.pending(ctx, subject, id)
+	}
 	if err != nil {
 		return Run{}, err
 	}
@@ -319,7 +346,8 @@ func (r *Runner) Retry(ctx context.Context, subject, id string) (Run, error) {
 
 // purge deletes runs that finished more than the retention ago, with their
 // step markers first: a crash in between leaves only finished runs without
-// markers, which never replay, and markers never outlive their run.
+// markers, which never replay, and markers never outlive their run. Events
+// dispatched before the retention go too.
 func (r *Runner) purge(ctx dbos.Context, _ dbos.ScheduledWorkflowInput) (any, error) {
 	return r.Purge(ctx)
 }
@@ -327,6 +355,12 @@ func (r *Runner) purge(ctx dbos.Context, _ dbos.ScheduledWorkflowInput) (any, er
 // Purge applies the retention now.
 func (r *Runner) Purge(ctx context.Context) (int, error) {
 	cutoff := time.Now().Add(-r.cfg.Retention)
+	if err := r.dms.Write(ctx, func(t *dms.Service) error {
+		_, err := t.Client.DomainEvent.Delete().Where(domainevent.DispatchedAtLT(cutoff)).Exec(ctx)
+		return err
+	}); err != nil {
+		return 0, err
+	}
 	deleted := 0
 	for {
 		done, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterName(runName), dbos.WithFilterStatus(dbos.WorkflowStatusSuccess, dbos.WorkflowStatusError, dbos.WorkflowStatusCancelled, dbos.WorkflowStatusMaxRecoveryAttemptsExceeded),

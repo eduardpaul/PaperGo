@@ -47,7 +47,7 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 | Business keys | Indexed scalar uniqueness across head and published values, enforced transactionally for single and bulk writes. |
 | Saved views and controlled taxonomy | Bounded typed queries, sorting, pagination, opt-in authorized totals, grouping; stable hierarchical terms with localized labels, synonyms, and deprecation. |
 | Smart folders | Private or shared live queries across collections, descendant-term matching, metadata navigation, UTC-relative filters and physical folder inclusion. See [smart folders](docs/smart-folders.md). |
-| Customizable automation | Workflows react to item changes, schedules, manual starts and each other's events, with conditions in the query filter language and flows of activity nodes. Versions are immutable; runs are durable, exactly once per step, act with their author's permissions, and start atomically with the change that triggers them. Built-in workflows ship core processes that people configure, turn off or copy. See [workflows](docs/workflows.md). |
+| Customizable automation | Workflows react to item changes, schedules, manual starts and each other's events, with conditions in the query filter language and flows of activity nodes. Versions are immutable; runs are durable, exactly once per step, act with their author's permissions, and start from a durable event log written with the change that triggers them, so any server can run them. Built-in workflows ship core processes that people configure, turn off or copy. See [workflows](docs/workflows.md). |
 
 ## API
 

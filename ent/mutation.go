@@ -11,6 +11,7 @@ import (
 	"papergo/ent/blob"
 	"papergo/ent/businesskey"
 	"papergo/ent/contenttype"
+	"papergo/ent/domainevent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
@@ -53,6 +54,7 @@ const (
 	TypeBlob             = "Blob"
 	TypeBusinessKey      = "BusinessKey"
 	TypeContentType      = "ContentType"
+	TypeDomainEvent      = "DomainEvent"
 	TypeFieldDefinition  = "FieldDefinition"
 	TypeFieldValue       = "FieldValue"
 	TypeGrant            = "Grant"
@@ -3042,6 +3044,866 @@ func (m *ContentTypeMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown ContentType edge %s", name)
+}
+
+// DomainEventMutation represents an operation that mutates the DomainEvent nodes in the graph.
+type DomainEventMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *string
+	created_at    *time.Time
+	_type         *string
+	workspace_id  *string
+	collection_id *string
+	resource_id   *string
+	actor         *string
+	data          *map[string]interface{}
+	depth         *int
+	adddepth      *int
+	dispatched_at *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*DomainEvent, error)
+	predicates    []predicate.DomainEvent
+}
+
+var _ ent.Mutation = (*DomainEventMutation)(nil)
+
+// domaineventOption allows management of the mutation configuration using functional options.
+type domaineventOption func(*DomainEventMutation)
+
+// newDomainEventMutation creates new mutation for the DomainEvent entity.
+func newDomainEventMutation(c config, op Op, opts ...domaineventOption) *DomainEventMutation {
+	m := &DomainEventMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDomainEvent,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDomainEventID sets the ID field of the mutation.
+func withDomainEventID(id string) domaineventOption {
+	return func(m *DomainEventMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *DomainEvent
+		)
+		m.oldValue = func(ctx context.Context) (*DomainEvent, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().DomainEvent.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDomainEvent sets the old DomainEvent of the mutation.
+func withDomainEvent(node *DomainEvent) domaineventOption {
+	return func(m *DomainEventMutation) {
+		m.oldValue = func(context.Context) (*DomainEvent, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DomainEventMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DomainEventMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of DomainEvent entities.
+func (m *DomainEventMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DomainEventMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DomainEventMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().DomainEvent.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DomainEventMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DomainEventMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DomainEventMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetType sets the "type" field.
+func (m *DomainEventMutation) SetType(s string) {
+	m._type = &s
+}
+
+// GetType returns the value of the "type" field in the mutation.
+func (m *DomainEventMutation) GetType() (r string, exists bool) {
+	v := m._type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldType returns the old "type" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldType: %w", err)
+	}
+	return oldValue.Type, nil
+}
+
+// ResetType resets all changes to the "type" field.
+func (m *DomainEventMutation) ResetType() {
+	m._type = nil
+}
+
+// SetWorkspaceID sets the "workspace_id" field.
+func (m *DomainEventMutation) SetWorkspaceID(s string) {
+	m.workspace_id = &s
+}
+
+// WorkspaceID returns the value of the "workspace_id" field in the mutation.
+func (m *DomainEventMutation) WorkspaceID() (r string, exists bool) {
+	v := m.workspace_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkspaceID returns the old "workspace_id" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldWorkspaceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkspaceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkspaceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkspaceID: %w", err)
+	}
+	return oldValue.WorkspaceID, nil
+}
+
+// ResetWorkspaceID resets all changes to the "workspace_id" field.
+func (m *DomainEventMutation) ResetWorkspaceID() {
+	m.workspace_id = nil
+}
+
+// SetCollectionID sets the "collection_id" field.
+func (m *DomainEventMutation) SetCollectionID(s string) {
+	m.collection_id = &s
+}
+
+// CollectionID returns the value of the "collection_id" field in the mutation.
+func (m *DomainEventMutation) CollectionID() (r string, exists bool) {
+	v := m.collection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCollectionID returns the old "collection_id" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldCollectionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCollectionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCollectionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCollectionID: %w", err)
+	}
+	return oldValue.CollectionID, nil
+}
+
+// ClearCollectionID clears the value of the "collection_id" field.
+func (m *DomainEventMutation) ClearCollectionID() {
+	m.collection_id = nil
+	m.clearedFields[domainevent.FieldCollectionID] = struct{}{}
+}
+
+// CollectionIDCleared returns if the "collection_id" field was cleared in this mutation.
+func (m *DomainEventMutation) CollectionIDCleared() bool {
+	_, ok := m.clearedFields[domainevent.FieldCollectionID]
+	return ok
+}
+
+// ResetCollectionID resets all changes to the "collection_id" field.
+func (m *DomainEventMutation) ResetCollectionID() {
+	m.collection_id = nil
+	delete(m.clearedFields, domainevent.FieldCollectionID)
+}
+
+// SetResourceID sets the "resource_id" field.
+func (m *DomainEventMutation) SetResourceID(s string) {
+	m.resource_id = &s
+}
+
+// ResourceID returns the value of the "resource_id" field in the mutation.
+func (m *DomainEventMutation) ResourceID() (r string, exists bool) {
+	v := m.resource_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResourceID returns the old "resource_id" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldResourceID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResourceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResourceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResourceID: %w", err)
+	}
+	return oldValue.ResourceID, nil
+}
+
+// ClearResourceID clears the value of the "resource_id" field.
+func (m *DomainEventMutation) ClearResourceID() {
+	m.resource_id = nil
+	m.clearedFields[domainevent.FieldResourceID] = struct{}{}
+}
+
+// ResourceIDCleared returns if the "resource_id" field was cleared in this mutation.
+func (m *DomainEventMutation) ResourceIDCleared() bool {
+	_, ok := m.clearedFields[domainevent.FieldResourceID]
+	return ok
+}
+
+// ResetResourceID resets all changes to the "resource_id" field.
+func (m *DomainEventMutation) ResetResourceID() {
+	m.resource_id = nil
+	delete(m.clearedFields, domainevent.FieldResourceID)
+}
+
+// SetActor sets the "actor" field.
+func (m *DomainEventMutation) SetActor(s string) {
+	m.actor = &s
+}
+
+// Actor returns the value of the "actor" field in the mutation.
+func (m *DomainEventMutation) Actor() (r string, exists bool) {
+	v := m.actor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActor returns the old "actor" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldActor(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActor: %w", err)
+	}
+	return oldValue.Actor, nil
+}
+
+// ResetActor resets all changes to the "actor" field.
+func (m *DomainEventMutation) ResetActor() {
+	m.actor = nil
+}
+
+// SetData sets the "data" field.
+func (m *DomainEventMutation) SetData(value map[string]interface{}) {
+	m.data = &value
+}
+
+// Data returns the value of the "data" field in the mutation.
+func (m *DomainEventMutation) Data() (r map[string]interface{}, exists bool) {
+	v := m.data
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldData returns the old "data" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldData(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldData is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldData requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldData: %w", err)
+	}
+	return oldValue.Data, nil
+}
+
+// ResetData resets all changes to the "data" field.
+func (m *DomainEventMutation) ResetData() {
+	m.data = nil
+}
+
+// SetDepth sets the "depth" field.
+func (m *DomainEventMutation) SetDepth(i int) {
+	m.depth = &i
+	m.adddepth = nil
+}
+
+// Depth returns the value of the "depth" field in the mutation.
+func (m *DomainEventMutation) Depth() (r int, exists bool) {
+	v := m.depth
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDepth returns the old "depth" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldDepth(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDepth is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDepth requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDepth: %w", err)
+	}
+	return oldValue.Depth, nil
+}
+
+// AddDepth adds i to the "depth" field.
+func (m *DomainEventMutation) AddDepth(i int) {
+	if m.adddepth != nil {
+		*m.adddepth += i
+	} else {
+		m.adddepth = &i
+	}
+}
+
+// AddedDepth returns the value that was added to the "depth" field in this mutation.
+func (m *DomainEventMutation) AddedDepth() (r int, exists bool) {
+	v := m.adddepth
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDepth resets all changes to the "depth" field.
+func (m *DomainEventMutation) ResetDepth() {
+	m.depth = nil
+	m.adddepth = nil
+}
+
+// SetDispatchedAt sets the "dispatched_at" field.
+func (m *DomainEventMutation) SetDispatchedAt(t time.Time) {
+	m.dispatched_at = &t
+}
+
+// DispatchedAt returns the value of the "dispatched_at" field in the mutation.
+func (m *DomainEventMutation) DispatchedAt() (r time.Time, exists bool) {
+	v := m.dispatched_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDispatchedAt returns the old "dispatched_at" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldDispatchedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDispatchedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDispatchedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDispatchedAt: %w", err)
+	}
+	return oldValue.DispatchedAt, nil
+}
+
+// ClearDispatchedAt clears the value of the "dispatched_at" field.
+func (m *DomainEventMutation) ClearDispatchedAt() {
+	m.dispatched_at = nil
+	m.clearedFields[domainevent.FieldDispatchedAt] = struct{}{}
+}
+
+// DispatchedAtCleared returns if the "dispatched_at" field was cleared in this mutation.
+func (m *DomainEventMutation) DispatchedAtCleared() bool {
+	_, ok := m.clearedFields[domainevent.FieldDispatchedAt]
+	return ok
+}
+
+// ResetDispatchedAt resets all changes to the "dispatched_at" field.
+func (m *DomainEventMutation) ResetDispatchedAt() {
+	m.dispatched_at = nil
+	delete(m.clearedFields, domainevent.FieldDispatchedAt)
+}
+
+// Where appends a list predicates to the DomainEventMutation builder.
+func (m *DomainEventMutation) Where(ps ...predicate.DomainEvent) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DomainEventMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DomainEventMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.DomainEvent, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DomainEventMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DomainEventMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (DomainEvent).
+func (m *DomainEventMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DomainEventMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.created_at != nil {
+		fields = append(fields, domainevent.FieldCreatedAt)
+	}
+	if m._type != nil {
+		fields = append(fields, domainevent.FieldType)
+	}
+	if m.workspace_id != nil {
+		fields = append(fields, domainevent.FieldWorkspaceID)
+	}
+	if m.collection_id != nil {
+		fields = append(fields, domainevent.FieldCollectionID)
+	}
+	if m.resource_id != nil {
+		fields = append(fields, domainevent.FieldResourceID)
+	}
+	if m.actor != nil {
+		fields = append(fields, domainevent.FieldActor)
+	}
+	if m.data != nil {
+		fields = append(fields, domainevent.FieldData)
+	}
+	if m.depth != nil {
+		fields = append(fields, domainevent.FieldDepth)
+	}
+	if m.dispatched_at != nil {
+		fields = append(fields, domainevent.FieldDispatchedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DomainEventMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case domainevent.FieldCreatedAt:
+		return m.CreatedAt()
+	case domainevent.FieldType:
+		return m.GetType()
+	case domainevent.FieldWorkspaceID:
+		return m.WorkspaceID()
+	case domainevent.FieldCollectionID:
+		return m.CollectionID()
+	case domainevent.FieldResourceID:
+		return m.ResourceID()
+	case domainevent.FieldActor:
+		return m.Actor()
+	case domainevent.FieldData:
+		return m.Data()
+	case domainevent.FieldDepth:
+		return m.Depth()
+	case domainevent.FieldDispatchedAt:
+		return m.DispatchedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DomainEventMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case domainevent.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case domainevent.FieldType:
+		return m.OldType(ctx)
+	case domainevent.FieldWorkspaceID:
+		return m.OldWorkspaceID(ctx)
+	case domainevent.FieldCollectionID:
+		return m.OldCollectionID(ctx)
+	case domainevent.FieldResourceID:
+		return m.OldResourceID(ctx)
+	case domainevent.FieldActor:
+		return m.OldActor(ctx)
+	case domainevent.FieldData:
+		return m.OldData(ctx)
+	case domainevent.FieldDepth:
+		return m.OldDepth(ctx)
+	case domainevent.FieldDispatchedAt:
+		return m.OldDispatchedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown DomainEvent field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DomainEventMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case domainevent.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case domainevent.FieldType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetType(v)
+		return nil
+	case domainevent.FieldWorkspaceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkspaceID(v)
+		return nil
+	case domainevent.FieldCollectionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCollectionID(v)
+		return nil
+	case domainevent.FieldResourceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResourceID(v)
+		return nil
+	case domainevent.FieldActor:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActor(v)
+		return nil
+	case domainevent.FieldData:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetData(v)
+		return nil
+	case domainevent.FieldDepth:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDepth(v)
+		return nil
+	case domainevent.FieldDispatchedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDispatchedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DomainEvent field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DomainEventMutation) AddedFields() []string {
+	var fields []string
+	if m.adddepth != nil {
+		fields = append(fields, domainevent.FieldDepth)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DomainEventMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case domainevent.FieldDepth:
+		return m.AddedDepth()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DomainEventMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case domainevent.FieldDepth:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDepth(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DomainEvent numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DomainEventMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(domainevent.FieldCollectionID) {
+		fields = append(fields, domainevent.FieldCollectionID)
+	}
+	if m.FieldCleared(domainevent.FieldResourceID) {
+		fields = append(fields, domainevent.FieldResourceID)
+	}
+	if m.FieldCleared(domainevent.FieldDispatchedAt) {
+		fields = append(fields, domainevent.FieldDispatchedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DomainEventMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DomainEventMutation) ClearField(name string) error {
+	switch name {
+	case domainevent.FieldCollectionID:
+		m.ClearCollectionID()
+		return nil
+	case domainevent.FieldResourceID:
+		m.ClearResourceID()
+		return nil
+	case domainevent.FieldDispatchedAt:
+		m.ClearDispatchedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown DomainEvent nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DomainEventMutation) ResetField(name string) error {
+	switch name {
+	case domainevent.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case domainevent.FieldType:
+		m.ResetType()
+		return nil
+	case domainevent.FieldWorkspaceID:
+		m.ResetWorkspaceID()
+		return nil
+	case domainevent.FieldCollectionID:
+		m.ResetCollectionID()
+		return nil
+	case domainevent.FieldResourceID:
+		m.ResetResourceID()
+		return nil
+	case domainevent.FieldActor:
+		m.ResetActor()
+		return nil
+	case domainevent.FieldData:
+		m.ResetData()
+		return nil
+	case domainevent.FieldDepth:
+		m.ResetDepth()
+		return nil
+	case domainevent.FieldDispatchedAt:
+		m.ResetDispatchedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown DomainEvent field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DomainEventMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DomainEventMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DomainEventMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DomainEventMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DomainEventMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DomainEventMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DomainEventMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown DomainEvent unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DomainEventMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown DomainEvent edge %s", name)
 }
 
 // FieldDefinitionMutation represents an operation that mutates the FieldDefinition nodes in the graph.

@@ -1,7 +1,8 @@
 // Package runner embeds DBOS Transact as PaperGo's durable execution engine
-// (docs/plans/runner.md). It is the only package that imports DBOS: domain
-// events of committed writes start workflow runs in the same transaction,
-// runs execute workflow.Execute with exactly-once steps, and schedules drive
+// (docs/plans/runner.md). It is the only package that imports DBOS. Writes
+// only log their domain events; the runner's dispatcher, on whichever node
+// claims them, matches logged events to workflows and enqueues the runs,
+// which any node's workers execute with exactly-once steps. Schedules drive
 // timed triggers and retention.
 package runner
 
@@ -53,6 +54,9 @@ type Config struct {
 	PollInterval time.Duration
 	// Concurrency bounds the runs one node executes at once; default 4.
 	Concurrency int
+	// DispatchInterval is how often the dispatcher looks for events that no
+	// commit on this node announced (other nodes, restarts); default 1s.
+	DispatchInterval time.Duration
 }
 
 // Runner executes workflow runs durably.
@@ -64,11 +68,14 @@ type Runner struct {
 	workflows *workflow.Service
 	log       *slog.Logger
 	cfg       Config
+	wake      chan struct{}
+	stop      context.CancelFunc
+	stopped   chan struct{}
 }
 
 // New registers PaperGo's runner workflows with DBOS on its own handle to
-// the PaperGo file, and makes service deliver its events to the runner.
-// db is PaperGo's pool, used for step transactions.
+// the PaperGo file, and makes service wake the dispatcher after commits that
+// logged events. db is PaperGo's pool, used for step transactions.
 func New(cfg Config, db *sql.DB, service *dms.Service, workflows *workflow.Service) (*Runner, error) {
 	if cfg.NodeID == "" {
 		cfg.NodeID = "local"
@@ -84,6 +91,9 @@ func New(cfg Config, db *sql.DB, service *dms.Service, workflows *workflow.Servi
 	}
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = 4
+	}
+	if cfg.DispatchInterval <= 0 {
+		cfg.DispatchInterval = time.Second
 	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -110,7 +120,7 @@ func New(cfg Config, db *sql.DB, service *dms.Service, workflows *workflow.Servi
 		system.Close()
 		return nil, fmt.Errorf("start the runner: %w", err)
 	}
-	r := &Runner{ctx: ctx, db: db, system: system, dms: service, workflows: workflows, log: cfg.Logger, cfg: cfg}
+	r := &Runner{ctx: ctx, db: db, system: system, dms: service, workflows: workflows, log: cfg.Logger, cfg: cfg, wake: make(chan struct{}, 1)}
 	if _, err = dbos.RegisterQueue(ctx, runQueue, dbos.WithWorkerConcurrency(cfg.Concurrency), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
 		system.Close()
 		return nil, err
@@ -118,12 +128,13 @@ func New(cfg Config, db *sql.DB, service *dms.Service, workflows *workflow.Servi
 	dbos.RegisterWorkflow(ctx, r.run, dbos.WithWorkflowName(runName))
 	dbos.RegisterWorkflow(ctx, r.tick, dbos.WithWorkflowName(tickName))
 	dbos.RegisterWorkflow(ctx, r.purge, dbos.WithWorkflowName(purgeName))
-	service.SetEvents(r)
+	service.OnCommit(r.Wake)
 	return r, nil
 }
 
 // Launch migrates the DBOS tables, recovers this node's pending runs, brings
-// built-in workflows to this release and starts the schedules.
+// built-in workflows to this release, and starts the schedules and the
+// dispatcher.
 func (r *Runner) Launch(ctx context.Context) error {
 	if err := dbos.Launch(r.ctx); err != nil {
 		return fmt.Errorf("launch the runner: %w", err)
@@ -134,11 +145,22 @@ func (r *Runner) Launch(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("apply runner schedules: %w", err)
 	}
-	return r.workflows.SyncBuiltIns(ctx)
+	if err := r.workflows.SyncBuiltIns(ctx); err != nil {
+		return err
+	}
+	loop, stop := context.WithCancel(context.Background())
+	r.stop, r.stopped = stop, make(chan struct{})
+	go r.dispatchLoop(loop)
+	return nil
 }
 
-// Shutdown stops the runner; pending runs continue when it launches again.
+// Shutdown stops the dispatcher and the runner; pending runs and
+// undispatched events continue when it launches again.
 func (r *Runner) Shutdown(timeout time.Duration) error {
+	if r.stop != nil {
+		r.stop()
+		<-r.stopped
+	}
 	return dbos.Shutdown(r.ctx, timeout)
 }
 
@@ -148,21 +170,6 @@ func (r *Runner) Ready(ctx context.Context) error {
 		return errors.New("the runner has stopped")
 	}
 	return r.system.PingContext(ctx)
-}
-
-// Publish starts the runs that a write's events trigger, in the write's
-// transaction: if the write rolls back, no run starts.
-func (r *Runner) Publish(ctx context.Context, t *dms.Service, events []dms.Event) error {
-	starts, err := workflow.Match(ctx, t, events)
-	if err != nil {
-		return err
-	}
-	for _, in := range starts {
-		if _, err = dbos.Enqueue[workflow.Result](r.ctx, runQueue, runName, in, dbos.WithEnqueueWorkflowID(in.RunID), dbos.WithEnqueueTransaction(t.SQLTx())); err != nil {
-			return fmt.Errorf("start run %s: %w", in.RunID, err)
-		}
-	}
-	return nil
 }
 
 // run is the DBOS workflow of every PaperGo workflow run.

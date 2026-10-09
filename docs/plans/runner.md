@@ -21,7 +21,7 @@ It must keep PaperGo's minimal install (one process, one SQLite file) and also r
 The runner is the engine; **workflows** are what people build with. Every process that happens after a change or on a schedule is a workflow definition that workspace managers can see, change, turn off or replace, including the processes PaperGo itself ships ("built-in workflows"). New product features that react to changes are delivered as workflow *activities* and built-in workflows, never as hidden code paths. The model follows the PaperDotNet design (definitions with triggers, a condition and a flow of activity nodes connected by outcome ports; immutable versions; runs pinned to their version), mapped onto DBOS:
 
 - One registered DBOS workflow, `papergo.run`, interprets a pinned definition version. Each node runs as one durable step, so a run resumes at the node it reached; waits and delays are DBOS `Sleep`/`Recv`.
-- Triggers are matched when a write commits: the write's domain events start the matching runs in the same transaction.
+- Writes only append their domain events to a durable log in their own transaction. A dispatcher, on whichever node claims the events, matches them to workflows and queues the runs; any node's workers execute them. The write path never matches triggers or evaluates conditions, and execution is not tied to the server that made the change.
 - The user documentation of the definition model is [`docs/workflows.md`](../workflows.md).
 
 ## Engine: DBOS Transact Go
@@ -51,7 +51,7 @@ The phase 0 spike proved this design; the numbers are in [Spike results](#spike-
 
 - **Write transactions lock when they begin.** `database.DefaultOptions` (used by `database.Open`) sets `_txlock=immediate` and a 30-second `busy_timeout`. modernc keeps starting read-only transactions deferred, so reads keep their WAL snapshots. Write transactions take the write lock at `BEGIN` and wait their turn, instead of failing with `SQLITE_BUSY` when a deferred transaction tries to upgrade after DBOS has written. `writeMu` stays as the in-process queue for request writes; workflow steps wait on the SQLite lock.
 - **DBOS has its own handle on the same file.** `internal/runner` opens a second `*sql.DB` with `database.DSN`, the helper `database.Open` uses, so both handles have the same pragmas, and passes it as `Config.SQLiteSystemDB`. DBOS `Shutdown` closes the handle it was given, so it must never be PaperGo's pool.
-- **One transaction for Ent and the runner.** `write()` begins a `*sql.Tx` and builds the Ent client over it, with a driver whose nested transactions join it. The same transaction carries domain rows, audit rows, the write's domain events and the runs they start; DBOS accepts the `*sql.Tx` from PaperGo's pool because both handles open the same database.
+- **One transaction for Ent and the event log.** `write()` begins a `*sql.Tx` and builds the Ent client over it, with a driver whose nested transactions join it. The same transaction carries domain rows, audit rows and the write's `domain_events` rows. The dispatcher's transaction carries the `workflow_runs` rows, the queued DBOS runs (DBOS accepts the `*sql.Tx` from PaperGo's pool because both handles open the same database) and the events' dispatched mark. Were the engine's tables ever in another database, the dispatcher would queue first (idempotent by run ID) and mark after.
 - **Reserved table names.** DBOS adds 13 tables without a prefix: `application_versions`, `dbos_migrations`, `event_dispatch_kv`, `notifications`, `operation_outputs`, `queues`, `streams`, `workflow_events`, `workflow_events_history`, `workflow_input`, `workflow_output`, `workflow_schedules`, `workflow_status`. PaperGo tables must not use these names; for example, a future inbox becomes `user_notifications`.
 - **Migrations.** DBOS migrates its own tables, versioned in `dbos_migrations`. This is the one documented exception to the single Atlas file in [AGENTS.md](../../AGENTS.md): PaperGo never edits those tables. Atlas applies the PaperGo schema to a fresh file first (`CheckSchema` refuses to start without it); DBOS migrates its tables when the runner launches, and the API does not start if that fails. Multi-node deployments run DBOS migrations once, before nodes start (`SkipMigrations` on the nodes).
 - **Step completion markers.** The schema file has one runner table, `runner_step_results (run_id, step_id, step, output)`, for exactly-once steps (below). Only the runner reads it, with plain SQL, so it has no Ent model.
@@ -60,9 +60,8 @@ The phase 0 spike proved this design; the numbers are in [Spike results](#spike-
 
 | Piece | Where | Meaning |
 | --- | --- | --- |
-| Domain events | `dms` writes | Every committed item write raises `item.created`, `item.updated`, `item.published`, `item.unpublished` or `item.deleted` (`dms.Event`). The write's transaction hands them to `dms.Events.Publish`. |
-| `Runner.Publish` | inside the write | `workflow.Match` finds the workflows whose triggers and condition accept each event, records a `workflow_runs` row, and enqueues `papergo.run` with workflow ID `wf:{workflowID}:{eventID}` in the same transaction. A rollback starts nothing, and an event starts at most one run per workflow. There is no outbox table: the queued workflow is the durable message. |
-| `Service.Emit` | inside a write | Raises an event for the same path: manual starts, schedule occurrences, and workflow events (`wf.{key}.{event}`). |
+| Domain event log | `dms` writes | Every item write appends `item.created`, `item.updated`, `item.published`, `item.unpublished` or `item.deleted` (`dms.Event`, UUIDv7 IDs) to `domain_events` in its own transaction, and nothing else. A rollback raises nothing. `Service.Emit` adds manual starts, schedule occurrences and workflow events (`wf.{key}.{event}`) to the same log. After a commit that logged events, `dms` calls the runner's `Wake`. |
+| Dispatcher (`Runner.Dispatch`) | runner, any node | Takes undispatched events oldest first in batches of 100. `workflow.Match` finds the workflows whose triggers and condition accept each one, records `workflow_runs` rows, and queues `papergo.run` with workflow ID `wf:{workflowID}:{eventID}`; the batch's dispatched mark commits with them. A crash dispatches a batch again or not at all, and run IDs make repeats harmless. It wakes on `Wake` and polls every second for events that other nodes or a restart left. On PostgreSQL, dispatchers on several nodes claim batches with `FOR UPDATE SKIP LOCKED`. |
 | Exactly-once step (`stepTx`) | each workflow node | The node's writes through `dms` (as the version's author), the events they raise, the runs those start, and a `runner_step_results` row keyed by run ID and DBOS step ID commit in one transaction. A retried or recovered step finds the row and returns the stored output. Replay assigns step IDs in the same order, so a node can run many times in a run (loops, retries); the recorded name must match on replay. The output is always returned decoded from the row, so a first run and a replay see the same value. DBOS `RunAsTransaction` cannot be used: its callback gets a DBOS `Tx` without the `*sql.Tx`, so Ent cannot run on it. Lock waits that outlive the busy timeout are retried three times. |
 | Durable sleep | `delay` nodes, retry delays | DBOS `Sleep`, which survives restarts. |
 | Schedules | `Launch` | DBOS database schedules: `papergo.tick` every minute raises due workflow schedule triggers, and `papergo.retention` daily at 03:30 UTC deletes old runs. DBOS fires each tick once across nodes. |
@@ -84,6 +83,26 @@ Rules:
   - change running logic only behind `runner.Patch` (DBOS `Patch`/`DeprecatePatch`);
   - keep inputs and outputs JSON-serializable and small.
 - **Versions.** By default DBOS stamps each workflow with a hash of the binary and recovers only workflows from the same binary, so a deploy would strand pending work. PaperGo fixes the application version (`papergo-1`). The interpreter's step sequence (`load`, one step per node attempt, `finish`) is the compatibility contract; an incompatible change to it must be guarded with DBOS `Patch`.
+
+## Product processes as system workflows
+
+PaperDotNet moved every product reaction to saved items into workflows ([PR #9](https://github.com/eduardpaul/PaperDotNet/pull/9), ADR-0047), and found what the engine needs once each item change starts several product runs. PaperGo adopts the same model in phase 3, before its first product process (search indexing, document text, notifications) is built:
+
+- **System built-ins.** A product process is a built-in with flags:
+  - `system`: own queue, so a rebuild of thousands of items never delays people's workflows; successful runs kept about 24 hours; starts past the depth limit (hard cap 20), because its activities guard their own loops.
+  - `required`: its role always has an active workflow.
+  - `locked`: a product guarantee, such as search removal or permission-scope updates. It cannot be replaced, copied, turned off or deleted.
+  - `include_folders`: folder events start it too.
+  - `lightweight`: solution reactions with system costs but no role.
+- **Roles, not keys.** A process is a role, such as `search.index` or `documents.text`.
+  - Built-ins, their copies and alternatives fill a role through `provides`, with one active per scope (workspace or collection). Turning one on turns the others off.
+  - A workflow that fills a role raises the role's events (`wf.{role}.…`), so a customized "read the text" still feeds everything that follows `wf.documents.text.hasText`.
+  - Consumers ask for the role, never a built-in key.
+  - Roles belong to the core only: collections, search, document processing and notifications. Solutions ship ordinary built-ins.
+- **Contracts that fixed code enforces.** A custom pipeline can change quality and cost, never permissions or inclusion. For example, a search-index workflow stages chunks, and a fixed `search.publish` activity checks revision, policy and permissions.
+- **Engine-owned item context.** The item event that started a run is the run's trigger data, written by the dispatcher. Data raised by `event.raise` or a manual start can never pose as an item change. PaperGo already has this: `wf.*` and `manual` events are distinct types.
+- **Cheap when nobody listens.** A finished run raises `wf.{key}.completed`/`failed` only when a workflow of the workspace listens to it, and trigger content-type filters avoid runs entirely.
+- **Coordination without polling.** A bounded fan-out (`requests`) starts child runs with IDs deterministic per step, waits for their completion as a durable wait, tolerates failures, and yields after a bounded amount of work.
 
 ## Multi-node
 
@@ -120,7 +139,7 @@ New capabilities the runner unlocks. Each will be designed separately:
 ## Operations
 
 - **Runs API.** Workspace managers list a workspace's runs, read a run with its steps, cancel, and retry failed runs (see [`docs/workflows.md`](../workflows.md#api)). A deployment-wide view of runs across workspaces needs a deployment-level role, which PaperGo does not have yet.
-- **Retention.** The `papergo.retention` schedule deletes runs that finished more than `RUN_RETENTION` ago. It first deletes their `runner_step_results` and `workflow_runs` rows, then the runs (`DeleteWorkflows`). In that order, a crash in between leaves only finished runs without markers, which never replay, and markers never outlive their run.
+- **Retention.** The `papergo.retention` schedule deletes dispatched events and the runs that finished more than `RUN_RETENTION` ago. It first deletes the runs' `runner_step_results` and `workflow_runs` rows, then the runs (`DeleteWorkflows`). In that order, a crash in between leaves only finished runs without markers, which never replay, and markers never outlive their run.
 - **Configuration:**
 
   | Setting | Meaning |
@@ -128,14 +147,14 @@ New capabilities the runner unlocks. Each will be designed separately:
   | `NODE_ID` | Default `local`; required and unique per node on PostgreSQL |
   | `RUN_RETENTION` | How long finished runs are kept (default `720h`) |
 
-- **Lifecycle.** `cmd/api/main.go` creates the runner (which registers its DBOS workflows and makes `dms` deliver events to it), calls `Launch` before serving (DBOS migrations, recovery of this node's runs, schedules, built-in sync), and shuts it down after the HTTP server's graceful stop. Readiness fails when the runner has stopped.
+- **Lifecycle.** `cmd/api/main.go` creates the runner (which registers its DBOS workflows and makes `dms` wake its dispatcher), calls `Launch` before serving (DBOS migrations, recovery of this node's runs, schedules, built-in sync, the dispatcher), and shuts it down after the HTTP server's graceful stop. Events logged while no runner was running are dispatched when one launches. Readiness fails when the runner has stopped.
 - **Observability.** Structured `slog` logs per failed run; DBOS logs through the same logger. Metrics and tracing export follow the general observability work.
 
 ## Phases
 
 1. **Spike** (done). See [Spike results](#spike-results).
 2. **Core** (done). The runner embedded in the API process (immediate transactions, domain events from every item write, exactly-once steps, run retention), and workflows v1: definitions and versions per workspace, item and schedule and manual triggers, conditions in the query filter language, the flow interpreter with the item activities, built-in workflows with the first one (unpublishing expired items), and the workflow and run API.
-3. **Workflow parts.** `forEach`, approvals (durable `Recv` waits), concurrency policies, run-again activities, then the maintenance processes as built-in workflows (credential purge, orphan reconciliation).
+3. **Workflow parts and system workflows.** `forEach`, approvals (durable `Recv` waits), concurrency policies (`skip` for sweeps), run-again activities, and the system-workflow model below; then the maintenance processes as system built-ins (credential purge, orphan reconciliation).
 4. **Long work.** Move index and business-key rebuilds and `publishAllHeads` to partitioned jobs, with the pending-index contract.
 5. **Multi-node.** Node heartbeats and recovery of nodes that never return, delivered with the PostgreSQL adapter.
 6. **Consumers.** Notifications, then tasks and approval of publishing, as activities and built-in workflows.
@@ -144,7 +163,9 @@ New capabilities the runner unlocks. Each will be designed separately:
 
 `internal/runner/runner_test.go` launches the real runner on temporary SQLite files with the PaperGo schema:
 
-- an item trigger with a condition, a node that updates the item, and a second workflow started by the first one's `event.raise`; a rolled-back write starts nothing; only workspace managers see runs;
+- an item trigger with a condition, a node that updates the item, and a second workflow started by the first one's `event.raise`; a rolled-back write logs no event and starts nothing; only workspace managers see runs;
+- a process without a runner (another server) commits a change, and a runner launched later dispatches its event and runs the workflow;
+- a condition that can no longer be evaluated produces a failed run with the reason and does not block later events;
 - manual starts with typed inputs, defaults, variables and `if` branches; starting without access is refused;
 - the `items.expire` built-in on a due schedule tick, unpublishing only expired published items; a second tick raises nothing; copying the built-in turns it off;
 - a workflow that keeps updating its own item stops at depth 5;

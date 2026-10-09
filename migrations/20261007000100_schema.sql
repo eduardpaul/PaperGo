@@ -107,6 +107,12 @@ CREATE TABLE relationship_types (
  CHECK(directed OR (inverse_label='' AND max_incoming IS NULL AND max_outgoing IS NULL))
 );
 
+CREATE TABLE domain_events (
+ id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, type TEXT NOT NULL,
+ workspace_id TEXT NOT NULL, collection_id TEXT, resource_id TEXT, actor TEXT NOT NULL,
+ data JSON NOT NULL DEFAULT '{}' CHECK(json_valid(data) AND json_type(data)='object'),
+ depth INTEGER NOT NULL CHECK(depth>=0), dispatched_at DATETIME
+);
 CREATE TABLE workflows (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
  workspace_id TEXT NOT NULL REFERENCES resources(id), key TEXT NOT NULL CHECK(length(key) BETWEEN 1 AND 100),
@@ -206,6 +212,8 @@ CREATE UNIQUE INDEX relationshiptype_workspace_id_key ON relationship_types(work
 CREATE UNIQUE INDEX relationship_type_id_source_id_target_id ON relationships(type_id,source_id,target_id);
 CREATE INDEX relationship_type_id_target_id ON relationships(type_id,target_id);
 
+CREATE INDEX domainevent_created_at_id ON domain_events(created_at,id) WHERE dispatched_at IS NULL;
+CREATE INDEX domainevent_dispatched_at ON domain_events(dispatched_at) WHERE dispatched_at IS NOT NULL;
 CREATE UNIQUE INDEX workflow_workspace_id_key ON workflows(workspace_id,key) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX workflow_workspace_id_name ON workflows(workspace_id,name) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX workflow_workspace_id_builtin_key_collection_id ON workflows(workspace_id,builtin_key,ifnull(collection_id,'')) WHERE builtin_key IS NOT NULL AND deleted_at IS NULL;
@@ -503,6 +511,7 @@ END;
 CREATE TRIGGER workflow_identity BEFORE UPDATE OF id,workspace_id,key,builtin_key,collection_id,created_by ON workflows BEGIN SELECT RAISE(ABORT,'workflow identity is immutable'); END;
 CREATE TRIGGER workflow_tombstone BEFORE UPDATE ON workflows WHEN old.deleted_at IS NOT NULL BEGIN SELECT RAISE(ABORT,'deleted workflows are final'); END;
 CREATE TRIGGER workflow_retained BEFORE DELETE ON workflows BEGIN SELECT RAISE(ABORT,'workflows are retained; delete sets deleted_at'); END;
+CREATE TRIGGER domain_event_immutable BEFORE UPDATE OF id,created_at,type,workspace_id,collection_id,resource_id,actor,data,depth ON domain_events BEGIN SELECT RAISE(ABORT,'domain events are immutable'); END;
 CREATE TRIGGER workflow_version_immutable BEFORE UPDATE ON workflow_versions BEGIN SELECT RAISE(ABORT,'workflow versions are immutable'); END;
 CREATE TRIGGER workflow_version_retained BEFORE DELETE ON workflow_versions BEGIN SELECT RAISE(ABORT,'workflow versions are retained'); END;
 CREATE TRIGGER workflow_run_immutable BEFORE UPDATE ON workflow_runs BEGIN SELECT RAISE(ABORT,'workflow runs are immutable'); END;

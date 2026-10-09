@@ -90,7 +90,7 @@ Only items raise item events. Folders, collections and settings do not.
 
 Every trigger of a workflow with a condition needs `collection_id`, and the condition's fields must be indexed in each of those collections. Saving checks both.
 
-For item and workflow-event triggers, the condition is tested against the item's head when the change commits, and a run starts only if it holds. Manual starts check it before starting.
+For item and workflow-event triggers, the condition is tested against the item's head when the event is dispatched (normally moments after the change commits), and a run starts only if it holds. A condition that cannot be evaluated, for example because a field is no longer indexed, starts a run that fails with the reason, so the problem is visible. Manual starts check the condition before starting.
 
 ## Flow
 
@@ -184,9 +184,11 @@ How people use them:
 - **Retry** (`POST .../retry`) runs a failed run again from the failed step as a new run with `retry_of`. Steps before it keep their recorded results, so nothing they wrote is written twice.
 - **Cancel** (`POST .../cancel`) stops a queued or running run.
 
-A run starts in the same transaction as the change that triggers it, so a change that rolls back starts nothing. Each event starts at most one run per workflow.
+**How runs start.** A change and its events commit together in the domain event log (`domain_events`), so a change that rolls back raises nothing, and the write does no workflow work. A dispatcher in the runner takes logged events in order, matches them to workflows, and queues the runs. The runs and the events' dispatched mark commit together, and each event starts at most one run per workflow, so a crash dispatches events again without duplicates. Queued runs execute on whichever server's workers take them. The dispatcher wakes when a change commits and also checks every second, so it picks up events that other servers or a restart left behind.
 
-Finished runs are deleted after `RUN_RETENTION` (default 30 days). Deleting a workflow stops it from matching triggers; its versions and runs are kept, and running runs finish with their version.
+A manual start returns run IDs at once. Until its event is dispatched, the run shows as `queued`.
+
+Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default 30 days). Deleting a workflow stops it from matching triggers; its versions and runs are kept, and running runs finish with their version.
 
 ## Permissions
 

@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
-
 	"papergo/ent/workflowversion"
 	"papergo/internal/dms"
 )
@@ -23,6 +21,9 @@ type RunInput struct {
 	ItemID      string         `json:"item_id,omitempty"`
 	Event       dms.Event      `json:"event"`
 	Inputs      map[string]any `json:"inputs,omitempty"`
+	// ConditionError fails the run at once: the condition could not be
+	// evaluated when the event was dispatched.
+	ConditionError string `json:"condition_error,omitempty"`
 }
 
 // Exec makes a run durable. Step runs fn once: the writes it makes through t
@@ -67,6 +68,9 @@ func Execute(ctx context.Context, x Exec, in RunInput) (Result, error) {
 		def, err := ParseDefinition(v.Definition)
 		if err != nil {
 			return nil, err
+		}
+		if in.ConditionError != "" {
+			return nil, fmt.Errorf("condition could not be evaluated: %s", in.ConditionError)
 		}
 		return json.Marshal(loaded{Key: w.Key, Author: v.CreatedBy, Definition: def})
 	})
@@ -208,7 +212,7 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 // one level deeper than the event that started the run.
 func (r *runState) event(typ string, data map[string]any) dms.Event {
 	data["run_id"] = r.in.RunID
-	return dms.Event{ID: uuid.NewString(), Type: typ, WorkspaceID: r.in.WorkspaceID, CollectionID: r.in.Event.CollectionID, ResourceID: r.in.ItemID, Actor: r.in.Event.Actor, Data: data, Depth: r.in.Event.Depth + 1}
+	return dms.Event{ID: dms.NewEventID(), Type: typ, WorkspaceID: r.in.WorkspaceID, CollectionID: r.in.Event.CollectionID, ResourceID: r.in.ItemID, Actor: r.in.Event.Actor, Data: data, Depth: r.in.Event.Depth + 1}
 }
 
 // finish raises wf.{key}.completed or wf.{key}.failed in one last step.

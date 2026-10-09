@@ -21,7 +21,7 @@ type Service struct {
 	db          *sql.DB
 	writeMu     chan struct{}
 	transaction bool
-	events      Events
+	onCommit    func()
 	tx          *sql.Tx
 	pending     *[]Event
 }
@@ -31,9 +31,9 @@ func NewService(db *sql.DB) *Service {
 	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1)}
 }
 
-// SetEvents makes every committed write deliver its domain events to events,
-// inside the write's transaction. Call it before the service is used.
-func (s *Service) SetEvents(events Events) { s.events = events }
+// OnCommit calls f after each committed write that recorded domain events,
+// so a dispatcher can pick them up at once. Call it before the service is used.
+func (s *Service) OnCommit(f func()) { s.onCommit = f }
 
 // txDriver runs Ent on a transaction the service does not own. Ent opens its
 // own transaction for multi-statement saves; here those join tx instead.
@@ -45,8 +45,8 @@ func entClient(tx *sql.Tx) *ent.Client {
 	return ent.NewClient(ent.Driver(txDriver{entsql.NewDriver(dialect.SQLite, entsql.Conn{ExecQuerier: tx})}))
 }
 
-// Mutations include authorization, version checks, audit records and domain
-// events in one transaction. SQLite WAL allows concurrent readers; one writer
+// Mutations include authorization, version checks, audit records and the
+// domain event log in one transaction. SQLite WAL allows concurrent readers; one writer
 // per process keeps PaperGo writes in order, and immediate transactions make
 // other writers (the runner) wait for the lock instead of failing.
 // Waiting for the writer slot honors ctx, so a timed-out request leaves the queue.
@@ -64,7 +64,8 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	if err != nil {
 		return err
 	}
-	if err = s.inTx(ctx, tx, fn); err != nil {
+	recorded, err := s.inTx(ctx, tx, fn)
+	if err != nil {
 		_ = tx.Rollback()
 	} else {
 		err = tx.Commit()
@@ -72,28 +73,30 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	if ent.IsConstraintError(err) {
 		return ErrConflict
 	}
+	if err == nil && recorded > 0 && s.onCommit != nil {
+		s.onCommit()
+	}
 	return err
 }
 
-// inTx runs fn on a service bound to tx and then delivers the events fn
-// produced, so they commit or roll back with its writes.
-func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) error {
+// inTx runs fn on a service bound to tx and then records the events fn
+// raised in the domain event log, so they commit or roll back with its
+// writes. It returns how many events it recorded.
+func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
 	var pending []Event
-	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, events: s.events, tx: tx, pending: &pending}
+	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, tx: tx, pending: &pending}
 	if err := fn(t); err != nil {
-		return err
+		return 0, err
 	}
-	if s.events == nil || len(pending) == 0 {
-		return nil
-	}
-	return s.events.Publish(ctx, t, pending)
+	return len(pending), recordEvents(ctx, tx, pending)
 }
 
 // WriteTx runs fn as one write inside tx, which the caller owns and commits.
 // The runner uses it so a workflow step's writes, their events and the step's
-// completion marker commit together.
+// completion marker commit together; it wakes the dispatcher itself.
 func (s *Service) WriteTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) error {
-	return s.inTx(ctx, tx, fn)
+	_, err := s.inTx(ctx, tx, fn)
+	return err
 }
 
 // A consistent snapshot binds authorization, surface selection and hydration.
@@ -106,7 +109,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, events: s.events, tx: tx})
+	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, tx: tx})
 	if err != nil {
 		return out, err
 	}

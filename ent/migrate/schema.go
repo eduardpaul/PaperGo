@@ -158,6 +158,43 @@ var (
 			},
 		},
 	}
+	// DomainEventsColumns holds the columns for the "domain_events" table.
+	DomainEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "type", Type: field.TypeString},
+		{Name: "workspace_id", Type: field.TypeString},
+		{Name: "collection_id", Type: field.TypeString, Nullable: true},
+		{Name: "resource_id", Type: field.TypeString, Nullable: true},
+		{Name: "actor", Type: field.TypeString},
+		{Name: "data", Type: field.TypeJSON},
+		{Name: "depth", Type: field.TypeInt},
+		{Name: "dispatched_at", Type: field.TypeTime, Nullable: true},
+	}
+	// DomainEventsTable holds the schema information for the "domain_events" table.
+	DomainEventsTable = &schema.Table{
+		Name:       "domain_events",
+		Columns:    DomainEventsColumns,
+		PrimaryKey: []*schema.Column{DomainEventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "domainevent_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{DomainEventsColumns[1], DomainEventsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "dispatched_at IS NULL",
+				},
+			},
+			{
+				Name:    "domainevent_dispatched_at",
+				Unique:  false,
+				Columns: []*schema.Column{DomainEventsColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "dispatched_at IS NOT NULL",
+				},
+			},
+		},
+	}
 	// FieldDefinitionsColumns holds the columns for the "field_definitions" table.
 	FieldDefinitionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1107,6 +1144,7 @@ var (
 		BlobsTable,
 		BusinessKeysTable,
 		ContentTypesTable,
+		DomainEventsTable,
 		FieldDefinitionsTable,
 		FieldValuesTable,
 		GrantsTable,

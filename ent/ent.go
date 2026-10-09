@@ -10,6 +10,7 @@ import (
 	"papergo/ent/blob"
 	"papergo/ent/businesskey"
 	"papergo/ent/contenttype"
+	"papergo/ent/domainevent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
@@ -100,6 +101,7 @@ func checkColumn(t, c string) error {
 			blob.Table:             blob.ValidColumn,
 			businesskey.Table:      businesskey.ValidColumn,
 			contenttype.Table:      contenttype.ValidColumn,
+			domainevent.Table:      domainevent.ValidColumn,
 			fielddefinition.Table:  fielddefinition.ValidColumn,
 			fieldvalue.Table:       fieldvalue.ValidColumn,
 			grant.Table:            grant.ValidColumn,

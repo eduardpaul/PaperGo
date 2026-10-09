@@ -22,6 +22,8 @@ type Tx struct {
 	BusinessKey *BusinessKeyClient
 	// ContentType is the client for interacting with the ContentType builders.
 	ContentType *ContentTypeClient
+	// DomainEvent is the client for interacting with the DomainEvent builders.
+	DomainEvent *DomainEventClient
 	// FieldDefinition is the client for interacting with the FieldDefinition builders.
 	FieldDefinition *FieldDefinitionClient
 	// FieldValue is the client for interacting with the FieldValue builders.
@@ -197,6 +199,7 @@ func (tx *Tx) init() {
 	tx.Blob = NewBlobClient(tx.config)
 	tx.BusinessKey = NewBusinessKeyClient(tx.config)
 	tx.ContentType = NewContentTypeClient(tx.config)
+	tx.DomainEvent = NewDomainEventClient(tx.config)
 	tx.FieldDefinition = NewFieldDefinitionClient(tx.config)
 	tx.FieldValue = NewFieldValueClient(tx.config)
 	tx.Grant = NewGrantClient(tx.config)

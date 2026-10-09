@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"papergo/ent"
+	"papergo/ent/domainevent"
 	"papergo/ent/workflowrun"
 	"papergo/ent/workflowtrigger"
 	"papergo/internal/database"
@@ -194,6 +195,9 @@ func TestItemTriggerConditionAndChainedWorkflow(t *testing.T) {
 	n, err := f.db.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(mark.ID)).Count(ctx)
 	if err != nil || n != 1 {
 		t.Fatalf("rolled back write started runs: %d %v", n, err)
+	}
+	if n, err = f.db.Client.DomainEvent.Query().Where(domainevent.DispatchedAtIsNil()).Count(ctx); err != nil || n != 0 {
+		t.Fatalf("rolled back write logged %d undispatched events: %v", n, err)
 	}
 	// Runs are for workspace managers.
 	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{}); !errors.Is(err, dms.ErrForbidden) {
@@ -446,4 +450,79 @@ func TestCrashRecovery(t *testing.T) {
 	if len(revisions) != 3 {
 		t.Fatalf("revisions after recovery: %d", len(revisions))
 	}
+}
+
+// TestEventsLoggedWithoutRunnerStartLater shows that a write only logs its
+// event: a process without a runner (another server) commits the change,
+// and a runner that launches later dispatches it and runs the workflow.
+func TestEventsLoggedWithoutRunnerStartLater(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "papergo.db")
+	db := testutil.DatabaseAt(t, path)
+	writer := dms.NewService(db.SQL)
+	wf := &workflow.Service{DMS: writer}
+	ws, err := writer.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := writer.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "Inbox"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := wf.Create(ctx, "alice", ws.ID, workflow.Save{Name: "Tag", Definition: json.RawMessage(`{
+		"triggers": [{"type": "item.created", "collection_id": "` + list.ID + `"}],
+		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": ["seen"]}}}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	it, err := writer.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Letter"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// item.created, and item.published: the list publishes automatically.
+	if n, err := db.Client.DomainEvent.Query().Where(domainevent.DispatchedAtIsNil()).Count(ctx); err != nil || n != 2 {
+		t.Fatalf("logged events: %d %v", n, err)
+	}
+	f := open(t, path, "worker")
+	f.ws, f.list = ws, list
+	if runs := f.runs(t, w.ID, 1); runs[0].Status != "completed" {
+		t.Fatalf("run: %+v", runs[0])
+	}
+	if tags := f.head(t, it.ID).Tags; strings.Join(tags, ",") != "seen" {
+		t.Fatalf("tags %v", tags)
+	}
+}
+
+// TestConditionErrorsFailVisibly: a condition that cannot be evaluated does
+// not block dispatch; the run fails with the reason.
+func TestConditionErrorsFailVisibly(t *testing.T) {
+	f := setup(t)
+	w := f.workflow(t, "Needs status", `{
+		"triggers": [{"type": "item.created", "collection_id": "$LIST"}],
+		"condition": {"field": "status", "op": "eq", "value": "new"},
+		"flow": {"start": "stop", "nodes": {"stop": {"activity": "end"}}}}`)
+	fields, err := f.dms.Fields(ctx, "alice", f.list.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range fields {
+		if d.Key == "status" {
+			off := false
+			list, err := f.dms.Get(ctx, "alice", f.list.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = f.dms.UpdateField(ctx, "alice", f.list.ID, d.ID, list.Version, dms.UpdateField{Indexed: &off}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	f.item(t, "alice", "Odd", map[string]any{"status": "new"})
+	runs := f.runs(t, w.ID, 1)
+	if runs[0].Status != "failed" || !strings.Contains(runs[0].Error, "condition") {
+		t.Fatalf("run: %+v", runs[0])
+	}
+	// Later events still dispatch.
+	other := f.workflow(t, "Any item", `{"triggers": [{"type": "item.created", "collection_id": "$LIST"}], "flow": {"start": "stop", "nodes": {"stop": {"activity": "end"}}}}`)
+	f.item(t, "alice", "Next", nil)
+	f.runs(t, other.ID, 1)
 }
