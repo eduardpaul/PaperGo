@@ -209,7 +209,7 @@ func TestManualStartInputsAndBranches(t *testing.T) {
 	f := setup(t)
 	w := f.workflow(t, "Set total", `{
 		"triggers": [{"type": "manual", "collection_id": "$LIST"}],
-		"inputs": {"total": {"type": "integer", "required": true}, "label": {"type": "text", "default": "checked"}},
+		"input_schema": {"type": "object", "required": ["total"], "properties": {"total": {"type": "integer", "minimum": 0}, "label": {"type": "string", "default": "checked"}}},
 		"variables": {"limit": 100},
 		"flow": {"start": "check", "nodes": {
 			"check": {"activity": "if", "inputs": {"left": "{input:total}", "op": "gt", "right": "{var:limit}"}, "next": {"true": "big", "false": "small"}},
@@ -633,5 +633,75 @@ func TestDeletingAMemberCancelsSelectionRuns(t *testing.T) {
 	}
 	if _, err = f.dms.Get(ctx, "alice", c.ID); !errors.Is(err, dms.ErrNotFound) {
 		t.Fatalf("consumed member: %v", err)
+	}
+}
+
+func TestLaunchFormDomainPickers(t *testing.T) {
+	f := setup(t)
+	set, err := f.dms.CreateTermSet(ctx, "alice", f.ws.ID, dms.TermSetInput{Key: "topics", Name: "Topics"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legal, err := f.dms.CreateTerm(ctx, "alice", set.ID, dms.TermInput{Name: "Legal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := f.dms.CreateTerm(ctx, "alice", set.ID, dms.TermInput{Name: "Old", Deprecated: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherWS, err := f.dms.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := f.dms.CreateTermSet(ctx, "alice", otherWS.ID, dms.TermSetInput{Key: "foreign", Name: "Foreign"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := func(termSet string) string {
+		return `{
+		"triggers": [{"type": "manual", "collection_id": "$LIST"}],
+		"input_schema": {"type": "object", "required": ["topics", "reviewer"], "properties": {
+			"topics": {"type": "array", "items": {"type": "string"}, "maxItems": 3, "x-papergo": {"kind": "terms", "term_set_id": "` + termSet + `"}},
+			"reviewer": {"type": "string", "x-papergo": {"kind": "people", "access": "write"}},
+			"related": {"type": "string", "x-papergo": {"kind": "item", "collection_id": "$LIST"}},
+			"target": {"type": "string", "x-papergo": {"kind": "collection"}},
+			"priority": {"type": "string", "enum": ["low", "high"], "default": "low"}}},
+		"flow": {"start": "note", "nodes": {"note": {"activity": "item.update", "inputs": {"values": {"note": "{input:priority} by {input:reviewer}"}}}}}}`
+	}
+	def := strings.ReplaceAll(form(foreign.ID), "$LIST", f.list.ID)
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Foreign terms", Definition: json.RawMessage(def)}); err == nil || !strings.Contains(err.Error(), "term_set_id") {
+		t.Fatalf("term set of another workspace: %v", err)
+	}
+	w := f.workflow(t, "Review", form(set.ID))
+	it := f.item(t, "alice", "Contract", nil)
+	start := func(inputs map[string]any) ([]string, error) {
+		return f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{it.ID}, Inputs: inputs})
+	}
+	for name, tc := range map[string]struct {
+		inputs map[string]any
+		err    string
+	}{
+		"deprecated term": {map[string]any{"topics": []any{old.ID}, "reviewer": "bob"}, "deprecated"},
+		"unknown term":    {map[string]any{"topics": []any{"nope"}, "reviewer": "bob"}, "does not exist"},
+		"no access":       {map[string]any{"topics": []any{legal.ID}, "reviewer": "carol"}, "no write access"},
+		"wrong item":      {map[string]any{"topics": []any{legal.ID}, "reviewer": "bob", "related": f.list.ID}, "not a readable item"},
+		"wrong target":    {map[string]any{"topics": []any{legal.ID}, "reviewer": "bob", "target": it.ID}, "list or library"},
+		"duplicate pick":  {map[string]any{"topics": []any{legal.ID, legal.ID}, "reviewer": "bob"}, "duplicate"},
+	} {
+		if _, err := start(tc.inputs); err == nil || !strings.Contains(err.Error(), tc.err) {
+			t.Fatalf("%s: error %v, want %q", name, err, tc.err)
+		}
+	}
+	ids, err := start(map[string]any{"topics": []any{legal.ID}, "reviewer": "bob", "related": it.ID, "target": f.list.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := f.wait(t, ids[0], finished)
+	if run.Status != "completed" || run.Inputs["priority"] != "low" || run.Inputs["reviewer"] != "bob" {
+		t.Fatalf("run: %+v", run)
+	}
+	if note := f.head(t, it.ID).Values["note"]; note != "low by bob" {
+		t.Fatalf("note %v", note)
 	}
 }

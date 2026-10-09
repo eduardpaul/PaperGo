@@ -62,7 +62,7 @@ func TestWorkflowRoutes(t *testing.T) {
 	}
 	body := `{"name": "Tag on demand", "definition": {
 		"triggers": [{"type": "manual", "collection_id": "` + list.ID + `"}],
-		"inputs": {"tag": {"type": "text", "required": true}},
+		"input_schema": {"type": "object", "required": ["tag"], "properties": {"tag": {"type": "string", "minLength": 1}}},
 		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": ["{input:tag}"]}}}}}}`
 	w = request(h, "POST", "/v1/workspaces/"+ws.ID+"/workflows", body, testToken, "", json_)
 	if w.Code != 201 || w.Header().Get("ETag") != `"1"` {

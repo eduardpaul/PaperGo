@@ -32,7 +32,6 @@ var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.Even
 const (
 	MaxTriggers    = 10
 	MaxNodes       = 100
-	MaxInputs      = 50
 	MaxDepth       = 5
 	MaxNodeVisits  = 1000
 	MaxOutputBytes = 64 * 1024
@@ -43,11 +42,12 @@ const (
 
 // Definition is the content of a workflow version.
 type Definition struct {
-	Triggers  []Trigger        `json:"triggers"`
-	Condition *dms.FilterExpr  `json:"condition,omitempty"`
-	Inputs    map[string]Input `json:"inputs,omitempty"`
-	Variables map[string]any   `json:"variables,omitempty"`
-	Flow      Flow             `json:"flow"`
+	Triggers  []Trigger       `json:"triggers"`
+	Condition *dms.FilterExpr `json:"condition,omitempty"`
+	// InputSchema is the launch form of manual starts (see forms.go).
+	InputSchema map[string]any `json:"input_schema,omitempty"`
+	Variables   map[string]any `json:"variables,omitempty"`
+	Flow        Flow           `json:"flow"`
 }
 
 // Trigger starts runs. CollectionID limits item and workflow-event triggers
@@ -71,14 +71,6 @@ const (
 	SelectionPerItem = "per_item"
 	SelectionAll     = "selection"
 )
-
-// Input declares a launch input of manual runs.
-type Input struct {
-	Type        string `json:"type"`
-	Required    bool   `json:"required,omitempty"`
-	Default     any    `json:"default,omitempty"`
-	Description string `json:"description,omitempty"`
-}
 
 // Flow is a graph of nodes; a run starts at Start and follows the port each
 // node's outcome selects.
@@ -215,25 +207,15 @@ func (d Definition) validate() error {
 	if manual > 1 {
 		return dms.Invalid("a workflow has at most one manual trigger")
 	}
-	if len(d.Inputs) > MaxInputs {
-		return dms.Invalid(fmt.Sprintf("a workflow has at most %d inputs", MaxInputs))
-	}
-	if len(d.Inputs) > 0 && manual == 0 {
-		return dms.Invalid("inputs belong to workflows with a manual trigger")
-	}
-	for name, in := range d.Inputs {
-		if !inputNamePattern.MatchString(name) {
-			return dms.Invalid("invalid input name " + name)
+	if d.InputSchema != nil {
+		if manual == 0 {
+			return dms.Invalid("input_schema belongs to workflows with a manual trigger")
 		}
-		switch in.Type {
-		case "text", "number", "integer", "boolean":
-		default:
-			return dms.Invalid("input " + name + ": type must be text, number, integer or boolean")
+		if err := validateSchema(d.InputSchema, "input_schema", 0, true); err != nil {
+			return dms.Invalid(err.Error())
 		}
-		if in.Default != nil {
-			if _, err := coerceInput(in, in.Default); err != nil {
-				return dms.Invalid("input " + name + " default: " + err.Error())
-			}
+		if _, hints := d.InputSchema["x-papergo-selection"]; hints && !d.selection() {
+			return dms.Invalid("input_schema: x-papergo-selection belongs to selection workflows")
 		}
 	}
 	for name := range d.Variables {
@@ -311,73 +293,18 @@ func (f Flow) validate() error {
 	return nil
 }
 
-// coerceInput converts a launch value to the input's type.
-func coerceInput(in Input, v any) (any, error) {
-	switch in.Type {
-	case "text":
-		s, ok := v.(string)
-		if !ok {
-			return nil, fmt.Errorf("must be text")
+// selection reports whether the manual trigger starts one run per selection.
+func (d Definition) selection() bool {
+	for _, t := range d.Triggers {
+		if t.Type == TriggerManual && t.Selection == SelectionAll {
+			return true
 		}
-		return s, nil
-	case "boolean":
-		b, ok := v.(bool)
-		if !ok {
-			return nil, fmt.Errorf("must be true or false")
-		}
-		return b, nil
-	case "number", "integer":
-		var f float64
-		switch n := v.(type) {
-		case json.Number:
-			var err error
-			if f, err = n.Float64(); err != nil {
-				return nil, fmt.Errorf("must be a number")
-			}
-		case float64:
-			f = n
-		case int:
-			f = float64(n)
-		case int64:
-			f = float64(n)
-		default:
-			return nil, fmt.Errorf("must be a number")
-		}
-		if in.Type == "integer" {
-			if f != float64(int64(f)) {
-				return nil, fmt.Errorf("must be a whole number")
-			}
-			return int64(f), nil
-		}
-		return f, nil
 	}
-	return nil, fmt.Errorf("unknown type")
+	return false
 }
 
-// launchInputs applies defaults and checks the values of a manual start.
+// launchInputs applies the launch form's defaults to a manual start's
+// values and checks them.
 func (d Definition) launchInputs(values map[string]any) (map[string]any, error) {
-	out := map[string]any{}
-	for name := range values {
-		if _, ok := d.Inputs[name]; !ok {
-			return nil, dms.Invalid("unknown input " + name)
-		}
-	}
-	for name, in := range d.Inputs {
-		v, ok := values[name]
-		if !ok || v == nil {
-			if in.Default != nil {
-				v = in.Default
-			} else if in.Required {
-				return nil, dms.Invalid("input " + name + " is required")
-			} else {
-				continue
-			}
-		}
-		c, err := coerceInput(in, v)
-		if err != nil {
-			return nil, dms.Invalid("input " + name + " " + err.Error())
-		}
-		out[name] = c
-	}
-	return out, nil
+	return formValues(d.InputSchema, values, "inputs")
 }

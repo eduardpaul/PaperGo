@@ -10794,31 +10794,6 @@
         ],
         "additionalProperties": false
       },
-      "WorkflowInput": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "text",
-              "number",
-              "integer",
-              "boolean"
-            ]
-          },
-          "required": {
-            "type": "boolean"
-          },
-          "default": {},
-          "description": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "type"
-        ],
-        "additionalProperties": false
-      },
       "WorkflowRetry": {
         "type": "object",
         "properties": {
@@ -10893,18 +10868,20 @@
           "condition": {
             "$ref": "#/components/schemas/FilterExpr"
           },
-          "inputs": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/WorkflowInput"
-            }
-          },
           "variables": {
             "type": "object",
             "additionalProperties": true
           },
           "flow": {
             "$ref": "#/components/schemas/WorkflowFlow"
+          },
+          "input_schema": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowForm"
+              }
+            ],
+            "description": "Launch form of manual starts. On selection workflows its root may carry x-papergo-selection hints (preview, item_label, order_label, primary_description)."
           }
         },
         "required": [
@@ -11096,28 +11073,6 @@
         ],
         "additionalProperties": false
       },
-      "WorkflowActivityInput": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          },
-          "required": {
-            "type": "boolean"
-          },
-          "description": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "type"
-        ],
-        "additionalProperties": false
-      },
       "WorkflowActivity": {
         "type": "object",
         "properties": {
@@ -11140,21 +11095,21 @@
               "type": "string"
             }
           },
-          "inputs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowActivityInput"
-            }
-          },
           "terminal": {
             "type": "boolean"
+          },
+          "input_schema": {
+            "$ref": "#/components/schemas/WorkflowForm"
+          },
+          "output_schema": {
+            "$ref": "#/components/schemas/WorkflowForm"
           }
         },
         "required": [
           "key",
           "kind",
           "ports",
-          "inputs"
+          "input_schema"
         ],
         "additionalProperties": false
       },
@@ -11173,18 +11128,15 @@
           "per_collection": {
             "type": "boolean"
           },
-          "parameters": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/WorkflowInput"
-            }
+          "parameters_schema": {
+            "$ref": "#/components/schemas/WorkflowForm"
           }
         },
         "required": [
           "key",
           "name",
           "per_collection",
-          "parameters"
+          "parameters_schema"
         ],
         "additionalProperties": false
       },
@@ -11244,24 +11196,21 @@
           "per_collection": {
             "type": "boolean"
           },
-          "parameters": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/WorkflowInput"
-            }
-          },
           "workflows": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Workflow"
             }
+          },
+          "parameters_schema": {
+            "$ref": "#/components/schemas/WorkflowForm"
           }
         },
         "required": [
           "key",
           "name",
           "per_collection",
-          "parameters",
+          "parameters_schema",
           "workflows"
         ],
         "additionalProperties": false
@@ -11414,6 +11363,11 @@
               "type": "string"
             },
             "description": "A selection run's ordered members; item_id is its primary item."
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Launch form values of a manual run, defaults applied (run detail only)."
           }
         },
         "required": [
@@ -11445,6 +11399,11 @@
           "data"
         ],
         "additionalProperties": false
+      },
+      "WorkflowForm": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required. x-papergo on a property makes it a domain picker (item, collection, relationship, terms, people)."
       }
     }
   }

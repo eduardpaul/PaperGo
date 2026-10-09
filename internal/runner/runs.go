@@ -38,8 +38,10 @@ type Run struct {
 	Error     string     `json:"error,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
-	Result    any        `json:"result,omitempty"`
-	Steps     []Step     `json:"steps,omitempty"`
+	// Inputs are the launch form's values of a manual run, defaults applied.
+	Inputs map[string]any `json:"inputs,omitempty"`
+	Result any            `json:"result,omitempty"`
+	Steps  []Step         `json:"steps,omitempty"`
 }
 
 // Step is one recorded step of a run: the load, each node attempt, and the
@@ -95,7 +97,7 @@ func (r *Runner) attach(runs []Run, output bool) error {
 		ids[i] = run.ID
 	}
 	// Errors are stored with the output, so it is always loaded.
-	statuses, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterWorkflowIDs(ids...), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(true))
+	statuses, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterWorkflowIDs(ids...), dbos.WithFilterLoadInput(output), dbos.WithFilterLoadOutput(true))
 	if err != nil {
 		return err
 	}
@@ -118,6 +120,9 @@ func (r *Runner) attach(runs []Run, output bool) error {
 		}
 		if output {
 			runs[i].Result = decodeOutput(s.Output)
+			if in, ok := decodeOutput(s.Input).(map[string]any); ok {
+				runs[i].Inputs, _ = in["inputs"].(map[string]any)
+			}
 		}
 	}
 	return nil

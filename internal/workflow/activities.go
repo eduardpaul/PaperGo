@@ -19,37 +19,32 @@ import (
 // or read content. New features add activities here (and built-in workflows
 // that use them) instead of reacting to changes in hidden code.
 type Activity struct {
-	Key         string       `json:"key"`
-	Description string       `json:"description"`
-	Kind        string       `json:"kind"`
-	Ports       []string     `json:"ports"`
-	Inputs      []InputField `json:"inputs"`
+	Key         string   `json:"key"`
+	Description string   `json:"description"`
+	Kind        string   `json:"kind"`
+	Ports       []string `json:"ports"`
+	// InputSchema describes the node's inputs and OutputSchema its output
+	// ({step:node...}), as JSON Schema forms an editor can render. Inputs
+	// may be tokens, so their types are checked when the node runs.
+	InputSchema  map[string]any `json:"input_schema"`
+	OutputSchema map[string]any `json:"output_schema,omitempty"`
 	// Terminal activities end the run and have no next nodes.
 	Terminal bool `json:"terminal,omitempty"`
 	run      func(*env, map[string]any) (outcome, error)
 }
 
-// InputField documents one input of an activity.
-type InputField struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Required    bool   `json:"required,omitempty"`
-	Description string `json:"description"`
-}
-
-// Validate checks a node's inputs: required inputs are present and every
-// input is known. Values may be tokens, so their types are checked when the
-// node runs.
+// Validate checks a node's inputs when a workflow is saved: required inputs
+// are present and every input is known.
 func (a *Activity) Validate(inputs map[string]any) error {
-	known := map[string]bool{}
-	for _, f := range a.Inputs {
-		known[f.Name] = true
-		if f.Required && inputs[f.Name] == nil {
-			return fmt.Errorf("input %s is required", f.Name)
+	props, _ := a.InputSchema["properties"].(map[string]any)
+	required, _ := a.InputSchema["required"].([]any)
+	for _, r := range required {
+		if name, _ := r.(string); inputs[name] == nil {
+			return fmt.Errorf("input %s is required", name)
 		}
 	}
 	for name := range inputs {
-		if !known[name] {
+		if _, ok := props[name]; !ok {
 			return fmt.Errorf("activity %s has no input %s", a.Key, name)
 		}
 	}
@@ -126,45 +121,61 @@ func register(a *Activity) {
 	if a.Ports == nil {
 		a.Ports = []string{}
 	}
+	if a.InputSchema == nil {
+		a.InputSchema = mustSchema(`{"type": "object", "properties": {}}`)
+	}
 	activities[a.Key] = a
 }
 
-var itemIDInput = InputField{Name: "item_id", Type: "id", Description: "The item; defaults to the run's item."}
+// inputs builds an activity's input schema from property schemas.
+func inputs(properties string, required ...string) map[string]any {
+	req, _ := json.Marshal(required)
+	if required == nil {
+		req = []byte("[]")
+	}
+	return mustSchema(`{"type": "object", "properties": {` + properties + `}, "required": ` + string(req) + `}`)
+}
+
+const (
+	itemIDProp  = `"item_id": {"type": "string", "title": "Item", "description": "The item; defaults to the run's item.", "x-papergo": {"kind": "item"}}`
+	itemOutput  = `{"type": "object", "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "values": {"type": "object"}, "collection_id": {"type": "string"}, "content_type_id": {"type": "string"}, "version": {"type": "integer"}, "published": {"type": "boolean"}, "created_by": {"type": "string"}, "updated_by": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}, "updated_at": {"type": "string", "format": "date-time"}}}`
+	filterProp  = `{"type": "object", "title": "Filter", "description": "A query filter, as in collection queries."}`
+	collectProp = `"collection_id": {"type": "string", "title": "List or library", "x-papergo": {"kind": "collection"}}`
+)
 
 func init() {
 	register(&Activity{Key: "if", Kind: "flow", Ports: []string{"true", "false"}, Description: "Follows true or false. With filter, tests the run's item with the query filter language; otherwise compares left and right.",
-		Inputs: []InputField{{Name: "filter", Type: "filter", Description: "A query filter tested against the item's head."}, {Name: "left", Type: "any", Description: "Left value."}, {Name: "op", Type: "text", Description: "eq, ne, gt, ge, lt, le, contains, empty or not_empty."}, {Name: "right", Type: "any", Description: "Right value."}},
-		run:    runIf})
+		InputSchema:  inputs(`"filter": ` + filterProp + `, "left": {"type": "string", "title": "Left"}, "op": {"type": "string", "title": "Comparison", "enum": ["eq", "ne", "gt", "ge", "lt", "le", "contains", "empty", "not_empty"]}, "right": {"type": "string", "title": "Right"}`),
+		OutputSchema: mustSchema(`{"type": "object", "properties": {"result": {"type": "boolean"}}}`), run: runIf})
 	register(&Activity{Key: "set_variable", Kind: "flow", Description: "Sets a run variable.",
-		Inputs: []InputField{{Name: "name", Type: "text", Required: true, Description: "Variable name."}, {Name: "value", Type: "any", Description: "Value; a single token keeps its type."}},
-		run:    runSetVariable})
+		InputSchema:  inputs(`"name": {"type": "string", "title": "Variable"}, "value": {"type": "string", "title": "Value", "description": "A single token keeps its type."}`, "name"),
+		OutputSchema: mustSchema(`{"type": "object", "properties": {"name": {"type": "string"}, "value": {"type": "string"}}}`), run: runSetVariable})
 	register(&Activity{Key: "delay", Kind: "flow", Description: "Waits durably for a duration or until a time.",
-		Inputs: []InputField{{Name: "duration", Type: "duration", Description: "How long, such as 30m or 72h."}, {Name: "until", Type: "datetime", Description: "A date or RFC 3339 time."}},
-		run:    runDelay})
+		InputSchema:  inputs(`"duration": {"type": "string", "title": "Duration", "description": "Such as 30m or 72h."}, "until": {"type": "string", "title": "Until", "description": "A date or RFC 3339 time."}`),
+		OutputSchema: mustSchema(`{"type": "object", "properties": {"until": {"type": "string", "format": "date-time"}}}`), run: runDelay})
 	register(&Activity{Key: "event.raise", Kind: "flow", Description: "Raises wf.{workflow key}.{event} for other workflows, with the run's item.",
-		Inputs: []InputField{{Name: "event", Type: "key", Required: true, Description: "Event name."}, {Name: "data", Type: "object", Description: "Event data."}},
-		run:    runRaise})
+		InputSchema:  inputs(`"event": {"type": "string", "title": "Event"}, "data": {"type": "object", "title": "Data"}`, "event"),
+		OutputSchema: mustSchema(`{"type": "object", "properties": {"event": {"type": "string"}}}`), run: runRaise})
 	register(&Activity{Key: "end", Kind: "flow", Terminal: true, Description: "Completes the run.", run: func(*env, map[string]any) (outcome, error) { return outcome{End: true}, nil }})
 	register(&Activity{Key: "fail", Kind: "flow", Terminal: true, Description: "Fails the run with a message.",
-		Inputs: []InputField{{Name: "message", Type: "text", Required: true, Description: "Why the run failed."}},
-		run:    runFail})
+		InputSchema: inputs(`"message": {"type": "string", "title": "Message"}`, "message"), run: runFail})
 	register(&Activity{Key: "item.get", Kind: "action", Description: "Reads an item; its fields become the output.",
-		Inputs: []InputField{itemIDInput}, run: runItemGet})
+		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(itemOutput), run: runItemGet})
 	register(&Activity{Key: "item.update", Kind: "action", Description: "Changes an item's name, tags or field values. Values are merged; null removes a value.",
-		Inputs: []InputField{itemIDInput, {Name: "name", Type: "text", Description: "New name."}, {Name: "tags", Type: "array", Description: "New tags."}, {Name: "values", Type: "object", Description: "Field values to set."}},
-		run:    runItemUpdate})
+		InputSchema:  inputs(itemIDProp + `, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`),
+		OutputSchema: mustSchema(itemOutput), run: runItemUpdate})
 	register(&Activity{Key: "item.create", Kind: "action", Description: "Creates an item; the output has its item_id.",
-		Inputs: []InputField{{Name: "collection_id", Type: "id", Required: true, Description: "List or library."}, {Name: "parent_id", Type: "id", Description: "Folder; defaults to the collection."}, {Name: "content_type_id", Type: "id", Description: "Content type; defaults to the collection's default."}, {Name: "name", Type: "text", Required: true, Description: "Name."}, {Name: "tags", Type: "array", Description: "Tags."}, {Name: "values", Type: "object", Description: "Field values."}},
-		run:    runItemCreate})
+		InputSchema:  inputs(collectProp+`, "parent_id": {"type": "string", "title": "Folder", "description": "Defaults to the collection."}, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`, "collection_id", "name"),
+		OutputSchema: mustSchema(`{"type": "object", "properties": {"item_id": {"type": "string"}, "item": ` + itemOutput + `}}`), run: runItemCreate})
 	register(&Activity{Key: "items.query", Kind: "action", Description: "Queries a collection's items (head surface); the output has items and count.",
-		Inputs: []InputField{{Name: "collection_id", Type: "id", Required: true, Description: "List or library."}, {Name: "filter", Type: "filter", Description: "Query filter."}, {Name: "sort", Type: "object", Description: "Sort, as in queries."}, {Name: "limit", Type: "integer", Description: "At most 100; default 50."}},
-		run:    runItemsQuery})
+		InputSchema:  inputs(collectProp+`, "filter": `+filterProp+`, "sort": {"type": "object", "title": "Sort"}, "limit": {"type": "integer", "title": "Limit", "minimum": 1, "maximum": 100, "default": 50}`, "collection_id"),
+		OutputSchema: mustSchema(`{"type": "object", "properties": {"items": {"type": "array", "items": ` + itemOutput + `}, "count": {"type": "integer"}}}`), run: runItemsQuery})
 	register(&Activity{Key: "item.publish", Kind: "action", Description: "Publishes the item's head revision; nothing happens when it is already published.",
-		Inputs: []InputField{itemIDInput}, run: runItemPublish})
+		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(`{"type": "object", "properties": {"published": {"type": "boolean"}, "publication_id": {"type": "string"}}}`), run: runItemPublish})
 	register(&Activity{Key: "item.unpublish", Kind: "action", Description: "Unpublishes the item; nothing happens when it is not published.",
-		Inputs: []InputField{itemIDInput}, run: runItemUnpublish})
+		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(`{"type": "object", "properties": {"unpublished": {"type": "boolean"}}}`), run: runItemUnpublish})
 	register(&Activity{Key: "item.delete", Kind: "action", Description: "Deletes the item.",
-		Inputs: []InputField{itemIDInput}, run: runItemDelete})
+		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(`{"type": "object", "properties": {"deleted": {"type": "boolean"}}}`), run: runItemDelete})
 }
 
 // target resolves the item an action works on.

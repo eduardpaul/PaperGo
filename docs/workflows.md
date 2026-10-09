@@ -56,7 +56,7 @@ Fields of a trigger:
   - **Without `collection_id`:** one run with no item.
   - Occurrences missed while PaperGo was down start once.
   - A change to a workflow never starts runs for times already past.
-- A `manual` trigger with `collection_id` starts only on items of that collection. Without it, it starts with no item. Manual workflows can declare `inputs`: `text`, `number`, `integer` or `boolean`, with `required` and `default`.
+- A `manual` trigger with `collection_id` starts only on items of that collection. Without it, it starts with no item. Manual workflows can declare a launch form, `input_schema` (see [Forms](#forms)).
 - `selection` on a `manual` trigger with `collection_id`:
   - `per_item` (the default) starts one run per chosen item.
   - `selection` starts **one run for all chosen items**, in order, for work that combines them, such as composing one document from several photos. See [selection runs](#selection-runs).
@@ -121,7 +121,7 @@ Strings in node inputs can read run data:
 | --- | --- |
 | `{item:path}` | the run's item: `id`, `name`, `tags`, `values.<field>`, `collection_id`, `content_type_id`, `version`, `published`, `created_by`, `updated_by`, `created_at`, `updated_at` |
 | `{trigger:path}` | the event that started the run (see above) |
-| `{input:name}` | manual launch inputs |
+| `{input:path}` | the launch form's values, defaults applied, such as `{input:reviewer}` or `{input:options.mode}` |
 | `{var:name}` | run variables (`variables`, and `set_variable`) |
 | `{step:node.path}` | a node's output, such as `{step:read.values.total}` |
 | `{run:path}` | `id`, `workflow_id`, `workflow_key`, `version`, `actor`, `items` (the run's items in order: a selection's members, else its item) |
@@ -131,7 +131,7 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 
 ## Activities
 
-`GET /v1/workflow-catalog` lists every activity with its inputs and ports.
+`GET /v1/workflow-catalog` lists every activity with its ports, an `input_schema` describing its node inputs and an `output_schema` describing what `{step:node...}` can read. Both are [forms](#forms), so an editor can render a node's settings without knowing the activity. Node inputs may be tokens, so saving checks only that required inputs are present and every input is known; types are checked when the node runs.
 
 | Activity | Kind | Does | Output |
 | --- | --- | --- | --- |
@@ -149,6 +149,55 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `item.delete` | action | deletes the item | `deleted` |
 
 Item actions work on the run's item unless `item_id` is given. They use the same validation, permissions, revisions, audit records and events as API requests.
+
+## Forms
+
+Launch inputs, built-in parameters and activity settings are described by **forms**: JSON Schema objects (a draft-07 subset). A UI renders them with any JSON Schema form library, but the server never trusts a form. It applies defaults and validates every value itself.
+
+```json
+"input_schema": {
+  "type": "object",
+  "required": ["reviewer", "topics"],
+  "properties": {
+    "reviewer": {"type": "string", "title": "Reviewer", "x-papergo": {"kind": "people", "access": "write"}},
+    "topics": {"type": "array", "title": "Topics", "items": {"type": "string"}, "maxItems": 3, "uniqueItems": true,
+               "x-papergo": {"kind": "terms", "term_set_id": "<term set>"}},
+    "related": {"type": "string", "title": "Related contract", "x-papergo": {"kind": "item", "collection_id": "<contracts list>"}},
+    "priority": {"type": "string", "enum": ["low", "high"], "default": "low"},
+    "options": {"type": "object", "properties": {"notify": {"type": "boolean", "default": true}}}
+  }
+}
+```
+
+**Keywords.**
+- Structure: `type` (`string`, `number`, `integer`, `boolean`, `array`, `object`), `properties`, `required`, `items`.
+- Constraints: `enum`, `minimum`, `maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, `uniqueItems`.
+- Annotations: `default`, `title`, `description`, `format`, `examples`, `readOnly`, `writeOnly`, `deprecated` and `$comment`.
+- Presentation hints: other `x-*` keys are kept for UIs and ignored by the server.
+- Rejected: a keyword the server would not enforce (`pattern`, `oneOf`, ...), so a form never promises a check that does not happen. A keyword on the wrong type is rejected too.
+
+Property names are lowercase identifiers, and forms nest at most 6 levels.
+
+**Values.**
+- Defaults fill missing properties, nested objects included.
+- Missing required values, unknown names, wrong types (an `integer` must be whole), values outside `enum` or the bounds, and duplicate entries under `uniqueItems` are rejected with the failing path, such as `inputs.options.notify`.
+- A manual start is refused before any run starts, and the run keeps the final values: `inputs` in the run detail, `{input:...}` in tokens.
+
+**Domain pickers.** `x-papergo` on a string property (one value) or an array of strings (several, at most 100) makes it a picker of PaperGo objects. Its values are IDs, which the server checks against the data and the permissions of the person who submits the form. A required picker must not be empty.
+
+| `kind` | Picks | Options |
+| --- | --- | --- |
+| `item` | items of the workspace the person may read | `collection_id`: only that list or library |
+| `collection` | lists and libraries of the workspace the person may read | |
+| `relationship` | items to use with a relationship type; no link is created, nodes decide | `relationship_type_id` (required) |
+| `terms` | terms of the workspace's taxonomy, not deprecated | `term_set_id`, `term_ids` (only those terms) |
+| `people` | principal subjects that have access to the workspace | `access`: `read` (default), `read_draft`, `write`, `publish` or `manage` |
+
+Saving a workflow checks that the collections, relationship types, term sets and terms its pickers name belong to the workspace.
+
+**Selection hints.** The root of a [selection](#selection-runs) workflow's launch form can carry `x-papergo-selection`, text hints for the screen that chooses and orders the items: `preview` (such as `image`), `item_label` (such as `page`), `order_label` and `primary_description`. They are presentation only.
+
+Approval steps (planned) will collect their answers with the same forms and checks.
 
 ## Selection runs
 
@@ -183,7 +232,7 @@ Built-in workflows are processes PaperGo ships, in the same model.
 
 How people use them:
 
-- **Turn on, off, and set parameters:** `PUT /v1/workspaces/{id}/workflow-builtins/{key}` with `{"collection_id", "enabled", "parameters"}`.
+- **Turn on, off, and set parameters:** `PUT /v1/workspaces/{id}/workflow-builtins/{key}` with `{"collection_id", "enabled", "parameters"}`. Each built-in describes its parameters as a form (`parameters_schema` in the catalog); they get its defaults and checks.
   - The first call creates the built-in's workflow. Later calls need its ETag in `If-Match`.
   - The workflow's definition is the release definition with the parameters filled in. Its runs, versions and history work like any workflow's.
 - **Edit freely:** a built-in's definition cannot be edited in place. `POST .../workflow-builtins/{key}/copy` creates an ordinary workflow from it and turns the built-in off where it was on, so the copy replaces it.

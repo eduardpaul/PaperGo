@@ -308,6 +308,11 @@ func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceI
 			continue
 		}
 	}
+	if def.InputSchema != nil {
+		if err = checkDomainConfig(ctx, t, workspaceID, def.InputSchema, "input_schema"); err != nil {
+			return def, nil, err
+		}
+	}
 	normalized, err := json.Marshal(def)
 	return def, normalized, err
 }
@@ -491,6 +496,11 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 		inputs, err := def.launchInputs(in.Inputs)
 		if err != nil {
 			return err
+		}
+		if def.InputSchema != nil {
+			if err = checkDomainValues(ctx, t, subject, w.WorkspaceID, def.InputSchema, inputs, "inputs"); err != nil {
+				return err
+			}
 		}
 		// Duplicates are dropped; the first occurrence keeps its place.
 		items := make([]string, 0, len(in.ItemIDs))

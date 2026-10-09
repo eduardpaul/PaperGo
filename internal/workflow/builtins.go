@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strings"
 
 	"papergo/ent"
 	"papergo/ent/resource"
@@ -25,9 +24,10 @@ type BuiltIn struct {
 	Description string `json:"description"`
 	// PerCollection built-ins are turned on for one list or library;
 	// {param:collection} is that collection's ID.
-	PerCollection bool             `json:"per_collection"`
-	Parameters    map[string]Input `json:"parameters"`
-	definition    string
+	PerCollection bool `json:"per_collection"`
+	// ParametersSchema is the form of the built-in's parameters.
+	ParametersSchema map[string]any `json:"parameters_schema"`
+	definition       string
 }
 
 var builtins = map[string]*BuiltIn{}
@@ -50,11 +50,11 @@ func init() {
 		Name:          "Unpublish expired items",
 		Description:   "Every day, unpublishes the published items whose date field is before today.",
 		PerCollection: true,
-		Parameters: map[string]Input{
-			"field":     {Type: "text", Required: true, Description: "Key of an indexed date field holding the expiry date."},
-			"cron":      {Type: "text", Default: "0 1 * * *", Description: "When to check, as a cron expression."},
-			"time_zone": {Type: "text", Default: "UTC", Description: "Time zone of the cron expression."},
-		},
+		ParametersSchema: mustSchema(`{"type": "object", "required": ["field"], "properties": {
+			"field": {"type": "string", "title": "Expiry field", "description": "Key of an indexed date field holding the expiry date."},
+			"cron": {"type": "string", "title": "Schedule", "description": "When to check, as a cron expression.", "default": "0 1 * * *"},
+			"time_zone": {"type": "string", "title": "Time zone", "description": "Time zone of the schedule.", "default": "UTC"}
+		}}`),
 		definition: `{
 			"triggers": [{"type": "schedule", "collection_id": "{param:collection}", "cron": "{param:cron}", "time_zone": "{param:time_zone}", "surface": "published"}],
 			"condition": {"field": "{param:field}", "op": "lt", "value_ref": "today"},
@@ -98,10 +98,9 @@ func (b *BuiltIn) fill(params map[string]any) (json.RawMessage, error) {
 
 // params applies defaults and checks a built-in's parameters.
 func (b *BuiltIn) params(values map[string]any, collectionID string) (map[string]any, error) {
-	d := Definition{Inputs: b.Parameters}
-	out, err := d.launchInputs(values)
+	out, err := formValues(b.ParametersSchema, values, "parameters")
 	if err != nil {
-		return nil, dms.Invalid(strings.Replace(err.Error(), "input", "parameter", 1))
+		return nil, err
 	}
 	if b.PerCollection {
 		out["collection"] = collectionID
