@@ -41,6 +41,18 @@ func permissionSQL(idColumn, subject, action string) (string, []any) {
 	return query, args
 }
 
+// scopeGrantSQL tests a grant on an ACL scope ID column directly.
+func scopeGrantSQL(scopeColumn, subject, action string) (string, []any) {
+	actions := impliedActions(action)
+	args := []any{subject}
+	marks := make([]string, len(actions))
+	for i, a := range actions {
+		marks[i] = "?"
+		args = append(args, a)
+	}
+	return `EXISTS (SELECT 1 FROM grants g WHERE g.resource_id=` + scopeColumn + ` AND g.subject=? AND g.effect='allow' AND g.action IN (` + strings.Join(marks, ",") + `))`, args
+}
+
 // permissionPredicate filters resources rows by their own scope_id, which the
 // browse indexes cover, so unreadable rows are skipped without a table lookup.
 func permissionPredicate(subject, action string) func(*entsql.Selector) {

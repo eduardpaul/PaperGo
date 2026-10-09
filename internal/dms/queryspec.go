@@ -61,6 +61,9 @@ type compiledQuery struct {
 	kind        string
 	// rankDef is the definition behind the rank column; nil for built-in columns.
 	rankDef *ent.FieldDefinition
+	// seek, set for ungrouped collection queries, pages from the sort index
+	// instead of sorting every eligible row.
+	seek *seekPlan
 }
 type queryCursor struct {
 	Fingerprint string          `json:"fingerprint"`
@@ -360,11 +363,10 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 	if e != nil {
 		return compiledQuery{}, e
 	}
-	selected, surfaceArgs := surfaceSQL("r.id", subject, in.Surface)
-	args := append([]any{}, rankArgs...)
-	args = append(args, surfaceArgs...)
-	args = append(args, c.ID)
-	text := "SELECT r.id," + rank + " AS sort_value FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind='item'"
+	// Conditions reference only r and p, so the CTE below and the index-driven
+	// pages of queryseek.go share them.
+	text := ""
+	args := []any{}
 	if in.Query.ContentTypeID != "" {
 		text += " AND r.content_type_id=?"
 		args = append(args, in.Query.ContentTypeID)
@@ -398,8 +400,13 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		text += " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)"
 		args = append(args, phrase)
 	}
+	conditions, conditionArgs := text, args
+	selected, surfaceArgs := surfaceSQL("r.id", subject, in.Surface)
+	args = append(append(append([]any{}, rankArgs...), surfaceArgs...), c.ID)
+	text = "SELECT r.id," + rank + " AS sort_value FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind='item'" + conditions
+	args = append(args, conditionArgs...)
 	// SQLite evaluates these terms in order: cheap index filters first, so the
-	// recursive ACL walk runs only on rows that already match.
+	// ACL probe runs only on rows that already match.
 	action := "read"
 	if in.Surface == "head" {
 		action = "read_draft"
@@ -413,7 +420,15 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		Grouped                              bool
 	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped})
 	sum := sha256.Sum256(fingerprint)
-	return compiledQuery{text, args, hex.EncodeToString(sum[:]), !grouped && in.Query.Sort.Direction == "desc", kind, compiler.defs[rankField]}, nil
+	q := compiledQuery{sql: text, args: args, fingerprint: hex.EncodeToString(sum[:]), descending: !grouped && in.Query.Sort.Direction == "desc", kind: kind, rankDef: compiler.defs[rankField]}
+	if !grouped {
+		column, _ := systemField(rankField)
+		if column == "r.id" {
+			column = "p.item_id"
+		}
+		q.seek = &seekPlan{collection: c.ID, subject: subject, surface: in.Surface, conditions: conditions, args: conditionArgs, column: column}
+	}
+	return q, nil
 }
 func cursorEncode(q compiledQuery, id string, value any) string {
 	raw, _ := json.Marshal(value)
@@ -476,9 +491,9 @@ func keyset(q compiledQuery, after string, grouped bool) (string, []any, error) 
 		return "", nil, invalid("cursor has no item ID")
 	}
 	if v == nil {
-		return " WHERE sort_value IS NULL AND id>?", []any{c.ID}, nil
+		return " WHERE sort_value IS NULL AND id" + op + "?", []any{c.ID}, nil
 	}
-	return " WHERE sort_value IS NULL OR sort_value" + op + "? OR (sort_value=? AND id>?)", []any{v, v, c.ID}, nil
+	return " WHERE sort_value IS NULL OR sort_value" + op + "? OR (sort_value=? AND id" + op + "?)", []any{v, v, c.ID}, nil
 }
 func (s *Service) Query(ctx context.Context, subject, containerID string, in QueryRequest) (QueryResult, error) {
 	if in.Surface == "" {
@@ -493,40 +508,62 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 	})
 }
 
+// page selects one keyset page of IDs and sort values; where is keyset's clause.
+// Missing values sort last; ID ties follow the sort direction, as in queryseek.go.
+func (q compiledQuery) page(where string) string {
+	order := "ASC"
+	if q.descending {
+		order = "DESC"
+	}
+	return "WITH eligible AS (" + q.sql + ") SELECT id,sort_value FROM eligible" + where + " ORDER BY (sort_value IS NULL) ASC,sort_value " + order + ",id " + order + " LIMIT ?"
+}
+
+// eligiblePage sorts every eligible row of the CTE. Smart folders, which
+// union several collections, page this way.
+func (s *Service) eligiblePage(ctx context.Context, q compiledQuery, after string, n int) ([]rankedID, error) {
+	where, afterArgs, e := keyset(q, after, false)
+	if e != nil {
+		return nil, e
+	}
+	args := append(append([]any{}, q.args...), afterArgs...)
+	return s.rankedIDs(ctx, q.page(where), append(args, n)...)
+}
+
+// rankedIDs reads (id, sort_value) rows.
+func (s *Service) rankedIDs(ctx context.Context, query string, args ...any) ([]rankedID, error) {
+	rows, e := s.Client.QueryContext(ctx, query, args...)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []rankedID{}
+	for rows.Next() {
+		var r rankedID
+		if e = rows.Scan(&r.id, &r.rank); e != nil {
+			return nil, e
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery) (QueryResult, error) {
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
-		where, afterArgs, e := keyset(q, in.After, false)
-		if e != nil {
-			return QueryResult{}, e
-		}
-		order := "ASC"
-		if q.descending {
-			order = "DESC"
-		}
 		limit := pageSize(in.Limit)
-		args := append(append([]any{}, q.args...), afterArgs...)
-		args = append(args, limit+1)
-		rows, e := t.Client.QueryContext(ctx, "WITH eligible AS ("+q.sql+") SELECT id,sort_value FROM eligible"+where+" ORDER BY (sort_value IS NULL) ASC,sort_value "+order+",id ASC LIMIT ?", args...)
+		var page []rankedID
+		var e error
+		if q.seek != nil {
+			page, e = t.seekPage(ctx, q, in.After, limit+1)
+		} else {
+			page, e = t.eligiblePage(ctx, q, in.After, limit+1)
+		}
 		if e != nil {
 			return QueryResult{}, e
 		}
-		ids := []string{}
-		ranks := []any{}
-		for rows.Next() {
-			var id string
-			var rank any
-			if e = rows.Scan(&id, &rank); e != nil {
-				break
-			}
-			ids = append(ids, id)
-			ranks = append(ranks, rank)
-		}
-		if e == nil {
-			e = rows.Err()
-		}
-		rows.Close()
-		if e != nil {
-			return QueryResult{}, e
+		ids := make([]string, len(page))
+		ranks := make([]any, len(page))
+		for i, r := range page {
+			ids[i], ranks[i] = r.id, r.rank
 		}
 		out := QueryResult{Data: []*ent.Resource{}}
 		if len(ids) > limit {

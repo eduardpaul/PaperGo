@@ -132,6 +132,7 @@ CREATE UNIQUE INDEX smartfolder_owner_id_name ON smart_folders(owner_id,name) WH
 CREATE INDEX `resource_parent_id_id_scope_id` ON `resources` (`parent_id`, `id`, `scope_id`);
 CREATE INDEX `resource_container_id_id` ON `resources` (`container_id`, `id`);
 CREATE INDEX resource_container_id_content_type_id_id ON resources(container_id,content_type_id,id);
+CREATE INDEX resource_container_id_scope_id ON resources(container_id,scope_id);
 CREATE UNIQUE INDEX contenttype_container_id_key ON content_types(container_id,key);
 CREATE UNIQUE INDEX contenttype_container_id_id ON content_types(container_id,id);
 CREATE UNIQUE INDEX contenttype_container_id ON content_types(container_id) WHERE is_default=1;
@@ -443,3 +444,5 @@ CREATE INDEX itemsurface_container_id_surface_modified_by_item_id ON item_surfac
 CREATE INDEX itemsurface_container_id_surface_item_created_at_item_id ON item_surfaces(container_id,surface,item_created_at,item_id);
 
 CREATE INDEX itemsurface_container_id_surface_item_created_by_item_id ON item_surfaces(container_id,surface,item_created_by,item_id);
+
+CREATE INDEX itemsurface_container_id_surface_name_item_id ON item_surfaces(container_id,surface,name,item_id);

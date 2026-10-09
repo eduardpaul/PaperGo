@@ -8514,7 +8514,7 @@
             }
           }
         },
-        "description": "Recently modified first, ID ascending ties, permission filtering before pagination and the optional total. Cursors bind folder version, caller, surface, path, schemas and resolved references.",
+        "description": "Recently modified first, ID descending ties, permission filtering before pagination and the optional total. Cursors bind folder version, caller, surface, path, schemas and resolved references.",
         "type": "object",
         "required": [
           "data"

@@ -473,7 +473,7 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 		Args                     []any
 	}{f.ID, subject, in.Surface, f.Version, in.Path, grouped, schemas, text, args})
 	sum := sha256.Sum256(fingerprint)
-	return compiledQuery{text, args, hex.EncodeToString(sum[:]), !grouped, kind, rankDef}, usable, nil
+	return compiledQuery{sql: text, args: args, fingerprint: hex.EncodeToString(sum[:]), descending: !grouped, kind: kind, rankDef: rankDef}, usable, nil
 }
 
 func (s *Service) QuerySmartFolder(ctx context.Context, subject, id string, in SmartFolderQueryRequest) (SmartFolderResult, error) {

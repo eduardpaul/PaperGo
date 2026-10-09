@@ -76,6 +76,8 @@ func (Resource) Indexes() []ent.Index {
 		index.Fields("parent_id", "id", "scope_id"),
 		index.Fields("container_id", "id"),
 		index.Fields("container_id", "content_type_id", "id"),
+		// Lets auto-surface queries list a collection's few ACL scopes by loose index scan.
+		index.Fields("container_id", "scope_id"),
 		index.Fields("parent_id", "name_key").Unique().Annotations(entsql.IndexWhere("name_key IS NOT NULL")),
 	}
 }

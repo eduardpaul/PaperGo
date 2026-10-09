@@ -411,6 +411,11 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[9], ItemSurfacesColumns[12]},
 			},
+			{
+				Name:    "itemsurface_container_id_surface_name_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[5], ItemSurfacesColumns[12]},
+			},
 		},
 	}
 	// ListViewsColumns holds the columns for the "list_views" table.
@@ -692,6 +697,11 @@ var (
 				Name:    "resource_container_id_content_type_id_id",
 				Unique:  false,
 				Columns: []*schema.Column{ResourcesColumns[21], ResourcesColumns[3], ResourcesColumns[0]},
+			},
+			{
+				Name:    "resource_container_id_scope_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[21], ResourcesColumns[17]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
