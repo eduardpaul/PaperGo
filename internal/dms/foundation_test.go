@@ -386,3 +386,11 @@ func TestRevisionOwnershipAndTransactionRollback(t *testing.T) {
 		t.Fatal("foreign key violation")
 	}
 }
+
+// counted reads an optional query total; -1 means the response had none.
+func counted(total *int) int {
+	if total == nil {
+		return -1
+	}
+	return *total
+}

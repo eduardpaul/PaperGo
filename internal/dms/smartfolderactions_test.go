@@ -52,8 +52,8 @@ func TestSmartFolderClassificationAndUnclassification(t *testing.T) {
 	if string(raw) != `["`+other.ID+`"]` {
 		t.Fatal(string(raw))
 	}
-	rows, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
-	if err != nil || rows.Total != 0 {
+	rows, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
+	if err != nil || counted(rows.Total) != 0 {
 		t.Fatal(rows, err)
 	}
 	out, created, err = s.ClassifySmartFolder(testContext, "alice", f.ID, SmartFolderDrop{FolderVersion: f.Version, CollectionID: l.ID, ItemID: out.ID, Version: out.Version, Path: []*string{&year}})

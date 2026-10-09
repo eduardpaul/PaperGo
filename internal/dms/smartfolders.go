@@ -41,10 +41,11 @@ type SmartFolderInput struct {
 }
 
 type SmartFolderQueryRequest struct {
-	Path    []*string `json:"path,omitempty"`
-	Surface string    `json:"surface,omitempty"`
-	After   string    `json:"after,omitempty"`
-	Limit   int       `json:"limit,omitempty"`
+	Path         []*string `json:"path,omitempty"`
+	Surface      string    `json:"surface,omitempty"`
+	After        string    `json:"after,omitempty"`
+	Limit        int       `json:"limit,omitempty"`
+	IncludeTotal bool      `json:"include_total,omitempty"`
 }
 
 func smartDefinition(f *ent.SmartFolder) (SmartFolderDefinition, error) {

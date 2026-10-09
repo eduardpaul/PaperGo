@@ -30,8 +30,8 @@ func TestSmartFolderPhysicalFoldersAndExactTimes(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := smartOK(t, s, SmartFolderInput{Name: "Folders", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{IncludeFolders: true, Filter: &FilterExpr{Field: "$modified_at", Value: json.RawMessage(`"2026-10-08T11:30:00.123456789Z"`)}, GroupBy: []SmartFolderGroupBy{{Field: "$modified_at", By: "month"}}}})
-	rows, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
-	if err != nil || rows.Total != 1 || rows.Data[0].Item.ID != folder.ID {
+	rows, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
+	if err != nil || counted(rows.Total) != 1 || rows.Data[0].Item.ID != folder.ID {
 		t.Fatal(rows, err)
 	}
 	groups, err := s.SmartFolderGroups(testContext, "alice", f.ID, SmartFolderQueryRequest{})
@@ -39,15 +39,15 @@ func TestSmartFolderPhysicalFoldersAndExactTimes(t *testing.T) {
 		t.Fatal(groups, err)
 	}
 	month := "2026-10"
-	rows, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{Path: []*string{&month}})
-	if err != nil || rows.Total != 1 {
+	rows, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true, Path: []*string{&month}})
+	if err != nil || counted(rows.Total) != 1 {
 		t.Fatal(rows, err)
 	}
 	if err = s.Delete(testContext, "alice", folder.ID, folder.Version); err != nil {
 		t.Fatal(err)
 	}
-	rows, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
-	if err != nil || rows.Total != 0 || len(rows.Data) != 0 {
+	rows, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
+	if err != nil || counted(rows.Total) != 0 || len(rows.Data) != 0 {
 		t.Fatal("deleted folder remains visible", rows, err)
 	}
 }
@@ -138,12 +138,12 @@ func TestRelativeFiltersAreTypedAndBounded(t *testing.T) {
 	fieldOK(t, s, l.ID, CreateField{Key: "owner", Label: "Owner", Type: "text", Indexed: true})
 	create(t, s, l.ID, "item", "Mine", map[string]any{"owner": "alice"})
 	create(t, s, l.ID, "item", "Literal", map[string]any{"owner": "me"})
-	got, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "owner", ValueRef: "me"}}})
-	if err != nil || got.Total != 1 || got.Data[0].Name != "Mine" {
+	got, err := s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "owner", ValueRef: "me"}}})
+	if err != nil || counted(got.Total) != 1 || got.Data[0].Name != "Mine" {
 		t.Fatal(got, err)
 	}
-	got, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "owner", Value: json.RawMessage(`"me"`)}}})
-	if err != nil || got.Total != 1 || got.Data[0].Name != "Literal" {
+	got, err = s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "owner", Value: json.RawMessage(`"me"`)}}})
+	if err != nil || counted(got.Total) != 1 || got.Data[0].Name != "Literal" {
 		t.Fatal(got, err)
 	}
 }
@@ -182,8 +182,8 @@ func TestSmartFoldersTermsSurfacesNavigationAndGlobalPaging(t *testing.T) {
 	}
 	create(t, s, a.ID, "item", "Draft secret", map[string]any{"project_0": root.ID, "issued": "2026-03-01", "status": "open"})
 	f := smartOK(t, s, SmartFolderInput{Name: "Apollo", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Terms: []string{root.ID}, GroupBy: []SmartFolderGroupBy{{Field: "issued", By: "year"}, {Field: "status"}}}})
-	got, err := s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{Limit: 1})
-	if err != nil || got.Total != 3 || len(got.Data) != 1 || got.Data[0].Item.ID != three.ID || got.Data[0].CollectionName != "Papers" {
+	got, err := s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{IncludeTotal: true, Limit: 1})
+	if err != nil || counted(got.Total) != 3 || len(got.Data) != 1 || got.Data[0].Item.ID != three.ID || got.Data[0].CollectionName != "Papers" {
 		t.Fatal(got, err)
 	}
 	seen := map[string]bool{got.Data[0].Item.ID: true}
@@ -212,16 +212,16 @@ func TestSmartFoldersTermsSurfacesNavigationAndGlobalPaging(t *testing.T) {
 	if err != nil || len(groups.Data) != 1 || groups.Data[0].Value != status || groups.Data[0].Count != 1 {
 		t.Fatal(groups, err)
 	}
-	got, err = s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{Path: []*string{&year, &status}})
-	if err != nil || got.Total != 1 || got.Data[0].Item.ID != two.ID {
+	got, err = s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{IncludeTotal: true, Path: []*string{&year, &status}})
+	if err != nil || counted(got.Total) != 1 || got.Data[0].Item.ID != two.ID {
 		t.Fatal(got, err)
 	}
-	got, err = s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{Path: []*string{nil}})
-	if err != nil || got.Total != 1 || got.Data[0].Item.ID != three.ID {
+	got, err = s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{IncludeTotal: true, Path: []*string{nil}})
+	if err != nil || counted(got.Total) != 1 || got.Data[0].Item.ID != three.ID {
 		t.Fatal(got, err)
 	}
-	got, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
-	if err != nil || got.Total != 4 {
+	got, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
+	if err != nil || counted(got.Total) != 4 {
 		t.Fatal(got, err)
 	}
 	if _, err = s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{Path: []*string{&year, &status, &status}}); !isValidation(err) {
@@ -242,8 +242,8 @@ func TestSmartFoldersTermsSurfacesNavigationAndGlobalPaging(t *testing.T) {
 	if _, err = s.Update(testContext, "alice", two.ID, latest(t, s, two.ID).Version, UpdateResource{Values: &values}); err != nil {
 		t.Fatal(err)
 	}
-	got, err = s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{Path: []*string{&year}})
-	if err != nil || got.Total != 1 {
+	got, err = s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{IncludeTotal: true, Path: []*string{&year}})
+	if err != nil || counted(got.Total) != 1 {
 		t.Fatal("draft leaked", got, err)
 	}
 }
@@ -259,8 +259,8 @@ func TestSmartFolderSkipsIncompatibleCollectionsAndSelectsTypesTemplates(t *test
 	}
 	create(t, s, b.ID, "item", "No status", nil)
 	f := smartOK(t, s, SmartFolderInput{Name: "Open", Personal: true, Definition: SmartFolderDefinition{Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"open"`)}, ContentTypes: []string{"INVOICE"}}})
-	got, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
-	if err != nil || got.Total != 1 || got.Data[0].Item.ID != item.ID {
+	got, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
+	if err != nil || counted(got.Total) != 1 || got.Data[0].Item.ID != item.ID {
 		t.Fatal(got, err)
 	}
 	tpl, err := s.CreateTemplate(testContext, "alice", w.ID, TemplateInput{Key: "invoice_template", Name: "Invoice template"})
@@ -271,8 +271,8 @@ func TestSmartFolderSkipsIncompatibleCollectionsAndSelectsTypesTemplates(t *test
 		t.Fatal(err)
 	}
 	f = smartOK(t, s, SmartFolderInput{Name: "Template", Personal: true, Definition: SmartFolderDefinition{Templates: []string{"INVOICE_TEMPLATE"}}})
-	got, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
-	if err != nil || got.Total != 1 {
+	got, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
+	if err != nil || counted(got.Total) != 1 {
 		t.Fatal(got, err)
 	}
 	f = smartOK(t, s, SmartFolderInput{Name: "Invalid field", Personal: true, Definition: SmartFolderDefinition{Collections: []string{b.Name}, Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"open"`)}}})

@@ -54,8 +54,8 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	good := &BulkCreate{Name: "Invoice", Values: map[string]any{"title": "One", "subtotal": "90071992547409.92", "total": "90071992547409.93"}}
 	bad := &BulkCreate{Name: "Bad", Values: map[string]any{"title": "Bad", "subtotal": "90071992547409.94", "total": "90071992547409.93"}}
 	bulkFails(t, s, "alice", l.ID, 1, nil, BulkOperation{Action: "create", Create: good}, BulkOperation{Action: "create", Create: bad})
-	query, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: typ.ID}})
-	if err != nil || query.Total != 0 {
+	query, err := s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{ContentTypeID: typ.ID}})
+	if err != nil || counted(query.Total) != 0 {
 		t.Fatal("rule failure did not roll back", query, err)
 	}
 	results := bulkOK(t, s, "alice", l.ID, BulkOperation{Action: "create", Create: good})
@@ -87,8 +87,8 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	}
 	bulkFails(t, s, "alice", l.ID, 0, nil, BulkOperation{Action: "create", Create: &BulkCreate{Name: "Simple", ContentTypeID: simple.ID, Values: good.Values}})
 	plain := bulkOK(t, s, "alice", l.ID, BulkOperation{Action: "create", Create: &BulkCreate{Name: "Simple", ContentTypeID: simple.ID, Values: map[string]any{"title": "Plain"}}})
-	query, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: typ.ID}})
-	if err != nil || query.Total != 1 || query.Data[0].ID != item.ID {
+	query, err = s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{ContentTypeID: typ.ID}})
+	if err != nil || counted(query.Total) != 1 || query.Data[0].ID != item.ID {
 		t.Fatal(query, err)
 	}
 	if _, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: simple.ID, Sort: SortSpec{Field: "total"}}}); !isValidation(err) {
@@ -292,8 +292,8 @@ func TestConcurrentBulkUniqueKeysHaveOneWholeBatchWinner(t *testing.T) {
 	if err != nil || count != 2 || winners != 1 {
 		t.Fatal("partial batch claims", count, winners, err)
 	}
-	got, err := s.Query(testContext, "alice", l.ID, QueryRequest{})
-	if err != nil || got.Total != 2 {
+	got, err := s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true})
+	if err != nil || counted(got.Total) != 2 {
 		t.Fatal(got, err)
 	}
 }

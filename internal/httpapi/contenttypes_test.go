@@ -62,8 +62,8 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 	if res.Code != 409 || !strings.Contains(res.Body.String(), `"operation_index":1`) {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	got, err := s.Query(ctx, "alice", l.ID, dms.QueryRequest{})
-	if err != nil || got.Total != 0 {
+	got, err := s.Query(ctx, "alice", l.ID, dms.QueryRequest{IncludeTotal: true})
+	if err != nil || got.Total == nil || *got.Total != 0 {
 		t.Fatal(got, err)
 	}
 	// A rule dependency rejects deletion without changing the collection ETag.

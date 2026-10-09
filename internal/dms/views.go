@@ -154,9 +154,10 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 }
 
 type ViewQueryRequest struct {
-	Surface string `json:"surface,omitempty"`
-	After   string `json:"after,omitempty"`
-	Limit   int    `json:"limit,omitempty"`
+	Surface      string `json:"surface,omitempty"`
+	After        string `json:"after,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	IncludeTotal bool   `json:"include_total,omitempty"`
 }
 
 func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQueryRequest) (QueryResult, error) {
@@ -169,7 +170,7 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 		if e = json.Unmarshal(v.Query, &spec); e != nil {
 			return QueryResult{}, e
 		}
-		out, e := t.Query(ctx, subject, v.ContainerID, QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit})
+		out, e := t.Query(ctx, subject, v.ContainerID, QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal})
 		if e != nil {
 			return out, e
 		}

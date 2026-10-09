@@ -7274,6 +7274,11 @@
             "maximum": 100,
             "default": 50
           },
+          "include_total": {
+            "type": "boolean",
+            "default": false,
+            "description": "Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested."
+          },
           "query": {
             "$ref": "#/components/schemas/QuerySpec"
           }
@@ -7301,6 +7306,11 @@
             "minimum": 1,
             "maximum": 100,
             "default": 50
+          },
+          "include_total": {
+            "type": "boolean",
+            "default": false,
+            "description": "Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested."
           }
         },
         "required": [],
@@ -7361,8 +7371,7 @@
           }
         },
         "required": [
-          "data",
-          "total"
+          "data"
         ],
         "additionalProperties": false
       },
@@ -8455,6 +8464,11 @@
           },
           "after": {
             "type": "string"
+          },
+          "include_total": {
+            "type": "boolean",
+            "default": false,
+            "description": "Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested."
           }
         },
         "additionalProperties": false,
@@ -8500,11 +8514,10 @@
             }
           }
         },
-        "description": "Recently modified first, ID ascending ties, permission filtering before pagination and totals. Cursors bind folder version, caller, surface, path, schemas and resolved references.",
+        "description": "Recently modified first, ID ascending ties, permission filtering before pagination and the optional total. Cursors bind folder version, caller, surface, path, schemas and resolved references.",
         "type": "object",
         "required": [
-          "data",
-          "total"
+          "data"
         ]
       },
       "SmartFolderGroup": {

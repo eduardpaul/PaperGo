@@ -68,8 +68,8 @@ func TestBulkItemLifecycle(t *testing.T) {
 		t.Fatalf("draft leaked: %+v %v", page, err)
 	}
 	bulkOK(t, s, "alice", list.ID, BulkOperation{Action: "publish", ID: item.ID, Version: 2})
-	query, err := s.Query(testContext, "alice", list.ID, QueryRequest{Surface: "published", Query: QuerySpec{Filter: &FilterExpr{Field: "amount", Op: "eq", Value: json.RawMessage("9007199254740994")}}})
-	if err != nil || query.Total != 1 || query.Data[0].ID != item.ID {
+	query, err := s.Query(testContext, "alice", list.ID, QueryRequest{IncludeTotal: true, Surface: "published", Query: QuerySpec{Filter: &FilterExpr{Field: "amount", Op: "eq", Value: json.RawMessage("9007199254740994")}}})
+	if err != nil || counted(query.Total) != 1 || query.Data[0].ID != item.ID {
 		t.Fatalf("projection: %+v %v", query, err)
 	}
 	bulkOK(t, s, "alice", list.ID,

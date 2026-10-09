@@ -105,7 +105,7 @@ POST `/v1/resources/{collectionID}/query` executes a bounded collection-wide ite
 }
 ```
 
-The response contains resource `data`, authorized `total` before pagination, and optional `next_cursor`. Include the returned cursor as `after`. Cursors bind the caller, collection, effective schema, query, and surface. They use keyset pagination with an ID tie-breaker and missing values last. Changing those inputs requires restarting pagination. Concurrent edits can move items between pages; the snapshot guarantee applies to each request.
+The response contains resource `data` and optional `next_cursor`. Set `"include_total": true` to also receive `total`, the authorized match count before pagination; it evaluates every match, so request it only when a client shows the count. The same flag applies to saved-view and smart-folder queries. Include the returned cursor as `after`. Cursors bind the caller, collection, effective schema, query, and surface. They use keyset pagination with an ID tie-breaker and missing values last. Changing those inputs requires restarting pagination. Concurrent edits can move items between pages; the snapshot guarantee applies to each request.
 
 A filter node is one condition or an AND/OR/NOT group, with at most 32 nodes and depth 6. Operators: eq, ne, gt/gte/lt/lte, in, contains, missing, present. Operator/type compatibility is enforced. Custom fields must be indexed; system fields use `$id`, `$name`, and `$tags` to avoid collisions with custom keys. Multi-value equality matches any member; ne means present with no equal member. Sort/group fields must be scalar. Default sort is $id ascending.
 

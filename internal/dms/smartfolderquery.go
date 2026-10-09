@@ -71,7 +71,7 @@ type SmartFolderEntry struct {
 type SmartFolderResult struct {
 	Data       []SmartFolderEntry `json:"data"`
 	NextCursor string             `json:"next_cursor,omitempty"`
-	Total      int                `json:"total"`
+	Total      *int               `json:"total,omitempty"`
 }
 type SmartFolderGroup struct {
 	Value any    `json:"value"`
@@ -493,7 +493,7 @@ func (s *Service) QuerySmartFolder(ctx context.Context, subject, id string, in S
 		if in.Surface == "" {
 			in.Surface = "auto"
 		}
-		out, err := t.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit}, q)
+		out, err := t.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal}, q)
 		if err != nil {
 			return SmartFolderResult{}, err
 		}

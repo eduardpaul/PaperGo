@@ -114,12 +114,12 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 			}
 		}
 	}
-	q, e := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "labels", Value: json.RawMessage(`"blue"`)}}})
-	if e != nil || q.Total != 1 {
+	q, e := s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "labels", Value: json.RawMessage(`"blue"`)}}})
+	if e != nil || counted(q.Total) != 1 {
 		t.Fatal("multi-value query", q, e)
 	}
-	q, e = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "labels", Op: "ne", Value: json.RawMessage(`"blue"`)}}})
-	if e != nil || q.Total != 0 {
+	q, e = s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "labels", Op: "ne", Value: json.RawMessage(`"blue"`)}}})
+	if e != nil || counted(q.Total) != 0 {
 		t.Fatal("multi-value ne must match no member", q, e)
 	}
 }
@@ -213,15 +213,15 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 		t.Fatal(e)
 	}
 	spec := QuerySpec{Sort: SortSpec{Field: "serial"}, GroupBy: "amount", Filter: &FilterExpr{Or: []FilterExpr{{Field: "serial", Op: "gte", Value: json.RawMessage("9007199254740993")}, {Field: "serial", Op: "missing"}}}}
-	query := QueryRequest{Query: spec, Limit: 1}
+	query := QueryRequest{Query: spec, Limit: 1, IncludeTotal: true}
 	ids := []string{}
 	for {
 		page, e := s.Query(testContext, "reader", l.ID, query)
 		if e != nil {
 			t.Fatal(e)
 		}
-		if page.Total != 4 {
-			t.Fatal("unauthorized/draft count", page.Total)
+		if counted(page.Total) != 4 {
+			t.Fatal("unauthorized/draft count", counted(page.Total))
 		}
 		for _, r := range page.Data {
 			ids = append(ids, r.ID)
@@ -264,8 +264,8 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	data, e := s.QueryView(testContext, "reader", view.ID, ViewQueryRequest{})
-	if e != nil || data.Total != 4 {
+	data, e := s.QueryView(testContext, "reader", view.ID, ViewQueryRequest{IncludeTotal: true})
+	if e != nil || counted(data.Total) != 4 {
 		t.Fatal("view query", data, e)
 	}
 	for _, r := range data.Data {
@@ -465,8 +465,8 @@ func TestQueriesCanMatchHistoricalChoicesAfterValidationChanges(t *testing.T) {
 	if _, e = s.UpdateField(testContext, "alice", l.ID, d.ID, latest(t, s, l.ID).Version, UpdateField{Choices: &choices}); e != nil {
 		t.Fatal(e)
 	}
-	result, e := s.Query(testContext, "reader", l.ID, QueryRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"old"`)}}})
-	if e != nil || result.Total != 1 {
+	result, e := s.Query(testContext, "reader", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"old"`)}}})
+	if e != nil || counted(result.Total) != 1 {
 		t.Fatal("historical choice became unqueryable", result, e)
 	}
 }

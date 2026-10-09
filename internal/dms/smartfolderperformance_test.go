@@ -21,7 +21,7 @@ func TestSmartFolderCollectionBudgetDoesNotTruncate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rows, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{}); err != nil || rows.Total != 0 {
+	if rows, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true}); err != nil || counted(rows.Total) != 0 {
 		t.Fatal(rows, err)
 	}
 }
@@ -61,8 +61,8 @@ func BenchmarkSmartFolderQuery100Collections(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		rows, err := s.QuerySmartFolder(ctx, "alice", f.ID, SmartFolderQueryRequest{Limit: 50})
-		if err != nil || rows.Total != 500 || len(rows.Data) != 50 {
+		rows, err := s.QuerySmartFolder(ctx, "alice", f.ID, SmartFolderQueryRequest{Limit: 50, IncludeTotal: true})
+		if err != nil || counted(rows.Total) != 500 || len(rows.Data) != 50 {
 			b.Fatal(rows, err)
 		}
 	}

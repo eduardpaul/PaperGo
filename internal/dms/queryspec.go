@@ -41,11 +41,13 @@ type QueryRequest struct {
 	Surface string    `json:"surface,omitempty"`
 	After   string    `json:"after,omitempty"`
 	Limit   int       `json:"limit,omitempty"`
+	// IncludeTotal counts every authorized match; omitted, total is absent.
+	IncludeTotal bool `json:"include_total,omitempty"`
 }
 type QueryResult struct {
 	Data       []*ent.Resource `json:"data"`
 	NextCursor string          `json:"next_cursor,omitempty"`
-	Total      int             `json:"total"`
+	Total      *int            `json:"total,omitempty"`
 }
 type QueryGroup struct {
 	Value any `json:"value"`
@@ -547,18 +549,16 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 				return out, e
 			}
 		}
-		counts, e := t.Client.QueryContext(ctx, "WITH eligible AS ("+q.sql+") SELECT count(*) FROM eligible", q.args...)
-		if e != nil {
+		if !in.IncludeTotal {
+			return out, nil
+		}
+		// An exact total evaluates every eligible row, so callers opt in.
+		var total int
+		if e = t.scan(ctx, []any{&total}, "WITH eligible AS ("+q.sql+") SELECT count(*) FROM eligible", q.args...); e != nil {
 			return out, e
 		}
-		if counts.Next() {
-			e = counts.Scan(&out.Total)
-		}
-		if e == nil {
-			e = counts.Err()
-		}
-		counts.Close()
-		return out, e
+		out.Total = &total
+		return out, nil
 	})
 }
 func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, in QueryRequest) (Page[QueryGroup], error) {
