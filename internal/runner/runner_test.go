@@ -705,3 +705,46 @@ func TestLaunchFormDomainPickers(t *testing.T) {
 		t.Fatalf("note %v", note)
 	}
 }
+
+func TestKeywordsPicker(t *testing.T) {
+	f := setup(t)
+	if _, err := f.dms.Create(ctx, "alice", f.list.ID, dms.CreateResource{Kind: "item", Name: "Tagged", Tags: []string{"finance"}}); err != nil {
+		t.Fatal(err)
+	}
+	closed := f.workflow(t, "Existing keywords", `{
+		"triggers": [{"type": "manual", "collection_id": "$LIST"}],
+		"input_schema": {"type": "object", "required": ["keywords"], "properties": {
+			"keywords": {"type": "array", "items": {"type": "string"}, "x-papergo": {"kind": "keywords", "collection_id": "$LIST"}}}},
+		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": "{input:keywords}"}}}}}`)
+	open := f.workflow(t, "New keywords", `{
+		"triggers": [{"type": "manual", "collection_id": "$LIST"}],
+		"input_schema": {"type": "object", "properties": {
+			"keyword": {"type": "string", "x-papergo": {"kind": "keywords", "allow_new": true}}}},
+		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": ["{input:keyword}"]}}}}}`)
+	it := f.item(t, "alice", "Target", nil)
+	start := func(w workflow.Workflow, inputs map[string]any) ([]string, error) {
+		return f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{it.ID}, Inputs: inputs})
+	}
+	if _, err := start(closed, map[string]any{"keywords": []any{"brand-new"}}); err == nil || !strings.Contains(err.Error(), "not used") {
+		t.Fatalf("unused keyword: %v", err)
+	}
+	if _, err := start(closed, map[string]any{"keywords": []any{" padded"}}); err == nil {
+		t.Fatal("untrimmed keyword accepted")
+	}
+	ids, err := start(closed, map[string]any{"keywords": []any{"finance"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run := f.wait(t, ids[0], finished); run.Status != "completed" {
+		t.Fatalf("run: %+v", run)
+	}
+	if ids, err = start(open, map[string]any{"keyword": "brand-new"}); err != nil {
+		t.Fatal(err)
+	}
+	if run := f.wait(t, ids[0], finished); run.Status != "completed" {
+		t.Fatalf("run: %+v", run)
+	}
+	if tags := f.head(t, it.ID).Tags; strings.Join(tags, ",") != "brand-new" {
+		t.Fatalf("tags %v", tags)
+	}
+}

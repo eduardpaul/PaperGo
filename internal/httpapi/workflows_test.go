@@ -133,3 +133,25 @@ func TestWorkflowRoutes(t *testing.T) {
 		t.Fatalf("deleted workflow: %d", w.Code)
 	}
 }
+
+func TestTagVocabularyRoute(t *testing.T) {
+	h, s, _ := setup(t)
+	ctx := t.Context()
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "list", Name: "Notes"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tags := range [][]string{{"finance", "legal"}, {"finance"}} {
+		if _, err = s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: tags[len(tags)-1], Tags: tags}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := request(h, "GET", "/v1/workspaces/"+ws.ID+"/tags?prefix=fin&collection_id="+list.ID, "", testToken, "", "")
+	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"data":[{"tag":"finance","count":2}]}` {
+		t.Fatalf("tags: %d %s", w.Code, w.Body)
+	}
+}

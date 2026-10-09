@@ -61,12 +61,15 @@ var schemaKeywords = map[string]bool{
 //	collection    lists and libraries of the workspace the person may read
 //	relationship  items to link with relationship_type_id (a type of the workspace); no edge is created
 //	terms         taxonomy terms of the workspace, not deprecated; term_set_id and term_ids narrow them
+//	keywords      tags (PaperGo's folksonomy) already used on resources the person may read; collection_id
+//	              narrows them to one list or library, allow_new also accepts tags nobody uses yet
 //	people        principal subjects with access (default read) to the workspace
 var domainKinds = map[string]map[string]bool{
 	"item":         {"collection_id": true},
 	"collection":   {},
 	"relationship": {"relationship_type_id": true},
 	"terms":        {"term_set_id": true, "term_ids": true},
+	"keywords":     {"collection_id": true, "allow_new": true},
 	"people":       {"access": true},
 }
 
@@ -214,7 +217,7 @@ func validateDomain(value any, typ string, items any, path string) error {
 	kind, _ := d["kind"].(string)
 	options, ok := domainKinds[kind]
 	if !ok {
-		return fmt.Errorf("%s.x-papergo.kind must be item, collection, relationship, terms or people", path)
+		return fmt.Errorf("%s.x-papergo.kind must be item, collection, relationship, terms, keywords or people", path)
 	}
 	itemType := ""
 	if m, ok := items.(map[string]any); ok {
@@ -240,6 +243,10 @@ func validateDomain(value any, typ string, items any, path string) error {
 				if s, ok := id.(string); !ok || s == "" {
 					return fmt.Errorf("%s.x-papergo.term_ids must hold term IDs", path)
 				}
+			}
+		case "allow_new":
+			if _, ok := v.(bool); !ok {
+				return fmt.Errorf("%s.x-papergo.allow_new must be true or false", path)
 			}
 		case "access":
 			switch v {
@@ -628,6 +635,21 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 		set, _ := f.opts["term_set_id"].(string)
 		allowed, _ := f.opts["term_ids"].([]any)
 		return checkTerm(ctx, t, workspaceID, set, allowed, id)
+	case "keywords":
+		if err := dms.ValidTag(id); err != nil {
+			return fmt.Errorf("%q: %v", id, err)
+		}
+		if f.opts["allow_new"] == true {
+			return nil
+		}
+		collection, _ := f.opts["collection_id"].(string)
+		used, err := t.Tags(ctx, subject, workspaceID, dms.TagsQuery{CollectionID: collection, Tag: id, Limit: 1})
+		if err != nil {
+			return err
+		}
+		if len(used.Data) == 0 {
+			return fmt.Errorf("keyword %q is not used on anything you can read here", id)
+		}
 	case "people":
 		access, _ := f.opts["access"].(string)
 		if access == "" {

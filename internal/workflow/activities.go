@@ -162,10 +162,10 @@ func init() {
 	register(&Activity{Key: "item.get", Kind: "action", Description: "Reads an item; its fields become the output.",
 		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(itemOutput), run: runItemGet})
 	register(&Activity{Key: "item.update", Kind: "action", Description: "Changes an item's name, tags or field values. Values are merged; null removes a value.",
-		InputSchema:  inputs(itemIDProp + `, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`),
+		InputSchema:  inputs(itemIDProp + `, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}, "x-papergo": {"kind": "keywords", "allow_new": true}}, "values": {"type": "object", "title": "Field values"}`),
 		OutputSchema: mustSchema(itemOutput), run: runItemUpdate})
 	register(&Activity{Key: "item.create", Kind: "action", Description: "Creates an item; the output has its item_id.",
-		InputSchema:  inputs(collectProp+`, "parent_id": {"type": "string", "title": "Folder", "description": "Defaults to the collection."}, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`, "collection_id", "name"),
+		InputSchema:  inputs(collectProp+`, "parent_id": {"type": "string", "title": "Folder", "description": "Defaults to the collection."}, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}, "x-papergo": {"kind": "keywords", "allow_new": true}}, "values": {"type": "object", "title": "Field values"}`, "collection_id", "name"),
 		OutputSchema: mustSchema(`{"type": "object", "properties": {"item_id": {"type": "string"}, "item": ` + itemOutput + `}}`), run: runItemCreate})
 	register(&Activity{Key: "items.query", Kind: "action", Description: "Queries a collection's items (head surface); the output has items and count.",
 		InputSchema:  inputs(collectProp+`, "filter": `+filterProp+`, "sort": {"type": "object", "title": "Sort"}, "limit": {"type": "integer", "title": "Limit", "minimum": 1, "maximum": 100, "default": 50}`, "collection_id"),

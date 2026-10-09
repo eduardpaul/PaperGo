@@ -40,7 +40,7 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 | Typed item relationships | Every link has a workspace relationship type supplying its key, directed/symmetric policy, validated attributes, cardinality limits, and edge ETags. Indexed incoming/outgoing queries require visible, authorized endpoints before pagination. Cross-workspace links are rejected. |
 | Publish any list/library item | Publishing disabled by default: new items, edits and uploads are automatically published. With publishing enabled, changes create drafts and explicit publish/unpublish controls the published pointer. Ordinary readers see published revisions only. Library revisions pin their blob. |
 | Preserve content history | Every item create, metadata edit and upload stores an immutable revision tied to its schema revision. Head and published surfaces are independent. Lifecycle/ACL changes advance the lock version without creating content revisions. |
-| Tags on all content | Built-in tags on every resource, with a normalized indexed projection maintained by database triggers. |
+| Tags on all content | Built-in tags on every resource, with a normalized indexed projection maintained by database triggers. They are the folksonomy (keywords): the workspace vocabulary lists tags in use with counts of what the caller can read. |
 | Read-heavy browsing and search | Keyset pagination and permission filtering before LIMIT; FTS5 and tags on the selected head/published surface; optional typed field indexes for exact filters and ranges. Multi-step reads use a consistent database snapshot. |
 | Enterprise backend foundation | Fail-closed bearer authentication, production OIDC, transactional audit events, optimistic concurrency, strict JSON, upload limits, structured logs, health probes, graceful shutdown and non-root container build. |
 | Reusable application schemas | Shared field catalogs, multiple collection content types, cross-field rules, active-field removal and templates with version-checked adoption; immutable effective schemas. |
@@ -59,6 +59,7 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | GET / PATCH / DELETE | `/v1/resources/{id}` | Read / update names, tags, item values, `parent_id` (move) and collection settings / delete a folder or item |
 | POST / GET | `/v1/resources/{id}/children` | Create / browse children |
 | POST | `/v1/resources/{id}/bulk` | Atomically create, update/move, publish, unpublish or delete up to 100 items in one list/library |
+| GET | `/v1/workspaces/{id}/tags` | The tag vocabulary (keywords) with counts of readable resources; `collection_id`, `prefix`, `after`, `limit` |
 | POST / GET | `/v1/smart-folders` | Create / browse personal and shared query definitions |
 | GET / PUT / DELETE | `/v1/smart-folders/{id}` | Read / replace / delete a definition with its own ETag |
 | POST | `/v1/smart-folders/{id}/query`, `/query/groups` | Query live membership / navigate metadata groups with authorized counts |

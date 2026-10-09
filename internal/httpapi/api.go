@@ -70,6 +70,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)
 	api.HandleFunc("GET /v1/workspaces/{id}/audit", a.audit)
+	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
 	api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
 	api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
 	api.HandleFunc("DELETE /v1/webdav-credentials/{id}", a.revokeWebDAVCredential)
@@ -581,4 +582,16 @@ func (a *API) observe(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(rw, r)
 	})
+}
+
+// tags lists the workspace's tag vocabulary (keywords) for pickers and autocomplete.
+func (a *API) tags(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	out, err := a.DMS.Tags(r.Context(), subject(r), r.PathValue("id"), dms.TagsQuery{CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("after"), Limit: limit})
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	respond(w, 200, out)
 }

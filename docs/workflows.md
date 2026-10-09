@@ -191,7 +191,10 @@ Property names are lowercase identifiers, and forms nest at most 6 levels.
 | `collection` | lists and libraries of the workspace the person may read | |
 | `relationship` | items to use with a relationship type; no link is created, nodes decide | `relationship_type_id` (required) |
 | `terms` | terms of the workspace's taxonomy, not deprecated | `term_set_id`, `term_ids` (only those terms) |
+| `keywords` | tags, PaperGo's folksonomy: text values, not IDs, already used on something the person can read | `collection_id`: only tags used there; `allow_new`: also tags nobody uses yet (still valid tags: trimmed, 1 to 64 characters) |
 | `people` | principal subjects that have access to the workspace | `access`: `read` (default), `read_draft`, `write`, `publish` or `manage` |
+
+Keyword pickers get their choices from `GET /v1/workspaces/{id}/tags` (`collection_id`, `prefix` for autocomplete, `after`, `limit`), which counts only what the caller can read. The tag inputs of `item.update` and `item.create` are keyword pickers with `allow_new`.
 
 Saving a workflow checks that the collections, relationship types, term sets and terms its pickers name belong to the workspace.
 
