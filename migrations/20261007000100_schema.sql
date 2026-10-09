@@ -111,7 +111,7 @@ CREATE TABLE domain_events (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, type TEXT NOT NULL,
  workspace_id TEXT NOT NULL, collection_id TEXT, resource_id TEXT, actor TEXT NOT NULL,
  data JSON NOT NULL DEFAULT '{}' CHECK(json_valid(data) AND json_type(data)='object'),
- depth INTEGER NOT NULL CHECK(depth>=0), dispatched_at DATETIME
+ depth INTEGER NOT NULL CHECK(depth>=0), cause_run_id TEXT, dispatched_at DATETIME
 );
 CREATE TABLE workflows (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
@@ -140,6 +140,10 @@ CREATE TABLE workflow_runs (
  workflow_version INTEGER NOT NULL CHECK(workflow_version>0), workspace_id TEXT NOT NULL REFERENCES resources(id),
  item_id TEXT REFERENCES resources(id), event_id TEXT NOT NULL, event_type TEXT NOT NULL,
  depth INTEGER NOT NULL CHECK(depth>=0), actor TEXT NOT NULL, retry_of TEXT
+);
+CREATE TABLE workflow_run_items (
+ id TEXT PRIMARY KEY NOT NULL, run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+ item_id TEXT NOT NULL REFERENCES resources(id), position INTEGER NOT NULL CHECK(position>=0)
 );
 CREATE TABLE runner_step_results (
  run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL,
@@ -227,6 +231,9 @@ CREATE INDEX workflowrun_workspace_id_created_at_id ON workflow_runs(workspace_i
 CREATE INDEX workflowrun_workflow_id_created_at_id ON workflow_runs(workflow_id,created_at,id);
 CREATE INDEX workflowrun_item_id_created_at_id ON workflow_runs(item_id,created_at,id);
 CREATE INDEX workflowrun_created_at ON workflow_runs(created_at);
+CREATE UNIQUE INDEX workflowrunitem_run_id_position ON workflow_run_items(run_id,position);
+CREATE UNIQUE INDEX workflowrunitem_run_id_item_id ON workflow_run_items(run_id,item_id);
+CREATE INDEX workflowrunitem_item_id ON workflow_run_items(item_id);
 
 -- Triggers: derived projections, integrity guards and permission scopes
 CREATE TRIGGER resource_search_insert AFTER INSERT ON resources BEGIN
@@ -511,7 +518,8 @@ END;
 CREATE TRIGGER workflow_identity BEFORE UPDATE OF id,workspace_id,key,builtin_key,collection_id,created_by ON workflows BEGIN SELECT RAISE(ABORT,'workflow identity is immutable'); END;
 CREATE TRIGGER workflow_tombstone BEFORE UPDATE ON workflows WHEN old.deleted_at IS NOT NULL BEGIN SELECT RAISE(ABORT,'deleted workflows are final'); END;
 CREATE TRIGGER workflow_retained BEFORE DELETE ON workflows BEGIN SELECT RAISE(ABORT,'workflows are retained; delete sets deleted_at'); END;
-CREATE TRIGGER domain_event_immutable BEFORE UPDATE OF id,created_at,type,workspace_id,collection_id,resource_id,actor,data,depth ON domain_events BEGIN SELECT RAISE(ABORT,'domain events are immutable'); END;
+CREATE TRIGGER domain_event_immutable BEFORE UPDATE OF id,created_at,type,workspace_id,collection_id,resource_id,actor,data,depth,cause_run_id ON domain_events BEGIN SELECT RAISE(ABORT,'domain events are immutable'); END;
 CREATE TRIGGER workflow_version_immutable BEFORE UPDATE ON workflow_versions BEGIN SELECT RAISE(ABORT,'workflow versions are immutable'); END;
 CREATE TRIGGER workflow_version_retained BEFORE DELETE ON workflow_versions BEGIN SELECT RAISE(ABORT,'workflow versions are retained'); END;
 CREATE TRIGGER workflow_run_immutable BEFORE UPDATE ON workflow_runs BEGIN SELECT RAISE(ABORT,'workflow runs are immutable'); END;
+CREATE TRIGGER workflow_run_item_immutable BEFORE UPDATE ON workflow_run_items BEGIN SELECT RAISE(ABORT,'run membership is immutable'); END;

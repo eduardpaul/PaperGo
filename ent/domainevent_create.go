@@ -92,6 +92,20 @@ func (_c *DomainEventCreate) SetDepth(v int) *DomainEventCreate {
 	return _c
 }
 
+// SetCauseRunID sets the "cause_run_id" field.
+func (_c *DomainEventCreate) SetCauseRunID(v string) *DomainEventCreate {
+	_c.mutation.SetCauseRunID(v)
+	return _c
+}
+
+// SetNillableCauseRunID sets the "cause_run_id" field if the given value is not nil.
+func (_c *DomainEventCreate) SetNillableCauseRunID(v *string) *DomainEventCreate {
+	if v != nil {
+		_c.SetCauseRunID(*v)
+	}
+	return _c
+}
+
 // SetDispatchedAt sets the "dispatched_at" field.
 func (_c *DomainEventCreate) SetDispatchedAt(v time.Time) *DomainEventCreate {
 	_c.mutation.SetDispatchedAt(v)
@@ -258,6 +272,10 @@ func (_c *DomainEventCreate) createSpec() (*DomainEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Depth(); ok {
 		_spec.SetField(domainevent.FieldDepth, field.TypeInt, value)
 		_node.Depth = value
+	}
+	if value, ok := _c.mutation.CauseRunID(); ok {
+		_spec.SetField(domainevent.FieldCauseRunID, field.TypeString, value)
+		_node.CauseRunID = &value
 	}
 	if value, ok := _c.mutation.DispatchedAt(); ok {
 		_spec.SetField(domainevent.FieldDispatchedAt, field.TypeTime, value)

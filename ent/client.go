@@ -34,6 +34,7 @@ import (
 	"papergo/ent/webdavcredential"
 	"papergo/ent/workflow"
 	"papergo/ent/workflowrun"
+	"papergo/ent/workflowrunitem"
 	"papergo/ent/workflowtrigger"
 	"papergo/ent/workflowversion"
 
@@ -96,6 +97,8 @@ type Client struct {
 	Workflow *WorkflowClient
 	// WorkflowRun is the client for interacting with the WorkflowRun builders.
 	WorkflowRun *WorkflowRunClient
+	// WorkflowRunItem is the client for interacting with the WorkflowRunItem builders.
+	WorkflowRunItem *WorkflowRunItemClient
 	// WorkflowTrigger is the client for interacting with the WorkflowTrigger builders.
 	WorkflowTrigger *WorkflowTriggerClient
 	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
@@ -134,6 +137,7 @@ func (c *Client) init() {
 	c.WebDAVCredential = NewWebDAVCredentialClient(c.config)
 	c.Workflow = NewWorkflowClient(c.config)
 	c.WorkflowRun = NewWorkflowRunClient(c.config)
+	c.WorkflowRunItem = NewWorkflowRunItemClient(c.config)
 	c.WorkflowTrigger = NewWorkflowTriggerClient(c.config)
 	c.WorkflowVersion = NewWorkflowVersionClient(c.config)
 }
@@ -251,6 +255,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		WebDAVCredential: NewWebDAVCredentialClient(cfg),
 		Workflow:         NewWorkflowClient(cfg),
 		WorkflowRun:      NewWorkflowRunClient(cfg),
+		WorkflowRunItem:  NewWorkflowRunItemClient(cfg),
 		WorkflowTrigger:  NewWorkflowTriggerClient(cfg),
 		WorkflowVersion:  NewWorkflowVersionClient(cfg),
 	}, nil
@@ -295,6 +300,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		WebDAVCredential: NewWebDAVCredentialClient(cfg),
 		Workflow:         NewWorkflowClient(cfg),
 		WorkflowRun:      NewWorkflowRunClient(cfg),
+		WorkflowRunItem:  NewWorkflowRunItemClient(cfg),
 		WorkflowTrigger:  NewWorkflowTriggerClient(cfg),
 		WorkflowVersion:  NewWorkflowVersionClient(cfg),
 	}, nil
@@ -330,8 +336,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermSet,
-		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowTrigger,
-		c.WorkflowVersion,
+		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -345,8 +351,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermSet,
-		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowTrigger,
-		c.WorkflowVersion,
+		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -401,6 +407,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Workflow.mutate(ctx, m)
 	case *WorkflowRunMutation:
 		return c.WorkflowRun.mutate(ctx, m)
+	case *WorkflowRunItemMutation:
+		return c.WorkflowRunItem.mutate(ctx, m)
 	case *WorkflowTriggerMutation:
 		return c.WorkflowTrigger.mutate(ctx, m)
 	case *WorkflowVersionMutation:
@@ -4173,6 +4181,139 @@ func (c *WorkflowRunClient) mutate(ctx context.Context, m *WorkflowRunMutation) 
 	}
 }
 
+// WorkflowRunItemClient is a client for the WorkflowRunItem schema.
+type WorkflowRunItemClient struct {
+	config
+}
+
+// NewWorkflowRunItemClient returns a client for the WorkflowRunItem from the given config.
+func NewWorkflowRunItemClient(c config) *WorkflowRunItemClient {
+	return &WorkflowRunItemClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `workflowrunitem.Hooks(f(g(h())))`.
+func (c *WorkflowRunItemClient) Use(hooks ...Hook) {
+	c.hooks.WorkflowRunItem = append(c.hooks.WorkflowRunItem, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `workflowrunitem.Intercept(f(g(h())))`.
+func (c *WorkflowRunItemClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WorkflowRunItem = append(c.inters.WorkflowRunItem, interceptors...)
+}
+
+// Create returns a builder for creating a WorkflowRunItem entity.
+func (c *WorkflowRunItemClient) Create() *WorkflowRunItemCreate {
+	mutation := newWorkflowRunItemMutation(c.config, OpCreate)
+	return &WorkflowRunItemCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WorkflowRunItem entities.
+func (c *WorkflowRunItemClient) CreateBulk(builders ...*WorkflowRunItemCreate) *WorkflowRunItemCreateBulk {
+	return &WorkflowRunItemCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WorkflowRunItemClient) MapCreateBulk(slice any, setFunc func(*WorkflowRunItemCreate, int)) *WorkflowRunItemCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WorkflowRunItemCreateBulk{err: fmt.Errorf("calling to WorkflowRunItemClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WorkflowRunItemCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WorkflowRunItemCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WorkflowRunItem.
+func (c *WorkflowRunItemClient) Update() *WorkflowRunItemUpdate {
+	mutation := newWorkflowRunItemMutation(c.config, OpUpdate)
+	return &WorkflowRunItemUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WorkflowRunItemClient) UpdateOne(_m *WorkflowRunItem) *WorkflowRunItemUpdateOne {
+	mutation := newWorkflowRunItemMutation(c.config, OpUpdateOne, withWorkflowRunItem(_m))
+	return &WorkflowRunItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WorkflowRunItemClient) UpdateOneID(id string) *WorkflowRunItemUpdateOne {
+	mutation := newWorkflowRunItemMutation(c.config, OpUpdateOne, withWorkflowRunItemID(id))
+	return &WorkflowRunItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WorkflowRunItem.
+func (c *WorkflowRunItemClient) Delete() *WorkflowRunItemDelete {
+	mutation := newWorkflowRunItemMutation(c.config, OpDelete)
+	return &WorkflowRunItemDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WorkflowRunItemClient) DeleteOne(_m *WorkflowRunItem) *WorkflowRunItemDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WorkflowRunItemClient) DeleteOneID(id string) *WorkflowRunItemDeleteOne {
+	builder := c.Delete().Where(workflowrunitem.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WorkflowRunItemDeleteOne{builder}
+}
+
+// Query returns a query builder for WorkflowRunItem.
+func (c *WorkflowRunItemClient) Query() *WorkflowRunItemQuery {
+	return &WorkflowRunItemQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWorkflowRunItem},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a WorkflowRunItem entity by its id.
+func (c *WorkflowRunItemClient) Get(ctx context.Context, id string) (*WorkflowRunItem, error) {
+	return c.Query().Where(workflowrunitem.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WorkflowRunItemClient) GetX(ctx context.Context, id string) *WorkflowRunItem {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *WorkflowRunItemClient) Hooks() []Hook {
+	return c.hooks.WorkflowRunItem
+}
+
+// Interceptors returns the client interceptors.
+func (c *WorkflowRunItemClient) Interceptors() []Interceptor {
+	return c.inters.WorkflowRunItem
+}
+
+func (c *WorkflowRunItemClient) mutate(ctx context.Context, m *WorkflowRunItemMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WorkflowRunItemCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WorkflowRunItemUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WorkflowRunItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WorkflowRunItemDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown WorkflowRunItem mutation op: %q", m.Op())
+	}
+}
+
 // WorkflowTriggerClient is a client for the WorkflowTrigger schema.
 type WorkflowTriggerClient struct {
 	config
@@ -4446,14 +4587,14 @@ type (
 		FieldValue, Grant, ItemRevision, ItemSurface, ListView, Publication,
 		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
 		SmartFolder, Term, TermSet, WebDAVCredential, Workflow, WorkflowRun,
-		WorkflowTrigger, WorkflowVersion []ent.Hook
+		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BusinessKey, ContentType, DomainEvent, FieldDefinition,
 		FieldValue, Grant, ItemRevision, ItemSurface, ListView, Publication,
 		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
 		SmartFolder, Term, TermSet, WebDAVCredential, Workflow, WorkflowRun,
-		WorkflowTrigger, WorkflowVersion []ent.Interceptor
+		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Interceptor
 	}
 )
 

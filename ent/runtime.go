@@ -27,6 +27,7 @@ import (
 	"papergo/ent/webdavcredential"
 	"papergo/ent/workflow"
 	"papergo/ent/workflowrun"
+	"papergo/ent/workflowrunitem"
 	"papergo/ent/workflowtrigger"
 	"papergo/ent/workflowversion"
 	"papergo/internal/model"
@@ -1280,6 +1281,34 @@ func init() {
 	workflowrunDescDepth := workflowrunFields[8].Descriptor()
 	// workflowrun.DepthValidator is a validator for the "depth" field. It is called by the builders before save.
 	workflowrun.DepthValidator = workflowrunDescDepth.Validators[0].(func(int) error)
+	workflowrunitemFields := schema.WorkflowRunItem{}.Fields()
+	_ = workflowrunitemFields
+	// workflowrunitemDescRunID is the schema descriptor for run_id field.
+	workflowrunitemDescRunID := workflowrunitemFields[1].Descriptor()
+	// workflowrunitem.RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
+	workflowrunitem.RunIDValidator = workflowrunitemDescRunID.Validators[0].(func(string) error)
+	// workflowrunitemDescItemID is the schema descriptor for item_id field.
+	workflowrunitemDescItemID := workflowrunitemFields[2].Descriptor()
+	// workflowrunitem.ItemIDValidator is a validator for the "item_id" field. It is called by the builders before save.
+	workflowrunitem.ItemIDValidator = func() func(string) error {
+		validators := workflowrunitemDescItemID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(item_id string) error {
+			for _, fn := range fns {
+				if err := fn(item_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// workflowrunitemDescPosition is the schema descriptor for position field.
+	workflowrunitemDescPosition := workflowrunitemFields[3].Descriptor()
+	// workflowrunitem.PositionValidator is a validator for the "position" field. It is called by the builders before save.
+	workflowrunitem.PositionValidator = workflowrunitemDescPosition.Validators[0].(func(int) error)
 	workflowtriggerMixin := schema.WorkflowTrigger{}.Mixin()
 	workflowtriggerMixinFields0 := workflowtriggerMixin[0].Fields()
 	_ = workflowtriggerMixinFields0

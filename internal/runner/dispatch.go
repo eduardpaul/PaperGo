@@ -9,6 +9,7 @@ import (
 
 	"papergo/ent"
 	"papergo/ent/domainevent"
+	"papergo/ent/workflowrunitem"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
 )
@@ -47,11 +48,20 @@ func (r *Runner) dispatchLoop(ctx context.Context) {
 // one transaction, so a crash dispatches a batch again or not at all, and run
 // IDs (one per workflow and event) make repeats harmless. The queued runs
 // execute on whichever node's workers dequeue them.
+//
+// Deleting an item cancels the active selection runs it belongs to, except
+// the run whose own step deleted it.
 func (r *Runner) Dispatch(ctx context.Context) (int, error) {
 	total := 0
 	for ctx.Err() == nil {
-		n, err := r.dispatchBatch(ctx)
+		n, cancel, err := r.dispatchBatch(ctx)
 		total += n
+		// DBOS cancels on its own connection, so after the batch committed.
+		for _, id := range cancel {
+			if e := r.cancelActive(id); e != nil && err == nil {
+				err = e
+			}
+		}
 		if err != nil || n < dispatchBatch {
 			return total, err
 		}
@@ -59,8 +69,21 @@ func (r *Runner) Dispatch(ctx context.Context) (int, error) {
 	return total, ctx.Err()
 }
 
-func (r *Runner) dispatchBatch(ctx context.Context) (int, error) {
+func (r *Runner) cancelActive(id string) error {
+	runs := []Run{{ID: id}}
+	if err := r.attach(runs, false); err != nil {
+		return err
+	}
+	if runs[0].Status != "queued" && runs[0].Status != "running" {
+		return nil
+	}
+	r.log.Info("cancel selection run: a member was deleted", "run_id", id)
+	return dbos.CancelWorkflow(r.ctx, id)
+}
+
+func (r *Runner) dispatchBatch(ctx context.Context) (int, []string, error) {
 	var n int
+	var cancel []string
 	err := r.dms.Write(ctx, func(t *dms.Service) error {
 		rows, err := t.Client.DomainEvent.Query().Where(domainevent.DispatchedAtIsNil()).Order(ent.Asc(domainevent.FieldCreatedAt), ent.Asc(domainevent.FieldID)).Limit(dispatchBatch).All(ctx)
 		if err != nil || len(rows) == 0 {
@@ -76,11 +99,28 @@ func (r *Runner) dispatchBatch(ctx context.Context) (int, error) {
 			if row.ResourceID != nil {
 				events[i].ResourceID = *row.ResourceID
 			}
+			if row.CauseRunID != nil {
+				events[i].CauseRunID = *row.CauseRunID
+			}
 			ids[i] = row.ID
 		}
 		starts, err := workflow.Match(ctx, t, events)
 		if err != nil {
 			return err
+		}
+		for _, e := range events {
+			if e.Type != dms.EventItemDeleted || e.ResourceID == "" {
+				continue
+			}
+			memberships, err := t.Client.WorkflowRunItem.Query().Where(workflowrunitem.ItemIDEQ(e.ResourceID)).All(ctx)
+			if err != nil {
+				return err
+			}
+			for _, m := range memberships {
+				if m.RunID != e.CauseRunID {
+					cancel = append(cancel, m.RunID)
+				}
+			}
 		}
 		for _, in := range starts {
 			if _, err = dbos.Enqueue[workflow.Result](r.ctx, runQueue, runName, in, dbos.WithEnqueueWorkflowID(in.RunID), dbos.WithEnqueueTransaction(t.SQLTx())); err != nil {
@@ -93,5 +133,8 @@ func (r *Runner) dispatchBatch(ctx context.Context) (int, error) {
 		n = len(rows)
 		return nil
 	})
-	return n, err
+	if err != nil {
+		cancel = nil
+	}
+	return n, cancel, err
 }

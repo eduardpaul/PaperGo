@@ -7436,7 +7436,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Only runs on this item."
+            "description": "Only runs on this item, including selection runs it is a member of."
           },
           {
             "name": "after",
@@ -10779,6 +10779,14 @@
               "published"
             ],
             "description": "Surface a schedule with collection_id queries; default head."
+          },
+          "selection": {
+            "type": "string",
+            "enum": [
+              "per_item",
+              "selection"
+            ],
+            "description": "On manual triggers with collection_id: one run per chosen item (per_item, default), or one run for all of them in order (selection)."
           }
         },
         "required": [
@@ -11058,11 +11066,16 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 100
+            "maxItems": 100,
+            "description": "Items to start on; duplicates are dropped. A selection workflow takes 1 to 100 items of its collection and starts one run."
           },
           "inputs": {
             "type": "object",
             "additionalProperties": true
+          },
+          "primary_item_id": {
+            "type": "string",
+            "description": "Selection workflows: the run's item; must be one of item_ids. Default: the first."
           }
         },
         "required": [],
@@ -11394,6 +11407,13 @@
             "items": {
               "$ref": "#/components/schemas/WorkflowRunStep"
             }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A selection run's ordered members; item_id is its primary item."
           }
         },
         "required": [

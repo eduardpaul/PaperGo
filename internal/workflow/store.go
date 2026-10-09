@@ -443,18 +443,22 @@ func index(ctx context.Context, t *dms.Service, w *ent.Workflow, def Definition)
 func RunID(workflowID, eventID string) string { return "wf:" + workflowID + ":" + eventID }
 
 // Start asks for a manual run. Without items it starts one run with no item.
+// A trigger with selection mode starts one run for all items, in their
+// order; PrimaryItemID (default: the first) is that run's item.
 type Start struct {
-	ItemIDs []string       `json:"item_ids,omitempty"`
-	Inputs  map[string]any `json:"inputs,omitempty"`
+	ItemIDs       []string       `json:"item_ids,omitempty"`
+	PrimaryItemID string         `json:"primary_item_id,omitempty"`
+	Inputs        map[string]any `json:"inputs,omitempty"`
 }
 
-// MaxStartItems bounds one manual start.
+// MaxStartItems bounds one manual start, and one selection.
 const MaxStartItems = 100
 
 // StartRuns starts a workflow by hand and returns the run IDs. Starting on
 // items needs write access to each item; starting without an item needs
 // manage access to the workspace. Everything is checked before any run
-// starts, and the runs start when the request's transaction commits.
+// starts. The start is logged as events with the request's transaction; the
+// dispatcher starts the runs moments later.
 func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (runs []string, err error) {
 	err = s.DMS.Write(ctx, func(t *dms.Service) error {
 		w, err := live(ctx, t, id)
@@ -488,11 +492,24 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 		if err != nil {
 			return err
 		}
-		if len(in.ItemIDs) > MaxStartItems {
+		// Duplicates are dropped; the first occurrence keeps its place.
+		items := make([]string, 0, len(in.ItemIDs))
+		seen := map[string]bool{}
+		for _, itemID := range in.ItemIDs {
+			if !seen[itemID] {
+				seen[itemID] = true
+				items = append(items, itemID)
+			}
+		}
+		if len(items) > MaxStartItems {
 			return dms.Invalid(fmt.Sprintf("start at most %d items at once", MaxStartItems))
 		}
+		selection := manual.Selection == SelectionAll
+		if in.PrimaryItemID != "" && (!selection || !seen[in.PrimaryItemID]) {
+			return dms.Invalid("primary_item_id must be one of item_ids, on a selection workflow")
+		}
 		data := map[string]any{"workflow_id": w.ID, "inputs": inputs}
-		if len(in.ItemIDs) == 0 {
+		if len(items) == 0 {
 			if manual.CollectionID != "" {
 				return dms.Invalid("this workflow starts on items of its collection; give item_ids")
 			}
@@ -504,12 +521,8 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			runs = append(runs, RunID(w.ID, e.ID))
 			return nil
 		}
-		seen := map[string]bool{}
-		for _, itemID := range in.ItemIDs {
-			if seen[itemID] {
-				return dms.Invalid("item_ids has duplicates")
-			}
-			seen[itemID] = true
+		collection := ""
+		for _, itemID := range items {
 			r, err := t.Authorize(ctx, subject, itemID, "write")
 			if err != nil {
 				return err
@@ -520,8 +533,9 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			if manual.CollectionID != "" && (r.ContainerID == nil || *r.ContainerID != manual.CollectionID) {
 				return dms.Invalid("item " + itemID + " is not in the workflow's collection")
 			}
+			collection = *r.ContainerID
 			if def.Condition != nil {
-				ok, err := matches(ctx, t, v.CreatedBy, *r.ContainerID, itemID, def.Condition)
+				ok, err := matches(ctx, t, v.CreatedBy, collection, itemID, def.Condition)
 				if err != nil {
 					return err
 				}
@@ -529,7 +543,23 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 					return dms.Invalid("item " + itemID + " does not meet the workflow's condition")
 				}
 			}
-			e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, CollectionID: *r.ContainerID, ResourceID: itemID, Actor: subject, Data: data}
+			if !selection {
+				e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, CollectionID: collection, ResourceID: itemID, Actor: subject, Data: data}
+				t.Emit(ctx, e)
+				runs = append(runs, RunID(w.ID, e.ID))
+			}
+		}
+		if selection {
+			primary := in.PrimaryItemID
+			if primary == "" {
+				primary = items[0]
+			}
+			members := make([]any, len(items))
+			for i, itemID := range items {
+				members[i] = itemID
+			}
+			data["items"] = members
+			e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, CollectionID: collection, ResourceID: primary, Actor: subject, Data: data}
 			t.Emit(ctx, e)
 			runs = append(runs, RunID(w.ID, e.ID))
 		}
@@ -642,8 +672,18 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 			if e.Type == dms.EventItemDeleted {
 				in.ItemID = ""
 			}
-			if inputs, ok := e.Data["inputs"].(map[string]any); ok && e.Type == TriggerManual {
-				in.Inputs = inputs
+			if e.Type == TriggerManual {
+				if inputs, ok := e.Data["inputs"].(map[string]any); ok {
+					in.Inputs = inputs
+				}
+				members, _ := e.Data["items"].([]any)
+				for position, m := range members {
+					itemID, _ := m.(string)
+					in.Items = append(in.Items, itemID)
+					if err = t.Client.WorkflowRunItem.Create().SetID(fmt.Sprintf("%s:%d", runID, position)).SetRunID(runID).SetItemID(itemID).SetPosition(position).Exec(ctx); err != nil {
+						return nil, err
+					}
+				}
 			}
 			out = append(out, in)
 		}

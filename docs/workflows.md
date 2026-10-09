@@ -44,7 +44,7 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | `item.unpublished` | an item is unpublished | the item |
 | `item.deleted` | an item is deleted, alone or with its folder | none (`{trigger:resource_id}` names it) |
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
-| `manual` | someone starts it through the API | the chosen items, or none |
+| `manual` | someone starts it through the API | each chosen item, the selection's primary item, or none |
 | `wf.{key}.{event}` | a run of workflow `key` raises `event`; `completed` and `failed` are raised when a run ends | that run's item |
 
 Fields of a trigger:
@@ -57,6 +57,9 @@ Fields of a trigger:
   - Occurrences missed while PaperGo was down start once.
   - A change to a workflow never starts runs for times already past.
 - A `manual` trigger with `collection_id` starts only on items of that collection. Without it, it starts with no item. Manual workflows can declare `inputs`: `text`, `number`, `integer` or `boolean`, with `required` and `default`.
+- `selection` on a `manual` trigger with `collection_id`:
+  - `per_item` (the default) starts one run per chosen item.
+  - `selection` starts **one run for all chosen items**, in order, for work that combines them, such as composing one document from several photos. See [selection runs](#selection-runs).
 
 Trigger data, readable as `{trigger:...}`:
 
@@ -121,7 +124,7 @@ Strings in node inputs can read run data:
 | `{input:name}` | manual launch inputs |
 | `{var:name}` | run variables (`variables`, and `set_variable`) |
 | `{step:node.path}` | a node's output, such as `{step:read.values.total}` |
-| `{run:path}` | `id`, `workflow_id`, `workflow_key`, `version`, `actor` |
+| `{run:path}` | `id`, `workflow_id`, `workflow_key`, `version`, `actor`, `items` (the run's items in order: a selection's members, else its item) |
 | `{now}`, `{today}` | the time the node ran (RFC 3339, or the date) |
 
 A string that is exactly one token keeps the value's JSON type: `"total": "{input:total}"` writes a number. Tokens inside longer text become text, and lists are joined with `, `. A missing path is empty. Write `{{` and `}}` for literal braces.
@@ -146,6 +149,23 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `item.delete` | action | deletes the item | `deleted` |
 
 Item actions work on the run's item unless `item_id` is given. They use the same validation, permissions, revisions, audit records and events as API requests.
+
+## Selection runs
+
+A manual trigger with `"selection": "selection"` starts one run over several items. `POST /v1/workflows/{id}/runs` then takes:
+
+- `item_ids`: 1 to 100 items of the trigger's collection. Duplicates are dropped and the first occurrence keeps its place.
+- `primary_item_id`: optional, one of `item_ids`. It defaults to the first.
+
+Every item needs the starter's `write` access and must meet the condition before the run starts.
+
+The primary item is the run's item: actions without `item_id`, `{item:...}` tokens and the run's events use it. `{run:items}` lists all members in order, so nodes reach the others with `"item_id": "{run:items.1}"`.
+
+The membership is recorded with the run (`items` in the run API) and does not change:
+
+- **Retries.** A retried run keeps the same members.
+- **Run listing.** Listing runs with `item_id` includes selection runs the item is a member of.
+- **Deleting a member.** Deleting a member, alone or with its folder, cancels the queued or running selection runs it belongs to. The exception is the run that deleted it, for example a run that replaces several items with one.
 
 ## Who a run acts as
 

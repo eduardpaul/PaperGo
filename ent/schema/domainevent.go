@@ -24,6 +24,8 @@ func (DomainEvent) Fields() []ent.Field {
 		field.String("actor").Immutable(),
 		field.JSON("data", map[string]any{}).Default(map[string]any{}).Immutable(),
 		field.Int("depth").NonNegative().Immutable(),
+		// CauseRunID is the workflow run whose step made the change, if any.
+		field.String("cause_run_id").Optional().Nillable().Immutable(),
 		field.Time("dispatched_at").Optional().Nillable(),
 	}
 }

@@ -284,6 +284,18 @@ func (f WorkflowRunFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowRunMutation", m)
 }
 
+// The WorkflowRunItemFunc type is an adapter to allow the use of ordinary
+// function as WorkflowRunItem mutator.
+type WorkflowRunItemFunc func(context.Context, *ent.WorkflowRunItemMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f WorkflowRunItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.WorkflowRunItemMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowRunItemMutation", m)
+}
+
 // The WorkflowTriggerFunc type is an adapter to allow the use of ordinary
 // function as WorkflowTrigger mutator.
 type WorkflowTriggerFunc func(context.Context, *ent.WorkflowTriggerMutation) (ent.Value, error)

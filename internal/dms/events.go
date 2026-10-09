@@ -33,6 +33,8 @@ type Event struct {
 	// Depth counts how many workflow runs led to this event: a write made by
 	// a run raises events one deeper than the event that started the run.
 	Depth int `json:"depth"`
+	// CauseRunID is the workflow run whose step made the change, if any.
+	CauseRunID string `json:"cause_run_id,omitempty"`
 }
 
 // recordEvents appends events to the domain event log in the write's
@@ -48,30 +50,36 @@ func recordEvents(ctx context.Context, tx *sql.Tx, events []Event) error {
 		if err != nil {
 			return err
 		}
-		var collection, resource any
-		if e.CollectionID != "" {
-			collection = e.CollectionID
-		}
-		if e.ResourceID != "" {
-			resource = e.ResourceID
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO domain_events (id, created_at, type, workspace_id, collection_id, resource_id, actor, data, depth) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING`,
-			e.ID, now, e.Type, e.WorkspaceID, collection, resource, e.Actor, string(data), e.Depth); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO domain_events (id, created_at, type, workspace_id, collection_id, resource_id, actor, data, depth, cause_run_id) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING`,
+			e.ID, now, e.Type, e.WorkspaceID, nullable(e.CollectionID), nullable(e.ResourceID), e.Actor, string(data), e.Depth, nullable(e.CauseRunID)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func nullable(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 // NewEventID returns a time-ordered event ID.
 func NewEventID() string { return uuid.Must(uuid.NewV7()).String() }
 
-type depthKey struct{}
+type causeKey struct{}
 
-// WithEventDepth marks writes made with ctx as caused by an event at depth,
-// so their own events are one deeper.
-func WithEventDepth(ctx context.Context, depth int) context.Context {
-	return context.WithValue(ctx, depthKey{}, depth)
+type cause struct {
+	depth int
+	runID string
+}
+
+// WithCause marks writes made with ctx as made by workflow run runID, which
+// an event at depth started, so their own events are one deeper and name
+// the run.
+func WithCause(ctx context.Context, depth int, runID string) context.Context {
+	return context.WithValue(ctx, causeKey{}, cause{depth: depth, runID: runID})
 }
 
 // emit records an event for delivery when the surrounding write commits.
@@ -79,11 +87,10 @@ func (s *Service) emit(ctx context.Context, typ, actor, workspaceID string, coll
 	if s.pending == nil {
 		return
 	}
-	depth := 0
-	if d, ok := ctx.Value(depthKey{}).(int); ok {
-		depth = d + 1
+	e := Event{ID: NewEventID(), Type: typ, WorkspaceID: workspaceID, ResourceID: resourceID, Actor: actor, Data: data}
+	if c, ok := ctx.Value(causeKey{}).(cause); ok {
+		e.Depth, e.CauseRunID = c.depth+1, c.runID
 	}
-	e := Event{ID: NewEventID(), Type: typ, WorkspaceID: workspaceID, ResourceID: resourceID, Actor: actor, Data: data, Depth: depth}
 	if collectionID != nil {
 		e.CollectionID = *collectionID
 	}

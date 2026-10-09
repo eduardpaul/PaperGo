@@ -29,6 +29,8 @@ const (
 	FieldData = "data"
 	// FieldDepth holds the string denoting the depth field in the database.
 	FieldDepth = "depth"
+	// FieldCauseRunID holds the string denoting the cause_run_id field in the database.
+	FieldCauseRunID = "cause_run_id"
 	// FieldDispatchedAt holds the string denoting the dispatched_at field in the database.
 	FieldDispatchedAt = "dispatched_at"
 	// Table holds the table name of the domainevent in the database.
@@ -46,6 +48,7 @@ var Columns = []string{
 	FieldActor,
 	FieldData,
 	FieldDepth,
+	FieldCauseRunID,
 	FieldDispatchedAt,
 }
 
@@ -113,6 +116,11 @@ func ByActor(opts ...sql.OrderTermOption) OrderOption {
 // ByDepth orders the results by the depth field.
 func ByDepth(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDepth, opts...).ToFunc()
+}
+
+// ByCauseRunID orders the results by the cause_run_id field.
+func ByCauseRunID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCauseRunID, opts...).ToFunc()
 }
 
 // ByDispatchedAt orders the results by the dispatched_at field.

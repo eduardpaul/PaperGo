@@ -169,6 +169,7 @@ var (
 		{Name: "actor", Type: field.TypeString},
 		{Name: "data", Type: field.TypeJSON},
 		{Name: "depth", Type: field.TypeInt},
+		{Name: "cause_run_id", Type: field.TypeString, Nullable: true},
 		{Name: "dispatched_at", Type: field.TypeTime, Nullable: true},
 	}
 	// DomainEventsTable holds the schema information for the "domain_events" table.
@@ -188,7 +189,7 @@ var (
 			{
 				Name:    "domainevent_dispatched_at",
 				Unique:  false,
-				Columns: []*schema.Column{DomainEventsColumns[9]},
+				Columns: []*schema.Column{DomainEventsColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "dispatched_at IS NOT NULL",
 				},
@@ -1079,6 +1080,36 @@ var (
 			},
 		},
 	}
+	// WorkflowRunItemsColumns holds the columns for the "workflow_run_items" table.
+	WorkflowRunItemsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString},
+		{Name: "run_id", Type: field.TypeString},
+		{Name: "item_id", Type: field.TypeString, Size: 36},
+		{Name: "position", Type: field.TypeInt},
+	}
+	// WorkflowRunItemsTable holds the schema information for the "workflow_run_items" table.
+	WorkflowRunItemsTable = &schema.Table{
+		Name:       "workflow_run_items",
+		Columns:    WorkflowRunItemsColumns,
+		PrimaryKey: []*schema.Column{WorkflowRunItemsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "workflowrunitem_run_id_position",
+				Unique:  true,
+				Columns: []*schema.Column{WorkflowRunItemsColumns[1], WorkflowRunItemsColumns[3]},
+			},
+			{
+				Name:    "workflowrunitem_run_id_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{WorkflowRunItemsColumns[1], WorkflowRunItemsColumns[2]},
+			},
+			{
+				Name:    "workflowrunitem_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowRunItemsColumns[2]},
+			},
+		},
+	}
 	// WorkflowTriggersColumns holds the columns for the "workflow_triggers" table.
 	WorkflowTriggersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1163,6 +1194,7 @@ var (
 		WebdavCredentialsTable,
 		WorkflowsTable,
 		WorkflowRunsTable,
+		WorkflowRunItemsTable,
 		WorkflowTriggersTable,
 		WorkflowVersionsTable,
 	}

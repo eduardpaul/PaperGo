@@ -29,6 +29,7 @@ import (
 	"papergo/ent/webdavcredential"
 	"papergo/ent/workflow"
 	"papergo/ent/workflowrun"
+	"papergo/ent/workflowrunitem"
 	"papergo/ent/workflowtrigger"
 	"papergo/ent/workflowversion"
 	"reflect"
@@ -120,6 +121,7 @@ func checkColumn(t, c string) error {
 			webdavcredential.Table: webdavcredential.ValidColumn,
 			workflow.Table:         workflow.ValidColumn,
 			workflowrun.Table:      workflowrun.ValidColumn,
+			workflowrunitem.Table:  workflowrunitem.ValidColumn,
 			workflowtrigger.Table:  workflowtrigger.ValidColumn,
 			workflowversion.Table:  workflowversion.ValidColumn,
 		})

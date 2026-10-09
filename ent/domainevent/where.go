@@ -99,6 +99,11 @@ func Depth(v int) predicate.DomainEvent {
 	return predicate.DomainEvent(sql.FieldEQ(FieldDepth, v))
 }
 
+// CauseRunID applies equality check predicate on the "cause_run_id" field. It's identical to CauseRunIDEQ.
+func CauseRunID(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldCauseRunID, v))
+}
+
 // DispatchedAt applies equality check predicate on the "dispatched_at" field. It's identical to DispatchedAtEQ.
 func DispatchedAt(v time.Time) predicate.DomainEvent {
 	return predicate.DomainEvent(sql.FieldEQ(FieldDispatchedAt, v))
@@ -527,6 +532,81 @@ func DepthLT(v int) predicate.DomainEvent {
 // DepthLTE applies the LTE predicate on the "depth" field.
 func DepthLTE(v int) predicate.DomainEvent {
 	return predicate.DomainEvent(sql.FieldLTE(FieldDepth, v))
+}
+
+// CauseRunIDEQ applies the EQ predicate on the "cause_run_id" field.
+func CauseRunIDEQ(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldCauseRunID, v))
+}
+
+// CauseRunIDNEQ applies the NEQ predicate on the "cause_run_id" field.
+func CauseRunIDNEQ(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNEQ(FieldCauseRunID, v))
+}
+
+// CauseRunIDIn applies the In predicate on the "cause_run_id" field.
+func CauseRunIDIn(vs ...string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIn(FieldCauseRunID, vs...))
+}
+
+// CauseRunIDNotIn applies the NotIn predicate on the "cause_run_id" field.
+func CauseRunIDNotIn(vs ...string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotIn(FieldCauseRunID, vs...))
+}
+
+// CauseRunIDGT applies the GT predicate on the "cause_run_id" field.
+func CauseRunIDGT(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGT(FieldCauseRunID, v))
+}
+
+// CauseRunIDGTE applies the GTE predicate on the "cause_run_id" field.
+func CauseRunIDGTE(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGTE(FieldCauseRunID, v))
+}
+
+// CauseRunIDLT applies the LT predicate on the "cause_run_id" field.
+func CauseRunIDLT(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLT(FieldCauseRunID, v))
+}
+
+// CauseRunIDLTE applies the LTE predicate on the "cause_run_id" field.
+func CauseRunIDLTE(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLTE(FieldCauseRunID, v))
+}
+
+// CauseRunIDContains applies the Contains predicate on the "cause_run_id" field.
+func CauseRunIDContains(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldContains(FieldCauseRunID, v))
+}
+
+// CauseRunIDHasPrefix applies the HasPrefix predicate on the "cause_run_id" field.
+func CauseRunIDHasPrefix(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldHasPrefix(FieldCauseRunID, v))
+}
+
+// CauseRunIDHasSuffix applies the HasSuffix predicate on the "cause_run_id" field.
+func CauseRunIDHasSuffix(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldHasSuffix(FieldCauseRunID, v))
+}
+
+// CauseRunIDIsNil applies the IsNil predicate on the "cause_run_id" field.
+func CauseRunIDIsNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIsNull(FieldCauseRunID))
+}
+
+// CauseRunIDNotNil applies the NotNil predicate on the "cause_run_id" field.
+func CauseRunIDNotNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotNull(FieldCauseRunID))
+}
+
+// CauseRunIDEqualFold applies the EqualFold predicate on the "cause_run_id" field.
+func CauseRunIDEqualFold(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEqualFold(FieldCauseRunID, v))
+}
+
+// CauseRunIDContainsFold applies the ContainsFold predicate on the "cause_run_id" field.
+func CauseRunIDContainsFold(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldContainsFold(FieldCauseRunID, v))
 }
 
 // DispatchedAtEQ applies the EQ predicate on the "dispatched_at" field.

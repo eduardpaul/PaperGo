@@ -526,3 +526,112 @@ func TestConditionErrorsFailVisibly(t *testing.T) {
 	f.item(t, "alice", "Next", nil)
 	f.runs(t, other.ID, 1)
 }
+
+func (f *fixture) wait(t testing.TB, id string, done func(Run) bool) Run {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		run, err := f.r.Run(ctx, "alice", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if done(run) {
+			return run
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("run %s: %+v", id, run)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func finished(run Run) bool { return run.Status != "queued" && run.Status != "running" }
+
+func TestSelectionRuns(t *testing.T) {
+	f := setup(t)
+	w := f.workflow(t, "Combine", `{
+		"triggers": [{"type": "manual", "collection_id": "$LIST", "selection": "selection"}],
+		"flow": {"start": "primary", "nodes": {
+			"primary": {"activity": "item.update", "inputs": {"tags": ["primary"]}, "next": {"done": "first"}},
+			"first": {"activity": "item.update", "inputs": {"item_id": "{run:items.0}", "values": {"note": "first of {run:items}"}}}
+		}}}`)
+	a, b, c := f.item(t, "alice", "A", nil), f.item(t, "alice", "B", nil), f.item(t, "alice", "C", nil)
+	other, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "list", Name: "Elsewhere"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stray, err := f.dms.Create(ctx, "alice", other.ID, dms.CreateResource{Kind: "item", Name: "Stray"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{a.ID, stray.ID}}); err == nil {
+		t.Fatal("selection across collections")
+	}
+	if _, err = f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{a.ID}, PrimaryItemID: c.ID}); err == nil {
+		t.Fatal("primary outside the selection")
+	}
+	ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{a.ID, b.ID, a.ID, c.ID}, PrimaryItemID: b.ID})
+	if err != nil || len(ids) != 1 {
+		t.Fatalf("start: %v %v", ids, err)
+	}
+	run := f.wait(t, ids[0], finished)
+	if run.Status != "completed" || *run.ItemID != b.ID || strings.Join(run.Items, ",") != strings.Join([]string{a.ID, b.ID, c.ID}, ",") {
+		t.Fatalf("selection run: %+v", run)
+	}
+	if tags := f.head(t, b.ID).Tags; strings.Join(tags, ",") != "primary" {
+		t.Fatalf("primary tags %v", tags)
+	}
+	if note := f.head(t, a.ID).Values["note"]; note != "first of "+a.ID+", "+b.ID+", "+c.ID {
+		t.Fatalf("note %v", note)
+	}
+	page, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{ItemID: c.ID})
+	if err != nil || len(page.Data) != 1 || page.Data[0].ID != run.ID {
+		t.Fatalf("runs of a member: %+v %v", page.Data, err)
+	}
+
+	// Per-item workflows take no primary item.
+	each := f.workflow(t, "Each", `{"triggers": [{"type": "manual", "collection_id": "$LIST"}], "flow": {"start": "stop", "nodes": {"stop": {"activity": "end"}}}}`)
+	if _, err = f.wf.StartRuns(ctx, "alice", each.ID, workflow.Start{ItemIDs: []string{a.ID}, PrimaryItemID: a.ID}); err == nil {
+		t.Fatal("primary on a per-item workflow")
+	}
+	if ids, err = f.wf.StartRuns(ctx, "alice", each.ID, workflow.Start{ItemIDs: []string{a.ID, b.ID}}); err != nil || len(ids) != 2 {
+		t.Fatalf("per-item start: %v %v", ids, err)
+	}
+}
+
+func TestDeletingAMemberCancelsSelectionRuns(t *testing.T) {
+	f := setup(t)
+	slow := f.workflow(t, "Slow", `{
+		"triggers": [{"type": "manual", "collection_id": "$LIST", "selection": "selection"}],
+		"flow": {"start": "wait", "nodes": {"wait": {"activity": "delay", "inputs": {"duration": "1h"}}}}}`)
+	consume := f.workflow(t, "Consume", `{
+		"triggers": [{"type": "manual", "collection_id": "$LIST", "selection": "selection"}],
+		"flow": {"start": "drop", "nodes": {
+			"drop": {"activity": "item.delete", "inputs": {"item_id": "{run:items.1}"}, "next": {"done": "pause"}},
+			"pause": {"activity": "delay", "inputs": {"duration": "500ms"}}
+		}}}`)
+	a, b, c := f.item(t, "alice", "A", nil), f.item(t, "alice", "B", nil), f.item(t, "alice", "C", nil)
+	ids, err := f.wf.StartRuns(ctx, "alice", slow.ID, workflow.Start{ItemIDs: []string{a.ID, b.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.wait(t, ids[0], func(r Run) bool { return r.Status == "running" })
+	if err = f.dms.Delete(ctx, "alice", b.ID, f.head(t, b.ID).Version); err != nil {
+		t.Fatal(err)
+	}
+	if run := f.wait(t, ids[0], finished); run.Status != "cancelled" {
+		t.Fatalf("selection run after a member was deleted: %+v", run)
+	}
+
+	// A run that deletes its own member is not cancelled by it.
+	ids, err = f.wf.StartRuns(ctx, "alice", consume.ID, workflow.Start{ItemIDs: []string{a.ID, c.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run := f.wait(t, ids[0], finished); run.Status != "completed" {
+		t.Fatalf("run that consumed its member: %+v", run)
+	}
+	if _, err = f.dms.Get(ctx, "alice", c.ID); !errors.Is(err, dms.ErrNotFound) {
+		t.Fatalf("consumed member: %v", err)
+	}
+}

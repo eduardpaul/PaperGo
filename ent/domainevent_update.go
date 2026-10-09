@@ -95,6 +95,9 @@ func (_u *DomainEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.ResourceIDCleared() {
 		_spec.ClearField(domainevent.FieldResourceID, field.TypeString)
 	}
+	if _u.mutation.CauseRunIDCleared() {
+		_spec.ClearField(domainevent.FieldCauseRunID, field.TypeString)
+	}
 	if value, ok := _u.mutation.DispatchedAt(); ok {
 		_spec.SetField(domainevent.FieldDispatchedAt, field.TypeTime, value)
 	}
@@ -217,6 +220,9 @@ func (_u *DomainEventUpdateOne) sqlSave(ctx context.Context) (_node *DomainEvent
 	}
 	if _u.mutation.ResourceIDCleared() {
 		_spec.ClearField(domainevent.FieldResourceID, field.TypeString)
+	}
+	if _u.mutation.CauseRunIDCleared() {
+		_spec.ClearField(domainevent.FieldCauseRunID, field.TypeString)
 	}
 	if value, ok := _u.mutation.DispatchedAt(); ok {
 		_spec.SetField(domainevent.FieldDispatchedAt, field.TypeTime, value)

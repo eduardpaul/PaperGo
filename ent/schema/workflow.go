@@ -110,3 +110,23 @@ func (WorkflowRun) Indexes() []ent.Index {
 		index.Fields("created_at"),
 	}
 }
+
+// WorkflowRunItem is the ordered membership of a selection run: one run
+// over several items, the first or chosen one being the run's item.
+type WorkflowRunItem struct{ ent.Schema }
+
+func (WorkflowRunItem) Fields() []ent.Field {
+	return []ent.Field{
+		field.String("id").Immutable(),
+		field.String("run_id").NotEmpty().Immutable(),
+		field.String("item_id").NotEmpty().Immutable().MaxLen(36),
+		field.Int("position").NonNegative().Immutable(),
+	}
+}
+func (WorkflowRunItem) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("run_id", "position").Unique(),
+		index.Fields("run_id", "item_id").Unique(),
+		index.Fields("item_id"),
+	}
+}

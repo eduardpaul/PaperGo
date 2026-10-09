@@ -60,6 +60,8 @@ type Tx struct {
 	Workflow *WorkflowClient
 	// WorkflowRun is the client for interacting with the WorkflowRun builders.
 	WorkflowRun *WorkflowRunClient
+	// WorkflowRunItem is the client for interacting with the WorkflowRunItem builders.
+	WorkflowRunItem *WorkflowRunItemClient
 	// WorkflowTrigger is the client for interacting with the WorkflowTrigger builders.
 	WorkflowTrigger *WorkflowTriggerClient
 	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
@@ -218,6 +220,7 @@ func (tx *Tx) init() {
 	tx.WebDAVCredential = NewWebDAVCredentialClient(tx.config)
 	tx.Workflow = NewWorkflowClient(tx.config)
 	tx.WorkflowRun = NewWorkflowRunClient(tx.config)
+	tx.WorkflowRunItem = NewWorkflowRunItemClient(tx.config)
 	tx.WorkflowTrigger = NewWorkflowTriggerClient(tx.config)
 	tx.WorkflowVersion = NewWorkflowVersionClient(tx.config)
 }

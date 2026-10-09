@@ -75,6 +75,9 @@ type Workflow func(*sql.Selector)
 // WorkflowRun is the predicate function for workflowrun builders.
 type WorkflowRun func(*sql.Selector)
 
+// WorkflowRunItem is the predicate function for workflowrunitem builders.
+type WorkflowRunItem func(*sql.Selector)
+
 // WorkflowTrigger is the predicate function for workflowtrigger builders.
 type WorkflowTrigger func(*sql.Selector)
 

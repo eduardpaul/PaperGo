@@ -60,7 +60,17 @@ type Trigger struct {
 	Cron          string `json:"cron,omitempty"`
 	TimeZone      string `json:"time_zone,omitempty"`
 	Surface       string `json:"surface,omitempty"`
+	// Selection, on a manual trigger with collection_id, is per_item (one
+	// run per chosen item, the default) or selection (one run for all of
+	// them, in order).
+	Selection string `json:"selection,omitempty"`
 }
+
+// Selection modes of manual triggers.
+const (
+	SelectionPerItem = "per_item"
+	SelectionAll     = "selection"
+)
 
 // Input declares a launch input of manual runs.
 type Input struct {
@@ -162,6 +172,12 @@ func (d Definition) validate() error {
 		if t.Surface != "" && (t.Type != TriggerSchedule || t.CollectionID == "" || t.Surface != "head" && t.Surface != "published") {
 			return dms.Invalid(at + "surface is head or published, on schedule triggers with collection_id")
 		}
+		if t.Selection != "" && (t.Type != TriggerManual || t.Selection != SelectionPerItem && t.Selection != SelectionAll) {
+			return dms.Invalid(at + "selection is per_item or selection, on manual triggers")
+		}
+		if t.Selection == SelectionAll && t.CollectionID == "" {
+			return dms.Invalid(at + "selection runs need collection_id: the items come from one list or library")
+		}
 		switch {
 		case isItemTrigger(t.Type):
 			if t.Cron != "" || t.TimeZone != "" {
@@ -180,7 +196,7 @@ func (d Definition) validate() error {
 		case t.Type == TriggerManual:
 			manual++
 			if t.Cron != "" || t.TimeZone != "" || t.ContentTypeID != "" {
-				return dms.Invalid(at + "manual triggers take only collection_id")
+				return dms.Invalid(at + "manual triggers take only collection_id and selection")
 			}
 		case eventPattern.MatchString(t.Type):
 			if t.Cron != "" || t.TimeZone != "" {

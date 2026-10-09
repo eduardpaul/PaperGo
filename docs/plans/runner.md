@@ -153,8 +153,8 @@ New capabilities the runner unlocks. Each will be designed separately:
 ## Phases
 
 1. **Spike** (done). See [Spike results](#spike-results).
-2. **Core** (done). The runner embedded in the API process (immediate transactions, domain events from every item write, exactly-once steps, run retention), and workflows v1: definitions and versions per workspace, item and schedule and manual triggers, conditions in the query filter language, the flow interpreter with the item activities, built-in workflows with the first one (unpublishing expired items), and the workflow and run API.
-3. **Workflow parts and system workflows.** `forEach`, approvals (durable `Recv` waits), concurrency policies (`skip` for sweeps), run-again activities, and the system-workflow model below; then the maintenance processes as system built-ins (credential purge, orphan reconciliation).
+2. **Core** (done). The runner embedded in the API process (immediate transactions, domain events from every item write, exactly-once steps, run retention), and workflows v1: definitions and versions per workspace, item and schedule and manual triggers (manual ones per item or over an ordered selection, after PaperDotNet [PR #8](https://github.com/eduardpaul/PaperDotNet/pull/8)), conditions in the query filter language, the flow interpreter with the item activities, built-in workflows with the first one (unpublishing expired items), and the workflow and run API.
+3. **Workflow parts and system workflows.** `forEach` (including over `{run:items}`), approvals (durable `Recv` waits), concurrency policies (`skip` for sweeps; they compare every member of selection runs, from `workflow_run_items`), run-again activities, and the system-workflow model below; then the maintenance processes as system built-ins (credential purge, orphan reconciliation).
 4. **Long work.** Move index and business-key rebuilds and `publishAllHeads` to partitioned jobs, with the pending-index contract.
 5. **Multi-node.** Node heartbeats and recovery of nodes that never return, delivered with the PostgreSQL adapter.
 6. **Consumers.** Notifications, then tasks and approval of publishing, as activities and built-in workflows.
@@ -164,6 +164,7 @@ New capabilities the runner unlocks. Each will be designed separately:
 `internal/runner/runner_test.go` launches the real runner on temporary SQLite files with the PaperGo schema:
 
 - an item trigger with a condition, a node that updates the item, and a second workflow started by the first one's `event.raise`; a rolled-back write logs no event and starts nothing; only workspace managers see runs;
+- selection runs: one run over ordered members with a chosen primary item, `{run:items}` tokens, listing by any member, refusal of items from another collection; deleting a member cancels the run, unless the run deleted it itself;
 - a process without a runner (another server) commits a change, and a runner launched later dispatches its event and runs the workflow;
 - a condition that can no longer be evaluated produces a failed run with the reason and does not block later events;
 - manual starts with typed inputs, defaults, variables and `if` branches; starting without access is refused;

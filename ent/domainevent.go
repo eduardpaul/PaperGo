@@ -34,6 +34,8 @@ type DomainEvent struct {
 	Data map[string]interface{} `json:"data,omitempty"`
 	// Depth holds the value of the "depth" field.
 	Depth int `json:"depth,omitempty"`
+	// CauseRunID holds the value of the "cause_run_id" field.
+	CauseRunID *string `json:"cause_run_id,omitempty"`
 	// DispatchedAt holds the value of the "dispatched_at" field.
 	DispatchedAt *time.Time `json:"dispatched_at,omitempty"`
 	selectValues sql.SelectValues
@@ -48,7 +50,7 @@ func (*DomainEvent) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case domainevent.FieldDepth:
 			values[i] = new(sql.NullInt64)
-		case domainevent.FieldID, domainevent.FieldType, domainevent.FieldWorkspaceID, domainevent.FieldCollectionID, domainevent.FieldResourceID, domainevent.FieldActor:
+		case domainevent.FieldID, domainevent.FieldType, domainevent.FieldWorkspaceID, domainevent.FieldCollectionID, domainevent.FieldResourceID, domainevent.FieldActor, domainevent.FieldCauseRunID:
 			values[i] = new(sql.NullString)
 		case domainevent.FieldCreatedAt, domainevent.FieldDispatchedAt:
 			values[i] = new(sql.NullTime)
@@ -125,6 +127,13 @@ func (_m *DomainEvent) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Depth = int(value.Int64)
 			}
+		case domainevent.FieldCauseRunID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field cause_run_id", values[i])
+			} else if value.Valid {
+				_m.CauseRunID = new(string)
+				*_m.CauseRunID = value.String
+			}
 		case domainevent.FieldDispatchedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field dispatched_at", values[i])
@@ -195,6 +204,11 @@ func (_m *DomainEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("depth=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Depth))
+	builder.WriteString(", ")
+	if v := _m.CauseRunID; v != nil {
+		builder.WriteString("cause_run_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	if v := _m.DispatchedAt; v != nil {
 		builder.WriteString("dispatched_at=")

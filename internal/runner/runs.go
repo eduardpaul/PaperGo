@@ -16,27 +16,30 @@ import (
 	"papergo/ent"
 	"papergo/ent/domainevent"
 	"papergo/ent/workflowrun"
+	"papergo/ent/workflowrunitem"
 	"papergo/internal/dms"
 )
 
 // Run is a workflow run as the API shows it.
 type Run struct {
-	ID              string     `json:"id"`
-	WorkflowID      string     `json:"workflow_id"`
-	WorkflowVersion int        `json:"workflow_version"`
-	WorkspaceID     string     `json:"workspace_id"`
-	ItemID          *string    `json:"item_id,omitempty"`
-	EventID         string     `json:"event_id"`
-	EventType       string     `json:"event_type"`
-	Depth           int        `json:"depth"`
-	Actor           string     `json:"actor"`
-	RetryOf         *string    `json:"retry_of,omitempty"`
-	Status          string     `json:"status"`
-	Error           string     `json:"error,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       *time.Time `json:"updated_at,omitempty"`
-	Result          any        `json:"result,omitempty"`
-	Steps           []Step     `json:"steps,omitempty"`
+	ID              string  `json:"id"`
+	WorkflowID      string  `json:"workflow_id"`
+	WorkflowVersion int     `json:"workflow_version"`
+	WorkspaceID     string  `json:"workspace_id"`
+	ItemID          *string `json:"item_id,omitempty"`
+	// Items is a selection run's ordered membership; ItemID is its primary.
+	Items     []string   `json:"items,omitempty"`
+	EventID   string     `json:"event_id"`
+	EventType string     `json:"event_type"`
+	Depth     int        `json:"depth"`
+	Actor     string     `json:"actor"`
+	RetryOf   *string    `json:"retry_of,omitempty"`
+	Status    string     `json:"status"`
+	Error     string     `json:"error,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	Result    any        `json:"result,omitempty"`
+	Steps     []Step     `json:"steps,omitempty"`
 }
 
 // Step is one recorded step of a run: the load, each node attempt, and the
@@ -139,7 +142,10 @@ func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFil
 			q.Where(workflowrun.WorkflowIDEQ(f.WorkflowID))
 		}
 		if f.ItemID != "" {
-			q.Where(workflowrun.ItemIDEQ(f.ItemID))
+			// Selection runs count for every member, not only their primary item.
+			q.Where(workflowrun.Or(workflowrun.ItemIDEQ(f.ItemID), func(s *entsql.Selector) {
+				s.Where(entsql.In(s.C(workflowrun.FieldID), entsql.Select(workflowrunitem.FieldRunID).From(entsql.Table(workflowrunitem.Table)).Where(entsql.EQ(workflowrunitem.FieldItemID, f.ItemID))))
+			}))
 		}
 		if f.After != "" {
 			at, id, err := decodeCursor(f.After)
@@ -163,12 +169,33 @@ func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFil
 		for _, row := range rows {
 			out.Data = append(out.Data, toRun(row))
 		}
-		return out, nil
+		return out, members(ctx, t, out.Data)
 	})
 	if err != nil {
 		return page, err
 	}
 	return page, r.attach(page.Data, false)
+}
+
+// members fills in the membership of selection runs.
+func members(ctx context.Context, t *dms.Service, runs []Run) error {
+	if len(runs) == 0 {
+		return nil
+	}
+	ids := make([]string, len(runs))
+	at := map[string]int{}
+	for i, run := range runs {
+		ids[i], at[run.ID] = run.ID, i
+	}
+	rows, err := t.Client.WorkflowRunItem.Query().Where(workflowrunitem.RunIDIn(ids...)).Order(ent.Asc(workflowrunitem.FieldRunID), ent.Asc(workflowrunitem.FieldPosition)).All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		i := at[row.RunID]
+		runs[i].Items = append(runs[i].Items, row.ItemID)
+	}
+	return nil
 }
 
 func encodeCursor(at time.Time, id string) string {
@@ -237,6 +264,9 @@ func (r *Runner) Run(ctx context.Context, subject, id string) (Run, error) {
 		return Run{}, err
 	}
 	runs := []Run{toRun(row)}
+	if _, err = dms.Read(ctx, r.dms, func(t *dms.Service) (struct{}, error) { return struct{}{}, members(ctx, t, runs) }); err != nil {
+		return Run{}, err
+	}
 	if err = r.attach(runs, true); err != nil {
 		return Run{}, err
 	}
@@ -334,8 +364,20 @@ func (r *Runner) Retry(ctx context.Context, subject, id string) (Run, error) {
 		if row.ItemID != nil {
 			c.SetItemID(*row.ItemID)
 		}
-		_, err := c.Save(ctx)
-		return err
+		if _, err := c.Save(ctx); err != nil {
+			return err
+		}
+		// A retried selection keeps its members, in order.
+		original, err := t.Client.WorkflowRunItem.Query().Where(workflowrunitem.RunIDEQ(row.ID)).All(ctx)
+		if err != nil {
+			return err
+		}
+		for _, m := range original {
+			if err = t.Client.WorkflowRunItem.Create().SetID(fmt.Sprintf("%s:%d", retryID, m.Position)).SetRunID(retryID).SetItemID(m.ItemID).SetPosition(m.Position).Exec(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		_ = dbos.CancelWorkflow(r.ctx, retryID)

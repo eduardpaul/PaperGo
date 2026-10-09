@@ -21,6 +21,8 @@ type RunInput struct {
 	ItemID      string         `json:"item_id,omitempty"`
 	Event       dms.Event      `json:"event"`
 	Inputs      map[string]any `json:"inputs,omitempty"`
+	// Items is a selection run's ordered membership; ItemID is its primary.
+	Items []string `json:"items,omitempty"`
 	// ConditionError fails the run at once: the condition could not be
 	// evaluated when the event was dispatched.
 	ConditionError string `json:"condition_error,omitempty"`
@@ -178,7 +180,7 @@ func (r *runState) attempt(ctx context.Context, name string, node Node) (outcome
 func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Event), name string, node Node) (json.RawMessage, error) {
 	var item map[string]any
 	sc := &scope{ctx: ctx, trigger: jsonish(r.in.Event).(map[string]any), inputs: r.in.Inputs, vars: r.vars, steps: r.steps, now: time.Now().UTC(),
-		run: map[string]any{"id": r.in.RunID, "workflow_id": r.in.WorkflowID, "workflow_key": r.l.Key, "version": r.in.Version, "actor": r.in.Event.Actor}}
+		run: map[string]any{"id": r.in.RunID, "workflow_id": r.in.WorkflowID, "workflow_key": r.l.Key, "version": r.in.Version, "actor": r.in.Event.Actor, "items": r.items()}}
 	if r.in.ItemID != "" {
 		sc.item = func(ctx context.Context) (map[string]any, error) {
 			if item == nil {
@@ -191,7 +193,7 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 			return item, nil
 		}
 	}
-	e := &env{ctx: dms.WithEventDepth(ctx, r.in.Event.Depth), t: t, author: r.l.Author, itemID: r.in.ItemID, scope: sc,
+	e := &env{ctx: dms.WithCause(ctx, r.in.Event.Depth, r.in.RunID), t: t, author: r.l.Author, itemID: r.in.ItemID, scope: sc,
 		raise: func(event string, data map[string]any) { raise(r.event(WorkflowEvent(r.l.Key, event), data)) }}
 	o, err := activities[node.Activity].run(e, node.Inputs)
 	if err != nil {
@@ -208,11 +210,25 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 	return out, nil
 }
 
+// items lists the run's items in order: a selection's members, else the
+// run's item, else none.
+func (r *runState) items() []any {
+	ids := r.in.Items
+	if len(ids) == 0 && r.in.ItemID != "" {
+		ids = []string{r.in.ItemID}
+	}
+	out := make([]any, len(ids))
+	for i, id := range ids {
+		out[i] = id
+	}
+	return out
+}
+
 // event is a workflow event of this run: it carries the run's item and is
 // one level deeper than the event that started the run.
 func (r *runState) event(typ string, data map[string]any) dms.Event {
 	data["run_id"] = r.in.RunID
-	return dms.Event{ID: dms.NewEventID(), Type: typ, WorkspaceID: r.in.WorkspaceID, CollectionID: r.in.Event.CollectionID, ResourceID: r.in.ItemID, Actor: r.in.Event.Actor, Data: data, Depth: r.in.Event.Depth + 1}
+	return dms.Event{ID: dms.NewEventID(), Type: typ, WorkspaceID: r.in.WorkspaceID, CollectionID: r.in.Event.CollectionID, ResourceID: r.in.ItemID, Actor: r.in.Event.Actor, Data: data, Depth: r.in.Event.Depth + 1, CauseRunID: r.in.RunID}
 }
 
 // finish raises wf.{key}.completed or wf.{key}.failed in one last step.
