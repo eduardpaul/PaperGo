@@ -13,9 +13,9 @@ import (
 )
 
 func TestCollectionPassesSpanBatches(t *testing.T) {
-	previous := surfaceBatch
-	surfaceBatch = 3
-	t.Cleanup(func() { surfaceBatch = previous })
+	previousSurface, previousOperation := surfaceBatch, operationBatch
+	surfaceBatch, operationBatch = 3, 3
+	t.Cleanup(func() { surfaceBatch, operationBatch = previousSurface, previousOperation })
 	s, _, list := fixture(t)
 	n, err := s.CreateField(testContext, "alice", list.ID, CreateField{Key: "n", Label: "N", Type: "integer"})
 	if err != nil {

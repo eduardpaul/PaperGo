@@ -198,8 +198,7 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 }
 
 // surfaceBatch bounds whole-collection passes: memory stays flat, IN lists
-// stay far below SQLite's bound-variable limit (32766) and each background
-// index batch holds the writer briefly, however large the collection.
+// stay far below SQLite's bound-variable limit (32766) however large the collection.
 var surfaceBatch = 500
 
 // reindexBatch replaces field d's field_values on a batch of surfaces with one

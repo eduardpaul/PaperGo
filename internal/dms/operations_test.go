@@ -16,9 +16,9 @@ import (
 // An index build runs in short batches; writes between batches index the
 // building field themselves, so the finished index is exact.
 func TestFieldIndexBuildsInBackgroundBatches(t *testing.T) {
-	previous := surfaceBatch
-	surfaceBatch = 3
-	t.Cleanup(func() { surfaceBatch = previous })
+	previous := operationBatch
+	operationBatch = 3
+	t.Cleanup(func() { operationBatch = previous })
 	s, _, list := fixture(t)
 	d, err := s.CreateField(testContext, "alice", list.ID, CreateField{Key: "n", Label: "N", Type: "integer"})
 	if err != nil {

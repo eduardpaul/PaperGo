@@ -13,7 +13,7 @@ import (
 
 // Collection-wide index maintenance runs as tracked operations. Changing a
 // field's indexing commits at once and marks the field building; queries reject
-// it until RunOperations has converged its field_values rows, one surfaceBatch
+// it until RunOperations has converged its field_values rows, one operationBatch
 // per write transaction, and marked it ready. Item writes between batches index
 // the field themselves (indexedDefinitions follows the live definition), and a
 // batch re-derives rows from the surface it reads, so the result is exact.
@@ -117,7 +117,13 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 	return true, errors.Join(err, failed)
 }
 
-// fieldIndexBatch converges the field's rows on the next surfaceBatch surfaces
+// operationBatch is the surfaces one background batch reindexes while holding
+// the writer. Measured with BenchmarkWriteDuringIndexBuild at 2000 items, a
+// concurrent edit waits about 50 ms extra behind 500-surface batches, 27 ms
+// behind 100 and 20 ms behind 50, where per-commit costs start to dominate.
+var operationBatch = 100
+
+// fieldIndexBatch converges the field's rows on the next operationBatch surfaces
 // and records the resume point, finishing after the published surfaces.
 func (s *Service) fieldIndexBatch(ctx context.Context, op *ent.Operation) error {
 	d, err := s.Client.FieldDefinition.Get(ctx, op.FieldID)
@@ -127,7 +133,7 @@ func (s *Service) fieldIndexBatch(ctx context.Context, op *ent.Operation) error 
 	if err != nil {
 		return err
 	}
-	projections, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(op.ContainerID), itemsurface.SurfaceEQ(itemsurface.Surface(op.Surface)), itemsurface.ItemIDGT(op.AfterItemID)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(surfaceBatch).All(ctx)
+	projections, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(op.ContainerID), itemsurface.SurfaceEQ(itemsurface.Surface(op.Surface)), itemsurface.ItemIDGT(op.AfterItemID)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(operationBatch).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -138,7 +144,7 @@ func (s *Service) fieldIndexBatch(ctx context.Context, op *ent.Operation) error 
 	}
 	b := s.Client.Operation.UpdateOne(op).AddProcessed(len(projections))
 	switch {
-	case len(projections) == surfaceBatch:
+	case len(projections) == operationBatch:
 		return b.SetAfterItemID(projections[len(projections)-1].ItemID).Exec(ctx)
 	case op.Surface == operation.SurfaceHead:
 		return b.SetSurface(operation.SurfacePublished).SetAfterItemID("").Exec(ctx)

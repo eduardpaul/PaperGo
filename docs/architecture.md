@@ -48,7 +48,7 @@ When scale warrants PostgreSQL, replace SQLite-specific authorization/search ada
 
 The complete schema is one Atlas migration file, edited in place until the first release; there are no upgrade paths or compatibility layers (see [AGENTS.md](../AGENTS.md)). Each resource stores its nearest exclusive permission scope (`scope_id`), maintained by triggers, so authorization is an indexed lookup rather than a hierarchy walk.
 
-Tests apply that schema file. Coverage includes ownership and move constraints, permission-scope maintenance, deletion tombstones, WebDAV protocol behavior and locking, exact values through REST, head/published search and blobs, typed index rebuilds, schema/history immutability, authorized pagination, and concurrent optimistic updates. Representative load benchmarks, restoration exercises, group provisioning, workflow approval, quotas, malware scanning, idempotency keys and observability exports remain deployment/application work.
+Tests apply that schema file. Coverage includes ownership and move constraints, permission-scope maintenance, deletion tombstones, WebDAV protocol behavior and locking, exact values through REST, head/published search and blobs, typed index rebuilds, schema/history immutability, authorized pagination, and concurrent optimistic updates. Concurrent-client load testing, restoration exercises, group provisioning, workflow approval, quotas, malware scanning, idempotency keys and observability exports remain deployment/application work.
 
 ## Application configuration
 
