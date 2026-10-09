@@ -6,6 +6,7 @@ import (
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/listview"
+	"strings"
 )
 
 type ViewInput struct {
@@ -170,23 +171,31 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 		if e = json.Unmarshal(v.Query, &spec); e != nil {
 			return QueryResult{}, e
 		}
-		out, e := t.Query(ctx, subject, v.ContainerID, QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal})
+		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal}
+		if request.Surface == "" {
+			request.Surface = "auto"
+		}
+		q, e := t.compileQuery(ctx, subject, v.ContainerID, request, false)
+		if e != nil {
+			return QueryResult{}, e
+		}
+		// Rows carry only the view's columns; detail reads return full content.
+		fields := []string{}
+		tags := false
+		for _, column := range v.Columns {
+			switch {
+			case column == "$tags":
+				tags = true
+			case !strings.HasPrefix(column, "$"):
+				fields = append(fields, column)
+			}
+		}
+		out, e := t.queryCompiled(ctx, subject, request, q, fields)
 		if e != nil {
 			return out, e
 		}
-		selected := map[string]bool{}
-		for _, column := range v.Columns {
-			selected[column] = true
-		}
-		for _, r := range out.Data {
-			values := map[string]any{}
-			for k, x := range r.Values {
-				if selected[k] {
-					values[k] = x
-				}
-			}
-			r.Values = values
-			if !selected["$tags"] {
+		if !tags {
+			for _, r := range out.Data {
 				r.Tags = []string{}
 			}
 		}

@@ -122,7 +122,7 @@ Permissions and surface selection are applied in SQL before sorting, pagination,
 | POST | /v1/views/{id}/query | Execute saved row query |
 | POST | /v1/views/{id}/query/groups | Execute saved group query |
 
-A view stores name, columns, query, layout (table/board/calendar/gallery), and is_default. These layouts are hints for headless clients. Columns select custom values and optionally $tags; identity/name remain available in resource responses. Empty columns default to $name. Only one default view per collection is allowed; replacing the default advances the previous default view's version.
+A view stores name, columns, query, layout (table/board/calendar/gallery), and is_default. These layouts are hints for headless clients. Columns select custom values and optionally $tags; identity/name remain available in resource responses. View queries read only those values from the selected surface, so rows stay small however large item content is; fetch an item for its full content. Empty columns default to $name. Only one default view per collection is allowed; replacing the default advances the previous default view's version.
 
 View management requires collection manage permission. Reading and execution require read, and saved configuration grants no access to content. PUT and DELETE use the view's ETag. View execution accepts only surface, after, and limit; the stored query controls filtering and sorting.
 

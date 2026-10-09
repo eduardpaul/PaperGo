@@ -360,7 +360,7 @@ func (s *Service) visibleFiles(ctx context.Context, subject string, q *ent.Resou
 	if len(rows) > MaxFolderEntries {
 		return nil, invalid("folders with more than " + strconv.Itoa(MaxFolderEntries) + " entries cannot be listed as files")
 	}
-	revisions, err := s.overlayPage(ctx, subject, "auto", rows)
+	revisions, err := s.overlayPage(ctx, subject, "auto", rows, nil)
 	if err != nil {
 		return nil, err
 	}

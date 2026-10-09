@@ -504,9 +504,20 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 		if e != nil {
 			return QueryResult{}, e
 		}
-		return t.queryCompiled(ctx, subject, in, q)
+		return t.queryCompiled(ctx, subject, in, q, nil)
 	})
 }
+
+// resourceSummaryColumns are every resources column but values.
+var resourceSummaryColumns = func() []string {
+	columns := []string{}
+	for _, c := range resource.Columns {
+		if c != resource.FieldValues {
+			columns = append(columns, c)
+		}
+	}
+	return columns
+}()
 
 // page selects one keyset page of IDs and sort values; where is keyset's clause.
 // Missing values sort last; ID ties follow the sort direction, as in queryseek.go.
@@ -547,7 +558,9 @@ func (s *Service) rankedIDs(ctx context.Context, query string, args ...any) ([]r
 	return out, rows.Err()
 }
 
-func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery) (QueryResult, error) {
+// queryCompiled returns one page of q. A non-nil fields projects item values
+// to those keys (see overlayPage); nil returns complete values.
+func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery, fields []string) (QueryResult, error) {
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
 		limit := pageSize(in.Limit)
 		var page []rankedID
@@ -571,18 +584,21 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 			ids = ids[:limit]
 		}
 		if len(ids) > 0 {
-			resources, e := t.Client.Resource.Query().Where(resource.IDIn(ids...)).All(ctx)
+			// Item values come from the selected surface, so the resource's copy
+			// of the head values is never loaded.
+			resources, e := t.Client.Resource.Query().Where(resource.IDIn(ids...)).Select(resourceSummaryColumns...).All(ctx)
 			if e != nil {
 				return out, e
 			}
 			lookup := map[string]*ent.Resource{}
 			for _, r := range resources {
+				r.Values = map[string]any{}
 				lookup[r.ID] = r
 			}
 			for _, id := range ids {
 				out.Data = append(out.Data, lookup[id])
 			}
-			if _, e = t.overlayPage(ctx, subject, in.Surface, out.Data); e != nil {
+			if _, e = t.overlayPage(ctx, subject, in.Surface, out.Data, fields); e != nil {
 				return out, e
 			}
 		}

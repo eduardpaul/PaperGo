@@ -3,7 +3,9 @@ package dms
 import (
 	"encoding/json"
 	"fmt"
+	"papergo/internal/model"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -106,7 +108,7 @@ func pageAll(t *testing.T, s *Service, subject, collection, surface string, spec
 			if !seek {
 				q.seek = nil
 			}
-			return tx.queryCompiled(testContext, subject, in, q)
+			return tx.queryCompiled(testContext, subject, in, q, nil)
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -118,5 +120,86 @@ func pageAll(t *testing.T, s *Service, subject, collection, surface string, spec
 			return ids
 		}
 		in.After = out.NextCursor
+	}
+}
+
+// View rows read only their columns from SQL, yet must equal the full query
+// rows reduced to those columns, on the surface each caller sees.
+func TestViewRowsProjectTheirColumns(t *testing.T) {
+	s, w, list := fixture(t)
+	readers(t, s, w)
+	for _, f := range []CreateField{
+		{Key: "amount", Label: "Amount", Type: "decimal", Scale: 2},
+		{Key: "serial", Label: "Serial", Type: "integer"},
+		{Key: "labels", Label: "Labels", Type: "text", Options: model.FieldOptions{Multiple: true}},
+		{Key: "done", Label: "Done", Type: "boolean"},
+		{Key: "note", Label: "Note", Type: "note"},
+	} {
+		if _, err := s.CreateField(testContext, "alice", list.ID, f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 6; i++ {
+		values := map[string]any{"amount": fmt.Sprintf("%d.25", i), "serial": json.Number("9007199254740993"), "labels": []any{"a", fmt.Sprint(i)}, "note": "long text"}
+		if i%2 == 0 {
+			values["done"] = true
+			delete(values, "labels")
+		}
+		r, err := s.Create(testContext, "alice", list.ID, CreateResource{Kind: "item", Name: fmt.Sprintf("Item %d", i), Tags: []string{"t"}, Values: values})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i%3 == 0 {
+			continue
+		}
+		if _, err = s.Publish(testContext, "alice", r.ID, r.Version); err != nil {
+			t.Fatal(err)
+		}
+		r = latest(t, s, r.ID)
+		values["amount"] = "99.00"
+		if _, err = s.Update(testContext, "alice", r.ID, r.Version, UpdateResource{Values: &values}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, columns := range [][]string{{"$name"}, {"$name", "amount", "labels", "done", "missing_key"}, {"$tags", "serial"}} {
+		view, err := s.CreateView(testContext, "alice", list.ID, ViewInput{Name: fmt.Sprint(columns), Columns: columns})
+		if err != nil && columns[len(columns)-1] == "missing_key" {
+			columns = columns[:len(columns)-1]
+			view, err = s.CreateView(testContext, "alice", list.ID, ViewInput{Name: fmt.Sprint(columns), Columns: columns})
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, subject := range []string{"alice", "reader"} {
+			rows, err := s.QueryView(testContext, subject, view.ID, ViewQueryRequest{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			full, err := s.Query(testContext, subject, list.ID, QueryRequest{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rows.Data) != len(full.Data) || len(rows.Data) == 0 {
+				t.Fatalf("%s %v: %d view rows, %d query rows", subject, columns, len(rows.Data), len(full.Data))
+			}
+			for i, r := range rows.Data {
+				want := *full.Data[i]
+				values := map[string]any{}
+				for _, c := range columns {
+					if v, ok := want.Values[c]; ok {
+						values[c] = v
+					}
+				}
+				want.Values = values
+				if !slices.Contains(columns, "$tags") {
+					want.Tags = []string{}
+				}
+				got, _ := json.Marshal(r)
+				expected, _ := json.Marshal(&want)
+				if string(got) != string(expected) {
+					t.Fatalf("%s %v:\n got  %s\n want %s", subject, columns, got, expected)
+				}
+			}
+		}
 	}
 }

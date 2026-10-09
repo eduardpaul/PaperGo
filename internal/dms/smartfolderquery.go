@@ -493,7 +493,7 @@ func (s *Service) QuerySmartFolder(ctx context.Context, subject, id string, in S
 		if in.Surface == "" {
 			in.Surface = "auto"
 		}
-		out, err := t.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal}, q)
+		out, err := t.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal}, q, nil)
 		if err != nil {
 			return SmartFolderResult{}, err
 		}

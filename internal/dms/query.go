@@ -2,10 +2,13 @@ package dms
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	entsql "entgo.io/ent/dialect/sql"
 	"papergo/ent"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
+	"papergo/ent/predicate"
 	"papergo/ent/resource"
 	"strings"
 )
@@ -151,7 +154,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		return Page[*ent.Resource]{}, err
 	}
 	out := entityPage(rows, in.Limit, func(v *ent.Resource) string { return v.ID })
-	if _, err = s.overlayPage(ctx, subject, in.Surface, out.Data); err != nil {
+	if _, err = s.overlayPage(ctx, subject, in.Surface, out.Data, nil); err != nil {
 		return out, err
 	}
 	return out, nil
@@ -189,8 +192,10 @@ func ftsPhrase(search string) string {
 }
 
 // overlayPage applies each item's selected surface and returns the selected revision
-// of every item, keyed by item ID, with its creation time and blob.
-func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows []*ent.Resource) (map[string]*ent.ItemRevision, error) {
+// of every item, keyed by item ID, with its creation time and blob. Only the
+// selected surface row is read. A non-nil fields limits Values to those keys,
+// extracted in SQL, so list rows never decode payloads they discard.
+func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows []*ent.Resource, fields []string) (map[string]*ent.ItemRevision, error) {
 	ids := []string{}
 	items := []*ent.Resource{}
 	for _, r := range rows {
@@ -206,15 +211,44 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 	if err != nil {
 		return nil, err
 	}
-	projections, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDIn(ids...)).All(ctx)
+	selectedSurface := func(r *ent.Resource) itemsurface.Surface {
+		if surface == "head" || (surface == "auto" && draft[r.ID]) {
+			return itemsurface.SurfaceHead
+		}
+		return itemsurface.SurfacePublished
+	}
+	bySurface := map[itemsurface.Surface][]string{}
+	for _, r := range items {
+		bySurface[selectedSurface(r)] = append(bySurface[selectedSurface(r)], r.ID)
+	}
+	selectors := []predicate.ItemSurface{}
+	for sf, members := range bySurface {
+		selectors = append(selectors, itemsurface.And(itemsurface.SurfaceEQ(sf), itemsurface.ItemIDIn(members...)))
+	}
+	q := s.Client.ItemSurface.Query().Where(itemsurface.Or(selectors...))
+	if fields != nil {
+		columns := []string{}
+		for _, c := range itemsurface.Columns {
+			if c != itemsurface.FieldPayload {
+				columns = append(columns, c)
+			}
+		}
+		q.Select(columns...)
+	}
+	projections, err := q.All(ctx)
 	if err != nil {
 		return nil, err
 	}
 	lookup := map[string]*ent.ItemSurface{}
 	revisionIDs := []string{}
 	for _, p := range projections {
-		lookup[p.ItemID+":"+string(p.Surface)] = p
+		lookup[p.ItemID] = p
 		revisionIDs = append(revisionIDs, p.RevisionID)
+	}
+	if fields != nil {
+		if err = s.projectPayloads(ctx, projections, fields); err != nil {
+			return nil, err
+		}
 	}
 	revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.IDIn(revisionIDs...)).Select(itemrevision.FieldID, itemrevision.FieldCreatedAt, itemrevision.FieldBlobID).All(ctx)
 	if err != nil {
@@ -226,11 +260,8 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 	}
 	selectedRevisions := make(map[string]*ent.ItemRevision, len(items))
 	for _, r := range items {
-		selected := "published"
-		if surface == "head" || (surface == "auto" && draft[r.ID]) {
-			selected = "head"
-		}
-		p := lookup[r.ID+":"+selected]
+		selected := selectedSurface(r)
+		p := lookup[r.ID]
 		if p == nil {
 			return nil, ErrNotFound
 		}
@@ -246,10 +277,60 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 			r.UpdatedAt = rev.CreatedAt
 			selectedRevisions[r.ID] = rev
 		}
-		if selected == "published" {
+		if selected == itemsurface.SurfacePublished {
 			r.HeadRevisionID = nil
 			r.NextRevisionNumber = 0
 		}
 	}
 	return selectedRevisions, nil
+}
+
+// projectPayloads replaces each surface payload with an object of just the
+// requested keys that it holds, read with SQLite's -> operator.
+func (s *Service) projectPayloads(ctx context.Context, surfaces []*ent.ItemSurface, fields []string) error {
+	byID := make(map[string]*ent.ItemSurface, len(surfaces))
+	for _, p := range surfaces {
+		p.Payload = json.RawMessage("{}")
+		byID[p.ID] = p
+	}
+	if len(fields) == 0 || len(surfaces) == 0 {
+		return nil
+	}
+	columns := make([]string, len(fields))
+	args := make([]any, 0, len(fields)+len(surfaces))
+	for i, key := range fields {
+		columns[i] = ",payload->?"
+		args = append(args, `$."`+key+`"`)
+	}
+	marks := make([]string, len(surfaces))
+	for i, p := range surfaces {
+		marks[i] = "?"
+		args = append(args, p.ID)
+	}
+	rows, err := s.Client.QueryContext(ctx, "SELECT id"+strings.Join(columns, "")+" FROM item_surfaces WHERE id IN ("+strings.Join(marks, ",")+")", args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		values := make([]sql.NullString, len(fields))
+		dest := []any{&id}
+		for i := range values {
+			dest = append(dest, &values[i])
+		}
+		if err = rows.Scan(dest...); err != nil {
+			return err
+		}
+		object := map[string]json.RawMessage{}
+		for i, v := range values {
+			if v.Valid {
+				object[fields[i]] = json.RawMessage(v.String)
+			}
+		}
+		if byID[id].Payload, err = json.Marshal(object); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
