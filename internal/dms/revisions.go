@@ -307,6 +307,7 @@ func (s *Service) insertFieldValues(ctx context.Context, rows []*ent.FieldValueC
 	}
 	return nil
 }
+
 // publishRevision reuses schema revisions from schemas, which may be nil, and
 // adds the ones it loads.
 func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Resource, rev *ent.ItemRevision, explicit bool, schemas map[string]*ent.SchemaRevision) (*ent.Publication, error) {
@@ -352,6 +353,7 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 	r.PublishedRevisionID = &rev.ID
 	return event, nil
 }
+
 // publishAllHeads publishes every unpublished head in surfaceBatch pages, so
 // memory stays flat and head revisions and schemas load once per batch.
 func (s *Service) publishAllHeads(ctx context.Context, actor string, c *ent.Resource) error {
