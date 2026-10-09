@@ -56,8 +56,11 @@ type Options struct {
 	BusyTimeout time.Duration
 }
 
-// DefaultOptions are the settings Open uses.
-var DefaultOptions = Options{BusyTimeout: 5 * time.Second}
+// DefaultOptions are the settings Open uses. Write transactions take the
+// write lock when they begin and wait up to 30 seconds for it, so PaperGo
+// requests and runner steps queue for the single SQLite writer instead of
+// failing with SQLITE_BUSY. Read-only transactions stay deferred.
+var DefaultOptions = Options{TxLock: "immediate", BusyTimeout: 30 * time.Second}
 
 // DSN returns the data source name of the SQLite file at the absolute path
 // abs, so every handle on the file uses the same pragmas.

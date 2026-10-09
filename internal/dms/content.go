@@ -122,6 +122,7 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 	if e = s.syncBusinessKeys(ctx, out); e != nil {
 		return nil, e
 	}
+	s.emit(ctx, EventItemUnpublished, subject, out.WorkspaceID, out.ContainerID, out.ID, map[string]any{"revision_id": rev.ID})
 	return out, s.audit(ctx, subject, "item.unpublish", out, map[string]any{"revision_id": rev.ID})
 }
 func (s *Service) Publications(ctx context.Context, subject, id string, after, limit int) ([]*ent.Publication, error) {

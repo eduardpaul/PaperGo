@@ -103,7 +103,7 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 
 func TestAutomaticPublishingAndPolicyChange(t *testing.T) {
 	db := testutil.Database(t)
-	s := NewService(db.Client)
+	s := NewService(db.SQL)
 	w := create(t, s, "", "workspace", "Organization", nil)
 	readers(t, s, w)
 	list, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Auto"})
@@ -349,7 +349,7 @@ func TestAuthorizedPaginationAndRelationships(t *testing.T) {
 
 func TestRevisionOwnershipAndTransactionRollback(t *testing.T) {
 	db := testutil.Database(t)
-	s := NewService(db.Client)
+	s := NewService(db.SQL)
 	w := create(t, s, "", "workspace", "Org", nil)
 	list := create(t, s, w.ID, "list", "Records", nil)
 	a := create(t, s, list.ID, "item", "A", nil)

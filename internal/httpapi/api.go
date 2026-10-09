@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
+	"papergo/internal/runner"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
 	"papergo/internal/webdav"
+	"papergo/internal/workflow"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +23,8 @@ import (
 
 type API struct {
 	DMS       *dms.Service
+	Workflows *workflow.Service
+	Runner    *runner.Runner
 	Auth      auth.Verifier
 	Storage   storage.Store
 	Logger    *slog.Logger
@@ -40,6 +44,7 @@ func (a *API) Handler() http.Handler {
 	api := http.NewServeMux()
 	a.registerFoundation(api)
 	a.registerSmartFolders(api)
+	a.registerWorkflows(api)
 	api.HandleFunc("GET /v1/workspaces", a.browse)
 	api.HandleFunc("POST /v1/workspaces", a.workspace)
 	api.HandleFunc("GET /v1/resources", a.browse)

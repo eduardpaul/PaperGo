@@ -13,8 +13,10 @@ import (
 	"papergo/internal/database"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
+	"papergo/internal/runner"
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
+	"papergo/internal/workflow"
 	"syscall"
 	"time"
 )
@@ -49,9 +51,26 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("initialize authentication: %w", err)
 	}
-	service := dms.NewService(db.Client)
-	a := &httpapi.API{DMS: service, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
+	service := dms.NewService(db.SQL)
+	workflows := &workflow.Service{DMS: service}
+	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, NodeID: c.NodeID, Retention: c.RunRetention, Logger: log}, db.SQL, service, workflows)
+	if err != nil {
+		return err
+	}
+	if err = run.Launch(startup); err != nil {
+		return err
+	}
+	// The runner stops after the server, so requests in flight can still start runs.
+	defer func() {
+		if err := run.Shutdown(10 * time.Second); err != nil {
+			log.Error("runner shutdown", "error", err)
+		}
+	}()
+	a := &httpapi.API{DMS: service, Workflows: workflows, Runner: run, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
+			return err
+		}
+		if err := run.Ready(ctx); err != nil {
 			return err
 		}
 		return db.CheckSchema(ctx)

@@ -185,6 +185,15 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfaceHead, defs); err != nil {
 		return nil, err
 	}
+	typ := EventItemUpdated
+	if rev.RevisionNumber == 1 {
+		typ = EventItemCreated
+	}
+	data := map[string]any{"revision_id": rev.ID, "revision_number": rev.RevisionNumber, "content_type_id": rev.ContentTypeID}
+	if rev.BlobID != nil {
+		data["blob_id"] = *rev.BlobID
+	}
+	s.emit(ctx, typ, actor, r.WorkspaceID, r.ContainerID, r.ID, data)
 	if !c.PublishingEnabled {
 		if _, err = s.publishRevision(ctx, actor, r, rev, false, nil); err != nil {
 			return nil, err
@@ -351,6 +360,7 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 		return nil, err
 	}
 	r.PublishedRevisionID = &rev.ID
+	s.emit(ctx, EventItemPublished, actor, r.WorkspaceID, r.ContainerID, r.ID, map[string]any{"revision_id": rev.ID, "revision_number": rev.RevisionNumber, "publication_id": event.ID})
 	return event, nil
 }
 

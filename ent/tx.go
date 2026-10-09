@@ -54,6 +54,14 @@ type Tx struct {
 	TermSet *TermSetClient
 	// WebDAVCredential is the client for interacting with the WebDAVCredential builders.
 	WebDAVCredential *WebDAVCredentialClient
+	// Workflow is the client for interacting with the Workflow builders.
+	Workflow *WorkflowClient
+	// WorkflowRun is the client for interacting with the WorkflowRun builders.
+	WorkflowRun *WorkflowRunClient
+	// WorkflowTrigger is the client for interacting with the WorkflowTrigger builders.
+	WorkflowTrigger *WorkflowTriggerClient
+	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
+	WorkflowVersion *WorkflowVersionClient
 
 	// lazily loaded.
 	client     *Client
@@ -205,6 +213,10 @@ func (tx *Tx) init() {
 	tx.Term = NewTermClient(tx.config)
 	tx.TermSet = NewTermSetClient(tx.config)
 	tx.WebDAVCredential = NewWebDAVCredentialClient(tx.config)
+	tx.Workflow = NewWorkflowClient(tx.config)
+	tx.WorkflowRun = NewWorkflowRunClient(tx.config)
+	tx.WorkflowTrigger = NewWorkflowTriggerClient(tx.config)
+	tx.WorkflowVersion = NewWorkflowVersionClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

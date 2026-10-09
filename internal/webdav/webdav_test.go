@@ -56,7 +56,7 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := dms.NewService(db.Client)
+	s := dms.NewService(db.SQL)
 	verifier := principals{"alice-token": "alice", "bob-token": "bob"}
 	logger := slog.New(slog.NewJSONHandler(testLog{t}, nil))
 	a := &httpapi.API{DMS: s, Auth: verifier, Storage: store, Logger: logger, Ready: db.SQL.PingContext, MaxUpload: 64, MaxInFlight: 4, WebDAV: webdav.New(s, verifier, store, logger, 64)}

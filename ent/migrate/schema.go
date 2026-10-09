@@ -947,6 +947,160 @@ var (
 			},
 		},
 	}
+	// WorkflowsColumns holds the columns for the "workflows" table.
+	WorkflowsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "workspace_id", Type: field.TypeString, Size: 36},
+		{Name: "key", Type: field.TypeString, Size: 100},
+		{Name: "name", Type: field.TypeString, Size: 400},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "builtin_key", Type: field.TypeString, Nullable: true},
+		{Name: "collection_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "parameters", Type: field.TypeJSON},
+		{Name: "current_version", Type: field.TypeInt},
+		{Name: "created_by", Type: field.TypeString},
+		{Name: "updated_by", Type: field.TypeString},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+	}
+	// WorkflowsTable holds the schema information for the "workflows" table.
+	WorkflowsTable = &schema.Table{
+		Name:       "workflows",
+		Columns:    WorkflowsColumns,
+		PrimaryKey: []*schema.Column{WorkflowsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "workflow_workspace_id_key",
+				Unique:  true,
+				Columns: []*schema.Column{WorkflowsColumns[3], WorkflowsColumns[4]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "deleted_at IS NULL",
+				},
+			},
+			{
+				Name:    "workflow_workspace_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{WorkflowsColumns[3], WorkflowsColumns[5]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "deleted_at IS NULL",
+				},
+			},
+			{
+				Name:    "workflow_workspace_id_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowsColumns[3], WorkflowsColumns[0]},
+			},
+		},
+	}
+	// WorkflowRunsColumns holds the columns for the "workflow_runs" table.
+	WorkflowRunsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "workflow_id", Type: field.TypeString, Size: 36},
+		{Name: "workflow_version", Type: field.TypeInt},
+		{Name: "workspace_id", Type: field.TypeString, Size: 36},
+		{Name: "item_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "event_id", Type: field.TypeString},
+		{Name: "event_type", Type: field.TypeString},
+		{Name: "depth", Type: field.TypeInt},
+		{Name: "actor", Type: field.TypeString},
+		{Name: "retry_of", Type: field.TypeString, Nullable: true},
+	}
+	// WorkflowRunsTable holds the schema information for the "workflow_runs" table.
+	WorkflowRunsTable = &schema.Table{
+		Name:       "workflow_runs",
+		Columns:    WorkflowRunsColumns,
+		PrimaryKey: []*schema.Column{WorkflowRunsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "workflowrun_workflow_id_event_id",
+				Unique:  true,
+				Columns: []*schema.Column{WorkflowRunsColumns[2], WorkflowRunsColumns[6]},
+			},
+			{
+				Name:    "workflowrun_workspace_id_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowRunsColumns[4], WorkflowRunsColumns[1], WorkflowRunsColumns[0]},
+			},
+			{
+				Name:    "workflowrun_workflow_id_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowRunsColumns[2], WorkflowRunsColumns[1], WorkflowRunsColumns[0]},
+			},
+			{
+				Name:    "workflowrun_item_id_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowRunsColumns[5], WorkflowRunsColumns[1], WorkflowRunsColumns[0]},
+			},
+			{
+				Name:    "workflowrun_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowRunsColumns[1]},
+			},
+		},
+	}
+	// WorkflowTriggersColumns holds the columns for the "workflow_triggers" table.
+	WorkflowTriggersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "workflow_id", Type: field.TypeString, Size: 36},
+		{Name: "workspace_id", Type: field.TypeString, Size: 36},
+		{Name: "collection_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "type", Type: field.TypeString},
+		{Name: "position", Type: field.TypeInt},
+		{Name: "next_at", Type: field.TypeTime, Nullable: true},
+	}
+	// WorkflowTriggersTable holds the schema information for the "workflow_triggers" table.
+	WorkflowTriggersTable = &schema.Table{
+		Name:       "workflow_triggers",
+		Columns:    WorkflowTriggersColumns,
+		PrimaryKey: []*schema.Column{WorkflowTriggersColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "workflowtrigger_type_workspace_id_collection_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowTriggersColumns[5], WorkflowTriggersColumns[3], WorkflowTriggersColumns[4]},
+			},
+			{
+				Name:    "workflowtrigger_workflow_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowTriggersColumns[2]},
+			},
+			{
+				Name:    "workflowtrigger_next_at",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowTriggersColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "next_at IS NOT NULL",
+				},
+			},
+		},
+	}
+	// WorkflowVersionsColumns holds the columns for the "workflow_versions" table.
+	WorkflowVersionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "workflow_id", Type: field.TypeString, Size: 36},
+		{Name: "number", Type: field.TypeInt},
+		{Name: "definition", Type: field.TypeJSON},
+		{Name: "created_by", Type: field.TypeString},
+	}
+	// WorkflowVersionsTable holds the schema information for the "workflow_versions" table.
+	WorkflowVersionsTable = &schema.Table{
+		Name:       "workflow_versions",
+		Columns:    WorkflowVersionsColumns,
+		PrimaryKey: []*schema.Column{WorkflowVersionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "workflowversion_workflow_id_number",
+				Unique:  true,
+				Columns: []*schema.Column{WorkflowVersionsColumns[2], WorkflowVersionsColumns[3]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuditEventsTable,
@@ -969,6 +1123,10 @@ var (
 		TermsTable,
 		TermSetsTable,
 		WebdavCredentialsTable,
+		WorkflowsTable,
+		WorkflowRunsTable,
+		WorkflowTriggersTable,
+		WorkflowVersionsTable,
 	}
 )
 

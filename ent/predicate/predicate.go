@@ -65,3 +65,15 @@ type TermSet func(*sql.Selector)
 
 // WebDAVCredential is the predicate function for webdavcredential builders.
 type WebDAVCredential func(*sql.Selector)
+
+// Workflow is the predicate function for workflow builders.
+type Workflow func(*sql.Selector)
+
+// WorkflowRun is the predicate function for workflowrun builders.
+type WorkflowRun func(*sql.Selector)
+
+// WorkflowTrigger is the predicate function for workflowtrigger builders.
+type WorkflowTrigger func(*sql.Selector)
+
+// WorkflowVersion is the predicate function for workflowversion builders.
+type WorkflowVersion func(*sql.Selector)

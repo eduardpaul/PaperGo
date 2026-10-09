@@ -26,6 +26,10 @@ import (
 	"papergo/ent/term"
 	"papergo/ent/termset"
 	"papergo/ent/webdavcredential"
+	"papergo/ent/workflow"
+	"papergo/ent/workflowrun"
+	"papergo/ent/workflowtrigger"
+	"papergo/ent/workflowversion"
 	"reflect"
 	"sync"
 
@@ -112,6 +116,10 @@ func checkColumn(t, c string) error {
 			term.Table:             term.ValidColumn,
 			termset.Table:          termset.ValidColumn,
 			webdavcredential.Table: webdavcredential.ValidColumn,
+			workflow.Table:         workflow.ValidColumn,
+			workflowrun.Table:      workflowrun.ValidColumn,
+			workflowtrigger.Table:  workflowtrigger.ValidColumn,
+			workflowversion.Table:  workflowversion.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)
