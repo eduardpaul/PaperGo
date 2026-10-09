@@ -75,7 +75,7 @@ func TestApplyTemplateCannotRequireMissingValues(t *testing.T) {
 
 func TestTermSearchFoldsNonASCII(t *testing.T) {
 	s, w, _ := fixture(t)
-	set, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "moods", Name: "Moods"})
+	set, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "moods", Name: "Moods"})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -83,7 +83,7 @@ func TestTermSearchFoldsNonASCII(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, q := range []string{"Élan", "élan", "übermut"} {
-		matches, e := s.Terms(testContext, "alice", set.ID, q, "", 50)
+		matches, e := s.Terms(testContext, "alice", set.ID, TermsQuery{Search: q})
 		if e != nil || len(matches.Data) != 1 {
 			t.Fatal("non-ASCII search", q, matches, e)
 		}

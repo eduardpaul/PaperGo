@@ -90,6 +90,36 @@ func NormalizedName(v string) predicate.Term {
 	return predicate.Term(sql.FieldEQ(FieldNormalizedName, v))
 }
 
+// Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
+func Description(v string) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldDescription, v))
+}
+
+// Color applies equality check predicate on the "color" field. It's identical to ColorEQ.
+func Color(v string) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldColor, v))
+}
+
+// SortOrder applies equality check predicate on the "sort_order" field. It's identical to SortOrderEQ.
+func SortOrder(v int) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldSortOrder, v))
+}
+
+// Path applies equality check predicate on the "path" field. It's identical to PathEQ.
+func Path(v string) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldPath, v))
+}
+
+// MergedIntoID applies equality check predicate on the "merged_into_id" field. It's identical to MergedIntoIDEQ.
+func MergedIntoID(v string) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldMergedIntoID, v))
+}
+
+// AvailableAsKeyword applies equality check predicate on the "available_as_keyword" field. It's identical to AvailableAsKeywordEQ.
+func AvailableAsKeyword(v bool) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldAvailableAsKeyword, v))
+}
+
 // Deprecated applies equality check predicate on the "deprecated" field. It's identical to DeprecatedEQ.
 func Deprecated(v bool) predicate.Term {
 	return predicate.Term(sql.FieldEQ(FieldDeprecated, v))
@@ -415,6 +445,336 @@ func NormalizedNameContainsFold(v string) predicate.Term {
 	return predicate.Term(sql.FieldContainsFold(FieldNormalizedName, v))
 }
 
+// DescriptionEQ applies the EQ predicate on the "description" field.
+func DescriptionEQ(v string) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldDescription, v))
+}
+
+// DescriptionNEQ applies the NEQ predicate on the "description" field.
+func DescriptionNEQ(v string) predicate.Term {
+	return predicate.Term(sql.FieldNEQ(FieldDescription, v))
+}
+
+// DescriptionIn applies the In predicate on the "description" field.
+func DescriptionIn(vs ...string) predicate.Term {
+	return predicate.Term(sql.FieldIn(FieldDescription, vs...))
+}
+
+// DescriptionNotIn applies the NotIn predicate on the "description" field.
+func DescriptionNotIn(vs ...string) predicate.Term {
+	return predicate.Term(sql.FieldNotIn(FieldDescription, vs...))
+}
+
+// DescriptionGT applies the GT predicate on the "description" field.
+func DescriptionGT(v string) predicate.Term {
+	return predicate.Term(sql.FieldGT(FieldDescription, v))
+}
+
+// DescriptionGTE applies the GTE predicate on the "description" field.
+func DescriptionGTE(v string) predicate.Term {
+	return predicate.Term(sql.FieldGTE(FieldDescription, v))
+}
+
+// DescriptionLT applies the LT predicate on the "description" field.
+func DescriptionLT(v string) predicate.Term {
+	return predicate.Term(sql.FieldLT(FieldDescription, v))
+}
+
+// DescriptionLTE applies the LTE predicate on the "description" field.
+func DescriptionLTE(v string) predicate.Term {
+	return predicate.Term(sql.FieldLTE(FieldDescription, v))
+}
+
+// DescriptionContains applies the Contains predicate on the "description" field.
+func DescriptionContains(v string) predicate.Term {
+	return predicate.Term(sql.FieldContains(FieldDescription, v))
+}
+
+// DescriptionHasPrefix applies the HasPrefix predicate on the "description" field.
+func DescriptionHasPrefix(v string) predicate.Term {
+	return predicate.Term(sql.FieldHasPrefix(FieldDescription, v))
+}
+
+// DescriptionHasSuffix applies the HasSuffix predicate on the "description" field.
+func DescriptionHasSuffix(v string) predicate.Term {
+	return predicate.Term(sql.FieldHasSuffix(FieldDescription, v))
+}
+
+// DescriptionEqualFold applies the EqualFold predicate on the "description" field.
+func DescriptionEqualFold(v string) predicate.Term {
+	return predicate.Term(sql.FieldEqualFold(FieldDescription, v))
+}
+
+// DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
+func DescriptionContainsFold(v string) predicate.Term {
+	return predicate.Term(sql.FieldContainsFold(FieldDescription, v))
+}
+
+// ColorEQ applies the EQ predicate on the "color" field.
+func ColorEQ(v string) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldColor, v))
+}
+
+// ColorNEQ applies the NEQ predicate on the "color" field.
+func ColorNEQ(v string) predicate.Term {
+	return predicate.Term(sql.FieldNEQ(FieldColor, v))
+}
+
+// ColorIn applies the In predicate on the "color" field.
+func ColorIn(vs ...string) predicate.Term {
+	return predicate.Term(sql.FieldIn(FieldColor, vs...))
+}
+
+// ColorNotIn applies the NotIn predicate on the "color" field.
+func ColorNotIn(vs ...string) predicate.Term {
+	return predicate.Term(sql.FieldNotIn(FieldColor, vs...))
+}
+
+// ColorGT applies the GT predicate on the "color" field.
+func ColorGT(v string) predicate.Term {
+	return predicate.Term(sql.FieldGT(FieldColor, v))
+}
+
+// ColorGTE applies the GTE predicate on the "color" field.
+func ColorGTE(v string) predicate.Term {
+	return predicate.Term(sql.FieldGTE(FieldColor, v))
+}
+
+// ColorLT applies the LT predicate on the "color" field.
+func ColorLT(v string) predicate.Term {
+	return predicate.Term(sql.FieldLT(FieldColor, v))
+}
+
+// ColorLTE applies the LTE predicate on the "color" field.
+func ColorLTE(v string) predicate.Term {
+	return predicate.Term(sql.FieldLTE(FieldColor, v))
+}
+
+// ColorContains applies the Contains predicate on the "color" field.
+func ColorContains(v string) predicate.Term {
+	return predicate.Term(sql.FieldContains(FieldColor, v))
+}
+
+// ColorHasPrefix applies the HasPrefix predicate on the "color" field.
+func ColorHasPrefix(v string) predicate.Term {
+	return predicate.Term(sql.FieldHasPrefix(FieldColor, v))
+}
+
+// ColorHasSuffix applies the HasSuffix predicate on the "color" field.
+func ColorHasSuffix(v string) predicate.Term {
+	return predicate.Term(sql.FieldHasSuffix(FieldColor, v))
+}
+
+// ColorIsNil applies the IsNil predicate on the "color" field.
+func ColorIsNil() predicate.Term {
+	return predicate.Term(sql.FieldIsNull(FieldColor))
+}
+
+// ColorNotNil applies the NotNil predicate on the "color" field.
+func ColorNotNil() predicate.Term {
+	return predicate.Term(sql.FieldNotNull(FieldColor))
+}
+
+// ColorEqualFold applies the EqualFold predicate on the "color" field.
+func ColorEqualFold(v string) predicate.Term {
+	return predicate.Term(sql.FieldEqualFold(FieldColor, v))
+}
+
+// ColorContainsFold applies the ContainsFold predicate on the "color" field.
+func ColorContainsFold(v string) predicate.Term {
+	return predicate.Term(sql.FieldContainsFold(FieldColor, v))
+}
+
+// SortOrderEQ applies the EQ predicate on the "sort_order" field.
+func SortOrderEQ(v int) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldSortOrder, v))
+}
+
+// SortOrderNEQ applies the NEQ predicate on the "sort_order" field.
+func SortOrderNEQ(v int) predicate.Term {
+	return predicate.Term(sql.FieldNEQ(FieldSortOrder, v))
+}
+
+// SortOrderIn applies the In predicate on the "sort_order" field.
+func SortOrderIn(vs ...int) predicate.Term {
+	return predicate.Term(sql.FieldIn(FieldSortOrder, vs...))
+}
+
+// SortOrderNotIn applies the NotIn predicate on the "sort_order" field.
+func SortOrderNotIn(vs ...int) predicate.Term {
+	return predicate.Term(sql.FieldNotIn(FieldSortOrder, vs...))
+}
+
+// SortOrderGT applies the GT predicate on the "sort_order" field.
+func SortOrderGT(v int) predicate.Term {
+	return predicate.Term(sql.FieldGT(FieldSortOrder, v))
+}
+
+// SortOrderGTE applies the GTE predicate on the "sort_order" field.
+func SortOrderGTE(v int) predicate.Term {
+	return predicate.Term(sql.FieldGTE(FieldSortOrder, v))
+}
+
+// SortOrderLT applies the LT predicate on the "sort_order" field.
+func SortOrderLT(v int) predicate.Term {
+	return predicate.Term(sql.FieldLT(FieldSortOrder, v))
+}
+
+// SortOrderLTE applies the LTE predicate on the "sort_order" field.
+func SortOrderLTE(v int) predicate.Term {
+	return predicate.Term(sql.FieldLTE(FieldSortOrder, v))
+}
+
+// PathEQ applies the EQ predicate on the "path" field.
+func PathEQ(v string) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldPath, v))
+}
+
+// PathNEQ applies the NEQ predicate on the "path" field.
+func PathNEQ(v string) predicate.Term {
+	return predicate.Term(sql.FieldNEQ(FieldPath, v))
+}
+
+// PathIn applies the In predicate on the "path" field.
+func PathIn(vs ...string) predicate.Term {
+	return predicate.Term(sql.FieldIn(FieldPath, vs...))
+}
+
+// PathNotIn applies the NotIn predicate on the "path" field.
+func PathNotIn(vs ...string) predicate.Term {
+	return predicate.Term(sql.FieldNotIn(FieldPath, vs...))
+}
+
+// PathGT applies the GT predicate on the "path" field.
+func PathGT(v string) predicate.Term {
+	return predicate.Term(sql.FieldGT(FieldPath, v))
+}
+
+// PathGTE applies the GTE predicate on the "path" field.
+func PathGTE(v string) predicate.Term {
+	return predicate.Term(sql.FieldGTE(FieldPath, v))
+}
+
+// PathLT applies the LT predicate on the "path" field.
+func PathLT(v string) predicate.Term {
+	return predicate.Term(sql.FieldLT(FieldPath, v))
+}
+
+// PathLTE applies the LTE predicate on the "path" field.
+func PathLTE(v string) predicate.Term {
+	return predicate.Term(sql.FieldLTE(FieldPath, v))
+}
+
+// PathContains applies the Contains predicate on the "path" field.
+func PathContains(v string) predicate.Term {
+	return predicate.Term(sql.FieldContains(FieldPath, v))
+}
+
+// PathHasPrefix applies the HasPrefix predicate on the "path" field.
+func PathHasPrefix(v string) predicate.Term {
+	return predicate.Term(sql.FieldHasPrefix(FieldPath, v))
+}
+
+// PathHasSuffix applies the HasSuffix predicate on the "path" field.
+func PathHasSuffix(v string) predicate.Term {
+	return predicate.Term(sql.FieldHasSuffix(FieldPath, v))
+}
+
+// PathEqualFold applies the EqualFold predicate on the "path" field.
+func PathEqualFold(v string) predicate.Term {
+	return predicate.Term(sql.FieldEqualFold(FieldPath, v))
+}
+
+// PathContainsFold applies the ContainsFold predicate on the "path" field.
+func PathContainsFold(v string) predicate.Term {
+	return predicate.Term(sql.FieldContainsFold(FieldPath, v))
+}
+
+// MergedIntoIDEQ applies the EQ predicate on the "merged_into_id" field.
+func MergedIntoIDEQ(v string) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDNEQ applies the NEQ predicate on the "merged_into_id" field.
+func MergedIntoIDNEQ(v string) predicate.Term {
+	return predicate.Term(sql.FieldNEQ(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDIn applies the In predicate on the "merged_into_id" field.
+func MergedIntoIDIn(vs ...string) predicate.Term {
+	return predicate.Term(sql.FieldIn(FieldMergedIntoID, vs...))
+}
+
+// MergedIntoIDNotIn applies the NotIn predicate on the "merged_into_id" field.
+func MergedIntoIDNotIn(vs ...string) predicate.Term {
+	return predicate.Term(sql.FieldNotIn(FieldMergedIntoID, vs...))
+}
+
+// MergedIntoIDGT applies the GT predicate on the "merged_into_id" field.
+func MergedIntoIDGT(v string) predicate.Term {
+	return predicate.Term(sql.FieldGT(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDGTE applies the GTE predicate on the "merged_into_id" field.
+func MergedIntoIDGTE(v string) predicate.Term {
+	return predicate.Term(sql.FieldGTE(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDLT applies the LT predicate on the "merged_into_id" field.
+func MergedIntoIDLT(v string) predicate.Term {
+	return predicate.Term(sql.FieldLT(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDLTE applies the LTE predicate on the "merged_into_id" field.
+func MergedIntoIDLTE(v string) predicate.Term {
+	return predicate.Term(sql.FieldLTE(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDContains applies the Contains predicate on the "merged_into_id" field.
+func MergedIntoIDContains(v string) predicate.Term {
+	return predicate.Term(sql.FieldContains(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDHasPrefix applies the HasPrefix predicate on the "merged_into_id" field.
+func MergedIntoIDHasPrefix(v string) predicate.Term {
+	return predicate.Term(sql.FieldHasPrefix(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDHasSuffix applies the HasSuffix predicate on the "merged_into_id" field.
+func MergedIntoIDHasSuffix(v string) predicate.Term {
+	return predicate.Term(sql.FieldHasSuffix(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDIsNil applies the IsNil predicate on the "merged_into_id" field.
+func MergedIntoIDIsNil() predicate.Term {
+	return predicate.Term(sql.FieldIsNull(FieldMergedIntoID))
+}
+
+// MergedIntoIDNotNil applies the NotNil predicate on the "merged_into_id" field.
+func MergedIntoIDNotNil() predicate.Term {
+	return predicate.Term(sql.FieldNotNull(FieldMergedIntoID))
+}
+
+// MergedIntoIDEqualFold applies the EqualFold predicate on the "merged_into_id" field.
+func MergedIntoIDEqualFold(v string) predicate.Term {
+	return predicate.Term(sql.FieldEqualFold(FieldMergedIntoID, v))
+}
+
+// MergedIntoIDContainsFold applies the ContainsFold predicate on the "merged_into_id" field.
+func MergedIntoIDContainsFold(v string) predicate.Term {
+	return predicate.Term(sql.FieldContainsFold(FieldMergedIntoID, v))
+}
+
+// AvailableAsKeywordEQ applies the EQ predicate on the "available_as_keyword" field.
+func AvailableAsKeywordEQ(v bool) predicate.Term {
+	return predicate.Term(sql.FieldEQ(FieldAvailableAsKeyword, v))
+}
+
+// AvailableAsKeywordNEQ applies the NEQ predicate on the "available_as_keyword" field.
+func AvailableAsKeywordNEQ(v bool) predicate.Term {
+	return predicate.Term(sql.FieldNEQ(FieldAvailableAsKeyword, v))
+}
+
 // DeprecatedEQ applies the EQ predicate on the "deprecated" field.
 func DeprecatedEQ(v bool) predicate.Term {
 	return predicate.Term(sql.FieldEQ(FieldDeprecated, v))
@@ -566,6 +926,52 @@ func HasParent() predicate.Term {
 func HasParentWith(preds ...predicate.Term) predicate.Term {
 	return predicate.Term(func(s *sql.Selector) {
 		step := newParentStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasMerged applies the HasEdge predicate on the "merged" edge.
+func HasMerged() predicate.Term {
+	return predicate.Term(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, MergedTable, MergedColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasMergedWith applies the HasEdge predicate on the "merged" edge with a given conditions (other predicates).
+func HasMergedWith(preds ...predicate.Term) predicate.Term {
+	return predicate.Term(func(s *sql.Selector) {
+		step := newMergedStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasMergedInto applies the HasEdge predicate on the "merged_into" edge.
+func HasMergedInto() predicate.Term {
+	return predicate.Term(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, MergedIntoTable, MergedIntoColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasMergedIntoWith applies the HasEdge predicate on the "merged_into" edge with a given conditions (other predicates).
+func HasMergedIntoWith(preds ...predicate.Term) predicate.Term {
+	return predicate.Term(func(s *sql.Selector) {
+		step := newMergedIntoStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

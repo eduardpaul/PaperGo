@@ -166,14 +166,33 @@ Run `go test ./internal/dms -run '^$' -bench BenchmarkItemUpdates -benchmem` to 
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| GET / POST | /v1/workspaces/{id}/term-sets | List or create term sets |
-| GET / PUT | /v1/term-sets/{id} | Read or replace term set metadata |
-| GET / POST | /v1/term-sets/{id}/terms | Search/list or create terms |
+| GET / POST | /v1/workspaces/{id}/term-groups | List or create term groups |
+| GET / PUT / DELETE | /v1/term-groups/{id} | Read, replace or delete a term group |
+| POST | /v1/term-groups/{id}/import | Import term sets from a SharePoint CSV (`text/csv`) |
+| GET / POST | /v1/workspaces/{id}/term-sets | List (`group_id` narrows) or create term sets |
+| GET / PUT / DELETE | /v1/term-sets/{id} | Read, replace or delete a term set |
+| GET / POST | /v1/term-sets/{id}/terms | Browse or search terms, or create one |
+| GET | /v1/terms?ids= | Look up 1 to 200 terms by ID |
 | GET / PUT | /v1/terms/{id} | Read or replace term metadata |
+| POST | /v1/terms/{id}/move | Move a term and its subtree |
+| POST | /v1/terms/{id}/merge | Merge a term into another |
+| GET / POST | /v1/workspaces/{id}/keywords | Suggest keywords, or get or add one |
+| GET | /v1/workspaces/{id}/keywords/popular | Most used keywords |
+| POST | /v1/keywords/{id}/promote | Promote a keyword into a managed set |
 
-Term sets have stable keys, names, descriptions, and versions. Terms have stable IDs, immutable optional parents within the same set, names, localized labels, synonyms, deprecation state, and versions. Hierarchy depth is bounded. Names are unique case-insensitively within a term set. Term listing supports q searches across names, labels, and synonyms and ID keyset pagination.
+**Groups and sets.** Term groups organize a workspace's term sets; group names are unique in the workspace. Every workspace has a system group, which holds its keywords set and cannot be renamed, deleted or given other sets. A term set has a stable key, a name unique in its group, a description and `is_open`. Open sets accept new terms from people with workspace write; closed sets change only with manage. Empty groups (other than the system group) and term sets without terms or fields can be deleted.
 
-Management requires workspace manage; reads require workspace read. PUT requires the entity's ETag and replaces its mutable metadata. Deprecated terms cannot be newly assigned, but existing references and historical content remain intact. Labels resolve from the current taxonomy; term definitions themselves are not immutable content-history snapshots. Free tags continue to work independently.
+**Terms.** Terms have stable IDs, a parent in the same set (or none), a name unique among the active children of a parent (case-insensitively), a description, an optional `#rrggbb` color, a `sort_order`, localized labels, synonyms and a deprecation flag. `path` lists the IDs from the root to the term (`/root/…/term/`), so a subtree is one index range; hierarchy depth is at most 32. Terms are never deleted: they are deprecated, which keeps existing values but rejects new assignments, or merged.
+
+Listing `GET /v1/term-sets/{id}/terms` returns the root terms, or the children of `parent_id`, ordered by `sort_order` then name with a keyset cursor; each term carries `has_children`. `q` searches names, labels and synonyms in the whole set (below `parent_id` when given). Deprecated terms are left out unless `include_deprecated=true`; merged terms are never listed. `GET /v1/terms?ids=` returns the readable terms among up to 200 IDs in the order asked, merged ones included.
+
+**Move and merge.** Moving a term (its ETag in `If-Match`) re-parents it within its set, never below itself, and updates the paths of its subtree. Merging a term into another active term of its set moves the source's children to the target, adds the source's name and synonyms to the target's synonyms, re-points terms earlier merged into the source, and keeps the source as a deprecated term whose `merged_into_id` names the target. Values that hold a merged term keep their ID; readers resolve it through `merged_into_id`. A merge raises the `term.merged` domain event (`source_term_id`, `target_term_id`, `term_set_id`).
+
+**Keywords.** The keywords set is the open set of free keywords. People with workspace write get or add a keyword with `POST /v1/workspaces/{id}/keywords {"name": ...}`: an active keyword with that name or synonym (any case) comes back with 200, else a new root keyword with 201. `GET /v1/workspaces/{id}/keywords?q=` suggests up to 20 keywords, names that start with `q` first. Managers see the most used keywords with `/keywords/popular?top=` (items whose current content holds them in indexed term fields of the keywords set) and promote a keyword with `POST /v1/keywords/{id}/promote {"term_set_id", "parent_id"}`: when the target set has an active term with the keyword's name, label or synonym, the keyword merges into it; otherwise the keyword moves there. Either way the resulting term is `available_as_keyword`, so keyword suggestions and keyword pickers still offer it. Managers can also mark any term `available_as_keyword`.
+
+**CSV import.** `POST /v1/term-groups/{id}/import` reads the SharePoint term set format (at most 1 MiB): `Term Set Name`, `Term Set Description`, `LCID`, `Available for Tagging`, `Term Description` and `Level 1 Term` to `Level 7 Term`. A row with a term set name starts that set; each row adds the path of terms in its level columns. Import is additive: the group's sets with the same name and terms with the same name under the same parent are reused. New sets are closed and get a key derived from their name. A term's description, and `Available for Tagging` FALSE (imported deprecated), apply when the import creates it. The result lists the sets and counts what was created.
+
+Management requires workspace manage; reads require workspace read. PUT, move, merge, promote and DELETE require the entity's ETag. Labels resolve from the current taxonomy; term definitions themselves are not immutable content-history snapshots. Free tags are separate plain-text labels.
 
 ## Typed relationships
 

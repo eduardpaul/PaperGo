@@ -236,6 +236,18 @@ func (f TermFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TermMutation", m)
 }
 
+// The TermGroupFunc type is an adapter to allow the use of ordinary
+// function as TermGroup mutator.
+type TermGroupFunc func(context.Context, *ent.TermGroupMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TermGroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TermGroupMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TermGroupMutation", m)
+}
+
 // The TermSetFunc type is an adapter to allow the use of ordinary
 // function as TermSet mutator.
 type TermSetFunc func(context.Context, *ent.TermSetMutation) (ent.Value, error)

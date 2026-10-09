@@ -14,18 +14,17 @@ type TagCount struct {
 }
 
 // TagsQuery narrows the tag vocabulary: CollectionID to one list or library,
-// Prefix to tags starting with it, Tag to exactly one tag.
+// Prefix to tags starting with it.
 type TagsQuery struct {
 	CollectionID string
 	Prefix       string
-	Tag          string
 	After        string
 	Limit        int
 }
 
 // Tags returns the tags used in a workspace, sorted, with how many resources
-// carry them. Tags are PaperGo's folksonomy (keywords): free text people add
-// to any resource. Only resources the caller may read count, and items count
+// carry them. Tags are free text labels people add to any resource; keywords
+// are taxonomy terms (see keywords.go). Only resources the caller may read count, and items count
 // with the surface the caller sees (head for draft readers, else published),
 // so the vocabulary never reveals what the caller cannot see.
 func (s *Service) Tags(ctx context.Context, subject, workspaceID string, in TagsQuery) (Page[TagCount], error) {
@@ -51,10 +50,7 @@ func (s *Service) Tags(ctx context.Context, subject, workspaceID string, in Tags
 		scope, scopeArgs = "r.container_id=?", []any{in.CollectionID}
 	}
 	match, matchArgs := "1", []any{}
-	switch {
-	case in.Tag != "":
-		match, matchArgs = "t.tag=?", []any{in.Tag}
-	case in.Prefix != "":
+	if in.Prefix != "" {
 		// A range on the tag index; U+10FFFF sorts after every other character.
 		match, matchArgs = "t.tag>=? AND t.tag<?", []any{in.Prefix, in.Prefix + "\U0010FFFF"}
 	}
@@ -91,6 +87,3 @@ func (s *Service) Tags(ctx context.Context, subject, workspaceID string, in Tags
 	}
 	return entityPage(out, in.Limit, func(tc TagCount) string { return tc.Tag }), nil
 }
-
-// ValidTag reports whether tag can be stored as a tag.
-func ValidTag(tag string) error { return validateTags([]string{tag}) }

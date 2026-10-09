@@ -52,6 +52,8 @@ type Tx struct {
 	SmartFolder *SmartFolderClient
 	// Term is the client for interacting with the Term builders.
 	Term *TermClient
+	// TermGroup is the client for interacting with the TermGroup builders.
+	TermGroup *TermGroupClient
 	// TermSet is the client for interacting with the TermSet builders.
 	TermSet *TermSetClient
 	// WebDAVCredential is the client for interacting with the WebDAVCredential builders.
@@ -216,6 +218,7 @@ func (tx *Tx) init() {
 	tx.SchemaTemplate = NewSchemaTemplateClient(tx.config)
 	tx.SmartFolder = NewSmartFolderClient(tx.config)
 	tx.Term = NewTermClient(tx.config)
+	tx.TermGroup = NewTermGroupClient(tx.config)
 	tx.TermSet = NewTermSetClient(tx.config)
 	tx.WebDAVCredential = NewWebDAVCredentialClient(tx.config)
 	tx.Workflow = NewWorkflowClient(tx.config)

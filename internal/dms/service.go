@@ -248,6 +248,9 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		if e != nil {
 			return nil, e
 		}
+		if e = s.createWorkspaceTaxonomy(ctx, out.ID); e != nil {
+			return nil, e
+		}
 	}
 	if out.Kind == resource.KindList || out.Kind == resource.KindLibrary {
 		if _, e = s.Client.ContentType.Create().SetContainerID(out.ID).SetKey("item").SetName("Item").SetIsDefault(true).Save(ctx); e != nil {

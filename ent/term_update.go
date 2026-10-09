@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"papergo/ent/predicate"
 	"papergo/ent/term"
+	"papergo/ent/termset"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -26,6 +27,40 @@ type TermUpdate struct {
 // Where appends a list predicates to the TermUpdate builder.
 func (_u *TermUpdate) Where(ps ...predicate.Term) *TermUpdate {
 	_u.mutation.Where(ps...)
+	return _u
+}
+
+// SetTermSetID sets the "term_set_id" field.
+func (_u *TermUpdate) SetTermSetID(v string) *TermUpdate {
+	_u.mutation.SetTermSetID(v)
+	return _u
+}
+
+// SetNillableTermSetID sets the "term_set_id" field if the given value is not nil.
+func (_u *TermUpdate) SetNillableTermSetID(v *string) *TermUpdate {
+	if v != nil {
+		_u.SetTermSetID(*v)
+	}
+	return _u
+}
+
+// SetParentID sets the "parent_id" field.
+func (_u *TermUpdate) SetParentID(v string) *TermUpdate {
+	_u.mutation.SetParentID(v)
+	return _u
+}
+
+// SetNillableParentID sets the "parent_id" field if the given value is not nil.
+func (_u *TermUpdate) SetNillableParentID(v *string) *TermUpdate {
+	if v != nil {
+		_u.SetParentID(*v)
+	}
+	return _u
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (_u *TermUpdate) ClearParentID() *TermUpdate {
+	_u.mutation.ClearParentID()
 	return _u
 }
 
@@ -57,6 +92,75 @@ func (_u *TermUpdate) SetNillableNormalizedName(v *string) *TermUpdate {
 	return _u
 }
 
+// SetDescription sets the "description" field.
+func (_u *TermUpdate) SetDescription(v string) *TermUpdate {
+	_u.mutation.SetDescription(v)
+	return _u
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_u *TermUpdate) SetNillableDescription(v *string) *TermUpdate {
+	if v != nil {
+		_u.SetDescription(*v)
+	}
+	return _u
+}
+
+// SetColor sets the "color" field.
+func (_u *TermUpdate) SetColor(v string) *TermUpdate {
+	_u.mutation.SetColor(v)
+	return _u
+}
+
+// SetNillableColor sets the "color" field if the given value is not nil.
+func (_u *TermUpdate) SetNillableColor(v *string) *TermUpdate {
+	if v != nil {
+		_u.SetColor(*v)
+	}
+	return _u
+}
+
+// ClearColor clears the value of the "color" field.
+func (_u *TermUpdate) ClearColor() *TermUpdate {
+	_u.mutation.ClearColor()
+	return _u
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (_u *TermUpdate) SetSortOrder(v int) *TermUpdate {
+	_u.mutation.ResetSortOrder()
+	_u.mutation.SetSortOrder(v)
+	return _u
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_u *TermUpdate) SetNillableSortOrder(v *int) *TermUpdate {
+	if v != nil {
+		_u.SetSortOrder(*v)
+	}
+	return _u
+}
+
+// AddSortOrder adds value to the "sort_order" field.
+func (_u *TermUpdate) AddSortOrder(v int) *TermUpdate {
+	_u.mutation.AddSortOrder(v)
+	return _u
+}
+
+// SetPath sets the "path" field.
+func (_u *TermUpdate) SetPath(v string) *TermUpdate {
+	_u.mutation.SetPath(v)
+	return _u
+}
+
+// SetNillablePath sets the "path" field if the given value is not nil.
+func (_u *TermUpdate) SetNillablePath(v *string) *TermUpdate {
+	if v != nil {
+		_u.SetPath(*v)
+	}
+	return _u
+}
+
 // SetLabels sets the "labels" field.
 func (_u *TermUpdate) SetLabels(v map[string]string) *TermUpdate {
 	_u.mutation.SetLabels(v)
@@ -72,6 +176,40 @@ func (_u *TermUpdate) SetSynonyms(v []string) *TermUpdate {
 // AppendSynonyms appends value to the "synonyms" field.
 func (_u *TermUpdate) AppendSynonyms(v []string) *TermUpdate {
 	_u.mutation.AppendSynonyms(v)
+	return _u
+}
+
+// SetMergedIntoID sets the "merged_into_id" field.
+func (_u *TermUpdate) SetMergedIntoID(v string) *TermUpdate {
+	_u.mutation.SetMergedIntoID(v)
+	return _u
+}
+
+// SetNillableMergedIntoID sets the "merged_into_id" field if the given value is not nil.
+func (_u *TermUpdate) SetNillableMergedIntoID(v *string) *TermUpdate {
+	if v != nil {
+		_u.SetMergedIntoID(*v)
+	}
+	return _u
+}
+
+// ClearMergedIntoID clears the value of the "merged_into_id" field.
+func (_u *TermUpdate) ClearMergedIntoID() *TermUpdate {
+	_u.mutation.ClearMergedIntoID()
+	return _u
+}
+
+// SetAvailableAsKeyword sets the "available_as_keyword" field.
+func (_u *TermUpdate) SetAvailableAsKeyword(v bool) *TermUpdate {
+	_u.mutation.SetAvailableAsKeyword(v)
+	return _u
+}
+
+// SetNillableAvailableAsKeyword sets the "available_as_keyword" field if the given value is not nil.
+func (_u *TermUpdate) SetNillableAvailableAsKeyword(v *bool) *TermUpdate {
+	if v != nil {
+		_u.SetAvailableAsKeyword(*v)
+	}
 	return _u
 }
 
@@ -116,6 +254,11 @@ func (_u *TermUpdate) SetUpdatedAt(v time.Time) *TermUpdate {
 	return _u
 }
 
+// SetTermSet sets the "term_set" edge to the TermSet entity.
+func (_u *TermUpdate) SetTermSet(v *TermSet) *TermUpdate {
+	return _u.SetTermSetID(v.ID)
+}
+
 // AddChildIDs adds the "children" edge to the Term entity by IDs.
 func (_u *TermUpdate) AddChildIDs(ids ...string) *TermUpdate {
 	_u.mutation.AddChildIDs(ids...)
@@ -131,9 +274,40 @@ func (_u *TermUpdate) AddChildren(v ...*Term) *TermUpdate {
 	return _u.AddChildIDs(ids...)
 }
 
+// SetParent sets the "parent" edge to the Term entity.
+func (_u *TermUpdate) SetParent(v *Term) *TermUpdate {
+	return _u.SetParentID(v.ID)
+}
+
+// AddMergedIDs adds the "merged" edge to the Term entity by IDs.
+func (_u *TermUpdate) AddMergedIDs(ids ...string) *TermUpdate {
+	_u.mutation.AddMergedIDs(ids...)
+	return _u
+}
+
+// AddMerged adds the "merged" edges to the Term entity.
+func (_u *TermUpdate) AddMerged(v ...*Term) *TermUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddMergedIDs(ids...)
+}
+
+// SetMergedInto sets the "merged_into" edge to the Term entity.
+func (_u *TermUpdate) SetMergedInto(v *Term) *TermUpdate {
+	return _u.SetMergedIntoID(v.ID)
+}
+
 // Mutation returns the TermMutation object of the builder.
 func (_u *TermUpdate) Mutation() *TermMutation {
 	return _u.mutation
+}
+
+// ClearTermSet clears the "term_set" edge to the TermSet entity.
+func (_u *TermUpdate) ClearTermSet() *TermUpdate {
+	_u.mutation.ClearTermSet()
+	return _u
 }
 
 // ClearChildren clears all "children" edges to the Term entity.
@@ -155,6 +329,39 @@ func (_u *TermUpdate) RemoveChildren(v ...*Term) *TermUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveChildIDs(ids...)
+}
+
+// ClearParent clears the "parent" edge to the Term entity.
+func (_u *TermUpdate) ClearParent() *TermUpdate {
+	_u.mutation.ClearParent()
+	return _u
+}
+
+// ClearMerged clears all "merged" edges to the Term entity.
+func (_u *TermUpdate) ClearMerged() *TermUpdate {
+	_u.mutation.ClearMerged()
+	return _u
+}
+
+// RemoveMergedIDs removes the "merged" edge to Term entities by IDs.
+func (_u *TermUpdate) RemoveMergedIDs(ids ...string) *TermUpdate {
+	_u.mutation.RemoveMergedIDs(ids...)
+	return _u
+}
+
+// RemoveMerged removes "merged" edges to Term entities.
+func (_u *TermUpdate) RemoveMerged(v ...*Term) *TermUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveMergedIDs(ids...)
+}
+
+// ClearMergedInto clears the "merged_into" edge to the Term entity.
+func (_u *TermUpdate) ClearMergedInto() *TermUpdate {
+	_u.mutation.ClearMergedInto()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -224,6 +431,24 @@ func (_u *TermUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.NormalizedName(); ok {
 		_spec.SetField(term.FieldNormalizedName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Description(); ok {
+		_spec.SetField(term.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Color(); ok {
+		_spec.SetField(term.FieldColor, field.TypeString, value)
+	}
+	if _u.mutation.ColorCleared() {
+		_spec.ClearField(term.FieldColor, field.TypeString)
+	}
+	if value, ok := _u.mutation.SortOrder(); ok {
+		_spec.SetField(term.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSortOrder(); ok {
+		_spec.AddField(term.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Path(); ok {
+		_spec.SetField(term.FieldPath, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Labels(); ok {
 		_spec.SetField(term.FieldLabels, field.TypeJSON, value)
 	}
@@ -234,6 +459,9 @@ func (_u *TermUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, term.FieldSynonyms, value)
 		})
+	}
+	if value, ok := _u.mutation.AvailableAsKeyword(); ok {
+		_spec.SetField(term.FieldAvailableAsKeyword, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Deprecated(); ok {
 		_spec.SetField(term.FieldDeprecated, field.TypeBool, value)
@@ -246,6 +474,35 @@ func (_u *TermUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(term.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.TermSetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.TermSetTable,
+			Columns: []string{term.TermSetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(termset.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.TermSetIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.TermSetTable,
+			Columns: []string{term.TermSetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(termset.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -292,6 +549,109 @@ func (_u *TermUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.ParentCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.ParentTable,
+			Columns: []string{term.ParentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ParentIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.ParentTable,
+			Columns: []string{term.ParentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MergedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   term.MergedTable,
+			Columns: []string{term.MergedColumn},
+			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedMergedIDs(); len(nodes) > 0 && !_u.mutation.MergedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   term.MergedTable,
+			Columns: []string{term.MergedColumn},
+			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MergedIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   term.MergedTable,
+			Columns: []string{term.MergedColumn},
+			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MergedIntoCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.MergedIntoTable,
+			Columns: []string{term.MergedIntoColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MergedIntoIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.MergedIntoTable,
+			Columns: []string{term.MergedIntoColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{term.Label}
@@ -310,6 +670,40 @@ type TermUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *TermMutation
+}
+
+// SetTermSetID sets the "term_set_id" field.
+func (_u *TermUpdateOne) SetTermSetID(v string) *TermUpdateOne {
+	_u.mutation.SetTermSetID(v)
+	return _u
+}
+
+// SetNillableTermSetID sets the "term_set_id" field if the given value is not nil.
+func (_u *TermUpdateOne) SetNillableTermSetID(v *string) *TermUpdateOne {
+	if v != nil {
+		_u.SetTermSetID(*v)
+	}
+	return _u
+}
+
+// SetParentID sets the "parent_id" field.
+func (_u *TermUpdateOne) SetParentID(v string) *TermUpdateOne {
+	_u.mutation.SetParentID(v)
+	return _u
+}
+
+// SetNillableParentID sets the "parent_id" field if the given value is not nil.
+func (_u *TermUpdateOne) SetNillableParentID(v *string) *TermUpdateOne {
+	if v != nil {
+		_u.SetParentID(*v)
+	}
+	return _u
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (_u *TermUpdateOne) ClearParentID() *TermUpdateOne {
+	_u.mutation.ClearParentID()
+	return _u
 }
 
 // SetName sets the "name" field.
@@ -340,6 +734,75 @@ func (_u *TermUpdateOne) SetNillableNormalizedName(v *string) *TermUpdateOne {
 	return _u
 }
 
+// SetDescription sets the "description" field.
+func (_u *TermUpdateOne) SetDescription(v string) *TermUpdateOne {
+	_u.mutation.SetDescription(v)
+	return _u
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_u *TermUpdateOne) SetNillableDescription(v *string) *TermUpdateOne {
+	if v != nil {
+		_u.SetDescription(*v)
+	}
+	return _u
+}
+
+// SetColor sets the "color" field.
+func (_u *TermUpdateOne) SetColor(v string) *TermUpdateOne {
+	_u.mutation.SetColor(v)
+	return _u
+}
+
+// SetNillableColor sets the "color" field if the given value is not nil.
+func (_u *TermUpdateOne) SetNillableColor(v *string) *TermUpdateOne {
+	if v != nil {
+		_u.SetColor(*v)
+	}
+	return _u
+}
+
+// ClearColor clears the value of the "color" field.
+func (_u *TermUpdateOne) ClearColor() *TermUpdateOne {
+	_u.mutation.ClearColor()
+	return _u
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (_u *TermUpdateOne) SetSortOrder(v int) *TermUpdateOne {
+	_u.mutation.ResetSortOrder()
+	_u.mutation.SetSortOrder(v)
+	return _u
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_u *TermUpdateOne) SetNillableSortOrder(v *int) *TermUpdateOne {
+	if v != nil {
+		_u.SetSortOrder(*v)
+	}
+	return _u
+}
+
+// AddSortOrder adds value to the "sort_order" field.
+func (_u *TermUpdateOne) AddSortOrder(v int) *TermUpdateOne {
+	_u.mutation.AddSortOrder(v)
+	return _u
+}
+
+// SetPath sets the "path" field.
+func (_u *TermUpdateOne) SetPath(v string) *TermUpdateOne {
+	_u.mutation.SetPath(v)
+	return _u
+}
+
+// SetNillablePath sets the "path" field if the given value is not nil.
+func (_u *TermUpdateOne) SetNillablePath(v *string) *TermUpdateOne {
+	if v != nil {
+		_u.SetPath(*v)
+	}
+	return _u
+}
+
 // SetLabels sets the "labels" field.
 func (_u *TermUpdateOne) SetLabels(v map[string]string) *TermUpdateOne {
 	_u.mutation.SetLabels(v)
@@ -355,6 +818,40 @@ func (_u *TermUpdateOne) SetSynonyms(v []string) *TermUpdateOne {
 // AppendSynonyms appends value to the "synonyms" field.
 func (_u *TermUpdateOne) AppendSynonyms(v []string) *TermUpdateOne {
 	_u.mutation.AppendSynonyms(v)
+	return _u
+}
+
+// SetMergedIntoID sets the "merged_into_id" field.
+func (_u *TermUpdateOne) SetMergedIntoID(v string) *TermUpdateOne {
+	_u.mutation.SetMergedIntoID(v)
+	return _u
+}
+
+// SetNillableMergedIntoID sets the "merged_into_id" field if the given value is not nil.
+func (_u *TermUpdateOne) SetNillableMergedIntoID(v *string) *TermUpdateOne {
+	if v != nil {
+		_u.SetMergedIntoID(*v)
+	}
+	return _u
+}
+
+// ClearMergedIntoID clears the value of the "merged_into_id" field.
+func (_u *TermUpdateOne) ClearMergedIntoID() *TermUpdateOne {
+	_u.mutation.ClearMergedIntoID()
+	return _u
+}
+
+// SetAvailableAsKeyword sets the "available_as_keyword" field.
+func (_u *TermUpdateOne) SetAvailableAsKeyword(v bool) *TermUpdateOne {
+	_u.mutation.SetAvailableAsKeyword(v)
+	return _u
+}
+
+// SetNillableAvailableAsKeyword sets the "available_as_keyword" field if the given value is not nil.
+func (_u *TermUpdateOne) SetNillableAvailableAsKeyword(v *bool) *TermUpdateOne {
+	if v != nil {
+		_u.SetAvailableAsKeyword(*v)
+	}
 	return _u
 }
 
@@ -399,6 +896,11 @@ func (_u *TermUpdateOne) SetUpdatedAt(v time.Time) *TermUpdateOne {
 	return _u
 }
 
+// SetTermSet sets the "term_set" edge to the TermSet entity.
+func (_u *TermUpdateOne) SetTermSet(v *TermSet) *TermUpdateOne {
+	return _u.SetTermSetID(v.ID)
+}
+
 // AddChildIDs adds the "children" edge to the Term entity by IDs.
 func (_u *TermUpdateOne) AddChildIDs(ids ...string) *TermUpdateOne {
 	_u.mutation.AddChildIDs(ids...)
@@ -414,9 +916,40 @@ func (_u *TermUpdateOne) AddChildren(v ...*Term) *TermUpdateOne {
 	return _u.AddChildIDs(ids...)
 }
 
+// SetParent sets the "parent" edge to the Term entity.
+func (_u *TermUpdateOne) SetParent(v *Term) *TermUpdateOne {
+	return _u.SetParentID(v.ID)
+}
+
+// AddMergedIDs adds the "merged" edge to the Term entity by IDs.
+func (_u *TermUpdateOne) AddMergedIDs(ids ...string) *TermUpdateOne {
+	_u.mutation.AddMergedIDs(ids...)
+	return _u
+}
+
+// AddMerged adds the "merged" edges to the Term entity.
+func (_u *TermUpdateOne) AddMerged(v ...*Term) *TermUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddMergedIDs(ids...)
+}
+
+// SetMergedInto sets the "merged_into" edge to the Term entity.
+func (_u *TermUpdateOne) SetMergedInto(v *Term) *TermUpdateOne {
+	return _u.SetMergedIntoID(v.ID)
+}
+
 // Mutation returns the TermMutation object of the builder.
 func (_u *TermUpdateOne) Mutation() *TermMutation {
 	return _u.mutation
+}
+
+// ClearTermSet clears the "term_set" edge to the TermSet entity.
+func (_u *TermUpdateOne) ClearTermSet() *TermUpdateOne {
+	_u.mutation.ClearTermSet()
+	return _u
 }
 
 // ClearChildren clears all "children" edges to the Term entity.
@@ -438,6 +971,39 @@ func (_u *TermUpdateOne) RemoveChildren(v ...*Term) *TermUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveChildIDs(ids...)
+}
+
+// ClearParent clears the "parent" edge to the Term entity.
+func (_u *TermUpdateOne) ClearParent() *TermUpdateOne {
+	_u.mutation.ClearParent()
+	return _u
+}
+
+// ClearMerged clears all "merged" edges to the Term entity.
+func (_u *TermUpdateOne) ClearMerged() *TermUpdateOne {
+	_u.mutation.ClearMerged()
+	return _u
+}
+
+// RemoveMergedIDs removes the "merged" edge to Term entities by IDs.
+func (_u *TermUpdateOne) RemoveMergedIDs(ids ...string) *TermUpdateOne {
+	_u.mutation.RemoveMergedIDs(ids...)
+	return _u
+}
+
+// RemoveMerged removes "merged" edges to Term entities.
+func (_u *TermUpdateOne) RemoveMerged(v ...*Term) *TermUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveMergedIDs(ids...)
+}
+
+// ClearMergedInto clears the "merged_into" edge to the Term entity.
+func (_u *TermUpdateOne) ClearMergedInto() *TermUpdateOne {
+	_u.mutation.ClearMergedInto()
+	return _u
 }
 
 // Where appends a list predicates to the TermUpdate builder.
@@ -537,6 +1103,24 @@ func (_u *TermUpdateOne) sqlSave(ctx context.Context) (_node *Term, err error) {
 	if value, ok := _u.mutation.NormalizedName(); ok {
 		_spec.SetField(term.FieldNormalizedName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Description(); ok {
+		_spec.SetField(term.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Color(); ok {
+		_spec.SetField(term.FieldColor, field.TypeString, value)
+	}
+	if _u.mutation.ColorCleared() {
+		_spec.ClearField(term.FieldColor, field.TypeString)
+	}
+	if value, ok := _u.mutation.SortOrder(); ok {
+		_spec.SetField(term.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSortOrder(); ok {
+		_spec.AddField(term.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Path(); ok {
+		_spec.SetField(term.FieldPath, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Labels(); ok {
 		_spec.SetField(term.FieldLabels, field.TypeJSON, value)
 	}
@@ -547,6 +1131,9 @@ func (_u *TermUpdateOne) sqlSave(ctx context.Context) (_node *Term, err error) {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, term.FieldSynonyms, value)
 		})
+	}
+	if value, ok := _u.mutation.AvailableAsKeyword(); ok {
+		_spec.SetField(term.FieldAvailableAsKeyword, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Deprecated(); ok {
 		_spec.SetField(term.FieldDeprecated, field.TypeBool, value)
@@ -559,6 +1146,35 @@ func (_u *TermUpdateOne) sqlSave(ctx context.Context) (_node *Term, err error) {
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(term.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.TermSetCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.TermSetTable,
+			Columns: []string{term.TermSetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(termset.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.TermSetIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.TermSetTable,
+			Columns: []string{term.TermSetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(termset.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -596,6 +1212,109 @@ func (_u *TermUpdateOne) sqlSave(ctx context.Context) (_node *Term, err error) {
 			Table:   term.ChildrenTable,
 			Columns: []string{term.ChildrenColumn},
 			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ParentCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.ParentTable,
+			Columns: []string{term.ParentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ParentIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.ParentTable,
+			Columns: []string{term.ParentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MergedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   term.MergedTable,
+			Columns: []string{term.MergedColumn},
+			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedMergedIDs(); len(nodes) > 0 && !_u.mutation.MergedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   term.MergedTable,
+			Columns: []string{term.MergedColumn},
+			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MergedIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   term.MergedTable,
+			Columns: []string{term.MergedColumn},
+			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MergedIntoCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.MergedIntoTable,
+			Columns: []string{term.MergedIntoColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MergedIntoIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.MergedIntoTable,
+			Columns: []string{term.MergedIntoColumn},
+			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
 			},

@@ -23,6 +23,7 @@ import (
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
 	"papergo/ent/term"
+	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 	"papergo/ent/webdavcredential"
 	"papergo/ent/workflow"
@@ -990,26 +991,38 @@ func init() {
 	termDescCreatedAt := termMixinFields0[1].Descriptor()
 	// term.DefaultCreatedAt holds the default value on creation for the created_at field.
 	term.DefaultCreatedAt = termDescCreatedAt.Default.(func() time.Time)
+	// termDescDescription is the schema descriptor for description field.
+	termDescDescription := termFields[4].Descriptor()
+	// term.DefaultDescription holds the default value on creation for the description field.
+	term.DefaultDescription = termDescDescription.Default.(string)
+	// termDescSortOrder is the schema descriptor for sort_order field.
+	termDescSortOrder := termFields[6].Descriptor()
+	// term.DefaultSortOrder holds the default value on creation for the sort_order field.
+	term.DefaultSortOrder = termDescSortOrder.Default.(int)
 	// termDescLabels is the schema descriptor for labels field.
-	termDescLabels := termFields[4].Descriptor()
+	termDescLabels := termFields[8].Descriptor()
 	// term.DefaultLabels holds the default value on creation for the labels field.
 	term.DefaultLabels = termDescLabels.Default.(map[string]string)
 	// termDescSynonyms is the schema descriptor for synonyms field.
-	termDescSynonyms := termFields[5].Descriptor()
+	termDescSynonyms := termFields[9].Descriptor()
 	// term.DefaultSynonyms holds the default value on creation for the synonyms field.
 	term.DefaultSynonyms = termDescSynonyms.Default.([]string)
+	// termDescAvailableAsKeyword is the schema descriptor for available_as_keyword field.
+	termDescAvailableAsKeyword := termFields[11].Descriptor()
+	// term.DefaultAvailableAsKeyword holds the default value on creation for the available_as_keyword field.
+	term.DefaultAvailableAsKeyword = termDescAvailableAsKeyword.Default.(bool)
 	// termDescDeprecated is the schema descriptor for deprecated field.
-	termDescDeprecated := termFields[6].Descriptor()
+	termDescDeprecated := termFields[12].Descriptor()
 	// term.DefaultDeprecated holds the default value on creation for the deprecated field.
 	term.DefaultDeprecated = termDescDeprecated.Default.(bool)
 	// termDescVersion is the schema descriptor for version field.
-	termDescVersion := termFields[7].Descriptor()
+	termDescVersion := termFields[13].Descriptor()
 	// term.DefaultVersion holds the default value on creation for the version field.
 	term.DefaultVersion = termDescVersion.Default.(int)
 	// term.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	term.VersionValidator = termDescVersion.Validators[0].(func(int) error)
 	// termDescUpdatedAt is the schema descriptor for updated_at field.
-	termDescUpdatedAt := termFields[8].Descriptor()
+	termDescUpdatedAt := termFields[14].Descriptor()
 	// term.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	term.DefaultUpdatedAt = termDescUpdatedAt.Default.(func() time.Time)
 	// term.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -1020,6 +1033,41 @@ func init() {
 	term.DefaultID = termDescID.Default.(func() string)
 	// term.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	term.IDValidator = termDescID.Validators[0].(func(string) error)
+	termgroupMixin := schema.TermGroup{}.Mixin()
+	termgroupMixinFields0 := termgroupMixin[0].Fields()
+	_ = termgroupMixinFields0
+	termgroupFields := schema.TermGroup{}.Fields()
+	_ = termgroupFields
+	// termgroupDescCreatedAt is the schema descriptor for created_at field.
+	termgroupDescCreatedAt := termgroupMixinFields0[1].Descriptor()
+	// termgroup.DefaultCreatedAt holds the default value on creation for the created_at field.
+	termgroup.DefaultCreatedAt = termgroupDescCreatedAt.Default.(func() time.Time)
+	// termgroupDescDescription is the schema descriptor for description field.
+	termgroupDescDescription := termgroupFields[2].Descriptor()
+	// termgroup.DefaultDescription holds the default value on creation for the description field.
+	termgroup.DefaultDescription = termgroupDescDescription.Default.(string)
+	// termgroupDescIsSystem is the schema descriptor for is_system field.
+	termgroupDescIsSystem := termgroupFields[3].Descriptor()
+	// termgroup.DefaultIsSystem holds the default value on creation for the is_system field.
+	termgroup.DefaultIsSystem = termgroupDescIsSystem.Default.(bool)
+	// termgroupDescVersion is the schema descriptor for version field.
+	termgroupDescVersion := termgroupFields[4].Descriptor()
+	// termgroup.DefaultVersion holds the default value on creation for the version field.
+	termgroup.DefaultVersion = termgroupDescVersion.Default.(int)
+	// termgroup.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	termgroup.VersionValidator = termgroupDescVersion.Validators[0].(func(int) error)
+	// termgroupDescUpdatedAt is the schema descriptor for updated_at field.
+	termgroupDescUpdatedAt := termgroupFields[5].Descriptor()
+	// termgroup.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	termgroup.DefaultUpdatedAt = termgroupDescUpdatedAt.Default.(func() time.Time)
+	// termgroup.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	termgroup.UpdateDefaultUpdatedAt = termgroupDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// termgroupDescID is the schema descriptor for id field.
+	termgroupDescID := termgroupMixinFields0[0].Descriptor()
+	// termgroup.DefaultID holds the default value on creation for the id field.
+	termgroup.DefaultID = termgroupDescID.Default.(func() string)
+	// termgroup.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	termgroup.IDValidator = termgroupDescID.Validators[0].(func(string) error)
 	termsetMixin := schema.TermSet{}.Mixin()
 	termsetMixinFields0 := termsetMixin[0].Fields()
 	_ = termsetMixinFields0
@@ -1030,17 +1078,25 @@ func init() {
 	// termset.DefaultCreatedAt holds the default value on creation for the created_at field.
 	termset.DefaultCreatedAt = termsetDescCreatedAt.Default.(func() time.Time)
 	// termsetDescDescription is the schema descriptor for description field.
-	termsetDescDescription := termsetFields[3].Descriptor()
+	termsetDescDescription := termsetFields[4].Descriptor()
 	// termset.DefaultDescription holds the default value on creation for the description field.
 	termset.DefaultDescription = termsetDescDescription.Default.(string)
+	// termsetDescIsOpen is the schema descriptor for is_open field.
+	termsetDescIsOpen := termsetFields[5].Descriptor()
+	// termset.DefaultIsOpen holds the default value on creation for the is_open field.
+	termset.DefaultIsOpen = termsetDescIsOpen.Default.(bool)
+	// termsetDescIsKeywords is the schema descriptor for is_keywords field.
+	termsetDescIsKeywords := termsetFields[6].Descriptor()
+	// termset.DefaultIsKeywords holds the default value on creation for the is_keywords field.
+	termset.DefaultIsKeywords = termsetDescIsKeywords.Default.(bool)
 	// termsetDescVersion is the schema descriptor for version field.
-	termsetDescVersion := termsetFields[4].Descriptor()
+	termsetDescVersion := termsetFields[7].Descriptor()
 	// termset.DefaultVersion holds the default value on creation for the version field.
 	termset.DefaultVersion = termsetDescVersion.Default.(int)
 	// termset.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	termset.VersionValidator = termsetDescVersion.Validators[0].(func(int) error)
 	// termsetDescUpdatedAt is the schema descriptor for updated_at field.
-	termsetDescUpdatedAt := termsetFields[5].Descriptor()
+	termsetDescUpdatedAt := termsetFields[8].Descriptor()
 	// termset.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	termset.DefaultUpdatedAt = termsetDescUpdatedAt.Default.(func() time.Time)
 	// termset.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

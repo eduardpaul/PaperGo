@@ -15,6 +15,7 @@ import (
 	"papergo/ent/relationshiptype"
 	"papergo/ent/resource"
 	"papergo/ent/term"
+	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 	"papergo/internal/dms"
 )
@@ -60,16 +61,15 @@ var schemaKeywords = map[string]bool{
 //	item          items the person may read; collection_id limits them to one list or library
 //	collection    lists and libraries of the workspace the person may read
 //	relationship  items to link with relationship_type_id (a type of the workspace); no edge is created
-//	terms         taxonomy terms of the workspace, not deprecated; term_set_id and term_ids narrow them
-//	keywords      tags (PaperGo's folksonomy) already used on resources the person may read; collection_id
-//	              narrows them to one list or library, allow_new also accepts tags nobody uses yet
+//	terms         taxonomy terms of the workspace, not deprecated; group_id, term_set_id and term_ids narrow them
+//	keywords      keywords of the workspace: terms of its keywords set and terms available as keywords, not deprecated
 //	people        principal subjects with access (default read) to the workspace
 var domainKinds = map[string]map[string]bool{
 	"item":         {"collection_id": true},
 	"collection":   {},
 	"relationship": {"relationship_type_id": true},
-	"terms":        {"term_set_id": true, "term_ids": true},
-	"keywords":     {"collection_id": true, "allow_new": true},
+	"terms":        {"group_id": true, "term_set_id": true, "term_ids": true},
+	"keywords":     {},
 	"people":       {"access": true},
 }
 
@@ -243,10 +243,6 @@ func validateDomain(value any, typ string, items any, path string) error {
 				if s, ok := id.(string); !ok || s == "" {
 					return fmt.Errorf("%s.x-papergo.term_ids must hold term IDs", path)
 				}
-			}
-		case "allow_new":
-			if _, ok := v.(bool); !ok {
-				return fmt.Errorf("%s.x-papergo.allow_new must be true or false", path)
 			}
 		case "access":
 			switch v {
@@ -549,6 +545,16 @@ func checkDomainConfig(ctx context.Context, t *dms.Service, workspaceID string, 
 				return dms.Invalid(at + "relationship_type_id must be a relationship type of the workspace")
 			}
 		}
+		group, _ := f.opts["group_id"].(string)
+		if group != "" {
+			ok, err := t.Client.TermGroup.Query().Where(termgroup.IDEQ(group), termgroup.WorkspaceIDEQ(workspaceID)).Exist(ctx)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return dms.Invalid(at + "group_id must be a term group of the workspace")
+			}
+		}
 		set, _ := f.opts["term_set_id"].(string)
 		if set != "" {
 			ok, err := t.Client.TermSet.Query().Where(termset.IDEQ(set), termset.WorkspaceIDEQ(workspaceID)).Exist(ctx)
@@ -561,7 +567,7 @@ func checkDomainConfig(ctx context.Context, t *dms.Service, workspaceID string, 
 		}
 		if list, ok := f.opts["term_ids"].([]any); ok {
 			for _, v := range list {
-				if err := checkTerm(ctx, t, workspaceID, set, nil, v.(string)); err != nil {
+				if err := checkTerm(ctx, t, workspaceID, group, set, nil, v.(string)); err != nil {
 					return dms.Invalid(at + err.Error())
 				}
 			}
@@ -570,7 +576,7 @@ func checkDomainConfig(ctx context.Context, t *dms.Service, workspaceID string, 
 	return nil
 }
 
-func checkTerm(ctx context.Context, t *dms.Service, workspaceID, set string, allowed []any, id string) error {
+func checkTerm(ctx context.Context, t *dms.Service, workspaceID, group, set string, allowed []any, id string) error {
 	tm, err := t.Client.Term.Query().Where(term.IDEQ(id)).WithTermSet().Only(ctx)
 	if ent.IsNotFound(err) {
 		return fmt.Errorf("term %s does not exist", id)
@@ -578,7 +584,7 @@ func checkTerm(ctx context.Context, t *dms.Service, workspaceID, set string, all
 	if err != nil {
 		return err
 	}
-	if tm.Edges.TermSet == nil || tm.Edges.TermSet.WorkspaceID != workspaceID || set != "" && tm.TermSetID != set {
+	if tm.Edges.TermSet == nil || tm.Edges.TermSet.WorkspaceID != workspaceID || set != "" && tm.TermSetID != set || group != "" && tm.Edges.TermSet.GroupID != group {
 		return fmt.Errorf("term %s is outside the allowed term set", id)
 	}
 	if tm.Deprecated {
@@ -632,23 +638,23 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 			return fmt.Errorf("%s is not a readable list or library of the workspace", id)
 		}
 	case "terms":
+		group, _ := f.opts["group_id"].(string)
 		set, _ := f.opts["term_set_id"].(string)
 		allowed, _ := f.opts["term_ids"].([]any)
-		return checkTerm(ctx, t, workspaceID, set, allowed, id)
+		return checkTerm(ctx, t, workspaceID, group, set, allowed, id)
 	case "keywords":
-		if err := dms.ValidTag(id); err != nil {
-			return fmt.Errorf("%q: %v", id, err)
+		tm, err := t.Client.Term.Query().Where(term.IDEQ(id)).WithTermSet().Only(ctx)
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("keyword %s does not exist", id)
 		}
-		if f.opts["allow_new"] == true {
-			return nil
-		}
-		collection, _ := f.opts["collection_id"].(string)
-		used, err := t.Tags(ctx, subject, workspaceID, dms.TagsQuery{CollectionID: collection, Tag: id, Limit: 1})
 		if err != nil {
 			return err
 		}
-		if len(used.Data) == 0 {
-			return fmt.Errorf("keyword %q is not used on anything you can read here", id)
+		if tm.Edges.TermSet.WorkspaceID != workspaceID || !tm.Edges.TermSet.IsKeywords && !tm.AvailableAsKeyword {
+			return fmt.Errorf("term %s is not a keyword of the workspace", id)
+		}
+		if tm.Deprecated {
+			return fmt.Errorf("keyword %s is deprecated", id)
 		}
 	case "people":
 		access, _ := f.opts["access"].(string)

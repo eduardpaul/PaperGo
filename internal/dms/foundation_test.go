@@ -394,3 +394,21 @@ func counted(total *int) int {
 	}
 	return *total
 }
+
+// testTermGroup returns the id of a "Test" term group of the workspace.
+func testTermGroup(s *Service, workspaceID string) string {
+	page, err := s.TermGroups(testContext, "alice", workspaceID, "", 100)
+	if err != nil {
+		panic(err)
+	}
+	for _, g := range page.Data {
+		if g.Name == "Test" {
+			return g.ID
+		}
+	}
+	g, err := s.CreateTermGroup(testContext, "alice", workspaceID, TermGroupInput{Name: "Test"})
+	if err != nil {
+		panic(err)
+	}
+	return g.ID
+}

@@ -30,6 +30,7 @@ import (
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
 	"papergo/ent/term"
+	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 	"papergo/ent/webdavcredential"
 	"papergo/ent/workflow"
@@ -89,6 +90,8 @@ type Client struct {
 	SmartFolder *SmartFolderClient
 	// Term is the client for interacting with the Term builders.
 	Term *TermClient
+	// TermGroup is the client for interacting with the TermGroup builders.
+	TermGroup *TermGroupClient
 	// TermSet is the client for interacting with the TermSet builders.
 	TermSet *TermSetClient
 	// WebDAVCredential is the client for interacting with the WebDAVCredential builders.
@@ -133,6 +136,7 @@ func (c *Client) init() {
 	c.SchemaTemplate = NewSchemaTemplateClient(c.config)
 	c.SmartFolder = NewSmartFolderClient(c.config)
 	c.Term = NewTermClient(c.config)
+	c.TermGroup = NewTermGroupClient(c.config)
 	c.TermSet = NewTermSetClient(c.config)
 	c.WebDAVCredential = NewWebDAVCredentialClient(c.config)
 	c.Workflow = NewWorkflowClient(c.config)
@@ -251,6 +255,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SchemaTemplate:   NewSchemaTemplateClient(cfg),
 		SmartFolder:      NewSmartFolderClient(cfg),
 		Term:             NewTermClient(cfg),
+		TermGroup:        NewTermGroupClient(cfg),
 		TermSet:          NewTermSetClient(cfg),
 		WebDAVCredential: NewWebDAVCredentialClient(cfg),
 		Workflow:         NewWorkflowClient(cfg),
@@ -296,6 +301,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SchemaTemplate:   NewSchemaTemplateClient(cfg),
 		SmartFolder:      NewSmartFolderClient(cfg),
 		Term:             NewTermClient(cfg),
+		TermGroup:        NewTermGroupClient(cfg),
 		TermSet:          NewTermSetClient(cfg),
 		WebDAVCredential: NewWebDAVCredentialClient(cfg),
 		Workflow:         NewWorkflowClient(cfg),
@@ -335,8 +341,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.DomainEvent,
 		c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermSet,
-		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
 		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
@@ -350,8 +356,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.DomainEvent,
 		c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermSet,
-		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
 		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
@@ -399,6 +405,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SmartFolder.mutate(ctx, m)
 	case *TermMutation:
 		return c.Term.mutate(ctx, m)
+	case *TermGroupMutation:
+		return c.TermGroup.mutate(ctx, m)
 	case *TermSetMutation:
 		return c.TermSet.mutate(ctx, m)
 	case *WebDAVCredentialMutation:
@@ -3592,6 +3600,38 @@ func (c *TermClient) QueryParent(_m *Term) *TermQuery {
 	return query
 }
 
+// QueryMerged queries the merged edge of a Term.
+func (c *TermClient) QueryMerged(_m *Term) *TermQuery {
+	query := (&TermClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(term.Table, term.FieldID, id),
+			sqlgraph.To(term.Table, term.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, term.MergedTable, term.MergedColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryMergedInto queries the merged_into edge of a Term.
+func (c *TermClient) QueryMergedInto(_m *Term) *TermQuery {
+	query := (&TermClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(term.Table, term.FieldID, id),
+			sqlgraph.To(term.Table, term.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, term.MergedIntoTable, term.MergedIntoColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *TermClient) Hooks() []Hook {
 	return c.hooks.Term
@@ -3614,6 +3654,171 @@ func (c *TermClient) mutate(ctx context.Context, m *TermMutation) (Value, error)
 		return (&TermDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Term mutation op: %q", m.Op())
+	}
+}
+
+// TermGroupClient is a client for the TermGroup schema.
+type TermGroupClient struct {
+	config
+}
+
+// NewTermGroupClient returns a client for the TermGroup from the given config.
+func NewTermGroupClient(c config) *TermGroupClient {
+	return &TermGroupClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `termgroup.Hooks(f(g(h())))`.
+func (c *TermGroupClient) Use(hooks ...Hook) {
+	c.hooks.TermGroup = append(c.hooks.TermGroup, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `termgroup.Intercept(f(g(h())))`.
+func (c *TermGroupClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TermGroup = append(c.inters.TermGroup, interceptors...)
+}
+
+// Create returns a builder for creating a TermGroup entity.
+func (c *TermGroupClient) Create() *TermGroupCreate {
+	mutation := newTermGroupMutation(c.config, OpCreate)
+	return &TermGroupCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TermGroup entities.
+func (c *TermGroupClient) CreateBulk(builders ...*TermGroupCreate) *TermGroupCreateBulk {
+	return &TermGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TermGroupClient) MapCreateBulk(slice any, setFunc func(*TermGroupCreate, int)) *TermGroupCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TermGroupCreateBulk{err: fmt.Errorf("calling to TermGroupClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TermGroupCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TermGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TermGroup.
+func (c *TermGroupClient) Update() *TermGroupUpdate {
+	mutation := newTermGroupMutation(c.config, OpUpdate)
+	return &TermGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TermGroupClient) UpdateOne(_m *TermGroup) *TermGroupUpdateOne {
+	mutation := newTermGroupMutation(c.config, OpUpdateOne, withTermGroup(_m))
+	return &TermGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TermGroupClient) UpdateOneID(id string) *TermGroupUpdateOne {
+	mutation := newTermGroupMutation(c.config, OpUpdateOne, withTermGroupID(id))
+	return &TermGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TermGroup.
+func (c *TermGroupClient) Delete() *TermGroupDelete {
+	mutation := newTermGroupMutation(c.config, OpDelete)
+	return &TermGroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TermGroupClient) DeleteOne(_m *TermGroup) *TermGroupDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TermGroupClient) DeleteOneID(id string) *TermGroupDeleteOne {
+	builder := c.Delete().Where(termgroup.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TermGroupDeleteOne{builder}
+}
+
+// Query returns a query builder for TermGroup.
+func (c *TermGroupClient) Query() *TermGroupQuery {
+	return &TermGroupQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTermGroup},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TermGroup entity by its id.
+func (c *TermGroupClient) Get(ctx context.Context, id string) (*TermGroup, error) {
+	return c.Query().Where(termgroup.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TermGroupClient) GetX(ctx context.Context, id string) *TermGroup {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryWorkspace queries the workspace edge of a TermGroup.
+func (c *TermGroupClient) QueryWorkspace(_m *TermGroup) *ResourceQuery {
+	query := (&ResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(termgroup.Table, termgroup.FieldID, id),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, termgroup.WorkspaceTable, termgroup.WorkspaceColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryTermSets queries the term_sets edge of a TermGroup.
+func (c *TermGroupClient) QueryTermSets(_m *TermGroup) *TermSetQuery {
+	query := (&TermSetClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(termgroup.Table, termgroup.FieldID, id),
+			sqlgraph.To(termset.Table, termset.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, termgroup.TermSetsTable, termgroup.TermSetsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *TermGroupClient) Hooks() []Hook {
+	return c.hooks.TermGroup
+}
+
+// Interceptors returns the client interceptors.
+func (c *TermGroupClient) Interceptors() []Interceptor {
+	return c.inters.TermGroup
+}
+
+func (c *TermGroupClient) mutate(ctx context.Context, m *TermGroupMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TermGroupCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TermGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TermGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TermGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TermGroup mutation op: %q", m.Op())
 	}
 }
 
@@ -3734,6 +3939,22 @@ func (c *TermSetClient) QueryWorkspace(_m *TermSet) *ResourceQuery {
 			sqlgraph.From(termset.Table, termset.FieldID, id),
 			sqlgraph.To(resource.Table, resource.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, termset.WorkspaceTable, termset.WorkspaceColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGroup queries the group edge of a TermSet.
+func (c *TermSetClient) QueryGroup(_m *TermSet) *TermGroupQuery {
+	query := (&TermGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(termset.Table, termset.FieldID, id),
+			sqlgraph.To(termgroup.Table, termgroup.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, termset.GroupTable, termset.GroupColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -4586,14 +4807,14 @@ type (
 		AuditEvent, Blob, BusinessKey, ContentType, DomainEvent, FieldDefinition,
 		FieldValue, Grant, ItemRevision, ItemSurface, ListView, Publication,
 		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, Term, TermSet, WebDAVCredential, Workflow, WorkflowRun,
+		SmartFolder, Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
 		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BusinessKey, ContentType, DomainEvent, FieldDefinition,
 		FieldValue, Grant, ItemRevision, ItemSurface, ListView, Publication,
 		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, Term, TermSet, WebDAVCredential, Workflow, WorkflowRun,
+		SmartFolder, Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
 		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Interceptor
 	}
 )

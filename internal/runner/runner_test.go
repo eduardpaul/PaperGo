@@ -638,7 +638,11 @@ func TestDeletingAMemberCancelsSelectionRuns(t *testing.T) {
 
 func TestLaunchFormDomainPickers(t *testing.T) {
 	f := setup(t)
-	set, err := f.dms.CreateTermSet(ctx, "alice", f.ws.ID, dms.TermSetInput{Key: "topics", Name: "Topics"})
+	group, err := f.dms.CreateTermGroup(ctx, "alice", f.ws.ID, dms.TermGroupInput{Name: "Subjects"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := f.dms.CreateTermSet(ctx, "alice", f.ws.ID, dms.TermSetInput{GroupID: group.ID, Key: "topics", Name: "Topics"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -654,7 +658,11 @@ func TestLaunchFormDomainPickers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := f.dms.CreateTermSet(ctx, "alice", otherWS.ID, dms.TermSetInput{Key: "foreign", Name: "Foreign"})
+	otherGroup, err := f.dms.CreateTermGroup(ctx, "alice", otherWS.ID, dms.TermGroupInput{Name: "Subjects"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := f.dms.CreateTermSet(ctx, "alice", otherWS.ID, dms.TermSetInput{GroupID: otherGroup.ID, Key: "foreign", Name: "Foreign"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -672,6 +680,10 @@ func TestLaunchFormDomainPickers(t *testing.T) {
 	def := strings.ReplaceAll(form(foreign.ID), "$LIST", f.list.ID)
 	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Foreign terms", Definition: json.RawMessage(def)}); err == nil || !strings.Contains(err.Error(), "term_set_id") {
 		t.Fatalf("term set of another workspace: %v", err)
+	}
+	def = strings.Replace(strings.ReplaceAll(form(set.ID), "$LIST", f.list.ID), `"kind": "terms",`, `"kind": "terms", "group_id": "`+otherGroup.ID+`",`, 1)
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Foreign group", Definition: json.RawMessage(def)}); err == nil || !strings.Contains(err.Error(), "group_id") {
+		t.Fatalf("term group of another workspace: %v", err)
 	}
 	w := f.workflow(t, "Review", form(set.ID))
 	it := f.item(t, "alice", "Contract", nil)
@@ -708,43 +720,59 @@ func TestLaunchFormDomainPickers(t *testing.T) {
 
 func TestKeywordsPicker(t *testing.T) {
 	f := setup(t)
-	if _, err := f.dms.Create(ctx, "alice", f.list.ID, dms.CreateResource{Kind: "item", Name: "Tagged", Tags: []string{"finance"}}); err != nil {
+	budget, _, err := f.dms.AddKeyword(ctx, "alice", f.ws.ID, dms.KeywordInput{Name: "Budget"})
+	if err != nil {
 		t.Fatal(err)
 	}
-	closed := f.workflow(t, "Existing keywords", `{
+	group, err := f.dms.CreateTermGroup(ctx, "alice", f.ws.ID, dms.TermGroupInput{Name: "Subjects"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := f.dms.CreateTermSet(ctx, "alice", f.ws.ID, dms.TermSetInput{GroupID: group.ID, Key: "costs", Name: "Costs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	managed, err := f.dms.CreateTerm(ctx, "alice", set.ID, dms.TermInput{Name: "Travel"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	promoted, err := f.dms.CreateTerm(ctx, "alice", set.ID, dms.TermInput{Name: "Meals", AvailableAsKeyword: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.dms.CreateField(ctx, "alice", f.list.ID, dms.CreateField{Key: "keywords", Label: "Keywords", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: budget.TermSetID, Multiple: true}}); err != nil {
+		t.Fatal(err)
+	}
+	def := `{
 		"triggers": [{"type": "manual", "collection_id": "$LIST"}],
 		"input_schema": {"type": "object", "required": ["keywords"], "properties": {
-			"keywords": {"type": "array", "items": {"type": "string"}, "x-papergo": {"kind": "keywords", "collection_id": "$LIST"}}}},
-		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": "{input:keywords}"}}}}}`)
-	open := f.workflow(t, "New keywords", `{
-		"triggers": [{"type": "manual", "collection_id": "$LIST"}],
-		"input_schema": {"type": "object", "properties": {
-			"keyword": {"type": "string", "x-papergo": {"kind": "keywords", "allow_new": true}}}},
-		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": ["{input:keyword}"]}}}}}`)
+			"keywords": {"type": "array", "items": {"type": "string"}, "x-papergo": {"kind": "keywords"}}}},
+		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"values": {"keywords": "{input:keywords}"}}}}}}`
+	w := f.workflow(t, "Keywords", def)
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Old picker", Definition: json.RawMessage(strings.ReplaceAll(strings.Replace(def, `"kind": "keywords"`, `"kind": "keywords", "allow_new": true`, 1), "$LIST", f.list.ID))}); err == nil {
+		t.Fatal("keywords pickers have no options")
+	}
 	it := f.item(t, "alice", "Target", nil)
-	start := func(w workflow.Workflow, inputs map[string]any) ([]string, error) {
-		return f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{it.ID}, Inputs: inputs})
+	start := func(ids ...any) ([]string, error) {
+		return f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{it.ID}, Inputs: map[string]any{"keywords": ids}})
 	}
-	if _, err := start(closed, map[string]any{"keywords": []any{"brand-new"}}); err == nil || !strings.Contains(err.Error(), "not used") {
-		t.Fatalf("unused keyword: %v", err)
+	if _, err = start(managed.ID); err == nil || !strings.Contains(err.Error(), "not a keyword") {
+		t.Fatalf("managed term: %v", err)
 	}
-	if _, err := start(closed, map[string]any{"keywords": []any{" padded"}}); err == nil {
-		t.Fatal("untrimmed keyword accepted")
+	if _, err = start("missing"); err == nil {
+		t.Fatal("unknown keyword accepted")
 	}
-	ids, err := start(closed, map[string]any{"keywords": []any{"finance"}})
+	if ids, err := start(promoted.ID); err != nil || len(ids) != 1 {
+		t.Fatalf("promoted term: %v", err)
+	}
+	ids, err := start(budget.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if run := f.wait(t, ids[0], finished); run.Status != "completed" {
 		t.Fatalf("run: %+v", run)
 	}
-	if ids, err = start(open, map[string]any{"keyword": "brand-new"}); err != nil {
-		t.Fatal(err)
-	}
-	if run := f.wait(t, ids[0], finished); run.Status != "completed" {
-		t.Fatalf("run: %+v", run)
-	}
-	if tags := f.head(t, it.ID).Tags; strings.Join(tags, ",") != "brand-new" {
-		t.Fatalf("tags %v", tags)
+	if got, _ := json.Marshal(f.head(t, it.ID).Values["keywords"]); string(got) != `["`+budget.ID+`"]` {
+		t.Fatalf("keywords %s", got)
 	}
 }

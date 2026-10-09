@@ -9,7 +9,6 @@ import (
 	"math"
 	"papergo/ent/predicate"
 	"papergo/ent/resource"
-	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 
@@ -19,54 +18,53 @@ import (
 	"entgo.io/ent/schema/field"
 )
 
-// TermSetQuery is the builder for querying TermSet entities.
-type TermSetQuery struct {
+// TermGroupQuery is the builder for querying TermGroup entities.
+type TermGroupQuery struct {
 	config
 	ctx           *QueryContext
-	order         []termset.OrderOption
+	order         []termgroup.OrderOption
 	inters        []Interceptor
-	predicates    []predicate.TermSet
+	predicates    []predicate.TermGroup
 	withWorkspace *ResourceQuery
-	withGroup     *TermGroupQuery
-	withTerms     *TermQuery
+	withTermSets  *TermSetQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the TermSetQuery builder.
-func (_q *TermSetQuery) Where(ps ...predicate.TermSet) *TermSetQuery {
+// Where adds a new predicate for the TermGroupQuery builder.
+func (_q *TermGroupQuery) Where(ps ...predicate.TermGroup) *TermGroupQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *TermSetQuery) Limit(limit int) *TermSetQuery {
+func (_q *TermGroupQuery) Limit(limit int) *TermGroupQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *TermSetQuery) Offset(offset int) *TermSetQuery {
+func (_q *TermGroupQuery) Offset(offset int) *TermGroupQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *TermSetQuery) Unique(unique bool) *TermSetQuery {
+func (_q *TermGroupQuery) Unique(unique bool) *TermGroupQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *TermSetQuery) Order(o ...termset.OrderOption) *TermSetQuery {
+func (_q *TermGroupQuery) Order(o ...termgroup.OrderOption) *TermGroupQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
 // QueryWorkspace chains the current query on the "workspace" edge.
-func (_q *TermSetQuery) QueryWorkspace() *ResourceQuery {
+func (_q *TermGroupQuery) QueryWorkspace() *ResourceQuery {
 	query := (&ResourceClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
@@ -77,9 +75,9 @@ func (_q *TermSetQuery) QueryWorkspace() *ResourceQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(termset.Table, termset.FieldID, selector),
+			sqlgraph.From(termgroup.Table, termgroup.FieldID, selector),
 			sqlgraph.To(resource.Table, resource.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, termset.WorkspaceTable, termset.WorkspaceColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, termgroup.WorkspaceTable, termgroup.WorkspaceColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -87,9 +85,9 @@ func (_q *TermSetQuery) QueryWorkspace() *ResourceQuery {
 	return query
 }
 
-// QueryGroup chains the current query on the "group" edge.
-func (_q *TermSetQuery) QueryGroup() *TermGroupQuery {
-	query := (&TermGroupClient{config: _q.config}).Query()
+// QueryTermSets chains the current query on the "term_sets" edge.
+func (_q *TermGroupQuery) QueryTermSets() *TermSetQuery {
+	query := (&TermSetClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -99,9 +97,9 @@ func (_q *TermSetQuery) QueryGroup() *TermGroupQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(termset.Table, termset.FieldID, selector),
-			sqlgraph.To(termgroup.Table, termgroup.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, termset.GroupTable, termset.GroupColumn),
+			sqlgraph.From(termgroup.Table, termgroup.FieldID, selector),
+			sqlgraph.To(termset.Table, termset.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, termgroup.TermSetsTable, termgroup.TermSetsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -109,43 +107,21 @@ func (_q *TermSetQuery) QueryGroup() *TermGroupQuery {
 	return query
 }
 
-// QueryTerms chains the current query on the "terms" edge.
-func (_q *TermSetQuery) QueryTerms() *TermQuery {
-	query := (&TermClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(termset.Table, termset.FieldID, selector),
-			sqlgraph.To(term.Table, term.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, termset.TermsTable, termset.TermsColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// First returns the first TermSet entity from the query.
-// Returns a *NotFoundError when no TermSet was found.
-func (_q *TermSetQuery) First(ctx context.Context) (*TermSet, error) {
+// First returns the first TermGroup entity from the query.
+// Returns a *NotFoundError when no TermGroup was found.
+func (_q *TermGroupQuery) First(ctx context.Context) (*TermGroup, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{termset.Label}
+		return nil, &NotFoundError{termgroup.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *TermSetQuery) FirstX(ctx context.Context) *TermSet {
+func (_q *TermGroupQuery) FirstX(ctx context.Context) *TermGroup {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -153,22 +129,22 @@ func (_q *TermSetQuery) FirstX(ctx context.Context) *TermSet {
 	return node
 }
 
-// FirstID returns the first TermSet ID from the query.
-// Returns a *NotFoundError when no TermSet ID was found.
-func (_q *TermSetQuery) FirstID(ctx context.Context) (id string, err error) {
+// FirstID returns the first TermGroup ID from the query.
+// Returns a *NotFoundError when no TermGroup ID was found.
+func (_q *TermGroupQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{termset.Label}
+		err = &NotFoundError{termgroup.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *TermSetQuery) FirstIDX(ctx context.Context) string {
+func (_q *TermGroupQuery) FirstIDX(ctx context.Context) string {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -176,10 +152,10 @@ func (_q *TermSetQuery) FirstIDX(ctx context.Context) string {
 	return id
 }
 
-// Only returns a single TermSet entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one TermSet entity is found.
-// Returns a *NotFoundError when no TermSet entities are found.
-func (_q *TermSetQuery) Only(ctx context.Context) (*TermSet, error) {
+// Only returns a single TermGroup entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one TermGroup entity is found.
+// Returns a *NotFoundError when no TermGroup entities are found.
+func (_q *TermGroupQuery) Only(ctx context.Context) (*TermGroup, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -188,14 +164,14 @@ func (_q *TermSetQuery) Only(ctx context.Context) (*TermSet, error) {
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{termset.Label}
+		return nil, &NotFoundError{termgroup.Label}
 	default:
-		return nil, &NotSingularError{termset.Label}
+		return nil, &NotSingularError{termgroup.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *TermSetQuery) OnlyX(ctx context.Context) *TermSet {
+func (_q *TermGroupQuery) OnlyX(ctx context.Context) *TermGroup {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -203,10 +179,10 @@ func (_q *TermSetQuery) OnlyX(ctx context.Context) *TermSet {
 	return node
 }
 
-// OnlyID is like Only, but returns the only TermSet ID in the query.
-// Returns a *NotSingularError when more than one TermSet ID is found.
+// OnlyID is like Only, but returns the only TermGroup ID in the query.
+// Returns a *NotSingularError when more than one TermGroup ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *TermSetQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *TermGroupQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -215,15 +191,15 @@ func (_q *TermSetQuery) OnlyID(ctx context.Context) (id string, err error) {
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{termset.Label}
+		err = &NotFoundError{termgroup.Label}
 	default:
-		err = &NotSingularError{termset.Label}
+		err = &NotSingularError{termgroup.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *TermSetQuery) OnlyIDX(ctx context.Context) string {
+func (_q *TermGroupQuery) OnlyIDX(ctx context.Context) string {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -231,18 +207,18 @@ func (_q *TermSetQuery) OnlyIDX(ctx context.Context) string {
 	return id
 }
 
-// All executes the query and returns a list of TermSets.
-func (_q *TermSetQuery) All(ctx context.Context) ([]*TermSet, error) {
+// All executes the query and returns a list of TermGroups.
+func (_q *TermGroupQuery) All(ctx context.Context) ([]*TermGroup, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*TermSet, *TermSetQuery]()
-	return withInterceptors[[]*TermSet](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*TermGroup, *TermGroupQuery]()
+	return withInterceptors[[]*TermGroup](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *TermSetQuery) AllX(ctx context.Context) []*TermSet {
+func (_q *TermGroupQuery) AllX(ctx context.Context) []*TermGroup {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -250,20 +226,20 @@ func (_q *TermSetQuery) AllX(ctx context.Context) []*TermSet {
 	return nodes
 }
 
-// IDs executes the query and returns a list of TermSet IDs.
-func (_q *TermSetQuery) IDs(ctx context.Context) (ids []string, err error) {
+// IDs executes the query and returns a list of TermGroup IDs.
+func (_q *TermGroupQuery) IDs(ctx context.Context) (ids []string, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(termset.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(termgroup.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *TermSetQuery) IDsX(ctx context.Context) []string {
+func (_q *TermGroupQuery) IDsX(ctx context.Context) []string {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -272,16 +248,16 @@ func (_q *TermSetQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (_q *TermSetQuery) Count(ctx context.Context) (int, error) {
+func (_q *TermGroupQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*TermSetQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*TermGroupQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *TermSetQuery) CountX(ctx context.Context) int {
+func (_q *TermGroupQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -290,7 +266,7 @@ func (_q *TermSetQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *TermSetQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *TermGroupQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -303,7 +279,7 @@ func (_q *TermSetQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *TermSetQuery) ExistX(ctx context.Context) bool {
+func (_q *TermGroupQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -311,21 +287,20 @@ func (_q *TermSetQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the TermSetQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the TermGroupQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *TermSetQuery) Clone() *TermSetQuery {
+func (_q *TermGroupQuery) Clone() *TermGroupQuery {
 	if _q == nil {
 		return nil
 	}
-	return &TermSetQuery{
+	return &TermGroupQuery{
 		config:        _q.config,
 		ctx:           _q.ctx.Clone(),
-		order:         append([]termset.OrderOption{}, _q.order...),
+		order:         append([]termgroup.OrderOption{}, _q.order...),
 		inters:        append([]Interceptor{}, _q.inters...),
-		predicates:    append([]predicate.TermSet{}, _q.predicates...),
+		predicates:    append([]predicate.TermGroup{}, _q.predicates...),
 		withWorkspace: _q.withWorkspace.Clone(),
-		withGroup:     _q.withGroup.Clone(),
-		withTerms:     _q.withTerms.Clone(),
+		withTermSets:  _q.withTermSets.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -334,7 +309,7 @@ func (_q *TermSetQuery) Clone() *TermSetQuery {
 
 // WithWorkspace tells the query-builder to eager-load the nodes that are connected to
 // the "workspace" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *TermSetQuery) WithWorkspace(opts ...func(*ResourceQuery)) *TermSetQuery {
+func (_q *TermGroupQuery) WithWorkspace(opts ...func(*ResourceQuery)) *TermGroupQuery {
 	query := (&ResourceClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
@@ -343,25 +318,14 @@ func (_q *TermSetQuery) WithWorkspace(opts ...func(*ResourceQuery)) *TermSetQuer
 	return _q
 }
 
-// WithGroup tells the query-builder to eager-load the nodes that are connected to
-// the "group" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *TermSetQuery) WithGroup(opts ...func(*TermGroupQuery)) *TermSetQuery {
-	query := (&TermGroupClient{config: _q.config}).Query()
+// WithTermSets tells the query-builder to eager-load the nodes that are connected to
+// the "term_sets" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TermGroupQuery) WithTermSets(opts ...func(*TermSetQuery)) *TermGroupQuery {
+	query := (&TermSetClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	_q.withGroup = query
-	return _q
-}
-
-// WithTerms tells the query-builder to eager-load the nodes that are connected to
-// the "terms" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *TermSetQuery) WithTerms(opts ...func(*TermQuery)) *TermSetQuery {
-	query := (&TermClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withTerms = query
+	_q.withTermSets = query
 	return _q
 }
 
@@ -375,15 +339,15 @@ func (_q *TermSetQuery) WithTerms(opts ...func(*TermQuery)) *TermSetQuery {
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.TermSet.Query().
-//		GroupBy(termset.FieldCreatedAt).
+//	client.TermGroup.Query().
+//		GroupBy(termgroup.FieldCreatedAt).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *TermSetQuery) GroupBy(field string, fields ...string) *TermSetGroupBy {
+func (_q *TermGroupQuery) GroupBy(field string, fields ...string) *TermGroupGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &TermSetGroupBy{build: _q}
+	grbuild := &TermGroupGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = termset.Label
+	grbuild.label = termgroup.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -397,23 +361,23 @@ func (_q *TermSetQuery) GroupBy(field string, fields ...string) *TermSetGroupBy 
 //		CreatedAt time.Time `json:"created_at,omitempty"`
 //	}
 //
-//	client.TermSet.Query().
-//		Select(termset.FieldCreatedAt).
+//	client.TermGroup.Query().
+//		Select(termgroup.FieldCreatedAt).
 //		Scan(ctx, &v)
-func (_q *TermSetQuery) Select(fields ...string) *TermSetSelect {
+func (_q *TermGroupQuery) Select(fields ...string) *TermGroupSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &TermSetSelect{TermSetQuery: _q}
-	sbuild.label = termset.Label
+	sbuild := &TermGroupSelect{TermGroupQuery: _q}
+	sbuild.label = termgroup.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a TermSetSelect configured with the given aggregations.
-func (_q *TermSetQuery) Aggregate(fns ...AggregateFunc) *TermSetSelect {
+// Aggregate returns a TermGroupSelect configured with the given aggregations.
+func (_q *TermGroupQuery) Aggregate(fns ...AggregateFunc) *TermGroupSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *TermSetQuery) prepareQuery(ctx context.Context) error {
+func (_q *TermGroupQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -425,7 +389,7 @@ func (_q *TermSetQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !termset.ValidColumn(f) {
+		if !termgroup.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -439,21 +403,20 @@ func (_q *TermSetQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *TermSetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*TermSet, error) {
+func (_q *TermGroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*TermGroup, error) {
 	var (
-		nodes       = []*TermSet{}
+		nodes       = []*TermGroup{}
 		_spec       = _q.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [2]bool{
 			_q.withWorkspace != nil,
-			_q.withGroup != nil,
-			_q.withTerms != nil,
+			_q.withTermSets != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*TermSet).scanValues(nil, columns)
+		return (*TermGroup).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &TermSet{config: _q.config}
+		node := &TermGroup{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -469,29 +432,23 @@ func (_q *TermSetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Term
 	}
 	if query := _q.withWorkspace; query != nil {
 		if err := _q.loadWorkspace(ctx, query, nodes, nil,
-			func(n *TermSet, e *Resource) { n.Edges.Workspace = e }); err != nil {
+			func(n *TermGroup, e *Resource) { n.Edges.Workspace = e }); err != nil {
 			return nil, err
 		}
 	}
-	if query := _q.withGroup; query != nil {
-		if err := _q.loadGroup(ctx, query, nodes, nil,
-			func(n *TermSet, e *TermGroup) { n.Edges.Group = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := _q.withTerms; query != nil {
-		if err := _q.loadTerms(ctx, query, nodes,
-			func(n *TermSet) { n.Edges.Terms = []*Term{} },
-			func(n *TermSet, e *Term) { n.Edges.Terms = append(n.Edges.Terms, e) }); err != nil {
+	if query := _q.withTermSets; query != nil {
+		if err := _q.loadTermSets(ctx, query, nodes,
+			func(n *TermGroup) { n.Edges.TermSets = []*TermSet{} },
+			func(n *TermGroup, e *TermSet) { n.Edges.TermSets = append(n.Edges.TermSets, e) }); err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
 }
 
-func (_q *TermSetQuery) loadWorkspace(ctx context.Context, query *ResourceQuery, nodes []*TermSet, init func(*TermSet), assign func(*TermSet, *Resource)) error {
+func (_q *TermGroupQuery) loadWorkspace(ctx context.Context, query *ResourceQuery, nodes []*TermGroup, init func(*TermGroup), assign func(*TermGroup, *Resource)) error {
 	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*TermSet)
+	nodeids := make(map[string][]*TermGroup)
 	for i := range nodes {
 		fk := nodes[i].WorkspaceID
 		if _, ok := nodeids[fk]; !ok {
@@ -518,38 +475,9 @@ func (_q *TermSetQuery) loadWorkspace(ctx context.Context, query *ResourceQuery,
 	}
 	return nil
 }
-func (_q *TermSetQuery) loadGroup(ctx context.Context, query *TermGroupQuery, nodes []*TermSet, init func(*TermSet), assign func(*TermSet, *TermGroup)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*TermSet)
-	for i := range nodes {
-		fk := nodes[i].GroupID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(termgroup.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "group_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
-func (_q *TermSetQuery) loadTerms(ctx context.Context, query *TermQuery, nodes []*TermSet, init func(*TermSet), assign func(*TermSet, *Term)) error {
+func (_q *TermGroupQuery) loadTermSets(ctx context.Context, query *TermSetQuery, nodes []*TermGroup, init func(*TermGroup), assign func(*TermGroup, *TermSet)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*TermSet)
+	nodeids := make(map[string]*TermGroup)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -558,27 +486,27 @@ func (_q *TermSetQuery) loadTerms(ctx context.Context, query *TermQuery, nodes [
 		}
 	}
 	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(term.FieldTermSetID)
+		query.ctx.AppendFieldOnce(termset.FieldGroupID)
 	}
-	query.Where(predicate.Term(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(termset.TermsColumn), fks...))
+	query.Where(predicate.TermSet(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(termgroup.TermSetsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.TermSetID
+		fk := n.GroupID
 		node, ok := nodeids[fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "term_set_id" returned %v for node %v`, fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "group_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}
 	return nil
 }
 
-func (_q *TermSetQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *TermGroupQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	_spec.Node.Columns = _q.ctx.Fields
 	if len(_q.ctx.Fields) > 0 {
@@ -587,8 +515,8 @@ func (_q *TermSetQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *TermSetQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(termset.Table, termset.Columns, sqlgraph.NewFieldSpec(termset.FieldID, field.TypeString))
+func (_q *TermGroupQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(termgroup.Table, termgroup.Columns, sqlgraph.NewFieldSpec(termgroup.FieldID, field.TypeString))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -597,17 +525,14 @@ func (_q *TermSetQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, termset.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, termgroup.FieldID)
 		for i := range fields {
-			if fields[i] != termset.FieldID {
+			if fields[i] != termgroup.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
 		if _q.withWorkspace != nil {
-			_spec.Node.AddColumnOnce(termset.FieldWorkspaceID)
-		}
-		if _q.withGroup != nil {
-			_spec.Node.AddColumnOnce(termset.FieldGroupID)
+			_spec.Node.AddColumnOnce(termgroup.FieldWorkspaceID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {
@@ -633,12 +558,12 @@ func (_q *TermSetQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *TermSetQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *TermGroupQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(termset.Table)
+	t1 := builder.Table(termgroup.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = termset.Columns
+		columns = termgroup.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -665,28 +590,28 @@ func (_q *TermSetQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	return selector
 }
 
-// TermSetGroupBy is the group-by builder for TermSet entities.
-type TermSetGroupBy struct {
+// TermGroupGroupBy is the group-by builder for TermGroup entities.
+type TermGroupGroupBy struct {
 	selector
-	build *TermSetQuery
+	build *TermGroupQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *TermSetGroupBy) Aggregate(fns ...AggregateFunc) *TermSetGroupBy {
+func (_g *TermGroupGroupBy) Aggregate(fns ...AggregateFunc) *TermGroupGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *TermSetGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *TermGroupGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*TermSetQuery, *TermSetGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*TermGroupQuery, *TermGroupGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *TermSetGroupBy) sqlScan(ctx context.Context, root *TermSetQuery, v any) error {
+func (_g *TermGroupGroupBy) sqlScan(ctx context.Context, root *TermGroupQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -713,28 +638,28 @@ func (_g *TermSetGroupBy) sqlScan(ctx context.Context, root *TermSetQuery, v any
 	return sql.ScanSlice(rows, v)
 }
 
-// TermSetSelect is the builder for selecting fields of TermSet entities.
-type TermSetSelect struct {
-	*TermSetQuery
+// TermGroupSelect is the builder for selecting fields of TermGroup entities.
+type TermGroupSelect struct {
+	*TermGroupQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *TermSetSelect) Aggregate(fns ...AggregateFunc) *TermSetSelect {
+func (_s *TermGroupSelect) Aggregate(fns ...AggregateFunc) *TermGroupSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *TermSetSelect) Scan(ctx context.Context, v any) error {
+func (_s *TermGroupSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*TermSetQuery, *TermSetSelect](ctx, _s.TermSetQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*TermGroupQuery, *TermGroupSelect](ctx, _s.TermGroupQuery, _s, _s.inters, v)
 }
 
-func (_s *TermSetSelect) sqlScan(ctx context.Context, root *TermSetQuery, v any) error {
+func (_s *TermGroupSelect) sqlScan(ctx context.Context, root *TermGroupQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

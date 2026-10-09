@@ -3,15 +3,14 @@ package dms
 import (
 	"encoding/json"
 	"errors"
-	"papergo/ent"
 	"strings"
 	"testing"
 )
 
 func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 	s, w, l := fixture(t)
-	makeTerms := func(workspace string) (*ent.Term, *ent.Term) {
-		set, e := s.CreateTermSet(testContext, "alice", workspace, TermSetInput{Key: "projects", Name: "Projects"})
+	makeTerms := func(workspace string) (TermView, TermView) {
+		set, e := s.CreateTermSet(testContext, "alice", workspace, TermSetInput{GroupID: testTermGroup(s, workspace), Key: "projects", Name: "Projects"})
 		if e != nil {
 			t.Fatal(e)
 		}

@@ -71,15 +71,26 @@ CREATE TABLE schema_templates (
  key TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',definition JSON NOT NULL CHECK(json_valid(definition) AND json_type(definition)='object'),
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
 );
+CREATE TABLE term_groups (
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,workspace_id TEXT NOT NULL REFERENCES resources(id),
+ name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',is_system BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
+);
 CREATE TABLE term_sets (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,workspace_id TEXT NOT NULL REFERENCES resources(id),
- key TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
+ group_id TEXT NOT NULL REFERENCES term_groups(id),
+ key TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',is_open BOOLEAN NOT NULL DEFAULT 0,is_keywords BOOLEAN NOT NULL DEFAULT 0,
+ version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
+ CHECK(NOT is_keywords OR is_open)
 );
 CREATE TABLE terms (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,term_set_id TEXT NOT NULL REFERENCES term_sets(id),
  parent_id TEXT REFERENCES terms(id),name TEXT NOT NULL,normalized_name TEXT NOT NULL,
  labels JSON NOT NULL CHECK(json_valid(labels) AND json_type(labels)='object'),synonyms JSON NOT NULL CHECK(json_valid(synonyms) AND json_type(synonyms)='array'),
- deprecated BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
+ description TEXT NOT NULL DEFAULT '',color TEXT CHECK(color IS NULL OR (length(color)=7 AND color GLOB '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]')),
+ sort_order INTEGER NOT NULL DEFAULT 0,path TEXT NOT NULL CHECK(path LIKE '/%/'),
+ merged_into_id TEXT REFERENCES terms(id),available_as_keyword BOOLEAN NOT NULL DEFAULT 0,
+ deprecated BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
+ CHECK(merged_into_id IS NULL OR deprecated), CHECK(merged_into_id IS NOT id)
 );
 CREATE TABLE list_views (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,container_id TEXT NOT NULL REFERENCES resources(id),
@@ -205,10 +216,18 @@ CREATE INDEX fieldvalue_container_id_surface_field_key_value_text_item_id ON fie
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_number_item_id ON field_values(container_id,surface,field_key,value_number,item_id);
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_boolean_item_id ON field_values(container_id,surface,field_key,value_boolean,item_id);
 CREATE UNIQUE INDEX schematemplate_workspace_id_key ON schema_templates(workspace_id,key);
+CREATE UNIQUE INDEX termgroup_workspace_id_name ON term_groups(workspace_id,name);
+CREATE UNIQUE INDEX termgroup_workspace_id_system ON term_groups(workspace_id) WHERE is_system;
 CREATE UNIQUE INDEX termset_workspace_id_key ON term_sets(workspace_id,key);
-CREATE UNIQUE INDEX term_term_set_id_normalized_name ON terms(term_set_id,normalized_name);
+CREATE UNIQUE INDEX termset_group_id_name ON term_sets(group_id,name);
+CREATE UNIQUE INDEX termset_workspace_id_keywords ON term_sets(workspace_id) WHERE is_keywords;
+CREATE UNIQUE INDEX term_active_sibling_name ON terms(term_set_id,ifnull(parent_id,''),normalized_name) WHERE merged_into_id IS NULL;
+CREATE INDEX term_term_set_id_parent_id_sort ON terms(term_set_id,parent_id,sort_order,normalized_name,id);
 CREATE INDEX term_term_set_id_id ON terms(term_set_id,id);
 CREATE INDEX term_parent_id ON terms(parent_id);
+CREATE INDEX term_path ON terms(path);
+CREATE INDEX term_merged_into_id ON terms(merged_into_id) WHERE merged_into_id IS NOT NULL;
+CREATE INDEX term_available_as_keyword ON terms(term_set_id) WHERE available_as_keyword;
 CREATE UNIQUE INDEX listview_container_id_name ON list_views(container_id,name);
 CREATE INDEX listview_container_id_id ON list_views(container_id,id);
 CREATE UNIQUE INDEX listview_one_default ON list_views(container_id) WHERE is_default=1;
@@ -462,8 +481,18 @@ CREATE TRIGGER field_value_no_update BEFORE UPDATE ON field_values BEGIN SELECT 
 CREATE TRIGGER term_parent_validate BEFORE INSERT ON terms WHEN new.parent_id IS NOT NULL BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM terms WHERE id=new.parent_id AND term_set_id=new.term_set_id) THEN RAISE(ABORT,'term parent must belong to the same term set') END;
 END;
-CREATE TRIGGER term_identity_immutable BEFORE UPDATE OF term_set_id,parent_id ON terms BEGIN
- SELECT CASE WHEN new.term_set_id IS NOT old.term_set_id OR new.parent_id IS NOT old.parent_id THEN RAISE(ABORT,'term ownership and parent are immutable') END;
+CREATE TRIGGER term_parent_move_validate BEFORE UPDATE OF term_set_id,parent_id ON terms WHEN new.parent_id IS NOT NULL BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM terms WHERE id=new.parent_id AND term_set_id=new.term_set_id) THEN RAISE(ABORT,'term parent must belong to the same term set') END;
+END;
+CREATE TRIGGER term_set_workspace_stable BEFORE UPDATE OF term_set_id ON terms BEGIN
+ SELECT CASE WHEN (SELECT workspace_id FROM term_sets WHERE id=new.term_set_id) IS NOT (SELECT workspace_id FROM term_sets WHERE id=old.term_set_id) THEN RAISE(ABORT,'terms stay in their workspace') END;
+END;
+CREATE TRIGGER term_retained BEFORE DELETE ON terms BEGIN SELECT RAISE(ABORT,'terms are retained; deprecate or merge them'); END;
+CREATE TRIGGER term_groups_workspace_validate BEFORE INSERT ON term_groups BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND kind='workspace') THEN RAISE(ABORT,'configuration requires a workspace') END;
+END;
+CREATE TRIGGER term_groups_identity_immutable BEFORE UPDATE OF workspace_id,is_system ON term_groups BEGIN
+ SELECT CASE WHEN new.workspace_id IS NOT old.workspace_id OR new.is_system IS NOT old.is_system THEN RAISE(ABORT,'term group identity is immutable') END;
 END;
 CREATE TRIGGER listview_container_validate BEFORE INSERT ON list_views BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.container_id AND kind IN ('list','library')) THEN RAISE(ABORT,'view requires a collection') END;
@@ -479,9 +508,10 @@ CREATE TRIGGER schema_templates_identity_immutable BEFORE UPDATE OF workspace_id
 END;
 CREATE TRIGGER term_sets_workspace_validate BEFORE INSERT ON term_sets BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND kind='workspace') THEN RAISE(ABORT,'configuration requires a workspace') END;
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM term_groups WHERE id=new.group_id AND workspace_id=new.workspace_id) THEN RAISE(ABORT,'term set group must belong to its workspace') END;
 END;
-CREATE TRIGGER term_sets_identity_immutable BEFORE UPDATE OF workspace_id,key ON term_sets BEGIN
- SELECT CASE WHEN new.workspace_id IS NOT old.workspace_id OR new.key IS NOT old.key THEN RAISE(ABORT,'configuration identity is immutable') END;
+CREATE TRIGGER term_sets_identity_immutable BEFORE UPDATE OF workspace_id,key,group_id,is_keywords ON term_sets BEGIN
+ SELECT CASE WHEN new.workspace_id IS NOT old.workspace_id OR new.key IS NOT old.key OR new.group_id IS NOT old.group_id OR new.is_keywords IS NOT old.is_keywords THEN RAISE(ABORT,'configuration identity is immutable') END;
 END;
 CREATE TRIGGER relationship_types_workspace_validate BEFORE INSERT ON relationship_types BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND kind='workspace') THEN RAISE(ABORT,'configuration requires a workspace') END;

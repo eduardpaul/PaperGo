@@ -27,6 +27,7 @@ import (
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
 	"papergo/ent/term"
+	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 	"papergo/ent/webdavcredential"
 	"papergo/ent/workflow"
@@ -70,6 +71,7 @@ const (
 	TypeSchemaTemplate   = "SchemaTemplate"
 	TypeSmartFolder      = "SmartFolder"
 	TypeTerm             = "Term"
+	TypeTermGroup        = "TermGroup"
 	TypeTermSet          = "TermSet"
 	TypeWebDAVCredential = "WebDAVCredential"
 	TypeWorkflow         = "Workflow"
@@ -18279,30 +18281,41 @@ func (m *SmartFolderMutation) ResetEdge(name string) error {
 // TermMutation represents an operation that mutates the Term nodes in the graph.
 type TermMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	created_at      *time.Time
-	name            *string
-	normalized_name *string
-	labels          *map[string]string
-	synonyms        *[]string
-	appendsynonyms  []string
-	deprecated      *bool
-	version         *int
-	addversion      *int
-	updated_at      *time.Time
-	clearedFields   map[string]struct{}
-	term_set        *string
-	clearedterm_set bool
-	children        map[string]struct{}
-	removedchildren map[string]struct{}
-	clearedchildren bool
-	parent          *string
-	clearedparent   bool
-	done            bool
-	oldValue        func(context.Context) (*Term, error)
-	predicates      []predicate.Term
+	op                   Op
+	typ                  string
+	id                   *string
+	created_at           *time.Time
+	name                 *string
+	normalized_name      *string
+	description          *string
+	color                *string
+	sort_order           *int
+	addsort_order        *int
+	_path                *string
+	labels               *map[string]string
+	synonyms             *[]string
+	appendsynonyms       []string
+	available_as_keyword *bool
+	deprecated           *bool
+	version              *int
+	addversion           *int
+	updated_at           *time.Time
+	clearedFields        map[string]struct{}
+	term_set             *string
+	clearedterm_set      bool
+	children             map[string]struct{}
+	removedchildren      map[string]struct{}
+	clearedchildren      bool
+	parent               *string
+	clearedparent        bool
+	merged               map[string]struct{}
+	removedmerged        map[string]struct{}
+	clearedmerged        bool
+	merged_into          *string
+	clearedmerged_into   bool
+	done                 bool
+	oldValue             func(context.Context) (*Term, error)
+	predicates           []predicate.Term
 }
 
 var _ ent.Mutation = (*TermMutation)(nil)
@@ -18602,6 +18615,183 @@ func (m *TermMutation) ResetNormalizedName() {
 	m.normalized_name = nil
 }
 
+// SetDescription sets the "description" field.
+func (m *TermMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *TermMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the Term entity.
+// If the Term object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *TermMutation) ResetDescription() {
+	m.description = nil
+}
+
+// SetColor sets the "color" field.
+func (m *TermMutation) SetColor(s string) {
+	m.color = &s
+}
+
+// Color returns the value of the "color" field in the mutation.
+func (m *TermMutation) Color() (r string, exists bool) {
+	v := m.color
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldColor returns the old "color" field's value of the Term entity.
+// If the Term object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermMutation) OldColor(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldColor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldColor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldColor: %w", err)
+	}
+	return oldValue.Color, nil
+}
+
+// ClearColor clears the value of the "color" field.
+func (m *TermMutation) ClearColor() {
+	m.color = nil
+	m.clearedFields[term.FieldColor] = struct{}{}
+}
+
+// ColorCleared returns if the "color" field was cleared in this mutation.
+func (m *TermMutation) ColorCleared() bool {
+	_, ok := m.clearedFields[term.FieldColor]
+	return ok
+}
+
+// ResetColor resets all changes to the "color" field.
+func (m *TermMutation) ResetColor() {
+	m.color = nil
+	delete(m.clearedFields, term.FieldColor)
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (m *TermMutation) SetSortOrder(i int) {
+	m.sort_order = &i
+	m.addsort_order = nil
+}
+
+// SortOrder returns the value of the "sort_order" field in the mutation.
+func (m *TermMutation) SortOrder() (r int, exists bool) {
+	v := m.sort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSortOrder returns the old "sort_order" field's value of the Term entity.
+// If the Term object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermMutation) OldSortOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSortOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSortOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSortOrder: %w", err)
+	}
+	return oldValue.SortOrder, nil
+}
+
+// AddSortOrder adds i to the "sort_order" field.
+func (m *TermMutation) AddSortOrder(i int) {
+	if m.addsort_order != nil {
+		*m.addsort_order += i
+	} else {
+		m.addsort_order = &i
+	}
+}
+
+// AddedSortOrder returns the value that was added to the "sort_order" field in this mutation.
+func (m *TermMutation) AddedSortOrder() (r int, exists bool) {
+	v := m.addsort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSortOrder resets all changes to the "sort_order" field.
+func (m *TermMutation) ResetSortOrder() {
+	m.sort_order = nil
+	m.addsort_order = nil
+}
+
+// SetPath sets the "path" field.
+func (m *TermMutation) SetPath(s string) {
+	m._path = &s
+}
+
+// Path returns the value of the "path" field in the mutation.
+func (m *TermMutation) Path() (r string, exists bool) {
+	v := m._path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPath returns the old "path" field's value of the Term entity.
+// If the Term object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermMutation) OldPath(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPath: %w", err)
+	}
+	return oldValue.Path, nil
+}
+
+// ResetPath resets all changes to the "path" field.
+func (m *TermMutation) ResetPath() {
+	m._path = nil
+}
+
 // SetLabels sets the "labels" field.
 func (m *TermMutation) SetLabels(value map[string]string) {
 	m.labels = &value
@@ -18687,6 +18877,91 @@ func (m *TermMutation) AppendedSynonyms() ([]string, bool) {
 func (m *TermMutation) ResetSynonyms() {
 	m.synonyms = nil
 	m.appendsynonyms = nil
+}
+
+// SetMergedIntoID sets the "merged_into_id" field.
+func (m *TermMutation) SetMergedIntoID(s string) {
+	m.merged_into = &s
+}
+
+// MergedIntoID returns the value of the "merged_into_id" field in the mutation.
+func (m *TermMutation) MergedIntoID() (r string, exists bool) {
+	v := m.merged_into
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMergedIntoID returns the old "merged_into_id" field's value of the Term entity.
+// If the Term object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermMutation) OldMergedIntoID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMergedIntoID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMergedIntoID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMergedIntoID: %w", err)
+	}
+	return oldValue.MergedIntoID, nil
+}
+
+// ClearMergedIntoID clears the value of the "merged_into_id" field.
+func (m *TermMutation) ClearMergedIntoID() {
+	m.merged_into = nil
+	m.clearedFields[term.FieldMergedIntoID] = struct{}{}
+}
+
+// MergedIntoIDCleared returns if the "merged_into_id" field was cleared in this mutation.
+func (m *TermMutation) MergedIntoIDCleared() bool {
+	_, ok := m.clearedFields[term.FieldMergedIntoID]
+	return ok
+}
+
+// ResetMergedIntoID resets all changes to the "merged_into_id" field.
+func (m *TermMutation) ResetMergedIntoID() {
+	m.merged_into = nil
+	delete(m.clearedFields, term.FieldMergedIntoID)
+}
+
+// SetAvailableAsKeyword sets the "available_as_keyword" field.
+func (m *TermMutation) SetAvailableAsKeyword(b bool) {
+	m.available_as_keyword = &b
+}
+
+// AvailableAsKeyword returns the value of the "available_as_keyword" field in the mutation.
+func (m *TermMutation) AvailableAsKeyword() (r bool, exists bool) {
+	v := m.available_as_keyword
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAvailableAsKeyword returns the old "available_as_keyword" field's value of the Term entity.
+// If the Term object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermMutation) OldAvailableAsKeyword(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAvailableAsKeyword is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAvailableAsKeyword requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAvailableAsKeyword: %w", err)
+	}
+	return oldValue.AvailableAsKeyword, nil
+}
+
+// ResetAvailableAsKeyword resets all changes to the "available_as_keyword" field.
+func (m *TermMutation) ResetAvailableAsKeyword() {
+	m.available_as_keyword = nil
 }
 
 // SetDeprecated sets the "deprecated" field.
@@ -18925,6 +19200,87 @@ func (m *TermMutation) ResetParent() {
 	m.clearedparent = false
 }
 
+// AddMergedIDs adds the "merged" edge to the Term entity by ids.
+func (m *TermMutation) AddMergedIDs(ids ...string) {
+	if m.merged == nil {
+		m.merged = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.merged[ids[i]] = struct{}{}
+	}
+}
+
+// ClearMerged clears the "merged" edge to the Term entity.
+func (m *TermMutation) ClearMerged() {
+	m.clearedmerged = true
+}
+
+// MergedCleared reports if the "merged" edge to the Term entity was cleared.
+func (m *TermMutation) MergedCleared() bool {
+	return m.clearedmerged
+}
+
+// RemoveMergedIDs removes the "merged" edge to the Term entity by IDs.
+func (m *TermMutation) RemoveMergedIDs(ids ...string) {
+	if m.removedmerged == nil {
+		m.removedmerged = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.merged, ids[i])
+		m.removedmerged[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedMerged returns the removed IDs of the "merged" edge to the Term entity.
+func (m *TermMutation) RemovedMergedIDs() (ids []string) {
+	for id := range m.removedmerged {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// MergedIDs returns the "merged" edge IDs in the mutation.
+func (m *TermMutation) MergedIDs() (ids []string) {
+	for id := range m.merged {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetMerged resets all changes to the "merged" edge.
+func (m *TermMutation) ResetMerged() {
+	m.merged = nil
+	m.clearedmerged = false
+	m.removedmerged = nil
+}
+
+// ClearMergedInto clears the "merged_into" edge to the Term entity.
+func (m *TermMutation) ClearMergedInto() {
+	m.clearedmerged_into = true
+	m.clearedFields[term.FieldMergedIntoID] = struct{}{}
+}
+
+// MergedIntoCleared reports if the "merged_into" edge to the Term entity was cleared.
+func (m *TermMutation) MergedIntoCleared() bool {
+	return m.MergedIntoIDCleared() || m.clearedmerged_into
+}
+
+// MergedIntoIDs returns the "merged_into" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// MergedIntoID instead. It exists only for internal usage by the builders.
+func (m *TermMutation) MergedIntoIDs() (ids []string) {
+	if id := m.merged_into; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetMergedInto resets all changes to the "merged_into" edge.
+func (m *TermMutation) ResetMergedInto() {
+	m.merged_into = nil
+	m.clearedmerged_into = false
+}
+
 // Where appends a list predicates to the TermMutation builder.
 func (m *TermMutation) Where(ps ...predicate.Term) {
 	m.predicates = append(m.predicates, ps...)
@@ -18959,7 +19315,7 @@ func (m *TermMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TermMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 16)
 	if m.created_at != nil {
 		fields = append(fields, term.FieldCreatedAt)
 	}
@@ -18975,11 +19331,29 @@ func (m *TermMutation) Fields() []string {
 	if m.normalized_name != nil {
 		fields = append(fields, term.FieldNormalizedName)
 	}
+	if m.description != nil {
+		fields = append(fields, term.FieldDescription)
+	}
+	if m.color != nil {
+		fields = append(fields, term.FieldColor)
+	}
+	if m.sort_order != nil {
+		fields = append(fields, term.FieldSortOrder)
+	}
+	if m._path != nil {
+		fields = append(fields, term.FieldPath)
+	}
 	if m.labels != nil {
 		fields = append(fields, term.FieldLabels)
 	}
 	if m.synonyms != nil {
 		fields = append(fields, term.FieldSynonyms)
+	}
+	if m.merged_into != nil {
+		fields = append(fields, term.FieldMergedIntoID)
+	}
+	if m.available_as_keyword != nil {
+		fields = append(fields, term.FieldAvailableAsKeyword)
 	}
 	if m.deprecated != nil {
 		fields = append(fields, term.FieldDeprecated)
@@ -19008,10 +19382,22 @@ func (m *TermMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case term.FieldNormalizedName:
 		return m.NormalizedName()
+	case term.FieldDescription:
+		return m.Description()
+	case term.FieldColor:
+		return m.Color()
+	case term.FieldSortOrder:
+		return m.SortOrder()
+	case term.FieldPath:
+		return m.Path()
 	case term.FieldLabels:
 		return m.Labels()
 	case term.FieldSynonyms:
 		return m.Synonyms()
+	case term.FieldMergedIntoID:
+		return m.MergedIntoID()
+	case term.FieldAvailableAsKeyword:
+		return m.AvailableAsKeyword()
 	case term.FieldDeprecated:
 		return m.Deprecated()
 	case term.FieldVersion:
@@ -19037,10 +19423,22 @@ func (m *TermMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldName(ctx)
 	case term.FieldNormalizedName:
 		return m.OldNormalizedName(ctx)
+	case term.FieldDescription:
+		return m.OldDescription(ctx)
+	case term.FieldColor:
+		return m.OldColor(ctx)
+	case term.FieldSortOrder:
+		return m.OldSortOrder(ctx)
+	case term.FieldPath:
+		return m.OldPath(ctx)
 	case term.FieldLabels:
 		return m.OldLabels(ctx)
 	case term.FieldSynonyms:
 		return m.OldSynonyms(ctx)
+	case term.FieldMergedIntoID:
+		return m.OldMergedIntoID(ctx)
+	case term.FieldAvailableAsKeyword:
+		return m.OldAvailableAsKeyword(ctx)
 	case term.FieldDeprecated:
 		return m.OldDeprecated(ctx)
 	case term.FieldVersion:
@@ -19091,6 +19489,34 @@ func (m *TermMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetNormalizedName(v)
 		return nil
+	case term.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case term.FieldColor:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetColor(v)
+		return nil
+	case term.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSortOrder(v)
+		return nil
+	case term.FieldPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPath(v)
+		return nil
 	case term.FieldLabels:
 		v, ok := value.(map[string]string)
 		if !ok {
@@ -19104,6 +19530,20 @@ func (m *TermMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSynonyms(v)
+		return nil
+	case term.FieldMergedIntoID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMergedIntoID(v)
+		return nil
+	case term.FieldAvailableAsKeyword:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAvailableAsKeyword(v)
 		return nil
 	case term.FieldDeprecated:
 		v, ok := value.(bool)
@@ -19134,6 +19574,9 @@ func (m *TermMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *TermMutation) AddedFields() []string {
 	var fields []string
+	if m.addsort_order != nil {
+		fields = append(fields, term.FieldSortOrder)
+	}
 	if m.addversion != nil {
 		fields = append(fields, term.FieldVersion)
 	}
@@ -19145,6 +19588,8 @@ func (m *TermMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *TermMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case term.FieldSortOrder:
+		return m.AddedSortOrder()
 	case term.FieldVersion:
 		return m.AddedVersion()
 	}
@@ -19156,6 +19601,13 @@ func (m *TermMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *TermMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case term.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSortOrder(v)
+		return nil
 	case term.FieldVersion:
 		v, ok := value.(int)
 		if !ok {
@@ -19174,6 +19626,12 @@ func (m *TermMutation) ClearedFields() []string {
 	if m.FieldCleared(term.FieldParentID) {
 		fields = append(fields, term.FieldParentID)
 	}
+	if m.FieldCleared(term.FieldColor) {
+		fields = append(fields, term.FieldColor)
+	}
+	if m.FieldCleared(term.FieldMergedIntoID) {
+		fields = append(fields, term.FieldMergedIntoID)
+	}
 	return fields
 }
 
@@ -19190,6 +19648,12 @@ func (m *TermMutation) ClearField(name string) error {
 	switch name {
 	case term.FieldParentID:
 		m.ClearParentID()
+		return nil
+	case term.FieldColor:
+		m.ClearColor()
+		return nil
+	case term.FieldMergedIntoID:
+		m.ClearMergedIntoID()
 		return nil
 	}
 	return fmt.Errorf("unknown Term nullable field %s", name)
@@ -19214,11 +19678,29 @@ func (m *TermMutation) ResetField(name string) error {
 	case term.FieldNormalizedName:
 		m.ResetNormalizedName()
 		return nil
+	case term.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case term.FieldColor:
+		m.ResetColor()
+		return nil
+	case term.FieldSortOrder:
+		m.ResetSortOrder()
+		return nil
+	case term.FieldPath:
+		m.ResetPath()
+		return nil
 	case term.FieldLabels:
 		m.ResetLabels()
 		return nil
 	case term.FieldSynonyms:
 		m.ResetSynonyms()
+		return nil
+	case term.FieldMergedIntoID:
+		m.ResetMergedIntoID()
+		return nil
+	case term.FieldAvailableAsKeyword:
+		m.ResetAvailableAsKeyword()
 		return nil
 	case term.FieldDeprecated:
 		m.ResetDeprecated()
@@ -19235,7 +19717,7 @@ func (m *TermMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *TermMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 5)
 	if m.term_set != nil {
 		edges = append(edges, term.EdgeTermSet)
 	}
@@ -19244,6 +19726,12 @@ func (m *TermMutation) AddedEdges() []string {
 	}
 	if m.parent != nil {
 		edges = append(edges, term.EdgeParent)
+	}
+	if m.merged != nil {
+		edges = append(edges, term.EdgeMerged)
+	}
+	if m.merged_into != nil {
+		edges = append(edges, term.EdgeMergedInto)
 	}
 	return edges
 }
@@ -19266,15 +19754,28 @@ func (m *TermMutation) AddedIDs(name string) []ent.Value {
 		if id := m.parent; id != nil {
 			return []ent.Value{*id}
 		}
+	case term.EdgeMerged:
+		ids := make([]ent.Value, 0, len(m.merged))
+		for id := range m.merged {
+			ids = append(ids, id)
+		}
+		return ids
+	case term.EdgeMergedInto:
+		if id := m.merged_into; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *TermMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 5)
 	if m.removedchildren != nil {
 		edges = append(edges, term.EdgeChildren)
+	}
+	if m.removedmerged != nil {
+		edges = append(edges, term.EdgeMerged)
 	}
 	return edges
 }
@@ -19289,13 +19790,19 @@ func (m *TermMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case term.EdgeMerged:
+		ids := make([]ent.Value, 0, len(m.removedmerged))
+		for id := range m.removedmerged {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *TermMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 5)
 	if m.clearedterm_set {
 		edges = append(edges, term.EdgeTermSet)
 	}
@@ -19304,6 +19811,12 @@ func (m *TermMutation) ClearedEdges() []string {
 	}
 	if m.clearedparent {
 		edges = append(edges, term.EdgeParent)
+	}
+	if m.clearedmerged {
+		edges = append(edges, term.EdgeMerged)
+	}
+	if m.clearedmerged_into {
+		edges = append(edges, term.EdgeMergedInto)
 	}
 	return edges
 }
@@ -19318,6 +19831,10 @@ func (m *TermMutation) EdgeCleared(name string) bool {
 		return m.clearedchildren
 	case term.EdgeParent:
 		return m.clearedparent
+	case term.EdgeMerged:
+		return m.clearedmerged
+	case term.EdgeMergedInto:
+		return m.clearedmerged_into
 	}
 	return false
 }
@@ -19331,6 +19848,9 @@ func (m *TermMutation) ClearEdge(name string) error {
 		return nil
 	case term.EdgeParent:
 		m.ClearParent()
+		return nil
+	case term.EdgeMergedInto:
+		m.ClearMergedInto()
 		return nil
 	}
 	return fmt.Errorf("unknown Term unique edge %s", name)
@@ -19349,8 +19869,845 @@ func (m *TermMutation) ResetEdge(name string) error {
 	case term.EdgeParent:
 		m.ResetParent()
 		return nil
+	case term.EdgeMerged:
+		m.ResetMerged()
+		return nil
+	case term.EdgeMergedInto:
+		m.ResetMergedInto()
+		return nil
 	}
 	return fmt.Errorf("unknown Term edge %s", name)
+}
+
+// TermGroupMutation represents an operation that mutates the TermGroup nodes in the graph.
+type TermGroupMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	created_at       *time.Time
+	name             *string
+	description      *string
+	is_system        *bool
+	version          *int
+	addversion       *int
+	updated_at       *time.Time
+	clearedFields    map[string]struct{}
+	workspace        *string
+	clearedworkspace bool
+	term_sets        map[string]struct{}
+	removedterm_sets map[string]struct{}
+	clearedterm_sets bool
+	done             bool
+	oldValue         func(context.Context) (*TermGroup, error)
+	predicates       []predicate.TermGroup
+}
+
+var _ ent.Mutation = (*TermGroupMutation)(nil)
+
+// termgroupOption allows management of the mutation configuration using functional options.
+type termgroupOption func(*TermGroupMutation)
+
+// newTermGroupMutation creates new mutation for the TermGroup entity.
+func newTermGroupMutation(c config, op Op, opts ...termgroupOption) *TermGroupMutation {
+	m := &TermGroupMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeTermGroup,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withTermGroupID sets the ID field of the mutation.
+func withTermGroupID(id string) termgroupOption {
+	return func(m *TermGroupMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *TermGroup
+		)
+		m.oldValue = func(ctx context.Context) (*TermGroup, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().TermGroup.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withTermGroup sets the old TermGroup of the mutation.
+func withTermGroup(node *TermGroup) termgroupOption {
+	return func(m *TermGroupMutation) {
+		m.oldValue = func(context.Context) (*TermGroup, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m TermGroupMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m TermGroupMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of TermGroup entities.
+func (m *TermGroupMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *TermGroupMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *TermGroupMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().TermGroup.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *TermGroupMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *TermGroupMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the TermGroup entity.
+// If the TermGroup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermGroupMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *TermGroupMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetWorkspaceID sets the "workspace_id" field.
+func (m *TermGroupMutation) SetWorkspaceID(s string) {
+	m.workspace = &s
+}
+
+// WorkspaceID returns the value of the "workspace_id" field in the mutation.
+func (m *TermGroupMutation) WorkspaceID() (r string, exists bool) {
+	v := m.workspace
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkspaceID returns the old "workspace_id" field's value of the TermGroup entity.
+// If the TermGroup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermGroupMutation) OldWorkspaceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkspaceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkspaceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkspaceID: %w", err)
+	}
+	return oldValue.WorkspaceID, nil
+}
+
+// ResetWorkspaceID resets all changes to the "workspace_id" field.
+func (m *TermGroupMutation) ResetWorkspaceID() {
+	m.workspace = nil
+}
+
+// SetName sets the "name" field.
+func (m *TermGroupMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *TermGroupMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the TermGroup entity.
+// If the TermGroup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermGroupMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *TermGroupMutation) ResetName() {
+	m.name = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *TermGroupMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *TermGroupMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the TermGroup entity.
+// If the TermGroup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermGroupMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *TermGroupMutation) ResetDescription() {
+	m.description = nil
+}
+
+// SetIsSystem sets the "is_system" field.
+func (m *TermGroupMutation) SetIsSystem(b bool) {
+	m.is_system = &b
+}
+
+// IsSystem returns the value of the "is_system" field in the mutation.
+func (m *TermGroupMutation) IsSystem() (r bool, exists bool) {
+	v := m.is_system
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsSystem returns the old "is_system" field's value of the TermGroup entity.
+// If the TermGroup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermGroupMutation) OldIsSystem(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsSystem is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsSystem requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsSystem: %w", err)
+	}
+	return oldValue.IsSystem, nil
+}
+
+// ResetIsSystem resets all changes to the "is_system" field.
+func (m *TermGroupMutation) ResetIsSystem() {
+	m.is_system = nil
+}
+
+// SetVersion sets the "version" field.
+func (m *TermGroupMutation) SetVersion(i int) {
+	m.version = &i
+	m.addversion = nil
+}
+
+// Version returns the value of the "version" field in the mutation.
+func (m *TermGroupMutation) Version() (r int, exists bool) {
+	v := m.version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersion returns the old "version" field's value of the TermGroup entity.
+// If the TermGroup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermGroupMutation) OldVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
+	}
+	return oldValue.Version, nil
+}
+
+// AddVersion adds i to the "version" field.
+func (m *TermGroupMutation) AddVersion(i int) {
+	if m.addversion != nil {
+		*m.addversion += i
+	} else {
+		m.addversion = &i
+	}
+}
+
+// AddedVersion returns the value that was added to the "version" field in this mutation.
+func (m *TermGroupMutation) AddedVersion() (r int, exists bool) {
+	v := m.addversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVersion resets all changes to the "version" field.
+func (m *TermGroupMutation) ResetVersion() {
+	m.version = nil
+	m.addversion = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *TermGroupMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *TermGroupMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the TermGroup entity.
+// If the TermGroup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermGroupMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *TermGroupMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearWorkspace clears the "workspace" edge to the Resource entity.
+func (m *TermGroupMutation) ClearWorkspace() {
+	m.clearedworkspace = true
+	m.clearedFields[termgroup.FieldWorkspaceID] = struct{}{}
+}
+
+// WorkspaceCleared reports if the "workspace" edge to the Resource entity was cleared.
+func (m *TermGroupMutation) WorkspaceCleared() bool {
+	return m.clearedworkspace
+}
+
+// WorkspaceIDs returns the "workspace" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkspaceID instead. It exists only for internal usage by the builders.
+func (m *TermGroupMutation) WorkspaceIDs() (ids []string) {
+	if id := m.workspace; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkspace resets all changes to the "workspace" edge.
+func (m *TermGroupMutation) ResetWorkspace() {
+	m.workspace = nil
+	m.clearedworkspace = false
+}
+
+// AddTermSetIDs adds the "term_sets" edge to the TermSet entity by ids.
+func (m *TermGroupMutation) AddTermSetIDs(ids ...string) {
+	if m.term_sets == nil {
+		m.term_sets = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.term_sets[ids[i]] = struct{}{}
+	}
+}
+
+// ClearTermSets clears the "term_sets" edge to the TermSet entity.
+func (m *TermGroupMutation) ClearTermSets() {
+	m.clearedterm_sets = true
+}
+
+// TermSetsCleared reports if the "term_sets" edge to the TermSet entity was cleared.
+func (m *TermGroupMutation) TermSetsCleared() bool {
+	return m.clearedterm_sets
+}
+
+// RemoveTermSetIDs removes the "term_sets" edge to the TermSet entity by IDs.
+func (m *TermGroupMutation) RemoveTermSetIDs(ids ...string) {
+	if m.removedterm_sets == nil {
+		m.removedterm_sets = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.term_sets, ids[i])
+		m.removedterm_sets[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedTermSets returns the removed IDs of the "term_sets" edge to the TermSet entity.
+func (m *TermGroupMutation) RemovedTermSetsIDs() (ids []string) {
+	for id := range m.removedterm_sets {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// TermSetsIDs returns the "term_sets" edge IDs in the mutation.
+func (m *TermGroupMutation) TermSetsIDs() (ids []string) {
+	for id := range m.term_sets {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetTermSets resets all changes to the "term_sets" edge.
+func (m *TermGroupMutation) ResetTermSets() {
+	m.term_sets = nil
+	m.clearedterm_sets = false
+	m.removedterm_sets = nil
+}
+
+// Where appends a list predicates to the TermGroupMutation builder.
+func (m *TermGroupMutation) Where(ps ...predicate.TermGroup) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the TermGroupMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TermGroupMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.TermGroup, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *TermGroupMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TermGroupMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (TermGroup).
+func (m *TermGroupMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *TermGroupMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.created_at != nil {
+		fields = append(fields, termgroup.FieldCreatedAt)
+	}
+	if m.workspace != nil {
+		fields = append(fields, termgroup.FieldWorkspaceID)
+	}
+	if m.name != nil {
+		fields = append(fields, termgroup.FieldName)
+	}
+	if m.description != nil {
+		fields = append(fields, termgroup.FieldDescription)
+	}
+	if m.is_system != nil {
+		fields = append(fields, termgroup.FieldIsSystem)
+	}
+	if m.version != nil {
+		fields = append(fields, termgroup.FieldVersion)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, termgroup.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *TermGroupMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case termgroup.FieldCreatedAt:
+		return m.CreatedAt()
+	case termgroup.FieldWorkspaceID:
+		return m.WorkspaceID()
+	case termgroup.FieldName:
+		return m.Name()
+	case termgroup.FieldDescription:
+		return m.Description()
+	case termgroup.FieldIsSystem:
+		return m.IsSystem()
+	case termgroup.FieldVersion:
+		return m.Version()
+	case termgroup.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *TermGroupMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case termgroup.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case termgroup.FieldWorkspaceID:
+		return m.OldWorkspaceID(ctx)
+	case termgroup.FieldName:
+		return m.OldName(ctx)
+	case termgroup.FieldDescription:
+		return m.OldDescription(ctx)
+	case termgroup.FieldIsSystem:
+		return m.OldIsSystem(ctx)
+	case termgroup.FieldVersion:
+		return m.OldVersion(ctx)
+	case termgroup.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown TermGroup field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TermGroupMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case termgroup.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case termgroup.FieldWorkspaceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkspaceID(v)
+		return nil
+	case termgroup.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case termgroup.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case termgroup.FieldIsSystem:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsSystem(v)
+		return nil
+	case termgroup.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersion(v)
+		return nil
+	case termgroup.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TermGroup field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *TermGroupMutation) AddedFields() []string {
+	var fields []string
+	if m.addversion != nil {
+		fields = append(fields, termgroup.FieldVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *TermGroupMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case termgroup.FieldVersion:
+		return m.AddedVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TermGroupMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case termgroup.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TermGroup numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *TermGroupMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *TermGroupMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *TermGroupMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown TermGroup nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *TermGroupMutation) ResetField(name string) error {
+	switch name {
+	case termgroup.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case termgroup.FieldWorkspaceID:
+		m.ResetWorkspaceID()
+		return nil
+	case termgroup.FieldName:
+		m.ResetName()
+		return nil
+	case termgroup.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case termgroup.FieldIsSystem:
+		m.ResetIsSystem()
+		return nil
+	case termgroup.FieldVersion:
+		m.ResetVersion()
+		return nil
+	case termgroup.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown TermGroup field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *TermGroupMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.workspace != nil {
+		edges = append(edges, termgroup.EdgeWorkspace)
+	}
+	if m.term_sets != nil {
+		edges = append(edges, termgroup.EdgeTermSets)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *TermGroupMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case termgroup.EdgeWorkspace:
+		if id := m.workspace; id != nil {
+			return []ent.Value{*id}
+		}
+	case termgroup.EdgeTermSets:
+		ids := make([]ent.Value, 0, len(m.term_sets))
+		for id := range m.term_sets {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *TermGroupMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.removedterm_sets != nil {
+		edges = append(edges, termgroup.EdgeTermSets)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *TermGroupMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case termgroup.EdgeTermSets:
+		ids := make([]ent.Value, 0, len(m.removedterm_sets))
+		for id := range m.removedterm_sets {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *TermGroupMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedworkspace {
+		edges = append(edges, termgroup.EdgeWorkspace)
+	}
+	if m.clearedterm_sets {
+		edges = append(edges, termgroup.EdgeTermSets)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *TermGroupMutation) EdgeCleared(name string) bool {
+	switch name {
+	case termgroup.EdgeWorkspace:
+		return m.clearedworkspace
+	case termgroup.EdgeTermSets:
+		return m.clearedterm_sets
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *TermGroupMutation) ClearEdge(name string) error {
+	switch name {
+	case termgroup.EdgeWorkspace:
+		m.ClearWorkspace()
+		return nil
+	}
+	return fmt.Errorf("unknown TermGroup unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *TermGroupMutation) ResetEdge(name string) error {
+	switch name {
+	case termgroup.EdgeWorkspace:
+		m.ResetWorkspace()
+		return nil
+	case termgroup.EdgeTermSets:
+		m.ResetTermSets()
+		return nil
+	}
+	return fmt.Errorf("unknown TermGroup edge %s", name)
 }
 
 // TermSetMutation represents an operation that mutates the TermSet nodes in the graph.
@@ -19363,12 +20720,16 @@ type TermSetMutation struct {
 	key              *string
 	name             *string
 	description      *string
+	is_open          *bool
+	is_keywords      *bool
 	version          *int
 	addversion       *int
 	updated_at       *time.Time
 	clearedFields    map[string]struct{}
 	workspace        *string
 	clearedworkspace bool
+	group            *string
+	clearedgroup     bool
 	terms            map[string]struct{}
 	removedterms     map[string]struct{}
 	clearedterms     bool
@@ -19553,6 +20914,42 @@ func (m *TermSetMutation) ResetWorkspaceID() {
 	m.workspace = nil
 }
 
+// SetGroupID sets the "group_id" field.
+func (m *TermSetMutation) SetGroupID(s string) {
+	m.group = &s
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *TermSetMutation) GroupID() (r string, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the TermSet entity.
+// If the TermSet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermSetMutation) OldGroupID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *TermSetMutation) ResetGroupID() {
+	m.group = nil
+}
+
 // SetKey sets the "key" field.
 func (m *TermSetMutation) SetKey(s string) {
 	m.key = &s
@@ -19659,6 +21056,78 @@ func (m *TermSetMutation) OldDescription(ctx context.Context) (v string, err err
 // ResetDescription resets all changes to the "description" field.
 func (m *TermSetMutation) ResetDescription() {
 	m.description = nil
+}
+
+// SetIsOpen sets the "is_open" field.
+func (m *TermSetMutation) SetIsOpen(b bool) {
+	m.is_open = &b
+}
+
+// IsOpen returns the value of the "is_open" field in the mutation.
+func (m *TermSetMutation) IsOpen() (r bool, exists bool) {
+	v := m.is_open
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsOpen returns the old "is_open" field's value of the TermSet entity.
+// If the TermSet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermSetMutation) OldIsOpen(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsOpen is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsOpen requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsOpen: %w", err)
+	}
+	return oldValue.IsOpen, nil
+}
+
+// ResetIsOpen resets all changes to the "is_open" field.
+func (m *TermSetMutation) ResetIsOpen() {
+	m.is_open = nil
+}
+
+// SetIsKeywords sets the "is_keywords" field.
+func (m *TermSetMutation) SetIsKeywords(b bool) {
+	m.is_keywords = &b
+}
+
+// IsKeywords returns the value of the "is_keywords" field in the mutation.
+func (m *TermSetMutation) IsKeywords() (r bool, exists bool) {
+	v := m.is_keywords
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsKeywords returns the old "is_keywords" field's value of the TermSet entity.
+// If the TermSet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TermSetMutation) OldIsKeywords(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsKeywords is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsKeywords requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsKeywords: %w", err)
+	}
+	return oldValue.IsKeywords, nil
+}
+
+// ResetIsKeywords resets all changes to the "is_keywords" field.
+func (m *TermSetMutation) ResetIsKeywords() {
+	m.is_keywords = nil
 }
 
 // SetVersion sets the "version" field.
@@ -19780,6 +21249,33 @@ func (m *TermSetMutation) ResetWorkspace() {
 	m.clearedworkspace = false
 }
 
+// ClearGroup clears the "group" edge to the TermGroup entity.
+func (m *TermSetMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[termset.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the TermGroup entity was cleared.
+func (m *TermSetMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *TermSetMutation) GroupIDs() (ids []string) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *TermSetMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
 // AddTermIDs adds the "terms" edge to the Term entity by ids.
 func (m *TermSetMutation) AddTermIDs(ids ...string) {
 	if m.terms == nil {
@@ -19868,12 +21364,15 @@ func (m *TermSetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TermSetMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 10)
 	if m.created_at != nil {
 		fields = append(fields, termset.FieldCreatedAt)
 	}
 	if m.workspace != nil {
 		fields = append(fields, termset.FieldWorkspaceID)
+	}
+	if m.group != nil {
+		fields = append(fields, termset.FieldGroupID)
 	}
 	if m.key != nil {
 		fields = append(fields, termset.FieldKey)
@@ -19883,6 +21382,12 @@ func (m *TermSetMutation) Fields() []string {
 	}
 	if m.description != nil {
 		fields = append(fields, termset.FieldDescription)
+	}
+	if m.is_open != nil {
+		fields = append(fields, termset.FieldIsOpen)
+	}
+	if m.is_keywords != nil {
+		fields = append(fields, termset.FieldIsKeywords)
 	}
 	if m.version != nil {
 		fields = append(fields, termset.FieldVersion)
@@ -19902,12 +21407,18 @@ func (m *TermSetMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case termset.FieldWorkspaceID:
 		return m.WorkspaceID()
+	case termset.FieldGroupID:
+		return m.GroupID()
 	case termset.FieldKey:
 		return m.Key()
 	case termset.FieldName:
 		return m.Name()
 	case termset.FieldDescription:
 		return m.Description()
+	case termset.FieldIsOpen:
+		return m.IsOpen()
+	case termset.FieldIsKeywords:
+		return m.IsKeywords()
 	case termset.FieldVersion:
 		return m.Version()
 	case termset.FieldUpdatedAt:
@@ -19925,12 +21436,18 @@ func (m *TermSetMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldCreatedAt(ctx)
 	case termset.FieldWorkspaceID:
 		return m.OldWorkspaceID(ctx)
+	case termset.FieldGroupID:
+		return m.OldGroupID(ctx)
 	case termset.FieldKey:
 		return m.OldKey(ctx)
 	case termset.FieldName:
 		return m.OldName(ctx)
 	case termset.FieldDescription:
 		return m.OldDescription(ctx)
+	case termset.FieldIsOpen:
+		return m.OldIsOpen(ctx)
+	case termset.FieldIsKeywords:
+		return m.OldIsKeywords(ctx)
 	case termset.FieldVersion:
 		return m.OldVersion(ctx)
 	case termset.FieldUpdatedAt:
@@ -19958,6 +21475,13 @@ func (m *TermSetMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetWorkspaceID(v)
 		return nil
+	case termset.FieldGroupID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
 	case termset.FieldKey:
 		v, ok := value.(string)
 		if !ok {
@@ -19978,6 +21502,20 @@ func (m *TermSetMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDescription(v)
+		return nil
+	case termset.FieldIsOpen:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsOpen(v)
+		return nil
+	case termset.FieldIsKeywords:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsKeywords(v)
 		return nil
 	case termset.FieldVersion:
 		v, ok := value.(int)
@@ -20063,6 +21601,9 @@ func (m *TermSetMutation) ResetField(name string) error {
 	case termset.FieldWorkspaceID:
 		m.ResetWorkspaceID()
 		return nil
+	case termset.FieldGroupID:
+		m.ResetGroupID()
+		return nil
 	case termset.FieldKey:
 		m.ResetKey()
 		return nil
@@ -20071,6 +21612,12 @@ func (m *TermSetMutation) ResetField(name string) error {
 		return nil
 	case termset.FieldDescription:
 		m.ResetDescription()
+		return nil
+	case termset.FieldIsOpen:
+		m.ResetIsOpen()
+		return nil
+	case termset.FieldIsKeywords:
+		m.ResetIsKeywords()
 		return nil
 	case termset.FieldVersion:
 		m.ResetVersion()
@@ -20084,9 +21631,12 @@ func (m *TermSetMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *TermSetMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.workspace != nil {
 		edges = append(edges, termset.EdgeWorkspace)
+	}
+	if m.group != nil {
+		edges = append(edges, termset.EdgeGroup)
 	}
 	if m.terms != nil {
 		edges = append(edges, termset.EdgeTerms)
@@ -20102,6 +21652,10 @@ func (m *TermSetMutation) AddedIDs(name string) []ent.Value {
 		if id := m.workspace; id != nil {
 			return []ent.Value{*id}
 		}
+	case termset.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
 	case termset.EdgeTerms:
 		ids := make([]ent.Value, 0, len(m.terms))
 		for id := range m.terms {
@@ -20114,7 +21668,7 @@ func (m *TermSetMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *TermSetMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedterms != nil {
 		edges = append(edges, termset.EdgeTerms)
 	}
@@ -20137,9 +21691,12 @@ func (m *TermSetMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *TermSetMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedworkspace {
 		edges = append(edges, termset.EdgeWorkspace)
+	}
+	if m.clearedgroup {
+		edges = append(edges, termset.EdgeGroup)
 	}
 	if m.clearedterms {
 		edges = append(edges, termset.EdgeTerms)
@@ -20153,6 +21710,8 @@ func (m *TermSetMutation) EdgeCleared(name string) bool {
 	switch name {
 	case termset.EdgeWorkspace:
 		return m.clearedworkspace
+	case termset.EdgeGroup:
+		return m.clearedgroup
 	case termset.EdgeTerms:
 		return m.clearedterms
 	}
@@ -20166,6 +21725,9 @@ func (m *TermSetMutation) ClearEdge(name string) error {
 	case termset.EdgeWorkspace:
 		m.ClearWorkspace()
 		return nil
+	case termset.EdgeGroup:
+		m.ClearGroup()
+		return nil
 	}
 	return fmt.Errorf("unknown TermSet unique edge %s", name)
 }
@@ -20176,6 +21738,9 @@ func (m *TermSetMutation) ResetEdge(name string) error {
 	switch name {
 	case termset.EdgeWorkspace:
 		m.ResetWorkspace()
+		return nil
+	case termset.EdgeGroup:
+		m.ResetGroup()
 		return nil
 	case termset.EdgeTerms:
 		m.ResetTerms()

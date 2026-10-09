@@ -886,12 +886,18 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "name", Type: field.TypeString},
 		{Name: "normalized_name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "color", Type: field.TypeString, Nullable: true},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "path", Type: field.TypeString},
 		{Name: "labels", Type: field.TypeJSON},
 		{Name: "synonyms", Type: field.TypeJSON},
+		{Name: "available_as_keyword", Type: field.TypeBool, Default: false},
 		{Name: "deprecated", Type: field.TypeBool, Default: false},
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "parent_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "merged_into_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "term_set_id", Type: field.TypeString, Size: 36},
 	}
 	// TermsTable holds the schema information for the "terms" table.
@@ -902,32 +908,99 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "terms_terms_children",
-				Columns:    []*schema.Column{TermsColumns[9]},
+				Columns:    []*schema.Column{TermsColumns[14]},
+				RefColumns: []*schema.Column{TermsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "terms_terms_merged",
+				Columns:    []*schema.Column{TermsColumns[15]},
 				RefColumns: []*schema.Column{TermsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "terms_term_sets_terms",
-				Columns:    []*schema.Column{TermsColumns[10]},
+				Columns:    []*schema.Column{TermsColumns[16]},
 				RefColumns: []*schema.Column{TermSetsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "term_term_set_id_normalized_name",
-				Unique:  true,
-				Columns: []*schema.Column{TermsColumns[10], TermsColumns[3]},
+				Name:    "term_term_set_id_parent_id_sort_order_normalized_name_id",
+				Unique:  false,
+				Columns: []*schema.Column{TermsColumns[16], TermsColumns[14], TermsColumns[6], TermsColumns[3], TermsColumns[0]},
 			},
 			{
 				Name:    "term_term_set_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{TermsColumns[10], TermsColumns[0]},
+				Columns: []*schema.Column{TermsColumns[16], TermsColumns[0]},
 			},
 			{
 				Name:    "term_parent_id",
 				Unique:  false,
-				Columns: []*schema.Column{TermsColumns[9]},
+				Columns: []*schema.Column{TermsColumns[14]},
+			},
+			{
+				Name:    "term_path",
+				Unique:  false,
+				Columns: []*schema.Column{TermsColumns[7]},
+			},
+			{
+				Name:    "term_merged_into_id",
+				Unique:  false,
+				Columns: []*schema.Column{TermsColumns[15]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "merged_into_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "term_available_as_keyword",
+				Unique:  false,
+				Columns: []*schema.Column{TermsColumns[16]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "available_as_keyword",
+				},
+			},
+		},
+	}
+	// TermGroupsColumns holds the columns for the "term_groups" table.
+	TermGroupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "is_system", Type: field.TypeBool, Default: false},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "workspace_id", Type: field.TypeString, Size: 36},
+	}
+	// TermGroupsTable holds the schema information for the "term_groups" table.
+	TermGroupsTable = &schema.Table{
+		Name:       "term_groups",
+		Columns:    TermGroupsColumns,
+		PrimaryKey: []*schema.Column{TermGroupsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "term_groups_resources_workspace",
+				Columns:    []*schema.Column{TermGroupsColumns[7]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "termgroup_workspace_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{TermGroupsColumns[7], TermGroupsColumns[2]},
+			},
+			{
+				Name:    "termgroup_workspace_id_system",
+				Unique:  true,
+				Columns: []*schema.Column{TermGroupsColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "is_system",
+				},
 			},
 		},
 	}
@@ -938,8 +1011,11 @@ var (
 		{Name: "key", Type: field.TypeString},
 		{Name: "name", Type: field.TypeString},
 		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "is_open", Type: field.TypeBool, Default: false},
+		{Name: "is_keywords", Type: field.TypeBool, Default: false},
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "group_id", Type: field.TypeString, Size: 36},
 		{Name: "workspace_id", Type: field.TypeString, Size: 36},
 	}
 	// TermSetsTable holds the schema information for the "term_sets" table.
@@ -949,8 +1025,14 @@ var (
 		PrimaryKey: []*schema.Column{TermSetsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
+				Symbol:     "term_sets_term_groups_term_sets",
+				Columns:    []*schema.Column{TermSetsColumns[9]},
+				RefColumns: []*schema.Column{TermGroupsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
 				Symbol:     "term_sets_resources_workspace",
-				Columns:    []*schema.Column{TermSetsColumns[7]},
+				Columns:    []*schema.Column{TermSetsColumns[10]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -959,7 +1041,20 @@ var (
 			{
 				Name:    "termset_workspace_id_key",
 				Unique:  true,
-				Columns: []*schema.Column{TermSetsColumns[7], TermSetsColumns[2]},
+				Columns: []*schema.Column{TermSetsColumns[10], TermSetsColumns[2]},
+			},
+			{
+				Name:    "termset_group_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{TermSetsColumns[9], TermSetsColumns[3]},
+			},
+			{
+				Name:    "termset_workspace_id_keywords",
+				Unique:  true,
+				Columns: []*schema.Column{TermSetsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "is_keywords",
+				},
 			},
 		},
 	}
@@ -1190,6 +1285,7 @@ var (
 		SchemaTemplatesTable,
 		SmartFoldersTable,
 		TermsTable,
+		TermGroupsTable,
 		TermSetsTable,
 		WebdavCredentialsTable,
 		WorkflowsTable,
@@ -1229,8 +1325,11 @@ func init() {
 	SchemaTemplatesTable.ForeignKeys[0].RefTable = ResourcesTable
 	SmartFoldersTable.ForeignKeys[0].RefTable = ResourcesTable
 	TermsTable.ForeignKeys[0].RefTable = TermsTable
-	TermsTable.ForeignKeys[1].RefTable = TermSetsTable
-	TermSetsTable.ForeignKeys[0].RefTable = ResourcesTable
+	TermsTable.ForeignKeys[1].RefTable = TermsTable
+	TermsTable.ForeignKeys[2].RefTable = TermSetsTable
+	TermGroupsTable.ForeignKeys[0].RefTable = ResourcesTable
+	TermSetsTable.ForeignKeys[0].RefTable = TermGroupsTable
+	TermSetsTable.ForeignKeys[1].RefTable = ResourcesTable
 	WebdavCredentialsTable.Annotation = &entsql.Annotation{
 		Table: "webdav_credentials",
 	}

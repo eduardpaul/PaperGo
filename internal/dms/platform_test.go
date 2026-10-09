@@ -125,7 +125,7 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 }
 func TestTaxonomyAndLookupPreserveIDsAndValidateNewAssignments(t *testing.T) {
 	s, w, l := fixture(t)
-	set, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "topics", Name: "Topics"})
+	set, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "topics", Name: "Topics"})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -168,22 +168,22 @@ func TestTaxonomyAndLookupPreserveIDsAndValidateNewAssignments(t *testing.T) {
 	if _, e = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Wrong lookup", Values: map[string]any{"contact": r.ID}}); e == nil {
 		t.Fatal("foreign lookup target")
 	}
-	matches, e := s.Terms(testContext, "alice", set.ID, "finanzas", "", 50)
+	matches, e := s.Terms(testContext, "alice", set.ID, TermsQuery{Search: "finanzas"})
 	if e != nil || len(matches.Data) != 1 || matches.Data[0].ID != root.ID {
 		t.Fatal("localized search", matches, e)
 	}
-	matches, e = s.Terms(testContext, "alice", set.ID, "money", "", 50)
+	matches, e = s.Terms(testContext, "alice", set.ID, TermsQuery{Search: "money"})
 	if e != nil || len(matches.Data) != 1 {
 		t.Fatal("synonym search", matches, e)
 	}
-	another, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "other", Name: "Other"})
+	another, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "other", Name: "Other"})
 	if e != nil {
 		t.Fatal(e)
 	}
 	if _, e = s.CreateTerm(testContext, "alice", another.ID, TermInput{Name: "Bad parent", ParentID: &root.ID}); e == nil {
 		t.Fatal("cross-set parent")
 	}
-	if _, e = s.CreateTermSet(testContext, "reader", w.ID, TermSetInput{Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
+	if _, e = s.CreateTermSet(testContext, "reader", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
 		t.Fatal("taxonomy management authorization", e)
 	}
 }

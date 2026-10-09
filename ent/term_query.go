@@ -20,13 +20,15 @@ import (
 // TermQuery is the builder for querying Term entities.
 type TermQuery struct {
 	config
-	ctx          *QueryContext
-	order        []term.OrderOption
-	inters       []Interceptor
-	predicates   []predicate.Term
-	withTermSet  *TermSetQuery
-	withChildren *TermQuery
-	withParent   *TermQuery
+	ctx            *QueryContext
+	order          []term.OrderOption
+	inters         []Interceptor
+	predicates     []predicate.Term
+	withTermSet    *TermSetQuery
+	withChildren   *TermQuery
+	withParent     *TermQuery
+	withMerged     *TermQuery
+	withMergedInto *TermQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -122,6 +124,50 @@ func (_q *TermQuery) QueryParent() *TermQuery {
 			sqlgraph.From(term.Table, term.FieldID, selector),
 			sqlgraph.To(term.Table, term.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, term.ParentTable, term.ParentColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryMerged chains the current query on the "merged" edge.
+func (_q *TermQuery) QueryMerged() *TermQuery {
+	query := (&TermClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(term.Table, term.FieldID, selector),
+			sqlgraph.To(term.Table, term.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, term.MergedTable, term.MergedColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryMergedInto chains the current query on the "merged_into" edge.
+func (_q *TermQuery) QueryMergedInto() *TermQuery {
+	query := (&TermClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(term.Table, term.FieldID, selector),
+			sqlgraph.To(term.Table, term.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, term.MergedIntoTable, term.MergedIntoColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -316,14 +362,16 @@ func (_q *TermQuery) Clone() *TermQuery {
 		return nil
 	}
 	return &TermQuery{
-		config:       _q.config,
-		ctx:          _q.ctx.Clone(),
-		order:        append([]term.OrderOption{}, _q.order...),
-		inters:       append([]Interceptor{}, _q.inters...),
-		predicates:   append([]predicate.Term{}, _q.predicates...),
-		withTermSet:  _q.withTermSet.Clone(),
-		withChildren: _q.withChildren.Clone(),
-		withParent:   _q.withParent.Clone(),
+		config:         _q.config,
+		ctx:            _q.ctx.Clone(),
+		order:          append([]term.OrderOption{}, _q.order...),
+		inters:         append([]Interceptor{}, _q.inters...),
+		predicates:     append([]predicate.Term{}, _q.predicates...),
+		withTermSet:    _q.withTermSet.Clone(),
+		withChildren:   _q.withChildren.Clone(),
+		withParent:     _q.withParent.Clone(),
+		withMerged:     _q.withMerged.Clone(),
+		withMergedInto: _q.withMergedInto.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -360,6 +408,28 @@ func (_q *TermQuery) WithParent(opts ...func(*TermQuery)) *TermQuery {
 		opt(query)
 	}
 	_q.withParent = query
+	return _q
+}
+
+// WithMerged tells the query-builder to eager-load the nodes that are connected to
+// the "merged" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TermQuery) WithMerged(opts ...func(*TermQuery)) *TermQuery {
+	query := (&TermClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withMerged = query
+	return _q
+}
+
+// WithMergedInto tells the query-builder to eager-load the nodes that are connected to
+// the "merged_into" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TermQuery) WithMergedInto(opts ...func(*TermQuery)) *TermQuery {
+	query := (&TermClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withMergedInto = query
 	return _q
 }
 
@@ -441,10 +511,12 @@ func (_q *TermQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Term, e
 	var (
 		nodes       = []*Term{}
 		_spec       = _q.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [5]bool{
 			_q.withTermSet != nil,
 			_q.withChildren != nil,
 			_q.withParent != nil,
+			_q.withMerged != nil,
+			_q.withMergedInto != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -481,6 +553,19 @@ func (_q *TermQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Term, e
 	if query := _q.withParent; query != nil {
 		if err := _q.loadParent(ctx, query, nodes, nil,
 			func(n *Term, e *Term) { n.Edges.Parent = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withMerged; query != nil {
+		if err := _q.loadMerged(ctx, query, nodes,
+			func(n *Term) { n.Edges.Merged = []*Term{} },
+			func(n *Term, e *Term) { n.Edges.Merged = append(n.Edges.Merged, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withMergedInto; query != nil {
+		if err := _q.loadMergedInto(ctx, query, nodes, nil,
+			func(n *Term, e *Term) { n.Edges.MergedInto = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -581,6 +666,71 @@ func (_q *TermQuery) loadParent(ctx context.Context, query *TermQuery, nodes []*
 	}
 	return nil
 }
+func (_q *TermQuery) loadMerged(ctx context.Context, query *TermQuery, nodes []*Term, init func(*Term), assign func(*Term, *Term)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Term)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(term.FieldMergedIntoID)
+	}
+	query.Where(predicate.Term(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(term.MergedColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.MergedIntoID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "merged_into_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "merged_into_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *TermQuery) loadMergedInto(ctx context.Context, query *TermQuery, nodes []*Term, init func(*Term), assign func(*Term, *Term)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*Term)
+	for i := range nodes {
+		if nodes[i].MergedIntoID == nil {
+			continue
+		}
+		fk := *nodes[i].MergedIntoID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(term.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "merged_into_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 
 func (_q *TermQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
@@ -612,6 +762,9 @@ func (_q *TermQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if _q.withParent != nil {
 			_spec.Node.AddColumnOnce(term.FieldParentID)
+		}
+		if _q.withMergedInto != nil {
+			_spec.Node.AddColumnOnce(term.FieldMergedIntoID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

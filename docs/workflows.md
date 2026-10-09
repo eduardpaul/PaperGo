@@ -190,13 +190,13 @@ Property names are lowercase identifiers, and forms nest at most 6 levels.
 | `item` | items of the workspace the person may read | `collection_id`: only that list or library |
 | `collection` | lists and libraries of the workspace the person may read | |
 | `relationship` | items to use with a relationship type; no link is created, nodes decide | `relationship_type_id` (required) |
-| `terms` | terms of the workspace's taxonomy, not deprecated | `term_set_id`, `term_ids` (only those terms) |
-| `keywords` | tags, PaperGo's folksonomy: text values, not IDs, already used on something the person can read | `collection_id`: only tags used there; `allow_new`: also tags nobody uses yet (still valid tags: trimmed, 1 to 64 characters) |
+| `terms` | terms of the workspace's taxonomy, not deprecated | `group_id`, `term_set_id`, `term_ids` (only those terms) |
+| `keywords` | keywords of the workspace, not deprecated: terms of its keywords set and terms available as keywords | |
 | `people` | principal subjects that have access to the workspace | `access`: `read` (default), `read_draft`, `write`, `publish` or `manage` |
 
-Keyword pickers get their choices from `GET /v1/workspaces/{id}/tags` (`collection_id`, `prefix` for autocomplete, `after`, `limit`), which counts only what the caller can read. The tag inputs of `item.update` and `item.create` are keyword pickers with `allow_new`.
+Term pickers browse `GET /v1/term-sets/{id}/terms`; keyword pickers suggest from `GET /v1/workspaces/{id}/keywords?q=` and add new keywords with `POST /v1/workspaces/{id}/keywords` before the form is submitted (see [taxonomy](application-foundation.md#controlled-taxonomy)).
 
-Saving a workflow checks that the collections, relationship types, term sets and terms its pickers name belong to the workspace.
+Saving a workflow checks that the collections, relationship types, term groups, term sets and terms its pickers name belong to the workspace.
 
 **Selection hints.** The root of a [selection](#selection-runs) workflow's launch form can carry `x-papergo-selection`, text hints for the screen that chooses and orders the items: `preview` (such as `image`), `item_label` (such as `page`), `order_label` and `primary_description`. They are presentation only.
 

@@ -51,9 +51,6 @@ func TestTagVocabularyFollowsAccessAndSurfaces(t *testing.T) {
 	if got := vocab("alice", TagsQuery{CollectionID: list.ID, Prefix: "f"}); got != "finance:2" {
 		t.Fatalf("prefix in collection: %s", got)
 	}
-	if got := vocab("alice", TagsQuery{Tag: "legal"}); got != "legal:1" {
-		t.Fatalf("exact tag: %s", got)
-	}
 	page, err := s.Tags(testContext, "alice", w.ID, TagsQuery{Limit: 2})
 	if err != nil || len(page.Data) != 2 || page.NextCursor != "elsewhere" {
 		t.Fatalf("first page: %+v %v", page, err)

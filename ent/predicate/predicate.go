@@ -63,6 +63,9 @@ type SmartFolder func(*sql.Selector)
 // Term is the predicate function for term builders.
 type Term func(*sql.Selector)
 
+// TermGroup is the predicate function for termgroup builders.
+type TermGroup func(*sql.Selector)
+
 // TermSet is the predicate function for termset builders.
 type TermSet func(*sql.Selector)
 

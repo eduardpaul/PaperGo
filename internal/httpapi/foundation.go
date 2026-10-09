@@ -43,7 +43,9 @@ func entityETag(w http.ResponseWriter, v any) {
 		etag(w, x.WorkspaceVersion)
 	case *ent.TermSet:
 		etag(w, x.Version)
-	case *ent.Term:
+	case *ent.TermGroup:
+		etag(w, x.Version)
+	case dms.TermView:
 		etag(w, x.Version)
 	case *ent.ListView:
 		etag(w, x.Version)
@@ -127,26 +129,7 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 	m.HandleFunc("POST /v1/views/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.ViewQueryRequest, v int) (any, error) {
 		return a.DMS.QueryViewGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
-	m.HandleFunc("GET /v1/workspaces/{id}/term-sets", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.TermSets(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
-	}))
-	m.HandleFunc("POST /v1/workspaces/{id}/term-sets", foundationMutation(a, 201, false, func(r *http.Request, in dms.TermSetInput, v int) (any, error) {
-		return a.DMS.CreateTermSet(r.Context(), subject(r), r.PathValue("id"), in)
-	}))
-	m.HandleFunc("GET /v1/term-sets/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.TermSet(r.Context(), subject(r), r.PathValue("id")) }))
-	m.HandleFunc("PUT /v1/term-sets/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.TermSetInput, v int) (any, error) {
-		return a.DMS.UpdateTermSet(r.Context(), subject(r), r.PathValue("id"), v, in)
-	}))
-	m.HandleFunc("GET /v1/term-sets/{id}/terms", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.Terms(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("q"), r.URL.Query().Get("after"), queryInt(r, "limit"))
-	}))
-	m.HandleFunc("POST /v1/term-sets/{id}/terms", foundationMutation(a, 201, false, func(r *http.Request, in dms.TermInput, v int) (any, error) {
-		return a.DMS.CreateTerm(r.Context(), subject(r), r.PathValue("id"), in)
-	}))
-	m.HandleFunc("GET /v1/terms/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Term(r.Context(), subject(r), r.PathValue("id")) }))
-	m.HandleFunc("PUT /v1/terms/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.TermInput, v int) (any, error) {
-		return a.DMS.UpdateTerm(r.Context(), subject(r), r.PathValue("id"), v, in)
-	}))
+	a.registerTaxonomy(m)
 	m.HandleFunc("GET /v1/workspaces/{id}/relationship-types", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.RelationshipTypes(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	}))

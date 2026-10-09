@@ -236,6 +236,9 @@ func (r *Runner) row(ctx context.Context, subject, id string) (*ent.WorkflowRun,
 	})
 }
 
+// errDispatched reports that a pending run's event was dispatched meanwhile.
+var errDispatched = errors.New("event dispatched")
+
 // pending returns a manual run whose event is logged but not dispatched yet:
 // the ID that StartRuns returned exists before the dispatcher records it.
 func (r *Runner) pending(ctx context.Context, subject, id string) (Run, error) {
@@ -246,8 +249,11 @@ func (r *Runner) pending(ctx context.Context, subject, id string) (Run, error) {
 			return Run{}, dms.ErrNotFound
 		}
 		e, err := t.Client.DomainEvent.Get(ctx, eventID)
-		if ent.IsNotFound(err) || err == nil && (e.DispatchedAt != nil || e.Data["workflow_id"] != workflowID) {
+		if ent.IsNotFound(err) || err == nil && e.Data["workflow_id"] != workflowID {
 			return Run{}, dms.ErrNotFound
+		}
+		if err == nil && e.DispatchedAt != nil {
+			return Run{}, errDispatched
 		}
 		if err != nil {
 			return Run{}, err
@@ -263,7 +269,12 @@ func (r *Runner) pending(ctx context.Context, subject, id string) (Run, error) {
 func (r *Runner) Run(ctx context.Context, subject, id string) (Run, error) {
 	row, err := r.row(ctx, subject, id)
 	if errors.Is(err, dms.ErrNotFound) {
-		return r.pending(ctx, subject, id)
+		run, err := r.pending(ctx, subject, id)
+		if !errors.Is(err, errDispatched) {
+			return run, err
+		}
+		// The dispatcher started the run between the two reads.
+		row, err = r.row(ctx, subject, id)
 	}
 	if err != nil {
 		return Run{}, err
