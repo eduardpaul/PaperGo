@@ -64,7 +64,24 @@ type Trigger struct {
 	// run per chosen item, the default) or selection (one run for all of
 	// them, in order).
 	Selection string `json:"selection,omitempty"`
+	// Terms, on item.created, item.updated and item.published triggers,
+	// limits them to revisions whose term and keywords fields hold one of
+	// these terms (or a descendant, or a term merged into one). TermChange
+	// is present (the default), added (held now, not by the revision before)
+	// or removed (held before, not now).
+	Terms      []string `json:"terms,omitempty"`
+	TermChange string   `json:"term_change,omitempty"`
 }
+
+// Term changes a trigger's terms filter reacts to.
+const (
+	TermPresent = "present"
+	TermAdded   = "added"
+	TermRemoved = "removed"
+)
+
+// MaxTriggerTerms bounds a trigger's terms filter.
+const MaxTriggerTerms = 20
 
 // Selection modes of manual triggers.
 const (
@@ -170,6 +187,24 @@ func (d Definition) validate() error {
 		if t.Selection == SelectionAll && t.CollectionID == "" {
 			return dms.Invalid(at + "selection runs need collection_id: the items come from one list or library")
 		}
+		if len(t.Terms) > 0 || t.TermChange != "" {
+			if t.Type != dms.EventItemCreated && t.Type != dms.EventItemUpdated && t.Type != dms.EventItemPublished {
+				return dms.Invalid(at + "terms belong to item.created, item.updated and item.published triggers")
+			}
+			if len(t.Terms) == 0 || len(t.Terms) > MaxTriggerTerms {
+				return dms.Invalid(at + fmt.Sprintf("terms needs 1 to %d term IDs", MaxTriggerTerms))
+			}
+			for _, id := range t.Terms {
+				if id == "" {
+					return dms.Invalid(at + "terms must hold term IDs")
+				}
+			}
+			switch t.TermChange {
+			case "", TermPresent, TermAdded, TermRemoved:
+			default:
+				return dms.Invalid(at + "term_change is present, added or removed")
+			}
+		}
 		switch {
 		case isItemTrigger(t.Type):
 			if t.Cron != "" || t.TimeZone != "" {
@@ -189,6 +224,10 @@ func (d Definition) validate() error {
 			manual++
 			if t.Cron != "" || t.TimeZone != "" || t.ContentTypeID != "" {
 				return dms.Invalid(at + "manual triggers take only collection_id and selection")
+			}
+		case t.Type == dms.EventTermMerged:
+			if t.CollectionID != "" || t.ContentTypeID != "" || t.Cron != "" || t.TimeZone != "" {
+				return dms.Invalid(at + "term.merged triggers take no options")
 			}
 		case eventPattern.MatchString(t.Type):
 			if t.Cron != "" || t.TimeZone != "" {

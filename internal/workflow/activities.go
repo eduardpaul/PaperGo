@@ -170,6 +170,9 @@ func init() {
 	register(&Activity{Key: "items.query", Kind: "action", Description: "Queries a collection's items (head surface); the output has items and count.",
 		InputSchema:  inputs(collectProp+`, "filter": `+filterProp+`, "sort": {"type": "object", "title": "Sort"}, "limit": {"type": "integer", "title": "Limit", "minimum": 1, "maximum": 100, "default": 50}`, "collection_id"),
 		OutputSchema: mustSchema(`{"type": "object", "properties": {"items": {"type": "array", "items": ` + itemOutput + `}, "count": {"type": "integer"}}}`), run: runItemsQuery})
+	register(&Activity{Key: "item.has_terms", Kind: "flow", Ports: []string{"matched", "unmatched"}, Description: "Follows matched when the item's term and keywords fields hold the terms (or descendants, or terms merged into them): any of them, or all with match all.",
+		InputSchema:  inputs(itemIDProp+`, "terms": {"type": "array", "title": "Terms", "items": {"type": "string"}, "minItems": 1, "maxItems": 20, "x-papergo": {"kind": "terms"}}, "match": {"type": "string", "title": "Match", "enum": ["any", "all"], "default": "any"}`, "terms"),
+		OutputSchema: mustSchema(`{"type": "object", "properties": {"matched": {"type": "boolean"}, "terms": {"type": "array", "items": {"type": "string"}, "description": "The given terms the item holds."}}}`), run: runItemHasTerms})
 	register(&Activity{Key: "item.publish", Kind: "action", Description: "Publishes the item's head revision; nothing happens when it is already published.",
 		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(`{"type": "object", "properties": {"published": {"type": "boolean"}, "publication_id": {"type": "string"}}}`), run: runItemPublish})
 	register(&Activity{Key: "item.unpublish", Kind: "action", Description: "Unpublishes the item; nothing happens when it is not published.",
@@ -270,6 +273,65 @@ func runIf(e *env, in map[string]any) (outcome, error) {
 		holds = compare(left, in["op"].(string), right)
 	}
 	return outcome{Port: strconv.FormatBool(holds), Output: map[string]any{"result": holds}}, nil
+}
+
+func runItemHasTerms(e *env, in map[string]any) (outcome, error) {
+	id, err := e.target(in)
+	if err != nil {
+		return outcome{}, err
+	}
+	r, err := e.load(id)
+	if err != nil {
+		return outcome{}, err
+	}
+	resolved, err := e.scope.resolve(in["terms"])
+	if err != nil {
+		return outcome{}, err
+	}
+	list, _ := resolved.([]any)
+	terms := make([]string, 0, len(list))
+	for _, v := range list {
+		s, ok := v.(string)
+		if !ok || s == "" {
+			return outcome{}, errors.New("terms must be term IDs")
+		}
+		terms = append(terms, s)
+	}
+	if len(terms) == 0 {
+		return outcome{}, errors.New("terms is empty")
+	}
+	match := "any"
+	if v, ok := in["match"]; ok {
+		if match, err = e.scope.text(v); err != nil {
+			return outcome{}, err
+		}
+		if match != "any" && match != "all" {
+			return outcome{}, errors.New("match is any or all")
+		}
+	}
+	values, err := e.t.ItemTerms(e.ctx, *r.ContainerID, r.Values)
+	if err != nil {
+		return outcome{}, err
+	}
+	held, err := e.t.MatchTerms(e.ctx, terms, values)
+	if err != nil {
+		return outcome{}, err
+	}
+	found := []any{}
+	for _, t := range terms {
+		if held[t] {
+			found = append(found, t)
+		}
+	}
+	matched := len(found) > 0
+	if match == "all" {
+		matched = len(found) == len(terms)
+	}
+	port := "unmatched"
+	if matched {
+		port = "matched"
+	}
+	return outcome{Port: port, Output: map[string]any{"matched": matched, "terms": found}}, nil
 }
 
 // filter resolves tokens in a filter's values and decodes it.

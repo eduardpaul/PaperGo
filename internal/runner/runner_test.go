@@ -776,3 +776,75 @@ func TestKeywordsPicker(t *testing.T) {
 		t.Fatalf("keywords %s", got)
 	}
 }
+
+func TestTermTriggersAndHasTerms(t *testing.T) {
+	f := setup(t)
+	group, err := f.dms.CreateTermGroup(ctx, "alice", f.ws.ID, dms.TermGroupInput{Name: "Subjects"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := f.dms.CreateTermSet(ctx, "alice", f.ws.ID, dms.TermSetInput{GroupID: group.ID, Key: "projects", Name: "Projects"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	term := func(name string, parent *string) dms.TermView {
+		v, err := f.dms.CreateTerm(ctx, "alice", set.ID, dms.TermInput{Name: name, ParentID: parent})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	apollo := term("Apollo", nil)
+	lander := term("Lander", &apollo.ID)
+	other := term("Gemini", nil)
+	if _, err = f.dms.CreateField(ctx, "alice", f.list.ID, dms.CreateField{Key: "project", Label: "Project", Type: "term", Options: model.FieldOptions{TermSetID: set.ID, Multiple: true}}); err != nil {
+		t.Fatal(err)
+	}
+	def := func(trigger, flow string) string {
+		return strings.NewReplacer("APOLLO", apollo.ID, "LANDER", lander.ID).Replace(`{"triggers": [` + trigger + `], "flow": ` + flow + `}`)
+	}
+	end := `{"start": "e", "nodes": {"e": {"activity": "end"}}}`
+	added := f.workflow(t, "Added", def(`{"type": "item.updated", "collection_id": "$LIST", "terms": ["APOLLO"], "term_change": "added"}`,
+		`{"start": "check", "nodes": {"check": {"activity": "item.has_terms", "inputs": {"terms": ["LANDER", "APOLLO"], "match": "all"}, "next": {"matched": "stop"}}, "stop": {"activity": "fail", "inputs": {"message": "the item holds Lander and Apollo"}}}}`))
+	removed := f.workflow(t, "Removed", def(`{"type": "item.updated", "collection_id": "$LIST", "terms": ["APOLLO"], "term_change": "removed"}`, end))
+	present := f.workflow(t, "Present", def(`{"type": "item.created", "terms": ["APOLLO"]}`, end))
+	control := f.workflow(t, "Control", def(`{"type": "item.updated", "collection_id": "$LIST"}`, end))
+	merged := f.workflow(t, "Merged", def(`{"type": "term.merged"}`, end))
+	for name, trigger := range map[string]string{
+		"deleted":        `{"type": "item.deleted", "terms": ["APOLLO"]}`,
+		"no terms":       `{"type": "item.updated", "term_change": "added"}`,
+		"bad change":     `{"type": "item.updated", "terms": ["APOLLO"], "term_change": "moved"}`,
+		"unknown term":   `{"type": "item.updated", "terms": ["nope"]}`,
+		"merged options": `{"type": "term.merged", "collection_id": "$LIST"}`,
+	} {
+		if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: name, Definition: json.RawMessage(strings.ReplaceAll(def(trigger, end), "$LIST", f.list.ID))}); err == nil {
+			t.Fatalf("%s: saved", name)
+		}
+	}
+
+	it := f.item(t, "alice", "Plan", map[string]any{"project": []any{lander.ID}})
+	update := func(values map[string]any) {
+		t.Helper()
+		if _, err := f.dms.Update(ctx, "alice", it.ID, f.head(t, it.ID).Version, dms.UpdateResource{Values: &values}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	update(map[string]any{"project": []any{other.ID}})
+	f.runs(t, control.ID, 1)
+	f.runs(t, removed.ID, 1)
+	update(map[string]any{"project": []any{other.ID}, "note": "same terms"})
+	f.runs(t, control.ID, 2)
+	update(map[string]any{"project": []any{lander.ID}})
+	f.runs(t, control.ID, 3)
+	if runs := f.runs(t, added.ID, 1); runs[0].Status != "failed" || !strings.Contains(runs[0].Error, "the item holds Lander and Apollo") {
+		t.Fatalf("has_terms all: %+v", runs[0])
+	}
+	f.runs(t, removed.ID, 1)
+	f.runs(t, present.ID, 1)
+	if _, err = f.dms.MergeTerm(ctx, "alice", other.ID, other.Version, dms.MergeTermInput{TargetTermID: apollo.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if runs := f.runs(t, merged.ID, 1); runs[0].Status != "completed" || runs[0].ItemID != nil {
+		t.Fatalf("term.merged: %+v", runs[0])
+	}
+}

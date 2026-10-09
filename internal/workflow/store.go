@@ -15,6 +15,8 @@ import (
 	"papergo/ent"
 	"papergo/ent/contenttype"
 	"papergo/ent/resource"
+	"papergo/ent/term"
+	"papergo/ent/termset"
 	"papergo/ent/workflow"
 	"papergo/ent/workflowrun"
 	"papergo/ent/workflowtrigger"
@@ -300,6 +302,15 @@ func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceI
 			}
 			if !ok {
 				return def, nil, dms.Invalid(at + "content_type_id must belong to collection_id")
+			}
+		}
+		for _, id := range tr.Terms {
+			ok, err := t.Client.Term.Query().Where(term.IDEQ(id), term.HasTermSetWith(termset.WorkspaceIDEQ(workspaceID))).Exist(ctx)
+			if err != nil {
+				return def, nil, err
+			}
+			if !ok {
+				return def, nil, dms.Invalid(at + "terms must be terms of the workspace")
 			}
 		}
 		if m := eventPattern.FindStringSubmatch(tr.Type); m != nil && m[2] != "completed" && m[2] != "failed" {
@@ -733,10 +744,48 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 				continue
 			}
 		}
+		if len(tr.Terms) > 0 {
+			held, err := termsChanged(ctx, t, tr, e)
+			if err != nil {
+				return false, err
+			}
+			if !held {
+				continue
+			}
+		}
 		accepted = true
 		break
 	}
 	return accepted, nil
+}
+
+// termsChanged applies a trigger's terms filter to the revision of e.
+func termsChanged(ctx context.Context, t *dms.Service, tr Trigger, e dms.Event) (bool, error) {
+	revisionID, _ := e.Data["revision_id"].(string)
+	if revisionID == "" {
+		return false, nil
+	}
+	current, previous, err := t.RevisionTerms(ctx, revisionID)
+	if err != nil {
+		return false, err
+	}
+	now, err := t.MatchTerms(ctx, tr.Terms, current)
+	if err != nil {
+		return false, err
+	}
+	if tr.TermChange == "" || tr.TermChange == TermPresent {
+		return len(now) > 0, nil
+	}
+	before, err := t.MatchTerms(ctx, tr.Terms, previous)
+	if err != nil {
+		return false, err
+	}
+	for _, id := range tr.Terms {
+		if tr.TermChange == TermAdded && now[id] && !before[id] || tr.TermChange == TermRemoved && !now[id] && before[id] {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Tick raises the schedule events that are due at now and moves each

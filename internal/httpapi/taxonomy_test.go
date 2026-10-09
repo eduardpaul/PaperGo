@@ -85,6 +85,18 @@ func TestTaxonomyRoutes(t *testing.T) {
 	send("POST", base+"/term-sets", `{"group_id":"`+group.ID+`","key":"empty","name":"Empty"}`, "", json_, 201, &empty)
 	send("DELETE", "/v1/term-sets/"+empty.ID, "", `"1"`, "", 204, nil)
 	send("DELETE", "/v1/term-groups/"+group.ID, "", `"1"`, "", 422, nil)
+	var pkg dms.TaxonomyPackage
+	send("GET", base+"/taxonomy/export", "", "", "", 200, &pkg)
+	other, err := s.Create(t.Context(), "alice", "", dms.CreateResource{Kind: "workspace", Name: "Copy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(pkg)
+	var result dms.TaxonomyImportResult
+	send("POST", "/v1/workspaces/"+other.ID+"/taxonomy/import", string(raw), "", json_, 200, &result)
+	if result.GroupsCreated != 1 || result.SetsCreated != 2 || result.TermsCreated != 5 {
+		t.Fatalf("taxonomy import: %+v", result)
+	}
 	var groups dms.Page[ent.TermGroup]
 	send("GET", base+"/term-groups", "", "", "", 200, &groups)
 	if len(groups.Data) != 2 {

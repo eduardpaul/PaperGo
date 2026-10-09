@@ -45,12 +45,14 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | `item.deleted` | an item is deleted, alone or with its folder | none (`{trigger:resource_id}` names it) |
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
 | `manual` | someone starts it through the API | each chosen item, the selection's primary item, or none |
+| `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
 | `wf.{key}.{event}` | a run of workflow `key` raises `event`; `completed` and `failed` are raised when a run ends | that run's item |
 
 Fields of a trigger:
 
 - `collection_id` limits item and workflow-event triggers to one list or library.
 - `content_type_id` (with `collection_id`) limits item triggers to one content type.
+- `terms` (1 to 20 term IDs) limits `item.created`, `item.updated` and `item.published` to revisions whose term and keywords fields hold one of the terms, a descendant of one, or a term merged into one. `term_change` says what counts: `present` (the default, the revision holds it), `added` (held now, not by the item's revision before) or `removed` (held before, not now).
 - For a schedule:
   - **With `collection_id`:** each occurrence starts one run per item of the collection that meets the condition, up to 500, on `surface` (`head` by default, or `published`).
   - **Without `collection_id`:** one run with no item.
@@ -78,9 +80,10 @@ The `data` for each event type:
 - `item.unpublished`: `revision_id`
 - `schedule`: `workflow_id`, `occurrence`
 - `manual`: `workflow_id`, `inputs`
+- `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
 - `wf.*`: `run_id` and the raised data; `completed`/`failed` add `status`, `node` and, on failure, `error`
 
-Only items raise item events. Folders, collections and settings do not.
+Only items raise item events. Folders, collections and settings do not; merging terms raises `term.merged`.
 
 ## Conditions
 
@@ -139,6 +142,7 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `set_variable` | flow | sets `name` to `value` | `name`, `value` |
 | `delay` | flow | waits `duration` (`90m`, `48h`) or `until` a date or time, durably | `until` |
 | `event.raise` | flow | raises `wf.{key}.{event}` with `data` and the run's item | `event` |
+| `item.has_terms` | flow | tests whether the item's term and keywords fields hold `terms` (or descendants, or terms merged into them): any of them, or all with `match: "all"`; ports `matched`/`unmatched` | `matched`, `terms` (those held) |
 | `end` / `fail` | flow | completes the run / fails it with `message` | |
 | `item.get` | action | reads an item | the item |
 | `item.update` | action | sets `name`, `tags`, and `values` (merged; `null` removes a value) | the item |

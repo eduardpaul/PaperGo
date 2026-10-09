@@ -6,6 +6,7 @@ import (
 	"papergo/ent"
 	"papergo/ent/domainevent"
 	"papergo/internal/model"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -484,5 +485,103 @@ func TestTermAndKeywordsFieldValues(t *testing.T) {
 	popular, err := s.PopularKeywords(testContext, "alice", w.ID, 10)
 	if err != nil || len(popular) != 2 {
 		t.Fatal("popular counts keywords fields", popular, err)
+	}
+}
+
+func TestSmartFoldersMatchKeywordsAndMergedTerms(t *testing.T) {
+	s, w, l := fixture(t)
+	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "projects", Name: "Projects"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	apollo := mustTerm(t, s, set.ID, TermInput{Name: "Apollo"})
+	lander := mustTerm(t, s, set.ID, TermInput{Name: "Lander", ParentID: &apollo.ID})
+	old := mustTerm(t, s, set.ID, TermInput{Name: "Moonshot"})
+	for _, f := range []CreateField{
+		{Key: "project", Label: "Project", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: set.ID}},
+		{Key: "keywords", Label: "Keywords", Type: "keywords", Indexed: true, Options: model.FieldOptions{Multiple: true}},
+	} {
+		if _, err = s.CreateField(testContext, "alice", l.ID, f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	create(t, s, l.ID, "item", "Spec", map[string]any{"project": lander.ID, "keywords": []any{"Budget"}})
+	create(t, s, l.ID, "item", "Pitch", map[string]any{"project": old.ID})
+	create(t, s, l.ID, "item", "Lunch", map[string]any{"keywords": []any{"Food"}})
+	if _, err = s.MergeTerm(testContext, "alice", old.ID, old.Version, MergeTermInput{TargetTermID: apollo.ID}); err != nil {
+		t.Fatal(err)
+	}
+	names := func(terms ...string) string {
+		t.Helper()
+		f := smartOK(t, s, SmartFolderInput{Name: strings.Join(terms, " "), WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Terms: terms}})
+		got, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, e := range got.Data {
+			out = append(out, e.Item.Name)
+		}
+		slices.Sort(out)
+		return strings.Join(out, ",")
+	}
+	if got := names(apollo.ID); got != "Pitch,Spec" {
+		t.Fatal("subtree and merged terms", got)
+	}
+	if got := names(old.ID); got != "Pitch,Spec" {
+		t.Fatal("a merged term stands for its target", got)
+	}
+	budget, _, _ := s.AddKeyword(testContext, "alice", w.ID, KeywordInput{Name: "budget"})
+	if got := names(budget.ID); got != "Spec" {
+		t.Fatal("keywords fields", got)
+	}
+}
+
+func TestTaxonomyPackageRoundTrip(t *testing.T) {
+	s, w, _ := fixture(t)
+	group, err := s.CreateTermGroup(testContext, "alice", w.ID, TermGroupInput{Name: "Records", Description: "Filing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: group.ID, Key: "regions", Name: "Regions", IsOpen: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	color := "#112233"
+	europe := mustTerm(t, s, set.ID, TermInput{Name: "Europe", Color: &color, SortOrder: 3, Labels: map[string]string{"es": "Europa"}})
+	mustTerm(t, s, set.ID, TermInput{Name: "Spain", ParentID: &europe.ID, Synonyms: []string{"Iberia"}, AvailableAsKeyword: true})
+	old := mustTerm(t, s, set.ID, TermInput{Name: "Old Europe"})
+	if _, err = s.MergeTerm(testContext, "alice", old.ID, old.Version, MergeTermInput{TargetTermID: europe.ID}); err != nil {
+		t.Fatal(err)
+	}
+	s.AddKeyword(testContext, "alice", w.ID, KeywordInput{Name: "Budget"})
+	pkg, err := s.ExportTaxonomy(testContext, "alice", w.ID)
+	if err != nil || len(pkg.Groups) != 2 || !pkg.Groups[0].System || pkg.Groups[1].Sets[0].Terms[0].Children[0].Name != "Spain" || len(pkg.Groups[1].Sets[0].Terms) != 1 {
+		t.Fatal("export", pkg, err)
+	}
+	raw, _ := json.Marshal(pkg)
+	if strings.Contains(string(raw), europe.ID) || strings.Contains(string(raw), `"name":"Old Europe"`) {
+		t.Fatal("packages hold names, not IDs or merged terms", string(raw))
+	}
+
+	target := create(t, s, "", "workspace", "Copy", nil)
+	out, err := s.ImportTaxonomy(testContext, "alice", target.ID, pkg)
+	if err != nil || out.GroupsCreated != 1 || out.SetsCreated != 1 || out.TermsCreated != 3 {
+		t.Fatal("import", out, err)
+	}
+	again, err := s.ImportTaxonomy(testContext, "alice", target.ID, pkg)
+	if err != nil || again != (TaxonomyImportResult{}) {
+		t.Fatal("import is additive", again, err)
+	}
+	copied, err := s.ExportTaxonomy(testContext, "alice", target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := json.Marshal(copied); string(got) != string(raw) {
+		t.Fatalf("round trip\n%s\n%s", raw, got)
+	}
+	pkg.Groups[1].Sets = append(pkg.Groups[1].Sets, PortableTermSet{Key: "regions", Name: "Again"})
+	if _, err = s.ImportTaxonomy(testContext, "alice", target.ID, pkg); err == nil {
+		t.Fatal("duplicate set keys")
 	}
 }

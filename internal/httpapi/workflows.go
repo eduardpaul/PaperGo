@@ -29,13 +29,14 @@ func (a *API) registerWorkflows(api *http.ServeMux) {
 
 // triggerTypes documents the trigger types for the catalog.
 var triggerTypes = []map[string]string{
-	{"type": dms.EventItemCreated, "description": "An item was created; data has revision_id, revision_number, content_type_id and blob_id."},
-	{"type": dms.EventItemUpdated, "description": "An item's content changed (a new head revision); data as for item.created."},
-	{"type": dms.EventItemPublished, "description": "An item revision was published; data has revision_id, revision_number and publication_id."},
+	{"type": dms.EventItemCreated, "description": "An item was created; data has revision_id, revision_number, content_type_id and blob_id. terms and term_change limit it to revisions that hold, gain or lose terms."},
+	{"type": dms.EventItemUpdated, "description": "An item's content changed (a new head revision); data as for item.created. terms and term_change as for item.created."},
+	{"type": dms.EventItemPublished, "description": "An item revision was published; data has revision_id, revision_number and publication_id. terms and term_change as for item.created."},
 	{"type": dms.EventItemUnpublished, "description": "An item was unpublished; data has revision_id."},
 	{"type": dms.EventItemDeleted, "description": "An item was deleted, alone or with its folder; the run has no item."},
 	{"type": workflow.TriggerSchedule, "description": "A cron occurrence (cron, time_zone). With collection_id, one run per item that meets the condition."},
 	{"type": workflow.TriggerManual, "description": "Started through POST /v1/workflows/{id}/runs, on items or (without collection_id) with no item."},
+	{"type": dms.EventTermMerged, "description": "A term was merged into another; data has source_term_id, target_term_id and term_set_id; the run has no item."},
 	{"type": "wf.{key}.{event}", "description": "Raised by runs of workflow key: completed, failed, or an event.raise node's event; carries the run's item."},
 }
 

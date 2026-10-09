@@ -165,16 +165,23 @@ func (s *Service) smartCandidates(ctx context.Context, subject string, f *ent.Sm
 	return out, nil
 }
 
+// smartTerms loads a definition's terms; a merged term stands for the term
+// it was merged into.
 func (s *Service) smartTerms(ctx context.Context, subject string, ids []string) ([]*ent.Term, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	terms, err := s.Client.Term.Query().Where(term.IDIn(ids...)).WithTermSet().Order(ent.Asc(term.FieldID)).All(ctx)
+	terms, err := s.Client.Term.Query().Where(term.IDIn(ids...)).WithTermSet().WithMergedInto(func(q *ent.TermQuery) { q.WithTermSet() }).Order(ent.Asc(term.FieldID)).All(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if len(terms) != len(ids) {
 		return nil, ErrNotFound
+	}
+	for i, t := range terms {
+		if t.Edges.MergedInto != nil {
+			terms[i] = t.Edges.MergedInto
+		}
 	}
 	checked := map[string]bool{}
 	for _, t := range terms {
@@ -282,8 +289,22 @@ func appendSmartPath(q *compiledQuery, compiler *queryCompiler, d SmartFolderDef
 	return nil
 }
 
-// Terms are matched through indexed surface values and one recursive CTE shared
-// by every collection branch. Descendants are never expanded into parameter lists.
+// smartTermField reports whether fd can hold root: a term field of root's
+// set, or a keywords field when root is a keyword.
+func smartTermField(fd *ent.FieldDefinition, root *ent.Term) bool {
+	if !fd.Indexed {
+		return false
+	}
+	if fd.Type == "term" {
+		return fd.Options.TermSetID == root.TermSetID
+	}
+	return fd.Type == "keywords" && (root.AvailableAsKeyword || root.Edges.TermSet != nil && root.Edges.TermSet.IsKeywords)
+}
+
+// Terms are matched through indexed surface values and one CTE of the
+// selected terms' subtrees (path ranges) and the terms merged into them,
+// shared by every collection branch. Descendants are never expanded into
+// parameter lists.
 func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinition, roots []*ent.Term) bool {
 	if len(roots) == 0 {
 		return true
@@ -293,7 +314,7 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 	for _, root := range roots {
 		eligible := false
 		for _, fd := range c.defs {
-			if fd.Type == "term" && fd.Indexed && fd.Options.TermSetID == root.TermSetID {
+			if smartTermField(fd, root) {
 				eligible = true
 				break
 			}
@@ -304,7 +325,11 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 			}
 			continue
 		}
-		parts = append(parts, `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.container_id=f.container_id AND fd.key=f.field_key JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.type='term' AND fd.indexed=1 AND json_extract(fd.options,'$.term_set_id')=? AND st.root=?)`)
+		fields := "fd.type='term' AND json_extract(fd.options,'$.term_set_id')=?"
+		if smartTermField(&ent.FieldDefinition{Type: "keywords", Indexed: true}, root) {
+			fields = "(fd.type='keywords' OR " + fields + ")"
+		}
+		parts = append(parts, `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.container_id=f.container_id AND fd.key=f.field_key JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.indexed=1 AND `+fields+` AND st.root=?)`)
 		args = append(args, root.TermSetID, root.ID)
 	}
 	if len(parts) == 0 {
@@ -456,7 +481,8 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 			marks = append(marks, "?")
 			rootArgs = append(rootArgs, root.ID)
 		}
-		text = "WITH RECURSIVE smart_terms(root,id) AS (SELECT id,id FROM terms WHERE id IN (" + strings.Join(marks, ",") + ") UNION ALL SELECT st.root,t.id FROM terms t JOIN smart_terms st ON t.parent_id=st.id) " + text
+		subtrees := "SELECT r.id root,t.id FROM terms r JOIN terms t ON t.path>=r.path AND t.path<substr(r.path,1,length(r.path)-1)||'0' WHERE r.id IN (" + strings.Join(marks, ",") + ")"
+		text = "WITH smart_subtrees(root,id) AS (" + subtrees + "),smart_terms(root,id) AS (SELECT root,id FROM smart_subtrees UNION ALL SELECT s.root,m.id FROM smart_subtrees s JOIN terms m ON m.merged_into_id=s.id) " + text
 		args = append(rootArgs, args...)
 	}
 	if len(args) > 30000 {

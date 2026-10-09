@@ -25,6 +25,12 @@ func (a *API) registerTaxonomy(m *http.ServeMux) {
 		return a.DMS.DeleteTermGroup(r.Context(), subject(r), r.PathValue("id"), v)
 	}))
 	m.HandleFunc("POST /v1/term-groups/{id}/import", a.importTerms)
+	m.HandleFunc("GET /v1/workspaces/{id}/taxonomy/export", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.ExportTaxonomy(r.Context(), subject(r), r.PathValue("id"))
+	}))
+	m.HandleFunc("POST /v1/workspaces/{id}/taxonomy/import", foundationMutation(a, 200, false, func(r *http.Request, in dms.TaxonomyPackage, v int) (any, error) {
+		return a.DMS.ImportTaxonomy(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
 	m.HandleFunc("GET /v1/workspaces/{id}/term-sets", foundationRead(a, func(r *http.Request) (any, error) {
 		q := r.URL.Query()
 		return a.DMS.TermSets(r.Context(), subject(r), r.PathValue("id"), q.Get("group_id"), q.Get("after"), queryInt(r, "limit"))

@@ -18,7 +18,7 @@ The item schema endpoint follows the same visibility rules as content and return
 
 Indexes are opt-in to bound write amplification. Typed equality/range queries are scoped to a collection and fixed operators; neither arbitrary SQL nor JSON paths are accepted. Integer values and scaled decimal units use signed 64-bit storage. Decimal content is represented as a canonical string, so its precision survives HTTP serialization and history reads.
 
-Smart folders store private or shared query definitions separately from resources. A bounded collection scan and batched catalogs feed SQL UNION branches over selected content surfaces; a recursive taxonomy CTE matches descendants through indexed term parents and field values. Navigation groups and authorized counts use the same SQL pipeline. Packages resolve target taxonomy leaves and ancestors in batches, and import/classification writes use the transaction and item validation pipeline. See [smart folders](smart-folders.md) for ownership, limits and routes.
+Smart folders store private or shared query definitions separately from resources. A bounded collection scan and batched catalogs feed SQL UNION branches over selected content surfaces; a taxonomy CTE matches descendants through materialized term paths (one index range per subtree), terms merged into them, and field values. Navigation groups and authorized counts use the same SQL pipeline. Packages resolve target taxonomy leaves and ancestors in batches, and import/classification writes use the transaction and item validation pipeline. See [smart folders](smart-folders.md) for ownership, limits and routes.
 
 ## Transactions and concurrency
 
