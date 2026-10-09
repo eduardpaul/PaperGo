@@ -132,7 +132,7 @@ func (a *API) limiter() func(http.Handler) http.Handler {
 			}
 			// Only reads are time-boxed: mutations are serialized and some (index
 			// rebuilds, template adoption, bulk publish) legitimately span a collection.
-			if a.RequestTimeout > 0 && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == "PROPFIND") {
+			if a.RequestTimeout > 0 && readRequest(r) {
 				ctx, cancel := context.WithTimeout(r.Context(), a.RequestTimeout)
 				defer cancel()
 				r = r.WithContext(ctx)
@@ -140,6 +140,31 @@ func (a *API) limiter() func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// readRequest reports requests that only read: safe methods, and the typed
+// queries of collections, saved views and smart folders, which POST their
+// query document but never mutate.
+func readRequest(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, "PROPFIND":
+		return true
+	case http.MethodPost:
+	default:
+		return false
+	}
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) == 6 && parts[5] == "groups" {
+		parts = parts[:5]
+	}
+	if len(parts) != 5 || parts[1] != "v1" || parts[4] != "query" {
+		return false
+	}
+	switch parts[2] {
+	case "resources", "views", "smart-folders":
+		return true
+	}
+	return false
 }
 
 // transferRequest reports requests that stream a body: blob downloads and

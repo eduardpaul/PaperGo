@@ -86,6 +86,36 @@ func TestRequestTimeoutBecomesRetryable503(t *testing.T) {
 	}
 }
 
+func TestQueriesReceiveTheReadDeadline(t *testing.T) {
+	a := &API{Logger: slog.New(slog.NewJSONHandler(testLog{t}, nil)), RequestTimeout: time.Minute}
+	for _, c := range []struct {
+		method, path string
+		deadline     bool
+	}{
+		{"GET", "/v1/workspaces", true},
+		{"PROPFIND", "/webdav/lib/", true},
+		{"POST", "/v1/resources/x/query", true},
+		{"POST", "/v1/resources/x/query/groups", true},
+		{"POST", "/v1/views/x/query", true},
+		{"POST", "/v1/views/x/query/groups", true},
+		{"POST", "/v1/smart-folders/x/query", true},
+		{"POST", "/v1/smart-folders/x/query/groups", true},
+		{"POST", "/v1/resources/x/views", false},
+		{"POST", "/v1/resources/x/bulk", false},
+		{"POST", "/v1/resources/x/query/other", false},
+		{"PUT", "/v1/views/x/query", false},
+		{"PATCH", "/v1/resources/x/fields/y", false},
+	} {
+		var deadline bool
+		a.limiter()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, deadline = r.Context().Deadline()
+		})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(c.method, c.path, nil))
+		if deadline != c.deadline {
+			t.Errorf("%s %s: deadline %v", c.method, c.path, deadline)
+		}
+	}
+}
+
 func TestOnlyStreamedTransfersBypassAdmission(t *testing.T) {
 	for _, c := range []struct {
 		method, path string
