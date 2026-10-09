@@ -6,7 +6,7 @@
 -- Tables
 CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `resource_id` text NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `details` json NOT NULL, PRIMARY KEY (`id`));
 CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL, `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT NULL, `key` text NOT NULL, `label` text NOT NULL, `type` text NOT NULL, `required` bool NOT NULL DEFAULT (false), `choices` json NOT NULL, `container_id` text NOT NULL, indexed BOOLEAN NOT NULL DEFAULT 0, scale INTEGER NOT NULL DEFAULT 0, options JSON NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object'), PRIMARY KEY (`id`), CONSTRAINT `field_definitions_resources_definitions` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
+CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT NULL, `key` text NOT NULL, `label` text NOT NULL, `type` text NOT NULL, `required` bool NOT NULL DEFAULT (false), `choices` json NOT NULL, `container_id` text NOT NULL, indexed BOOLEAN NOT NULL DEFAULT 0, index_status TEXT NOT NULL DEFAULT 'ready' CHECK(index_status IN ('ready','building','failed')), scale INTEGER NOT NULL DEFAULT 0, options JSON NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object'), PRIMARY KEY (`id`), CONSTRAINT `field_definitions_resources_definitions` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT REFERENCES item_revisions(id), PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `name` text NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT NOT NULL REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
@@ -84,6 +84,13 @@ CREATE TABLE list_views (
  name TEXT NOT NULL,columns JSON NOT NULL CHECK(json_valid(columns) AND json_type(columns)='array'),
  query JSON NOT NULL CHECK(json_valid(query) AND json_type(query)='object'),layout TEXT NOT NULL DEFAULT 'table' CHECK(layout IN ('table','board','calendar','gallery')),
  is_default BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
+);
+CREATE TABLE operations (
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,container_id TEXT NOT NULL REFERENCES resources(id),
+ field_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('field_index')),
+ status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','succeeded','failed','superseded')),
+ surface TEXT NOT NULL DEFAULT 'head' CHECK(surface IN ('head','published')),after_item_id TEXT NOT NULL DEFAULT '',
+ processed INTEGER NOT NULL DEFAULT 0 CHECK(processed>=0),error TEXT NOT NULL DEFAULT '',created_by TEXT NOT NULL
 );
 CREATE TABLE webdav_credentials (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,subject TEXT NOT NULL,label TEXT NOT NULL,
@@ -166,6 +173,8 @@ CREATE INDEX term_term_set_id_id ON terms(term_set_id,id);
 CREATE INDEX term_parent_id ON terms(parent_id);
 CREATE UNIQUE INDEX listview_container_id_name ON list_views(container_id,name);
 CREATE INDEX listview_container_id_id ON list_views(container_id,id);
+CREATE INDEX operation_status_created_at ON operations(status,created_at);
+CREATE INDEX operation_container_id_id ON operations(container_id,id);
 CREATE UNIQUE INDEX listview_one_default ON list_views(container_id) WHERE is_default=1;
 CREATE UNIQUE INDEX relationshiptype_workspace_id_key ON relationship_types(workspace_id,key);
 CREATE UNIQUE INDEX relationship_type_id_source_id_target_id ON relationships(type_id,source_id,target_id);

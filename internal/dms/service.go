@@ -18,10 +18,12 @@ type Service struct {
 	Client      *ent.Client
 	writeMu     chan struct{}
 	transaction bool
+	// operations wakes RunOperations when work is queued.
+	operations chan struct{}
 }
 
 func NewService(client *ent.Client) *Service {
-	return &Service{Client: client, writeMu: make(chan struct{}, 1)}
+	return &Service{Client: client, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1)}
 }
 
 // Mutations include authorization, version checks and audit records in one
@@ -39,7 +41,7 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	if err != nil {
 		return err
 	}
-	err = fn(&Service{Client: tx.Client(), writeMu: s.writeMu, transaction: true})
+	err = fn(&Service{Client: tx.Client(), writeMu: s.writeMu, transaction: true, operations: s.operations})
 	if err != nil {
 		_ = tx.Rollback()
 	} else {
@@ -61,7 +63,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: tx.Client(), writeMu: s.writeMu, transaction: true})
+	out, err = fn(&Service{Client: tx.Client(), writeMu: s.writeMu, transaction: true, operations: s.operations})
 	if err != nil {
 		return out, err
 	}

@@ -294,7 +294,7 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 	for _, root := range roots {
 		eligible := false
 		for _, fd := range c.defs {
-			if fd.Type == "term" && fd.Indexed && fd.Options.TermSetID == root.TermSetID {
+			if fd.Type == "term" && queryable(fd) && fd.Options.TermSetID == root.TermSetID {
 				eligible = true
 				break
 			}

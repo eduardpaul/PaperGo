@@ -237,7 +237,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		for _, root := range roots {
 			var target *ent.FieldDefinition
 			for _, fd := range defs {
-				if fd.Type == "term" && fd.Indexed && fd.Options.TermSetID == root.TermSetID {
+				if fd.Type == "term" && queryable(fd) && fd.Options.TermSetID == root.TermSetID {
 					target = fd
 					break
 				}

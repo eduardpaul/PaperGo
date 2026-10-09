@@ -85,6 +85,20 @@ func (_u *FieldDefinitionUpdate) SetNillableIndexed(v *bool) *FieldDefinitionUpd
 	return _u
 }
 
+// SetIndexStatus sets the "index_status" field.
+func (_u *FieldDefinitionUpdate) SetIndexStatus(v fielddefinition.IndexStatus) *FieldDefinitionUpdate {
+	_u.mutation.SetIndexStatus(v)
+	return _u
+}
+
+// SetNillableIndexStatus sets the "index_status" field if the given value is not nil.
+func (_u *FieldDefinitionUpdate) SetNillableIndexStatus(v *fielddefinition.IndexStatus) *FieldDefinitionUpdate {
+	if v != nil {
+		_u.SetIndexStatus(*v)
+	}
+	return _u
+}
+
 // SetScale sets the "scale" field.
 func (_u *FieldDefinitionUpdate) SetScale(v int) *FieldDefinitionUpdate {
 	_u.mutation.ResetScale()
@@ -176,6 +190,11 @@ func (_u *FieldDefinitionUpdate) check() error {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.IndexStatus(); ok {
+		if err := fielddefinition.IndexStatusValidator(v); err != nil {
+			return &ValidationError{Name: "index_status", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.index_status": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Scale(); ok {
 		if err := fielddefinition.ScaleValidator(v); err != nil {
 			return &ValidationError{Name: "scale", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.scale": %w`, err)}
@@ -210,6 +229,9 @@ func (_u *FieldDefinitionUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.Indexed(); ok {
 		_spec.SetField(fielddefinition.FieldIndexed, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.IndexStatus(); ok {
+		_spec.SetField(fielddefinition.FieldIndexStatus, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.Scale(); ok {
 		_spec.SetField(fielddefinition.FieldScale, field.TypeInt, value)
@@ -300,6 +322,20 @@ func (_u *FieldDefinitionUpdateOne) SetIndexed(v bool) *FieldDefinitionUpdateOne
 func (_u *FieldDefinitionUpdateOne) SetNillableIndexed(v *bool) *FieldDefinitionUpdateOne {
 	if v != nil {
 		_u.SetIndexed(*v)
+	}
+	return _u
+}
+
+// SetIndexStatus sets the "index_status" field.
+func (_u *FieldDefinitionUpdateOne) SetIndexStatus(v fielddefinition.IndexStatus) *FieldDefinitionUpdateOne {
+	_u.mutation.SetIndexStatus(v)
+	return _u
+}
+
+// SetNillableIndexStatus sets the "index_status" field if the given value is not nil.
+func (_u *FieldDefinitionUpdateOne) SetNillableIndexStatus(v *fielddefinition.IndexStatus) *FieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetIndexStatus(*v)
 	}
 	return _u
 }
@@ -408,6 +444,11 @@ func (_u *FieldDefinitionUpdateOne) check() error {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.IndexStatus(); ok {
+		if err := fielddefinition.IndexStatusValidator(v); err != nil {
+			return &ValidationError{Name: "index_status", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.index_status": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Scale(); ok {
 		if err := fielddefinition.ScaleValidator(v); err != nil {
 			return &ValidationError{Name: "scale", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.scale": %w`, err)}
@@ -459,6 +500,9 @@ func (_u *FieldDefinitionUpdateOne) sqlSave(ctx context.Context) (_node *FieldDe
 	}
 	if value, ok := _u.mutation.Indexed(); ok {
 		_spec.SetField(fielddefinition.FieldIndexed, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.IndexStatus(); ok {
+		_spec.SetField(fielddefinition.FieldIndexStatus, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.Scale(); ok {
 		_spec.SetField(fielddefinition.FieldScale, field.TypeInt, value)

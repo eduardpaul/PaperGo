@@ -118,7 +118,10 @@ func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID
 			return e
 		}
 		if reindex {
-			if e = t.rebuildSurfaces(ctx, containerID); e != nil {
+			if e = t.enqueueFieldIndex(ctx, subject, out); e != nil {
+				return e
+			}
+			if out, e = t.Client.FieldDefinition.Get(ctx, fieldID); e != nil {
 				return e
 			}
 		}
@@ -194,44 +197,16 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	}
 }
 
-// surfaceBatch bounds whole-collection passes: memory stays flat and IN lists
-// stay far below SQLite's bound-variable limit (32766) however large the collection.
+// surfaceBatch bounds whole-collection passes: memory stays flat, IN lists
+// stay far below SQLite's bound-variable limit (32766) and each background
+// index batch holds the writer briefly, however large the collection.
 var surfaceBatch = 500
 
-// rebuildSurfaces re-derives the field_values index of every surface in the
-// collection. Only index membership changes need it; surface rows are untouched.
-func (s *Service) rebuildSurfaces(ctx context.Context, containerID string) error {
-	current, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(containerID)).All(ctx)
-	if e != nil {
-		return e
-	}
-	// Collections share few schema revisions, so their definitions are cached across batches.
-	indexed := map[string][]*ent.FieldDefinition{}
-	// Paging each surface by item_id walks the (container_id, surface, item_id)
-	// index; any other order makes every batch rescan the whole collection.
-	for _, surface := range []itemsurface.Surface{itemsurface.SurfaceHead, itemsurface.SurfacePublished} {
-		for after := ""; ; {
-			projections, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID), itemsurface.SurfaceEQ(surface), itemsurface.ItemIDGT(after)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(surfaceBatch).All(ctx)
-			if e != nil {
-				return e
-			}
-			if len(projections) > 0 {
-				if e = s.reindexBatch(ctx, projections, current, indexed); e != nil {
-					return e
-				}
-			}
-			if len(projections) < surfaceBatch {
-				break
-			}
-			after = projections[len(projections)-1].ItemID
-		}
-	}
-	return nil
-}
-
-// reindexBatch replaces the field_values of a batch of surfaces with one delete
-// and a few bulk inserts, rather than two statements per surface.
-func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurface, current []*ent.FieldDefinition, indexed map[string][]*ent.FieldDefinition) error {
+// reindexBatch replaces field d's field_values on a batch of surfaces with one
+// delete and a few bulk inserts; an unindexed d just loses its rows. indexed
+// caches d's per-schema-revision definitions across the batch.
+func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurface, d *ent.FieldDefinition, indexed map[string][]*ent.FieldDefinition) error {
+	current := []*ent.FieldDefinition{d}
 	revisionIDs := make([]string, 0, len(projections))
 	for _, p := range projections {
 		revisionIDs = append(revisionIDs, p.RevisionID)
@@ -279,7 +254,7 @@ func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurfa
 		surfaceIDs = append(surfaceIDs, p.ID)
 		rows = append(rows, built...)
 	}
-	if _, e = s.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDIn(surfaceIDs...)).Exec(ctx); e != nil {
+	if _, e = s.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDIn(surfaceIDs...), fieldvalue.FieldKeyEQ(d.Key)).Exec(ctx); e != nil {
 		return e
 	}
 	return s.insertFieldValues(ctx, rows)

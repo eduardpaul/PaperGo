@@ -178,7 +178,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			return e
 		}
 		required := []string{}
-		reindex := false
+		reindex := []*ent.FieldDefinition{}
 		for _, d := range defs {
 			if e = validateFieldDefinition(d); e != nil {
 				return e
@@ -208,9 +208,12 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			if newlyRequired(old, d) {
 				required = append(required, d.Key)
 			}
-			reindex = reindex || old.Indexed != d.Indexed
-			if _, e = t.Client.FieldDefinition.UpdateOne(old).SetLabel(d.Label).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetOptions(d.Options).Save(ctx); e != nil {
+			updated, e := t.Client.FieldDefinition.UpdateOne(old).SetLabel(d.Label).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetOptions(d.Options).Save(ctx)
+			if e != nil {
 				return e
+			}
+			if old.Indexed != d.Indexed {
+				reindex = append(reindex, updated)
 			}
 		}
 		if e = t.checkRequiredFilled(ctx, c.ID, required); e != nil {
@@ -248,8 +251,8 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e = t.recordSchema(ctx, subject, c); e != nil {
 			return e
 		}
-		if reindex {
-			if e = t.rebuildSurfaces(ctx, c.ID); e != nil {
+		for _, d := range reindex {
+			if e = t.enqueueFieldIndex(ctx, subject, d); e != nil {
 				return e
 			}
 		}

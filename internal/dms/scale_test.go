@@ -47,6 +47,9 @@ func TestCollectionPassesSpanBatches(t *testing.T) {
 	if _, err = s.UpdateField(testContext, "alice", list.ID, n.ID, latest(t, s, list.ID).Version, UpdateField{Indexed: &indexed}); err != nil {
 		t.Fatal(err)
 	}
+	if err = s.runOperations(testContext); err != nil {
+		t.Fatal(err)
+	}
 	if rows, err := s.Client.FieldValue.Query().Count(testContext); err != nil || rows != surfaces {
 		t.Fatalf("rebuild indexed %d of %d surfaces: %v", rows, surfaces, err)
 	}
@@ -56,6 +59,9 @@ func TestCollectionPassesSpanBatches(t *testing.T) {
 	}
 	indexed = false
 	if _, err = s.UpdateField(testContext, "alice", list.ID, n.ID, latest(t, s, list.ID).Version, UpdateField{Indexed: &indexed}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.runOperations(testContext); err != nil {
 		t.Fatal(err)
 	}
 	if rows, err := s.Client.FieldValue.Query().Count(testContext); err != nil || rows != 0 {

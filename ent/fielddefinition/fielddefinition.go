@@ -30,6 +30,8 @@ const (
 	FieldOptions = "options"
 	// FieldIndexed holds the string denoting the indexed field in the database.
 	FieldIndexed = "indexed"
+	// FieldIndexStatus holds the string denoting the index_status field in the database.
+	FieldIndexStatus = "index_status"
 	// FieldScale holds the string denoting the scale field in the database.
 	FieldScale = "scale"
 	// FieldRequired holds the string denoting the required field in the database.
@@ -59,6 +61,7 @@ var Columns = []string{
 	FieldType,
 	FieldOptions,
 	FieldIndexed,
+	FieldIndexStatus,
 	FieldScale,
 	FieldRequired,
 	FieldChoices,
@@ -135,6 +138,33 @@ func TypeValidator(_type Type) error {
 	}
 }
 
+// IndexStatus defines the type for the "index_status" enum field.
+type IndexStatus string
+
+// IndexStatusReady is the default value of the IndexStatus enum.
+const DefaultIndexStatus = IndexStatusReady
+
+// IndexStatus values.
+const (
+	IndexStatusReady    IndexStatus = "ready"
+	IndexStatusBuilding IndexStatus = "building"
+	IndexStatusFailed   IndexStatus = "failed"
+)
+
+func (is IndexStatus) String() string {
+	return string(is)
+}
+
+// IndexStatusValidator is a validator for the "index_status" field enum values. It is called by the builders before save.
+func IndexStatusValidator(is IndexStatus) error {
+	switch is {
+	case IndexStatusReady, IndexStatusBuilding, IndexStatusFailed:
+		return nil
+	default:
+		return fmt.Errorf("fielddefinition: invalid enum value for index_status field: %q", is)
+	}
+}
+
 // OrderOption defines the ordering options for the FieldDefinition queries.
 type OrderOption func(*sql.Selector)
 
@@ -171,6 +201,11 @@ func ByType(opts ...sql.OrderTermOption) OrderOption {
 // ByIndexed orders the results by the indexed field.
 func ByIndexed(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIndexed, opts...).ToFunc()
+}
+
+// ByIndexStatus orders the results by the index_status field.
+func ByIndexStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIndexStatus, opts...).ToFunc()
 }
 
 // ByScale orders the results by the scale field.
