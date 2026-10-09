@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,7 +28,7 @@ import (
 
 	"papergo/ent"
 	"papergo/ent/auditevent"
-	_ "papergo/internal/database" // registers PaperGo's SQLite functions
+	"papergo/internal/database"
 	"papergo/internal/dms"
 	"papergo/internal/testutil"
 )
@@ -42,26 +41,16 @@ const (
 
 // pool describes one database/sql handle on the shared SQLite file.
 type pool struct {
-	txlock  string // "" (deferred) or "immediate"
-	busy    int    // busy_timeout in milliseconds
+	database.Options
 	maxOpen int
 }
 
-var defaultPool = pool{txlock: "immediate", busy: 5000, maxOpen: 8}
+// defaultPool has the settings the plan adopts for every handle.
+var defaultPool = pool{database.Options{TxLock: "immediate", BusyTimeout: 30 * time.Second}, 8}
 
 func openPool(t testing.TB, path string, p pool) *sql.DB {
 	t.Helper()
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
-	q := url.Values{}
-	q.Set("_time_format", "sqlite")
-	if p.txlock != "" {
-		q.Set("_txlock", p.txlock)
-	}
-	for _, pragma := range []string{"foreign_keys(1)", fmt.Sprintf("busy_timeout(%d)", p.busy), "journal_mode(WAL)", "synchronous(FULL)"} {
-		q.Add("_pragma", pragma)
-	}
-	u.RawQuery = q.Encode()
-	db, err := sql.Open("sqlite", u.String())
+	db, err := sql.Open("sqlite", database.DSN(path, p.Options))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,11 +72,17 @@ func openPaperGo(t testing.TB, path string, p pool) *sql.DB {
 	if fresh {
 		applySchema(t, db)
 	}
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS runner_step_results (workflow_id TEXT NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL, PRIMARY KEY (workflow_id, step))`); err != nil {
-		t.Fatal(err)
-	}
 	return db
 }
+
+// stepResultsTable is the runner table phase 1 adds to the schema file.
+const stepResultsTable = `CREATE TABLE runner_step_results (
+	workflow_id TEXT NOT NULL,
+	step_id INTEGER NOT NULL,
+	step TEXT NOT NULL,
+	output BLOB NOT NULL,
+	PRIMARY KEY (workflow_id, step_id)
+)`
 
 func applySchema(t testing.TB, db *sql.DB) {
 	t.Helper()
@@ -95,6 +90,9 @@ func applySchema(t testing.TB, db *sql.DB) {
 		if _, err := db.Exec(string(f.Bytes())); err != nil {
 			t.Fatalf("apply %s: %v", f.Name(), err)
 		}
+	}
+	if _, err := db.Exec(stepResultsTable); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -132,7 +130,11 @@ func launchOn(t testing.TB, system *sql.DB, executor string, register func(dbos.
 	if err = dbos.Launch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = dbos.Shutdown(ctx, 10*time.Second) })
+	t.Cleanup(func() {
+		if err := dbos.Shutdown(ctx, 10*time.Second); err != nil {
+			t.Errorf("shutdown %s: %v", executor, err)
+		}
+	})
 	return ctx
 }
 
@@ -150,48 +152,73 @@ func audits(t testing.TB, db *sql.DB, action string) int {
 	return n
 }
 
-// afterStepCommit lets tests fail a step after its transaction committed,
-// which is the window a crash before the DBOS checkpoint would hit.
-var afterStepCommit func(workflowID, step string) error
+// steps holds what the runner.Tx prototype needs: PaperGo's pool, and for
+// tests a hook that fails a step after its transaction committed, which is
+// the window a crash before the DBOS checkpoint would hit.
+type steps struct {
+	db          *sql.DB
+	afterCommit func(step string) error
+}
 
 // stepTx is the prototype of runner.Tx. DBOS RunAsTransaction hands its
 // callback a DBOS Tx without the underlying *sql.Tx, so Ent cannot run on it.
 // Instead, the step's effects and a completion marker commit together; a
 // retried or recovered step finds the marker and returns the stored output.
-func stepTx[R any](ctx dbos.Context, db *sql.DB, step string, fn func(context.Context, *ent.Client) (R, error), opts ...dbos.StepOption) (R, error) {
-	workflowID, err := dbos.GetWorkflowID(ctx)
-	if err != nil {
-		var zero R
-		return zero, err
-	}
+// The marker is keyed by the DBOS step ID, which replay assigns again in the
+// same order, so a step name can repeat within a workflow. The output always
+// comes back decoded from the marker, so a first run and a replay see the
+// same value.
+func stepTx[R any](ctx dbos.Context, s steps, step string, fn func(context.Context, *ent.Client) (R, error), opts ...dbos.StepOption) (R, error) {
 	opts = append(opts, dbos.WithStepName(step))
 	return dbos.RunAsStep(ctx, func(stepCtx context.Context) (out R, err error) {
-		tx, err := db.BeginTx(stepCtx, nil)
+		dctx, ok := stepCtx.(dbos.Context)
+		if !ok {
+			return out, errors.New("step context is not a DBOS context")
+		}
+		workflowID, err := dbos.GetWorkflowID(dctx)
+		if err != nil {
+			return out, err
+		}
+		stepID, err := dbos.GetStepID(dctx)
+		if err != nil {
+			return out, err
+		}
+		tx, err := s.db.BeginTx(stepCtx, nil)
 		if err != nil {
 			return out, err
 		}
 		defer tx.Rollback()
-		var stored []byte
-		switch err = tx.QueryRowContext(stepCtx, `SELECT output FROM runner_step_results WHERE workflow_id=? AND step=?`, workflowID, step).Scan(&stored); {
+		var (
+			stored     []byte
+			storedStep string
+		)
+		switch err = tx.QueryRowContext(stepCtx, `SELECT step, output FROM runner_step_results WHERE workflow_id=? AND step_id=?`, workflowID, stepID).Scan(&storedStep, &stored); {
 		case err == nil:
+			if storedStep != step {
+				return out, fmt.Errorf("step %d of %s replayed as %q, recorded as %q", stepID, workflowID, step, storedStep)
+			}
 			return out, json.Unmarshal(stored, &out)
 		case !errors.Is(err, sql.ErrNoRows):
 			return out, err
 		}
-		if out, err = fn(stepCtx, entOver(tx)); err != nil {
+		result, err := fn(stepCtx, entOver(tx))
+		if err != nil {
 			return out, err
 		}
-		if stored, err = json.Marshal(out); err != nil {
+		if stored, err = json.Marshal(result); err != nil {
 			return out, err
 		}
-		if _, err = tx.ExecContext(stepCtx, `INSERT INTO runner_step_results (workflow_id, step, output) VALUES (?,?,?)`, workflowID, step, stored); err != nil {
+		if _, err = tx.ExecContext(stepCtx, `INSERT INTO runner_step_results (workflow_id, step_id, step, output) VALUES (?,?,?,?)`, workflowID, stepID, step, stored); err != nil {
 			return out, err
 		}
 		if err = tx.Commit(); err != nil {
 			return out, err
 		}
-		if afterStepCommit != nil {
-			return out, afterStepCommit(workflowID, step)
+		if err = json.Unmarshal(stored, &out); err != nil {
+			return out, err
+		}
+		if s.afterCommit != nil {
+			return out, s.afterCommit(step)
 		}
 		return out, nil
 	}, opts...)
@@ -260,9 +287,13 @@ type echoInput struct {
 func TestSpikeTransactionalEnqueue(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "papergo.db")
 	db := openPaperGo(t, path, defaultPool)
+	var runs atomic.Int32
 	ctx := launch(t, path, "node-a", func(ctx dbos.Context) {
 		dbos.RegisterWorkflow(ctx, func(ctx dbos.Context, in echoInput) (string, error) {
-			return dbos.RunAsStep(ctx, func(context.Context) (string, error) { return "handled " + in.Resource, nil })
+			return dbos.RunAsStep(ctx, func(context.Context) (string, error) {
+				runs.Add(1)
+				return "handled " + in.Resource, nil
+			})
 		}, dbos.WithWorkflowName("spike.echo"))
 	})
 	start := func(resource string, commit, existing bool) (dbos.WorkflowHandle[string], error) {
@@ -315,7 +346,8 @@ func TestSpikeTransactionalEnqueue(t *testing.T) {
 	}
 
 	// The event ID is the idempotency key: enqueuing it again in another
-	// committed transaction returns the existing run instead of a second one.
+	// committed transaction keeps that transaction's domain write and returns
+	// the finished run without executing it again.
 	again, err := start("committed", true, true)
 	if err != nil {
 		t.Fatal(err)
@@ -323,25 +355,65 @@ func TestSpikeTransactionalEnqueue(t *testing.T) {
 	if again.GetWorkflowID() != "evt:committed" {
 		t.Fatal("unexpected workflow id")
 	}
-	runs, err := dbos.ListWorkflows(ctx, dbos.WithFilterWorkflowIDs("evt:committed"))
-	if err != nil || len(runs) != 1 {
-		t.Fatalf("duplicate key produced %d runs: %v", len(runs), err)
+	if got, err := again.GetResult(dbos.WithHandleTimeout(10 * time.Second)); err != nil || got != "handled committed" {
+		t.Fatalf("repeated key result %q, %v", got, err)
+	}
+	if n := runs.Load(); n != 1 {
+		t.Fatalf("repeated key executed the workflow %d times", n)
+	}
+	if n := audits(t, db, "spike.enqueue"); n != 2 {
+		t.Fatalf("second committed domain write: %d rows", n)
 	}
 }
 
 func TestSpikeTransactionalSignal(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "papergo.db")
 	db := openPaperGo(t, path, defaultPool)
+	// Each waiter blocks in a step until the test opens its gate, so the
+	// test's signals are committed before the workflow reaches Recv.
+	var (
+		gatesMu sync.Mutex
+		gates   = map[string]chan struct{}{}
+		opened  = map[string]bool{}
+	)
+	gate := func(id string) chan struct{} {
+		gatesMu.Lock()
+		defer gatesMu.Unlock()
+		if gates[id] == nil {
+			gates[id] = make(chan struct{})
+		}
+		return gates[id]
+	}
+	open := func(id string) {
+		g := gate(id)
+		gatesMu.Lock()
+		defer gatesMu.Unlock()
+		if !opened[id] {
+			opened[id] = true
+			close(g)
+		}
+	}
 	var waiter func(dbos.Context, time.Duration) (string, error)
 	ctx := launch(t, path, "node-a", func(ctx dbos.Context) {
 		waiter = func(ctx dbos.Context, timeout time.Duration) (string, error) {
-			// The pause lets a test signal before the workflow starts waiting.
-			if _, err := dbos.Sleep(ctx, 300*time.Millisecond); err != nil {
+			id, err := dbos.GetWorkflowID(ctx)
+			if err != nil {
+				return "", err
+			}
+			if _, err = dbos.RunAsStep(ctx, func(context.Context) (string, error) {
+				<-gate(id)
+				return "", nil
+			}, dbos.WithStepName("gate")); err != nil {
 				return "", err
 			}
 			return dbos.Recv[string](ctx, "task.completed", timeout)
 		}
 		dbos.RegisterWorkflow(ctx, waiter, dbos.WithWorkflowName("spike.wait"))
+	})
+	// Registered after launch, so it runs before Shutdown if the test fails.
+	t.Cleanup(func() {
+		open("wait-rollback")
+		open("wait-commit")
 	})
 	send := func(id, outcome string, commit bool) {
 		tx, err := db.Begin()
@@ -367,6 +439,7 @@ func TestSpikeTransactionalSignal(t *testing.T) {
 		t.Fatal(err)
 	}
 	send("wait-rollback", "approved", false)
+	open("wait-rollback")
 	if got, err := rolledBack.GetResult(dbos.WithHandleTimeout(10 * time.Second)); !errors.Is(err, dbos.ErrTimeout) || got != "" {
 		t.Fatalf("rolled back signal was delivered: %q %v", got, err)
 	}
@@ -377,16 +450,17 @@ func TestSpikeTransactionalSignal(t *testing.T) {
 		t.Fatal(err)
 	}
 	send("wait-commit", "approved", true)
-	send("wait-commit", "approved", true) // same idempotency key: delivered once
-	if got, err := committed.GetResult(dbos.WithHandleTimeout(15 * time.Second)); err != nil || got != "approved" {
-		t.Fatalf("committed signal: %q %v", got, err)
-	}
+	send("wait-commit", "approved", true) // same idempotency key: stored once
 	var messages int
 	if err = db.QueryRow(`SELECT count(*) FROM notifications WHERE destination_uuid='wait-commit'`).Scan(&messages); err != nil {
 		t.Fatal(err)
 	}
 	if messages != 1 {
-		t.Fatalf("idempotent send stored %d messages", messages)
+		t.Fatalf("idempotent send stored %d messages before Recv", messages)
+	}
+	open("wait-commit")
+	if got, err := committed.GetResult(dbos.WithHandleTimeout(15 * time.Second)); err != nil || got != "approved" {
+		t.Fatalf("committed signal: %q %v", got, err)
 	}
 }
 
@@ -394,19 +468,30 @@ func TestSpikeExactlyOnceStep(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "papergo.db")
 	db := openPaperGo(t, path, defaultPool)
 	var failures atomic.Int32
-	afterStepCommit = func(_, step string) error {
+	s := steps{db: db, afterCommit: func(step string) error {
 		if step == "publish" && failures.Add(1) == 1 {
 			return errors.New("lost checkpoint")
 		}
 		return nil
-	}
-	t.Cleanup(func() { afterStepCommit = nil })
+	}}
 	var wf func(dbos.Context, string) (string, error)
 	ctx := launch(t, path, "node-a", func(ctx dbos.Context) {
 		wf = func(ctx dbos.Context, resource string) (string, error) {
-			return stepTx(ctx, db, "publish", func(ctx context.Context, c *ent.Client) (string, error) {
+			out, err := stepTx(ctx, s, "publish", func(ctx context.Context, c *ent.Client) (string, error) {
 				return "published " + resource, audit(ctx, c, "spike.publish", resource)
 			}, dbos.WithStepMaxRetries(3), dbos.WithStepBaseInterval(10*time.Millisecond))
+			if err != nil {
+				return "", err
+			}
+			// One step name for several writes, as a loop over recipients would.
+			for _, to := range []string{"alice", "bob"} {
+				if _, err = stepTx(ctx, s, "notify", func(ctx context.Context, c *ent.Client) (string, error) {
+					return to, audit(ctx, c, "spike.notify", resource+":"+to)
+				}); err != nil {
+					return "", err
+				}
+			}
+			return out, nil
 		}
 		dbos.RegisterWorkflow(ctx, wf, dbos.WithWorkflowName("spike.once"))
 	})
@@ -424,6 +509,9 @@ func TestSpikeExactlyOnceStep(t *testing.T) {
 	if n := audits(t, db, "spike.publish"); n != 1 {
 		t.Fatalf("retried step wrote %d times", n)
 	}
+	if n := audits(t, db, "spike.notify"); n != 2 {
+		t.Fatalf("repeated step name wrote %d of 2 times", n)
+	}
 }
 
 const crashEnv = "PAPERGO_SPIKE_CRASH"
@@ -432,7 +520,7 @@ const crashEnv = "PAPERGO_SPIKE_CRASH"
 // second step when crashEnv is set.
 func crashWorkflow(db *sql.DB) func(dbos.Context, string) (string, error) {
 	return func(ctx dbos.Context, resource string) (string, error) {
-		if _, err := stepTx(ctx, db, "first", func(ctx context.Context, c *ent.Client) (string, error) {
+		if _, err := stepTx(ctx, steps{db: db}, "first", func(ctx context.Context, c *ent.Client) (string, error) {
 			return "", audit(ctx, c, "spike.first", resource)
 		}); err != nil {
 			return "", err
@@ -494,11 +582,13 @@ func TestSpikeCrashRecovery(t *testing.T) {
 	ctx := launch(t, path, "node-a", func(ctx dbos.Context) { dbos.RegisterWorkflow(ctx, wf, dbos.WithWorkflowName("spike.crash")) })
 	for _, id := range []string{"crash-same-node", "crash-dead-node"} {
 		if id == "crash-dead-node" {
-			// A node that never returns: launching a short-lived context with
-			// its executor ID puts its pending work back on the internal
-			// queue, where the live node picks it up.
-			takeover := launch(t, path, "node-dead", nil)
-			if err := dbos.Shutdown(takeover, 10*time.Second); err != nil {
+			// A node that never returns: a live node lists its pending runs
+			// and resumes them, which re-enqueues them on the internal queue.
+			pending, err := dbos.ListWorkflows(ctx, dbos.WithFilterExecutorIDs("node-dead"), dbos.WithFilterStatus(dbos.WorkflowStatusPending))
+			if err != nil || len(pending) != 1 || pending[0].ID != id {
+				t.Fatalf("pending runs of the dead node: %+v %v", pending, err)
+			}
+			if _, err = dbos.ResumeWorkflows[string](ctx, []string{id}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -523,29 +613,16 @@ func TestSpikeWriteContention(t *testing.T) {
 		paperGo     pool
 		mustNotFail bool
 	}{
-		{"deferred", pool{busy: 5000, maxOpen: 8}, false},
-		{"immediate", pool{txlock: "immediate", busy: 5000, maxOpen: 8}, false},
-		{"immediate-busy30s", pool{txlock: "immediate", busy: 30000, maxOpen: 8}, true},
+		{"deferred", pool{database.Options{BusyTimeout: 5 * time.Second}, 8}, false},
+		{"immediate", pool{database.Options{TxLock: "immediate", BusyTimeout: 5 * time.Second}, 8}, false},
+		{"immediate-busy30s", pool{database.Options{TxLock: "immediate", BusyTimeout: 30 * time.Second}, 8}, true},
 	} {
 		t.Run(v.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "papergo.db")
 			db := openPaperGo(t, path, v.paperGo)
 			client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db)))
 			s := dms.NewService(client)
-			system := v.paperGo
-			system.txlock = "immediate"
-			var wf func(dbos.Context, string) (string, error)
-			ctx := launchOn(t, openPool(t, path, system), "node-a", func(ctx dbos.Context) {
-				wf = func(ctx dbos.Context, resource string) (string, error) {
-					if _, err := stepTx(ctx, db, "write", func(ctx context.Context, c *ent.Client) (string, error) {
-						return "", audit(ctx, c, "spike.load", resource)
-					}, dbos.WithStepMaxRetries(5), dbos.WithStepBaseInterval(10*time.Millisecond)); err != nil {
-						return "", err
-					}
-					return dbos.RunAsStep(ctx, func(context.Context) (string, error) { return resource, nil })
-				}
-				dbos.RegisterWorkflow(ctx, wf, dbos.WithWorkflowName("spike.load"))
-			})
+			// Fixtures exist before DBOS starts writing to the file.
 			w, err := s.Create(context.Background(), "alice", "", dms.CreateResource{Kind: "workspace", Name: "Load"})
 			if err != nil {
 				t.Fatal(err)
@@ -554,6 +631,20 @@ func TestSpikeWriteContention(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			system := v.paperGo
+			system.TxLock = "immediate"
+			var wf func(dbos.Context, string) (string, error)
+			ctx := launchOn(t, openPool(t, path, system), "node-a", func(ctx dbos.Context) {
+				wf = func(ctx dbos.Context, resource string) (string, error) {
+					if _, err := stepTx(ctx, steps{db: db}, "write", func(ctx context.Context, c *ent.Client) (string, error) {
+						return "", audit(ctx, c, "spike.load", resource)
+					}, dbos.WithStepMaxRetries(5), dbos.WithStepBaseInterval(10*time.Millisecond)); err != nil {
+						return "", err
+					}
+					return dbos.RunAsStep(ctx, func(context.Context) (string, error) { return resource, nil })
+				}
+				dbos.RegisterWorkflow(ctx, wf, dbos.WithWorkflowName("spike.load"))
+			})
 			const workers, each = 6, 20
 			var (
 				mu      sync.Mutex

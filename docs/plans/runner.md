@@ -41,12 +41,12 @@ Compared with PaperDotNet (outbox messages, a run table and bookmarks; ADR-0019/
 
 The phase 0 spike proved this design; the numbers are in [Spike results](#spike-results).
 
-- **Write transactions lock when they begin.** `database.Open` (`internal/database/database.go:52`) adds `_txlock=immediate` and raises `busy_timeout` to 30 seconds. modernc starts read-only transactions as before, so reads keep their WAL snapshots. Write transactions take the write lock at `BEGIN` and wait their turn, instead of failing with `SQLITE_BUSY` when a deferred transaction tries to upgrade after DBOS has written. `writeMu` stays as the in-process queue for PaperGo writes.
-- **DBOS has its own handle on the same file.** `internal/runner` opens a second `*sql.DB` on the PaperGo file, with the same settings, and passes it as `Config.SQLiteSystemDB`. DBOS `Shutdown` closes the handle it was given, so it must never be PaperGo's pool.
+- **Write transactions lock when they begin.** Today `database.Open` uses `database.DefaultOptions`: deferred transactions and a 5-second `busy_timeout`. Phase 1 changes the defaults to `_txlock=immediate` and 30 seconds. modernc keeps starting read-only transactions deferred, so reads keep their WAL snapshots. Write transactions take the write lock at `BEGIN` and wait their turn, instead of failing with `SQLITE_BUSY` when a deferred transaction tries to upgrade after DBOS has written. `writeMu` stays as the in-process queue for PaperGo writes.
+- **DBOS has its own handle on the same file.** `internal/runner` opens a second `*sql.DB` with `database.DSN`, the helper `database.Open` uses, so both handles have the same pragmas, and passes it as `Config.SQLiteSystemDB`. DBOS `Shutdown` closes the handle it was given, so it must never be PaperGo's pool.
 - **One transaction for Ent and the runner.** `write()` begins a `*sql.Tx` and builds the Ent client over it (`entsql.NewDriver(dialect.SQLite, entsql.Conn{ExecQuerier: tx})`). The same transaction carries domain rows, audit rows and runner calls (`Publish`, `Enqueue`, `Signal`); DBOS accepts the `*sql.Tx` from PaperGo's pool because both handles open the same database.
 - **Reserved table names.** DBOS adds 13 tables without a prefix: `application_versions`, `dbos_migrations`, `event_dispatch_kv`, `notifications`, `operation_outputs`, `queues`, `streams`, `workflow_events`, `workflow_events_history`, `workflow_input`, `workflow_output`, `workflow_schedules`, `workflow_status`. PaperGo tables must not use these names; for example, a future inbox becomes `user_notifications`.
-- **Migrations.** DBOS migrates its own tables, versioned in `dbos_migrations`. This is the one documented exception to the single Atlas file in [AGENTS.md](../../AGENTS.md): PaperGo never edits those tables. `CheckSchema` (`internal/database/database.go:86`) also checks the DBOS migration version. Atlas applies the PaperGo schema to a fresh file first; DBOS migrates its tables when the runner launches. Multi-node deployments run DBOS migrations once, before nodes start (`SkipMigrations` on the nodes).
-- **Step completion markers.** PaperGo's schema gets one runner table, `runner_step_results (workflow_id, step, output)`, for `runner.Tx` (below).
+- **Migrations.** DBOS migrates its own tables, versioned in `dbos_migrations`. This is the one documented exception to the single Atlas file in [AGENTS.md](../../AGENTS.md): PaperGo never edits those tables. Phase 1 extends `CheckSchema` (`internal/database/database.go`) to check the DBOS migration version too. Atlas applies the PaperGo schema to a fresh file first; DBOS migrates its tables when the runner launches. Multi-node deployments run DBOS migrations once, before nodes start (`SkipMigrations` on the nodes).
+- **Step completion markers.** Phase 1 adds one runner table to the schema file and `ent/schema`: `runner_step_results (workflow_id, step_id, step, output)`, for `runner.Tx` (below). The spike creates the same table in its test schema.
 
 ## PaperGo contract
 
@@ -57,7 +57,7 @@ The phase 0 spike proved this design; the numbers are in [Spike results](#spike-
 | `t.Signal(ctx, workflowID, topic, payload, key)` | inside `write()` | Delivers a message to a workflow (`Send` with an idempotency key). The workflow must already exist: DBOS rejects a message to an unknown workflow ID. A message sent before the workflow reaches `Wait` is kept. |
 | `runner.Wait(ctx, topic, timeout)` | workflow | Durable wait for a signal (`Recv`). A timeout returns `ErrTimeout`, the hook for escalation. |
 | `runner.Sleep(ctx, d)` | workflow | Durable timer. |
-| `runner.Tx(ctx, step, func(t *dms.Service) error)` | workflow step | Writes PaperGo data **exactly once**, through the same invariants, audit and `Publish` as a request. The step's writes and a `runner_step_results` row keyed by workflow ID and step name commit in one transaction; a retried or recovered step finds the row and returns the stored output. DBOS `RunAsTransaction` cannot be used: its callback gets a DBOS `Tx` without the `*sql.Tx`, so Ent cannot run on it. |
+| `runner.Tx(ctx, step, func(t *dms.Service) error)` | workflow step | Writes PaperGo data **exactly once**, through the same invariants, audit and `Publish` as a request. The step's writes and a `runner_step_results` row keyed by workflow ID and DBOS step ID commit in one transaction; a retried or recovered step finds the row and returns the stored output. Replay assigns step IDs in the same order, so one step name can be used for several writes, such as a loop over recipients; the recorded name must match on replay. The output is always returned decoded from the row, so a first run and a replay see the same value. DBOS `RunAsTransaction` cannot be used: its callback gets a DBOS `Tx` without the `*sql.Tx`, so Ent cannot run on it. |
 | `runner.Schedule{Name, Cron, Job, Queue}` | registration | Cron schedules declared in code. Startup creates new schedules, updates changed ones and removes ones no longer declared. |
 
 Rules:
@@ -85,7 +85,7 @@ Rules:
 On PostgreSQL several nodes share queues and schedules safely. Two pieces are PaperGo's responsibility:
 
 - **Node identity.** Each node has a stable `NODE_ID`, used as the DBOS executor ID. A restarted node recovers its own pending workflows.
-- **Recovering a node that never returns.** Nodes heartbeat into `runner_nodes`. The holder of a `runner_leases` row takes over the pending workflows of a node whose heartbeat expired: it launches a short-lived DBOS context with that node's executor ID and the same application version, which puts the node's pending workflows back on the internal queue, then shuts it down; the live nodes run them. DBOS v1.6.0 has no public call for this (its own recovery of other executors is driven by the commercial Conductor), so the approach is pinned to the version and covered by a test.
+- **Recovering a node that never returns.** Nodes heartbeat into `runner_nodes`. The holder of a `runner_leases` row takes over the pending workflows of a node whose heartbeat expired: it lists them (`ListWorkflows` filtered by that executor ID and `PENDING`) and calls `ResumeWorkflows`, which puts them back on the internal queue, where the live nodes run them. A node that was only slow may still be running one of them; `runner.Tx` markers keep its writes single, and ordinary steps are idempotent anyway.
 
 Other in-process state also needs shared implementations before a second node: WebDAV locks (`internal/webdav/locks.go`), and later the live SSE hub (PostgreSQL `LISTEN/NOTIFY`).
 
@@ -119,7 +119,7 @@ New capabilities the runner unlocks. Each will be designed separately:
   - `GET /v1/admin/runs/{id}` shows a run and its steps (`GetWorkflowSteps`).
   - `POST /v1/admin/runs/{id}/cancel` and `/resume` act on a run.
   - PaperGo has no deployment-level role, so a new `ADMIN_SUBJECTS` setting lists the allowed subjects.
-- **Retention:** a `maintenance` schedule deletes runs that finished more than `RUNNER_RETENTION` ago (default 30 days) with `DeleteWorkflows`.
+- **Retention:** a `maintenance` schedule deletes runs that finished more than `RUNNER_RETENTION` ago (default 30 days). It first deletes their `runner_step_results` rows, then the runs (`DeleteWorkflows`). In that order, a crash in between leaves only a finished run without markers, which is never replayed; markers never outlive their run, so a later run that reuses a `Key` starts without stale markers.
 - **Configuration:**
 
   | Setting | Meaning |
@@ -149,7 +149,7 @@ Tests use temporary SQLite databases, as `internal/testutil` does today, plus a 
 - A `Signal` sent before `Wait` is still received.
 - `runner.Tx` effects happen once across a real process crash and relaunch with the same `NODE_ID`.
 - Schedules are created, changed and removed from code.
-- Retention deletes only finished runs.
+- Retention deletes only finished runs, together with their step markers.
 - Concurrent request writes and runner writes never fail with `SQLITE_BUSY`.
 
 On PostgreSQL, the same suite runs with two nodes, including recovery of a node that never returns.
@@ -161,10 +161,10 @@ The spike is `internal/runner/spike_test.go`. It runs DBOS v1.6.0 against the re
 | Question | Test | Result |
 | --- | --- | --- |
 | Do DBOS tables coexist with the PaperGo schema? | `TestSpikeSchemaCoexistence` | Yes, in both orders (PaperGo first, or DBOS first). DBOS adds the 13 tables listed above, leaves PaperGo tables untouched, and `integrity_check` and `foreign_key_check` stay clean. |
-| Does a rollback cancel the start? | `TestSpikeTransactionalEnqueue` | Yes. An Ent write and `Enqueue` share PaperGo's `*sql.Tx`: the run is invisible to other connections until commit, and neither the row nor the run exists after a rollback. A repeated workflow ID returns the existing run. |
-| Does a rollback cancel a signal? | `TestSpikeTransactionalSignal` | Yes. A rolled-back `Send` never arrives (`Recv` ends with `ErrTimeout`). A committed one sent before the workflow reaches `Recv` is delivered. Sending twice with one idempotency key stores one message. |
-| Are step writes exactly-once? | `TestSpikeExactlyOnceStep` | Yes, with the completion-marker design of `runner.Tx`. The step fails after its transaction committed, DBOS retries it, and the retry returns the stored output without writing again. |
-| Does work survive a process crash? | `TestSpikeCrashRecovery` | Yes. A child test process completes the first step and calls `os.Exit` inside the second. Relaunching with the same executor ID resumes the run at the second step; the first step's write stays single. A second crashed run, under an executor ID that never returns, completes on another node after a short-lived context with the dead executor ID requeues it. |
+| Does a rollback cancel the start? | `TestSpikeTransactionalEnqueue` | Yes. An Ent write and `Enqueue` share PaperGo's `*sql.Tx`: the run is invisible to other connections until commit, and neither the row nor the run exists after a rollback. Enqueuing a finished workflow ID again in another committed transaction keeps that transaction's write and returns the stored result without running the workflow again. |
+| Does a rollback cancel a signal? | `TestSpikeTransactionalSignal` | Yes. A rolled-back `Send` never arrives (`Recv` ends with `ErrTimeout`). A committed one is delivered even though both sends commit while the workflow is held in an earlier step, before it reaches `Recv`. Sending twice with one idempotency key stores one message. |
+| Are step writes exactly-once? | `TestSpikeExactlyOnceStep` | Yes, with the completion-marker design of `runner.Tx`. The step fails after its transaction committed, DBOS retries it, and the retry returns the stored output without writing again. Two steps with the same name in one workflow both write. |
+| Does work survive a process crash? | `TestSpikeCrashRecovery` | Yes. A child test process completes the first step and calls `os.Exit` inside the second. Relaunching with the same executor ID resumes the run at the second step; the first step's write stays single. A second crashed run, under an executor ID that never returns, completes on the live node after it lists the dead executor's pending runs and resumes them. |
 | Does write contention break requests? | `TestSpikeWriteContention` | See the next table. |
 | Does it build without CGO? | `CGO_ENABLED=0 go build ./cmd/api` and `CGO_ENABLED=0 go test -c ./internal/runner` | Yes. |
 
@@ -172,7 +172,7 @@ Contention: 6 goroutines create items through `dms.Service`, 6 others commit an 
 
 | PaperGo pool | Errors per run | Workflows completed |
 | --- | --- | --- |
-| deferred transactions, 5 s busy timeout (today's `database.Open`) | 127–135 (`database is locked`, `SQLITE_BUSY_SNAPSHOT`; steps out of retries) | 96–99 of 120 |
+| deferred transactions, 5 s busy timeout (today's `database.Open`) | 99–139 (`database is locked`, `SQLITE_BUSY_SNAPSHOT`; steps out of retries) | 92–104 of 120 |
 | `_txlock=immediate`, 5 s busy timeout | 0 | 120 |
 | `_txlock=immediate`, 30 s busy timeout | 0 | 120 |
 
@@ -183,8 +183,8 @@ Other findings that shaped this plan:
 - DBOS `Shutdown` closes the `*sql.DB` it was given, despite the comment saying the caller owns it, so DBOS gets its own handle.
 - `RunAsTransaction` hands its callback a DBOS `Tx`, not a `*sql.Tx`, so Ent cannot run on it; `runner.Tx` uses a completion marker instead.
 - `Send` to a workflow ID that does not exist fails on a foreign key, so signals go only to existing workflows.
-- DBOS v1.6.0 has no public call to recover another executor's work; launching a context with that executor ID does it.
-- The spike tests take about 75 seconds under `-race`, mostly DBOS start and stop; phase 1 tests should share one launched runner per package.
+- DBOS recovers only its own executor's work at launch; another executor's pending runs are taken over with `ListWorkflows` and `ResumeWorkflows`.
+- The spike tests take about 80 seconds under `-race`, mostly DBOS start and stop; phase 1 tests should share one launched runner per package.
 
 ## Dependencies
 
