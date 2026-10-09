@@ -27,6 +27,8 @@ Tests use temporary SQLite files and apply the actual versioned migrations, incl
 
 The machine-readable REST contract is [`api/openapi.json`](api/openapi.json) (OpenAPI 3.1), also served at `GET /openapi.json`. It is generated from the handlers in `internal/httpapi` with [Huma](https://huma.rocks): operations, parameters and response models are Go types, so the document cannot drift from the code. After changing the API, run `go generate ./internal/httpapi`; tests fail when the committed document is stale or when any test response deviates from it.
 
+The JavaScript/TypeScript SDK [`@papergo/client`](sdk/typescript) is generated from that document with [Kiota](https://learn.microsoft.com/openapi/kiota/) by the same `go generate ./internal/httpapi`, which needs the .NET SDK for the pinned Kiota tool (`.config/dotnet-tools.json`). CI regenerates both, fails when either committed copy is stale, and runs the SDK's end-to-end tests against the API.
+
 ## Data model and requirements
 
 | Requirement | Implementation |

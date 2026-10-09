@@ -39,11 +39,12 @@ func (a *API) registerContent(api huma.API, mux *http.ServeMux) {
 		RequestBody: &huma.RequestBody{Required: true, Content: map[string]*huma.MediaType{"*/*": {Schema: binary}}},
 		Responses:   upload})
 	download := errors(401, 403, 404, 500)
-	download["200"] = &huma.Response{Description: "Blob bytes", Headers: map[string]*huma.Header{"ETag": {Description: "Quoted hex SHA-256 of the bytes.", Schema: &huma.Schema{Type: huma.TypeString}}, "Content-Disposition": {Schema: &huma.Schema{Type: huma.TypeString}}}, Content: map[string]*huma.MediaType{"*/*": {Schema: binary}}}
-	download["206"] = &huma.Response{Description: "Requested byte range", Content: map[string]*huma.MediaType{"*/*": {Schema: binary}}}
-	download["304"] = &huma.Response{Description: "Not modified (If-None-Match)"}
+	// Blobs keep their stored media type; octet-stream documents arbitrary bytes.
+	bytes := map[string]*huma.MediaType{"application/octet-stream": {Schema: binary}}
+	download["200"] = &huma.Response{Description: "Blob bytes, with the stored media type as Content-Type", Headers: map[string]*huma.Header{"ETag": {Description: "Quoted hex SHA-256 of the bytes.", Schema: &huma.Schema{Type: huma.TypeString}}, "Content-Disposition": {Schema: &huma.Schema{Type: huma.TypeString}}}, Content: bytes}
+	download["206"] = &huma.Response{Description: "Requested byte range", Content: bytes}
 	download["416"] = &huma.Response{Description: "Range not satisfiable"}
-	oapi.AddOperation(&huma.Operation{OperationID: "downloadContent", Method: http.MethodGet, Path: "/v1/items/{id}/content", Summary: "Download the selected head/published blob; supports byte ranges", Description: "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs.", Tags: []string{"Content"},
+	oapi.AddOperation(&huma.Operation{OperationID: "downloadContent", Method: http.MethodGet, Path: "/v1/items/{id}/content", Summary: "Download the selected head/published blob; supports byte ranges", Description: "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Conditional requests (If-None-Match, If-Modified-Since) can return 304 Not Modified.", Tags: []string{"Content"},
 		Parameters: []*huma.Param{id, {Name: "blob_id", In: "query", Description: "Retained blob revision to download.", Schema: &huma.Schema{Type: huma.TypeString, Format: "uuid"}}, {Name: "Range", In: "header", Description: "Single or multiple byte ranges.", Schema: &huma.Schema{Type: huma.TypeString}}},
 		Responses:  download})
 }
@@ -109,8 +110,10 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(transfer.Writer(w), r, b.Filename, b.CreatedAt, file)
 }
 
-// describeSchemas adds what struct tags cannot express: type descriptions and
-// the per-variant requirements of bulk operations and validation rules.
+// describeSchemas adds the type descriptions that struct tags cannot express.
+// Per-variant requirements (bulk actions, rule operators, smart folder drops)
+// are described in prose and enforced by the service: oneOf constraints would
+// turn these inputs into unions in generated clients.
 func describeSchemas(oapi *huma.OpenAPI) {
 	schemas := oapi.Components.Schemas.Map()
 	describe := map[string]string{
@@ -136,36 +139,5 @@ func describeSchemas(oapi *huma.OpenAPI) {
 		if s := schemas[name]; s != nil {
 			s.Description = text
 		}
-	}
-	variant := func(action string, required ...string) *huma.Schema {
-		return &huma.Schema{Type: huma.TypeObject, Properties: map[string]*huma.Schema{"action": {Type: huma.TypeString, Enum: []any{action}}}, Required: append([]string{"action"}, required...)}
-	}
-	if s := schemas["BulkOperation"]; s != nil {
-		s.OneOf = []*huma.Schema{variant("create", "create"), variant("update", "id", "version", "update"), variant("publish", "id", "version"), variant("unpublish", "id", "version"), variant("delete", "id", "version")}
-	}
-	if s := schemas["SmartFolderDrop"]; s != nil {
-		s.OneOf = []*huma.Schema{{Type: huma.TypeObject, Required: []string{"item_id", "version"}}, {Type: huma.TypeObject, Required: []string{"create"}}}
-	}
-	if s := schemas["ValidationRule"]; s != nil {
-		comparisons := []any{"eq", "ne", "gt", "gte", "lt", "lte"}
-		s.OneOf = []*huma.Schema{
-			{Type: huma.TypeObject, Properties: map[string]*huma.Schema{"op": {Type: huma.TypeString, Enum: []any{"required_if"}}}, Required: []string{"when_field", "when_value"}},
-			{Type: huma.TypeObject, Properties: map[string]*huma.Schema{"op": {Type: huma.TypeString, Enum: comparisons}}, Required: []string{"other_field"}},
-		}
-	}
-	for _, s := range schemas {
-		for _, v := range s.OneOf {
-			// Huma validates only required names that are declared properties.
-			for _, name := range v.Required {
-				if v.Properties == nil {
-					v.Properties = map[string]*huma.Schema{}
-				}
-				if v.Properties[name] == nil {
-					v.Properties[name] = &huma.Schema{}
-				}
-			}
-			v.PrecomputeMessages()
-		}
-		s.PrecomputeMessages()
 	}
 }

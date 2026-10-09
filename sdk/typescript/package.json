@@ -1,0 +1,32 @@
+{
+  "name": "@papergo/client",
+  "version": "0.1.0",
+  "description": "Typed JavaScript/TypeScript client for the PaperGo REST API, generated with Kiota from api/openapi.json.",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@microsoft/kiota-abstractions": "1.0.0-preview.106",
+    "@microsoft/kiota-bundle": "1.0.0-preview.106",
+    "@microsoft/kiota-http-fetchlibrary": "1.0.0-preview.106",
+    "@microsoft/kiota-serialization-form": "1.0.0-preview.106",
+    "@microsoft/kiota-serialization-json": "1.0.0-preview.106",
+    "@microsoft/kiota-serialization-multipart": "1.0.0-preview.106",
+    "@microsoft/kiota-serialization-text": "1.0.0-preview.106"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "^5.9.0"
+  }
+}

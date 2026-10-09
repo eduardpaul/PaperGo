@@ -262,98 +262,6 @@
       "BulkOperation": {
         "additionalProperties": false,
         "description": "One item operation. create needs create; update needs id, version and update; publish, unpublish and delete need id and version.",
-        "oneOf": [
-          {
-            "properties": {
-              "action": {
-                "enum": [
-                  "create"
-                ],
-                "type": "string"
-              },
-              "create": {}
-            },
-            "required": [
-              "action",
-              "create"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "action": {
-                "enum": [
-                  "update"
-                ],
-                "type": "string"
-              },
-              "id": {},
-              "update": {},
-              "version": {}
-            },
-            "required": [
-              "action",
-              "id",
-              "version",
-              "update"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "action": {
-                "enum": [
-                  "publish"
-                ],
-                "type": "string"
-              },
-              "id": {},
-              "version": {}
-            },
-            "required": [
-              "action",
-              "id",
-              "version"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "action": {
-                "enum": [
-                  "unpublish"
-                ],
-                "type": "string"
-              },
-              "id": {},
-              "version": {}
-            },
-            "required": [
-              "action",
-              "id",
-              "version"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "action": {
-                "enum": [
-                  "delete"
-                ],
-                "type": "string"
-              },
-              "id": {},
-              "version": {}
-            },
-            "required": [
-              "action",
-              "id",
-              "version"
-            ],
-            "type": "object"
-          }
-        ],
         "properties": {
           "action": {
             "enum": [
@@ -2499,28 +2407,6 @@
       "SmartFolderDrop": {
         "additionalProperties": false,
         "description": "Classify an existing item (item_id and version) or create one (create and optional parent_id) through ordinary item validation, revisions and publication. Inferred AND equalities, selected terms and writable path fields are applied; non-inferable predicates must already fit. The write rolls back unless the head matches the folder and path. Existing items retain their location.",
-        "oneOf": [
-          {
-            "properties": {
-              "item_id": {},
-              "version": {}
-            },
-            "required": [
-              "item_id",
-              "version"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "create": {}
-            },
-            "required": [
-              "create"
-            ],
-            "type": "object"
-          }
-        ],
         "properties": {
           "collection_id": {
             "format": "uuid",
@@ -3281,45 +3167,6 @@
       "ValidationRule": {
         "additionalProperties": false,
         "description": "Comparisons require other_field of the same scalar type and decimal scale; null operands skip comparison. required_if requires when_field and non-null when_value and requires field when those values are equal. Ordered comparisons exclude boolean, choice, lookup and term. Maximum 32 rules per type.",
-        "oneOf": [
-          {
-            "properties": {
-              "op": {
-                "enum": [
-                  "required_if"
-                ],
-                "type": "string"
-              },
-              "when_field": {},
-              "when_value": {}
-            },
-            "required": [
-              "when_field",
-              "when_value"
-            ],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "op": {
-                "enum": [
-                  "eq",
-                  "ne",
-                  "gt",
-                  "gte",
-                  "lt",
-                  "lte"
-                ],
-                "type": "string"
-              },
-              "other_field": {}
-            },
-            "required": [
-              "other_field"
-            ],
-            "type": "object"
-          }
-        ],
         "properties": {
           "field": {
             "type": "string"
@@ -3710,7 +3557,7 @@
     },
     "/v1/items/{id}/content": {
       "get": {
-        "description": "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs.",
+        "description": "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Conditional requests (If-None-Match, If-Modified-Since) can return 304 Not Modified.",
         "operationId": "downloadContent",
         "parameters": [
           {
@@ -3743,7 +3590,7 @@
         "responses": {
           "200": {
             "content": {
-              "*/*": {
+              "application/octet-stream": {
                 "schema": {
                   "contentMediaType": "application/octet-stream",
                   "format": "binary",
@@ -3751,7 +3598,7 @@
                 }
               }
             },
-            "description": "Blob bytes",
+            "description": "Blob bytes, with the stored media type as Content-Type",
             "headers": {
               "Content-Disposition": {
                 "schema": {
@@ -3768,7 +3615,7 @@
           },
           "206": {
             "content": {
-              "*/*": {
+              "application/octet-stream": {
                 "schema": {
                   "contentMediaType": "application/octet-stream",
                   "format": "binary",
@@ -3777,9 +3624,6 @@
               }
             },
             "description": "Requested byte range"
-          },
-          "304": {
-            "description": "Not modified (If-None-Match)"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"

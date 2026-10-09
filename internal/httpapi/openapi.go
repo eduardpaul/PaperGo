@@ -1,6 +1,8 @@
 package httpapi
 
 //go:generate go run ../../cmd/openapi -o ../../api/openapi.json
+//go:generate dotnet tool restore
+//go:generate dotnet tool run kiota generate --openapi ../../api/openapi.json --language TypeScript --class-name PaperGoClient --namespace-name papergo --output ../../sdk/typescript/src/generated --clean-output --exclude-backward-compatible --log-level Warning
 
 import (
 	"bytes"

@@ -12,4 +12,6 @@ PaperGo is being built from scratch. It has never been released and has no deplo
 
 ## The REST contract is generated
 
-`api/openapi.json` is generated from `internal/httpapi` (Huma). Describe operations there with `register(...)`, request and response Go types and their struct tags, then run `go generate ./internal/httpapi`. Never edit the JSON by hand. Handlers return the response models in `internal/httpapi/models.go`, never Ent entities.
+`api/openapi.json` is generated from `internal/httpapi` (Huma). Describe operations there with `register(...)`, request and response Go types and their struct tags, then run `go generate ./internal/httpapi`, which also regenerates the Kiota SDK in `sdk/typescript/src/generated` (needs the .NET SDK). Never edit the JSON or the generated SDK by hand; commit both with the change. Handlers return the response models in `internal/httpapi/models.go`, never Ent entities.
+
+Keep the contract usable by generated clients: express per-variant requirements (such as which fields an action needs) in descriptions and enforce them in the service, not with `oneOf`/`anyOf`, which Kiota turns into unions. Document binary responses as `application/octet-stream`, and do not list body-less statuses such as 304 next to them, or the client method returns nothing.

@@ -94,7 +94,7 @@ func conformant(t *testing.T, h http.Handler) http.Handler {
 			}
 		}
 		if len(res.Content) == 0 {
-			if rec.body.Len() > 0 && rec.status != http.StatusNotModified {
+			if rec.body.Len() > 0 {
 				t.Errorf("%s: %d response has an undocumented body", pattern, rec.status)
 			}
 			return
@@ -102,7 +102,8 @@ func conformant(t *testing.T, h http.Handler) http.Handler {
 		media, _, _ := mime.ParseMediaType(w.Header().Get("Content-Type"))
 		content := res.Content[media]
 		if content == nil {
-			if content = res.Content["*/*"]; content == nil {
+			// Binary bodies carry their own media type.
+			if res.Content["application/octet-stream"] == nil {
 				t.Errorf("%s: %d response has undocumented content type %q", pattern, rec.status, media)
 			}
 			return
