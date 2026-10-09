@@ -1,0 +1,237 @@
+# Workflows
+
+Workflows are how PaperGo does anything that happens **after** a change or **on a schedule**. A workflow is data that workspace managers can read, change, turn off or replace. That includes the processes PaperGo ships, which are *built-in workflows* rather than hidden code. New features that react to changes are delivered as workflow activities and built-in workflows.
+
+A workflow has:
+
+- **triggers**: what starts a run, such as an item being created, a cron schedule, a manual start, or another workflow's event;
+- an optional **condition**: a query filter the run's item must meet;
+- a **flow**: nodes that each run one **activity**, connected by outcome **ports**.
+
+Every save that changes the definition creates a new immutable **version**. A run always executes the version it started with.
+
+Runs are durable. Each node runs as one step that commits exactly once. A run continues at the node it reached after a crash or restart, and waits such as `delay` survive restarts. The engine is described in the [runner plan](plans/runner.md).
+
+## Example
+
+```json
+{
+  "name": "Review new contracts",
+  "definition": {
+    "triggers": [{"type": "item.created", "collection_id": "<contracts list>"}],
+    "condition": {"field": "status", "op": "eq", "value": "new"},
+    "variables": {"limit": 10000},
+    "flow": {
+      "start": "big",
+      "nodes": {
+        "big": {"activity": "if", "inputs": {"left": "{item:values.amount}", "op": "gt", "right": "{var:limit}"}, "next": {"true": "flag", "false": "file"}},
+        "flag": {"activity": "item.update", "inputs": {"values": {"status": "review", "note": "Large contract from {trigger:actor}"}}, "next": {"done": "tell"}},
+        "tell": {"activity": "event.raise", "inputs": {"event": "flagged"}},
+        "file": {"activity": "item.publish", "retry": {"attempts": 3, "delay": "5m"}}
+      }
+    }
+  }
+}
+```
+
+## Triggers
+
+| Type | Starts a run when | The run's item |
+| --- | --- | --- |
+| `item.created` | an item is created (its first revision) | the item |
+| `item.updated` | an item's content changes (a new head revision) | the item |
+| `item.published` | a revision is published, explicitly or automatically | the item |
+| `item.unpublished` | an item is unpublished | the item |
+| `item.deleted` | an item is deleted, alone or with its folder | none (`{trigger:resource_id}` names it) |
+| `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
+| `manual` | someone starts it through the API | the chosen items, or none |
+| `wf.{key}.{event}` | a run of workflow `key` raises `event`; `completed` and `failed` are raised when a run ends | that run's item |
+
+Fields of a trigger:
+
+- `collection_id` limits item and workflow-event triggers to one list or library.
+- `content_type_id` (with `collection_id`) limits item triggers to one content type.
+- For a schedule:
+  - **With `collection_id`:** each occurrence starts one run per item of the collection that meets the condition, up to 500, on `surface` (`head` by default, or `published`).
+  - **Without `collection_id`:** one run with no item.
+  - Occurrences missed while PaperGo was down start once.
+  - A change to a workflow never starts runs for times already past.
+- A `manual` trigger with `collection_id` starts only on items of that collection. Without it, it starts with no item. Manual workflows can declare `inputs`: `text`, `number`, `integer` or `boolean`, with `required` and `default`.
+
+Trigger data, readable as `{trigger:...}`:
+
+| Key | Value |
+| --- | --- |
+| `id`, `type` | the event's ID and type |
+| `actor` | who made the change, started the run, or (for schedules) the version's author |
+| `workspace_id`, `collection_id`, `resource_id` | where it happened |
+| `depth` | how many runs led to this event |
+| `data` | type-specific details |
+
+The `data` for each event type:
+
+- `item.created` / `item.updated`: `revision_id`, `revision_number`, `content_type_id`, `blob_id`
+- `item.published`: `revision_id`, `revision_number`, `publication_id`
+- `item.unpublished`: `revision_id`
+- `schedule`: `workflow_id`, `occurrence`
+- `manual`: `workflow_id`, `inputs`
+- `wf.*`: `run_id` and the raised data; `completed`/`failed` add `status`, `node` and, on failure, `error`
+
+Only items raise item events. Folders, collections and settings do not.
+
+## Conditions
+
+`condition` uses the [query filter language](application-foundation.md) of collection queries, so a condition means exactly what the same filter means in a view:
+
+- `and` / `or` / `not`
+- typed operators
+- `value_ref`, such as `today` or `me`
+- system fields `$name`, `$created_at`, and so on
+
+Every trigger of a workflow with a condition needs `collection_id`, and the condition's fields must be indexed in each of those collections. Saving checks both.
+
+For item and workflow-event triggers, the condition is tested against the item's head when the change commits, and a run starts only if it holds. Manual starts check it before starting.
+
+## Flow
+
+`flow.start` names the first node. Each node has:
+
+- `activity`
+- `inputs`, whose strings may contain tokens
+- `next`, mapping ports to node names
+- an optional `retry`: `attempts` 1 to 10 in all, and a `delay` of up to `24h`
+
+After a node runs:
+
+- The activity's outcome picks a port. Actions use `done`; `if` uses `true` or `false`.
+- An outcome port that is not connected falls back to `done`. When `done` is not connected either, the run completes.
+- When a node fails, it is retried by its `retry` policy. After that, the run follows its `error` port (the node output is `{"error": "..."}`), or fails at that node.
+- `end` completes the run; `fail` fails it with a message.
+
+Node names use letters, digits, spaces, `_` and `-`. Every node must be reachable from `start`. Loops are allowed: a run visits at most 1,000 nodes, and a node's output is limited to 64 KB.
+
+## Tokens
+
+Strings in node inputs can read run data:
+
+| Token | Value |
+| --- | --- |
+| `{item:path}` | the run's item: `id`, `name`, `tags`, `values.<field>`, `collection_id`, `content_type_id`, `version`, `published`, `created_by`, `updated_by`, `created_at`, `updated_at` |
+| `{trigger:path}` | the event that started the run (see above) |
+| `{input:name}` | manual launch inputs |
+| `{var:name}` | run variables (`variables`, and `set_variable`) |
+| `{step:node.path}` | a node's output, such as `{step:read.values.total}` |
+| `{run:path}` | `id`, `workflow_id`, `workflow_key`, `version`, `actor` |
+| `{now}`, `{today}` | the time the node ran (RFC 3339, or the date) |
+
+A string that is exactly one token keeps the value's JSON type: `"total": "{input:total}"` writes a number. Tokens inside longer text become text, and lists are joined with `, `. A missing path is empty. Write `{{` and `}}` for literal braces.
+
+## Activities
+
+`GET /v1/workflow-catalog` lists every activity with its inputs and ports.
+
+| Activity | Kind | Does | Output |
+| --- | --- | --- | --- |
+| `if` | flow | `filter` (a query filter on the item's head), or `left` `op` `right` (`eq ne gt ge lt le contains empty not_empty`; numbers compare as numbers); ports `true`/`false` | `result` |
+| `set_variable` | flow | sets `name` to `value` | `name`, `value` |
+| `delay` | flow | waits `duration` (`90m`, `48h`) or `until` a date or time, durably | `until` |
+| `event.raise` | flow | raises `wf.{key}.{event}` with `data` and the run's item | `event` |
+| `end` / `fail` | flow | completes the run / fails it with `message` | |
+| `item.get` | action | reads an item | the item |
+| `item.update` | action | sets `name`, `tags`, and `values` (merged; `null` removes a value) | the item |
+| `item.create` | action | creates an item in `collection_id` (optional `parent_id`, `content_type_id`, `tags`, `values`) | `item_id`, `item` |
+| `items.query` | action | queries `collection_id` with `filter`, `sort`, `limit` (≤ 100), on the head surface | `items`, `count` |
+| `item.publish` | action | publishes the head revision, if not already published | `published` |
+| `item.unpublish` | action | unpublishes, if published | `unpublished` |
+| `item.delete` | action | deletes the item | `deleted` |
+
+Item actions work on the run's item unless `item_id` is given. They use the same validation, permissions, revisions, audit records and events as API requests.
+
+## Who a run acts as
+
+A run acts as the **author of its workflow version**: the subject who saved that version, or who configured the built-in. Every step checks that author's permissions, as an API request would. A workflow therefore never does more than its author may, and a run fails visibly if the author loses access. `{trigger:actor}` and `{run:actor}` still name who caused the run.
+
+Changes a run makes raise events like any other change, one level deeper than the event that started the run. Events at depth 5 start nothing, which stops workflows that keep triggering each other.
+
+## Built-in workflows
+
+Built-in workflows are processes PaperGo ships, in the same model.
+
+| Key | Name | Scope | Parameters |
+| --- | --- | --- | --- |
+| `items.expire` | Unpublish expired items: every day, unpublishes the published items whose date `field` is before today | per list or library | `field` (an indexed date field), `cron` (default `0 1 * * *`), `time_zone` (default `UTC`) |
+
+How people use them:
+
+- **Turn on, off, and set parameters:** `PUT /v1/workspaces/{id}/workflow-builtins/{key}` with `{"collection_id", "enabled", "parameters"}`.
+  - The first call creates the built-in's workflow. Later calls need its ETag in `If-Match`.
+  - The workflow's definition is the release definition with the parameters filled in. Its runs, versions and history work like any workflow's.
+- **Edit freely:** a built-in's definition cannot be edited in place. `POST .../workflow-builtins/{key}/copy` creates an ordinary workflow from it and turns the built-in off where it was on, so the copy replaces it.
+- **Release updates:** when PaperGo starts, every built-in workflow is brought to the running release, and a changed release definition becomes a new version. A built-in no longer shipped, or whose parameters no longer validate, is turned off.
+
+## Runs
+
+| Status | Meaning |
+| --- | --- |
+| `queued` | waiting for a worker |
+| `running` | executing, or waiting in `delay` |
+| `completed` | finished |
+| `failed` | a node failed with no `error` port, or `fail` ran |
+| `cancelled` | stopped by a manager |
+
+`GET /v1/workflow-runs/{id}` shows the run's result and its recorded steps: `load`, each node attempt, and `finish`, each with output or error.
+
+- **Retry** (`POST .../retry`) runs a failed run again from the failed step as a new run with `retry_of`. Steps before it keep their recorded results, so nothing they wrote is written twice.
+- **Cancel** (`POST .../cancel`) stops a queued or running run.
+
+A run starts in the same transaction as the change that triggers it, so a change that rolls back starts nothing. Each event starts at most one run per workflow.
+
+Finished runs are deleted after `RUN_RETENTION` (default 30 days). Deleting a workflow stops it from matching triggers; its versions and runs are kept, and running runs finish with their version.
+
+## Permissions
+
+| Action | Needs |
+| --- | --- |
+| List and read workflows | workspace `read` |
+| Create, change, delete workflows; turn on, configure and copy built-ins | workspace `manage` (built-ins per collection also need collection `manage`) |
+| Start a manual workflow on items | `write` on each item |
+| Start a manual workflow with no item | workspace `manage` |
+| See, cancel and retry runs | workspace `manage` |
+
+## API
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | /v1/workflow-catalog | Trigger types, activities, built-ins |
+| GET / POST | /v1/workspaces/{id}/workflows | List or create workflows |
+| GET / PUT / DELETE | /v1/workflows/{id} | Read, replace (If-Match), delete (If-Match) |
+| GET | /v1/workflows/{id}/versions | Versions, newest first |
+| POST | /v1/workflows/{id}/runs | Manual start: `{"item_ids": [...], "inputs": {...}}` (202 with `run_ids`) |
+| GET | /v1/workspaces/{id}/workflow-builtins | Built-ins with the workspace's built-in workflows |
+| PUT | /v1/workspaces/{id}/workflow-builtins/{key} | Turn on/off, set parameters |
+| POST | /v1/workspaces/{id}/workflow-builtins/{key}/copy | Copy into an editable workflow |
+| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `after`, `limit`) |
+| GET | /v1/workflow-runs/{id} | A run with result and steps |
+| POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
+
+## Runtime
+
+The runner ([DBOS Transact Go](https://github.com/dbos-inc/dbos-transact-golang)) runs inside the API process and keeps its state in the PaperGo SQLite file:
+
+- **Reserved table names.** DBOS creates and migrates its own tables when the API starts. Their names are reserved for PaperGo tables: `application_versions`, `dbos_migrations`, `event_dispatch_kv`, `notifications`, `operation_outputs`, `queues`, `streams`, `workflow_events`, `workflow_events_history`, `workflow_input`, `workflow_output`, `workflow_schedules`, `workflow_status`.
+- **Write locking.** Write transactions lock when they begin (`_txlock=immediate`) and wait up to 30 seconds for the lock, so requests and workflow steps share the single SQLite writer.
+
+Configuration:
+
+| Setting | Meaning |
+| --- | --- |
+| `NODE_ID` | This process's identity (default `local`); a restarted process recovers the runs it was executing |
+| `RUN_RETENTION` | How long finished runs are kept (default `720h`) |
+
+## Building features on workflows
+
+PaperGo code that should happen after a change or on a schedule:
+
+1. Adds an activity in `internal/workflow`, documented in the catalog and safe to run once per step. Activities change data through `dms` with the run's author, so permissions, validation and events stay in one place.
+2. Ships the process as a built-in workflow when people should see or change it.
+3. Never reacts to changes in hidden code paths.

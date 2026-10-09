@@ -1,6 +1,6 @@
 # PaperGo
 
-Go foundation for headless DMS and CMS applications. Uses **SQLite**, **Ent** for data access, and **Atlas** for reviewed, versioned migrations. One organization per deployment, with multiple workspaces. The API is a modular monolith with immutable content/schema revisions, derived read projections, and local immutable blob storage. [Architecture decisions](docs/architecture.md) explain the extension boundaries. [Application foundation](docs/application-foundation.md) documents rich fields, templates, views, taxonomy, typed relationships, and exclusive permission scopes.
+Go foundation for headless DMS and CMS applications. Uses **SQLite**, **Ent** for data access, and **Atlas** for reviewed, versioned migrations. One organization per deployment, with multiple workspaces. The API is a modular monolith with immutable content/schema revisions, derived read projections, and local immutable blob storage. [Architecture decisions](docs/architecture.md) explain the extension boundaries. [Application foundation](docs/application-foundation.md) documents rich fields, templates, views, taxonomy, typed relationships, and exclusive permission scopes. [Workflows](docs/workflows.md) are how anything happens after a change or on a schedule: triggers, conditions and flows of activities that people can change, including the built-in processes PaperGo ships, run durably by an embedded runner.
 
 ## Run locally
 
@@ -47,6 +47,7 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 | Business keys | Indexed scalar uniqueness across head and published values, enforced transactionally for single and bulk writes. |
 | Saved views and controlled taxonomy | Bounded typed queries, sorting, pagination, opt-in authorized totals, grouping; stable hierarchical terms with localized labels, synonyms, and deprecation. |
 | Smart folders | Private or shared live queries across collections, descendant-term matching, metadata navigation, UTC-relative filters and physical folder inclusion. See [smart folders](docs/smart-folders.md). |
+| Customizable automation | Workflows react to item changes, schedules, manual starts and each other's events, with conditions in the query filter language and flows of activity nodes. Versions are immutable; runs are durable, exactly once per step, act with their author's permissions, and start atomically with the change that triggers them. Built-in workflows ship core processes that people configure, turn off or copy. See [workflows](docs/workflows.md). |
 
 ## API
 
@@ -180,15 +181,15 @@ atlas migrate apply --env local
 
 ## Deployment and scaling
 
-Use one API process with a local persistent disk. SQLite runs WAL mode, foreign-key enforcement, a 5-second busy timeout and FULL synchronous durability. An in-process mutex serializes application writes, and WebDAV locks live in the same process; readers use a bounded connection pool. Do not run multiple API replicas against a shared network filesystem. See [SQLite's WAL documentation](https://www.sqlite.org/wal.html).
+Use one API process with a local persistent disk. SQLite runs WAL mode, foreign-key enforcement and FULL synchronous durability. Write transactions take the write lock when they begin and wait up to 30 seconds for it, so API requests and workflow steps share the single writer; an in-process mutex keeps request writes in order, and WebDAV locks live in the same process; readers use a bounded connection pool. The workflow runner runs inside the API process and keeps its tables in the same database file; `NODE_ID` names the process (default `local`) and `RUN_RETENTION` sets how long finished runs are kept (default `720h`). Do not run multiple API replicas against a shared network filesystem. See [SQLite's WAL documentation](https://www.sqlite.org/wal.html).
 
 For production, set `APP_ENV=production`, `AUTH_MODE=oidc`, an HTTPS `OIDC_ISSUER`, and the API audience in `OIDC_AUDIENCE`. The provider must issue signed JWT bearer tokens with issuer, audience, subject and expiry claims; opaque tokens require a separate introspection adapter. The audience must be registered for this API. Development authentication is rejected in production. Terminate TLS at the ingress, enforce deployment request/rate limits there, and apply migrations before starting the API. The Docker image runs as UID 65532 and needs a writable persistent `/data` volume. Docker is not installed in the current workspace, so image verification requires CI or another host.
 
 Back up SQLite with its online backup API or `VACUUM INTO` and back up the referenced blob files consistently; copying only the `.db` file while WAL is active is not a valid backup. Blobs are created before their metadata transaction; ordinary failed writes clean up the object, while a process crash between those steps can leave an unreferenced file. A deployment should reconcile such orphan files after a grace period. Deleted resources keep their blobs, because their revisions are retained; purging tombstones and pruning old revisions need explicit retention rules first.
 
-This is an initial backend foundation, not a completed enterprise certification or deployment. Group ACLs, S3 storage, antivirus scanning, quotas, workflow approval, idempotency keys, document text extraction, tracing/metrics export and restore tooling remain future extensions. Performance has functional coverage; representative load benchmarks and SLOs still need a target workload.
+This is an initial backend foundation, not a completed enterprise certification or deployment. Group ACLs, S3 storage, antivirus scanning, quotas, approval and task activities, notifications, idempotency keys, document text extraction, tracing/metrics export and restore tooling remain future extensions. Performance has functional coverage; representative load benchmarks and SLOs still need a target workload.
 
-Asynchronous work (event reactions, background jobs, schedules and durable waits) is planned on an embedded runner; see the [runner plan](docs/plans/runner.md). Notifications and tasks build on it afterwards.
+The [runner plan](docs/plans/runner.md) describes the embedded runner and the next workflow phases; notifications and tasks build on workflows as activities and built-in workflows.
 
 To scale later, retain the service and API boundaries, introduce a PostgreSQL connection adapter, regenerate/review database-specific Atlas migrations, replace FTS5 and tag SQL, and use a shared object-store implementation of the storage port. A database migration is required; changing the connection string alone is insufficient.
 
