@@ -188,6 +188,8 @@ Back up SQLite with its online backup API or `VACUUM INTO` and back up the refer
 
 This is an initial backend foundation, not a completed enterprise certification or deployment. Group ACLs, S3 storage, antivirus scanning, quotas, workflow approval, idempotency keys, document text extraction, tracing/metrics export and restore tooling remain future extensions. Performance has functional coverage; representative load benchmarks and SLOs still need a target workload.
 
+Asynchronous work (event reactions, background jobs, schedules and durable waits) is planned on an embedded runner; see the [runner plan](docs/plans/runner.md). Notifications and tasks build on it afterwards.
+
 To scale later, retain the service and API boundaries, introduce a PostgreSQL connection adapter, regenerate/review database-specific Atlas migrations, replace FTS5 and tag SQL, and use a shared object-store implementation of the storage port. A database migration is required; changing the connection string alone is insufficient.
 
 Relevant upstream references: [Ent versioned migrations](https://entgo.io/docs/versioned-migrations/), [Atlas](https://atlasgo.io/getting-started), [SQLite FTS5](https://www.sqlite.org/fts5.html).
