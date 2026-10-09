@@ -270,7 +270,8 @@
                   "create"
                 ],
                 "type": "string"
-              }
+              },
+              "create": {}
             },
             "required": [
               "action",
@@ -285,7 +286,10 @@
                   "update"
                 ],
                 "type": "string"
-              }
+              },
+              "id": {},
+              "update": {},
+              "version": {}
             },
             "required": [
               "action",
@@ -302,7 +306,9 @@
                   "publish"
                 ],
                 "type": "string"
-              }
+              },
+              "id": {},
+              "version": {}
             },
             "required": [
               "action",
@@ -318,7 +324,9 @@
                   "unpublish"
                 ],
                 "type": "string"
-              }
+              },
+              "id": {},
+              "version": {}
             },
             "required": [
               "action",
@@ -334,7 +342,9 @@
                   "delete"
                 ],
                 "type": "string"
-              }
+              },
+              "id": {},
+              "version": {}
             },
             "required": [
               "action",
@@ -947,6 +957,24 @@
           },
           "value": {
             "description": "Typed operand; an array for in."
+          },
+          "value_ref": {
+            "description": "Exclusive with value. me resolves to the authenticated subject; UTC date references require date/datetime fields and resolve to midnight for datetime. Plain value strings stay literal.",
+            "enum": [
+              "me",
+              "today",
+              "yesterday",
+              "tomorrow",
+              "weekStart",
+              "weekEnd",
+              "monthStart",
+              "monthEnd",
+              "last7Days",
+              "next7Days",
+              "last30Days",
+              "next30Days"
+            ],
+            "type": "string"
           }
         },
         "type": "object"
@@ -1298,6 +1326,28 @@
         ],
         "type": "object"
       },
+      "PageSmartFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SmartFolder"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "next_cursor": {
+            "description": "Opaque cursor for the next page; absent on the last page.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "PageTerm": {
         "additionalProperties": false,
         "properties": {
@@ -1417,6 +1467,103 @@
         "required": [
           "inherit"
         ],
+        "type": "object"
+      },
+      "PortableSmartFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/PortableSmartFolderDefinition"
+          },
+          "description": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "definition"
+        ],
+        "type": "object"
+      },
+      "PortableSmartFolderDefinition": {
+        "additionalProperties": false,
+        "description": "Portable shared definition: named selectors and term paths, with filter literals retained literally.",
+        "properties": {
+          "collections": {
+            "description": "Collection names.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "content_types": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "filter": {
+            "$ref": "#/components/schemas/FilterExpr"
+          },
+          "group_by": {
+            "items": {
+              "$ref": "#/components/schemas/SmartFolderGroupBy"
+            },
+            "maxItems": 3,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "include_folders": {
+            "type": "boolean"
+          },
+          "templates": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "term_match": {
+            "description": "Defaults to all.",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "type": "string"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/SmartFolderTermRef"
+            },
+            "maxItems": 20,
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "Problem": {
@@ -2211,6 +2358,516 @@
         ],
         "type": "object"
       },
+      "SmartFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/SmartFolderDefinition"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "description": "Owner of a personal folder; absent for shared folders.",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "workspace_id": {
+            "description": "Workspace of a shared folder; absent for personal folders.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "definition",
+          "version",
+          "created_by",
+          "updated_by",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "SmartFolderDefinition": {
+        "additionalProperties": false,
+        "description": "Live query across at most 100 readable collections. Name/key selectors ignore case, OR within each selector and AND between selectors; omitted selectors include all readable collections. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have system metadata only and are excluded when term/content-type selectors are present.",
+        "properties": {
+          "collections": {
+            "description": "Collection names, ignoring case.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "content_types": {
+            "description": "Content type keys or names, ignoring case.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "filter": {
+            "$ref": "#/components/schemas/FilterExpr"
+          },
+          "group_by": {
+            "description": "Navigation levels.",
+            "items": {
+              "$ref": "#/components/schemas/SmartFolderGroupBy"
+            },
+            "maxItems": 3,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "include_folders": {
+            "type": "boolean"
+          },
+          "templates": {
+            "description": "Adopted template keys, ignoring case.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          },
+          "term_match": {
+            "description": "Defaults to all.",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "type": "string"
+          },
+          "terms": {
+            "description": "Term IDs; descendants match too.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "type": [
+              "array",
+              "null"
+            ],
+            "uniqueItems": true
+          }
+        },
+        "type": "object"
+      },
+      "SmartFolderDrop": {
+        "additionalProperties": false,
+        "description": "Classify an existing item (item_id and version) or create one (create and optional parent_id) through ordinary item validation, revisions and publication. Inferred AND equalities, selected terms and writable path fields are applied; non-inferable predicates must already fit. The write rolls back unless the head matches the folder and path. Existing items retain their location.",
+        "oneOf": [
+          {
+            "properties": {
+              "item_id": {},
+              "version": {}
+            },
+            "required": [
+              "item_id",
+              "version"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "create": {}
+            },
+            "required": [
+              "create"
+            ],
+            "type": "object"
+          }
+        ],
+        "properties": {
+          "collection_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "create": {
+            "$ref": "#/components/schemas/BulkCreate",
+            "description": "New item to create in the collection."
+          },
+          "folder_version": {
+            "description": "Current smart folder version.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "item_id": {
+            "description": "Existing item to classify; requires version.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "parent_id": {
+            "description": "Folder of the collection for a created item.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "path": {
+            "description": "One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped.",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "maxItems": 3,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "version": {
+            "description": "Current item version.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "folder_version",
+          "collection_id"
+        ],
+        "type": "object"
+      },
+      "SmartFolderEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "collection_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/Resource"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "collection_id",
+          "collection_name",
+          "item"
+        ],
+        "type": "object"
+      },
+      "SmartFolderGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "value",
+          "label",
+          "count"
+        ],
+        "type": "object"
+      },
+      "SmartFolderGroupBy": {
+        "additionalProperties": false,
+        "properties": {
+          "by": {
+            "description": "Date bucket for date/datetime fields.",
+            "enum": [
+              "year",
+              "month"
+            ],
+            "type": "string"
+          },
+          "field": {
+            "description": "Indexed scalar field key or system field.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "type": "object"
+      },
+      "SmartFolderGroupsResult": {
+        "additionalProperties": false,
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SmartFolderGroup"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "field": {
+            "type": "string"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "SmartFolderImportResult": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "data": {
+            "description": "Created and updated definitions.",
+            "items": {
+              "$ref": "#/components/schemas/SmartFolder"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "updated": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "workspace_version": {
+            "description": "Also returned as the ETag.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "updated",
+          "workspace_version",
+          "data"
+        ],
+        "type": "object"
+      },
+      "SmartFolderInput": {
+        "additionalProperties": false,
+        "description": "Personal folders are owner-only and may span all readable workspaces. Shared folders require workspace_id and workspace manage permission. Ownership and workspace are immutable on PUT; PUT replaces the definition. At most 100 shared folders per workspace. Shared mutations advance the workspace version; personal mutations do not.",
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/SmartFolderDefinition"
+          },
+          "description": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "personal": {
+            "type": "boolean"
+          },
+          "workspace_id": {
+            "description": "Required for shared folders.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "personal",
+          "definition"
+        ],
+        "type": "object"
+      },
+      "SmartFolderPackage": {
+        "additionalProperties": false,
+        "description": "Shared definitions only; personal folders and ownership IDs are excluded. Imports merge by exact unique name, preserve IDs and leave other definitions intact. Target taxonomy must exist. Any invalid entry rolls back the entire package. Identical reapplication changes no versions or audit records.",
+        "properties": {
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/PortableSmartFolder"
+            },
+            "maxItems": 100,
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "folders"
+        ],
+        "type": "object"
+      },
+      "SmartFolderQueryRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "description": "Opaque cursor from next_cursor.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum results; defaults to 50.",
+            "format": "int64",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "path": {
+            "description": "One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped.",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "maxItems": 3,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "surface": {
+            "description": "Defaults to auto.",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SmartFolderResult": {
+        "additionalProperties": false,
+        "description": "Recently modified first, ID ascending ties, permission filtering before pagination and totals. Cursors bind folder version, caller, surface, path, schemas and resolved references.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SmartFolderEntry"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "next_cursor": {
+            "description": "Opaque cursor for the next page; absent on the last page.",
+            "type": "string"
+          },
+          "total": {
+            "description": "Authorized members before pagination.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data",
+          "total"
+        ],
+        "type": "object"
+      },
+      "SmartFolderTermRef": {
+        "additionalProperties": false,
+        "description": "Taxonomy set key and root-to-leaf term names, resolved in the target workspace.",
+        "properties": {
+          "path": {
+            "description": "Root-to-leaf term names.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "term_set_key": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "term_set_key",
+          "path"
+        ],
+        "type": "object"
+      },
+      "SmartFolderUnclassify": {
+        "additionalProperties": false,
+        "properties": {
+          "folder_version": {
+            "description": "Current smart folder version.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "folder_version"
+        ],
+        "type": "object"
+      },
       "SortSpec": {
         "additionalProperties": false,
         "properties": {
@@ -2632,7 +3289,9 @@
                   "required_if"
                 ],
                 "type": "string"
-              }
+              },
+              "when_field": {},
+              "when_value": {}
             },
             "required": [
               "when_field",
@@ -2652,7 +3311,8 @@
                   "lte"
                 ],
                 "type": "string"
-              }
+              },
+              "other_field": {}
             },
             "required": [
               "other_field"
@@ -3131,7 +3791,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "416": {
-            "$ref": "#/components/responses/RequestedRangeNotSatisfiable"
+            "description": "Range not satisfiable"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -5894,6 +6554,702 @@
         ]
       }
     },
+    "/v1/smart-folders": {
+      "get": {
+        "operationId": "listSmartFolders",
+        "parameters": [
+          {
+            "description": "Limits the list to one workspace's shared folders.",
+            "explode": false,
+            "in": "query",
+            "name": "workspace_id",
+            "schema": {
+              "description": "Limits the list to one workspace's shared folders.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Opaque cursor from next_cursor of the previous page.",
+            "explode": false,
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "description": "Opaque cursor from next_cursor of the previous page.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum results.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "description": "Maximum results.",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageSmartFolder"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "List own personal and readable shared smart folders",
+        "tags": [
+          "Smart folders"
+        ]
+      },
+      "post": {
+        "description": "Shared folders require workspace manage permission and advance the workspace version.",
+        "operationId": "createSmartFolder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolder"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "description": "Quoted version to send as If-Match on the next change.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Create a smart folder",
+        "tags": [
+          "Smart folders"
+        ]
+      }
+    },
+    "/v1/smart-folders/{id}": {
+      "delete": {
+        "description": "Uses the smart folder ETag. Items are never affected.",
+        "operationId": "deleteSmartFolder",
+        "parameters": [
+          {
+            "description": "Current quoted numeric ETag of the entity being changed, e.g. \"1\". Missing returns 428, stale returns 409.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"[1-9][0-9]*\"$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Smart folder ID.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Smart folder ID.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Delete a smart folder definition",
+        "tags": [
+          "Smart folders"
+        ]
+      },
+      "get": {
+        "operationId": "getSmartFolder",
+        "parameters": [
+          {
+            "description": "Smart folder ID.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Smart folder ID.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolder"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "description": "Quoted version to send as If-Match on the next change.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Read a smart folder",
+        "tags": [
+          "Smart folders"
+        ]
+      },
+      "put": {
+        "description": "Uses the smart folder ETag. Ownership and workspace are immutable.",
+        "operationId": "updateSmartFolder",
+        "parameters": [
+          {
+            "description": "Current quoted numeric ETag of the entity being changed, e.g. \"1\". Missing returns 428, stale returns 409.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"[1-9][0-9]*\"$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Smart folder ID.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Smart folder ID.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolder"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "description": "Quoted version to send as If-Match on the next change.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Replace a smart folder definition",
+        "tags": [
+          "Smart folders"
+        ]
+      }
+    },
+    "/v1/smart-folders/{id}/items": {
+      "post": {
+        "description": "Returns 201 when an item is created and 200 when an existing item is classified. Read access to a definition grants no write access to content.",
+        "operationId": "classifySmartFolder",
+        "parameters": [
+          {
+            "description": "Smart folder ID.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Smart folder ID.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderDrop"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "description": "Quoted item version to send as If-Match on the next change.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "ETag": {
+                "description": "Quoted item version to send as If-Match on the next change.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Classify or create an item in a smart folder",
+        "tags": [
+          "Smart folders"
+        ]
+      }
+    },
+    "/v1/smart-folders/{id}/items/{itemID}": {
+      "delete": {
+        "description": "Requires item If-Match and current folder_version. Clears matching equality values/tags and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition.",
+        "operationId": "unclassifySmartFolder",
+        "parameters": [
+          {
+            "description": "Current quoted numeric ETag of the entity being changed, e.g. \"1\". Missing returns 428, stale returns 409.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"[1-9][0-9]*\"$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Smart folder ID.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Smart folder ID.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Item ID.",
+            "in": "path",
+            "name": "itemID",
+            "required": true,
+            "schema": {
+              "description": "Item ID.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderUnclassify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "description": "Quoted version to send as If-Match on the next change.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Remove classification while preserving item name and location",
+        "tags": [
+          "Smart folders"
+        ]
+      }
+    },
+    "/v1/smart-folders/{id}/query": {
+      "post": {
+        "operationId": "querySmartFolder",
+        "parameters": [
+          {
+            "description": "Smart folder ID.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Smart folder ID.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolderResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Query authorized live membership",
+        "tags": [
+          "Smart folders"
+        ]
+      }
+    },
+    "/v1/smart-folders/{id}/query/groups": {
+      "post": {
+        "operationId": "groupSmartFolder",
+        "parameters": [
+          {
+            "description": "Smart folder ID.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Smart folder ID.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolderGroupsResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Read counts and labels for the next navigation level",
+        "tags": [
+          "Smart folders"
+        ]
+      }
+    },
     "/v1/templates/{id}": {
       "get": {
         "operationId": "getTemplate",
@@ -7353,6 +8709,160 @@
         "summary": "Create a relationship type (workspace manage required)",
         "tags": [
           "Relationship types"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/smart-folders/export": {
+      "get": {
+        "operationId": "exportSmartFolders",
+        "parameters": [
+          {
+            "description": "Workspace ID.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Workspace ID.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolderPackage"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "description": "Quoted version to send as If-Match on the next change.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Export portable shared definitions (workspace manage required)",
+        "tags": [
+          "Smart folders"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/smart-folders/import": {
+      "post": {
+        "description": "Uses the workspace ETag.",
+        "operationId": "importSmartFolders",
+        "parameters": [
+          {
+            "description": "Current quoted numeric ETag of the entity being changed, e.g. \"1\". Missing returns 428, stale returns 409.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"[1-9][0-9]*\"$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Workspace ID.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Workspace ID.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderPackage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolderImportResult"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "description": "Quoted version to send as If-Match on the next change.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "Atomically merge portable shared definitions (workspace manage required)",
+        "tags": [
+          "Smart folders"
         ]
       }
     },

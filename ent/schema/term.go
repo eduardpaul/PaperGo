@@ -25,5 +25,5 @@ func (Term) Edges() []ent.Edge {
 	}
 }
 func (Term) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("term_set_id", "normalized_name").Unique(), index.Fields("term_set_id", "id")}
+	return []ent.Index{index.Fields("term_set_id", "normalized_name").Unique(), index.Fields("term_set_id", "id"), index.Fields("parent_id")}
 }

@@ -13,11 +13,26 @@ import (
 	"papergo/ent"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // SQLite's built-in lower() folds ASCII only; unicode_lower matches Go's
 // strings.ToLower so case-insensitive searches work for every script.
 func init() {
+	sqlite.MustRegisterDeterministicScalarFunction("papergo_time", 1, func(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+		if args[0] == nil {
+			return nil, nil
+		}
+		value, ok := args[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid stored timestamp")
+		}
+		t, err := time.Parse("2006-01-02 15:04:05.999999999-07:00", value)
+		if err != nil {
+			return nil, err
+		}
+		return t.UTC().Format("2006-01-02T15:04:05.000000000Z"), nil
+	})
 	sqlite.MustRegisterDeterministicScalarFunction("unicode_lower", 1, func(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
 		switch v := args[0].(type) {
 		case string:
@@ -49,6 +64,7 @@ func Open(ctx context.Context, path string) (*Database, error) {
 	}
 	u := url.URL{Scheme: "file", Path: uriPath}
 	q := url.Values{}
+	q.Set("_time_format", "sqlite")
 	for _, pragma := range []string{"foreign_keys(1)", "busy_timeout(5000)", "journal_mode(WAL)", "synchronous(FULL)"} {
 		q.Add("_pragma", pragma)
 	}

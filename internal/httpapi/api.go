@@ -70,6 +70,7 @@ func (a *API) routes(mux *http.ServeMux) *huma.OpenAPI {
 	a.registerItems(api)
 	a.registerContent(api, mux)
 	a.registerFoundation(api)
+	a.registerSmartFolders(api)
 	describeSchemas(api.OpenAPI())
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		a.problem(w, r, 404, "not_found", "route not found")

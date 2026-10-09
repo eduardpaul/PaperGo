@@ -82,6 +82,18 @@ func (_u *ResourceUpdate) AppendTags(v []string) *ResourceUpdate {
 	return _u
 }
 
+// SetTemplateKeys sets the "template_keys" field.
+func (_u *ResourceUpdate) SetTemplateKeys(v []string) *ResourceUpdate {
+	_u.mutation.SetTemplateKeys(v)
+	return _u
+}
+
+// AppendTemplateKeys appends value to the "template_keys" field.
+func (_u *ResourceUpdate) AppendTemplateKeys(v []string) *ResourceUpdate {
+	_u.mutation.AppendTemplateKeys(v)
+	return _u
+}
+
 // SetValues sets the "values" field.
 func (_u *ResourceUpdate) SetValues(v map[string]interface{}) *ResourceUpdate {
 	_u.mutation.SetValues(v)
@@ -818,6 +830,14 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			sqljson.Append(u, resource.FieldTags, value)
 		})
 	}
+	if value, ok := _u.mutation.TemplateKeys(); ok {
+		_spec.SetField(resource.FieldTemplateKeys, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedTemplateKeys(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, resource.FieldTemplateKeys, value)
+		})
+	}
 	if value, ok := _u.mutation.Values(); ok {
 		_spec.SetField(resource.FieldValues, field.TypeJSON, value)
 	}
@@ -1495,6 +1515,18 @@ func (_u *ResourceUpdateOne) SetTags(v []string) *ResourceUpdateOne {
 // AppendTags appends value to the "tags" field.
 func (_u *ResourceUpdateOne) AppendTags(v []string) *ResourceUpdateOne {
 	_u.mutation.AppendTags(v)
+	return _u
+}
+
+// SetTemplateKeys sets the "template_keys" field.
+func (_u *ResourceUpdateOne) SetTemplateKeys(v []string) *ResourceUpdateOne {
+	_u.mutation.SetTemplateKeys(v)
+	return _u
+}
+
+// AppendTemplateKeys appends value to the "template_keys" field.
+func (_u *ResourceUpdateOne) AppendTemplateKeys(v []string) *ResourceUpdateOne {
+	_u.mutation.AppendTemplateKeys(v)
 	return _u
 }
 
@@ -2262,6 +2294,14 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	if value, ok := _u.mutation.AppendedTags(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, resource.FieldTags, value)
+		})
+	}
+	if value, ok := _u.mutation.TemplateKeys(); ok {
+		_spec.SetField(resource.FieldTemplateKeys, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedTemplateKeys(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, resource.FieldTemplateKeys, value)
 		})
 	}
 	if value, ok := _u.mutation.Values(); ok {

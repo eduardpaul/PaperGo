@@ -200,6 +200,18 @@ func (f SchemaTemplateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SchemaTemplateMutation", m)
 }
 
+// The SmartFolderFunc type is an adapter to allow the use of ordinary
+// function as SmartFolder mutator.
+type SmartFolderFunc func(context.Context, *ent.SmartFolderMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SmartFolderFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SmartFolderMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SmartFolderMutation", m)
+}
+
 // The TermFunc type is an adapter to allow the use of ordinary
 // function as Term mutator.
 type TermFunc func(context.Context, *ent.TermMutation) (ent.Value, error)

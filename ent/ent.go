@@ -22,6 +22,7 @@ import (
 	"papergo/ent/resource"
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
+	"papergo/ent/smartfolder"
 	"papergo/ent/term"
 	"papergo/ent/termset"
 	"papergo/ent/webdavcredential"
@@ -107,6 +108,7 @@ func checkColumn(t, c string) error {
 			resource.Table:         resource.ValidColumn,
 			schemarevision.Table:   schemarevision.ValidColumn,
 			schematemplate.Table:   schematemplate.ValidColumn,
+			smartfolder.Table:      smartfolder.ValidColumn,
 			term.Table:             term.ValidColumn,
 			termset.Table:          termset.ValidColumn,
 			webdavcredential.Table: webdavcredential.ValidColumn,

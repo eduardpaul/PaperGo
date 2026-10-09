@@ -36,6 +36,8 @@ type Resource struct {
 	Name string `json:"name,omitempty"`
 	// Tags holds the value of the "tags" field.
 	Tags []string `json:"tags,omitempty"`
+	// TemplateKeys holds the value of the "template_keys" field.
+	TemplateKeys []string `json:"template_keys,omitempty"`
 	// Values holds the value of the "values" field.
 	Values map[string]interface{} `json:"values,omitempty"`
 	// InheritPermissions holds the value of the "inherit_permissions" field.
@@ -259,7 +261,7 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case resource.FieldTags, resource.FieldValues:
+		case resource.FieldTags, resource.FieldTemplateKeys, resource.FieldValues:
 			values[i] = new([]byte)
 		case resource.FieldInheritPermissions, resource.FieldPublishingEnabled, resource.FieldWebdavEnabled:
 			values[i] = new(sql.NullBool)
@@ -341,6 +343,14 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.Tags); err != nil {
 					return fmt.Errorf("unmarshal field tags: %w", err)
+				}
+			}
+		case resource.FieldTemplateKeys:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field template_keys", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.TemplateKeys); err != nil {
+					return fmt.Errorf("unmarshal field template_keys: %w", err)
 				}
 			}
 		case resource.FieldValues:
@@ -581,6 +591,9 @@ func (_m *Resource) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("tags=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Tags))
+	builder.WriteString(", ")
+	builder.WriteString("template_keys=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TemplateKeys))
 	builder.WriteString(", ")
 	builder.WriteString("values=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Values))

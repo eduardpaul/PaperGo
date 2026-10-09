@@ -82,7 +82,7 @@ PaperDotNet supplies the [field registry contracts](https://github.com/eduardpau
 
 ### 2. Saved views over one bounded query model
 
-Add ListView with collection, name, selected columns, filter expression, sort, optional grouping, default flag, and concurrency version. Define a validated QuerySpec expression tree that can be shared by listing, search, saved views, and eventual smart folders.
+ListView supports collection, name, selected columns, filter expression, sort, optional grouping, default flag, and concurrency version. The validated QuerySpec expression tree also powers collection queries and [smart folders](smart-folders.md).
 
 Compile allowed operations into parameterized SQL; retain exact typed comparisons and a stable ID sort tie-breaker. Authorization and head/published selection must occur before pagination, grouping, and counts. Saving a view never grants access to its contents.
 

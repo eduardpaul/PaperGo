@@ -24,6 +24,7 @@ import (
 	"papergo/ent/resource"
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
+	"papergo/ent/smartfolder"
 	"papergo/ent/term"
 	"papergo/ent/termset"
 	"papergo/ent/webdavcredential"
@@ -60,6 +61,7 @@ const (
 	TypeResource         = "Resource"
 	TypeSchemaRevision   = "SchemaRevision"
 	TypeSchemaTemplate   = "SchemaTemplate"
+	TypeSmartFolder      = "SmartFolder"
 	TypeTerm             = "Term"
 	TypeTermSet          = "TermSet"
 	TypeWebDAVCredential = "WebDAVCredential"
@@ -11903,6 +11905,8 @@ type ResourceMutation struct {
 	name                      *string
 	tags                      *[]string
 	appendtags                []string
+	template_keys             *[]string
+	appendtemplate_keys       []string
 	values                    *map[string]interface{}
 	inherit_permissions       *bool
 	version                   *int
@@ -12407,6 +12411,57 @@ func (m *ResourceMutation) AppendedTags() ([]string, bool) {
 func (m *ResourceMutation) ResetTags() {
 	m.tags = nil
 	m.appendtags = nil
+}
+
+// SetTemplateKeys sets the "template_keys" field.
+func (m *ResourceMutation) SetTemplateKeys(s []string) {
+	m.template_keys = &s
+	m.appendtemplate_keys = nil
+}
+
+// TemplateKeys returns the value of the "template_keys" field in the mutation.
+func (m *ResourceMutation) TemplateKeys() (r []string, exists bool) {
+	v := m.template_keys
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemplateKeys returns the old "template_keys" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldTemplateKeys(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemplateKeys is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemplateKeys requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemplateKeys: %w", err)
+	}
+	return oldValue.TemplateKeys, nil
+}
+
+// AppendTemplateKeys adds s to the "template_keys" field.
+func (m *ResourceMutation) AppendTemplateKeys(s []string) {
+	m.appendtemplate_keys = append(m.appendtemplate_keys, s...)
+}
+
+// AppendedTemplateKeys returns the list of values that were appended to the "template_keys" field in this mutation.
+func (m *ResourceMutation) AppendedTemplateKeys() ([]string, bool) {
+	if len(m.appendtemplate_keys) == 0 {
+		return nil, false
+	}
+	return m.appendtemplate_keys, true
+}
+
+// ResetTemplateKeys resets all changes to the "template_keys" field.
+func (m *ResourceMutation) ResetTemplateKeys() {
+	m.template_keys = nil
+	m.appendtemplate_keys = nil
 }
 
 // SetValues sets the "values" field.
@@ -13776,7 +13831,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -13800,6 +13855,9 @@ func (m *ResourceMutation) Fields() []string {
 	}
 	if m.tags != nil {
 		fields = append(fields, resource.FieldTags)
+	}
+	if m.template_keys != nil {
+		fields = append(fields, resource.FieldTemplateKeys)
 	}
 	if m.values != nil {
 		fields = append(fields, resource.FieldValues)
@@ -13870,6 +13928,8 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case resource.FieldTags:
 		return m.Tags()
+	case resource.FieldTemplateKeys:
+		return m.TemplateKeys()
 	case resource.FieldValues:
 		return m.Values()
 	case resource.FieldInheritPermissions:
@@ -13925,6 +13985,8 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldName(ctx)
 	case resource.FieldTags:
 		return m.OldTags(ctx)
+	case resource.FieldTemplateKeys:
+		return m.OldTemplateKeys(ctx)
 	case resource.FieldValues:
 		return m.OldValues(ctx)
 	case resource.FieldInheritPermissions:
@@ -14019,6 +14081,13 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTags(v)
+		return nil
+	case resource.FieldTemplateKeys:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemplateKeys(v)
 		return nil
 	case resource.FieldValues:
 		v, ok := value.(map[string]interface{})
@@ -14281,6 +14350,9 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldTags:
 		m.ResetTags()
+		return nil
+	case resource.FieldTemplateKeys:
+		m.ResetTemplateKeys()
 		return nil
 	case resource.FieldValues:
 		m.ResetValues()
@@ -16292,6 +16364,971 @@ func (m *SchemaTemplateMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown SchemaTemplate edge %s", name)
+}
+
+// SmartFolderMutation represents an operation that mutates the SmartFolder nodes in the graph.
+type SmartFolderMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	created_at       *time.Time
+	owner_id         *string
+	name             *string
+	description      *string
+	definition       *jsontext.Value
+	appenddefinition jsontext.Value
+	created_by       *string
+	updated_by       *string
+	updated_at       *time.Time
+	version          *int
+	addversion       *int
+	clearedFields    map[string]struct{}
+	workspace        *string
+	clearedworkspace bool
+	done             bool
+	oldValue         func(context.Context) (*SmartFolder, error)
+	predicates       []predicate.SmartFolder
+}
+
+var _ ent.Mutation = (*SmartFolderMutation)(nil)
+
+// smartfolderOption allows management of the mutation configuration using functional options.
+type smartfolderOption func(*SmartFolderMutation)
+
+// newSmartFolderMutation creates new mutation for the SmartFolder entity.
+func newSmartFolderMutation(c config, op Op, opts ...smartfolderOption) *SmartFolderMutation {
+	m := &SmartFolderMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSmartFolder,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSmartFolderID sets the ID field of the mutation.
+func withSmartFolderID(id string) smartfolderOption {
+	return func(m *SmartFolderMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SmartFolder
+		)
+		m.oldValue = func(ctx context.Context) (*SmartFolder, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SmartFolder.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSmartFolder sets the old SmartFolder of the mutation.
+func withSmartFolder(node *SmartFolder) smartfolderOption {
+	return func(m *SmartFolderMutation) {
+		m.oldValue = func(context.Context) (*SmartFolder, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SmartFolderMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SmartFolderMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of SmartFolder entities.
+func (m *SmartFolderMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SmartFolderMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SmartFolderMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SmartFolder.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SmartFolderMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SmartFolderMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SmartFolderMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetWorkspaceID sets the "workspace_id" field.
+func (m *SmartFolderMutation) SetWorkspaceID(s string) {
+	m.workspace = &s
+}
+
+// WorkspaceID returns the value of the "workspace_id" field in the mutation.
+func (m *SmartFolderMutation) WorkspaceID() (r string, exists bool) {
+	v := m.workspace
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkspaceID returns the old "workspace_id" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldWorkspaceID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkspaceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkspaceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkspaceID: %w", err)
+	}
+	return oldValue.WorkspaceID, nil
+}
+
+// ClearWorkspaceID clears the value of the "workspace_id" field.
+func (m *SmartFolderMutation) ClearWorkspaceID() {
+	m.workspace = nil
+	m.clearedFields[smartfolder.FieldWorkspaceID] = struct{}{}
+}
+
+// WorkspaceIDCleared returns if the "workspace_id" field was cleared in this mutation.
+func (m *SmartFolderMutation) WorkspaceIDCleared() bool {
+	_, ok := m.clearedFields[smartfolder.FieldWorkspaceID]
+	return ok
+}
+
+// ResetWorkspaceID resets all changes to the "workspace_id" field.
+func (m *SmartFolderMutation) ResetWorkspaceID() {
+	m.workspace = nil
+	delete(m.clearedFields, smartfolder.FieldWorkspaceID)
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (m *SmartFolderMutation) SetOwnerID(s string) {
+	m.owner_id = &s
+}
+
+// OwnerID returns the value of the "owner_id" field in the mutation.
+func (m *SmartFolderMutation) OwnerID() (r string, exists bool) {
+	v := m.owner_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnerID returns the old "owner_id" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldOwnerID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnerID: %w", err)
+	}
+	return oldValue.OwnerID, nil
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (m *SmartFolderMutation) ClearOwnerID() {
+	m.owner_id = nil
+	m.clearedFields[smartfolder.FieldOwnerID] = struct{}{}
+}
+
+// OwnerIDCleared returns if the "owner_id" field was cleared in this mutation.
+func (m *SmartFolderMutation) OwnerIDCleared() bool {
+	_, ok := m.clearedFields[smartfolder.FieldOwnerID]
+	return ok
+}
+
+// ResetOwnerID resets all changes to the "owner_id" field.
+func (m *SmartFolderMutation) ResetOwnerID() {
+	m.owner_id = nil
+	delete(m.clearedFields, smartfolder.FieldOwnerID)
+}
+
+// SetName sets the "name" field.
+func (m *SmartFolderMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *SmartFolderMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *SmartFolderMutation) ResetName() {
+	m.name = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *SmartFolderMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *SmartFolderMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *SmartFolderMutation) ResetDescription() {
+	m.description = nil
+}
+
+// SetDefinition sets the "definition" field.
+func (m *SmartFolderMutation) SetDefinition(j jsontext.Value) {
+	m.definition = &j
+	m.appenddefinition = nil
+}
+
+// Definition returns the value of the "definition" field in the mutation.
+func (m *SmartFolderMutation) Definition() (r jsontext.Value, exists bool) {
+	v := m.definition
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefinition returns the old "definition" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldDefinition(ctx context.Context) (v jsontext.Value, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefinition is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefinition requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefinition: %w", err)
+	}
+	return oldValue.Definition, nil
+}
+
+// AppendDefinition adds j to the "definition" field.
+func (m *SmartFolderMutation) AppendDefinition(j jsontext.Value) {
+	m.appenddefinition = append(m.appenddefinition, j...)
+}
+
+// AppendedDefinition returns the list of values that were appended to the "definition" field in this mutation.
+func (m *SmartFolderMutation) AppendedDefinition() (jsontext.Value, bool) {
+	if len(m.appenddefinition) == 0 {
+		return nil, false
+	}
+	return m.appenddefinition, true
+}
+
+// ResetDefinition resets all changes to the "definition" field.
+func (m *SmartFolderMutation) ResetDefinition() {
+	m.definition = nil
+	m.appenddefinition = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *SmartFolderMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *SmartFolderMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *SmartFolderMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *SmartFolderMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *SmartFolderMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *SmartFolderMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SmartFolderMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SmartFolderMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SmartFolderMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetVersion sets the "version" field.
+func (m *SmartFolderMutation) SetVersion(i int) {
+	m.version = &i
+	m.addversion = nil
+}
+
+// Version returns the value of the "version" field in the mutation.
+func (m *SmartFolderMutation) Version() (r int, exists bool) {
+	v := m.version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersion returns the old "version" field's value of the SmartFolder entity.
+// If the SmartFolder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SmartFolderMutation) OldVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
+	}
+	return oldValue.Version, nil
+}
+
+// AddVersion adds i to the "version" field.
+func (m *SmartFolderMutation) AddVersion(i int) {
+	if m.addversion != nil {
+		*m.addversion += i
+	} else {
+		m.addversion = &i
+	}
+}
+
+// AddedVersion returns the value that was added to the "version" field in this mutation.
+func (m *SmartFolderMutation) AddedVersion() (r int, exists bool) {
+	v := m.addversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVersion resets all changes to the "version" field.
+func (m *SmartFolderMutation) ResetVersion() {
+	m.version = nil
+	m.addversion = nil
+}
+
+// ClearWorkspace clears the "workspace" edge to the Resource entity.
+func (m *SmartFolderMutation) ClearWorkspace() {
+	m.clearedworkspace = true
+	m.clearedFields[smartfolder.FieldWorkspaceID] = struct{}{}
+}
+
+// WorkspaceCleared reports if the "workspace" edge to the Resource entity was cleared.
+func (m *SmartFolderMutation) WorkspaceCleared() bool {
+	return m.WorkspaceIDCleared() || m.clearedworkspace
+}
+
+// WorkspaceIDs returns the "workspace" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkspaceID instead. It exists only for internal usage by the builders.
+func (m *SmartFolderMutation) WorkspaceIDs() (ids []string) {
+	if id := m.workspace; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkspace resets all changes to the "workspace" edge.
+func (m *SmartFolderMutation) ResetWorkspace() {
+	m.workspace = nil
+	m.clearedworkspace = false
+}
+
+// Where appends a list predicates to the SmartFolderMutation builder.
+func (m *SmartFolderMutation) Where(ps ...predicate.SmartFolder) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SmartFolderMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SmartFolderMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SmartFolder, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SmartFolderMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SmartFolderMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SmartFolder).
+func (m *SmartFolderMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SmartFolderMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.created_at != nil {
+		fields = append(fields, smartfolder.FieldCreatedAt)
+	}
+	if m.workspace != nil {
+		fields = append(fields, smartfolder.FieldWorkspaceID)
+	}
+	if m.owner_id != nil {
+		fields = append(fields, smartfolder.FieldOwnerID)
+	}
+	if m.name != nil {
+		fields = append(fields, smartfolder.FieldName)
+	}
+	if m.description != nil {
+		fields = append(fields, smartfolder.FieldDescription)
+	}
+	if m.definition != nil {
+		fields = append(fields, smartfolder.FieldDefinition)
+	}
+	if m.created_by != nil {
+		fields = append(fields, smartfolder.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, smartfolder.FieldUpdatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, smartfolder.FieldUpdatedAt)
+	}
+	if m.version != nil {
+		fields = append(fields, smartfolder.FieldVersion)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SmartFolderMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case smartfolder.FieldCreatedAt:
+		return m.CreatedAt()
+	case smartfolder.FieldWorkspaceID:
+		return m.WorkspaceID()
+	case smartfolder.FieldOwnerID:
+		return m.OwnerID()
+	case smartfolder.FieldName:
+		return m.Name()
+	case smartfolder.FieldDescription:
+		return m.Description()
+	case smartfolder.FieldDefinition:
+		return m.Definition()
+	case smartfolder.FieldCreatedBy:
+		return m.CreatedBy()
+	case smartfolder.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case smartfolder.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case smartfolder.FieldVersion:
+		return m.Version()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SmartFolderMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case smartfolder.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case smartfolder.FieldWorkspaceID:
+		return m.OldWorkspaceID(ctx)
+	case smartfolder.FieldOwnerID:
+		return m.OldOwnerID(ctx)
+	case smartfolder.FieldName:
+		return m.OldName(ctx)
+	case smartfolder.FieldDescription:
+		return m.OldDescription(ctx)
+	case smartfolder.FieldDefinition:
+		return m.OldDefinition(ctx)
+	case smartfolder.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case smartfolder.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case smartfolder.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case smartfolder.FieldVersion:
+		return m.OldVersion(ctx)
+	}
+	return nil, fmt.Errorf("unknown SmartFolder field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SmartFolderMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case smartfolder.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case smartfolder.FieldWorkspaceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkspaceID(v)
+		return nil
+	case smartfolder.FieldOwnerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnerID(v)
+		return nil
+	case smartfolder.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case smartfolder.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case smartfolder.FieldDefinition:
+		v, ok := value.(jsontext.Value)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefinition(v)
+		return nil
+	case smartfolder.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case smartfolder.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case smartfolder.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case smartfolder.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SmartFolder field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SmartFolderMutation) AddedFields() []string {
+	var fields []string
+	if m.addversion != nil {
+		fields = append(fields, smartfolder.FieldVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SmartFolderMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case smartfolder.FieldVersion:
+		return m.AddedVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SmartFolderMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case smartfolder.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SmartFolder numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SmartFolderMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(smartfolder.FieldWorkspaceID) {
+		fields = append(fields, smartfolder.FieldWorkspaceID)
+	}
+	if m.FieldCleared(smartfolder.FieldOwnerID) {
+		fields = append(fields, smartfolder.FieldOwnerID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SmartFolderMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SmartFolderMutation) ClearField(name string) error {
+	switch name {
+	case smartfolder.FieldWorkspaceID:
+		m.ClearWorkspaceID()
+		return nil
+	case smartfolder.FieldOwnerID:
+		m.ClearOwnerID()
+		return nil
+	}
+	return fmt.Errorf("unknown SmartFolder nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SmartFolderMutation) ResetField(name string) error {
+	switch name {
+	case smartfolder.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case smartfolder.FieldWorkspaceID:
+		m.ResetWorkspaceID()
+		return nil
+	case smartfolder.FieldOwnerID:
+		m.ResetOwnerID()
+		return nil
+	case smartfolder.FieldName:
+		m.ResetName()
+		return nil
+	case smartfolder.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case smartfolder.FieldDefinition:
+		m.ResetDefinition()
+		return nil
+	case smartfolder.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case smartfolder.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case smartfolder.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case smartfolder.FieldVersion:
+		m.ResetVersion()
+		return nil
+	}
+	return fmt.Errorf("unknown SmartFolder field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SmartFolderMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.workspace != nil {
+		edges = append(edges, smartfolder.EdgeWorkspace)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SmartFolderMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case smartfolder.EdgeWorkspace:
+		if id := m.workspace; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SmartFolderMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SmartFolderMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SmartFolderMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedworkspace {
+		edges = append(edges, smartfolder.EdgeWorkspace)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SmartFolderMutation) EdgeCleared(name string) bool {
+	switch name {
+	case smartfolder.EdgeWorkspace:
+		return m.clearedworkspace
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SmartFolderMutation) ClearEdge(name string) error {
+	switch name {
+	case smartfolder.EdgeWorkspace:
+		m.ClearWorkspace()
+		return nil
+	}
+	return fmt.Errorf("unknown SmartFolder unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SmartFolderMutation) ResetEdge(name string) error {
+	switch name {
+	case smartfolder.EdgeWorkspace:
+		m.ResetWorkspace()
+		return nil
+	}
+	return fmt.Errorf("unknown SmartFolder edge %s", name)
 }
 
 // TermMutation represents an operation that mutates the Term nodes in the graph.

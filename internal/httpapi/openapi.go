@@ -46,7 +46,7 @@ func newHumaAPI(mux *http.ServeMux) huma.API {
 	// Operations share one documented response per error status.
 	config.OnAddOperation = append(config.OnAddOperation, func(_ *huma.OpenAPI, op *huma.Operation) {
 		for code := range op.Responses {
-			if status, err := strconv.Atoi(code); err == nil && status >= 400 {
+			if status, err := strconv.Atoi(code); err == nil && problemResponses[status] != "" {
 				op.Responses[code] = &huma.Response{Ref: "#/components/responses/" + problemResponse(status)}
 			}
 		}

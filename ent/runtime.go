@@ -20,6 +20,7 @@ import (
 	"papergo/ent/schema"
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
+	"papergo/ent/smartfolder"
 	"papergo/ent/term"
 	"papergo/ent/termset"
 	"papergo/ent/webdavcredential"
@@ -781,54 +782,58 @@ func init() {
 	resourceDescTags := resourceFields[6].Descriptor()
 	// resource.DefaultTags holds the default value on creation for the tags field.
 	resource.DefaultTags = resourceDescTags.Default.([]string)
+	// resourceDescTemplateKeys is the schema descriptor for template_keys field.
+	resourceDescTemplateKeys := resourceFields[7].Descriptor()
+	// resource.DefaultTemplateKeys holds the default value on creation for the template_keys field.
+	resource.DefaultTemplateKeys = resourceDescTemplateKeys.Default.([]string)
 	// resourceDescValues is the schema descriptor for values field.
-	resourceDescValues := resourceFields[7].Descriptor()
+	resourceDescValues := resourceFields[8].Descriptor()
 	// resource.DefaultValues holds the default value on creation for the values field.
 	resource.DefaultValues = resourceDescValues.Default.(map[string]interface{})
 	// resourceDescInheritPermissions is the schema descriptor for inherit_permissions field.
-	resourceDescInheritPermissions := resourceFields[8].Descriptor()
+	resourceDescInheritPermissions := resourceFields[9].Descriptor()
 	// resource.DefaultInheritPermissions holds the default value on creation for the inherit_permissions field.
 	resource.DefaultInheritPermissions = resourceDescInheritPermissions.Default.(bool)
 	// resourceDescVersion is the schema descriptor for version field.
-	resourceDescVersion := resourceFields[9].Descriptor()
+	resourceDescVersion := resourceFields[10].Descriptor()
 	// resource.DefaultVersion holds the default value on creation for the version field.
 	resource.DefaultVersion = resourceDescVersion.Default.(int)
 	// resource.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	resource.VersionValidator = resourceDescVersion.Validators[0].(func(int) error)
 	// resourceDescNextRevisionNumber is the schema descriptor for next_revision_number field.
-	resourceDescNextRevisionNumber := resourceFields[13].Descriptor()
+	resourceDescNextRevisionNumber := resourceFields[14].Descriptor()
 	// resource.DefaultNextRevisionNumber holds the default value on creation for the next_revision_number field.
 	resource.DefaultNextRevisionNumber = resourceDescNextRevisionNumber.Default.(int)
 	// resource.NextRevisionNumberValidator is a validator for the "next_revision_number" field. It is called by the builders before save.
 	resource.NextRevisionNumberValidator = resourceDescNextRevisionNumber.Validators[0].(func(int) error)
 	// resourceDescPublishingEnabled is the schema descriptor for publishing_enabled field.
-	resourceDescPublishingEnabled := resourceFields[14].Descriptor()
+	resourceDescPublishingEnabled := resourceFields[15].Descriptor()
 	// resource.DefaultPublishingEnabled holds the default value on creation for the publishing_enabled field.
 	resource.DefaultPublishingEnabled = resourceDescPublishingEnabled.Default.(bool)
 	// resourceDescWebdavEnabled is the schema descriptor for webdav_enabled field.
-	resourceDescWebdavEnabled := resourceFields[15].Descriptor()
+	resourceDescWebdavEnabled := resourceFields[16].Descriptor()
 	// resource.DefaultWebdavEnabled holds the default value on creation for the webdav_enabled field.
 	resource.DefaultWebdavEnabled = resourceDescWebdavEnabled.Default.(bool)
 	// resourceDescUpdatedAt is the schema descriptor for updated_at field.
-	resourceDescUpdatedAt := resourceFields[16].Descriptor()
+	resourceDescUpdatedAt := resourceFields[17].Descriptor()
 	// resource.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	resource.DefaultUpdatedAt = resourceDescUpdatedAt.Default.(func() time.Time)
 	// resource.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	resource.UpdateDefaultUpdatedAt = resourceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// resourceDescCreatedBy is the schema descriptor for created_by field.
-	resourceDescCreatedBy := resourceFields[17].Descriptor()
+	resourceDescCreatedBy := resourceFields[18].Descriptor()
 	// resource.DefaultCreatedBy holds the default value on creation for the created_by field.
 	resource.DefaultCreatedBy = resourceDescCreatedBy.Default.(string)
 	// resourceDescUpdatedBy is the schema descriptor for updated_by field.
-	resourceDescUpdatedBy := resourceFields[18].Descriptor()
+	resourceDescUpdatedBy := resourceFields[19].Descriptor()
 	// resource.DefaultUpdatedBy holds the default value on creation for the updated_by field.
 	resource.DefaultUpdatedBy = resourceDescUpdatedBy.Default.(string)
 	// resourceDescScopeID is the schema descriptor for scope_id field.
-	resourceDescScopeID := resourceFields[19].Descriptor()
+	resourceDescScopeID := resourceFields[20].Descriptor()
 	// resource.ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
 	resource.ScopeIDValidator = resourceDescScopeID.Validators[0].(func(string) error)
 	// resourceDescNameKey is the schema descriptor for name_key field.
-	resourceDescNameKey := resourceFields[20].Descriptor()
+	resourceDescNameKey := resourceFields[21].Descriptor()
 	// resource.NameKeyValidator is a validator for the "name_key" field. It is called by the builders before save.
 	resource.NameKeyValidator = resourceDescNameKey.Validators[0].(func(string) error)
 	// resourceDescID is the schema descriptor for id field.
@@ -891,6 +896,63 @@ func init() {
 	schematemplate.DefaultID = schematemplateDescID.Default.(func() string)
 	// schematemplate.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	schematemplate.IDValidator = schematemplateDescID.Validators[0].(func(string) error)
+	smartfolderMixin := schema.SmartFolder{}.Mixin()
+	smartfolderMixinFields0 := smartfolderMixin[0].Fields()
+	_ = smartfolderMixinFields0
+	smartfolderFields := schema.SmartFolder{}.Fields()
+	_ = smartfolderFields
+	// smartfolderDescCreatedAt is the schema descriptor for created_at field.
+	smartfolderDescCreatedAt := smartfolderMixinFields0[1].Descriptor()
+	// smartfolder.DefaultCreatedAt holds the default value on creation for the created_at field.
+	smartfolder.DefaultCreatedAt = smartfolderDescCreatedAt.Default.(func() time.Time)
+	// smartfolderDescWorkspaceID is the schema descriptor for workspace_id field.
+	smartfolderDescWorkspaceID := smartfolderFields[0].Descriptor()
+	// smartfolder.WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
+	smartfolder.WorkspaceIDValidator = smartfolderDescWorkspaceID.Validators[0].(func(string) error)
+	// smartfolderDescOwnerID is the schema descriptor for owner_id field.
+	smartfolderDescOwnerID := smartfolderFields[1].Descriptor()
+	// smartfolder.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
+	smartfolder.OwnerIDValidator = smartfolderDescOwnerID.Validators[0].(func(string) error)
+	// smartfolderDescName is the schema descriptor for name field.
+	smartfolderDescName := smartfolderFields[2].Descriptor()
+	// smartfolder.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	smartfolder.NameValidator = func() func(string) error {
+		validators := smartfolderDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// smartfolderDescDescription is the schema descriptor for description field.
+	smartfolderDescDescription := smartfolderFields[3].Descriptor()
+	// smartfolder.DefaultDescription holds the default value on creation for the description field.
+	smartfolder.DefaultDescription = smartfolderDescDescription.Default.(string)
+	// smartfolderDescUpdatedAt is the schema descriptor for updated_at field.
+	smartfolderDescUpdatedAt := smartfolderFields[7].Descriptor()
+	// smartfolder.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	smartfolder.DefaultUpdatedAt = smartfolderDescUpdatedAt.Default.(func() time.Time)
+	// smartfolder.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	smartfolder.UpdateDefaultUpdatedAt = smartfolderDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// smartfolderDescVersion is the schema descriptor for version field.
+	smartfolderDescVersion := smartfolderFields[8].Descriptor()
+	// smartfolder.DefaultVersion holds the default value on creation for the version field.
+	smartfolder.DefaultVersion = smartfolderDescVersion.Default.(int)
+	// smartfolder.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	smartfolder.VersionValidator = smartfolderDescVersion.Validators[0].(func(int) error)
+	// smartfolderDescID is the schema descriptor for id field.
+	smartfolderDescID := smartfolderMixinFields0[0].Descriptor()
+	// smartfolder.DefaultID holds the default value on creation for the id field.
+	smartfolder.DefaultID = smartfolderDescID.Default.(func() string)
+	// smartfolder.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	smartfolder.IDValidator = smartfolderDescID.Validators[0].(func(string) error)
 	termMixin := schema.Term{}.Mixin()
 	termMixinFields0 := termMixin[0].Fields()
 	_ = termMixinFields0

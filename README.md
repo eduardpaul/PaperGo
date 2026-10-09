@@ -46,6 +46,7 @@ The machine-readable REST contract is [`api/openapi.json`](api/openapi.json) (Op
 | Reusable application schemas | Shared field catalogs, multiple collection content types, cross-field rules, active-field removal and templates with version-checked adoption; immutable effective schemas. |
 | Business keys | Indexed scalar uniqueness across head and published values, enforced transactionally for single and bulk writes. |
 | Saved views and controlled taxonomy | Bounded typed queries, sorting, pagination, authorized totals/grouping; stable hierarchical terms with localized labels, synonyms, and deprecation. |
+| Smart folders | Private or shared live queries across collections, descendant-term matching, metadata navigation, UTC-relative filters and physical folder inclusion. See [smart folders](docs/smart-folders.md). |
 
 ## API
 
@@ -57,6 +58,12 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | GET / PATCH / DELETE | `/v1/resources/{id}` | Read / update names, tags, item values, `parent_id` (move) and collection settings / delete a folder or item |
 | POST / GET | `/v1/resources/{id}/children` | Create / browse children |
 | POST | `/v1/resources/{id}/bulk` | Atomically create, update/move, publish, unpublish or delete up to 100 items in one list/library |
+| POST / GET | `/v1/smart-folders` | Create / browse personal and shared query definitions |
+| GET / PUT / DELETE | `/v1/smart-folders/{id}` | Read / replace / delete a definition with its own ETag |
+| POST | `/v1/smart-folders/{id}/query`, `/query/groups` | Query live membership / navigate metadata groups with authorized counts |
+| POST | `/v1/smart-folders/{id}/items` | Classify an existing item or create an item matching the definition/path |
+| DELETE | `/v1/smart-folders/{id}/items/{itemID}` | Remove classification while preserving the item and location |
+| GET / POST | `/v1/workspaces/{id}/smart-folders/export`, `/import` | Export / atomically merge portable shared definitions |
 | GET | `/v1/resources?workspace_id=...&q=...&tag=...` | Workspace search and tag filtering; optional `parent_id` narrows to direct children |
 | POST / GET | `/v1/resources/{id}/fields` | Add / read list or library field definitions |
 | PATCH | `/v1/resources/{id}/fields/{fieldID}` | Evolve label, choices, required or indexed; uses the container ETag |
