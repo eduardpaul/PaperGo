@@ -3,20 +3,18 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"github.com/google/uuid"
-	"io"
 	"log/slog"
-	"mime"
 	"net/http"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
-	"papergo/internal/transfer"
 	"papergo/internal/webdav"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/danielgtaylor/huma/v2"
 )
 
 type API struct {
@@ -35,50 +33,18 @@ type API struct {
 type subjectKey struct{}
 type requestKey struct{}
 
-func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
 func (a *API) Handler() http.Handler {
 	api := http.NewServeMux()
-	a.registerFoundation(api)
-	a.registerSmartFolders(api)
-	api.HandleFunc("GET /v1/workspaces", a.browse)
-	api.HandleFunc("POST /v1/workspaces", a.workspace)
-	api.HandleFunc("GET /v1/resources", a.browse)
-	api.HandleFunc("GET /v1/resources/{id}", a.get)
-	api.HandleFunc("PATCH /v1/resources/{id}", a.update)
-	api.HandleFunc("DELETE /v1/resources/{id}", a.delete)
-	api.HandleFunc("GET /v1/resources/{id}/children", a.children)
-	api.HandleFunc("POST /v1/resources/{id}/children", a.create)
-	api.HandleFunc("GET /v1/resources/{id}/fields", a.fields)
-	api.HandleFunc("POST /v1/resources/{id}/fields", a.createField)
-	api.HandleFunc("PATCH /v1/resources/{id}/fields/{fieldID}", a.updateField)
-	api.HandleFunc("GET /v1/resources/{id}/schemas", a.schemas)
-	api.HandleFunc("GET /v1/resources/{id}/permissions", a.permissions)
-	api.HandleFunc("PUT /v1/resources/{id}/permissions", a.setPermissions)
-	api.HandleFunc("GET /v1/items/{id}/relationships", a.relationships)
-	api.HandleFunc("POST /v1/items/{id}/relationships", a.link)
-	api.HandleFunc("DELETE /v1/items/{id}/relationships/{linkID}", a.unlink)
-	api.HandleFunc("POST /v1/items/{id}/publications", a.publish)
-	api.HandleFunc("GET /v1/items/{id}/publications", a.publications)
-	api.HandleFunc("POST /v1/items/{id}/unpublish", a.unpublish)
-	api.HandleFunc("GET /v1/items/{id}/revisions", a.revisions)
-	api.HandleFunc("GET /v1/items/{id}/schema", a.itemSchema)
-	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
-	api.HandleFunc("GET /v1/items/{id}/content", a.download)
-	api.HandleFunc("GET /v1/workspaces/{id}/audit", a.audit)
-	api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
-	api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
-	api.HandleFunc("DELETE /v1/webdav-credentials/{id}", a.revokeWebDAVCredential)
-	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
+	spec, err := json.Marshal(a.routes(api))
+	if err != nil {
+		panic(err)
+	}
 	root := http.NewServeMux()
-	root.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]string{"status": "ok"}) })
-	root.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), time.Second)
-		defer cancel()
-		if err := a.Ready(ctx); err != nil {
-			a.problem(w, r, 503, "unavailable", "service is not ready")
-			return
-		}
-		respond(w, 200, map[string]string{"status": "ok"})
+	// Health checks and the contract are public and never shed.
+	root.Handle("GET /health/", api)
+	root.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/openapi+json")
+		_, _ = w.Write(spec)
 	})
 	limit := a.limiter()
 	root.Handle("/", a.authenticate(limit(api)))
@@ -90,6 +56,26 @@ func (a *API) Handler() http.Handler {
 		root.Handle("OPTIONS /{$}", a.WebDAV)
 	}
 	return a.observe(root)
+}
+
+// OpenAPI returns the REST contract that Handler serves.
+func (a *API) OpenAPI() *huma.OpenAPI {
+	return a.routes(http.NewServeMux())
+}
+
+// routes registers every REST operation on mux and returns its description.
+func (a *API) routes(mux *http.ServeMux) *huma.OpenAPI {
+	api := newHumaAPI(mux)
+	a.registerResources(api)
+	a.registerItems(api)
+	a.registerContent(api, mux)
+	a.registerFoundation(api)
+	a.registerSmartFolders(api)
+	describeSchemas(api.OpenAPI())
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		a.problem(w, r, 404, "not_found", "route not found")
+	})
+	return api.OpenAPI()
 }
 
 // admissionWait is how long a request may queue for a slot before it is shed.
@@ -156,349 +142,24 @@ func transferRequest(r *http.Request) bool {
 	parts := strings.Split(r.URL.Path, "/")
 	return len(parts) == 5 && parts[1] == "v1" && parts[2] == "items" && parts[4] == "content"
 }
-func respond(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
-}
-func (a *API) problem(w http.ResponseWriter, r *http.Request, status int, code, message string, operationIndex ...int) {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(status)
-	id, _ := r.Context().Value(requestKey{}).(string)
-	body := map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "detail": message, "request_id": id}
-	if len(operationIndex) > 0 {
-		body["operation_index"] = operationIndex[0]
-	}
-	_ = json.NewEncoder(w).Encode(body)
+
+// problem writes a problem from plain handlers and middleware.
+func (a *API) problem(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	writeProblem(w, newProblem(r.Context(), status, code, message))
 }
 func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
-	var bulk *dms.BulkError
-	var operationIndex []int
-	if errors.As(err, &bulk) {
-		operationIndex = []int{bulk.Index}
-	}
-	problem := func(status int, code, message string) {
-		a.problem(w, r, status, code, message, operationIndex...)
-	}
-	var validation *dms.ValidationError
-	var max *http.MaxBytesError
-	switch {
-	case errors.As(err, &validation):
-		problem(422, "validation_failed", validation.Error())
-	case errors.Is(err, dms.ErrNotFound):
-		problem(404, "not_found", "resource not found")
-	case errors.Is(err, dms.ErrForbidden):
-		problem(403, "forbidden", "access denied")
-	case errors.Is(err, dms.ErrConflict):
-		problem(409, "conflict", "version conflict or duplicate")
-	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &max):
-		problem(413, "payload_too_large", "request body exceeds size limit")
-	case errors.Is(err, context.DeadlineExceeded) && errors.Is(r.Context().Err(), context.DeadlineExceeded):
-		w.Header().Set("Retry-After", "1")
-		problem(503, "timeout", "request exceeded the server time limit")
-	default:
-		a.Logger.ErrorContext(r.Context(), "request failed", "error", err, "request_id", r.Context().Value(requestKey{}))
-		problem(500, "internal_error", "request could not be completed")
-	}
+	writeProblem(w, a.fail(r.Context(), err))
 }
-func (a *API) decode(w http.ResponseWriter, r *http.Request, dst any) bool {
-	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || media != "application/json" {
-		a.problem(w, r, 415, "unsupported_media_type", "Content-Type must be application/json")
-		return false
+func writeProblem(w http.ResponseWriter, p *Problem) {
+	for name, values := range p.GetHeaders() {
+		w.Header()[name] = values
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
-	decoder := json.NewDecoder(r.Body)
-	decoder.UseNumber()
-	decoder.DisallowUnknownFields()
-	if err = decoder.Decode(dst); err != nil {
-		var max *http.MaxBytesError
-		if errors.As(err, &max) {
-			a.failure(w, r, err)
-		} else {
-			a.problem(w, r, 400, "invalid_json", "invalid JSON request body")
-		}
-		return false
-	}
-	if err = decoder.Decode(new(any)); err != io.EOF {
-		a.problem(w, r, 400, "invalid_json", "request must contain one JSON value")
-		return false
-	}
-	return true
+	w.Header().Set("Content-Type", p.ContentType(""))
+	w.WriteHeader(p.Status)
+	_ = json.NewEncoder(w).Encode(p)
 }
-func etag(w http.ResponseWriter, version int) {
-	w.Header().Set("ETag", strconv.Quote(strconv.Itoa(version)))
-}
-func (a *API) version(w http.ResponseWriter, r *http.Request) (int, bool) {
-	raw := r.Header.Get("If-Match")
-	if raw == "" {
-		a.problem(w, r, 428, "precondition_required", "If-Match with the current resource ETag is required")
-		return 0, false
-	}
-	v, err := strconv.Unquote(raw)
-	if err != nil {
-		a.problem(w, r, 400, "invalid_precondition", "If-Match must be a quoted integer ETag")
-		return 0, false
-	}
-	version, err := strconv.Atoi(v)
-	if err != nil || version < 1 {
-		a.problem(w, r, 400, "invalid_precondition", "If-Match must be a positive integer ETag")
-		return 0, false
-	}
-	return version, true
-}
-func queryInt(r *http.Request, key string) int {
-	v, _ := strconv.Atoi(r.URL.Query().Get(key))
-	return v
-}
-func (a *API) workspace(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Name string   `json:"name"`
-		Tags []string `json:"tags"`
-	}
-	if !a.decode(w, r, &in) {
-		return
-	}
-	out, err := a.DMS.Create(r.Context(), subject(r), "", dms.CreateResource{Kind: "workspace", Name: in.Name, Tags: in.Tags})
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	w.Header().Set("Location", "/v1/resources/"+out.ID)
-	etag(w, out.Version)
-	respond(w, 201, out)
-}
-func (a *API) create(w http.ResponseWriter, r *http.Request) {
-	var in dms.CreateResource
-	if !a.decode(w, r, &in) {
-		return
-	}
-	out, err := a.DMS.Create(r.Context(), subject(r), r.PathValue("id"), in)
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	w.Header().Set("Location", "/v1/resources/"+out.ID)
-	etag(w, out.Version)
-	respond(w, 201, out)
-}
-func (a *API) get(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.GetSurface(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("surface"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	etag(w, out.Version)
-	respond(w, 200, out)
-}
-func (a *API) update(w http.ResponseWriter, r *http.Request) {
-	version, ok := a.version(w, r)
-	if !ok {
-		return
-	}
-	var in dms.UpdateResource
-	if !a.decode(w, r, &in) {
-		return
-	}
-	out, err := a.DMS.Update(r.Context(), subject(r), r.PathValue("id"), version, in)
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	etag(w, out.Version)
-	respond(w, 200, out)
-}
-func (a *API) delete(w http.ResponseWriter, r *http.Request) {
-	version, ok := a.version(w, r)
-	if !ok {
-		return
-	}
-	if err := a.DMS.Delete(r.Context(), subject(r), r.PathValue("id"), version); err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	w.WriteHeader(204)
-}
-func (a *API) children(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("after"), Limit: queryInt(r, "limit"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")})
-}
-func (a *API) browse(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("after"), Limit: queryInt(r, "limit"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")}
-	if r.URL.Path == "/v1/workspaces" {
-		in = dms.Browse{After: q.Get("after"), Limit: queryInt(r, "limit")}
-	}
-	a.list(w, r, in)
-}
-func (a *API) list(w http.ResponseWriter, r *http.Request, in dms.Browse) {
-	out, err := a.DMS.Browse(r.Context(), subject(r), in)
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	respond(w, 200, out)
-}
-func (a *API) fields(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Fields(r.Context(), subject(r), r.PathValue("id"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	respond(w, 200, map[string]any{"data": out})
-}
-func (a *API) createField(w http.ResponseWriter, r *http.Request) {
-	var in dms.CreateField
-	if !a.decode(w, r, &in) {
-		return
-	}
-	out, err := a.DMS.CreateField(r.Context(), subject(r), r.PathValue("id"), in)
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	respond(w, 201, out)
-}
-func (a *API) permissions(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Permissions(r.Context(), subject(r), r.PathValue("id"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	respond(w, 200, out)
-}
-func (a *API) setPermissions(w http.ResponseWriter, r *http.Request) {
-	version, ok := a.version(w, r)
-	if !ok {
-		return
-	}
-	var in dms.Permissions
-	if !a.decode(w, r, &in) {
-		return
-	}
-	out, err := a.DMS.SetPermissions(r.Context(), subject(r), r.PathValue("id"), version, in)
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	etag(w, out.Version)
-	respond(w, 200, out)
-}
-func (a *API) link(w http.ResponseWriter, r *http.Request) {
-	var in dms.CreateRelationship
-	if !a.decode(w, r, &in) {
-		return
-	}
-	out, err := a.DMS.Link(r.Context(), subject(r), r.PathValue("id"), in)
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	etag(w, out.Version)
-	respond(w, 201, out)
-}
-func (a *API) relationships(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	out, err := a.DMS.Relationships(r.Context(), subject(r), r.PathValue("id"), q.Get("direction"), q.Get("name"), q.Get("after"), queryInt(r, "limit"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	respond(w, 200, out)
-}
-func (a *API) unlink(w http.ResponseWriter, r *http.Request) {
-	version, ok := a.version(w, r)
-	if !ok {
-		return
-	}
-	if err := a.DMS.UnlinkVersion(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"), version); err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	w.WriteHeader(204)
-}
-func (a *API) publish(w http.ResponseWriter, r *http.Request) {
-	version, ok := a.version(w, r)
-	if !ok {
-		return
-	}
-	out, err := a.DMS.Publish(r.Context(), subject(r), r.PathValue("id"), version)
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	etag(w, version+1)
-	respond(w, 201, out)
-}
-func (a *API) publications(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Publications(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "after_version"), queryInt(r, "limit"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	respond(w, 200, map[string]any{"data": out})
-}
-func (a *API) upload(w http.ResponseWriter, r *http.Request) {
-	version, ok := a.version(w, r)
-	if !ok {
-		return
-	}
-	if err := a.DMS.CanUpload(r.Context(), subject(r), r.PathValue("id"), version); err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	filename := r.Header.Get("X-Filename")
-	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || filename == "" {
-		a.problem(w, r, 400, "invalid_upload", "Content-Type and X-Filename are required")
-		return
-	}
-	if r.ContentLength > a.MaxUpload {
-		a.failure(w, r, storage.ErrTooLarge)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUpload)
-	object, err := a.Storage.Put(r.Context(), transfer.Reader(r.Body, w), a.MaxUpload)
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	out, err := a.DMS.AttachBlob(r.Context(), subject(r), r.PathValue("id"), version, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256})
-	if err != nil {
-		if cleanupErr := a.Storage.Delete(context.Background(), object.Key); cleanupErr != nil {
-			a.Logger.Error("orphan cleanup failed", "object_key", object.Key, "error", cleanupErr)
-		}
-		a.failure(w, r, err)
-		return
-	}
-	etag(w, version+1)
-	respond(w, 201, map[string]any{"id": out.ID, "item_id": out.ItemID, "version": out.Version, "resource_version": version + 1, "filename": out.Filename, "content_type": out.ContentType, "size": out.Size, "sha256": out.Sha256})
-}
-func (a *API) download(w http.ResponseWriter, r *http.Request) {
-	b, err := a.DMS.GetBlob(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("blob_id"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	file, err := a.Storage.Open(r.Context(), b.ObjectKey)
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	defer file.Close()
-	w.Header().Set("Content-Type", b.ContentType)
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": b.Filename}))
-	w.Header().Set("ETag", strconv.Quote(b.Sha256))
-	http.ServeContent(transfer.Writer(w), r, b.Filename, b.CreatedAt, file)
-}
-func (a *API) audit(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Audit(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	respond(w, 200, out)
-}
+func subject(ctx context.Context) string { v, _ := ctx.Value(subjectKey{}).(string); return v }
+func etag(version int) string            { return strconv.Quote(strconv.Itoa(version)) }
 
 func (a *API) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

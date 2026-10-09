@@ -14,9 +14,9 @@ import (
 // Every relationship has a type; its name, direction, attributes and
 // cardinality all come from that type.
 type CreateRelationship struct {
-	TypeID   string         `json:"type_id"`
-	TargetID string         `json:"target_id"`
-	Metadata map[string]any `json:"metadata"`
+	TypeID   string         `json:"type_id" format:"uuid" doc:"Relationship type; it supplies the name, direction, attributes and cardinality."`
+	TargetID string         `json:"target_id" format:"uuid"`
+	Metadata map[string]any `json:"metadata" required:"false" doc:"Attribute values validated by the relationship type."`
 }
 
 func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateRelationship) (out *ent.Relationship, err error) {

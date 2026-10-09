@@ -12,11 +12,11 @@ import (
 )
 
 type TemplateInput struct {
-	Key         string                 `json:"key"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Fields      []CreateField          `json:"fields"`
-	Rules       []model.ValidationRule `json:"rules,omitempty"`
+	Key         string                 `json:"key" pattern:"^[a-z][a-z0-9_]{0,63}$"`
+	Name        string                 `json:"name" minLength:"1" maxLength:"255"`
+	Description string                 `json:"description" required:"false" maxLength:"4096"`
+	Fields      []CreateField          `json:"fields" maxItems:"200" doc:"Field definitions; content_type_id is not allowed."`
+	Rules       []model.ValidationRule `json:"rules,omitempty" maxItems:"32"`
 }
 
 func (s *Service) templateDefinition(ctx context.Context, subject, workspaceID string, in TemplateInput) (json.RawMessage, error) {
@@ -136,8 +136,8 @@ func (s *Service) Templates(ctx context.Context, subject, workspaceID, after str
 }
 
 type ApplyTemplateInput struct {
-	TemplateVersion int    `json:"template_version"`
-	ContentTypeID   string `json:"content_type_id,omitempty"`
+	TemplateVersion int    `json:"template_version" minimum:"1" doc:"Current template version, guarding against concurrent template edits."`
+	ContentTypeID   string `json:"content_type_id,omitempty" format:"uuid" doc:"Content type that adopts the fields and rules. Omission selects the collection default."`
 }
 
 func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templateID string, version, templateVersion int, typeID string) (out *ent.Resource, err error) {

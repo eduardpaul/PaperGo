@@ -17,34 +17,34 @@ const MaxSmartGroupLevels = 3
 const MaxSharedSmartFolders = 100
 
 type SmartFolderGroupBy struct {
-	Field string `json:"field"`
-	By    string `json:"by,omitempty"`
+	Field string `json:"field" doc:"Indexed scalar field key or system field."`
+	By    string `json:"by,omitempty" enum:"year,month" doc:"Date bucket for date/datetime fields."`
 }
 
 type SmartFolderDefinition struct {
-	Collections    []string             `json:"collections,omitempty"`
-	Templates      []string             `json:"templates,omitempty"`
-	ContentTypes   []string             `json:"content_types,omitempty"`
-	Terms          []string             `json:"terms,omitempty"`
-	TermMatch      string               `json:"term_match,omitempty"`
+	Collections    []string             `json:"collections,omitempty" maxItems:"100" uniqueItems:"true" doc:"Collection names, ignoring case."`
+	Templates      []string             `json:"templates,omitempty" maxItems:"100" uniqueItems:"true" doc:"Adopted template keys, ignoring case."`
+	ContentTypes   []string             `json:"content_types,omitempty" maxItems:"100" uniqueItems:"true" doc:"Content type keys or names, ignoring case."`
+	Terms          []string             `json:"terms,omitempty" maxItems:"20" uniqueItems:"true" doc:"Term IDs; descendants match too."`
+	TermMatch      string               `json:"term_match,omitempty" enum:"all,any" doc:"Defaults to all."`
 	Filter         *FilterExpr          `json:"filter,omitempty"`
-	GroupBy        []SmartFolderGroupBy `json:"group_by,omitempty"`
+	GroupBy        []SmartFolderGroupBy `json:"group_by,omitempty" maxItems:"3" doc:"Navigation levels."`
 	IncludeFolders bool                 `json:"include_folders,omitempty"`
 }
 
 type SmartFolderInput struct {
-	Name        string                `json:"name"`
-	Description string                `json:"description,omitempty"`
-	WorkspaceID *string               `json:"workspace_id,omitempty"`
+	Name        string                `json:"name" minLength:"1" maxLength:"255"`
+	Description string                `json:"description,omitempty" maxLength:"4096"`
+	WorkspaceID *string               `json:"workspace_id,omitempty" format:"uuid" doc:"Required for shared folders."`
 	Personal    bool                  `json:"personal"`
 	Definition  SmartFolderDefinition `json:"definition"`
 }
 
 type SmartFolderQueryRequest struct {
-	Path    []*string `json:"path,omitempty"`
-	Surface string    `json:"surface,omitempty"`
-	After   string    `json:"after,omitempty"`
-	Limit   int       `json:"limit,omitempty"`
+	Path    []*string `json:"path,omitempty" maxItems:"3" doc:"One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped."`
+	Surface string    `json:"surface,omitempty" enum:"auto,head,published" doc:"Defaults to auto."`
+	After   string    `json:"after,omitempty" doc:"Opaque cursor from next_cursor."`
+	Limit   int       `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"Maximum results; defaults to 50."`
 }
 
 func smartDefinition(f *ent.SmartFolder) (SmartFolderDefinition, error) {

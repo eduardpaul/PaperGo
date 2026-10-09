@@ -16,11 +16,11 @@ import (
 // Stable keys, types and decimal scales are immutable. A new type uses a new key;
 // labels, choices, requirements and query indexing evolve via schema revisions.
 type UpdateField struct {
-	Options  *model.FieldOptions `json:"options,omitempty"`
-	Label    *string             `json:"label,omitempty"`
+	Options  *model.FieldOptions `json:"options,omitempty" doc:"Complete replacement of options; multiple and reference scope are immutable."`
+	Label    *string             `json:"label,omitempty" minLength:"1" maxLength:"255"`
 	Required *bool               `json:"required,omitempty"`
 	Choices  *[]string           `json:"choices,omitempty"`
-	Indexed  *bool               `json:"indexed,omitempty"`
+	Indexed  *bool               `json:"indexed,omitempty" doc:"Changes rebuild both surfaces atomically."`
 }
 
 func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID string, version int, in UpdateField) (out *ent.FieldDefinition, err error) {

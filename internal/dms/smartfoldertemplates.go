@@ -11,26 +11,26 @@ import (
 )
 
 type SmartFolderTermRef struct {
-	TermSetKey string   `json:"term_set_key"`
-	Path       []string `json:"path"`
+	TermSetKey string   `json:"term_set_key" pattern:"^[a-z][a-z0-9_]{0,63}$"`
+	Path       []string `json:"path" minItems:"1" maxItems:"32" doc:"Root-to-leaf term names."`
 }
 type PortableSmartFolderDefinition struct {
-	Collections    []string             `json:"collections,omitempty"`
-	Templates      []string             `json:"templates,omitempty"`
-	ContentTypes   []string             `json:"content_types,omitempty"`
-	Terms          []SmartFolderTermRef `json:"terms,omitempty"`
-	TermMatch      string               `json:"term_match,omitempty"`
+	Collections    []string             `json:"collections,omitempty" maxItems:"100" uniqueItems:"true" doc:"Collection names."`
+	Templates      []string             `json:"templates,omitempty" maxItems:"100" uniqueItems:"true"`
+	ContentTypes   []string             `json:"content_types,omitempty" maxItems:"100" uniqueItems:"true"`
+	Terms          []SmartFolderTermRef `json:"terms,omitempty" maxItems:"20"`
+	TermMatch      string               `json:"term_match,omitempty" enum:"all,any" doc:"Defaults to all."`
 	Filter         *FilterExpr          `json:"filter,omitempty"`
-	GroupBy        []SmartFolderGroupBy `json:"group_by,omitempty"`
+	GroupBy        []SmartFolderGroupBy `json:"group_by,omitempty" maxItems:"3"`
 	IncludeFolders bool                 `json:"include_folders,omitempty"`
 }
 type PortableSmartFolder struct {
-	Name        string                        `json:"name"`
-	Description string                        `json:"description,omitempty"`
+	Name        string                        `json:"name" minLength:"1" maxLength:"255"`
+	Description string                        `json:"description,omitempty" maxLength:"4096"`
 	Definition  PortableSmartFolderDefinition `json:"definition"`
 }
 type SmartFolderPackage struct {
-	Folders []PortableSmartFolder `json:"folders"`
+	Folders []PortableSmartFolder `json:"folders" maxItems:"100"`
 }
 type SmartFolderImportResult struct {
 	Created          int                `json:"created"`

@@ -25,7 +25,9 @@ With globally installed tools, replace `.tools/atlas.exe` with `atlas`; run `go 
 
 Tests use temporary SQLite files and apply the actual versioned migrations, including FTS5, triggers, foreign keys, and Atlas checksum validation. CI also runs the Go race detector and verifies regenerated Ent code.
 
-The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
+The machine-readable REST contract is [`api/openapi.json`](api/openapi.json) (OpenAPI 3.1), also served at `GET /openapi.json`. It is generated from the handlers in `internal/httpapi` with [Huma](https://huma.rocks): operations, parameters and response models are Go types, so the document cannot drift from the code. After changing the API, run `go generate ./internal/httpapi`; tests fail when the committed document is stale or when any test response deviates from it.
+
+The JavaScript/TypeScript SDK [`@papergo/client`](sdk/typescript) is generated from that document with [Kiota](https://learn.microsoft.com/openapi/kiota/) by the same `go generate ./internal/httpapi`, which needs the .NET SDK for the pinned Kiota tool (`.config/dotnet-tools.json`). CI regenerates both, fails when either committed copy is stale, and runs the SDK's end-to-end tests against the API.
 
 ## Data model and requirements
 
@@ -50,7 +52,7 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
 ## API
 
-Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints are public. IDs are UUID strings. Lists of resources and relationships return `{ "data": [...], "next_cursor": "..." }`; pass `after` to continue. Default page size is 50, maximum 100.
+Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints and `/openapi.json` are public. IDs are UUID strings. Lists of resources and relationships return `{ "data": [...], "next_cursor": "..." }`; pass `after` to continue. Default page size is 50, maximum 100.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
@@ -82,13 +84,15 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | WebDAV | `/webdav/{libraryID}/...` | A WebDAV-enabled library as a network drive; see [WebDAV](#webdav) |
 | GET | `/health/live`, `/health/ready` | Process liveness / database and migration readiness |
 
+Errors are RFC 9457 problems (`application/problem+json`) with a stable `code` and the `request_id` that is also returned as `X-Request-ID`. Request bodies must be one JSON object: malformed JSON returns 400 `invalid_json`, other media types 415, and unknown fields, wrong types or values outside the documented bounds return 422 `validation_failed`, with each failing field located in `errors` (for example `body.name` or `query.limit`).
+
 Read/update responses carry a quoted numeric `ETag`. PATCH, resource DELETE, catalog PUT, view/relationship DELETE, template application, ACL replacement, blob upload, publish and unpublish require `If-Match: "<current version>"`. Missing preconditions return 428; stale versions return 409. These mutations consume a lock version; publishing an already published head returns 409. Content `revision_number`, blob `version`, and resource lock `version` are independent counters. Upload returns `resource_version` and an ETag for the resource. Publication event `version` records the lock version consumed by the transition. PATCH `values` replaces the whole custom-value object.
 
 GET resources and browsing support `surface=auto|head|published`. Auto chooses head for draft readers and published for ordinary readers. An unpublished item returns 404 to a reader; explicit head requests require draft access. Names, tags, values, search matches, field filters and downloads all use the chosen surface. Readers cannot download draft or arbitrary historical blobs. A published resource's lock version may advance when editors save drafts; its `updated_at` describes the selected content revision.
 
 Fields use stable immutable keys, types, decimal scales, multiplicity, and reference scopes. Labels, choices, required and indexed flags can evolve; existing revisions retain their original schema. Adding a required field to a populated collection requires a valid default; setting an existing field required affects future edits. Set `indexed:true` to enable typed queries. Changing this flag rebuilds both surfaces atomically. For example, `GET /v1/resources/{listID}/children?filter_field=amount&filter_op=gte&filter_value=125.00`. Operators: `eq`, `gt`, `gte`, `lt`, `lte`; boolean supports only `eq`. Filters require a list/library/folder scope and apply to direct children.
 
-Read an item's `/schema` for the schema paired with its selected revision. Revision history includes each immutable schema in `edges.schema_revision`, allowing draft readers to interpret historical values without collection management access. The collection `/fields` endpoint describes current configuration.
+Read an item's `/schema` for the schema paired with its selected revision. Revision history includes each immutable schema in `schema_revision`, allowing draft readers to interpret historical values without collection management access. The collection `/fields` endpoint describes current configuration.
 
 `integer` accepts exact JSON integers within signed 64 bits. `decimal` accepts a decimal string or exact JSON number, with fixed `scale` from 0 to 9; it stores a canonical string in content and a signed 64-bit scaled integer in indexes. Excess fractional digits and overflow are rejected without rounding. Use strings for decimals and an exact-number parser in clients; JavaScript clients should avoid unsafe numeric literals above 2^53. `number` is an approximate floating-point query type. Optional null values produce no field-index row.
 

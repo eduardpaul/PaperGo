@@ -12,17 +12,17 @@ import (
 )
 
 type SmartFolderDrop struct {
-	FolderVersion int         `json:"folder_version"`
-	CollectionID  string      `json:"collection_id"`
-	ItemID        string      `json:"item_id,omitempty"`
-	Version       int         `json:"version,omitempty"`
-	Create        *BulkCreate `json:"create,omitempty"`
-	ParentID      string      `json:"parent_id,omitempty"`
-	Path          []*string   `json:"path,omitempty"`
+	FolderVersion int         `json:"folder_version" minimum:"1" doc:"Current smart folder version."`
+	CollectionID  string      `json:"collection_id" format:"uuid"`
+	ItemID        string      `json:"item_id,omitempty" format:"uuid" doc:"Existing item to classify; requires version."`
+	Version       int         `json:"version,omitempty" minimum:"1" doc:"Current item version."`
+	Create        *BulkCreate `json:"create,omitempty" doc:"New item to create in the collection."`
+	ParentID      string      `json:"parent_id,omitempty" format:"uuid" doc:"Folder of the collection for a created item."`
+	Path          []*string   `json:"path,omitempty" maxItems:"3" doc:"One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped."`
 }
 
 type SmartFolderUnclassify struct {
-	FolderVersion int `json:"folder_version"`
+	FolderVersion int `json:"folder_version" minimum:"1" doc:"Current smart folder version."`
 }
 
 func smartEqual(a, b any) bool {

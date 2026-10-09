@@ -9,11 +9,11 @@ import (
 )
 
 type ViewInput struct {
-	Name      string    `json:"name"`
-	Columns   []string  `json:"columns"`
-	Query     QuerySpec `json:"query"`
-	Layout    string    `json:"layout"`
-	IsDefault bool      `json:"is_default"`
+	Name      string    `json:"name" minLength:"1" maxLength:"255"`
+	Columns   []string  `json:"columns" required:"false" maxItems:"50" doc:"Field keys and $id/$name/$tags; empty columns default to $name."`
+	Query     QuerySpec `json:"query" required:"false"`
+	Layout    string    `json:"layout" required:"false" enum:"table,board,calendar,gallery" doc:"Client layout hint; defaults to table."`
+	IsDefault bool      `json:"is_default" required:"false"`
 }
 
 func (s *Service) validateView(ctx context.Context, subject, containerID string, in *ViewInput) error {
@@ -154,9 +154,9 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 }
 
 type ViewQueryRequest struct {
-	Surface string `json:"surface,omitempty"`
-	After   string `json:"after,omitempty"`
-	Limit   int    `json:"limit,omitempty"`
+	Surface string `json:"surface,omitempty" enum:"auto,head,published" doc:"Defaults to auto: head for draft readers and published for ordinary readers. Head requires draft access."`
+	After   string `json:"after,omitempty" doc:"Opaque cursor from next_cursor."`
+	Limit   int    `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"Maximum results; defaults to 50."`
 }
 
 func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQueryRequest) (QueryResult, error) {

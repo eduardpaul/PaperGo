@@ -19,13 +19,13 @@ import (
 
 type SchemaField struct {
 	Options  model.FieldOptions `json:"options,omitempty"`
-	ID       string             `json:"id"`
+	ID       string             `json:"id" doc:"Immutable field key."`
 	Label    string             `json:"label"`
-	Type     string             `json:"type"`
+	Type     string             `json:"type" enum:"text,note,email,url,date,datetime,choice,integer,decimal,number,boolean,lookup,term"`
 	Required bool               `json:"required"`
 	Choices  []string           `json:"choices"`
 	Indexed  bool               `json:"indexed"`
-	Scale    int                `json:"scale"`
+	Scale    int                `json:"scale" minimum:"0" maximum:"9"`
 }
 type SchemaDefinition struct {
 	Fields       []SchemaField          `json:"fields"`

@@ -36,7 +36,7 @@ func setup(t *testing.T) (http.Handler, *dms.Service, string) {
 	}
 	s := dms.NewService(db.Client)
 	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Storage: store, Logger: slog.New(slog.NewJSONHandler(testLog{t}, nil)), Ready: db.SQL.PingContext, MaxUpload: 32}
-	return a.Handler(), s, path
+	return conformant(t, a.Handler()), s, path
 }
 func request(h http.Handler, method, path, body, token, match, contentType string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -64,9 +64,21 @@ func TestAuthenticationAndPreconditions(t *testing.T) {
 	if w.Code != 401 || w.Header().Get("X-Request-ID") == "" {
 		t.Fatal("missing authentication or request ID")
 	}
+	w = request(h, "GET", "/openapi.json", "", "", "", "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"openapi":"3.1.0"`) {
+		t.Fatal("public OpenAPI document", w.Code)
+	}
 	w = request(h, "POST", "/v1/workspaces", `{"name":"Demo","unknown":true}`, testToken, "", "application/json")
-	if w.Code != 400 {
-		t.Fatal("unknown JSON field accepted")
+	if w.Code != 422 || !strings.Contains(w.Body.String(), `"location":"body.unknown"`) {
+		t.Fatal("unknown JSON field accepted", w.Code, w.Body.String())
+	}
+	w = request(h, "POST", "/v1/workspaces", `{"name":"Demo"`, testToken, "", "application/json")
+	if w.Code != 400 || !strings.Contains(w.Body.String(), `"code":"invalid_json"`) {
+		t.Fatal("malformed JSON accepted", w.Code, w.Body.String())
+	}
+	w = request(h, "POST", "/v1/workspaces", `name=Demo`, testToken, "", "application/x-www-form-urlencoded")
+	if w.Code != 415 {
+		t.Fatal("non-JSON body accepted", w.Code, w.Body.String())
 	}
 	root, err := s.Create(context.Background(), "alice", "", dms.CreateResource{Kind: "workspace", Name: "Demo"})
 	if err != nil {
