@@ -14,7 +14,7 @@ import (
 func TestCreateRetryReturnsCurrentItemWithoutMutation(t *testing.T) {
 	s, _, c := fixture(t)
 	id := uuid.NewString()
-	i, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: id, Kind: "item", Name: "Original"})
+	i, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: &id, Kind: "item", Name: "Original"})
 	if err != nil || !created || i.ID != id {
 		t.Fatal("first create", i, created, err)
 	}
@@ -25,7 +25,7 @@ func TestCreateRetryReturnsCurrentItemWithoutMutation(t *testing.T) {
 	}
 	before := revisionCount(t, s, id)
 	for n := 0; n < 3; n++ {
-		out, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: id, Kind: "item", Name: "Ignored", Values: map[string]any{"unknown": "ignored"}})
+		out, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: &id, Kind: "item", Name: "Ignored", Values: map[string]any{"unknown": "ignored"}})
 		if err != nil || created || out.ID != id || out.Name != "Edited" || out.Version != i.Version {
 			t.Fatal("retry mutated", out, created, err)
 		}
@@ -50,7 +50,7 @@ func TestCreateRetryConcurrentAndFolderIDs(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			out, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: id, Kind: "item", Name: "One item"})
+			out, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: &id, Kind: "item", Name: "One item"})
 			if err != nil || out.ID != id {
 				t.Errorf("concurrent retry: %+v %v", out, err)
 				return
@@ -65,11 +65,11 @@ func TestCreateRetryConcurrentAndFolderIDs(t *testing.T) {
 		t.Fatal("duplicate creations", inserted.Load())
 	}
 	folderID := uuid.NewString()
-	folder, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: folderID, Kind: "folder", Name: "Folder"})
+	folder, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: &folderID, Kind: "folder", Name: "Folder"})
 	if err != nil || !created {
 		t.Fatal(folder, created, err)
 	}
-	again, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: folderID, Kind: "folder", Name: "Ignored"})
+	again, created, err := s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: &folderID, Kind: "folder", Name: "Ignored"})
 	if err != nil || created || again.Version != folder.Version {
 		t.Fatal(again, created, err)
 	}
@@ -78,15 +78,15 @@ func TestCreateRetryConcurrentAndFolderIDs(t *testing.T) {
 func TestCreateRetryConflictsAndReadableRecovery(t *testing.T) {
 	s, w, c := fixture(t)
 	id := uuid.NewString()
-	i, err := s.Create(testContext, "alice", c.ID, CreateResource{ID: id, Kind: "item", Name: "Item"})
+	i, err := s.Create(testContext, "alice", c.ID, CreateResource{ID: &id, Kind: "item", Name: "Item"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	other := create(t, s, w.ID, "list", "Other", nil)
-	if _, _, err = s.CreateWithStatus(testContext, "alice", other.ID, CreateResource{ID: id, Kind: "item"}); !errors.Is(err, ErrConflict) {
+	if _, _, err = s.CreateWithStatus(testContext, "alice", other.ID, CreateResource{ID: &id, Kind: "item"}); !errors.Is(err, ErrConflict) {
 		t.Fatal("cross-collection ID accepted", err)
 	}
-	if _, _, err = s.CreateWithStatus(testContext, "bob", c.ID, CreateResource{ID: id, Kind: "item"}); !errors.Is(err, ErrConflict) {
+	if _, _, err = s.CreateWithStatus(testContext, "bob", c.ID, CreateResource{ID: &id, Kind: "item"}); !errors.Is(err, ErrConflict) {
 		t.Fatal("inaccessible ID disclosed", err)
 	}
 	if _, err = s.Publish(testContext, "alice", id, i.Version); err != nil {
@@ -96,21 +96,21 @@ func TestCreateRetryConflictsAndReadableRecovery(t *testing.T) {
 	if err = s.SetWorkspaceMember(testContext, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	if out, created, err := s.CreateWithStatus(testContext, "bob", c.ID, CreateResource{ID: id, Kind: "item"}); err != nil || created || out.ID != id {
+	if out, created, err := s.CreateWithStatus(testContext, "bob", c.ID, CreateResource{ID: &id, Kind: "item"}); err != nil || created || out.ID != id {
 		t.Fatal("readable retry requires create ACL", out, created, err)
 	}
 	if err = s.Delete(testContext, "alice", id, i.Version, DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: id, Kind: "item", Name: "Replacement"}); !errors.Is(err, ErrConflict) {
+	if _, _, err = s.CreateWithStatus(testContext, "alice", c.ID, CreateResource{ID: &id, Kind: "item", Name: "Replacement"}); !errors.Is(err, ErrConflict) {
 		t.Fatal("deleted ID reused", err)
 	}
-	for _, bad := range []string{"invalid", uuid.Nil.String()} {
-		if _, err = s.Create(testContext, "alice", c.ID, CreateResource{ID: bad, Kind: "item", Name: "Invalid"}); !isValidation(err) {
+	for _, bad := range []string{"", "invalid", uuid.Nil.String()} {
+		if _, err = s.Create(testContext, "alice", c.ID, CreateResource{ID: &bad, Kind: "item", Name: "Invalid"}); !isValidation(err) {
 			t.Fatal("invalid ID accepted", bad, err)
 		}
 	}
-	if _, err = s.Create(testContext, "alice", w.ID, CreateResource{ID: uuid.NewString(), Kind: "list", Name: "Invalid"}); !isValidation(err) {
+	if _, err = s.Create(testContext, "alice", w.ID, CreateResource{ID: &id, Kind: "list", Name: "Invalid"}); !isValidation(err) {
 		t.Fatal("collection caller ID accepted", err)
 	}
 }

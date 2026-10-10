@@ -1,18 +1,14 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-10; PaperGo `31c42d5`, PaperDotNet `96df412`. 91 open comparisons: 62 missing, 14 partial, 15 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-10; PaperGo selected P1 delivery through `64fed28`, PaperDotNet `96df412`. 87 open comparisons: 58 missing, 14 partial, 15 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
-## P1 (21)
+## P1 (17)
 
 - **P1 · ID-01 · Missing:** A user needs an external identity service for the production sign-in story.
 - **P1 · ID-04 · Partial:** Display name/email profiles, account deletion/anonymization and password management are absent. Production credentials remain external.
 - **P1 · ID-10 · Missing:** Clients cannot obtain the same signed-in user profile without an external identity service.
-- **P1 · LST-06 · Missing:** Cannot reclassify Invoice into Contract or detach an unused type through equivalent APIs.
-- **P1 · LST-12 · Missing:** A client retry after a lost response can create a second item.
-- **P1 · LST-16 · Missing:** Cannot file Inbox content into a destination library while preserving identity/history/links.
-- **P1 · LST-18 · Missing:** Accidental deletion cannot be undone through the product API.
 - **P1 · LST-32 · Missing:** An everyday user's initial landing/storage locations are missing.
 - **P1 · DOC-02 · Partial:** No equivalent single REST multipart upload with metadata/content-type/folder/language inputs. This is a request-flow gap; upstream upload code also writes item and file state separately.
 - **P1 · DOC-04 · Missing:** Users cannot prevent/triage duplicate ingestion through library settings.

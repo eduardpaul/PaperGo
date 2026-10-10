@@ -13,19 +13,20 @@ import (
 // ID makes a repeated item/folder create an unchanged read of the original.
 func (s *Service) CreateWithStatus(ctx context.Context, subject, parentID string, in CreateResource) (out *ent.Resource, created bool, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		if in.ID != "" {
+		if in.ID != nil {
 			if in.Kind != "item" && in.Kind != "folder" {
 				return invalid("caller IDs belong to items and folders")
 			}
-			id, e := uuid.Parse(in.ID)
+			id, e := uuid.Parse(*in.ID)
 			if e != nil || id == uuid.Nil {
 				return invalid("id must be a non-empty UUID")
 			}
-			in.ID = id.String()
+			canonical := id.String()
+			in.ID = &canonical
 			if e = t.RequireScope(ctx, subject, "list.write"); e != nil {
 				return e
 			}
-			existing, e := t.Client.Resource.Get(ctx, in.ID)
+			existing, e := t.Client.Resource.Get(ctx, canonical)
 			if e != nil && !ent.IsNotFound(e) {
 				return e
 			}

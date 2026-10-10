@@ -129,7 +129,7 @@ func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, e
 }
 
 type CreateResource struct {
-	ID                string         `json:"id,omitempty"`
+	ID                *string        `json:"id,omitempty"`
 	TemplateKey       string         `json:"template_key,omitempty"`
 	ContentTypeID     string         `json:"content_type_id,omitempty"`
 	ContentTypeIDs    []string       `json:"content_type_ids,omitempty"`
@@ -239,9 +239,9 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if len(in.ContentTypeIDs) > 32 {
 		return nil, invalid("at most 32 content types per collection")
 	}
-	id := in.ID
-	if id == "" {
-		id = uuid.NewString()
+	id := uuid.NewString()
+	if in.ID != nil {
+		id = *in.ID
 	}
 	workspaceID := id
 	var parent *ent.Resource
