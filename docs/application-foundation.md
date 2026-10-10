@@ -19,7 +19,7 @@ GET permissions requires manage access and returns `inherit`, local `grants`, th
 
 ## Rich fields
 
-The field registry supports `text`, `note`, `email`, `url`, `date`, `datetime`, `choice`, `integer`, `decimal`, `number`, `boolean`, `lookup`, and `term`.
+The field registry supports `text`, `note`, `email`, `url`, `date`, `datetime`, `choice`, `integer`, `decimal`, `number`, `boolean`, `lookup`, `term`, and `keywords`.
 
 Field creation retains key, label, type, required, choices, indexed, and decimal scale. Optional configuration belongs in `options`:
 
@@ -40,13 +40,15 @@ Field creation retains key, label, type, required, choices, indexed, and decimal
 }
 ```
 
-Options include description, default_value (a JSON value), max_length, minimum/maximum (exact numeric strings), multiple, lookup_container_id, term_set_id, and unique. Text/choice/reference fields can have multiple values; arrays contain at most 100 non-null members and duplicate normalized values are removed. Required arrays must remain nonempty.
+Options include description, default_value (a JSON value), max_length, minimum/maximum (exact numeric strings), multiple, lookup_container_id, term_set_id, and unique. Text/choice/reference/keywords fields can have multiple values; arrays contain at most 100 non-null members and duplicate normalized values are removed. Required arrays must remain nonempty.
 
 Email fields accept a plain address; URL fields accept an absolute HTTP(S) URL without credentials; date fields use YYYY-MM-DD; datetimes normalize to UTC. Defaults fill absent fields when writing a revision; explicit null remains null for optional fields. Defaults are validated before saving field definitions. Required fields can be added to populated collections when they have a valid default, without rewriting old revisions.
 
 Integer and decimal bounds, defaults, history, and indexed comparisons preserve exact precision. Decimal content is a canonical fixed-scale string; its index is signed 64-bit scaled units. The existing approximate `number` type remains available.
 
-Lookup fields require a same-workspace collection and validate newly assigned targets as visible items in that collection. Term fields require a same-workspace term set and stable term IDs. Unchanged references can remain in later revisions when a term is deprecated or lookup access changes.
+Lookup fields require a same-workspace collection and validate newly assigned targets as visible items in that collection. Unchanged references can remain in later revisions when a term is deprecated or lookup access changes.
+
+Term fields require a same-workspace term set; keywords fields take the workspace's keywords (terms of its keywords set and terms available as keywords) and must be indexed. Both store term IDs, and writers may give a term's ID or its label instead. A term field matches a label against the names, then the localized labels, then the synonyms of the set's active terms; a label that matches several terms is rejected (give the ID), an unknown label adds a root term to an open set and is rejected by a closed one. A keywords field finds the keyword with that name or synonym, or adds it to the keywords set. An ID of a merged term is stored as the term it was merged into, and every write of an item replaces the merged terms it still holds. Deprecated terms cannot be newly assigned. The names, labels and synonyms of an item's terms are part of its full-text search text, as they were when the item was last written.
 
 Keys, types, scale, multiplicity, and reference scope are immutable. PATCH field `options` is a complete replacement, retaining those identity properties. Other validation/display options evolve through frozen SchemaRevision snapshots. Changing `indexed` on a populated collection commits at once, sets the field's `index_status` to `building` and queues a `field_index` operation; multiple values receive separate ordinal index rows. The operation converges the field's index rows across head and published surfaces in batches of 100 surfaces, each in its own short write transaction, so other writes proceed between batches and edits made meanwhile index themselves. Queries reject the field until `index_status` is `ready`; a failed build sets it to `failed`, and changing the flag again queues a fresh build that supersedes any pending one. Track progress with `GET /v1/resources/{id}/operations` or `GET /v1/operations/{id}`; builds resume after a restart.
 
@@ -80,7 +82,7 @@ Content type creation and replacement require manage access. Bodies contain key 
 
 `options.unique=true` creates a collection-wide business key. It requires an indexed scalar field and excludes approximate `number` and multiple values. Equality is exact and case-sensitive after field normalization; integers and decimals retain full precision. Optional nulls reserve nothing. Both head and published values remain reserved by an item; a draft change releases its former key only when that value leaves both surfaces. Unpublishing and deletion release the applicable claims. Enabling uniqueness validates existing surfaces atomically. Collisions return 409; bulk errors identify the failing operation and roll back all mutations. Constraints are checked in operation order, so key swaps that temporarily collide are rejected.
 
-Cross-field validation supports up to 32 declarative rules per type. A rule has a stable key, field, op and message. Comparisons use other_field of the same scalar type and decimal scale and support eq/ne/gt/gte/lt/lte; ordered operators exclude boolean, choice, lookup and term. Comparisons skip null operands. Conditional requirements use `{"key":"approval_code","field":"code","op":"required_if","when_field":"approved","when_value":true,"message":"Approved items need a code"}`. Defaults and field normalization run before rules on every new content revision. Templates can define and adopt these rules.
+Cross-field validation supports up to 32 declarative rules per type. A rule has a stable key, field, op and message. Comparisons use other_field of the same scalar type and decimal scale and support eq/ne/gt/gte/lt/lte; ordered operators exclude boolean, choice, lookup, term and keywords. Comparisons skip null operands. Conditional requirements use `{"key":"approval_code","field":"code","op":"required_if","when_field":"approved","when_value":true,"message":"Approved items need a code"}`. Defaults and field normalization run before rules on every new content revision. Templates can define and adopt these rules.
 
 Deleting a field removes it from the active catalog, all type memberships, query indexes and key claims. Rules and saved views that reference it must first be edited or removed. Immutable content and schema revisions retain their original values and definitions. Later edits or blob uploads omit removed values when carrying content forward; explicit replacement payloads reject undeclared keys. Removed keys cannot be reused.
 
@@ -107,11 +109,11 @@ POST `/v1/resources/{collectionID}/query` executes a bounded collection-wide ite
 
 The response contains resource `data` and optional `next_cursor`. Set `"include_total": true` to also receive `total`, the authorized match count before pagination; it evaluates every match, so request it only when a client shows the count. The same flag applies to saved-view and smart-folder queries. Include the returned cursor as `after`. Cursors bind the caller, collection, effective schema, query, and surface. They use keyset pagination: missing values sort last, and equal values order by ID in the sort direction. Ungrouped collection queries read each page in sort-index order (the indexed field, or `$name`, `$created_at`, `$created_by`, `$modified_at`, `$modified_by` or `$id`), so a page costs about its own size plus the rows the filter rejects, and a cursor seeks directly to where the previous page ended. Changing those inputs requires restarting pagination. Concurrent edits can move items between pages; the snapshot guarantee applies to each request.
 
-A filter node is one condition or an AND/OR/NOT group, with at most 32 nodes and depth 6. Operators: eq, ne, gt/gte/lt/lte, in, contains, missing, present. Operator/type compatibility is enforced. Custom fields must be indexed; system fields use `$id`, `$name`, and `$tags` to avoid collisions with custom keys. Multi-value equality matches any member; ne means present with no equal member. Sort/group fields must be scalar. Default sort is $id ascending.
+A filter node is one condition or an AND/OR/NOT group, with at most 32 nodes and depth 6. Operators: eq, ne, gt/gte/lt/lte, in, contains, under, missing, present. Operator/type compatibility is enforced. Term and keywords fields support eq, ne, in and under (the term or any of its descendants); a value that holds a merged term matches as the term it was merged into. Custom fields must be indexed; system fields use `$id`, `$name`, and `$tags` to avoid collisions with custom keys. Multi-value equality matches any member; ne means present with no equal member. Sort/group fields must be scalar. Default sort is $id ascending.
 
 Optional query content_type_id restricts items and usable query fields to one collection type. Omitting it queries all types with the shared catalog. Optional query parent_id restricts direct children of a collection or one of its folders. Search is a literal FTS phrase, and tag applies to the selected content surface. Missing optional values have no typed index row.
 
-POST the same request to `/query/groups` for a separately paginated collection of `{"value":...,"count":...}` groups. Counts use all authorized matching items before pagination. Integer and decimal group keys are exact strings, boolean keys are booleans, and missing keys are null. Group cursors cannot be used as row cursors.
+POST the same request to `/query/groups` for a separately paginated collection of `{"value":...,"count":...}` groups. Counts use all authorized matching items before pagination. Term and keywords groups carry the term's name in `label` when the caller can read the workspace's taxonomy. Integer and decimal group keys are exact strings, boolean keys are booleans, and missing keys are null. Group cursors cannot be used as row cursors.
 
 Permissions and surface selection are applied in SQL before sorting, pagination, counts, and grouping. All selection, counts, and hydration share one snapshot. Auto selects head for draft readers and published for ordinary readers. Explicit head selection requires draft access for returned items.
 
@@ -168,14 +170,37 @@ Run `go test ./internal/dms -run '^$' -bench BenchmarkItemUpdates -benchmem` to 
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| GET / POST | /v1/workspaces/{id}/term-sets | List or create term sets |
-| GET / PUT | /v1/term-sets/{id} | Read or replace term set metadata |
-| GET / POST | /v1/term-sets/{id}/terms | Search/list or create terms |
+| GET / POST | /v1/workspaces/{id}/term-groups | List or create term groups |
+| GET / PUT / DELETE | /v1/term-groups/{id} | Read, replace or delete a term group |
+| POST | /v1/term-groups/{id}/import | Import term sets from a SharePoint CSV (`text/csv`) |
+| GET / POST | /v1/workspaces/{id}/term-sets | List (`group_id` narrows) or create term sets |
+| GET / PUT / DELETE | /v1/term-sets/{id} | Read, replace or delete a term set |
+| GET / POST | /v1/term-sets/{id}/terms | Browse or search terms, or create one |
+| GET | /v1/terms?ids= | Look up 1 to 200 terms by ID |
 | GET / PUT | /v1/terms/{id} | Read or replace term metadata |
+| POST | /v1/terms/{id}/move | Move a term and its subtree |
+| POST | /v1/terms/{id}/merge | Merge a term into another |
+| GET / POST | /v1/workspaces/{id}/keywords | Suggest keywords, or get or add one |
+| GET | /v1/workspaces/{id}/keywords/popular | Most used keywords |
+| POST | /v1/keywords/{id}/promote | Promote a keyword into a managed set |
+| GET | /v1/workspaces/{id}/taxonomy/export | Export the taxonomy as a package |
+| POST | /v1/workspaces/{id}/taxonomy/import | Import a taxonomy package |
 
-Term sets have stable keys, names, descriptions, and versions. Terms have stable IDs, immutable optional parents within the same set, names, localized labels, synonyms, deprecation state, and versions. Hierarchy depth is bounded. Names are unique case-insensitively within a term set. Term listing supports q searches across names, labels, and synonyms and ID keyset pagination.
+**Groups and sets.** Term groups organize a workspace's term sets; group names are unique in the workspace. Every workspace has a system group, which holds its keywords set and cannot be renamed, deleted or given other sets. A term set has a stable key, a name unique in its group, a description and `is_open`. Open sets accept new terms from people with workspace write; closed sets change only with manage. Empty groups (other than the system group) and term sets without terms or fields can be deleted.
 
-Management requires workspace manage; reads require workspace read. PUT requires the entity's ETag and replaces its mutable metadata. Deprecated terms cannot be newly assigned, but existing references and historical content remain intact. Labels resolve from the current taxonomy; term definitions themselves are not immutable content-history snapshots. Free tags continue to work independently.
+**Terms.** Terms have stable IDs, a parent in the same set (or none), a name unique among the active children of a parent (case-insensitively), a description, an optional `#rrggbb` color, a `sort_order`, localized labels, synonyms and a deprecation flag. `path` lists the IDs from the root to the term (`/root/…/term/`), so a subtree is one index range; hierarchy depth is at most 32. Terms are never deleted: they are deprecated, which keeps existing values but rejects new assignments, or merged.
+
+Listing `GET /v1/term-sets/{id}/terms` returns the root terms, or the children of `parent_id`, ordered by `sort_order` then name with a keyset cursor; each term carries `has_children`. `q` searches names, labels and synonyms in the whole set (below `parent_id` when given). Deprecated terms are left out unless `include_deprecated=true`; merged terms are never listed. `GET /v1/terms?ids=` returns the readable terms among up to 200 IDs in the order asked, merged ones included.
+
+**Move and merge.** Moving a term (its ETag in `If-Match`) re-parents it within its set, never below itself, and updates the paths of its subtree. Merging a term into another active term of its set moves the source's children to the target, adds the source's name and synonyms to the target's synonyms, re-points terms earlier merged into the source, and keeps the source as a deprecated term whose `merged_into_id` names the target. Item values that hold a merged term keep its ID until the item is next written; filters treat it as the target, and readers resolve it through `merged_into_id`. A merge raises the `term.merged` domain event (`source_term_id`, `target_term_id`, `term_set_id`).
+
+**Keywords.** The keywords set is the open set of free keywords. People with workspace write get or add a keyword with `POST /v1/workspaces/{id}/keywords {"name": ...}`: an active keyword with that name or synonym (any case) comes back with 200, else a new root keyword with 201. `GET /v1/workspaces/{id}/keywords?q=` suggests up to 20 keywords, names that start with `q` first. Managers see the most used keywords with `/keywords/popular?top=` (items whose current content holds them in indexed term fields of the keywords set) and promote a keyword with `POST /v1/keywords/{id}/promote {"term_set_id", "parent_id"}`: when the target set has an active term with the keyword's name, label or synonym, the keyword merges into it; otherwise the keyword moves there. Either way the resulting term is `available_as_keyword`, so keyword suggestions and keyword pickers still offer it. Managers can also mark any term `available_as_keyword`.
+
+**CSV import.** `POST /v1/term-groups/{id}/import` reads the SharePoint term set format (at most 1 MiB): `Term Set Name`, `Term Set Description`, `LCID`, `Available for Tagging`, `Term Description` and `Level 1 Term` to `Level 7 Term`. A row with a term set name starts that set; each row adds the path of terms in its level columns. Import is additive: the group's sets with the same name and terms with the same name under the same parent are reused. New sets are closed and get a key derived from their name. A term's description, and `Available for Tagging` FALSE (imported deprecated), apply when the import creates it. The result lists the sets and counts what was created.
+
+**Packages.** `GET /v1/workspaces/{id}/taxonomy/export` returns the taxonomy by name, for setting it up in another workspace or deployment: `groups` (the system group marked `system`) with their `sets` (key, name, description, `is_open`) and nested `terms` (name, description, color, sort order, labels, synonyms, deprecation, `available_as_keyword`, `children`). Merged terms are left out; IDs never appear. `POST /v1/workspaces/{id}/taxonomy/import` (manage) is additive and atomic: groups match by name (the system group by role), sets by key and terms by name under the same parent; what exists stays as it is and what is missing is created. It reports `groups_created`, `sets_created` and `terms_created`. Smart folder packages refer to terms by set key and path, so importing the taxonomy first makes them portable.
+
+Management requires workspace manage; reads require workspace read. PUT, move, merge, promote and DELETE require the entity's ETag. Labels resolve from the current taxonomy; term definitions themselves are not immutable content-history snapshots. Free tags are separate plain-text labels.
 
 ## Typed relationships
 

@@ -3,6 +3,8 @@ package dms
 import (
 	"context"
 	"database/sql"
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"fmt"
 	"github.com/google/uuid"
 	"papergo/ent"
@@ -16,32 +18,55 @@ import (
 
 type Service struct {
 	Client      *ent.Client
+	db          *sql.DB
 	writeMu     chan struct{}
 	transaction bool
 	// operations wakes RunOperations when work is queued.
 	operations chan struct{}
+	onCommit   func()
+	tx         *sql.Tx
+	pending    *[]Event
 }
 
-func NewService(client *ent.Client) *Service {
-	return &Service{Client: client, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1)}
+// NewService serves the PaperGo database db.
+func NewService(db *sql.DB) *Service {
+	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1)}
 }
 
-// Mutations include authorization, version checks and audit records in one
-// transaction. SQLite WAL allows concurrent readers; one writer per process
-// avoids deferred-transaction upgrades racing with another application writer.
+// OnCommit calls f after each committed write that recorded domain events,
+// so a dispatcher can pick them up at once. Call it before the service is used.
+func (s *Service) OnCommit(f func()) { s.onCommit = f }
+
+// txDriver runs Ent on a transaction the service does not own. Ent opens its
+// own transaction for multi-statement saves; here those join tx instead.
+type txDriver struct{ *entsql.Driver }
+
+func (d txDriver) Tx(context.Context) (dialect.Tx, error) { return dialect.NopTx(d.Driver), nil }
+
+func entClient(tx *sql.Tx) *ent.Client {
+	return ent.NewClient(ent.Driver(txDriver{entsql.NewDriver(dialect.SQLite, entsql.Conn{ExecQuerier: tx})}))
+}
+
+// Mutations include authorization, version checks, audit records and the
+// domain event log in one transaction. SQLite WAL allows concurrent readers; one writer
+// per process keeps PaperGo writes in order, and immediate transactions make
+// other writers (the runner) wait for the lock instead of failing.
 // Waiting for the writer slot honors ctx, so a timed-out request leaves the queue.
 func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
+	if s.transaction {
+		return fn(s)
+	}
 	select {
 	case s.writeMu <- struct{}{}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 	defer func() { <-s.writeMu }()
-	tx, err := s.Client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return err
 	}
-	err = fn(&Service{Client: tx.Client(), writeMu: s.writeMu, transaction: true, operations: s.operations})
+	recorded, err := s.inTx(ctx, tx, fn)
 	if err != nil {
 		_ = tx.Rollback()
 	} else {
@@ -50,6 +75,29 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	if ent.IsConstraintError(err) {
 		return ErrConflict
 	}
+	if err == nil && recorded > 0 && s.onCommit != nil {
+		s.onCommit()
+	}
+	return err
+}
+
+// inTx runs fn on a service bound to tx and then records the events fn
+// raised in the domain event log, so they commit or roll back with its
+// writes. It returns how many events it recorded.
+func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
+	var pending []Event
+	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending}
+	if err := fn(t); err != nil {
+		return 0, err
+	}
+	return len(pending), recordEvents(ctx, tx, pending)
+}
+
+// WriteTx runs fn as one write inside tx, which the caller owns and commits.
+// The runner uses it so a workflow step's writes, their events and the step's
+// completion marker commit together; it wakes the dispatcher itself.
+func (s *Service) WriteTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) error {
+	_, err := s.inTx(ctx, tx, fn)
 	return err
 }
 
@@ -58,12 +106,12 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 	if s.transaction {
 		return fn(s)
 	}
-	tx, err := s.Client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
 	if err != nil {
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: tx.Client(), writeMu: s.writeMu, transaction: true, operations: s.operations})
+	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx})
 	if err != nil {
 		return out, err
 	}
@@ -200,6 +248,9 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if parent == nil {
 		_, e = s.Client.Grant.Create().SetResourceID(out.ID).SetSubject(subject).SetAction(grant.ActionManage).SetEffect(grant.EffectAllow).Save(ctx)
 		if e != nil {
+			return nil, e
+		}
+		if e = s.createWorkspaceTaxonomy(ctx, out.ID); e != nil {
 			return nil, e
 		}
 	}
@@ -495,6 +546,17 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int) e
 	links, err := unlinked.RowsAffected()
 	if err != nil {
 		return err
+	}
+	if s.pending != nil {
+		items, err := s.Client.Resource.Query().Where(resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil(), func(sel *entsql.Selector) {
+			sel.Where(entsql.ExprP(sel.C(resource.FieldID)+" IN ("+subtree+")", id))
+		}).Select(resource.FieldID, resource.FieldWorkspaceID, resource.FieldContainerID).All(ctx)
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			s.emit(ctx, EventItemDeleted, subject, item.WorkspaceID, item.ContainerID, item.ID, nil)
+		}
 	}
 	now := time.Now().UTC()
 	if _, err = s.Client.ExecContext(ctx, `UPDATE resources SET deleted_at=?, name_key=NULL, version=version+1, updated_at=? WHERE id IN (`+subtree+`)`, now, now, id); err != nil {

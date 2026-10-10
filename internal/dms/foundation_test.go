@@ -103,7 +103,7 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 
 func TestAutomaticPublishingAndPolicyChange(t *testing.T) {
 	db := testutil.Database(t)
-	s := NewService(db.Client)
+	s := NewService(db.SQL)
 	w := create(t, s, "", "workspace", "Organization", nil)
 	readers(t, s, w)
 	list, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Auto"})
@@ -355,7 +355,7 @@ func TestAuthorizedPaginationAndRelationships(t *testing.T) {
 
 func TestRevisionOwnershipAndTransactionRollback(t *testing.T) {
 	db := testutil.Database(t)
-	s := NewService(db.Client)
+	s := NewService(db.SQL)
 	w := create(t, s, "", "workspace", "Org", nil)
 	list := create(t, s, w.ID, "list", "Records", nil)
 	a := create(t, s, list.ID, "item", "A", nil)
@@ -399,4 +399,22 @@ func counted(total *int) int {
 		return -1
 	}
 	return *total
+}
+
+// testTermGroup returns the id of a "Test" term group of the workspace.
+func testTermGroup(s *Service, workspaceID string) string {
+	page, err := s.TermGroups(testContext, "alice", workspaceID, "", 100)
+	if err != nil {
+		panic(err)
+	}
+	for _, g := range page.Data {
+		if g.Name == "Test" {
+			return g.ID
+		}
+	}
+	g, err := s.CreateTermGroup(testContext, "alice", workspaceID, TermGroupInput{Name: "Test"})
+	if err != nil {
+		panic(err)
+	}
+	return g.ID
 }

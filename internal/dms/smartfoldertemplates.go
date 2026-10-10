@@ -141,9 +141,10 @@ func smartTermRefKey(ref SmartFolderTermRef) string {
 	return string(raw)
 }
 
-// Term names are unique inside a term set. Fetch requested leaves by their
-// indexed (set,name) keys, then fetch all required ancestors in one recursive
-// query. Import cost does not multiply by the depth of each term path.
+// Term names are unique among the active children of a parent. Fetch the
+// active terms named like the requested leaves, then build their paths in one
+// recursive query and keep the terms whose paths were asked for. Import cost
+// does not multiply by the depth of each term path.
 func (s *Service) resolveSmartPackageTerms(ctx context.Context, workspace string, pkg SmartFolderPackage) (map[string]string, error) {
 	type leaf struct {
 		Set  string `json:"set"`
@@ -178,7 +179,7 @@ func (s *Service) resolveSmartPackageTerms(ctx context.Context, workspace string
 		return out, nil
 	}
 	raw, _ := json.Marshal(leaves)
-	rows, err := s.Client.QueryContext(ctx, `SELECT t.id FROM json_each(?) j JOIN term_sets ts ON ts.workspace_id=? AND ts.key=json_extract(j.value,'$.set') JOIN terms t ON t.term_set_id=ts.id AND t.normalized_name=json_extract(j.value,'$.name')`, string(raw), workspace)
+	rows, err := s.Client.QueryContext(ctx, `SELECT t.id FROM json_each(?) j JOIN term_sets ts ON ts.workspace_id=? AND ts.key=json_extract(j.value,'$.set') JOIN terms t ON t.term_set_id=ts.id AND t.normalized_name=json_extract(j.value,'$.name') AND t.merged_into_id IS NULL`, string(raw), workspace)
 	if err != nil {
 		return nil, err
 	}

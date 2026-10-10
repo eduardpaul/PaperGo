@@ -28,7 +28,7 @@ func TestSmartFolderCollectionBudgetDoesNotTruncate(t *testing.T) {
 
 func BenchmarkSmartFolderQuery100Collections(b *testing.B) {
 	db := testutil.Database(b)
-	s := NewService(db.Client)
+	s := NewService(db.SQL)
 	ctx := context.Background()
 	w, err := s.Create(ctx, "alice", "", CreateResource{Kind: "workspace", Name: "Performance"})
 	if err != nil {

@@ -53,7 +53,7 @@ func relationshipPolicy(in RelationshipTypeInput) (json.RawMessage, error) {
 			return nil, invalid("duplicate attribute")
 		}
 		seen[d.Key] = true
-		if d.Type == "term" || d.Type == "lookup" || d.Options.Multiple || d.Indexed {
+		if d.Type == "term" || d.Type == "keywords" || d.Type == "lookup" || d.Options.Multiple || d.Indexed {
 			return nil, invalid("relationship attributes must be unindexed scalar fields")
 		}
 		if d.Choices == nil {

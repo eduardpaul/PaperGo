@@ -24,7 +24,7 @@ func benchCollection(b *testing.B) (*Service, *database.Database, string, string
 	}
 	ctx := context.Background()
 	db := testutil.Database(b)
-	s := NewService(db.Client)
+	s := NewService(db.SQL)
 	w, err := s.Create(ctx, "alice", "", CreateResource{Kind: "workspace", Name: "Benchmark"})
 	if err != nil {
 		b.Fatal(err)

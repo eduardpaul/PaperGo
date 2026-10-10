@@ -9,7 +9,7 @@ import (
 
 func TestSmartFolderClassificationAndUnclassification(t *testing.T) {
 	s, w, l := fixture(t)
-	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "projects", Name: "Projects"})
+	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "projects", Name: "Projects"})
 	if err != nil {
 		t.Fatal(err)
 	}

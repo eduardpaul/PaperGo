@@ -5,6 +5,7 @@ package ent
 import (
 	"fmt"
 	"papergo/ent/resource"
+	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 	"strings"
 	"time"
@@ -22,12 +23,18 @@ type TermSet struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// WorkspaceID holds the value of the "workspace_id" field.
 	WorkspaceID string `json:"workspace_id,omitempty"`
+	// GroupID holds the value of the "group_id" field.
+	GroupID string `json:"group_id,omitempty"`
 	// Key holds the value of the "key" field.
 	Key string `json:"key,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
+	// IsOpen holds the value of the "is_open" field.
+	IsOpen bool `json:"is_open,omitempty"`
+	// IsKeywords holds the value of the "is_keywords" field.
+	IsKeywords bool `json:"is_keywords,omitempty"`
 	// Version holds the value of the "version" field.
 	Version int `json:"version,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -42,11 +49,13 @@ type TermSet struct {
 type TermSetEdges struct {
 	// Workspace holds the value of the workspace edge.
 	Workspace *Resource `json:"workspace,omitempty"`
+	// Group holds the value of the group edge.
+	Group *TermGroup `json:"group,omitempty"`
 	// Terms holds the value of the terms edge.
 	Terms []*Term `json:"terms,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // WorkspaceOrErr returns the Workspace value or an error if the edge
@@ -60,10 +69,21 @@ func (e TermSetEdges) WorkspaceOrErr() (*Resource, error) {
 	return nil, &NotLoadedError{edge: "workspace"}
 }
 
+// GroupOrErr returns the Group value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e TermSetEdges) GroupOrErr() (*TermGroup, error) {
+	if e.Group != nil {
+		return e.Group, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: termgroup.Label}
+	}
+	return nil, &NotLoadedError{edge: "group"}
+}
+
 // TermsOrErr returns the Terms value or an error if the edge
 // was not loaded in eager-loading.
 func (e TermSetEdges) TermsOrErr() ([]*Term, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[2] {
 		return e.Terms, nil
 	}
 	return nil, &NotLoadedError{edge: "terms"}
@@ -74,9 +94,11 @@ func (*TermSet) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case termset.FieldIsOpen, termset.FieldIsKeywords:
+			values[i] = new(sql.NullBool)
 		case termset.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case termset.FieldID, termset.FieldWorkspaceID, termset.FieldKey, termset.FieldName, termset.FieldDescription:
+		case termset.FieldID, termset.FieldWorkspaceID, termset.FieldGroupID, termset.FieldKey, termset.FieldName, termset.FieldDescription:
 			values[i] = new(sql.NullString)
 		case termset.FieldCreatedAt, termset.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -113,6 +135,12 @@ func (_m *TermSet) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.WorkspaceID = value.String
 			}
+		case termset.FieldGroupID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field group_id", values[i])
+			} else if value.Valid {
+				_m.GroupID = value.String
+			}
 		case termset.FieldKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field key", values[i])
@@ -130,6 +158,18 @@ func (_m *TermSet) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
 				_m.Description = value.String
+			}
+		case termset.FieldIsOpen:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_open", values[i])
+			} else if value.Valid {
+				_m.IsOpen = value.Bool
+			}
+		case termset.FieldIsKeywords:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_keywords", values[i])
+			} else if value.Valid {
+				_m.IsKeywords = value.Bool
 			}
 		case termset.FieldVersion:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -159,6 +199,11 @@ func (_m *TermSet) Value(name string) (ent.Value, error) {
 // QueryWorkspace queries the "workspace" edge of the TermSet entity.
 func (_m *TermSet) QueryWorkspace() *ResourceQuery {
 	return NewTermSetClient(_m.config).QueryWorkspace(_m)
+}
+
+// QueryGroup queries the "group" edge of the TermSet entity.
+func (_m *TermSet) QueryGroup() *TermGroupQuery {
+	return NewTermSetClient(_m.config).QueryGroup(_m)
 }
 
 // QueryTerms queries the "terms" edge of the TermSet entity.
@@ -195,6 +240,9 @@ func (_m *TermSet) String() string {
 	builder.WriteString("workspace_id=")
 	builder.WriteString(_m.WorkspaceID)
 	builder.WriteString(", ")
+	builder.WriteString("group_id=")
+	builder.WriteString(_m.GroupID)
+	builder.WriteString(", ")
 	builder.WriteString("key=")
 	builder.WriteString(_m.Key)
 	builder.WriteString(", ")
@@ -203,6 +251,12 @@ func (_m *TermSet) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)
+	builder.WriteString(", ")
+	builder.WriteString("is_open=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IsOpen))
+	builder.WriteString(", ")
+	builder.WriteString("is_keywords=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IsKeywords))
 	builder.WriteString(", ")
 	builder.WriteString("version=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Version))

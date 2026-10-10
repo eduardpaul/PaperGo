@@ -47,7 +47,7 @@ func validateRules(defs []*ent.FieldDefinition, rules []model.ValidationRule) er
 			switch r.Op {
 			case "eq", "ne":
 			case "gt", "gte", "lt", "lte":
-				if left.Type == "boolean" || left.Type == "lookup" || left.Type == "term" || left.Type == "choice" {
+				if left.Type == "boolean" || left.Type == "lookup" || left.Type == "term" || left.Type == "keywords" || left.Type == "choice" {
 					return invalid("this field type supports only eq/ne rules")
 				}
 			default:

@@ -35,7 +35,7 @@ func staleScopes(t *testing.T, db *sql.DB) []string {
 
 func TestScopeFollowsInheritanceChanges(t *testing.T) {
 	db := testutil.Database(t)
-	s := dms.NewService(db.Client)
+	s := dms.NewService(db.SQL)
 	ctx := context.Background()
 	create := func(parent, kind, name string) *ent.Resource {
 		t.Helper()

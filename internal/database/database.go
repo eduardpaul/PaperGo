@@ -50,6 +50,38 @@ type Database struct {
 	Client *ent.Client
 }
 
+// Options are the connection settings of a handle on the PaperGo SQLite file.
+type Options struct {
+	TxLock      string // "" (deferred) or "immediate"
+	BusyTimeout time.Duration
+}
+
+// DefaultOptions are the settings Open uses. Write transactions take the
+// write lock when they begin and wait up to 30 seconds for it, so PaperGo
+// requests and runner steps queue for the single SQLite writer instead of
+// failing with SQLITE_BUSY. Read-only transactions stay deferred.
+var DefaultOptions = Options{TxLock: "immediate", BusyTimeout: 30 * time.Second}
+
+// DSN returns the data source name of the SQLite file at the absolute path
+// abs, so every handle on the file uses the same pragmas.
+func DSN(abs string, o Options) string {
+	uriPath := filepath.ToSlash(abs)
+	if filepath.VolumeName(abs) != "" {
+		uriPath = "/" + uriPath
+	}
+	u := url.URL{Scheme: "file", Path: uriPath}
+	q := url.Values{}
+	q.Set("_time_format", "sqlite")
+	if o.TxLock != "" {
+		q.Set("_txlock", o.TxLock)
+	}
+	for _, pragma := range []string{"foreign_keys(1)", fmt.Sprintf("busy_timeout(%d)", o.BusyTimeout.Milliseconds()), "journal_mode(WAL)", "synchronous(FULL)"} {
+		q.Add("_pragma", pragma)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
 func Open(ctx context.Context, path string) (*Database, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -58,18 +90,7 @@ func Open(ctx context.Context, path string) (*Database, error) {
 	if err = os.MkdirAll(filepath.Dir(abs), 0700); err != nil {
 		return nil, err
 	}
-	uriPath := filepath.ToSlash(abs)
-	if filepath.VolumeName(abs) != "" {
-		uriPath = "/" + uriPath
-	}
-	u := url.URL{Scheme: "file", Path: uriPath}
-	q := url.Values{}
-	q.Set("_time_format", "sqlite")
-	for _, pragma := range []string{"foreign_keys(1)", "busy_timeout(5000)", "journal_mode(WAL)", "synchronous(FULL)"} {
-		q.Add("_pragma", pragma)
-	}
-	u.RawQuery = q.Encode()
-	db, err := sql.Open("sqlite", u.String())
+	db, err := sql.Open("sqlite", DSN(abs, DefaultOptions))
 	if err != nil {
 		return nil, err
 	}

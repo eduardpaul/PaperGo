@@ -155,7 +155,7 @@ func TestSmartFoldersTermsSurfacesNavigationAndGlobalPaging(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := create(t, s, w.ID, "list", "Papers", nil)
-	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "projects", Name: "Projects"})
+	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "projects", Name: "Projects"})
 	if err != nil {
 		t.Fatal(err)
 	}

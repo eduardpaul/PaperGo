@@ -26,7 +26,7 @@ func TestApproximateNumericBoundsDoNotExpandScientificExponents(t *testing.T) {
 }
 func TestTemplateAdoptionRevalidatesReferenceDefaults(t *testing.T) {
 	s, w, l := fixture(t)
-	set, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "topics", Name: "Topics"})
+	set, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "topics", Name: "Topics"})
 	if e != nil {
 		t.Fatal(e)
 	}

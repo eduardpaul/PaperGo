@@ -17,7 +17,7 @@ var testContext = context.Background()
 
 func fixture(t *testing.T) (*Service, *ent.Resource, *ent.Resource) {
 	t.Helper()
-	s := NewService(testutil.Database(t).Client)
+	s := NewService(testutil.Database(t).SQL)
 	w := create(t, s, "", "workspace", "Finance", nil)
 	list := create(t, s, w.ID, "list", "Invoices", nil)
 	return s, w, list

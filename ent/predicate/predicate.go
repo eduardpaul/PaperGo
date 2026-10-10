@@ -18,6 +18,9 @@ type BusinessKey func(*sql.Selector)
 // ContentType is the predicate function for contenttype builders.
 type ContentType func(*sql.Selector)
 
+// DomainEvent is the predicate function for domainevent builders.
+type DomainEvent func(*sql.Selector)
+
 // FieldDefinition is the predicate function for fielddefinition builders.
 type FieldDefinition func(*sql.Selector)
 
@@ -63,8 +66,26 @@ type SmartFolder func(*sql.Selector)
 // Term is the predicate function for term builders.
 type Term func(*sql.Selector)
 
+// TermGroup is the predicate function for termgroup builders.
+type TermGroup func(*sql.Selector)
+
 // TermSet is the predicate function for termset builders.
 type TermSet func(*sql.Selector)
 
 // WebDAVCredential is the predicate function for webdavcredential builders.
 type WebDAVCredential func(*sql.Selector)
+
+// Workflow is the predicate function for workflow builders.
+type Workflow func(*sql.Selector)
+
+// WorkflowRun is the predicate function for workflowrun builders.
+type WorkflowRun func(*sql.Selector)
+
+// WorkflowRunItem is the predicate function for workflowrunitem builders.
+type WorkflowRunItem func(*sql.Selector)
+
+// WorkflowTrigger is the predicate function for workflowtrigger builders.
+type WorkflowTrigger func(*sql.Selector)
+
+// WorkflowVersion is the predicate function for workflowversion builders.
+type WorkflowVersion func(*sql.Selector)

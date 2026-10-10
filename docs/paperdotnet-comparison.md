@@ -90,7 +90,7 @@ PaperDotNet's [ListView and SmartFolder](https://github.com/eduardpaul/PaperDotN
 
 ### 3. Transactional outbox and small durable jobs
 
-Write an OutboxEvent in the same transaction as content, publication, grants, relationships, and audit changes. Proposed fields: event ID/type, resource and revision IDs, actor, payload, occurred_at, attempts, next_attempt_at, and lease state. Dispatch after commit with at-least-once delivery and idempotent handlers. Add an Operation record for user-visible asynchronous progress.
+Implemented for item changes as the `domain_events` log and the workflow runner's dispatcher ([workflows](workflows.md#runs)); the rest of this section is the remaining scope. Write an OutboxEvent in the same transaction as content, publication, grants, relationships, and audit changes. Proposed fields: event ID/type, resource and revision IDs, actor, payload, occurred_at, attempts, next_attempt_at, and lease state. Dispatch after commit with at-least-once delivery and idempotent handlers. Add an Operation record for user-visible asynchronous progress.
 
 PaperDotNet has an [outbox abstraction](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/BuildingBlocks/PaperDotNet.Messaging/Outbox.cs) and a [central mutation writer](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/ItemWriter.cs) that commit state and events together. Adopt that invariant, not the entire .NET messaging stack. Synchronous extension hooks must pass through final validation and cannot bypass authorization, revision allocation, projection maintenance, or audit recording.
 

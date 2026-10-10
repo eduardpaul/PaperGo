@@ -10,6 +10,7 @@ import (
 	"papergo/ent/blob"
 	"papergo/ent/businesskey"
 	"papergo/ent/contenttype"
+	"papergo/ent/domainevent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
@@ -25,8 +26,14 @@ import (
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
 	"papergo/ent/term"
+	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 	"papergo/ent/webdavcredential"
+	"papergo/ent/workflow"
+	"papergo/ent/workflowrun"
+	"papergo/ent/workflowrunitem"
+	"papergo/ent/workflowtrigger"
+	"papergo/ent/workflowversion"
 	"reflect"
 	"sync"
 
@@ -97,6 +104,7 @@ func checkColumn(t, c string) error {
 			blob.Table:             blob.ValidColumn,
 			businesskey.Table:      businesskey.ValidColumn,
 			contenttype.Table:      contenttype.ValidColumn,
+			domainevent.Table:      domainevent.ValidColumn,
 			fielddefinition.Table:  fielddefinition.ValidColumn,
 			fieldvalue.Table:       fieldvalue.ValidColumn,
 			grant.Table:            grant.ValidColumn,
@@ -112,8 +120,14 @@ func checkColumn(t, c string) error {
 			schematemplate.Table:   schematemplate.ValidColumn,
 			smartfolder.Table:      smartfolder.ValidColumn,
 			term.Table:             term.ValidColumn,
+			termgroup.Table:        termgroup.ValidColumn,
 			termset.Table:          termset.ValidColumn,
 			webdavcredential.Table: webdavcredential.ValidColumn,
+			workflow.Table:         workflow.ValidColumn,
+			workflowrun.Table:      workflowrun.ValidColumn,
+			workflowrunitem.Table:  workflowrunitem.ValidColumn,
+			workflowtrigger.Table:  workflowtrigger.ValidColumn,
+			workflowversion.Table:  workflowversion.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

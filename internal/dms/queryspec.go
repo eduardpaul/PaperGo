@@ -51,7 +51,10 @@ type QueryResult struct {
 }
 type QueryGroup struct {
 	Value any `json:"value"`
-	Count int `json:"count"`
+	// Label names the term of a term or keywords group when the caller can
+	// read the workspace's taxonomy.
+	Label string `json:"label,omitempty"`
+	Count int    `json:"count"`
 }
 type compiledQuery struct {
 	sql         string
@@ -249,6 +252,12 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 	if e != nil || v == nil {
 		return "", nil, invalid("filter value is required")
 	}
+	if !builtin && (d.Type == "term" || d.Type == "keywords") {
+		return termFilter(d, op, v, prefix, args)
+	}
+	if op == "under" {
+		return "", nil, invalid("under requires a term or keywords field")
+	}
 	compare := ""
 	bind := []any{}
 	if op == "in" {
@@ -283,7 +292,7 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 			if operator == "" {
 				return "", nil, invalid("unsupported filter operator")
 			}
-			if (d.Type == "boolean" || d.Type == "lookup" || d.Type == "term" || d.Type == "choice") && op != "eq" && op != "ne" {
+			if (d.Type == "boolean" || d.Type == "lookup" || d.Type == "choice") && op != "eq" && op != "ne" {
 				return "", nil, invalid("field supports equality only")
 			}
 			compare = col + operator + "?"
@@ -620,7 +629,23 @@ func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, 
 		if e != nil {
 			return Page[QueryGroup]{}, e
 		}
-		return t.queryGroupsCompiled(ctx, in, q)
+		out, e := t.queryGroupsCompiled(ctx, in, q)
+		if e != nil || q.rankDef == nil || q.rankDef.Type != "term" && q.rankDef.Type != "keywords" {
+			return out, e
+		}
+		ids := make([]string, 0, len(out.Data))
+		for _, g := range out.Data {
+			if id, ok := g.Value.(string); ok {
+				ids = append(ids, id)
+			}
+		}
+		names, e := t.termNames(ctx, subject, ids)
+		for i := range out.Data {
+			if id, ok := out.Data[i].Value.(string); ok {
+				out.Data[i].Label = names[id]
+			}
+		}
+		return out, e
 	})
 }
 
@@ -701,4 +726,49 @@ func (s *Service) validateQuery(ctx context.Context, subject, containerID string
 		return e
 	}
 	return nil
+}
+
+// termFilter matches term values. A value that holds a merged term counts as
+// the term it was merged into; under also matches the descendants of a term.
+func termFilter(d *ent.FieldDefinition, op string, v any, prefix string, args []any) (string, []any, error) {
+	var ids []any
+	switch op {
+	case "eq", "ne", "under":
+		x, e := queryValue(d, v)
+		if e != nil {
+			return "", nil, e
+		}
+		ids = []any{x}
+	case "in":
+		list, ok := v.([]any)
+		if !ok || len(list) < 1 || len(list) > 50 {
+			return "", nil, invalid("in requires 1..50 values")
+		}
+		for _, value := range list {
+			x, e := queryValue(d, value)
+			if e != nil {
+				return "", nil, e
+			}
+			ids = append(ids, x)
+		}
+	default:
+		return "", nil, invalid("term fields support eq, ne, in and under")
+	}
+	var set string
+	var bind []any
+	if op == "under" {
+		// The subtree of r is one range of the path index.
+		subtree := "terms r JOIN terms t ON t.path>=r.path AND t.path<substr(r.path,1,length(r.path)-1)||'0' WHERE r.id=?"
+		set = "SELECT t.id FROM " + subtree + " UNION ALL SELECT m.id FROM terms m WHERE m.merged_into_id IN (SELECT t.id FROM " + subtree + ")"
+		bind = []any{ids[0], ids[0]}
+	} else {
+		marks := strings.TrimPrefix(strings.Repeat(",?", len(ids)), ",")
+		set = "SELECT id FROM terms WHERE id IN (" + marks + ") UNION ALL SELECT id FROM terms WHERE merged_into_id IN (" + marks + ")"
+		bind = append(append([]any{}, ids...), ids...)
+	}
+	member := "f.value_text IN (" + set + ")"
+	if op == "ne" {
+		return "EXISTS (SELECT 1 FROM field_values f WHERE " + prefix + ") AND NOT EXISTS (SELECT 1 FROM field_values f WHERE " + prefix + " AND " + member + ")", append(append(append([]any{}, args...), args...), bind...), nil
+	}
+	return "EXISTS (SELECT 1 FROM field_values f WHERE " + prefix + " AND " + member + ")", append(args, bind...), nil
 }

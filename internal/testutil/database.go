@@ -11,7 +11,13 @@ import (
 
 func Database(t testing.TB) *database.Database {
 	t.Helper()
-	db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+	return DatabaseAt(t, filepath.Join(t.TempDir(), "test.db"))
+}
+
+// DatabaseAt opens the database file at path and applies the schema to it.
+func DatabaseAt(t testing.TB, path string) *database.Database {
+	t.Helper()
+	db, err := database.Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -57,6 +57,20 @@ func (_u *TermSetUpdate) SetNillableDescription(v *string) *TermSetUpdate {
 	return _u
 }
 
+// SetIsOpen sets the "is_open" field.
+func (_u *TermSetUpdate) SetIsOpen(v bool) *TermSetUpdate {
+	_u.mutation.SetIsOpen(v)
+	return _u
+}
+
+// SetNillableIsOpen sets the "is_open" field if the given value is not nil.
+func (_u *TermSetUpdate) SetNillableIsOpen(v *bool) *TermSetUpdate {
+	if v != nil {
+		_u.SetIsOpen(*v)
+	}
+	return _u
+}
+
 // SetVersion sets the "version" field.
 func (_u *TermSetUpdate) SetVersion(v int) *TermSetUpdate {
 	_u.mutation.ResetVersion()
@@ -171,6 +185,9 @@ func (_u *TermSetUpdate) check() error {
 	if _u.mutation.WorkspaceCleared() && len(_u.mutation.WorkspaceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "TermSet.workspace"`)
 	}
+	if _u.mutation.GroupCleared() && len(_u.mutation.GroupIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "TermSet.group"`)
+	}
 	return nil
 }
 
@@ -191,6 +208,9 @@ func (_u *TermSetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(termset.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IsOpen(); ok {
+		_spec.SetField(termset.FieldIsOpen, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(termset.FieldVersion, field.TypeInt, value)
@@ -290,6 +310,20 @@ func (_u *TermSetUpdateOne) SetDescription(v string) *TermSetUpdateOne {
 func (_u *TermSetUpdateOne) SetNillableDescription(v *string) *TermSetUpdateOne {
 	if v != nil {
 		_u.SetDescription(*v)
+	}
+	return _u
+}
+
+// SetIsOpen sets the "is_open" field.
+func (_u *TermSetUpdateOne) SetIsOpen(v bool) *TermSetUpdateOne {
+	_u.mutation.SetIsOpen(v)
+	return _u
+}
+
+// SetNillableIsOpen sets the "is_open" field if the given value is not nil.
+func (_u *TermSetUpdateOne) SetNillableIsOpen(v *bool) *TermSetUpdateOne {
+	if v != nil {
+		_u.SetIsOpen(*v)
 	}
 	return _u
 }
@@ -421,6 +455,9 @@ func (_u *TermSetUpdateOne) check() error {
 	if _u.mutation.WorkspaceCleared() && len(_u.mutation.WorkspaceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "TermSet.workspace"`)
 	}
+	if _u.mutation.GroupCleared() && len(_u.mutation.GroupIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "TermSet.group"`)
+	}
 	return nil
 }
 
@@ -458,6 +495,9 @@ func (_u *TermSetUpdateOne) sqlSave(ctx context.Context) (_node *TermSet, err er
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(termset.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IsOpen(); ok {
+		_spec.SetField(termset.FieldIsOpen, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(termset.FieldVersion, field.TypeInt, value)

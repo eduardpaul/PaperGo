@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
+	"papergo/internal/runner"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
 	"papergo/internal/webdav"
+	"papergo/internal/workflow"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +23,8 @@ import (
 
 type API struct {
 	DMS       *dms.Service
+	Workflows *workflow.Service
+	Runner    *runner.Runner
 	Auth      auth.Verifier
 	Storage   storage.Store
 	Logger    *slog.Logger
@@ -40,6 +44,7 @@ func (a *API) Handler() http.Handler {
 	api := http.NewServeMux()
 	a.registerFoundation(api)
 	a.registerSmartFolders(api)
+	a.registerWorkflows(api)
 	api.HandleFunc("GET /v1/workspaces", a.browse)
 	api.HandleFunc("POST /v1/workspaces", a.workspace)
 	api.HandleFunc("GET /v1/resources", a.browse)
@@ -65,6 +70,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)
 	api.HandleFunc("GET /v1/workspaces/{id}/audit", a.audit)
+	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
 	api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
 	api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
 	api.HandleFunc("DELETE /v1/webdav-credentials/{id}", a.revokeWebDAVCredential)
@@ -576,4 +582,16 @@ func (a *API) observe(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(rw, r)
 	})
+}
+
+// tags lists the workspace's tag vocabulary (keywords) for pickers and autocomplete.
+func (a *API) tags(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	out, err := a.DMS.Tags(r.Context(), subject(r), r.PathValue("id"), dms.TagsQuery{CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("after"), Limit: limit})
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	respond(w, 200, out)
 }

@@ -10,6 +10,7 @@ import (
 	"papergo/ent/predicate"
 	"papergo/ent/resource"
 	"papergo/ent/term"
+	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 
 	"entgo.io/ent"
@@ -26,6 +27,7 @@ type TermSetQuery struct {
 	inters        []Interceptor
 	predicates    []predicate.TermSet
 	withWorkspace *ResourceQuery
+	withGroup     *TermGroupQuery
 	withTerms     *TermQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -78,6 +80,28 @@ func (_q *TermSetQuery) QueryWorkspace() *ResourceQuery {
 			sqlgraph.From(termset.Table, termset.FieldID, selector),
 			sqlgraph.To(resource.Table, resource.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, termset.WorkspaceTable, termset.WorkspaceColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryGroup chains the current query on the "group" edge.
+func (_q *TermSetQuery) QueryGroup() *TermGroupQuery {
+	query := (&TermGroupClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(termset.Table, termset.FieldID, selector),
+			sqlgraph.To(termgroup.Table, termgroup.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, termset.GroupTable, termset.GroupColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -300,6 +324,7 @@ func (_q *TermSetQuery) Clone() *TermSetQuery {
 		inters:        append([]Interceptor{}, _q.inters...),
 		predicates:    append([]predicate.TermSet{}, _q.predicates...),
 		withWorkspace: _q.withWorkspace.Clone(),
+		withGroup:     _q.withGroup.Clone(),
 		withTerms:     _q.withTerms.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
@@ -315,6 +340,17 @@ func (_q *TermSetQuery) WithWorkspace(opts ...func(*ResourceQuery)) *TermSetQuer
 		opt(query)
 	}
 	_q.withWorkspace = query
+	return _q
+}
+
+// WithGroup tells the query-builder to eager-load the nodes that are connected to
+// the "group" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TermSetQuery) WithGroup(opts ...func(*TermGroupQuery)) *TermSetQuery {
+	query := (&TermGroupClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withGroup = query
 	return _q
 }
 
@@ -407,8 +443,9 @@ func (_q *TermSetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Term
 	var (
 		nodes       = []*TermSet{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			_q.withWorkspace != nil,
+			_q.withGroup != nil,
 			_q.withTerms != nil,
 		}
 	)
@@ -433,6 +470,12 @@ func (_q *TermSetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Term
 	if query := _q.withWorkspace; query != nil {
 		if err := _q.loadWorkspace(ctx, query, nodes, nil,
 			func(n *TermSet, e *Resource) { n.Edges.Workspace = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withGroup; query != nil {
+		if err := _q.loadGroup(ctx, query, nodes, nil,
+			func(n *TermSet, e *TermGroup) { n.Edges.Group = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -468,6 +511,35 @@ func (_q *TermSetQuery) loadWorkspace(ctx context.Context, query *ResourceQuery,
 		nodes, ok := nodeids[n.ID]
 		if !ok {
 			return fmt.Errorf(`unexpected foreign-key "workspace_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (_q *TermSetQuery) loadGroup(ctx context.Context, query *TermGroupQuery, nodes []*TermSet, init func(*TermSet), assign func(*TermSet, *TermGroup)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*TermSet)
+	for i := range nodes {
+		fk := nodes[i].GroupID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(termgroup.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "group_id" returned %v`, n.ID)
 		}
 		for i := range nodes {
 			assign(nodes[i], n)
@@ -533,6 +605,9 @@ func (_q *TermSetQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if _q.withWorkspace != nil {
 			_spec.Node.AddColumnOnce(termset.FieldWorkspaceID)
+		}
+		if _q.withGroup != nil {
+			_spec.Node.AddColumnOnce(termset.FieldGroupID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

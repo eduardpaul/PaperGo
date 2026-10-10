@@ -31,7 +31,10 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	var l ent.Resource
 	json.Unmarshal(lbody, &l)
 	base := "/v1/workspaces/" + w.ID
-	setBody := send("POST", base+"/term-sets", `{"key":"topics","name":"Topics"}`, "", 201)
+	groupBody := send("POST", base+"/term-groups", `{"name":"Subjects"}`, "", 201)
+	var group ent.TermGroup
+	json.Unmarshal(groupBody, &group)
+	setBody := send("POST", base+"/term-sets", fmt.Sprintf(`{"group_id":%q,"key":"topics","name":"Topics"}`, group.ID), "", 201)
 	var set ent.TermSet
 	json.Unmarshal(setBody, &set)
 	termBody := send("POST", "/v1/term-sets/"+set.ID+"/terms", `{"name":"Finance","labels":{"es":"Finanzas"},"synonyms":["Money"]}`, "", 201)

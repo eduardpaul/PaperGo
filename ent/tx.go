@@ -22,6 +22,8 @@ type Tx struct {
 	BusinessKey *BusinessKeyClient
 	// ContentType is the client for interacting with the ContentType builders.
 	ContentType *ContentTypeClient
+	// DomainEvent is the client for interacting with the DomainEvent builders.
+	DomainEvent *DomainEventClient
 	// FieldDefinition is the client for interacting with the FieldDefinition builders.
 	FieldDefinition *FieldDefinitionClient
 	// FieldValue is the client for interacting with the FieldValue builders.
@@ -52,10 +54,22 @@ type Tx struct {
 	SmartFolder *SmartFolderClient
 	// Term is the client for interacting with the Term builders.
 	Term *TermClient
+	// TermGroup is the client for interacting with the TermGroup builders.
+	TermGroup *TermGroupClient
 	// TermSet is the client for interacting with the TermSet builders.
 	TermSet *TermSetClient
 	// WebDAVCredential is the client for interacting with the WebDAVCredential builders.
 	WebDAVCredential *WebDAVCredentialClient
+	// Workflow is the client for interacting with the Workflow builders.
+	Workflow *WorkflowClient
+	// WorkflowRun is the client for interacting with the WorkflowRun builders.
+	WorkflowRun *WorkflowRunClient
+	// WorkflowRunItem is the client for interacting with the WorkflowRunItem builders.
+	WorkflowRunItem *WorkflowRunItemClient
+	// WorkflowTrigger is the client for interacting with the WorkflowTrigger builders.
+	WorkflowTrigger *WorkflowTriggerClient
+	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
+	WorkflowVersion *WorkflowVersionClient
 
 	// lazily loaded.
 	client     *Client
@@ -191,6 +205,7 @@ func (tx *Tx) init() {
 	tx.Blob = NewBlobClient(tx.config)
 	tx.BusinessKey = NewBusinessKeyClient(tx.config)
 	tx.ContentType = NewContentTypeClient(tx.config)
+	tx.DomainEvent = NewDomainEventClient(tx.config)
 	tx.FieldDefinition = NewFieldDefinitionClient(tx.config)
 	tx.FieldValue = NewFieldValueClient(tx.config)
 	tx.Grant = NewGrantClient(tx.config)
@@ -206,8 +221,14 @@ func (tx *Tx) init() {
 	tx.SchemaTemplate = NewSchemaTemplateClient(tx.config)
 	tx.SmartFolder = NewSmartFolderClient(tx.config)
 	tx.Term = NewTermClient(tx.config)
+	tx.TermGroup = NewTermGroupClient(tx.config)
 	tx.TermSet = NewTermSetClient(tx.config)
 	tx.WebDAVCredential = NewWebDAVCredentialClient(tx.config)
+	tx.Workflow = NewWorkflowClient(tx.config)
+	tx.WorkflowRun = NewWorkflowRunClient(tx.config)
+	tx.WorkflowRunItem = NewWorkflowRunItemClient(tx.config)
+	tx.WorkflowTrigger = NewWorkflowTriggerClient(tx.config)
+	tx.WorkflowVersion = NewWorkflowVersionClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.
