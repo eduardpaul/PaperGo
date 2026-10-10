@@ -152,6 +152,13 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 }
 
 func (s *Service) smartFolder(ctx context.Context, subject, id string, manage bool) (*ent.SmartFolder, error) {
+	scope := "list.read"
+	if manage {
+		scope = "list.write"
+	}
+	if err := s.RequireScope(ctx, subject, scope); err != nil {
+		return nil, err
+	}
 	f, err := s.Client.SmartFolder.Get(ctx, id)
 	if ent.IsNotFound(err) {
 		return nil, ErrNotFound
@@ -189,6 +196,9 @@ func (s *Service) auditSmartFolder(ctx context.Context, subject, action string, 
 }
 
 func (s *Service) createSmartFolder(ctx context.Context, subject string, in SmartFolderInput) (*ent.SmartFolder, error) {
+	if err := s.RequireScope(ctx, subject, "list.write"); err != nil {
+		return nil, err
+	}
 	if subject == "" {
 		return nil, ErrForbidden
 	}
@@ -233,6 +243,9 @@ func (s *Service) SmartFolder(ctx context.Context, subject, id string) (*ent.Sma
 
 func (s *Service) SmartFolders(ctx context.Context, subject, workspace, after string, limit int) (Page[*ent.SmartFolder], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.SmartFolder], error) {
+		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
+			return Page[*ent.SmartFolder]{}, err
+		}
 		acl, args := permissionSQL("smart_folders.workspace_id", subject, "read")
 		q := t.Client.SmartFolder.Query().Where(smartfolder.IDGT(after), func(sel *entsql.Selector) {
 			sel.Where(entsql.ExprP("(owner_id=? OR (owner_id IS NULL AND "+acl+"))", append([]any{subject}, args...)...))

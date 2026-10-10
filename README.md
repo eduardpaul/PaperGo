@@ -27,6 +27,8 @@ Tests use temporary SQLite files and apply the actual versioned migrations, incl
 
 The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
+[Organization groups and roles](docs/identity.md) are managed under `/v1/identity`. OIDC deployments require `ADMIN_SUBJECT` for the first administrator; development defaults to `DEV_SUBJECT`. Verified subjects enroll with the Member role on first authentication. Module scopes and resource ACLs apply independently, including to owners and workflow item actions.
+
 ## Data model and requirements
 
 | Requirement | Implementation |

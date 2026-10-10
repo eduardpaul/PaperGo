@@ -124,7 +124,11 @@
               "default": 50
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "workspace.read"
+        ],
+        "description": " Required module scopes: workspace.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Create a workspace with creator manage permission",
@@ -188,7 +192,10 @@
             }
           }
         },
-        "description": "Creates a workspace with the authenticated subject as its first owner. Name is trimmed (1..200 characters); description is at most 2000 characters."
+        "description": "Creates a workspace with the authenticated subject as its first owner. Name is trimmed (1..200 characters); description is at most 2000 characters. Required module scopes: workspace.create. Resource ACLs and any additional use-case checks also apply.",
+        "x-module-scopes": [
+          "workspace.create"
+        ]
       }
     },
     "/v1/resources": {
@@ -743,7 +750,11 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.read"
+        ],
+        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Add a field definition (manage required)",
@@ -771,7 +782,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ],
+        "description": " Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/resources/{id}/permissions": {
@@ -802,7 +817,11 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "summary": "Replace permissions and inheritance (manage required)",
@@ -850,7 +869,10 @@
             }
           }
         },
-        "description": "Changes collection/folder/item permission inheritance and grants. Workspace access is managed through members; permission replacement is rejected for workspaces. Workspace owners retain management even in exclusive scopes."
+        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "x-module-scopes": [
+          "list.read"
+        ]
       }
     },
     "/v1/items/{id}/relationships": {
@@ -935,7 +957,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Create a named directional relationship",
@@ -972,7 +998,10 @@
             }
           }
         },
-        "description": "Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering."
+        "description": "Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "x-module-scopes": [
+          "list.write"
+        ]
       }
     },
     "/v1/items/{id}/relationships/{linkID}": {
@@ -1021,7 +1050,10 @@
             "description": "Current entity ETag. Template adoption uses the collection ETag and also requires template_version."
           }
         ],
-        "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match."
+        "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "x-module-scopes": [
+          "list.write"
+        ]
       },
       "patch": {
         "summary": "Update Relationship",
@@ -1184,7 +1216,10 @@
             }
           }
         },
-        "description": "Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key."
+        "description": "Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "x-module-scopes": [
+          "list.write"
+        ]
       }
     },
     "/v1/items/{id}/publications": {
@@ -1234,7 +1269,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       },
       "get": {
         "summary": "Read immutable publications",
@@ -1283,7 +1322,10 @@
             }
           }
         ],
-        "description": "Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only."
+        "description": "Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "x-module-scopes": [
+          "list.read"
+        ]
       }
     },
     "/v1/items/{id}/content": {
@@ -1354,7 +1396,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       },
       "get": {
         "summary": "Download selected head/published blob; supports byte ranges",
@@ -1393,7 +1439,10 @@
             "$ref": "#/components/responses/Problem"
           }
         },
-        "description": "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs."
+        "description": "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "x-module-scopes": [
+          "list.read"
+        ]
       }
     },
     "/v1/workspaces/{id}/audit": {
@@ -1663,7 +1712,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "contentType.manage"
+        ],
+        "description": " Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "parameters": [
         {
@@ -1688,7 +1741,7 @@
       "delete": {
         "operationId": "deleteField",
         "summary": "Remove field from the active schema (manage required)",
-        "description": "Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys.",
+        "description": "Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys. Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "If-Match",
@@ -1715,7 +1768,10 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ]
       }
     },
     "/v1/resources/{id}/schemas": {
@@ -1843,7 +1899,11 @@
             "description": "Maximum results.",
             "in": "query"
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/items/{id}/unpublish": {
@@ -1893,7 +1953,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/items/{id}/schema": {
@@ -1940,7 +2004,11 @@
             "description": "Auto chooses head for draft readers and published for ordinary readers. Head requires draft access.",
             "in": "query"
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/workspaces/{id}/templates": {
@@ -2075,7 +2143,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.read"
+        ],
+        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Create Template",
@@ -2209,7 +2281,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ],
+        "description": " Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/templates/{id}": {
@@ -2335,7 +2411,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.read"
+        ],
+        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "summary": "Update Template",
@@ -2489,7 +2569,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ],
+        "description": " Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/resources/{id}/templates/{templateID}/apply": {
@@ -2653,7 +2737,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ],
+        "description": " Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/resources/{id}/query": {
@@ -3298,7 +3386,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Create View",
@@ -3432,7 +3524,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}": {
@@ -3558,7 +3654,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "summary": "Update View",
@@ -3712,7 +3812,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "summary": "Delete saved view",
@@ -3746,7 +3850,11 @@
           "428": {
             "description": "If-Match required"
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}/query": {
@@ -3874,7 +3982,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/views/{id}/query/groups": {
@@ -4002,7 +4114,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/workspaces/{id}/relationship-types": {
@@ -4137,7 +4253,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Create Relationship Type",
@@ -4271,7 +4391,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/relationship-types/{id}": {
@@ -4397,7 +4521,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "summary": "Update Relationship Type",
@@ -4551,7 +4679,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/resources/{id}/bulk": {
@@ -4656,7 +4788,11 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.read"
+        ],
+        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "operationId": "createContentType",
@@ -4705,7 +4841,11 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ],
+        "description": " Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/content-types/{id}": {
@@ -4745,7 +4885,11 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.read"
+        ],
+        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "operationId": "updateContentType",
@@ -4794,7 +4938,11 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "contentType.manage"
+        ],
+        "description": " Required module scopes: contentType.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/smart-folders": {
@@ -4841,7 +4989,11 @@
               "type": "integer"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "operationId": "createSmartFolder",
@@ -4878,7 +5030,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/smart-folders/{id}": {
@@ -4918,7 +5074,11 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "operationId": "updateSmartFolder",
@@ -4966,7 +5126,11 @@
             },
             "required": true
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "deleteSmartFolder",
@@ -4988,7 +5152,11 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/smart-folders/{id}/query": {
@@ -5030,7 +5198,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/smart-folders/{id}/query/groups": {
@@ -5072,7 +5244,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/smart-folders/{id}/items": {
@@ -5127,7 +5303,11 @@
             }
           }
         },
-        "summary": "Classify or create an item in a smart folder"
+        "summary": "Classify or create an item in a smart folder",
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       },
       "parameters": [
         {
@@ -5143,7 +5323,7 @@
     },
     "/v1/smart-folders/{id}/items/{itemID}": {
       "delete": {
-        "description": "Requires item If-Match and current folder_version. Clears matching equality values/tags and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition.",
+        "description": "Requires item If-Match and current folder_version. Clears matching equality values/tags and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
         "responses": {
           "200": {
             "content": {
@@ -5188,7 +5368,10 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.write"
+        ]
       },
       "parameters": [
         {
@@ -7379,12 +7562,16 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ],
+        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Create Term Group",
         "operationId": "createTermGroup",
-        "description": "Requires workspace manage.",
+        "description": "Requires workspace manage. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -7514,7 +7701,10 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/term-groups/{id}": {
@@ -7640,12 +7830,16 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ],
+        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "summary": "Update Term Group",
         "operationId": "updateTermGroup",
-        "description": "The system group cannot change.",
+        "description": "The system group cannot change. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -7785,12 +7979,15 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       },
       "delete": {
         "summary": "Delete Term Group",
         "operationId": "deleteTermGroup",
-        "description": "Deletes an empty group other than the system group.",
+        "description": "Deletes an empty group other than the system group. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -7905,14 +8102,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/term-groups/{id}/import": {
       "post": {
         "summary": "Import Term Sets",
         "operationId": "importTermSets",
-        "description": "Adds the sets and terms of a SharePoint term set CSV (at most 1 MiB) to the group. Existing sets (by name) and terms (by name under the same parent) are reused; new sets are closed.",
+        "description": "Adds the sets and terms of a SharePoint term set CSV (at most 1 MiB) to the group. Existing sets (by name) and terms (by name under the same parent) are reused; new sets are closed. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -8034,7 +8234,10 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/workspaces/{id}/term-sets": {
@@ -8182,12 +8385,16 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ],
+        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Create Term Set",
         "operationId": "createTermSet",
-        "description": "Requires workspace manage; not in the system group.",
+        "description": "Requires workspace manage; not in the system group. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -8317,7 +8524,10 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/term-sets/{id}": {
@@ -8443,12 +8653,16 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ],
+        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "summary": "Update Term Set",
         "operationId": "updateTermSet",
-        "description": "Key and group are immutable; the keywords set stays open.",
+        "description": "Key and group are immutable; the keywords set stays open. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -8588,12 +8802,15 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       },
       "delete": {
         "summary": "Delete Term Set",
         "operationId": "deleteTermSet",
-        "description": "Deletes a set without terms or fields; not the keywords set.",
+        "description": "Deletes a set without terms or fields; not the keywords set. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -8708,14 +8925,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/term-sets/{id}/terms": {
       "get": {
         "summary": "Terms",
         "operationId": "terms",
-        "description": "Ordered by sort_order, then name. Merged terms are never listed.",
+        "description": "Ordered by sort_order, then name. Merged terms are never listed. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -8875,12 +9095,15 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ]
       },
       "post": {
         "summary": "Create Term",
         "operationId": "createTerm",
-        "description": "Open sets need workspace write, closed sets manage; deprecated or keyword-available terms need manage.",
+        "description": "Open sets need workspace write, closed sets manage; deprecated or keyword-available terms need manage. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -9010,14 +9233,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ]
       }
     },
     "/v1/terms": {
       "get": {
         "summary": "Terms by ID",
         "operationId": "termsByID",
-        "description": "Readable terms in the order asked; unknown ids are left out. Merged terms name their replacement in merged_into_id.",
+        "description": "Readable terms in the order asked; unknown ids are left out. Merged terms name their replacement in merged_into_id. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "ids",
@@ -9130,7 +9356,10 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ]
       }
     },
     "/v1/terms/{id}": {
@@ -9256,12 +9485,16 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ],
+        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
       },
       "put": {
         "summary": "Update Term",
         "operationId": "updateTerm",
-        "description": "Requires manage. Merged terms are read-only.",
+        "description": "Requires manage. Merged terms are read-only. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -9401,14 +9634,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/terms/{id}/move": {
       "post": {
         "summary": "Move Term",
         "operationId": "moveTerm",
-        "description": "Moves the term and its subtree in its set.",
+        "description": "Moves the term and its subtree in its set. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -9548,14 +9784,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/terms/{id}/merge": {
       "post": {
         "summary": "Merge Term",
         "operationId": "mergeTerm",
-        "description": "Merges the term into another term of its set and returns the target: children move, the source's name and synonyms become synonyms, and the source keeps merged_into_id. Raises term.merged.",
+        "description": "Merges the term into another term of its set and returns the target: children move, the source's name and synonyms become synonyms, and the source keeps merged_into_id. Raises term.merged. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -9695,14 +9934,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/workspaces/{id}/keywords": {
       "get": {
         "summary": "Keywords",
         "operationId": "keywords",
-        "description": "Keywords of the keywords set and terms available as keywords; names starting with q first.",
+        "description": "Keywords of the keywords set and terms available as keywords; names starting with q first. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -9835,12 +10077,15 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ]
       },
       "post": {
         "summary": "Add Keyword",
         "operationId": "addKeyword",
-        "description": "Returns the keyword with this name or synonym, or adds it to the keywords set. Requires workspace write.",
+        "description": "Returns the keyword with this name or synonym, or adds it to the keywords set. Requires workspace write. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -9980,14 +10225,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ]
       }
     },
     "/v1/workspaces/{id}/keywords/popular": {
       "get": {
         "summary": "Popular Keywords",
         "operationId": "popularKeywords",
-        "description": "Requires workspace manage.",
+        "description": "Requires workspace manage. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -10111,14 +10359,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/keywords/{id}/promote": {
       "post": {
         "summary": "Promote Keyword",
         "operationId": "promoteKeyword",
-        "description": "Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym.",
+        "description": "Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -10258,14 +10509,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/workspaces/{id}/taxonomy/export": {
       "get": {
         "summary": "Export Taxonomy",
         "operationId": "exportTaxonomy",
-        "description": "Term groups, sets and nested terms by name; merged terms are left out.",
+        "description": "Term groups, sets and nested terms by name; merged terms are left out. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -10377,14 +10631,17 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.read"
+        ]
       }
     },
     "/v1/workspaces/{id}/taxonomy/import": {
       "post": {
         "summary": "Import Taxonomy",
         "operationId": "importTaxonomy",
-        "description": "Additive: groups match by name (the system group by system), sets by key, terms by name under the same parent; missing ones are created. Requires workspace manage.",
+        "description": "Additive: groups match by name (the system group by system), sets by key, terms by name under the same parent; missing ones are created. Requires workspace manage. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "id",
@@ -10506,7 +10763,10 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     },
     "/v1/workspaces/{id}/members": {
@@ -10655,7 +10915,11 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/items/{id}/revisions/{number}/restore": {
@@ -10681,7 +10945,7 @@
       ],
       "post": {
         "summary": "Restore historical metadata as a new revision",
-        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores name, tags and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged.",
+        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores name, tags and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "If-Match",
@@ -10706,7 +10970,10 @@
           "default": {
             "$ref": "#/components/responses/Problem"
           }
-        }
+        },
+        "x-module-scopes": [
+          "list.write"
+        ]
       }
     },
     "/v1/identity/scopes": {
@@ -10736,7 +11003,11 @@
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
           }
-        }
+        },
+        "x-module-scopes": [
+          "identity.read"
+        ],
+        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/me/scopes": {
@@ -10796,7 +11067,11 @@
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
           }
-        }
+        },
+        "x-module-scopes": [
+          "identity.read"
+        ],
+        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "operationId": "createIdentityUser",
@@ -10831,7 +11106,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/groups": {
@@ -10861,7 +11140,11 @@
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
           }
-        }
+        },
+        "x-module-scopes": [
+          "identity.read"
+        ],
+        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "operationId": "createIdentityGroup",
@@ -10896,7 +11179,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/groups/{id}": {
@@ -10955,7 +11242,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "deleteIdentityGroup",
@@ -10995,7 +11286,11 @@
             },
             "description": "Quoted current integer version."
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/groups/{id}/members": {
@@ -11035,7 +11330,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "identity.read"
+        ],
+        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/groups/{id}/members/{principalType}/{principalID}": {
@@ -11085,7 +11384,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "removeIdentityGroupMembers",
@@ -11133,7 +11436,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/roles": {
@@ -11163,7 +11470,11 @@
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
           }
-        }
+        },
+        "x-module-scopes": [
+          "identity.read"
+        ],
+        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "operationId": "createIdentityRole",
@@ -11198,7 +11509,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/roles/{id}": {
@@ -11257,7 +11572,11 @@
               }
             }
           }
-        }
+        },
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "deleteIdentityRole",
@@ -11297,7 +11616,11 @@
             },
             "description": "Quoted current integer version."
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/roles/{id}/assignments": {
@@ -11337,7 +11660,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "identity.read"
+        ],
+        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/roles/{id}/assignments/{principalType}/{principalID}": {
@@ -11387,7 +11714,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "removeIdentityRoleAssignments",
@@ -11435,7 +11766,11 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-module-scopes": [
+          "identity.manage"
+        ],
+        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
       }
     }
   },
@@ -11971,11 +12306,6 @@
             "items": {
               "type": "object",
               "properties": {
-                "subject": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255
-                },
                 "action": {
                   "type": "string",
                   "enum": [
@@ -11992,11 +12322,28 @@
                     "allow"
                   ],
                   "default": "allow"
+                },
+                "principal_type": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "group",
+                    "workspace_visitor",
+                    "workspace_member",
+                    "workspace_owner"
+                  ]
+                },
+                "principal_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "description": "Enrolled subject, existing group ID, or the resource workspace ID for workspace role principals."
                 }
               },
               "required": [
-                "subject",
-                "action"
+                "action",
+                "principal_type",
+                "principal_id"
               ],
               "additionalProperties": false
             }
@@ -12017,11 +12364,6 @@
             "items": {
               "type": "object",
               "properties": {
-                "subject": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255
-                },
                 "action": {
                   "type": "string",
                   "enum": [
@@ -12038,11 +12380,28 @@
                     "allow"
                   ],
                   "default": "allow"
+                },
+                "principal_type": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "group",
+                    "workspace_visitor",
+                    "workspace_member",
+                    "workspace_owner"
+                  ]
+                },
+                "principal_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "description": "Enrolled subject, existing group ID, or the resource workspace ID for workspace role principals."
                 }
               },
               "required": [
-                "subject",
-                "action"
+                "action",
+                "principal_type",
+                "principal_id"
               ],
               "additionalProperties": false
             },
@@ -15545,7 +15904,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 255,
-            "description": "Authenticated principal subject, without surrounding whitespace. PaperGo uses external identity subjects."
+            "description": "Existing organization directory subject. Verified bearer subjects enroll on first authentication; identity managers can provision subjects through POST /v1/identity/users."
           },
           "role": {
             "type": "string",
@@ -15569,7 +15928,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 255,
-            "description": "Authenticated principal subject, without surrounding whitespace. PaperGo uses external identity subjects."
+            "description": "Existing organization directory subject. Verified bearer subjects enroll on first authentication; identity managers can provision subjects through POST /v1/identity/users."
           },
           "role": {
             "type": "string",

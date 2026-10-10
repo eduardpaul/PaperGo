@@ -112,7 +112,7 @@ func (s *Service) setDefaultType(ctx context.Context, collection, except string)
 
 func (s *Service) CreateContentType(ctx context.Context, subject, collection string, version int, in ContentTypeInput) (out *ent.ContentType, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		c, e := t.authorize(ctx, subject, collection, "manage")
+		c, e := t.contentTypeResource(ctx, subject, collection, "manage")
 		if e != nil {
 			return e
 		}
@@ -151,7 +151,7 @@ func (s *Service) CreateContentType(ctx context.Context, subject, collection str
 
 func (s *Service) ContentTypes(ctx context.Context, subject, collection string) ([]*ent.ContentType, error) {
 	return read(ctx, s, func(t *Service) ([]*ent.ContentType, error) {
-		if _, err := t.authorize(ctx, subject, collection, "read"); err != nil {
+		if _, err := t.contentTypeResource(ctx, subject, collection, "read"); err != nil {
 			return nil, err
 		}
 		return t.Client.ContentType.Query().Where(contenttype.ContainerIDEQ(collection)).Order(ent.Asc(contenttype.FieldKey)).All(ctx)
@@ -167,7 +167,7 @@ func (s *Service) GetContentType(ctx context.Context, subject, id string) (*ent.
 		if err != nil {
 			return nil, err
 		}
-		if _, err = t.authorize(ctx, subject, typ.ContainerID, "read"); err != nil {
+		if _, err = t.contentTypeResource(ctx, subject, typ.ContainerID, "read"); err != nil {
 			return nil, err
 		}
 		return typ, nil
@@ -183,7 +183,7 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 		if e != nil {
 			return e
 		}
-		c, e := t.authorize(ctx, subject, old.ContainerID, "manage")
+		c, e := t.contentTypeResource(ctx, subject, old.ContainerID, "manage")
 		if e != nil {
 			return e
 		}

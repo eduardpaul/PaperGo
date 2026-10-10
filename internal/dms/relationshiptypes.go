@@ -72,7 +72,7 @@ func (s *Service) CreateRelationshipType(ctx context.Context, subject, workspace
 		return nil, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.workspace(ctx, subject, workspaceID, "manage")
+		w, e := t.listWorkspace(ctx, subject, workspaceID, "manage")
 		if e != nil {
 			return e
 		}
@@ -86,7 +86,7 @@ func (s *Service) CreateRelationshipType(ctx context.Context, subject, workspace
 }
 func (s *Service) RelationshipTypes(ctx context.Context, subject, workspaceID, after string, limit int) (Page[*ent.RelationshipType], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.RelationshipType], error) {
-		if _, e := t.workspace(ctx, subject, workspaceID, "read"); e != nil {
+		if _, e := t.listWorkspace(ctx, subject, workspaceID, "read"); e != nil {
 			return Page[*ent.RelationshipType]{}, e
 		}
 		rows, e := t.Client.RelationshipType.Query().Where(relationshiptype.WorkspaceIDEQ(workspaceID), relationshiptype.IDGT(after)).Order(ent.Asc(relationshiptype.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
@@ -102,7 +102,7 @@ func (s *Service) UpdateRelationshipType(ctx context.Context, subject, id string
 		if e != nil {
 			return e
 		}
-		w, e := t.workspace(ctx, subject, old.WorkspaceID, "manage")
+		w, e := t.listWorkspace(ctx, subject, old.WorkspaceID, "manage")
 		if e != nil {
 			return e
 		}

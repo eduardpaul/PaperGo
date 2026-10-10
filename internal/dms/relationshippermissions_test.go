@@ -36,7 +36,7 @@ func TestRelationshipsRequireWritableEndpointsAndCanMutateFromEitherEnd(t *testi
 	if err != nil {
 		t.Fatal("target could not update directed edge", err)
 	}
-	target, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Grants: []Permission{{"bob", "read", "allow"}}})
+	target, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Grants: []Permission{{"user", "bob", "read", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestRelationshipsRequireWritableEndpointsAndCanMutateFromEitherEnd(t *testi
 	if err = s.UnlinkVersion(testContext, "bob", source.ID, edge.ID, edge.Version); !errors.Is(err, ErrForbidden) {
 		t.Fatal("read-only target allowed unlink", err)
 	}
-	if _, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Grants: []Permission{{"bob", "write", "allow"}}}); err != nil {
+	if _, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Grants: []Permission{{"user", "bob", "write", "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.UnlinkVersion(testContext, "bob", target.ID, edge.ID, edge.Version); err != nil {

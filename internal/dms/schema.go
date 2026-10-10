@@ -41,7 +41,7 @@ func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID
 		}
 	}
 	err = s.write(ctx, func(t *Service) error {
-		c, e := t.authorize(ctx, subject, containerID, "manage")
+		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
 		if e != nil {
 			return e
 		}

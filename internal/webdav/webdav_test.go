@@ -275,7 +275,7 @@ func TestRecursiveDeleteRejectsProtectedDescendant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.s.SetPermissions(ctx, "alice", private.ID, private.Version, dms.Permissions{Grants: []dms.Permission{{Subject: "alice", Action: "manage", Effect: "allow"}}}); err != nil {
+	if _, err := e.s.SetPermissions(ctx, "alice", private.ID, private.Version, dms.Permissions{Grants: []dms.Permission{{PrincipalType: "user", PrincipalID: "alice", Action: "manage", Effect: "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
 	e.expect(e.do("DELETE", e.root+"/Tree", "bob-token", ""), 403)

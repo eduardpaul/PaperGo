@@ -22,8 +22,10 @@ type Grant struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// ResourceID holds the value of the "resource_id" field.
 	ResourceID string `json:"resource_id,omitempty"`
-	// Subject holds the value of the "subject" field.
-	Subject string `json:"subject,omitempty"`
+	// PrincipalType holds the value of the "principal_type" field.
+	PrincipalType grant.PrincipalType `json:"principal_type,omitempty"`
+	// PrincipalID holds the value of the "principal_id" field.
+	PrincipalID string `json:"principal_id,omitempty"`
 	// Action holds the value of the "action" field.
 	Action grant.Action `json:"action,omitempty"`
 	// Effect holds the value of the "effect" field.
@@ -59,7 +61,7 @@ func (*Grant) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case grant.FieldID, grant.FieldResourceID, grant.FieldSubject, grant.FieldAction, grant.FieldEffect:
+		case grant.FieldID, grant.FieldResourceID, grant.FieldPrincipalType, grant.FieldPrincipalID, grant.FieldAction, grant.FieldEffect:
 			values[i] = new(sql.NullString)
 		case grant.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -96,11 +98,17 @@ func (_m *Grant) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ResourceID = value.String
 			}
-		case grant.FieldSubject:
+		case grant.FieldPrincipalType:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field subject", values[i])
+				return fmt.Errorf("unexpected type %T for field principal_type", values[i])
 			} else if value.Valid {
-				_m.Subject = value.String
+				_m.PrincipalType = grant.PrincipalType(value.String)
+			}
+		case grant.FieldPrincipalID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field principal_id", values[i])
+			} else if value.Valid {
+				_m.PrincipalID = value.String
 			}
 		case grant.FieldAction:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -161,8 +169,11 @@ func (_m *Grant) String() string {
 	builder.WriteString("resource_id=")
 	builder.WriteString(_m.ResourceID)
 	builder.WriteString(", ")
-	builder.WriteString("subject=")
-	builder.WriteString(_m.Subject)
+	builder.WriteString("principal_type=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PrincipalType))
+	builder.WriteString(", ")
+	builder.WriteString("principal_id=")
+	builder.WriteString(_m.PrincipalID)
 	builder.WriteString(", ")
 	builder.WriteString("action=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Action))

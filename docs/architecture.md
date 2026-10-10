@@ -2,7 +2,7 @@
 
 ## Deployment boundary
 
-One organization owns one deployment, SQLite database, and blob directory. A workspace is an organizational content scope within that deployment. No tenant ID is inferred from an HTTP header. OIDC subjects are stable principal identifiers; authorization happens in the service and SQL read predicates. Multi-organization SaaS, group membership and cross-deployment identities require explicit future design.
+One organization owns one deployment, SQLite database, and blob directory. A workspace is an organizational content scope within that deployment. No tenant ID is inferred from an HTTP header. OIDC subjects enroll in a persisted organization directory; typed user/group principals, nested groups and module-scoped roles feed service authorization and SQL read predicates. Multi-organization SaaS and cross-deployment identities require explicit future design.
 
 ## Authoritative content and derived reads
 

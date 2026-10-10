@@ -39,7 +39,7 @@ func DatabaseAt(t testing.TB, path string) *database.Database {
 	}
 	// Content fixtures exercise ACL ownership independently of organization-wide
 	// administration. Alice can curate schemas/taxonomy but has no workspace.manage.
-	for _, subject := range []string{"alice", "bob", "carol", "dave", "mallory", "writer", "reader", "visitor", "member", "owner", "other", "eve", "admin", "local-admin"} {
+	for _, subject := range []string{"alice", "bob", "carol", "dave", "mallory", "writer", "reader", "visitor", "member", "owner", "other", "eve", "admin", "local-admin", "delegate", "editor", "outsider", "stranger", "publisher", "rita"} {
 		if err = directory.EnsureUser(context.Background(), subject); err != nil {
 			t.Fatal(err)
 		}

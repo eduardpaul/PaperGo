@@ -100,7 +100,7 @@ func TestTermTreeOpenSetsAndListing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.CreateTerm(testContext, "writer", closed.ID, TermInput{Name: "Spain"}); !errors.Is(err, ErrNotFound) {
+	if _, err = s.CreateTerm(testContext, "writer", closed.ID, TermInput{Name: "Spain"}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("writer added to a closed set", err)
 	}
 	if _, err = s.CreateTerm(testContext, "writer", open.ID, TermInput{Name: "Travel"}); err != nil {
@@ -109,13 +109,13 @@ func TestTermTreeOpenSetsAndListing(t *testing.T) {
 	if _, err = s.CreateTerm(testContext, "reader", open.ID, TermInput{Name: "Books"}); err != nil {
 		t.Fatal("reader adds to an open set", err)
 	}
-	if _, err = s.CreateTerm(testContext, "reader", closed.ID, TermInput{Name: "France"}); !errors.Is(err, ErrNotFound) {
+	if _, err = s.CreateTerm(testContext, "reader", closed.ID, TermInput{Name: "France"}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("reader added to a closed set", err)
 	}
-	if _, err = s.CreateTerm(testContext, "reader", open.ID, TermInput{Name: "Curated", AvailableAsKeyword: true}); !errors.Is(err, ErrNotFound) {
+	if _, err = s.CreateTerm(testContext, "reader", open.ID, TermInput{Name: "Curated", AvailableAsKeyword: true}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("reader changed keyword curation", err)
 	}
-	if _, err = s.CreateTerm(testContext, "writer", open.ID, TermInput{Name: "Retired", Deprecated: true}); !errors.Is(err, ErrNotFound) {
+	if _, err = s.CreateTerm(testContext, "writer", open.ID, TermInput{Name: "Retired", Deprecated: true}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("writer added a deprecated term", err)
 	}
 
@@ -277,7 +277,7 @@ func TestKeywords(t *testing.T) {
 		t.Fatal(err)
 	}
 	travel := mustTerm(t, s, set.ID, TermInput{Name: "Travel", Labels: map[string]string{"en": "Trip"}})
-	if _, err = s.PromoteKeyword(testContext, "writer", trip.ID, trip.Version, PromoteKeywordInput{TermSetID: set.ID}); !errors.Is(err, ErrNotFound) {
+	if _, err = s.PromoteKeyword(testContext, "writer", trip.ID, trip.Version, PromoteKeywordInput{TermSetID: set.ID}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("writer promoted", err)
 	}
 	merged, err := s.PromoteKeyword(testContext, "alice", trip.ID, trip.Version, PromoteKeywordInput{TermSetID: set.ID})
@@ -308,7 +308,7 @@ func TestKeywords(t *testing.T) {
 	snack, _, _ := s.AddKeyword(testContext, "writer", w.ID, KeywordInput{Name: "Snack"})
 	create(t, s, l.ID, "item", "One", map[string]any{"keywords": []any{lunch.ID, snack.ID}})
 	create(t, s, l.ID, "item", "Two", map[string]any{"keywords": []any{lunch.ID}})
-	if _, err = s.PopularKeywords(testContext, "writer", w.ID, 10); !errors.Is(err, ErrNotFound) {
+	if _, err = s.PopularKeywords(testContext, "writer", w.ID, 10); !errors.Is(err, ErrForbidden) {
 		t.Fatal("popular keywords are for managers", err)
 	}
 	popular, err := s.PopularKeywords(testContext, "alice", w.ID, 10)

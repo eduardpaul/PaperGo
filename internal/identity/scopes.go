@@ -58,8 +58,14 @@ func PrincipalSQL(alias string, subject string) (string, []any) {
 }
 
 func ScopeSQL(subject, scope string) (string, []any) {
+	query, args := ScopeExpressionSQL(subject, "?")
+	return query, append(args, scope)
+}
+
+// ScopeExpressionSQL accepts only a trusted SQL expression built by the caller.
+func ScopeExpressionSQL(subject, expression string) (string, []any) {
 	principal, args := PrincipalSQL("a", subject)
-	return `EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + ` AND sc.value=?)`, append(args, scope)
+	return `EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + ` AND sc.value=` + expression + `)`, args
 }
 
 func RequireScope(ctx context.Context, q Querier, subject, scope string) error {

@@ -31,7 +31,7 @@ func filterUsesField(f *FilterExpr, key string) bool {
 
 func (s *Service) DeleteField(ctx context.Context, subject, collection, id string, version int) error {
 	return s.write(ctx, func(t *Service) error {
-		c, err := t.authorize(ctx, subject, collection, "manage")
+		c, err := t.contentTypeResource(ctx, subject, collection, "manage")
 		if err != nil {
 			return err
 		}

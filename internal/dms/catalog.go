@@ -14,7 +14,7 @@ func (s *Service) Template(ctx context.Context, subject, id string) (*ent.Schema
 		if e != nil {
 			return nil, e
 		}
-		if _, e = t.workspace(ctx, subject, v.WorkspaceID, "read"); e != nil {
+		if _, e = t.schemaWorkspace(ctx, subject, v.WorkspaceID, "read"); e != nil {
 			return nil, e
 		}
 		return v, nil
@@ -29,7 +29,7 @@ func (s *Service) RelationshipType(ctx context.Context, subject, id string) (*en
 		if e != nil {
 			return nil, e
 		}
-		if _, e = t.workspace(ctx, subject, v.WorkspaceID, "read"); e != nil {
+		if _, e = t.listWorkspace(ctx, subject, v.WorkspaceID, "read"); e != nil {
 			return nil, e
 		}
 		return v, nil

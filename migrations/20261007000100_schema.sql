@@ -9,7 +9,7 @@
 CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `resource_id` text NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `details` json NOT NULL, PRIMARY KEY (`id`));
 CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL, `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT NULL, `key` text NOT NULL, `label` text NOT NULL, `type` text NOT NULL, `required` bool NOT NULL DEFAULT (false), `choices` json NOT NULL, `container_id` text NOT NULL, indexed BOOLEAN NOT NULL DEFAULT 0, index_status TEXT NOT NULL DEFAULT 'ready' CHECK(index_status IN ('ready','building','failed')), scale INTEGER NOT NULL DEFAULT 0, options JSON NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object'), PRIMARY KEY (`id`), CONSTRAINT `field_definitions_resources_definitions` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
+CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `principal_type` text NOT NULL CHECK(principal_type IN ('user','group','workspace_visitor','workspace_member','workspace_owner')), `principal_id` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT REFERENCES item_revisions(id), PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `name` text NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT NOT NULL REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind IN ('workspace','list','library') OR description='')), allow_folders BOOLEAN NOT NULL DEFAULT 1 CHECK(allow_folders IN (0,1) AND (kind IN ('list','library') OR allow_folders=1)), `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind='item')=(content_type_id IS NOT NULL)), FOREIGN KEY(container_id,content_type_id) REFERENCES content_types(container_id,id));
@@ -182,8 +182,8 @@ CREATE INDEX `auditevent_resource_id_created_at` ON `audit_events` (`resource_id
 CREATE UNIQUE INDEX `blobs_object_key_key` ON `blobs` (`object_key`);
 CREATE UNIQUE INDEX `blob_item_id_version` ON `blobs` (`item_id`, `version`);
 CREATE UNIQUE INDEX `fielddefinition_container_id_key` ON `field_definitions` (`container_id`, `key`);
-CREATE UNIQUE INDEX `grant_resource_id_subject_action` ON `grants` (`resource_id`, `subject`, `action`);
-CREATE INDEX `grant_subject_resource_id` ON `grants` (`subject`, `resource_id`);
+CREATE UNIQUE INDEX `grant_resource_id_principal_type_principal_id_action` ON `grants` (`resource_id`, `principal_type`, `principal_id`, `action`);
+CREATE INDEX `grant_principal_type_principal_id_resource_id` ON `grants` (`principal_type`, `principal_id`, `resource_id`);
 CREATE INDEX `relationship_source_id_name_id` ON `relationships` (`source_id`, `name`, `id`);
 CREATE INDEX `relationship_target_id_name_id` ON `relationships` (`target_id`, `name`, `id`);
 CREATE INDEX `resource_workspace_id_kind_id` ON `resources` (`workspace_id`, `kind`, `id`);
@@ -569,22 +569,22 @@ CREATE TRIGGER workflow_run_item_immutable BEFORE UPDATE ON workflow_run_items B
 -- Role capabilities: owner=manage, member=write, visitor=read.
 CREATE TRIGGER workspace_member_insert BEFORE INSERT ON grants
 WHEN EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND kind='workspace') BEGIN
- SELECT CASE WHEN new.action NOT IN ('manage','write','read') OR length(trim(new.subject))=0 OR new.subject<>trim(new.subject)
- OR EXISTS(SELECT 1 FROM grants WHERE resource_id=new.resource_id AND subject=new.subject)
+ SELECT CASE WHEN new.principal_type<>'user' OR new.action NOT IN ('manage','write','read') OR length(trim(new.principal_id))=0 OR new.principal_id<>trim(new.principal_id)
+ OR EXISTS(SELECT 1 FROM grants WHERE resource_id=new.resource_id AND principal_id=new.principal_id)
  THEN RAISE(ABORT,'invalid workspace membership') END;
 END;
 CREATE TRIGGER workspace_member_update BEFORE UPDATE ON grants
 WHEN EXISTS(SELECT 1 FROM resources WHERE id IN (old.resource_id,new.resource_id) AND kind='workspace') BEGIN
- SELECT CASE WHEN new.resource_id IS NOT old.resource_id OR new.subject IS NOT old.subject OR new.action NOT IN ('manage','write','read')
+ SELECT CASE WHEN new.resource_id IS NOT old.resource_id OR new.principal_type IS NOT old.principal_type OR new.principal_id IS NOT old.principal_id OR new.action NOT IN ('manage','write','read')
  THEN RAISE(ABORT,'invalid workspace membership') END;
  SELECT CASE WHEN old.action='manage' AND new.action<>'manage'
  AND EXISTS(SELECT 1 FROM resources WHERE id=old.resource_id AND deleted_at IS NULL)
- AND NOT EXISTS(SELECT 1 FROM grants WHERE resource_id=old.resource_id AND subject<>old.subject AND action='manage')
+ AND NOT EXISTS(SELECT 1 FROM grants WHERE resource_id=old.resource_id AND principal_id<>old.principal_id AND action='manage')
  THEN RAISE(ABORT,'a workspace needs at least one owner') END;
 END;
 CREATE TRIGGER workspace_last_owner_delete BEFORE DELETE ON grants
 WHEN old.action='manage' AND EXISTS(SELECT 1 FROM resources WHERE id=old.resource_id AND kind='workspace' AND deleted_at IS NULL) BEGIN
- SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM grants WHERE resource_id=old.resource_id AND subject<>old.subject AND action='manage')
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM grants WHERE resource_id=old.resource_id AND principal_id<>old.principal_id AND action='manage')
  THEN RAISE(ABORT,'a workspace needs at least one owner') END;
 END;
 
@@ -611,6 +611,7 @@ CREATE TRIGGER identity_assignment_immutable BEFORE UPDATE ON identity_assignmen
 CREATE TRIGGER identity_group_delete AFTER DELETE ON identity_groups BEGIN
  DELETE FROM identity_memberships WHERE principal_type='group' AND principal_id=old.id;
  DELETE FROM identity_assignments WHERE principal_type='group' AND principal_id=old.id;
+ DELETE FROM grants WHERE principal_type='group' AND principal_id=old.id;
 END;
 CREATE TRIGGER identity_user_delete AFTER DELETE ON identity_users BEGIN
  DELETE FROM identity_memberships WHERE principal_type='user' AND principal_id=old.id;
@@ -618,3 +619,9 @@ CREATE TRIGGER identity_user_delete AFTER DELETE ON identity_users BEGIN
 END;
 CREATE TRIGGER identity_builtin_role_update BEFORE UPDATE ON identity_roles WHEN old.builtin=1 BEGIN SELECT RAISE(ABORT,'built-in roles are immutable'); END;
 CREATE TRIGGER identity_builtin_role_delete BEFORE DELETE ON identity_roles WHEN old.builtin=1 BEGIN SELECT RAISE(ABORT,'built-in roles cannot be deleted'); END;
+CREATE TRIGGER grant_principal_insert BEFORE INSERT ON grants BEGIN
+ SELECT CASE WHEN (new.principal_type='user' AND NOT EXISTS(SELECT 1 FROM identity_users WHERE id=new.principal_id)) OR (new.principal_type='group' AND NOT EXISTS(SELECT 1 FROM identity_groups WHERE id=new.principal_id)) OR (new.principal_type IN ('workspace_visitor','workspace_member','workspace_owner') AND NOT EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND workspace_id=new.principal_id)) OR (new.principal_type='workspace_owner' AND new.action<>'manage') THEN RAISE(ABORT,'invalid ACL principal') END;
+END;
+CREATE TRIGGER grant_principal_update BEFORE UPDATE OF principal_type,principal_id,action ON grants BEGIN
+ SELECT CASE WHEN (new.principal_type='user' AND NOT EXISTS(SELECT 1 FROM identity_users WHERE id=new.principal_id)) OR (new.principal_type='group' AND NOT EXISTS(SELECT 1 FROM identity_groups WHERE id=new.principal_id)) OR (new.principal_type IN ('workspace_visitor','workspace_member','workspace_owner') AND NOT EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND workspace_id=new.principal_id)) OR (new.principal_type='workspace_owner' AND new.action<>'manage') THEN RAISE(ABORT,'invalid ACL principal') END;
+END;

@@ -105,7 +105,7 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	readers(t, s, current(t, s, w.ID))
 	// Ordinary deletion rejects a populated folder, even with an unreadable child.
 	locked := current(t, s, inner.ID)
-	locked, err := s.SetPermissions(testContext, "alice", inner.ID, locked.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}})
+	locked, err := s.SetPermissions(testContext, "alice", inner.ID, locked.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestMoveStaysInCollectionAndFollowsTheNewScope(t *testing.T) {
 	private := create(t, s, lib.ID, "folder", "Private", nil)
 	nested := create(t, s, private.ID, "folder", "Nested", nil)
 	item := create(t, s, lib.ID, "item", "Notes.txt", nil)
-	if _, err := s.SetPermissions(testContext, "alice", private.ID, private.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"bob", "read", "allow"}}}); err != nil {
+	if _, err := s.SetPermissions(testContext, "alice", private.ID, private.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}, {"user", "bob", "read", "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Get(testContext, "bob", item.ID); !errors.Is(err, ErrForbidden) {

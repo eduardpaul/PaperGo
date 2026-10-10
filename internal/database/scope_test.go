@@ -79,8 +79,8 @@ func TestScopeFollowsInheritanceChanges(t *testing.T) {
 	if scope(deep.ID) != w.ID {
 		t.Fatal("new descendant did not inherit the workspace scope")
 	}
-	alice := dms.Permission{Subject: "alice", Action: "manage", Effect: "allow"}
-	bob := dms.Permission{Subject: "bob", Action: "read", Effect: "allow"}
+	alice := dms.Permission{PrincipalType: "user", PrincipalID: "alice", Action: "manage", Effect: "allow"}
+	bob := dms.Permission{PrincipalType: "user", PrincipalID: "bob", Action: "read", Effect: "allow"}
 	setACL(nested.ID, dms.Permissions{Grants: []dms.Permission{alice}})
 	setACL(l.ID, dms.Permissions{Grants: []dms.Permission{alice, bob}})
 	check("break")

@@ -183,7 +183,7 @@ func TestTaxonomyAndLookupPreserveIDsAndValidateNewAssignments(t *testing.T) {
 	if _, e = s.CreateTerm(testContext, "alice", another.ID, TermInput{Name: "Bad parent", ParentID: &root.ID}); e == nil {
 		t.Fatal("cross-set parent")
 	}
-	if _, e = s.CreateTermSet(testContext, "reader", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrNotFound) {
+	if _, e = s.CreateTermSet(testContext, "reader", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
 		t.Fatal("taxonomy management authorization", e)
 	}
 }
@@ -204,7 +204,7 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 	for _, r := range []*ent.Resource{a, b, c, missing, hidden} {
 		publishItem(t, s, r)
 	}
-	if _, e := s.SetPermissions(testContext, "alice", hidden.ID, latest(t, s, hidden.ID).Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}}); e != nil {
+	if _, e := s.SetPermissions(testContext, "alice", hidden.ID, latest(t, s, hidden.ID).Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}}); e != nil {
 		t.Fatal(e)
 	}
 	values := map[string]any{"serial": json.Number("3"), "amount": "99.99"}
@@ -310,13 +310,13 @@ func TestExclusiveScopesInheritanceCopyAndReset(t *testing.T) {
 	item := create(t, s, nested.ID, "item", "Document", nil)
 	publishItem(t, s, item)
 	permissions, e := s.Permissions(testContext, "alice", item.ID)
-	if e != nil || permissions.ScopeID != w.ID || !permissions.Inherit || len(permissions.EffectiveGrants) != 2 {
+	if e != nil || permissions.ScopeID != w.ID || !permissions.Inherit || len(permissions.EffectiveGrants) != 3 {
 		t.Fatal("effective inherited scope", permissions, e)
 	}
-	if _, e = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Inherit: true, Grants: []Permission{{"alice", "manage", "allow"}}}); e == nil {
+	if _, e = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Inherit: true, Grants: []Permission{{"user", "alice", "manage", "allow"}}}); e == nil {
 		t.Fatal("augmented inheritance accepted")
 	}
-	folder, e = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}})
+	folder, e = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -344,18 +344,18 @@ func TestExclusiveScopesInheritanceCopyAndReset(t *testing.T) {
 		t.Fatal(e)
 	}
 	permissions, e = s.Permissions(testContext, "alice", item.ID)
-	if e != nil || permissions.ScopeID != folder.ID || len(permissions.EffectiveGrants) != 2 {
+	if e != nil || permissions.ScopeID != folder.ID || len(permissions.EffectiveGrants) != 3 {
 		t.Fatal("copy inherited scope", permissions, e)
 	}
 	e = s.RemoveWorkspaceMember(testContext, "alice", w.ID, "reader")
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.Get(testContext, "reader", item.ID); e != nil {
-		t.Fatal("exclusive copy should retain copied grant", e)
+	if _, e = s.Get(testContext, "reader", item.ID); !errors.Is(e, ErrForbidden) {
+		t.Fatal("copied workspace roles must track current membership", e)
 	}
 	inherited := create(t, s, l.ID, "folder", "Inherited", nil)
-	if _, e = s.Client.Grant.Create().SetResourceID(inherited.ID).SetSubject("reader").SetAction("read").SetEffect("allow").Save(testContext); e == nil {
+	if _, e = s.Client.Grant.Create().SetResourceID(inherited.ID).SetPrincipalType("user").SetPrincipalID("reader").SetAction("read").SetEffect("allow").Save(testContext); e == nil {
 		t.Fatal("database accepted a grant on an inherited resource")
 	}
 }

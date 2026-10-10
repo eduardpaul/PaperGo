@@ -129,7 +129,7 @@ func TestBulkPermissionsAndCollectionBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	blocked, err = s.SetPermissions(testContext, "alice", blocked.ID, blocked.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}}})
+	blocked, err = s.SetPermissions(testContext, "alice", blocked.ID, blocked.Version, Permissions{Grants: []Permission{{PrincipalType: "user", PrincipalID: "alice", Action: "manage"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestConcurrentBulkUpdatesHaveOneWholeBatchWinner(t *testing.T) {
 func TestBulkPublisherAndCancelledWriter(t *testing.T) {
 	s, _, list := fixture(t)
 	item := create(t, s, list.ID, "item", "Draft", nil)
-	_, err := s.SetPermissions(testContext, "alice", list.ID, list.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "publisher", Action: "publish"}}})
+	_, err := s.SetPermissions(testContext, "alice", list.ID, list.Version, Permissions{Grants: []Permission{{PrincipalType: "user", PrincipalID: "alice", Action: "manage"}, {PrincipalType: "user", PrincipalID: "publisher", Action: "publish"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

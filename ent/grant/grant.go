@@ -19,8 +19,10 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldResourceID holds the string denoting the resource_id field in the database.
 	FieldResourceID = "resource_id"
-	// FieldSubject holds the string denoting the subject field in the database.
-	FieldSubject = "subject"
+	// FieldPrincipalType holds the string denoting the principal_type field in the database.
+	FieldPrincipalType = "principal_type"
+	// FieldPrincipalID holds the string denoting the principal_id field in the database.
+	FieldPrincipalID = "principal_id"
 	// FieldAction holds the string denoting the action field in the database.
 	FieldAction = "action"
 	// FieldEffect holds the string denoting the effect field in the database.
@@ -43,7 +45,8 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldResourceID,
-	FieldSubject,
+	FieldPrincipalType,
+	FieldPrincipalID,
 	FieldAction,
 	FieldEffect,
 }
@@ -63,13 +66,39 @@ var (
 	DefaultCreatedAt func() time.Time
 	// ResourceIDValidator is a validator for the "resource_id" field. It is called by the builders before save.
 	ResourceIDValidator func(string) error
-	// SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
-	SubjectValidator func(string) error
+	// PrincipalIDValidator is a validator for the "principal_id" field. It is called by the builders before save.
+	PrincipalIDValidator func(string) error
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() string
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
+
+// PrincipalType defines the type for the "principal_type" enum field.
+type PrincipalType string
+
+// PrincipalType values.
+const (
+	PrincipalTypeUser             PrincipalType = "user"
+	PrincipalTypeGroup            PrincipalType = "group"
+	PrincipalTypeWorkspaceVisitor PrincipalType = "workspace_visitor"
+	PrincipalTypeWorkspaceMember  PrincipalType = "workspace_member"
+	PrincipalTypeWorkspaceOwner   PrincipalType = "workspace_owner"
+)
+
+func (pt PrincipalType) String() string {
+	return string(pt)
+}
+
+// PrincipalTypeValidator is a validator for the "principal_type" field enum values. It is called by the builders before save.
+func PrincipalTypeValidator(pt PrincipalType) error {
+	switch pt {
+	case PrincipalTypeUser, PrincipalTypeGroup, PrincipalTypeWorkspaceVisitor, PrincipalTypeWorkspaceMember, PrincipalTypeWorkspaceOwner:
+		return nil
+	default:
+		return fmt.Errorf("grant: invalid enum value for principal_type field: %q", pt)
+	}
+}
 
 // Action defines the type for the "action" enum field.
 type Action string
@@ -140,9 +169,14 @@ func ByResourceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldResourceID, opts...).ToFunc()
 }
 
-// BySubject orders the results by the subject field.
-func BySubject(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSubject, opts...).ToFunc()
+// ByPrincipalType orders the results by the principal_type field.
+func ByPrincipalType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPrincipalType, opts...).ToFunc()
+}
+
+// ByPrincipalID orders the results by the principal_id field.
+func ByPrincipalID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPrincipalID, opts...).ToFunc()
 }
 
 // ByAction orders the results by the action field.

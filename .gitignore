@@ -1,5 +1,6 @@
 .tools/
 .cache/
+ent/.ent-generate-*/
 .env
 data/
 bin/

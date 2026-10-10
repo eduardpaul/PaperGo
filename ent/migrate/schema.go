@@ -294,7 +294,8 @@ var (
 	GrantsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "subject", Type: field.TypeString, Size: 255},
+		{Name: "principal_type", Type: field.TypeEnum, Enums: []string{"user", "group", "workspace_visitor", "workspace_member", "workspace_owner"}},
+		{Name: "principal_id", Type: field.TypeString, Size: 255},
 		{Name: "action", Type: field.TypeEnum, Enums: []string{"read", "read_draft", "write", "publish", "manage"}},
 		{Name: "effect", Type: field.TypeEnum, Enums: []string{"allow"}, Default: "allow"},
 		{Name: "resource_id", Type: field.TypeString, Size: 36},
@@ -307,21 +308,21 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "grants_resources_grants",
-				Columns:    []*schema.Column{GrantsColumns[5]},
+				Columns:    []*schema.Column{GrantsColumns[6]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "grant_resource_id_subject_action",
+				Name:    "grant_resource_id_principal_type_principal_id_action",
 				Unique:  true,
-				Columns: []*schema.Column{GrantsColumns[5], GrantsColumns[2], GrantsColumns[3]},
+				Columns: []*schema.Column{GrantsColumns[6], GrantsColumns[2], GrantsColumns[3], GrantsColumns[4]},
 			},
 			{
-				Name:    "grant_subject_resource_id",
+				Name:    "grant_principal_type_principal_id_resource_id",
 				Unique:  false,
-				Columns: []*schema.Column{GrantsColumns[2], GrantsColumns[5]},
+				Columns: []*schema.Column{GrantsColumns[2], GrantsColumns[3], GrantsColumns[6]},
 			},
 		},
 	}
@@ -343,7 +344,7 @@ var (
 				Symbol:     "identity_assignments_identity_roles_role",
 				Columns:    []*schema.Column{IdentityAssignmentsColumns[4]},
 				RefColumns: []*schema.Column{IdentityRolesColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 		Indexes: []*schema.Index{
@@ -398,7 +399,7 @@ var (
 				Symbol:     "identity_memberships_identity_groups_group",
 				Columns:    []*schema.Column{IdentityMembershipsColumns[4]},
 				RefColumns: []*schema.Column{IdentityGroupsColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 		Indexes: []*schema.Index{

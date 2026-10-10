@@ -71,7 +71,7 @@ func benchCollection(b *testing.B) (*Service, *database.Database, string, string
 		}
 		for k, r := range published.Data {
 			if (i+2*k)%50 == 0 {
-				if _, err = s.SetPermissions(ctx, "alice", r.ID, r.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"reader", "read_draft", "allow"}}}); err != nil {
+				if _, err = s.SetPermissions(ctx, "alice", r.ID, r.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}, {"user", "reader", "read_draft", "allow"}}}); err != nil {
 					b.Fatal(err)
 				}
 			}

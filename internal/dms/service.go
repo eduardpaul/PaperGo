@@ -11,6 +11,7 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/grant"
 	"papergo/ent/resource"
+	"papergo/internal/identity"
 	"papergo/internal/model"
 	"strings"
 	"time"
@@ -151,6 +152,15 @@ func (s *Service) Create(ctx context.Context, subject, parentID string, in Creat
 // created with its first blob, so its first revision already carries content.
 func (s *Service) create(ctx context.Context, subject, parentID string, in CreateResource, content *BlobInput) (*ent.Resource, error) {
 	collection := in.Kind == "list" || in.Kind == "library"
+	scope := "list.write"
+	if in.Kind == "workspace" {
+		scope = "workspace.create"
+	} else if collection {
+		scope = "list.read"
+	}
+	if err := s.RequireScope(ctx, subject, scope); err != nil {
+		return nil, err
+	}
 	if in.Kind == "workspace" || collection {
 		in.Name = strings.TrimSpace(in.Name)
 		if e := validateContainerMetadata(in.Name, in.Description); e != nil {
@@ -278,7 +288,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		return nil, e
 	}
 	if parent == nil {
-		_, e = s.Client.Grant.Create().SetResourceID(out.ID).SetSubject(subject).SetAction(grant.ActionManage).SetEffect(grant.EffectAllow).Save(ctx)
+		_, e = s.Client.Grant.Create().SetResourceID(out.ID).SetPrincipalType(grant.PrincipalTypeUser).SetPrincipalID(subject).SetAction(grant.ActionManage).SetEffect(grant.EffectAllow).Save(ctx)
 		if e != nil {
 			return nil, e
 		}
@@ -718,7 +728,7 @@ type CreateField struct {
 
 func (s *Service) CreateField(ctx context.Context, subject, containerID string, in CreateField) (out *ent.FieldDefinition, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		c, e := t.authorize(ctx, subject, containerID, "manage")
+		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
 		if e != nil {
 			return e
 		}
@@ -799,9 +809,10 @@ func (s *Service) Fields(ctx context.Context, subject, id string) ([]*ent.FieldD
 }
 
 type Permission struct {
-	Subject string `json:"subject"`
-	Action  string `json:"action"`
-	Effect  string `json:"effect"`
+	PrincipalType string `json:"principal_type"`
+	PrincipalID   string `json:"principal_id"`
+	Action        string `json:"action"`
+	Effect        string `json:"effect"`
 }
 type Permissions struct {
 	CopyInherited   bool         `json:"copy_inherited,omitempty"`
@@ -820,8 +831,8 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 	}
 	seen := map[string]bool{}
 	for _, g := range in.Grants {
-		if strings.TrimSpace(g.Subject) == "" || len(g.Subject) > 255 {
-			return nil, invalid("invalid permission subject")
+		if e := identity.ValidateSubject(g.PrincipalID); e != nil {
+			return nil, invalid(e.Error())
 		}
 		if g.Action != "read" && g.Action != "read_draft" && g.Action != "write" && g.Action != "publish" && g.Action != "manage" {
 			return nil, invalid("invalid permission action")
@@ -829,7 +840,7 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 		if g.Effect != "" && g.Effect != "allow" {
 			return nil, invalid("only additive allow grants are supported")
 		}
-		key := g.Subject + "\x00" + g.Action
+		key := g.PrincipalType + "\x00" + g.PrincipalID + "\x00" + g.Action
 		if seen[key] {
 			return nil, invalid("duplicate permission")
 		}
@@ -846,6 +857,23 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 		if r.Kind == resource.KindWorkspace {
 			return invalid("workspace access is managed through members")
 		}
+		for _, g := range in.Grants {
+			switch g.PrincipalType {
+			case "user", "group":
+				if e = identity.ValidatePrincipal(ctx, t.tx, identity.Principal{Type: g.PrincipalType, ID: g.PrincipalID}); e != nil {
+					return invalid(e.Error())
+				}
+			case "workspace_visitor", "workspace_member", "workspace_owner":
+				if g.PrincipalID != r.WorkspaceID {
+					return invalid("workspace role principals must identify this resource's workspace")
+				}
+				if g.PrincipalType == "workspace_owner" && g.Action != "manage" {
+					return invalid("workspace owners retain manage access")
+				}
+			default:
+				return invalid("invalid permission principal_type")
+			}
+		}
 		if in.CopyInherited {
 			if !r.InheritPermissions {
 				return invalid("copy_inherited requires an inherited resource")
@@ -856,10 +884,10 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 			}
 			merged := map[string]bool{}
 			for _, g := range in.Grants {
-				merged[g.Subject+"\x00"+g.Action] = true
+				merged[g.PrincipalType+"\x00"+g.PrincipalID+"\x00"+g.Action] = true
 			}
 			for _, g := range copied {
-				key := g.Subject + "\x00" + g.Action
+				key := g.PrincipalType + "\x00" + g.PrincipalID + "\x00" + g.Action
 				if !merged[key] {
 					in.Grants = append(in.Grants, g)
 					merged[key] = true
@@ -880,7 +908,7 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 			return ErrConflict
 		}
 		for _, g := range in.Grants {
-			if _, e = t.Client.Grant.Create().SetResourceID(id).SetSubject(g.Subject).SetAction(grant.Action(g.Action)).SetEffect(grant.EffectAllow).Save(ctx); e != nil {
+			if _, e = t.Client.Grant.Create().SetResourceID(id).SetPrincipalType(grant.PrincipalType(g.PrincipalType)).SetPrincipalID(g.PrincipalID).SetAction(grant.Action(g.Action)).SetEffect(grant.EffectAllow).Save(ctx); e != nil {
 				return e
 			}
 		}
@@ -929,13 +957,16 @@ func (s *Service) effectivePermissions(ctx context.Context, r *ent.Resource) (st
 		}
 		r = parent
 	}
-	rows, e := s.Client.Grant.Query().Where(grant.ResourceIDEQ(r.ID)).Order(ent.Asc(grant.FieldSubject, grant.FieldAction)).All(ctx)
+	if r.Kind == resource.KindWorkspace {
+		return r.ID, []Permission{{"workspace_visitor", r.ID, "read", "allow"}, {"workspace_member", r.ID, "write", "allow"}, {"workspace_owner", r.ID, "manage", "allow"}}, nil
+	}
+	rows, e := s.Client.Grant.Query().Where(grant.ResourceIDEQ(r.ID)).Order(ent.Asc(grant.FieldPrincipalType, grant.FieldPrincipalID, grant.FieldAction)).All(ctx)
 	if e != nil {
 		return "", nil, e
 	}
 	permissions := []Permission{}
 	for _, g := range rows {
-		permissions = append(permissions, Permission{g.Subject, string(g.Action), string(g.Effect)})
+		permissions = append(permissions, Permission{string(g.PrincipalType), g.PrincipalID, string(g.Action), string(g.Effect)})
 	}
 	return r.ID, permissions, nil
 }

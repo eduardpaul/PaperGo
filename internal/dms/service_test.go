@@ -103,11 +103,11 @@ func TestAdditivePermissionsInheritanceAndRollback(t *testing.T) {
 	if _, err = s.Get(testContext, "bob", item.ID); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: true, Grants: []Permission{{"bob", "read", "deny"}}})
+	_, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: true, Grants: []Permission{{"user", "bob", "read", "deny"}}})
 	if err == nil {
 		t.Fatal("deny grant accepted")
 	}
-	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"alice", "manage", "allow"}}})
+	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestAdditivePermissionsInheritanceAndRollback(t *testing.T) {
 			t.Fatal("search leaked private resource")
 		}
 	}
-	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"alice", "manage", "allow"}, {"carol", "read_draft", "allow"}, {"delegate", "manage", "allow"}}})
+	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}, {"user", "carol", "read_draft", "allow"}, {"user", "delegate", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Inherit: false, Grants: []Permission{{"alice", "manage", "allow"}}})
+	_, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

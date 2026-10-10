@@ -89,35 +89,39 @@ func validateRole(in RoleInput) error {
 	return nil
 }
 
-func (d Directory) write(ctx context.Context, actor string, fn func(*sql.Tx) error) error {
+func (d Directory) transaction(ctx context.Context, fn func(*sql.Tx) error) error {
 	tx, err := d.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if actor != "" {
-		if err = RequireScope(ctx, tx, actor, "identity.manage"); err != nil {
-			return err
-		}
-	}
 	if err = fn(tx); err != nil {
 		return err
 	}
-	if actor != "" {
+	return tx.Commit()
+}
+
+func (d Directory) write(ctx context.Context, actor string, fn func(*sql.Tx) error) error {
+	return d.transaction(ctx, func(tx *sql.Tx) error {
+		if err := RequireScope(ctx, tx, actor, "identity.manage"); err != nil {
+			return err
+		}
+		if err := fn(tx); err != nil {
+			return err
+		}
 		// Check after every change, including nested memberships and role removal.
-		principal, args := PrincipalSQL("a", "unused")
-		_ = args
+		principal, _ := PrincipalSQL("a", "unused")
 		principal = strings.ReplaceAll(principal, "?", "u.id")
 		var exists bool
-		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM identity_users u WHERE EXISTS(SELECT 1 FROM identity_assignments a WHERE a.role_id='administrator' AND `+principal+`))`).Scan(&exists)
+		err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM identity_users u WHERE EXISTS(SELECT 1 FROM identity_assignments a WHERE a.role_id='administrator' AND `+principal+`))`).Scan(&exists)
 		if err != nil {
 			return err
 		}
 		if !exists {
 			return ErrLastAdministrator
 		}
-	}
-	return tx.Commit()
+		return nil
+	})
 }
 
 // Initialize provisions built-in roles and the configured first administrator
@@ -126,7 +130,7 @@ func (d Directory) Initialize(ctx context.Context, administrator string) error {
 	if err := ValidateSubject(administrator); err != nil {
 		return err
 	}
-	return d.write(ctx, "", func(tx *sql.Tx) error {
+	return d.transaction(ctx, func(tx *sql.Tx) error {
 		var initialized bool
 		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_roles WHERE id=?)", AdministratorRole).Scan(&initialized); err != nil {
 			return err
@@ -168,7 +172,7 @@ func (d Directory) EnsureUser(ctx context.Context, subject string) error {
 	if exists {
 		return nil
 	}
-	return d.write(ctx, "", func(tx *sql.Tx) error { return ensureUser(ctx, tx, subject) })
+	return d.transaction(ctx, func(tx *sql.Tx) error { return ensureUser(ctx, tx, subject) })
 }
 func ensureUser(ctx context.Context, tx *sql.Tx, subject string) error {
 	result, err := tx.ExecContext(ctx, "INSERT INTO identity_users(id,created_at) VALUES(?,CURRENT_TIMESTAMP) ON CONFLICT(id) DO NOTHING", subject)
@@ -314,7 +318,7 @@ func (d Directory) SetMember(ctx context.Context, actor, groupID string, p Princ
 			return err
 		}
 		var depth int
-		err = tx.QueryRowContext(ctx, `WITH RECURSIVE paths(id,depth) AS (SELECT id,1 FROM identity_groups UNION ALL SELECT m.principal_id,p.depth+1 FROM identity_memberships m JOIN paths p ON m.group_id=p.id WHERE m.principal_type='group' AND p.depth<=?) SELECT COALESCE(MAX(depth),0) FROM paths`, MaxGroupDepth).Scan(&depth)
+		err = tx.QueryRowContext(ctx, `WITH RECURSIVE paths(id,depth) AS (SELECT id,1 FROM identity_groups UNION SELECT m.principal_id,p.depth+1 FROM identity_memberships m JOIN paths p ON m.group_id=p.id WHERE m.principal_type='group' AND p.depth<=?) SELECT COALESCE(MAX(depth),0) FROM paths`, MaxGroupDepth).Scan(&depth)
 		if err != nil {
 			return err
 		}

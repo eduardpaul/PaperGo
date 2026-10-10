@@ -54,12 +54,12 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 		switch i % 6 {
 		case 1: // the reader may see this item's drafts
 			r = latest(t, s, r.ID)
-			if _, err = s.SetPermissions(testContext, "alice", r.ID, r.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"reader", "read_draft", "allow"}}}); err != nil {
+			if _, err = s.SetPermissions(testContext, "alice", r.ID, r.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}, {"user", "reader", "read_draft", "allow"}}}); err != nil {
 				t.Fatal(err)
 			}
 		case 4: // the reader may not see this item at all
 			r = latest(t, s, r.ID)
-			if _, err = s.SetPermissions(testContext, "alice", r.ID, r.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}}); err != nil {
+			if _, err = s.SetPermissions(testContext, "alice", r.ID, r.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}}); err != nil {
 				t.Fatal(err)
 			}
 		}

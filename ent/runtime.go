@@ -434,18 +434,18 @@ func init() {
 			return nil
 		}
 	}()
-	// grantDescSubject is the schema descriptor for subject field.
-	grantDescSubject := grantFields[1].Descriptor()
-	// grant.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
-	grant.SubjectValidator = func() func(string) error {
-		validators := grantDescSubject.Validators
+	// grantDescPrincipalID is the schema descriptor for principal_id field.
+	grantDescPrincipalID := grantFields[2].Descriptor()
+	// grant.PrincipalIDValidator is a validator for the "principal_id" field. It is called by the builders before save.
+	grant.PrincipalIDValidator = func() func(string) error {
+		validators := grantDescPrincipalID.Validators
 		fns := [...]func(string) error{
 			validators[0].(func(string) error),
 			validators[1].(func(string) error),
 		}
-		return func(subject string) error {
+		return func(principal_id string) error {
 			for _, fn := range fns {
-				if err := fn(subject); err != nil {
+				if err := fn(principal_id); err != nil {
 					return err
 				}
 			}

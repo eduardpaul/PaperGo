@@ -5,6 +5,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"papergo/ent"
 	"papergo/ent/resource"
+	"papergo/internal/identity"
 	"strings"
 )
 
@@ -28,22 +29,44 @@ func impliedActions(action string) []string {
 // This SQL is isolated so a future database adapter can replace it. Additive
 // grants apply at the nearest exclusive scope; inherited resources have no ACL.
 func permissionSQL(idColumn, subject, action string) (string, []any) {
+	principal, args := aclPrincipalSQL("g", subject)
+	marks, actions := actionParameters(action)
+	args = append(args, actions...)
+	admin, adminArgs := identity.ScopeSQL(subject, "workspace.manage")
+	module, moduleArgs := modulePermissionSQL("acl.kind", subject, action)
+	query := `EXISTS (SELECT 1 FROM resources acl JOIN resources workspace ON workspace.id=acl.workspace_id AND workspace.deleted_at IS NULL
+ WHERE acl.id=` + idColumn + ` AND acl.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM grants g WHERE g.resource_id=acl.scope_id AND ` + principal + ` AND g.effect='allow' AND g.action IN (` + marks + `))
+ OR EXISTS(SELECT 1 FROM grants owner WHERE owner.resource_id=acl.workspace_id AND owner.principal_type='user' AND owner.principal_id=? AND owner.action='manage' AND owner.effect='allow')
+ OR ` + admin + `) AND ` + module + `)`
+	args = append(args, subject)
+	args = append(args, adminArgs...)
+	args = append(args, moduleArgs...)
+	return query, args
+}
+
+func actionParameters(action string) (string, []any) {
 	actions := impliedActions(action)
-	args := []any{subject}
 	marks := make([]string, len(actions))
+	args := make([]any, len(actions))
 	for i, a := range actions {
 		marks[i] = "?"
-		args = append(args, a)
+		args[i] = a
 	}
-	// scope_id, maintained by triggers, is the nearest exclusive ancestor-or-self.
-	query := `EXISTS (SELECT 1 FROM resources acl JOIN grants g ON g.resource_id=acl.scope_id
- WHERE acl.id=` + idColumn + ` AND acl.deleted_at IS NULL AND g.subject=? AND g.effect='allow' AND g.action IN (` + strings.Join(marks, ",") + `))
- OR EXISTS (SELECT 1 FROM resources owned JOIN grants owner ON owner.resource_id=owned.workspace_id
- JOIN resources workspace ON workspace.id=owner.resource_id AND workspace.deleted_at IS NULL
- WHERE owned.id=` + idColumn + ` AND owned.deleted_at IS NULL AND owner.subject=? AND owner.action='manage' AND owner.effect='allow')`
-	args = append(args, subject)
-	query = "(" + query + ")"
-	return query, args
+	return strings.Join(marks, ","), args
+}
+func aclPrincipalSQL(alias, subject string) (string, []any) {
+	principal, args := identity.PrincipalSQL(alias, subject)
+	query := `(` + principal + ` OR (` + alias + `.principal_type IN ('workspace_visitor','workspace_member','workspace_owner') AND EXISTS(SELECT 1 FROM grants membership
+ WHERE membership.resource_id=` + alias + `.principal_id AND membership.principal_type='user' AND membership.principal_id=? AND membership.effect='allow'
+ AND membership.action=CASE ` + alias + `.principal_type WHEN 'workspace_visitor' THEN 'read' WHEN 'workspace_member' THEN 'write' ELSE 'manage' END)))`
+	return query, append(args, subject)
+}
+func modulePermissionSQL(kindColumn, subject, action string) (string, []any) {
+	scope := "list.read"
+	if action == "write" || action == "publish" {
+		scope = "list.write"
+	}
+	return identity.ScopeExpressionSQL(subject, `CASE WHEN `+kindColumn+`='workspace' THEN 'workspace.read' WHEN `+kindColumn+` IN ('item','folder') THEN '`+scope+`' ELSE 'list.read' END`)
 }
 
 // scopeGrantSQL tests a grant on an ACL scope ID column directly.
@@ -55,15 +78,16 @@ func scopeGrantSQL(scopeColumn, subject, action string) (string, []any) {
 // browse indexes cover, so unreadable rows are skipped without a table lookup.
 func permissionPredicate(subject, action string) func(*entsql.Selector) {
 	return func(sel *entsql.Selector) {
-		actions := impliedActions(action)
-		args := []any{subject}
-		marks := make([]string, len(actions))
-		for i, a := range actions {
-			marks[i] = "?"
-			args = append(args, a)
-		}
+		principal, args := aclPrincipalSQL("g", subject)
+		marks, actions := actionParameters(action)
+		args = append(args, actions...)
 		args = append(args, subject)
-		sel.Where(entsql.ExprP("("+sel.C(resource.FieldScopeID)+` IN (SELECT resource_id FROM grants WHERE subject=? AND effect='allow' AND action IN (`+strings.Join(marks, ",")+`)) OR `+sel.C(resource.FieldWorkspaceID)+` IN (SELECT g.resource_id FROM grants g JOIN resources w ON w.id=g.resource_id WHERE g.subject=? AND g.effect='allow' AND g.action='manage' AND w.kind='workspace' AND w.deleted_at IS NULL))`, args...))
+		admin, adminArgs := identity.ScopeSQL(subject, "workspace.manage")
+		args = append(args, adminArgs...)
+		module, moduleArgs := modulePermissionSQL(sel.C(resource.FieldKind), subject, action)
+		args = append(args, moduleArgs...)
+		query := `((` + sel.C(resource.FieldScopeID) + ` IN (SELECT g.resource_id FROM grants g WHERE ` + principal + ` AND g.effect='allow' AND g.action IN (` + marks + `)) OR ` + sel.C(resource.FieldWorkspaceID) + ` IN (SELECT g.resource_id FROM grants g JOIN resources w ON w.id=g.resource_id WHERE g.principal_type='user' AND g.principal_id=? AND g.effect='allow' AND g.action='manage' AND w.kind='workspace' AND w.deleted_at IS NULL) OR ` + admin + `) AND ` + module + `)`
+		sel.Where(entsql.ExprP(query, args...))
 	}
 }
 func (s *Service) allowedMany(ctx context.Context, subject, action string, roots []*ent.Resource) (map[string]bool, error) {

@@ -344,7 +344,7 @@ func TestFailedRunRetriesFromFailedStep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if list, err = f.dms.SetPermissions(ctx, "alice", f.list.ID, list.Version, dms.Permissions{Grants: []dms.Permission{{Subject: "alice", Action: "manage", Effect: "allow"}}}); err != nil {
+	if list, err = f.dms.SetPermissions(ctx, "alice", f.list.ID, list.Version, dms.Permissions{Grants: []dms.Permission{{PrincipalType: "user", PrincipalID: "alice", Action: "manage", Effect: "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
 	it := f.item(t, "alice", "Lease", nil)

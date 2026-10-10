@@ -95,7 +95,7 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	send("GET", base+"/term-sets", "", "", 200)
 	send("GET", base+"/relationship-types", "", "", 200)
 	send("POST", "/v1/resources/"+l.ID+"/query", `{"query":{"unknown":"bad"}}`, "", 400)
-	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":true,"grants":[{"subject":"alice","action":"manage"}]}`, `"2"`, 422)
+	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":true,"grants":[{"principal_type":"user","principal_id":"alice","action":"manage"}]}`, `"2"`, 422)
 	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":false,"copy_inherited":true,"grants":[]}`, `"2"`, 200)
 	acl := send("GET", "/v1/resources/"+item.ID+"/permissions", "", "", 200)
 	if !strings.Contains(string(acl), l.ID) || !strings.Contains(string(acl), "effective_grants") {

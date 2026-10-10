@@ -6243,7 +6243,8 @@ type GrantMutation struct {
 	typ             string
 	id              *string
 	created_at      *time.Time
-	subject         *string
+	principal_type  *grant.PrincipalType
+	principal_id    *string
 	action          *grant.Action
 	effect          *grant.Effect
 	clearedFields   map[string]struct{}
@@ -6430,40 +6431,76 @@ func (m *GrantMutation) ResetResourceID() {
 	m.resource = nil
 }
 
-// SetSubject sets the "subject" field.
-func (m *GrantMutation) SetSubject(s string) {
-	m.subject = &s
+// SetPrincipalType sets the "principal_type" field.
+func (m *GrantMutation) SetPrincipalType(gt grant.PrincipalType) {
+	m.principal_type = &gt
 }
 
-// Subject returns the value of the "subject" field in the mutation.
-func (m *GrantMutation) Subject() (r string, exists bool) {
-	v := m.subject
+// PrincipalType returns the value of the "principal_type" field in the mutation.
+func (m *GrantMutation) PrincipalType() (r grant.PrincipalType, exists bool) {
+	v := m.principal_type
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldSubject returns the old "subject" field's value of the Grant entity.
+// OldPrincipalType returns the old "principal_type" field's value of the Grant entity.
 // If the Grant object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *GrantMutation) OldSubject(ctx context.Context) (v string, err error) {
+func (m *GrantMutation) OldPrincipalType(ctx context.Context) (v grant.PrincipalType, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldSubject is only allowed on UpdateOne operations")
+		return v, errors.New("OldPrincipalType is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldSubject requires an ID field in the mutation")
+		return v, errors.New("OldPrincipalType requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldSubject: %w", err)
+		return v, fmt.Errorf("querying old value for OldPrincipalType: %w", err)
 	}
-	return oldValue.Subject, nil
+	return oldValue.PrincipalType, nil
 }
 
-// ResetSubject resets all changes to the "subject" field.
-func (m *GrantMutation) ResetSubject() {
-	m.subject = nil
+// ResetPrincipalType resets all changes to the "principal_type" field.
+func (m *GrantMutation) ResetPrincipalType() {
+	m.principal_type = nil
+}
+
+// SetPrincipalID sets the "principal_id" field.
+func (m *GrantMutation) SetPrincipalID(s string) {
+	m.principal_id = &s
+}
+
+// PrincipalID returns the value of the "principal_id" field in the mutation.
+func (m *GrantMutation) PrincipalID() (r string, exists bool) {
+	v := m.principal_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPrincipalID returns the old "principal_id" field's value of the Grant entity.
+// If the Grant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GrantMutation) OldPrincipalID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPrincipalID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPrincipalID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPrincipalID: %w", err)
+	}
+	return oldValue.PrincipalID, nil
+}
+
+// ResetPrincipalID resets all changes to the "principal_id" field.
+func (m *GrantMutation) ResetPrincipalID() {
+	m.principal_id = nil
 }
 
 // SetAction sets the "action" field.
@@ -6599,15 +6636,18 @@ func (m *GrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GrantMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.created_at != nil {
 		fields = append(fields, grant.FieldCreatedAt)
 	}
 	if m.resource != nil {
 		fields = append(fields, grant.FieldResourceID)
 	}
-	if m.subject != nil {
-		fields = append(fields, grant.FieldSubject)
+	if m.principal_type != nil {
+		fields = append(fields, grant.FieldPrincipalType)
+	}
+	if m.principal_id != nil {
+		fields = append(fields, grant.FieldPrincipalID)
 	}
 	if m.action != nil {
 		fields = append(fields, grant.FieldAction)
@@ -6627,8 +6667,10 @@ func (m *GrantMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case grant.FieldResourceID:
 		return m.ResourceID()
-	case grant.FieldSubject:
-		return m.Subject()
+	case grant.FieldPrincipalType:
+		return m.PrincipalType()
+	case grant.FieldPrincipalID:
+		return m.PrincipalID()
 	case grant.FieldAction:
 		return m.Action()
 	case grant.FieldEffect:
@@ -6646,8 +6688,10 @@ func (m *GrantMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldCreatedAt(ctx)
 	case grant.FieldResourceID:
 		return m.OldResourceID(ctx)
-	case grant.FieldSubject:
-		return m.OldSubject(ctx)
+	case grant.FieldPrincipalType:
+		return m.OldPrincipalType(ctx)
+	case grant.FieldPrincipalID:
+		return m.OldPrincipalID(ctx)
 	case grant.FieldAction:
 		return m.OldAction(ctx)
 	case grant.FieldEffect:
@@ -6675,12 +6719,19 @@ func (m *GrantMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetResourceID(v)
 		return nil
-	case grant.FieldSubject:
+	case grant.FieldPrincipalType:
+		v, ok := value.(grant.PrincipalType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPrincipalType(v)
+		return nil
+	case grant.FieldPrincipalID:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetSubject(v)
+		m.SetPrincipalID(v)
 		return nil
 	case grant.FieldAction:
 		v, ok := value.(grant.Action)
@@ -6751,8 +6802,11 @@ func (m *GrantMutation) ResetField(name string) error {
 	case grant.FieldResourceID:
 		m.ResetResourceID()
 		return nil
-	case grant.FieldSubject:
-		m.ResetSubject()
+	case grant.FieldPrincipalType:
+		m.ResetPrincipalType()
+		return nil
+	case grant.FieldPrincipalID:
+		m.ResetPrincipalID()
 		return nil
 	case grant.FieldAction:
 		m.ResetAction()

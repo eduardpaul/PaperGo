@@ -44,6 +44,13 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if !s.transaction {
 		return read(ctx, s, func(t *Service) (Page[*ent.Resource], error) { return t.Browse(ctx, subject, in) })
 	}
+	scope := "list.read"
+	if in.WorkspaceID == "" && in.ParentID == "" {
+		scope = "workspace.read"
+	}
+	if err := s.RequireScope(ctx, subject, scope); err != nil {
+		return Page[*ent.Resource]{}, err
+	}
 	if in.Surface == "" {
 		in.Surface = "auto"
 	}

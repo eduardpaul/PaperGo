@@ -69,7 +69,7 @@ func TestWorkspaceDescriptionsMembershipAndOwnerControl(t *testing.T) {
 	if current.Version != w.Version {
 		t.Fatal("membership consumed metadata ETag", current.Version)
 	}
-	if _, err = s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}}); err == nil {
+	if _, err = s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}}); err == nil {
 		t.Fatal("workspace ACL replacement bypasses member API")
 	}
 	// Even an exclusive scope with no grants remains manageable by workspace owners.
@@ -112,16 +112,16 @@ func TestWorkspaceLastOwnerIsProtectedAndTransferable(t *testing.T) {
 	if err := s.SetWorkspaceMember(testContext, "alice", w.ID, WorkspaceMember{"alice", "visitor"}); !errors.Is(err, ErrLastOwner) {
 		t.Fatal("last owner demoted", err)
 	}
-	if _, err := s.Client.Grant.Delete().Where(grant.ResourceIDEQ(w.ID), grant.SubjectEQ("alice")).Exec(testContext); err == nil {
+	if _, err := s.Client.Grant.Delete().Where(grant.ResourceIDEQ(w.ID), grant.PrincipalIDEQ("alice")).Exec(testContext); err == nil {
 		t.Fatal("database allowed last owner deletion")
 	}
-	if _, err := s.Client.Grant.Update().Where(grant.ResourceIDEQ(w.ID), grant.SubjectEQ("alice")).SetAction(grant.ActionRead).Save(testContext); err == nil {
+	if _, err := s.Client.Grant.Update().Where(grant.ResourceIDEQ(w.ID), grant.PrincipalIDEQ("alice")).SetAction(grant.ActionRead).Save(testContext); err == nil {
 		t.Fatal("database allowed last owner demotion")
 	}
 	if _, err := s.Client.ExecContext(testContext, `UPDATE grants SET resource_id=? WHERE resource_id=? AND subject='alice'`, list.ID, w.ID); err == nil {
 		t.Fatal("database allowed moving the workspace owner grant")
 	}
-	if _, err := s.Client.Grant.Create().SetResourceID(w.ID).SetSubject("alice").SetAction(grant.ActionRead).Save(testContext); err == nil {
+	if _, err := s.Client.Grant.Create().SetResourceID(w.ID).SetPrincipalType("user").SetPrincipalID("alice").SetAction(grant.ActionRead).Save(testContext); err == nil {
 		t.Fatal("database allowed two roles for the same workspace member")
 	}
 	if err := s.SetWorkspaceMember(testContext, "alice", w.ID, WorkspaceMember{"bob", "owner"}); err != nil {

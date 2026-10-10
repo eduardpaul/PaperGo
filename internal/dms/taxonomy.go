@@ -65,7 +65,7 @@ func (s *Service) CreateTermGroup(ctx context.Context, subject, workspaceID stri
 		return nil, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.workspace(ctx, subject, workspaceID, "manage")
+		w, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "manage")
 		if e != nil {
 			return e
 		}
@@ -78,7 +78,7 @@ func (s *Service) CreateTermGroup(ctx context.Context, subject, workspaceID stri
 }
 func (s *Service) TermGroups(ctx context.Context, subject, workspaceID, after string, limit int) (Page[*ent.TermGroup], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.TermGroup], error) {
-		if _, e := t.workspace(ctx, subject, workspaceID, "read"); e != nil {
+		if _, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "read"); e != nil {
 			return Page[*ent.TermGroup]{}, e
 		}
 		rows, e := t.Client.TermGroup.Query().Where(termgroup.WorkspaceIDEQ(workspaceID), termgroup.IDGT(after)).Order(ent.Asc(termgroup.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
@@ -99,7 +99,7 @@ func (s *Service) termGroup(ctx context.Context, subject, id, action string) (*e
 	if e != nil {
 		return nil, nil, e
 	}
-	w, e := s.workspace(ctx, subject, g.WorkspaceID, action)
+	w, e := s.taxonomyWorkspace(ctx, subject, g.WorkspaceID, action)
 	return g, w, e
 }
 func (s *Service) UpdateTermGroup(ctx context.Context, subject, id string, version int, in TermGroupInput) (out *ent.TermGroup, err error) {
@@ -177,7 +177,7 @@ func (s *Service) CreateTermSet(ctx context.Context, subject, workspaceID string
 		return nil, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.workspace(ctx, subject, workspaceID, "manage")
+		w, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "manage")
 		if e != nil {
 			return e
 		}
@@ -200,7 +200,7 @@ func (s *Service) CreateTermSet(ctx context.Context, subject, workspaceID string
 }
 func (s *Service) TermSets(ctx context.Context, subject, workspaceID, groupID, after string, limit int) (Page[*ent.TermSet], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.TermSet], error) {
-		if _, e := t.workspace(ctx, subject, workspaceID, "read"); e != nil {
+		if _, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "read"); e != nil {
 			return Page[*ent.TermSet]{}, e
 		}
 		q := t.Client.TermSet.Query().Where(termset.WorkspaceIDEQ(workspaceID), termset.IDGT(after))
@@ -225,7 +225,7 @@ func (s *Service) termSet(ctx context.Context, subject, id, action string) (*ent
 	if e != nil {
 		return nil, nil, e
 	}
-	w, e := s.workspace(ctx, subject, set.WorkspaceID, action)
+	w, e := s.taxonomyWorkspace(ctx, subject, set.WorkspaceID, action)
 	return set, w, e
 }
 func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, version int, in TermSetInput) (out *ent.TermSet, err error) {
@@ -337,7 +337,7 @@ func (s *Service) termNames(ctx context.Context, subject string, ids []string) (
 		ws := v.Edges.TermSet.WorkspaceID
 		ok, seen := readable[ws]
 		if !seen {
-			_, e = s.workspace(ctx, subject, ws, "read")
+			_, e = s.taxonomyWorkspace(ctx, subject, ws, "read")
 			if e != nil && !errors.Is(e, ErrForbidden) && !errors.Is(e, ErrNotFound) {
 				return nil, e
 			}
@@ -474,7 +474,7 @@ func (s *Service) CreateTerm(ctx context.Context, subject, setID string, in Term
 		if in.Deprecated || in.AvailableAsKeyword {
 			action = "manage"
 		}
-		w, e := t.workspace(ctx, subject, set.WorkspaceID, action)
+		w, e := t.taxonomyWorkspace(ctx, subject, set.WorkspaceID, action)
 		if e != nil {
 			return e
 		}
@@ -591,7 +591,7 @@ func (s *Service) TermsByID(ctx context.Context, subject string, ids []string) (
 			ws := v.Edges.TermSet.WorkspaceID
 			ok, seen := readable[ws]
 			if !seen {
-				_, e = t.workspace(ctx, subject, ws, "read")
+				_, e = t.taxonomyWorkspace(ctx, subject, ws, "read")
 				if e != nil && !errors.Is(e, ErrForbidden) && !errors.Is(e, ErrNotFound) {
 					return nil, e
 				}

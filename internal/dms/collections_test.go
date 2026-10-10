@@ -74,11 +74,11 @@ func TestCollectionDeletionRemovesLiveContentAndRetainsHistory(t *testing.T) {
 	if err := s.Delete(testContext, "bob", collection.ID, latest(t, s, collection.ID).Version, DeleteOptions{}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("member deleted collection", err)
 	}
-	collection, err = s.SetPermissions(testContext, "alice", collection.ID, latest(t, s, collection.ID).Version, Permissions{Grants: []Permission{{"bob", "manage", "allow"}}})
+	collection, err = s.SetPermissions(testContext, "alice", collection.ID, latest(t, s, collection.ID).Version, Permissions{Grants: []Permission{{"user", "bob", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}}); err != nil {
+	if _, err = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.Delete(testContext, "bob", collection.ID, collection.Version-1, DeleteOptions{}); !errors.Is(err, ErrConflict) {

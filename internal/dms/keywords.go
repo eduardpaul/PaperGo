@@ -37,7 +37,7 @@ func (s *Service) Keywords(ctx context.Context, subject, workspaceID, search str
 		limit = maxKeywordSuggestions
 	}
 	return read(ctx, s, func(t *Service) ([]TermView, error) {
-		if _, e := t.workspace(ctx, subject, workspaceID, "read"); e != nil {
+		if _, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "read"); e != nil {
 			return nil, e
 		}
 		set, e := t.keywordsSet(ctx, workspaceID)
@@ -73,7 +73,7 @@ func (s *Service) AddKeyword(ctx context.Context, subject, workspaceID string, i
 		return out, false, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.workspace(ctx, subject, workspaceID, "read")
+		w, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "read")
 		if e != nil {
 			return e
 		}
@@ -123,7 +123,7 @@ func (s *Service) PopularKeywords(ctx context.Context, subject, workspaceID stri
 		top = maxKeywordSuggestions
 	}
 	return read(ctx, s, func(t *Service) ([]KeywordCount, error) {
-		if _, e := t.workspace(ctx, subject, workspaceID, "manage"); e != nil {
+		if _, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "manage"); e != nil {
 			return nil, e
 		}
 		set, e := t.keywordsSet(ctx, workspaceID)

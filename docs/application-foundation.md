@@ -10,12 +10,14 @@ An exclusive folder scope affects its inherited descendants immediately. A desce
 
 Use PUT `/v1/resources/{id}/permissions` for collections and content with the resource's quoted numeric If-Match. Workspace roots use the membership API:
 
-- Create or replace an exclusive scope: `{"inherit":false,"grants":[{"subject":"admin","action":"manage"},{"subject":"reader","action":"read"}]}`.
-- Break inheritance and copy effective parent permissions: `{"inherit":false,"copy_inherited":true}`. Additional grants can be included. Copies become independent of later parent changes.
+- Create or replace an exclusive scope: `{"inherit":false,"grants":[{"principal_type":"user","principal_id":"admin","action":"manage"},{"principal_type":"group","principal_id":"group-id","action":"read"}]}`. User subjects and group IDs must exist in the organization directory.
+- Break inheritance and copy effective parent permissions: `{"inherit":false,"copy_inherited":true}`. Additional grants can be included. Copies remain independent of parent ACL edits, while group and workspace-role membership resolve dynamically.
 - Reset to inherit: `{"inherit":true,"grants":[]}`. Local grants are removed.
 - Inherited resources cannot contain local grants. Changes that remove the caller's manage access roll back.
 
 GET permissions requires manage access and returns `inherit`, local `grants`, the effective `scope_id`, and `effective_grants`. Read, read_draft, write, publish, and manage retain their existing capability implications. Ordinary readers see only published content.
+
+Principals are `user`, `group`, `workspace_visitor`, `workspace_member` or `workspace_owner`. Workspace role principals identify the resource's workspace; owner grants must allow manage. Copying the workspace scope preserves its three role principals. Resetting inheritance restores the current parent scope and leaves nested exclusive scopes intact. [Module scopes](identity.md) apply independently: `list.read` permits list access and permission management, while `list.write` permits item/folder mutations and publishing. Content-type/schema curation requires `contentType.manage`; taxonomy operations require `taxonomy.read` or `taxonomy.manage` alongside current workspace access. REST, WebDAV and transactional workflow item actions resolve persisted memberships and roles.
 
 ## Rich fields
 

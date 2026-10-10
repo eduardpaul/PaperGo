@@ -75,7 +75,7 @@ func (s *Service) templateDefinition(ctx context.Context, subject, workspaceID s
 }
 func (s *Service) CreateTemplate(ctx context.Context, subject, workspaceID string, in TemplateInput) (out *ent.SchemaTemplate, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.workspace(ctx, subject, workspaceID, "manage")
+		w, e := t.schemaWorkspace(ctx, subject, workspaceID, "manage")
 		if e != nil {
 			return e
 		}
@@ -100,7 +100,7 @@ func (s *Service) UpdateTemplate(ctx context.Context, subject, id string, versio
 		if e != nil {
 			return e
 		}
-		w, e := t.workspace(ctx, subject, old.WorkspaceID, "manage")
+		w, e := t.schemaWorkspace(ctx, subject, old.WorkspaceID, "manage")
 		if e != nil {
 			return e
 		}
@@ -127,7 +127,7 @@ func (s *Service) UpdateTemplate(ctx context.Context, subject, id string, versio
 }
 func (s *Service) Templates(ctx context.Context, subject, workspaceID, after string, limit int) (Page[*ent.SchemaTemplate], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.SchemaTemplate], error) {
-		if _, e := t.workspace(ctx, subject, workspaceID, "read"); e != nil {
+		if _, e := t.schemaWorkspace(ctx, subject, workspaceID, "read"); e != nil {
 			return Page[*ent.SchemaTemplate]{}, e
 		}
 		rows, e := t.Client.SchemaTemplate.Query().Where(schematemplate.WorkspaceIDEQ(workspaceID), schematemplate.IDGT(after)).Order(ent.Asc(schematemplate.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
@@ -142,7 +142,7 @@ type ApplyTemplateInput struct {
 
 func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templateID string, version, templateVersion int, typeID string) (out *ent.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		c, e := t.authorize(ctx, subject, containerID, "manage")
+		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
 		if e != nil {
 			return e
 		}

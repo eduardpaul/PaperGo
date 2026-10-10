@@ -9,6 +9,7 @@ import (
 	"papergo/ent"
 	"papergo/ent/grant"
 	"papergo/ent/resource"
+	"papergo/internal/identity"
 )
 
 // Workspace membership is the workspace's root ACL: exactly one grant per
@@ -56,13 +57,13 @@ func (s *Service) WorkspaceMembers(ctx context.Context, subject, id string) ([]W
 		if _, err := t.workspace(ctx, subject, id, "read"); err != nil {
 			return nil, err
 		}
-		grants, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id)).Order(ent.Asc(grant.FieldSubject)).All(ctx)
+		grants, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id)).Order(ent.Asc(grant.FieldPrincipalID)).All(ctx)
 		if err != nil {
 			return nil, err
 		}
 		members := make([]WorkspaceMember, 0, len(grants))
 		for _, g := range grants {
-			members = append(members, WorkspaceMember{Subject: g.Subject, Role: workspaceRole(g.Action)})
+			members = append(members, WorkspaceMember{Subject: g.PrincipalID, Role: workspaceRole(g.Action)})
 		}
 		return members, nil
 	})
@@ -92,9 +93,12 @@ func (s *Service) SetWorkspaceMember(ctx context.Context, subject, id string, in
 		if err != nil {
 			return err
 		}
-		old, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.SubjectEQ(in.Subject)).Only(ctx)
+		if err = identity.ValidatePrincipal(ctx, t.tx, identity.Principal{Type: "user", ID: in.Subject}); err != nil {
+			return invalid(err.Error())
+		}
+		old, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.PrincipalIDEQ(in.Subject), grant.PrincipalTypeEQ(grant.PrincipalTypeUser)).Only(ctx)
 		if ent.IsNotFound(err) {
-			_, err = t.Client.Grant.Create().SetResourceID(id).SetSubject(in.Subject).SetAction(action).Save(ctx)
+			_, err = t.Client.Grant.Create().SetResourceID(id).SetPrincipalType(grant.PrincipalTypeUser).SetPrincipalID(in.Subject).SetAction(action).Save(ctx)
 		} else if err == nil {
 			if old.Action == action {
 				return nil
@@ -114,7 +118,7 @@ func (s *Service) SetWorkspaceMember(ctx context.Context, subject, id string, in
 }
 
 func (s *Service) checkOtherOwner(ctx context.Context, id, member string) error {
-	other, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.SubjectNEQ(member), grant.ActionEQ(grant.ActionManage)).Exist(ctx)
+	other, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.PrincipalIDNEQ(member), grant.ActionEQ(grant.ActionManage)).Exist(ctx)
 	if err != nil {
 		return err
 	}
@@ -130,7 +134,7 @@ func (s *Service) RemoveWorkspaceMember(ctx context.Context, subject, id, member
 		if err != nil {
 			return err
 		}
-		g, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.SubjectEQ(member)).Only(ctx)
+		g, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.PrincipalIDEQ(member), grant.PrincipalTypeEQ(grant.PrincipalTypeUser)).Only(ctx)
 		if ent.IsNotFound(err) {
 			return ErrNotFound
 		}

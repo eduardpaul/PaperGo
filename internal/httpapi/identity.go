@@ -17,7 +17,9 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/identity/users", foundationRead(a, func(r *http.Request) (any, error) { return d.Users(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/identity/users", foundationMutation(a, 201, false, func(r *http.Request, in struct {
 		Subject string `json:"subject"`
-	}, _ int) (any, error) { return map[string]string{"subject": in.Subject}, d.CreateUser(r.Context(), subject(r), in.Subject) }))
+	}, _ int) (any, error) {
+		return map[string]string{"subject": in.Subject}, d.CreateUser(r.Context(), subject(r), in.Subject)
+	}))
 	m.HandleFunc("GET /v1/identity/groups", foundationRead(a, func(r *http.Request) (any, error) { return d.Groups(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/identity/groups", foundationMutation(a, 201, false, func(r *http.Request, in identity.GroupInput, _ int) (any, error) {
 		return d.SaveGroup(r.Context(), subject(r), "", 0, in)

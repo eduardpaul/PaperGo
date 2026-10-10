@@ -65,6 +65,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.status(w, http.StatusUnauthorized, "valid credentials are required")
 		return
 	}
+	scope := "list.write"
+	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == "PROPFIND" {
+		scope = "list.read"
+	}
+	if err = h.DMS.RequireScope(r.Context(), subject, scope); err != nil {
+		h.fail(w, r, err)
+		return
+	}
 	library, path, ok := parsePath(r.URL.EscapedPath())
 	if !ok {
 		h.status(w, http.StatusBadRequest, "invalid path")

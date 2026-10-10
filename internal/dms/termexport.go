@@ -57,7 +57,7 @@ const (
 
 func (s *Service) ExportTaxonomy(ctx context.Context, subject, workspaceID string) (TaxonomyPackage, error) {
 	return read(ctx, s, func(t *Service) (TaxonomyPackage, error) {
-		if _, e := t.workspace(ctx, subject, workspaceID, "read"); e != nil {
+		if _, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "read"); e != nil {
 			return TaxonomyPackage{}, e
 		}
 		groups, e := t.Client.TermGroup.Query().Where(termgroup.WorkspaceIDEQ(workspaceID)).Order(ent.Desc(termgroup.FieldIsSystem), ent.Asc(termgroup.FieldName)).
@@ -105,7 +105,7 @@ func (s *Service) ImportTaxonomy(ctx context.Context, subject, workspaceID strin
 	}
 	err = s.write(ctx, func(t *Service) error {
 		out = TaxonomyImportResult{}
-		w, e := t.workspace(ctx, subject, workspaceID, "manage")
+		w, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "manage")
 		if e != nil {
 			return e
 		}
