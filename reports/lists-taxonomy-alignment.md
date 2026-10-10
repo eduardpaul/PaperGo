@@ -1,13 +1,13 @@
 # Lists and Taxonomy: code/API parity and alignment
 
-PaperDotNet source: `96df412f040f53cc14711aaba35880e24817e084`. PaperGo code baseline: `596fb68` plus the explicit recursive deletion capability represented by this report, including the workspace, PATCH/taxonomy, collection, history and relationship changes described below. The comparison uses handlers, services, schemas, triggers, validators and tests. Project documentation is not feature evidence. This is static parity analysis plus PaperGo integration testing; the .NET application was not executed.
+PaperDotNet source: `96df412f040f53cc14711aaba35880e24817e084`. PaperGo code baseline: `4e19f54`, including organization groups/module roles, explicit recursive deletion, workspace, PATCH/taxonomy, collection, history and relationship changes described below. The comparison uses handlers, services, schemas, triggers, validators and tests. Project documentation is not feature evidence. This is static parity analysis plus PaperGo integration testing; the .NET application was not executed.
 
 The two modules do **not** yet cover all the same user stories. A matching story means the corresponding capability exists; it does not imply identical URLs, payload names, error statuses or authorization models. Publishing, declarative validation, frozen schemas and typed edge policies remain PaperGo features.
 
 | Assessment | Stories |
 | --- | ---: |
-| Covered | 19 |
-| Partial | 6 |
+| Covered | 20 |
+| Partial | 5 |
 | Drift | 8 |
 | Drift (accepted) | 1 |
 | Missing | 10 |
@@ -20,6 +20,7 @@ LST-17 is an accepted difference: the user requires deleting a folder with its c
 | Story | Result | Verification |
 | --- | --- | --- |
 | LST-02/03 | Collection descriptions, folder policy, manager changes and collection deletion | Service + HTTP lifecycle tests; nested/raw folder insertion rejection; exclusive descendant deletion; bound workflow shutdown; single schema regenerated/applied |
+| LST-31 | Nested group ACLs, dynamic workspace roles and module-scoped role enforcement | Service, REST and WebDAV tests; inheritance/copy/reset; principal ID collisions; role/group revocation; last administrator and nested-group depth/cycle guards |
 | LST-13 | Item field PATCH merges, null removes, defaults apply at creation | Field retention/default removal and unknown/removed-null rollback tests; existing Smart Folder tests; durable workflow null-removal test; bulk/API suites |
 | LST-17 | Delete an empty folder or explicitly delete a folder and its contents | Service and REST tests; nested/hidden children; whole-tree permissions; preconditions; cleanup rollback after injected failure; retained revisions and committed deletion events; WebDAV recursive deletion, locks and explicit overwrites |
 | LST-20/21 | Numbered history, changed fields and metadata restore | Schema pairing, pagination, current marker, missing revisions, stale restore, current validation rollback and blob retention; HTTP tests |
@@ -61,7 +62,7 @@ LST-17 is an accepted difference: the user requires deleting a folder with its c
 | LST-28 | Use taxonomy labels to discover/create relationship types | Drift | Relationship types are term-backed; a type label can be resolved/ensured. | Separate workspace RelationshipType entities, requiring manager-created IDs. | The term store is not the relationship vocabulary, and ordinary link creation cannot ensure a type by label. | [.NET: ItemRelationshipEndpoints.cs:15][N-REL]<br>[.NET: ListItemStore.cs:204][N-RELRULES]<br>[Go: relationshiptypes.go:12][G-RELT]<br>[Go: relationships.go:22][G-REL] |
 | LST-29 | Apply the same rights/idempotency when creating/removing a link | Covered | Relationship operations use writable endpoints and ensure existing relations; removal can use either endpoint. | Creating, patching and removing edges requires write on both endpoints. Either endpoint can mutate directed edges; repeated creation returns the original edge without changing metadata, version or audit. | Retries succeed even at a full cardinality limit; a readable but unwritable peer cannot be linked. | [.NET: ListItemStore.cs:204][N-RELRULES]<br>[.NET: GlobalItemEndpoints.cs:16][N-GLOBAL]<br>[relationships.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/relationships.go:22) |
 | LST-30 | Query the workspace relationship graph by edge attributes | Missing | GET workspaces/{id}/relationships accepts type/direction/$filter. | Only per-item incoming/outgoing/name pages; no workspace edge query or single-edge GET. | Cannot query all receipt lines/amount-bearing edges across the workspace in one API request. | [.NET: ItemRelationshipEndpoints.cs:15][N-REL]<br>[Go: api.go:43][G-ROUTES]<br>[Go: relationships.go:22][G-REL] |
-| LST-31 | Break/copy/reset inherited permissions | Partial | Permission endpoints provide inheritance/grant operations over scoped ACLs. | Nearest exclusive resource scope with copy/reset; changes are transactional. | Core ACL inheritance is covered; group principals and module-scoped roles are absent (see Identity). | [.NET: PermissionEndpoints.cs:47][N-ACL]<br>[Go: permissions.go:30][G-ACL]<br>[Go: service.go:129][G-SERVICE] |
+| LST-31 | Break/copy/reset inherited permissions | Covered | Scoped ACLs support users, groups and dynamic workspace roles; endpoint operations also require list.read. | Typed user/group/workspace-role ACL principals, nested group expansion, copy/reset, persisted module roles and transactional scope enforcement. | Copies preserve symbolic principals; membership and role revocation take effect immediately. Workspace owners and workspace.manage holders retain ACL control subject to module scopes. The core story is covered; organization-wide catalog boundaries remain separate gaps. | [.NET: PermissionEndpoints.cs:47][N-ACL]<br>[Go: permissions.go:30][G-ACL]<br>[Group/role tests](C:/Users/eduapaul/Documents/PaperGo/internal/dms/grouppermissions_test.go)<br>[Scope catalog](C:/Users/eduapaul/Documents/PaperGo/internal/identity/scopes.go) |
 | LST-32 | Discover a personal Home and default Inbox/Documents libraries | Missing | GET me/home provisions/returns personal content locations. | Workspaces must be created explicitly; no personal home/inbox discovery. | An everyday user's initial landing/storage locations are missing. | [.NET: HomeEndpoints.cs:27][N-HOME]<br>[Go: api.go:43][G-ROUTES]<br>[Go: resource.go:16][G-RESOURCE] |
 | LST-33 | Create a complete collection from a built-in or extension template | Partial | TemplateKey provisions content types, views and list settings; built-ins register Documents/Contacts, modules add others. | Workspace SchemaTemplate explicitly adds fields/rules to an existing collection/type. | Reusable schema application exists; one-call application collection provisioning and ready-made templates do not. | [.NET: ListEndpoints.cs:41][N-LIST]<br>[.NET: BuiltInTemplates.cs:21][N-TEMPL]<br>[Go: templates.go:14][G-TEMPL] |
 | LST-34 | Synchronize changes using a durable delta token | Missing | GET items/delta supports snapshot/delta continuation and deletion/access changes. | Audit feed is managerial; no item delta/change token endpoint. | Offline clients cannot obtain equivalent incremental synchronization. | [.NET: DeltaEndpoints.cs:68][N-DELTA]<br>[Go: api.go:43][G-ROUTES]<br>[Go: audit.go:10][G-AUDIT] |
@@ -80,7 +81,7 @@ LST-17 is an accepted difference: the user requires deleting a folder with its c
 | --- | --- | --- | --- | --- | --- | --- |
 | TAX-01 | Share one governed vocabulary across the organization | Drift | Tenant termStore groups/sets/terms, available across workspace lists. | Every term group/set belongs to a workspace; term fields require same-workspace sets. | One shared corporate term set cannot directly classify content in multiple workspaces. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:62][G-TAX]<br>[Go: termvalues.go:32][G-TERMVALUE] |
 | TAX-02 | Curate hierarchical terms with labels, synonyms, colors, deprecation, move and merge | Covered | Term store handlers and persisted hierarchy/merge state. | Term APIs and MoveTerm/MergeTerm preserve managed IDs and paths. | Principal vocabulary curation stories are covered. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[Go: taxonomy.go:62][G-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI] |
-| TAX-03 | Allow contributors to add terms in open sets | Partial | CreateTerm allows taxonomy.read in an open set; closed set needs taxonomy.manage. | Workspace read access permits ordinary new terms in open sets and keyword creation. Closed sets and deprecated/available-as-keyword curation still require manage. | The read-only contributor story works inside a workspace. Independent organization taxonomy.read/manage scopes remain absent. | [.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[taxonomy.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:455) |
+| TAX-03 | Allow contributors to add terms in open sets | Partial | CreateTerm allows taxonomy.read in an open set; closed set needs taxonomy.manage. | Workspace read access permits ordinary new terms in open sets and keyword creation. Closed sets and deprecated/available-as-keyword curation still require manage. | The read-only contributor story works inside a workspace. Persisted taxonomy.read/manage roles are implemented. Vocabulary and curation still require workspace access; a shared organization term store remains TAX-01. | [.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[taxonomy.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:455) |
 | TAX-04 | Add/suggest keywords and promote popular keywords into managed terms | Covered | Keyword creation/suggestions/popular/promote handlers. | Workspace keywords, popular counts and promote API; free resource tags are an additional system. | Controlled keywords/promotion exist. Free tags and term-valued keywords need deliberate client mapping. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI]<br>[Go: keywords.go:20][G-KEYWORDS] |
 | TAX-05 | Import a governed taxonomy and resolve labels/IDs | Covered | Term store CSV import and term ID lookup. | CSV group import, taxonomy package import/export, IDs/labels/synonyms normalization. | Seed/import and term lookup stories are covered with different package contracts. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[Go: termimport.go:40][G-IMPORT]<br>[Go: termexport.go:58][G-TAXPORT]<br>[Go: termvalues.go:32][G-TERMVALUE] |
 
@@ -88,13 +89,13 @@ LST-17 is an accepted difference: the user requires deleting a folder with its c
 
 | Work | Why it comes first | Dependent gaps |
 | --- | --- | --- |
-| Organization identity, active-user directory and module scopes | Auth.Verifier returns only a subject; DMS authorization has resource capabilities. Neither identifies active people nor a global taxonomy manager. These roles must have an explicit authority before vocabulary becomes organization-wide. | Person fields, independent taxonomy roles, group ACLs, personal Home |
+| Active-user/account lifecycle and organization catalogs | Enrolled subjects, nested groups and module roles now have explicit organization authority. Account disable/delete, person field validation and a shared organization term store remain incomplete. | Person fields, corporate taxonomy, personal Home |
 | Organization content-type and vocabulary catalogs | ContentType.container_id and TermSet.workspace_id are immutable ownership boundaries; collection type and term-field validators depend on them. Templates currently copy definitions. | Shared live schemas, type detach/reclassification, compatible cross-collection moves, corporate taxonomy and term-backed relationship types |
 | Content lifecycle and folder metadata | Resource kind/type constraints and revision/projection triggers currently distinguish folders from items; tombstones and historical rows cannot be restored/purged. Durable workflow records also reference items. | Folder classification, recycle bin, purge and retention settings |
 | Tracked filtered edits and query contracts | Atomic explicit bulk requests differ from independently committed filtered operations; SortSpec represents one sort key. | Filtered bulk progress/failures, multiple sorts and ad hoc projection |
 | Durable change feed | Audit events are managerial and domain events do not provide an item delta cursor with ACL-change/deletion semantics. | Initial/offline sync, incremental access changes and tombstones |
 
-The remaining architecture should be changed in place under the new-app rules: one schema, matching Ent models, callers and contracts. Workspace vocabulary must not be made globally readable merely to bypass the missing organization permission model.
+The remaining architecture should be changed in place under the new-app rules: one schema, matching Ent models, callers and contracts. Organization vocabulary should use the persisted scope model while its ownership boundary is changed in place.
 
 ## Validation
 
@@ -111,6 +112,9 @@ Deletion tests cover both ordinary REST empty-folder deletion and explicit recur
 | `3780024` | Both-endpoint relationship permissions, either-end mutation and retry ensure |
 | `9f403ae` | Reject explicitly supplied unknown/removed PATCH keys, including null |
 | `596fb68` | Ordinary folder deletion rejects populated folders |
+| `2720a71` | Explicit recursive folder deletion |
+| `3fde9bf` | Persisted organization directory, nested groups and role APIs |
+| `4e19f54` | Group/workspace-role ACL inheritance and module scope enforcement |
 
 [G-ACL]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/permissions.go:30
 [G-ATTRPATCH]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/relationshiptypes.go:185
@@ -169,3 +173,16 @@ Deletion tests cover both ordinary REST empty-folder deletion and explicit recur
 [N-TEMPL]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Templates/BuiltInTemplates.cs#L21
 [N-VIEW]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/ViewEndpoints.cs#L18
 [N-WRITER]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/ItemWriter.cs#L31
+
+## LST-31 code/API verification
+
+| Priority / story | Result | Verified behavior |
+| --- | --- | --- |
+| P1 · LST-31 | Covered | Break/copy/reset keeps nearest exclusive scopes and nested exclusive descendants; typed group grants resolve current direct and nested members. |
+| Group membership | Covered | Nested membership works; cycles and depth above 10 are rejected; removing membership revokes both ACL rights and group-assigned module scopes. |
+| Copy and reset | Covered | Copies preserve group IDs and dynamic workspace role principals. Parent ACL replacement leaves an exclusive copy intact; reset reconnects to the current parent. |
+| Module roles | Covered for this story | Direct/group assignments use the persisted scope catalog. Resource ACL ownership does not bypass missing list.write, contentType.manage or taxonomy.manage. workspace.manage supplies the explicit organization ACL override. |
+| Authority boundaries | Covered | Directory changes require identity.manage; unknown principals/scopes and user/group ID collisions cannot grant access; last Administrator removal or group deletion rolls back. |
+| REST / WebDAV / workflow item actions | Covered | Each uses current persisted group/role state; content authorization and mutations share a transaction. HTTP and WebDAV revocation tests pass; transactional service and durable runner suites pass. |
+
+Validation: `go test -count=1 ./...`, `go vet ./...` and the app build passed. Ent was regenerated, including cascade annotations matching the directory schema. Atlas validated the checksum and applied the single schema to the recreated disposable local database. The .NET evidence remains source inspection of the pinned commit; the .NET app was not executed. This closes LST-31 without claiming the separate account-lifecycle, shared content-type or organization term-store stories are complete.

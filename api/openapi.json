@@ -752,9 +752,9 @@
           }
         },
         "x-module-scopes": [
-          "contentType.read"
+          "list.read"
         ],
-        "description": " Required module scopes: contentType.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "summary": "Add a field definition (manage required)",
