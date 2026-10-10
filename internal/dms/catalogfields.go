@@ -81,7 +81,11 @@ func (s *Service) validateSchemaViews(ctx context.Context, collection string, de
 		if !schemaFilterKnown(q.Filter, defs) {
 			return invalid("remove dependent saved-view references before removing a field")
 		}
-		for _, key := range []string{q.Sort.Field, q.GroupBy} {
+		keys := []string{q.GroupBy}
+		for _, order := range q.Sort {
+			keys = append(keys, order.Field)
+		}
+		for _, key := range keys {
 			if key != "" && !builtinColumn(key) && defs[key] == nil {
 				return invalid("remove dependent saved-view references before removing a field")
 			}

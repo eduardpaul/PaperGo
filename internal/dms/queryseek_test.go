@@ -78,7 +78,10 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 				for _, field := range sorts {
 					for _, direction := range []string{"asc", "desc"} {
 						spec := base
-						spec.Sort = SortSpec{Field: field, Direction: direction}
+						spec.Sort = []SortSpec{{Field: field, Direction: direction}}
+						if field == "" {
+							spec.Sort[0].Field = "$id"
+						}
 						seek, sorted := pageAll(t, s, subject, list.ID, surface, spec, true), pageAll(t, s, subject, list.ID, surface, spec, false)
 						if !reflect.DeepEqual(seek, sorted) {
 							t.Fatalf("%s/%s %+v sort %s %s:\n seek   %v\n sorted %v", subject, surface, base, field, direction, seek, sorted)

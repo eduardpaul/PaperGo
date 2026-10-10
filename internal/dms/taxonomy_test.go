@@ -435,7 +435,7 @@ func TestTermAndKeywordsFieldValues(t *testing.T) {
 		raw, _ := json.Marshal(f)
 		var spec FilterExpr
 		_ = json.Unmarshal(raw, &spec)
-		page, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &spec, Sort: SortSpec{Field: "$name"}}})
+		page, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &spec, Sort: []SortSpec{{Field: "$name"}}}})
 		if err != nil {
 			t.Fatal(f, err)
 		}

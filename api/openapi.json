@@ -13234,7 +13234,8 @@
         "type": "object",
         "properties": {
           "field": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "direction": {
             "type": "string",
@@ -13244,7 +13245,9 @@
             ]
           }
         },
-        "required": [],
+        "required": [
+          "field"
+        ],
         "additionalProperties": false
       },
       "QuerySpec": {
@@ -13254,7 +13257,12 @@
             "$ref": "#/components/schemas/FilterExpr"
           },
           "sort": {
-            "$ref": "#/components/schemas/SortSpec"
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/SortSpec"
+            },
+            "description": "Ordered unique sort keys with independent asc/desc directions. Custom keys require ready scalar indexes. Missing values sort last at each key; final item ID ties follow the primary direction. Omitted or empty uses $id ascending."
           },
           "group_by": {
             "type": "string"
@@ -13308,6 +13316,15 @@
           },
           "query": {
             "$ref": "#/components/schemas/QuerySpec"
+          },
+          "select": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Selected custom fields and optional $tags; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
           }
         },
         "required": [],
@@ -13338,6 +13355,15 @@
             "type": "boolean",
             "default": false,
             "description": "Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested."
+          },
+          "select": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Selected custom fields and optional $tags; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
           }
         },
         "required": [],

@@ -43,7 +43,7 @@ func TestRESTFilteredBulkUpdateProgressFailuresAndStrictInput(t *testing.T) {
 			t.Fatal(res.Code, res.Body.String())
 		}
 	}
-	for _, bad := range []string{`{}`, `{"values":{}}`, `{"query":{"sort":{"field":"$name"}},"values":{"status":"done"}}`, `{"query":{"filter":{"field":"bad","value":1}},"values":{"status":"done"}}`} {
+	for _, bad := range []string{`{}`, `{"values":{}}`, `{"query":{"sort":[{"field":"$name"}]},"values":{"status":"done"}}`, `{"query":{"filter":{"field":"bad","value":1}},"values":{"status":"done"}}`} {
 		res := request(h, "POST", path, bad, testToken, "", "application/json")
 		if res.Code != 422 {
 			t.Fatal(res.Code, res.Body.String())

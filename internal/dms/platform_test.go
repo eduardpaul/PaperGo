@@ -212,7 +212,7 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 	if _, e := s.Update(testContext, "alice", a.ID, latest(t, s, a.ID).Version, UpdateResource{Values: &values, Name: &name}); e != nil {
 		t.Fatal(e)
 	}
-	spec := QuerySpec{Sort: SortSpec{Field: "serial"}, GroupBy: "amount", Filter: &FilterExpr{Or: []FilterExpr{{Field: "serial", Op: "gte", Value: json.RawMessage("9007199254740993")}, {Field: "serial", Op: "missing"}}}}
+	spec := QuerySpec{Sort: []SortSpec{{Field: "serial"}}, GroupBy: "amount", Filter: &FilterExpr{Or: []FilterExpr{{Field: "serial", Op: "gte", Value: json.RawMessage("9007199254740993")}, {Field: "serial", Op: "missing"}}}}
 	query := QueryRequest{Query: spec, Limit: 1, IncludeTotal: true}
 	ids := []string{}
 	for {
@@ -256,7 +256,8 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 		t.Fatal("cursor reused across caller")
 	}
 	changed := spec
-	changed.Sort.Direction = "desc"
+	changed.Sort = append([]SortSpec{}, spec.Sort...)
+	changed.Sort[0].Direction = "desc"
 	if _, e = s.Query(testContext, "reader", l.ID, QueryRequest{Query: changed, After: first.NextCursor}); e == nil {
 		t.Fatal("cursor reused across query")
 	}

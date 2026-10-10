@@ -25,7 +25,7 @@ func (s *Service) StartBulkUpdate(ctx context.Context, subject, collectionID str
 	if in.Name == nil && in.Tags == nil && len(in.Values) == 0 {
 		return nil, invalid("a name, tags or non-empty values patch is required")
 	}
-	if in.Query.Sort != (SortSpec{}) || in.Query.GroupBy != "" {
+	if len(in.Query.Sort) != 0 || in.Query.GroupBy != "" {
 		return nil, invalid("bulk selection does not accept sort or group_by")
 	}
 	err = s.write(ctx, func(t *Service) error {

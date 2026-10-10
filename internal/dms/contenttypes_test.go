@@ -94,7 +94,7 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	if err != nil || counted(query.Total) != 1 || query.Data[0].ID != item.ID {
 		t.Fatal(query, err)
 	}
-	if _, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: simple.ID, Sort: SortSpec{Field: "total"}}}); !isValidation(err) {
+	if _, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: simple.ID, Sort: []SortSpec{{Field: "total"}}}}); !isValidation(err) {
 		t.Fatal(err)
 	}
 	strict := []model.ValidationRule{{Key: "sum", Field: "total", Op: "lt", OtherField: "subtotal", Message: "Too high"}}

@@ -109,7 +109,7 @@ POST `/v1/resources/{collectionID}/query` executes a bounded collection-wide ite
         {"field": "status", "op": "in", "value": ["approved", "paid"]}
       ]
     },
-    "sort": {"field": "amount", "direction": "desc"},
+    "sort":[{"field": "amount", "direction": "desc"}],
     "group_by": "status"
   },
   "surface": "auto",
@@ -117,7 +117,9 @@ POST `/v1/resources/{collectionID}/query` executes a bounded collection-wide ite
 }
 ```
 
-The response contains resource `data` and optional `next_cursor`. Set `"include_total": true` to also receive `total`, the authorized match count before pagination; it evaluates every match, so request it only when a client shows the count. The same flag applies to saved-view and smart-folder queries. Include the returned cursor as `after`. Cursors bind the caller, collection, effective schema, query, and surface. They use keyset pagination: missing values sort last, and equal values order by ID in the sort direction. Ungrouped collection queries read each page in sort-index order (the indexed field, or `$name`, `$created_at`, `$created_by`, `$modified_at`, `$modified_by` or `$id`), so a page costs about its own size plus the rows the filter rejects, and a cursor seeks directly to where the previous page ended. Changing those inputs requires restarting pagination. Concurrent edits can move items between pages; the snapshot guarantee applies to each request.
+The response contains resource `data` and optional `next_cursor`. Set `"include_total": true` to receive the authorized match count in `total`; it evaluates every match. `sort` is an ordered array of up to eight unique field/direction pairs, with independent `asc` or `desc` directions. Custom sort keys require ready scalar indexes. An omitted or empty array uses `$id` ascending. Missing values sort last at each key; the final ID tie follows the primary direction. Single-key pages scan the sort index; multiple keys sort the authorized matching set and use a typed lexicographic keyset cursor. Cursors bind the caller, collection, schema, surface, query and selection. Changing these inputs restarts pagination. Concurrent edits can move items between pages; snapshot guarantees apply to each request.
+
+`select` is an optional array of up to 50 unique known field keys on direct and saved-view query requests. It projects custom values in SQL, including unindexed fields; `$tags` includes tags. The resource metadata envelope remains present. Omitted selection returns all values on a direct query and the saved columns on a view. An explicit empty array returns no custom values. Ad hoc selection overrides saved-view columns. Selection does not change filtering, sorting or counts. Group queries do not accept `select`.
 
 A filter node is one condition or an AND/OR/NOT group, with at most 32 nodes and depth 6. Operators: eq, ne, gt/gte/lt/lte, in, contains, under, missing, present. Operator/type compatibility is enforced. Term and keywords fields support eq, ne, in and under (the term or any of its descendants); a value that holds a merged term matches as the term it was merged into. Custom fields must be indexed; system fields use `$id`, `$name`, and `$tags` to avoid collisions with custom keys. Multi-value equality matches any member; ne means present with no equal member. Sort/group fields must be scalar. Default sort is $id ascending.
 
@@ -136,7 +138,7 @@ Permissions and surface selection are applied in SQL before sorting, pagination,
 
 A view stores name, columns, query, layout (table/board/calendar/gallery), and is_default. These layouts are hints for headless clients. Columns select custom values and optionally $tags; identity/name remain available in resource responses. View queries read only those values from the selected surface, so rows stay small however large item content is; fetch an item for its full content. Empty columns default to $name. Only one default view per collection is allowed; replacing the default advances the previous default view's version.
 
-View management requires collection manage permission. Reading and execution require read, and saved configuration grants no access to content. PUT and DELETE use the view's ETag. View execution accepts only surface, after, and limit; the stored query controls filtering and sorting.
+View management requires collection manage permission. Reading and execution require read, and saved configuration grants no access to content. PUT and DELETE use the view's ETag. View execution accepts surface, after, limit, include_total and an optional select override; the stored query controls filtering and sorting.
 
 ## Bulk item operations
 

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"papergo/ent"
 	"papergo/ent/listview"
-	"strings"
 )
 
 type ViewInput struct {
@@ -154,10 +153,11 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 }
 
 type ViewQueryRequest struct {
-	Surface      string `json:"surface,omitempty"`
-	After        string `json:"after,omitempty"`
-	Limit        int    `json:"limit,omitempty"`
-	IncludeTotal bool   `json:"include_total,omitempty"`
+	Select       []string `json:"select,omitempty"`
+	Surface      string   `json:"surface,omitempty"`
+	After        string   `json:"after,omitempty"`
+	Limit        int      `json:"limit,omitempty"`
+	IncludeTotal bool     `json:"include_total,omitempty"`
 }
 
 func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQueryRequest) (QueryResult, error) {
@@ -170,7 +170,11 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 		if e = json.Unmarshal(v.Query, &spec); e != nil {
 			return QueryResult{}, e
 		}
-		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal}
+		selection := in.Select
+		if selection == nil {
+			selection = v.Columns
+		}
+		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, Select: selection}
 		if request.Surface == "" {
 			request.Surface = "auto"
 		}
@@ -179,21 +183,11 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 			return QueryResult{}, e
 		}
 		// Rows carry only the view's columns; detail reads return full content.
-		fields := []string{}
-		tags := false
-		for _, column := range v.Columns {
-			switch {
-			case column == "$tags":
-				tags = true
-			case !strings.HasPrefix(column, "$"):
-				fields = append(fields, column)
-			}
-		}
-		out, e := t.queryCompiled(ctx, subject, request, q, fields)
+		out, e := t.queryCompiled(ctx, subject, request, q, q.projection)
 		if e != nil {
 			return out, e
 		}
-		if !tags {
+		if !q.includeTags {
 			for _, r := range out.Data {
 				r.Tags = []string{}
 			}
@@ -211,6 +205,6 @@ func (s *Service) QueryViewGroups(ctx context.Context, subject, id string, in Vi
 		if e = json.Unmarshal(v.Query, &spec); e != nil {
 			return Page[QueryGroup]{}, e
 		}
-		return t.QueryGroups(ctx, subject, v.ContainerID, QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit})
+		return t.QueryGroups(ctx, subject, v.ContainerID, QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, Select: in.Select})
 	})
 }

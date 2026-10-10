@@ -93,15 +93,15 @@ func BenchmarkCollectionQuery(b *testing.B) {
 	}{
 		{"id/head", "alice", "head", QuerySpec{}, false},
 		{"id/page2", "alice", "head", QuerySpec{}, true},
-		{"name/head", "alice", "head", QuerySpec{Sort: SortSpec{Field: "$name"}}, false},
-		{"modified-desc/auto", "alice", "auto", QuerySpec{Sort: SortSpec{Field: "$modified_at", Direction: "desc"}}, false},
-		{"n/auto", "alice", "auto", QuerySpec{Sort: SortSpec{Field: "n"}}, false},
-		{"n-desc/page2", "alice", "head", QuerySpec{Sort: SortSpec{Field: "n", Direction: "desc"}}, true},
-		{"n/reader-fragmented", "reader", "auto", QuerySpec{Sort: SortSpec{Field: "n"}}, false},
-		{"status-sort/missing-last", "alice", "head", QuerySpec{Sort: SortSpec{Field: "status", Direction: "desc"}}, true},
-		{"broad-filter/n", "alice", "auto", QuerySpec{Sort: SortSpec{Field: "n"}, Filter: &FilterExpr{Field: "status", Value: []byte(`"open"`)}}, false},
-		{"selective-filter/modified", "alice", "head", QuerySpec{Sort: SortSpec{Field: "$modified_at"}, Filter: &FilterExpr{Field: "n", Value: []byte(`77`)}}, false},
-		{"search/name", "reader", "auto", QuerySpec{Sort: SortSpec{Field: "$name"}, Search: "Item"}, false},
+		{"name/head", "alice", "head", QuerySpec{Sort: []SortSpec{{Field: "$name"}}}, false},
+		{"modified-desc/auto", "alice", "auto", QuerySpec{Sort: []SortSpec{{Field: "$modified_at", Direction: "desc"}}}, false},
+		{"n/auto", "alice", "auto", QuerySpec{Sort: []SortSpec{{Field: "n"}}}, false},
+		{"n-desc/page2", "alice", "head", QuerySpec{Sort: []SortSpec{{Field: "n", Direction: "desc"}}}, true},
+		{"n/reader-fragmented", "reader", "auto", QuerySpec{Sort: []SortSpec{{Field: "n"}}}, false},
+		{"status-sort/missing-last", "alice", "head", QuerySpec{Sort: []SortSpec{{Field: "status", Direction: "desc"}}}, true},
+		{"broad-filter/n", "alice", "auto", QuerySpec{Sort: []SortSpec{{Field: "n"}}, Filter: &FilterExpr{Field: "status", Value: []byte(`"open"`)}}, false},
+		{"selective-filter/modified", "alice", "head", QuerySpec{Sort: []SortSpec{{Field: "$modified_at"}}, Filter: &FilterExpr{Field: "n", Value: []byte(`77`)}}, false},
+		{"search/name", "reader", "auto", QuerySpec{Sort: []SortSpec{{Field: "$name"}}, Search: "Item"}, false},
 	}
 	for _, c := range cases {
 		b.Run(c.name, func(b *testing.B) {

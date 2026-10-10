@@ -22,7 +22,7 @@ func TestSystemMetadataUsesSelectedRevisionAndIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, surface := range []string{"head", "published"} {
-		out, err := s.Query(testContext, "alice", list.ID, QueryRequest{IncludeTotal: true, Surface: surface, Query: QuerySpec{Filter: &FilterExpr{Field: "$modified_by", Op: "eq", Value: json.RawMessage(`"editor"`)}, Sort: SortSpec{Field: "$modified_at"}}})
+		out, err := s.Query(testContext, "alice", list.ID, QueryRequest{IncludeTotal: true, Surface: surface, Query: QuerySpec{Filter: &FilterExpr{Field: "$modified_by", Op: "eq", Value: json.RawMessage(`"editor"`)}, Sort: []SortSpec{{Field: "$modified_at"}}}})
 		want := 0
 		if surface == "head" {
 			want = 1
@@ -50,7 +50,7 @@ func TestSystemMetadataUsesSelectedRevisionAndIndexes(t *testing.T) {
 	if err != nil || len(groups.Data) != 1 || groups.Data[0].Value != "editor" {
 		t.Fatalf("actor groups: %+v %v", groups, err)
 	}
-	_, err = s.CreateView(testContext, "alice", list.ID, ViewInput{Name: "Recently edited", Columns: []string{"$modified_by", "$modified_at"}, Query: QuerySpec{Sort: SortSpec{Field: "$modified_at", Direction: "desc"}}})
+	_, err = s.CreateView(testContext, "alice", list.ID, ViewInput{Name: "Recently edited", Columns: []string{"$modified_by", "$modified_at"}, Query: QuerySpec{Sort: []SortSpec{{Field: "$modified_at", Direction: "desc"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

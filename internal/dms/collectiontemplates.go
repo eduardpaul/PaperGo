@@ -35,7 +35,7 @@ func builtInCollectionTemplates() map[string]CollectionTemplate {
 			ContentTypes: []TemplateInput{{Key: "contact", Name: "Contact", Fields: []CreateField{
 				{Key: "email", Label: "Email", Type: "email"}, {Key: "phone", Label: "Phone", Type: "text"},
 				{Key: "company", Label: "Company", Type: "text"}, {Key: "job_title", Label: "Job title", Type: "text"}, {Key: "notes", Label: "Notes", Type: "note"},
-			}}}, Views: []ViewInput{{Name: "All contacts", Columns: []string{"$name", "company", "email", "phone"}, Query: QuerySpec{Sort: SortSpec{Field: "$name", Direction: "asc"}}, Layout: "table", IsDefault: true}}},
+			}}}, Views: []ViewInput{{Name: "All contacts", Columns: []string{"$name", "company", "email", "phone"}, Query: QuerySpec{Sort: []SortSpec{{Field: "$name", Direction: "asc"}}}, Layout: "table", IsDefault: true}}},
 	}
 }
 

@@ -58,7 +58,7 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	otherBody := send("POST", "/v1/resources/"+l.ID+"/children", `{"kind":"item","name":"B"}`, "", 201)
 	var other ent.Resource
 	json.Unmarshal(otherBody, &other)
-	query := `{"query":{"filter":{"field":"serial","op":"eq","value":9007199254740993},"sort":{"field":"serial"},"group_by":"serial"},"limit":1}`
+	query := `{"query":{"filter":{"field":"serial","op":"eq","value":9007199254740993},"sort":[{"field":"serial"}],"group_by":"serial"},"limit":1}`
 	first := send("POST", "/v1/resources/"+l.ID+"/query", query, "", 200)
 	if !strings.Contains(string(first), "9007199254740993") || strings.Contains(string(first), `"total"`) {
 		t.Fatal("query contract", string(first))
