@@ -342,16 +342,20 @@ CREATE TRIGGER resource_validate_insert BEFORE INSERT ON resources BEGIN
   ) THEN RAISE(ABORT,'invalid containment') END;
 END;
 CREATE TRIGGER resource_immutable_ownership BEFORE UPDATE OF id,workspace_id,container_id,kind,content_type_id ON resources BEGIN
-  SELECT CASE WHEN new.id IS NOT old.id OR new.workspace_id IS NOT old.workspace_id
-    OR new.container_id IS NOT old.container_id OR new.kind IS NOT old.kind OR new.content_type_id IS NOT old.content_type_id
+  SELECT CASE WHEN new.id IS NOT old.id OR new.kind IS NOT old.kind OR new.content_type_id IS NOT old.content_type_id
+    OR (new.kind<>'item' AND (new.workspace_id IS NOT old.workspace_id OR new.container_id IS NOT old.container_id))
     THEN RAISE(ABORT,'resource ownership is immutable') END;
 END;
--- Folders and items move only within their collection, never below themselves.
-CREATE TRIGGER resource_validate_move BEFORE UPDATE OF parent_id ON resources WHEN new.parent_id IS NOT old.parent_id BEGIN
+-- Items may move to compatible collections. Folder trees remain in their collection.
+CREATE TRIGGER resource_validate_move BEFORE UPDATE OF parent_id,workspace_id,container_id ON resources WHEN new.parent_id IS NOT old.parent_id OR new.workspace_id IS NOT old.workspace_id OR new.container_id IS NOT old.container_id BEGIN
   SELECT CASE WHEN new.kind NOT IN ('folder','item') OR new.deleted_at IS NOT NULL OR NOT EXISTS (
     SELECT 1 FROM resources p WHERE p.id=new.parent_id AND p.workspace_id=new.workspace_id AND p.deleted_at IS NULL
       AND ((p.kind IN ('list','library') AND p.id=new.container_id) OR (p.kind='folder' AND p.container_id=new.container_id))
   ) THEN RAISE(ABORT,'invalid containment') END;
+  SELECT CASE WHEN new.container_id IS NOT old.container_id AND NOT EXISTS (
+    SELECT 1 FROM resources src JOIN resources dst ON dst.id=new.container_id
+    WHERE src.id=old.container_id AND src.kind=dst.kind AND dst.deleted_at IS NULL AND new.kind='item'
+  ) THEN RAISE(ABORT,'cross-collection moves require compatible item collections') END;
   SELECT CASE WHEN EXISTS (WITH RECURSIVE up(id) AS (
     SELECT new.parent_id UNION ALL SELECT r.parent_id FROM resources r JOIN up ON r.id=up.id WHERE r.parent_id IS NOT NULL
   ) SELECT 1 FROM up WHERE id=new.id) THEN RAISE(ABORT,'resource cannot move below itself') END;
@@ -579,7 +583,7 @@ CREATE TRIGGER workflow_retained BEFORE DELETE ON workflows BEGIN SELECT RAISE(A
 CREATE TRIGGER domain_event_immutable BEFORE UPDATE OF id,created_at,type,workspace_id,collection_id,resource_id,actor,data,depth,cause_run_id ON domain_events BEGIN SELECT RAISE(ABORT,'domain events are immutable'); END;
 CREATE TRIGGER workflow_version_immutable BEFORE UPDATE ON workflow_versions BEGIN SELECT RAISE(ABORT,'workflow versions are immutable'); END;
 CREATE TRIGGER workflow_version_retained BEFORE DELETE ON workflow_versions BEGIN SELECT RAISE(ABORT,'workflow versions are retained'); END;
-CREATE TRIGGER workflow_run_immutable BEFORE UPDATE ON workflow_runs BEGIN SELECT RAISE(ABORT,'workflow runs are immutable'); END;
+CREATE TRIGGER workflow_run_immutable BEFORE UPDATE OF id,created_at,workflow_id,workflow_version,item_id,event_id,event_type,depth,actor,retry_of ON workflow_runs BEGIN SELECT RAISE(ABORT,'workflow run identity and inputs are immutable'); END;
 CREATE TRIGGER workflow_run_item_immutable BEFORE UPDATE ON workflow_run_items BEGIN SELECT RAISE(ABORT,'run membership is immutable'); END;
 
 -- Workspace members are canonical root grants: one role per authenticated subject.

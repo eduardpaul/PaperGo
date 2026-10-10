@@ -92,7 +92,7 @@ func (WorkflowRun) Fields() []ent.Field {
 		field.Time("created_at").Default(func() time.Time { return time.Now().UTC() }).Immutable(),
 		field.String("workflow_id").NotEmpty().Immutable().MaxLen(36),
 		field.Int("workflow_version").Positive().Immutable(),
-		field.String("workspace_id").NotEmpty().Immutable().MaxLen(36),
+		field.String("workspace_id").NotEmpty().MaxLen(36),
 		field.String("item_id").Optional().Nillable().Immutable().MaxLen(36),
 		field.String("event_id").NotEmpty().Immutable(),
 		field.String("event_type").NotEmpty().Immutable(),

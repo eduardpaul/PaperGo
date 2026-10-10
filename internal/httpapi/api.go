@@ -65,6 +65,9 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("GET /v1/resources/{id}/permissions", a.permissions)
 	api.HandleFunc("PUT /v1/resources/{id}/permissions", a.setPermissions)
 	api.HandleFunc("GET /v1/items/{id}/relationships", a.relationships)
+	api.HandleFunc("POST /v1/items/{id}/move", foundationMutation(a, 200, true, func(r *http.Request, in dms.MoveItem, version int) (any, error) {
+		return a.DMS.MoveItem(r.Context(), subject(r), r.PathValue("id"), version, in)
+	}))
 	api.HandleFunc("POST /v1/items/{id}/relationships", a.link)
 	api.HandleFunc("DELETE /v1/items/{id}/relationships/{linkID}", a.unlink)
 	api.HandleFunc("POST /v1/items/{id}/publications", a.publish)

@@ -35,6 +35,20 @@ func (_u *ResourceUpdate) Where(ps ...predicate.Resource) *ResourceUpdate {
 	return _u
 }
 
+// SetWorkspaceID sets the "workspace_id" field.
+func (_u *ResourceUpdate) SetWorkspaceID(v string) *ResourceUpdate {
+	_u.mutation.SetWorkspaceID(v)
+	return _u
+}
+
+// SetNillableWorkspaceID sets the "workspace_id" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableWorkspaceID(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetWorkspaceID(*v)
+	}
+	return _u
+}
+
 // SetParentID sets the "parent_id" field.
 func (_u *ResourceUpdate) SetParentID(v string) *ResourceUpdate {
 	_u.mutation.SetParentID(v)
@@ -52,6 +66,26 @@ func (_u *ResourceUpdate) SetNillableParentID(v *string) *ResourceUpdate {
 // ClearParentID clears the value of the "parent_id" field.
 func (_u *ResourceUpdate) ClearParentID() *ResourceUpdate {
 	_u.mutation.ClearParentID()
+	return _u
+}
+
+// SetContainerID sets the "container_id" field.
+func (_u *ResourceUpdate) SetContainerID(v string) *ResourceUpdate {
+	_u.mutation.SetContainerID(v)
+	return _u
+}
+
+// SetNillableContainerID sets the "container_id" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableContainerID(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetContainerID(*v)
+	}
+	return _u
+}
+
+// ClearContainerID clears the value of the "container_id" field.
+func (_u *ResourceUpdate) ClearContainerID() *ResourceUpdate {
+	_u.mutation.ClearContainerID()
 	return _u
 }
 
@@ -441,6 +475,11 @@ func (_u *ResourceUpdate) AddContainedItems(v ...*Resource) *ResourceUpdate {
 	return _u.AddContainedItemIDs(ids...)
 }
 
+// SetContainer sets the "container" edge to the Resource entity.
+func (_u *ResourceUpdate) SetContainer(v *Resource) *ResourceUpdate {
+	return _u.SetContainerID(v.ID)
+}
+
 // AddGrantIDs adds the "grants" edge to the Grant entity by IDs.
 func (_u *ResourceUpdate) AddGrantIDs(ids ...string) *ResourceUpdate {
 	_u.mutation.AddGrantIDs(ids...)
@@ -612,6 +651,12 @@ func (_u *ResourceUpdate) RemoveContainedItems(v ...*Resource) *ResourceUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveContainedItemIDs(ids...)
+}
+
+// ClearContainer clears the "container" edge to the Resource entity.
+func (_u *ResourceUpdate) ClearContainer() *ResourceUpdate {
+	_u.mutation.ClearContainer()
+	return _u
 }
 
 // ClearGrants clears all "grants" edges to the Grant entity.
@@ -817,9 +862,19 @@ func (_u *ResourceUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ResourceUpdate) check() error {
+	if v, ok := _u.mutation.WorkspaceID(); ok {
+		if err := resource.WorkspaceIDValidator(v); err != nil {
+			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "Resource.workspace_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ParentID(); ok {
 		if err := resource.ParentIDValidator(v); err != nil {
 			return &ValidationError{Name: "parent_id", err: fmt.Errorf(`ent: validator failed for field "Resource.parent_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ContainerID(); ok {
+		if err := resource.ContainerIDValidator(v); err != nil {
+			return &ValidationError{Name: "container_id", err: fmt.Errorf(`ent: validator failed for field "Resource.container_id": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Name(); ok {
@@ -876,6 +931,9 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.WorkspaceID(); ok {
+		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
 	}
 	if _u.mutation.ContentTypeIDCleared() {
 		_spec.ClearField(resource.FieldContentTypeID, field.TypeString)
@@ -1078,6 +1136,35 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Table:   resource.ContainedItemsTable,
 			Columns: []string{resource.ContainedItemsColumn},
 			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ContainerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ContainerTable,
+			Columns: []string{resource.ContainerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ContainerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ContainerTable,
+			Columns: []string{resource.ContainerColumn},
+			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
 			},
@@ -1509,6 +1596,20 @@ type ResourceUpdateOne struct {
 	mutation *ResourceMutation
 }
 
+// SetWorkspaceID sets the "workspace_id" field.
+func (_u *ResourceUpdateOne) SetWorkspaceID(v string) *ResourceUpdateOne {
+	_u.mutation.SetWorkspaceID(v)
+	return _u
+}
+
+// SetNillableWorkspaceID sets the "workspace_id" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableWorkspaceID(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetWorkspaceID(*v)
+	}
+	return _u
+}
+
 // SetParentID sets the "parent_id" field.
 func (_u *ResourceUpdateOne) SetParentID(v string) *ResourceUpdateOne {
 	_u.mutation.SetParentID(v)
@@ -1526,6 +1627,26 @@ func (_u *ResourceUpdateOne) SetNillableParentID(v *string) *ResourceUpdateOne {
 // ClearParentID clears the value of the "parent_id" field.
 func (_u *ResourceUpdateOne) ClearParentID() *ResourceUpdateOne {
 	_u.mutation.ClearParentID()
+	return _u
+}
+
+// SetContainerID sets the "container_id" field.
+func (_u *ResourceUpdateOne) SetContainerID(v string) *ResourceUpdateOne {
+	_u.mutation.SetContainerID(v)
+	return _u
+}
+
+// SetNillableContainerID sets the "container_id" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableContainerID(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetContainerID(*v)
+	}
+	return _u
+}
+
+// ClearContainerID clears the value of the "container_id" field.
+func (_u *ResourceUpdateOne) ClearContainerID() *ResourceUpdateOne {
+	_u.mutation.ClearContainerID()
 	return _u
 }
 
@@ -1915,6 +2036,11 @@ func (_u *ResourceUpdateOne) AddContainedItems(v ...*Resource) *ResourceUpdateOn
 	return _u.AddContainedItemIDs(ids...)
 }
 
+// SetContainer sets the "container" edge to the Resource entity.
+func (_u *ResourceUpdateOne) SetContainer(v *Resource) *ResourceUpdateOne {
+	return _u.SetContainerID(v.ID)
+}
+
 // AddGrantIDs adds the "grants" edge to the Grant entity by IDs.
 func (_u *ResourceUpdateOne) AddGrantIDs(ids ...string) *ResourceUpdateOne {
 	_u.mutation.AddGrantIDs(ids...)
@@ -2086,6 +2212,12 @@ func (_u *ResourceUpdateOne) RemoveContainedItems(v ...*Resource) *ResourceUpdat
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveContainedItemIDs(ids...)
+}
+
+// ClearContainer clears the "container" edge to the Resource entity.
+func (_u *ResourceUpdateOne) ClearContainer() *ResourceUpdateOne {
+	_u.mutation.ClearContainer()
+	return _u
 }
 
 // ClearGrants clears all "grants" edges to the Grant entity.
@@ -2304,9 +2436,19 @@ func (_u *ResourceUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ResourceUpdateOne) check() error {
+	if v, ok := _u.mutation.WorkspaceID(); ok {
+		if err := resource.WorkspaceIDValidator(v); err != nil {
+			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "Resource.workspace_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ParentID(); ok {
 		if err := resource.ParentIDValidator(v); err != nil {
 			return &ValidationError{Name: "parent_id", err: fmt.Errorf(`ent: validator failed for field "Resource.parent_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ContainerID(); ok {
+		if err := resource.ContainerIDValidator(v); err != nil {
+			return &ValidationError{Name: "container_id", err: fmt.Errorf(`ent: validator failed for field "Resource.container_id": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Name(); ok {
@@ -2380,6 +2522,9 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.WorkspaceID(); ok {
+		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
 	}
 	if _u.mutation.ContentTypeIDCleared() {
 		_spec.ClearField(resource.FieldContentTypeID, field.TypeString)
@@ -2582,6 +2727,35 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 			Table:   resource.ContainedItemsTable,
 			Columns: []string{resource.ContainedItemsColumn},
 			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ContainerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ContainerTable,
+			Columns: []string{resource.ContainerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ContainerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ContainerTable,
+			Columns: []string{resource.ContainerColumn},
+			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
 			},

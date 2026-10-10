@@ -27,6 +27,20 @@ func (_u *WorkflowRunUpdate) Where(ps ...predicate.WorkflowRun) *WorkflowRunUpda
 	return _u
 }
 
+// SetWorkspaceID sets the "workspace_id" field.
+func (_u *WorkflowRunUpdate) SetWorkspaceID(v string) *WorkflowRunUpdate {
+	_u.mutation.SetWorkspaceID(v)
+	return _u
+}
+
+// SetNillableWorkspaceID sets the "workspace_id" field if the given value is not nil.
+func (_u *WorkflowRunUpdate) SetNillableWorkspaceID(v *string) *WorkflowRunUpdate {
+	if v != nil {
+		_u.SetWorkspaceID(*v)
+	}
+	return _u
+}
+
 // Mutation returns the WorkflowRunMutation object of the builder.
 func (_u *WorkflowRunUpdate) Mutation() *WorkflowRunMutation {
 	return _u.mutation
@@ -59,7 +73,20 @@ func (_u *WorkflowRunUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *WorkflowRunUpdate) check() error {
+	if v, ok := _u.mutation.WorkspaceID(); ok {
+		if err := workflowrun.WorkspaceIDValidator(v); err != nil {
+			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowRun.workspace_id": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *WorkflowRunUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(workflowrun.Table, workflowrun.Columns, sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeString))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -67,6 +94,9 @@ func (_u *WorkflowRunUpdate) sqlSave(ctx context.Context) (_node int, err error)
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.WorkspaceID(); ok {
+		_spec.SetField(workflowrun.FieldWorkspaceID, field.TypeString, value)
 	}
 	if _u.mutation.ItemIDCleared() {
 		_spec.ClearField(workflowrun.FieldItemID, field.TypeString)
@@ -92,6 +122,20 @@ type WorkflowRunUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *WorkflowRunMutation
+}
+
+// SetWorkspaceID sets the "workspace_id" field.
+func (_u *WorkflowRunUpdateOne) SetWorkspaceID(v string) *WorkflowRunUpdateOne {
+	_u.mutation.SetWorkspaceID(v)
+	return _u
+}
+
+// SetNillableWorkspaceID sets the "workspace_id" field if the given value is not nil.
+func (_u *WorkflowRunUpdateOne) SetNillableWorkspaceID(v *string) *WorkflowRunUpdateOne {
+	if v != nil {
+		_u.SetWorkspaceID(*v)
+	}
+	return _u
 }
 
 // Mutation returns the WorkflowRunMutation object of the builder.
@@ -139,7 +183,20 @@ func (_u *WorkflowRunUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *WorkflowRunUpdateOne) check() error {
+	if v, ok := _u.mutation.WorkspaceID(); ok {
+		if err := workflowrun.WorkspaceIDValidator(v); err != nil {
+			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowRun.workspace_id": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *WorkflowRunUpdateOne) sqlSave(ctx context.Context) (_node *WorkflowRun, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(workflowrun.Table, workflowrun.Columns, sqlgraph.NewFieldSpec(workflowrun.FieldID, field.TypeString))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -164,6 +221,9 @@ func (_u *WorkflowRunUpdateOne) sqlSave(ctx context.Context) (_node *WorkflowRun
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.WorkspaceID(); ok {
+		_spec.SetField(workflowrun.FieldWorkspaceID, field.TypeString, value)
 	}
 	if _u.mutation.ItemIDCleared() {
 		_spec.ClearField(workflowrun.FieldItemID, field.TypeString)

@@ -12254,6 +12254,63 @@
           }
         }
       }
+    },
+    "/v1/items/{id}/move": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "moveItem",
+        "summary": "Move an item across compatible collections or workspaces",
+        "description": "Requires list.write, source write access, destination collection read access and destination parent write access. If-Match validates the current item version. Cross-collection moves support content items only, require matching collection kinds and an attached matching content type, and revalidate all current values and references. Identity, blobs, history and relationships survive. Source item grants are removed and the item inherits destination permissions. Search indexes and business keys move atomically; name/unique-value collisions roll back the move. Explicit publications retain frozen snapshots; automatic publishing exposes the head. Historical revisions retain their original schema/container provenance. Workflow run location metadata follows the item. Same-collection moves retain exclusive permissions.",
+        "x-module-scopes": [
+          "list.read",
+          "list.write"
+        ],
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveItem"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moved resource and current ETag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -16960,6 +17017,23 @@
           },
           "next_cursor": {
             "type": "string"
+          }
+        }
+      },
+      "MoveItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "collection_id"
+        ],
+        "properties": {
+          "collection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parent_id": {
+            "type": "string",
+            "description": "Destination folder ID; empty or omitted selects the collection root."
           }
         }
       }

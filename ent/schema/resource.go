@@ -15,10 +15,10 @@ type Resource struct{ ent.Schema }
 func (Resource) Mixin() []ent.Mixin { return []ent.Mixin{Identity{}} }
 func (Resource) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("workspace_id").NotEmpty().Immutable().MaxLen(36),
+		field.String("workspace_id").NotEmpty().MaxLen(36),
 		// Folders and items can move within their collection; triggers keep containment valid.
 		field.String("parent_id").Optional().Nillable().MaxLen(36),
-		field.String("container_id").Optional().Nillable().Immutable().MaxLen(36),
+		field.String("container_id").Optional().Nillable().MaxLen(36),
 		field.String("content_type_id").Optional().Nillable().Immutable().MaxLen(36),
 		field.Enum("kind").Values("workspace", "list", "library", "folder", "item").Immutable(),
 		field.String("name").NotEmpty().MaxRuneLen(255),
@@ -59,7 +59,7 @@ func (Resource) Edges() []ent.Edge {
 		edge.To("children", Resource.Type),
 		edge.From("parent", Resource.Type).Ref("children").Field("parent_id").Unique(),
 		edge.To("contained_items", Resource.Type),
-		edge.From("container", Resource.Type).Ref("contained_items").Field("container_id").Unique().Immutable(),
+		edge.From("container", Resource.Type).Ref("contained_items").Field("container_id").Unique(),
 		edge.To("grants", Grant.Type),
 		edge.To("outgoing", Relationship.Type),
 		edge.To("incoming", Relationship.Type),
