@@ -212,7 +212,7 @@ Management requires workspace manage; reads require workspace read. PUT, move, m
 
 A relationship type has key, label, inverse_label, explicit directed flag, optional max_incoming/max_outgoing (1..1000), attribute definitions, and version. Attributes use unindexed scalar field definitions, including defaults and validation. Reference/multiple attributes are rejected. An empty attribute schema permits no custom keys.
 
-Directed=false creates symmetric links: endpoints are stored in canonical order, reverse duplicates are rejected, and incoming/outgoing queries include either endpoint. Symmetric types cannot have directional cardinality or inverse labels.
+Directed=false creates symmetric links: endpoints are stored in canonical order, reverse retries return the existing edge, and incoming/outgoing queries include either endpoint. Symmetric types cannot have directional cardinality or inverse labels.
 
 POST an item's existing relationships endpoint with:
 
@@ -222,7 +222,7 @@ POST an item's existing relationships endpoint with:
 
 The type supplies the stable relationship name. Typed attributes are validated and normalized; cardinality allocation is transactional. Keys and direction are immutable. Attribute schemas cannot change while edges use a type; label changes are allowed. Lowering cardinality cannot invalidate existing edges.
 
-Every relationship requires a type. Links stay within one workspace, with source write and target read on creation. For symmetric edges, either endpoint can act as the authorized source when editing or removing the edge. Query visibility still requires both endpoints to have authorized visible content.
+Every relationship requires a type. Links stay within one workspace. Creating, editing or removing an edge requires write permission on both endpoints. Either endpoint may edit or remove directed and symmetric edges. Repeating creation returns the existing edge without changing its attributes, version or audit history; the retry succeeds even when a cardinality limit is full. Query visibility still requires both endpoints to have authorized visible content.
 
 Creation returns an edge ETag. PATCH and DELETE require the edge If-Match. PATCH merges supplied metadata keys; omitted keys remain, and null removes a key. The resulting metadata still satisfies the relationship type. Edge versions are independent of item lock versions. Edges remain live and are not frozen by item publication.
 

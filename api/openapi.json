@@ -961,7 +961,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering."
       }
     },
     "/v1/items/{id}/relationships/{linkID}": {
@@ -1009,7 +1010,8 @@
             },
             "description": "Current entity ETag. Template adoption uses the collection ETag and also requires template_version."
           }
-        ]
+        ],
+        "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match."
       },
       "patch": {
         "summary": "Update Relationship",
@@ -1171,7 +1173,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key."
       }
     },
     "/v1/items/{id}/publications": {

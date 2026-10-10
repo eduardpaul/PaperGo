@@ -157,8 +157,8 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	if err != nil || len(incoming.Data) != 1 || incoming.Data[0].ID != link.ID {
 		t.Fatalf("incoming relationship: %+v %v", incoming, err)
 	}
-	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID}); !errors.Is(err, ErrConflict) {
-		t.Fatalf("duplicate relationship accepted: %v", err)
+	if again, e := s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID}); e != nil || again.ID != link.ID || again.Version != link.Version {
+		t.Fatalf("retry did not return the same relationship: %v %v", again, e)
 	}
 	err = setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"})
 	if err != nil {

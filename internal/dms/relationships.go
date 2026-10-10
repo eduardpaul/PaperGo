@@ -38,7 +38,7 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 		if e != nil {
 			return e
 		}
-		target, e := t.Get(ctx, subject, in.TargetID)
+		target, e := t.authorize(ctx, subject, in.TargetID, "write")
 		if e != nil {
 			return e
 		}
@@ -58,12 +58,20 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 		if typ.WorkspaceID != source.WorkspaceID {
 			return invalid("relationship type belongs to another workspace")
 		}
-		if e = normalizeMetadata(typ.Attributes, in.Metadata, nil); e != nil {
-			return e
-		}
 		sourceKey, targetKey := sourceID, in.TargetID
 		if !typ.Directed && sourceKey > targetKey {
 			sourceKey, targetKey = targetKey, sourceKey
+		}
+		existing, e := t.Client.Relationship.Query().Where(relationship.TypeIDEQ(typ.ID), relationship.SourceIDEQ(sourceKey), relationship.TargetIDEQ(targetKey)).Only(ctx)
+		if e == nil {
+			out = existing
+			return nil
+		}
+		if !ent.IsNotFound(e) {
+			return e
+		}
+		if e = normalizeMetadata(typ.Attributes, in.Metadata, nil); e != nil {
+			return e
 		}
 		for i, max := range []*int{typ.MaxOutgoing, typ.MaxIncoming} {
 			if max == nil {
@@ -131,8 +139,7 @@ func (s *Service) Relationships(ctx context.Context, subject, itemID, direction,
 	return entityPage(rows, limit, func(v *ent.Relationship) string { return v.ID }), err
 }
 
-// itemLink loads a relationship the item participates in: as source, or as
-// either endpoint of an undirected link.
+// itemLink loads a relationship the item participates in at either endpoint.
 func (s *Service) itemLink(ctx context.Context, itemID, linkID string) (*ent.Relationship, error) {
 	link, err := s.Client.Relationship.Get(ctx, linkID)
 	if ent.IsNotFound(err) {
@@ -141,7 +148,7 @@ func (s *Service) itemLink(ctx context.Context, itemID, linkID string) (*ent.Rel
 	if err != nil {
 		return nil, err
 	}
-	if link.SourceID != itemID && (link.Directed || link.TargetID != itemID) {
+	if link.SourceID != itemID && link.TargetID != itemID {
 		return nil, ErrNotFound
 	}
 	return link, nil

@@ -14,6 +14,11 @@ func (s *Service) UnlinkVersion(ctx context.Context, subject, itemID, linkID str
 		if e != nil {
 			return e
 		}
+		for _, id := range []string{link.SourceID, link.TargetID} {
+			if _, e = t.authorize(ctx, subject, id, "write"); e != nil {
+				return e
+			}
+		}
 		if link.Version != version {
 			return ErrConflict
 		}

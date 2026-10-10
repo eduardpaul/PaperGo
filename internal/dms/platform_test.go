@@ -405,8 +405,8 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 	if edge.Directed || edge.SourceID > edge.TargetID {
 		t.Fatal("noncanonical symmetric edge")
 	}
-	if _, e = s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: sym.ID, TargetID: b.ID}); !errors.Is(e, ErrConflict) {
-		t.Fatal("symmetric duplicate", e)
+	if again, e := s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: sym.ID, TargetID: b.ID}); e != nil || again.ID != edge.ID {
+		t.Fatal("symmetric retry", again, e)
 	}
 	for _, id := range []string{a.ID, b.ID} {
 		for _, direction := range []string{"incoming", "outgoing"} {

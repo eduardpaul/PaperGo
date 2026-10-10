@@ -195,13 +195,13 @@ func (s *Service) UpdateRelationship(ctx context.Context, subject, itemID, linkI
 		if e != nil {
 			return e
 		}
-		if old.Version != version {
-			return ErrConflict
-		}
 		for _, id := range []string{old.SourceID, old.TargetID} {
-			if _, e = t.Get(ctx, subject, id); e != nil {
+			if _, e = t.authorize(ctx, subject, id, "write"); e != nil {
 				return e
 			}
+		}
+		if old.Version != version {
+			return ErrConflict
 		}
 		values := patchValues(old.Metadata, in.Metadata)
 		if b, e := json.Marshal(values); e != nil || len(b) > 16*1024 {
