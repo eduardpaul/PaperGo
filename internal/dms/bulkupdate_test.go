@@ -127,7 +127,8 @@ func TestFilteredBulkUpdatePartialFailuresRollbackEveryItemSideEffect(t *testing
 			t.Fatal("failed edit retained audit", audits, e)
 		}
 	}
-	// A failure after revision and audit creation must roll back those too.
+	// A database failure after revision creation stops the operation, rolls back
+	// the current item and retains earlier operations' successful edits.
 	if _, e = s.Client.ExecContext(testContext, `CREATE TRIGGER reject_bulk_audit BEFORE INSERT ON audit_events WHEN new.action='resource.update' BEGIN SELECT RAISE(ABORT,'injected failure'); END`); e != nil {
 		t.Fatal(e)
 	}
@@ -139,15 +140,28 @@ func TestFilteredBulkUpdatePartialFailuresRollbackEveryItemSideEffect(t *testing
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = s.runOperations(testContext); e != nil {
-		t.Fatal(e)
+	if e = s.runOperations(testContext); e == nil {
+		t.Fatal("database failure did not stop the operation")
 	}
 	got = bulkStatus(t, s, op.ID)
-	if got.Failed != 3 || got.Updated != 0 {
+	if got.Status != operation.StatusFailed || got.Failed != 0 || got.Updated != 0 || got.Processed != 0 {
 		t.Fatal(got)
 	}
 	if after, e := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventItemUpdated)).Count(testContext); e != nil || after != before {
 		t.Fatal("failed item emitted events", before, after, e)
+	}
+	for _, r := range items {
+		live := latest(t, s, r.ID)
+		want := 1
+		if live.Values["code"] == "same" {
+			want = 2
+		}
+		if live.Version != want || live.Values["code"] == nil {
+			t.Fatal("database failure retained item changes", live)
+		}
+		if n, e := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(r.ID)).Count(testContext); e != nil || n != want {
+			t.Fatal("database failure retained revisions", n, e)
+		}
 	}
 }
 
@@ -250,5 +264,55 @@ func TestFilteredBulkUpdateFailureCapProgressAndCancellation(t *testing.T) {
 	got = bulkStatus(t, s, op.ID)
 	if got.Matched != 0 || got.Progress != 100 || got.Status != operation.StatusSucceeded {
 		t.Fatal(got)
+	}
+}
+
+func TestFilteredBulkUpdateItemACLsAndNullRemoval(t *testing.T) {
+	s, w, l := fixture(t)
+	if e := s.SetWorkspaceMember(testContext, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "memo", Label: "Memo", Type: "text", Options: model.FieldOptions{DefaultValue: json.RawMessage(`"default"`)}}); e != nil {
+		t.Fatal(e)
+	}
+	items := map[string]*ent.Resource{}
+	for _, name := range []string{"hidden", "draft reader", "revoked", "editable"} {
+		items[name] = create(t, s, l.ID, "item", name, map[string]any{"memo": "keep"})
+	}
+	set := func(name string, grants []Permission) {
+		t.Helper()
+		r := latest(t, s, items[name].ID)
+		if _, e := s.SetPermissions(testContext, "alice", r.ID, r.Version, Permissions{Grants: grants}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	draft := []Permission{{PrincipalType: "user", PrincipalID: "bob", Action: "read_draft"}}
+	set("hidden", []Permission{})
+	set("draft reader", draft)
+	op, e := s.StartBulkUpdate(testContext, "bob", l.ID, FilteredBulkUpdate{Values: map[string]any{"memo": nil}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	bulkStep(t, s)
+	set("revoked", draft)
+	if e = s.runOperations(testContext); e != nil {
+		t.Fatal(e)
+	}
+	got, e := s.Operation(testContext, "bob", op.ID)
+	if e != nil || got.Matched != 3 || got.Updated != 1 || got.Failed != 2 || len(got.Failures) != 2 {
+		t.Fatal(got, e)
+	}
+	for _, failure := range got.Failures {
+		if failure.Reason != "Access denied." || failure.ItemID == items["hidden"].ID {
+			t.Fatal("permission/selection", failure)
+		}
+	}
+	if _, exists := latest(t, s, items["editable"].ID).Values["memo"]; exists {
+		t.Fatal("null did not remove value or reapplied default")
+	}
+	for _, name := range []string{"hidden", "draft reader", "revoked"} {
+		if latest(t, s, items[name].ID).Values["memo"] != "keep" {
+			t.Fatal("inaccessible item edited", name)
+		}
 	}
 }

@@ -200,10 +200,12 @@ Relevant upstream references: [Ent versioned migrations](https://entgo.io/docs/v
 
 ### Filtered bulk edits
 
-POST `/v1/resources/{collectionID}/bulk-update` queues a durable operation. Its `query` uses the same typed `QuerySpec` as collection queries, on readable head content; omit it to select all readable head items. A patch may set `name`, `tags` or `values`. For example:
+POST `/v1/resources/{collectionID}/bulk-update` queues a durable operation with list.read, list.write and collection write access. Its `query` uses the same typed `QuerySpec` as collection queries, on readable head content; omit it to select all readable head items. A patch may set `name`, `tags` or `values`. For example:
 
 ```json
 {"query":{"filter":{"field":"status","value":"todo"}},"values":{"status":"done"}}
 ```
 
-The response is 202 with a `Location` pointing to `/v1/operations/{id}`. Poll that URL for `matched`, `processed`, `updated`, `failed`, `progress` and `failures`. The runner freezes selection when it starts and commits each item independently through normal permissions, validation, history, uniqueness and event handling. Values merge; null removes a field. Selection uses head content and does not publish changes. Successful edits survive other items' failures. `succeeded` means execution finished, even when some items failed; `failed` means the operation stopped. Counts include every failure, with at most 50 reported reasons. Results require the starter and current collection read access. Pending work resumes after restart. `/bulk` provides a separate atomic batch of explicit actions.
+The response is 202 with a `Location` pointing to `/v1/operations/{id}`. Poll that URL for `matched`, `processed`, `updated`, `failed`, `progress` and `failures`. The runner freezes selection when it starts and commits each item independently through normal permissions, validation, history, uniqueness and event handling. Values merge; null removes a field. Selection uses head content and does not publish changes. Successful edits survive other items' failures. `succeeded` means execution finished, even when some items failed; `failed` means the operation stopped because collection access, schema or infrastructure failed; earlier successful edits remain committed. Counts include every failure, with at most 50 reported reasons. Results require the starter and current collection read access. Pending work resumes after restart. `/bulk` provides a separate atomic batch of explicit actions.
+
+Lookup fields may target any live collection in the organization, across workspace boundaries. Explicit assignments and defaults validate that every target is a live item of that collection, without requiring target read access or publication. Repeating a stored ID explicitly revalidates it; omitted lookup values survive unrelated edits. A lookup reference does not grant access to the target content.

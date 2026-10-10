@@ -12056,8 +12056,9 @@
         ],
         "operationId": "startFilteredBulkUpdate",
         "summary": "Bulk edit matching items with durable progress",
-        "description": "Starts a durable filtered edit of current head content. Requires list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items, including nested folders' items. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/tags can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access/schema failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.",
+        "description": "Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items, including nested folders' items. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/tags can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.",
         "x-required-scopes": [
+          "list.read",
           "list.write"
         ],
         "parameters": [
@@ -13180,7 +13181,7 @@
           },
           "lookup_container_id": {
             "type": "string",
-            "description": "Existing live organization collection. May be in any workspace. Lookup values require a live non-folder item in this collection; validation does not require target read permission or grant access to target content."
+            "description": "Existing live organization collection. May be in any workspace. Explicit lookup assignments and defaults require live non-folder items in this collection, including IDs already stored on the item. Omitted references are retained on unrelated edits. Validation does not require target read permission or grant access to target content."
           },
           "term_set_id": {
             "type": "string"

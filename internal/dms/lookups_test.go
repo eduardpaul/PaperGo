@@ -77,6 +77,14 @@ func TestCrossWorkspaceLookupDefaultsSharingAndTargetValidation(t *testing.T) {
 	if _, e = s.Update(testContext, "alice", r.ID, r.Version, UpdateResource{Name: &name}); e != nil {
 		t.Fatal("unchanged reference invalidated", e)
 	}
+	assigned := map[string]any{"contact": contact.ID}
+	current := latest(t, s, r.ID)
+	if _, e = s.Update(testContext, "alice", r.ID, current.Version, UpdateResource{Values: &assigned}); e == nil {
+		t.Fatal("explicit deleted reference was retained")
+	}
+	if latest(t, s, r.ID).Version != current.Version {
+		t.Fatal("failed lookup assignment consumed a version")
+	}
 	if e = s.Delete(testContext, "bob", target.ID, latestForActor(t, s, "bob", target.ID).Version, DeleteOptions{}); e != nil {
 		t.Fatal(e)
 	}
@@ -84,6 +92,50 @@ func TestCrossWorkspaceLookupDefaultsSharingAndTargetValidation(t *testing.T) {
 		if _, e = s.CreateCatalogField(testContext, "alice", CreateField{Key: "invalid", Label: "Invalid", Type: "lookup", Options: model.FieldOptions{LookupContainerID: id}}); e == nil {
 			t.Fatal("accepted invalid lookup collection", id)
 		}
+	}
+}
+
+func TestCrossWorkspaceLookupExplicitMultipleAssignmentRevalidatesEveryTarget(t *testing.T) {
+	s, _, source := fixture(t)
+	w, e := s.Create(testContext, "bob", "", CreateResource{Kind: "workspace", Name: "Catalog"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	c, e := s.Create(testContext, "bob", w.ID, CreateResource{Kind: "library", Name: "Contacts", PublishingEnabled: true})
+	if e != nil {
+		t.Fatal(e)
+	}
+	a, e := s.Create(testContext, "bob", c.ID, CreateResource{Kind: "item", Name: "A"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	b, e := s.Create(testContext, "bob", c.ID, CreateResource{Kind: "item", Name: "B"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.CreateField(testContext, "alice", source.ID, CreateField{Key: "contacts", Label: "Contacts", Type: "lookup", Options: model.FieldOptions{LookupContainerID: c.ID, Multiple: true}}); e != nil {
+		t.Fatal(e)
+	}
+	r := create(t, s, source.ID, "item", "References", map[string]any{"contacts": []any{a.ID, b.ID}})
+	assigned := map[string]any{"contacts": []any{a.ID, b.ID}}
+	r, e = s.Update(testContext, "alice", r.ID, r.Version, UpdateResource{Values: &assigned})
+	if e != nil {
+		t.Fatal("live repeated assignment", e)
+	}
+	if e = s.Delete(testContext, "bob", a.ID, a.Version, DeleteOptions{}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Update(testContext, "alice", r.ID, r.Version, UpdateResource{Values: &assigned}); e == nil {
+		t.Fatal("accepted array containing deleted retained target")
+	}
+	name := "Omitted references"
+	r, e = s.Update(testContext, "alice", r.ID, r.Version, UpdateResource{Name: &name})
+	if e != nil {
+		t.Fatal(e)
+	}
+	assigned = map[string]any{"contacts": []any{b.ID}}
+	if _, e = s.Update(testContext, "alice", r.ID, r.Version, UpdateResource{Values: &assigned}); e != nil {
+		t.Fatal("cannot remove dead reference", e)
 	}
 }
 

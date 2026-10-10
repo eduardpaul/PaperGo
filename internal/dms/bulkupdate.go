@@ -116,6 +116,11 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *ent.Operation) error {
 		return ctx.Err()
 	}
 	if e != nil {
+		var validation *ValidationError
+		if !errors.Is(e, ErrForbidden) && !errors.Is(e, ErrNotFound) && !errors.Is(e, ErrConflict) && !ent.IsConstraintError(e) && !errors.As(e, &validation) {
+			// Infrastructure failures stop the operation and roll back this item.
+			return e
+		}
 		if _, rollback := s.tx.ExecContext(ctx, "ROLLBACK TO bulk_item"); rollback != nil {
 			return errors.Join(e, rollback)
 		}

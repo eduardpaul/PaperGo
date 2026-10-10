@@ -99,8 +99,8 @@ func (s *Service) runOperations(ctx context.Context) error {
 	}
 }
 
-// operationStep advances the oldest pending operation by one batch. A batch
-// error other than cancellation fails the operation and its field.
+// operationStep advances the oldest pending operation by one index batch or
+// bulk item. An operation error fails it; item errors are bulk results.
 func (s *Service) operationStep(ctx context.Context) (bool, error) {
 	var op *ent.Operation
 	err := s.write(ctx, func(t *Service) error {
@@ -183,7 +183,7 @@ func (s *Service) fieldIndexBatch(ctx context.Context, op *ent.Operation) error 
 	return s.Client.FieldDefinition.UpdateOne(d).SetIndexStatus(fielddefinition.IndexStatusReady).Exec(ctx)
 }
 
-// Operations lists a collection's operations.
+// Operations lists index maintenance and the caller's own bulk operations.
 func (s *Service) Operations(ctx context.Context, subject, containerID, after string, limit int) (Page[*ent.Operation], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.Operation], error) {
 		if _, e := t.authorize(ctx, subject, containerID, "read"); e != nil {
@@ -196,7 +196,7 @@ func (s *Service) Operations(ctx context.Context, subject, containerID, after st
 	})
 }
 
-// Operation returns one operation of a collection the caller can read.
+// Operation requires collection read access; bulk results also require ownership.
 func (s *Service) Operation(ctx context.Context, subject, id string) (*ent.Operation, error) {
 	return read(ctx, s, func(t *Service) (*ent.Operation, error) {
 		op, e := t.Client.Operation.Get(ctx, id)
