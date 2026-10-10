@@ -69,6 +69,8 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("GET /v1/items/{id}/publications", a.publications)
 	api.HandleFunc("POST /v1/items/{id}/unpublish", a.unpublish)
 	api.HandleFunc("GET /v1/items/{id}/revisions", a.revisions)
+	api.HandleFunc("GET /v1/items/{id}/revisions/{number}", a.revision)
+	api.HandleFunc("POST /v1/items/{id}/revisions/{number}/restore", a.restoreRevision)
 	api.HandleFunc("GET /v1/items/{id}/schema", a.itemSchema)
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)

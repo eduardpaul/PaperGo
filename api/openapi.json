@@ -10604,6 +10604,97 @@
           }
         }
       }
+    },
+    "/v1/items/{id}/revisions/{number}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "number",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      ],
+      "get": {
+        "summary": "Read one numbered revision and its original schema (read_draft required)",
+        "responses": {
+          "200": {
+            "description": "Revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemRevision"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/revisions/{number}/restore": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "number",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      ],
+      "post": {
+        "summary": "Restore historical metadata as a new revision",
+        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores name, tags and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged.",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated item with a new ETag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11470,6 +11561,17 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "is_current": {
+            "type": "boolean",
+            "description": "This is the current head revision."
+          },
+          "changed_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sorted fields changed from the preceding revision. $name and $tags identify system metadata. File blob changes are not included."
           }
         },
         "type": "object",

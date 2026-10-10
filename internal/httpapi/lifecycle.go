@@ -19,7 +19,7 @@ func (a *API) unpublish(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, out)
 }
 func (a *API) revisions(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Revisions(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "after_revision"), queryInt(r, "limit"))
+	out, err := a.DMS.RevisionHistory(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "after_revision"), queryInt(r, "limit"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
