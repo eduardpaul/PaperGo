@@ -81,14 +81,6 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 		}
 	}
 
-	workspaceID := ""
-	if d.Type == fielddefinition.TypeLookup {
-		target, e := s.Client.Resource.Get(ctx, d.Options.LookupContainerID)
-		if e != nil {
-			return nil, e
-		}
-		workspaceID = target.WorkspaceID
-	}
 	var e error
 	if in.Choices != nil && d.Type != fielddefinition.TypeChoice {
 		return nil, invalid("choices belong to choice fields")
@@ -115,11 +107,11 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 	if e = validateFieldDefinition(&candidate); e != nil {
 		return nil, e
 	}
-	if e = s.validateReferenceScopes(ctx, subject, workspaceID, &candidate); e != nil {
+	if e = s.validateReferenceScopes(ctx, subject, &candidate); e != nil {
 		return nil, e
 	}
 	if len(candidate.Options.DefaultValue) > 0 {
-		if e = s.normalizeItemValues(ctx, subject, workspaceID, []*ent.FieldDefinition{&candidate}, map[string]any{}, nil); e != nil {
+		if e = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{&candidate}, map[string]any{}, nil); e != nil {
 			return nil, e
 		}
 	}

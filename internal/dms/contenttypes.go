@@ -219,15 +219,6 @@ func (s *Service) refreshCollections(ctx context.Context, subject string, collec
 				return invalid("attached content types have conflicting field keys: " + d.Key)
 			}
 			seen[d.Key] = d.ID
-			if d.Type == fielddefinition.TypeLookup {
-				target, e := s.Client.Resource.Get(ctx, d.Options.LookupContainerID)
-				if e != nil {
-					return e
-				}
-				if target.WorkspaceID != c.WorkspaceID {
-					return invalid("shared lookup fields must target a collection in each attached workspace")
-				}
-			}
 		}
 		if len(defs) > 200 {
 			return invalid("at most 200 fields per collection")

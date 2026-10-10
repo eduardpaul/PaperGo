@@ -49,11 +49,11 @@ func (s *Service) templateDefinition(ctx context.Context, subject, workspaceID s
 		if e := validateFieldDefinition(d); e != nil {
 			return nil, e
 		}
-		if e := s.validateReferenceScopes(ctx, subject, workspaceID, d); e != nil {
+		if e := s.validateReferenceScopes(ctx, subject, d); e != nil {
 			return nil, e
 		}
 		if len(d.Options.DefaultValue) > 0 {
-			if e := s.normalizeItemValues(ctx, subject, workspaceID, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
+			if e := s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
 				return nil, e
 			}
 		}
@@ -183,11 +183,11 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			if e = validateFieldDefinition(d); e != nil {
 				return e
 			}
-			if e = t.validateReferenceScopes(ctx, subject, c.WorkspaceID, d); e != nil {
+			if e = t.validateReferenceScopes(ctx, subject, d); e != nil {
 				return e
 			}
 			if len(d.Options.DefaultValue) > 0 {
-				if e = t.normalizeItemValues(ctx, subject, c.WorkspaceID, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
+				if e = t.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
 					return e
 				}
 			}

@@ -362,14 +362,17 @@ func optionsIdentityEqual(a, b model.FieldOptions) bool {
 	return a.Multiple == b.Multiple && a.LookupContainerID == b.LookupContainerID && a.TermSetID == b.TermSetID
 }
 
-func (s *Service) validateReferenceScopes(ctx context.Context, subject string, workspaceID string, d *ent.FieldDefinition) error {
+func (s *Service) validateReferenceScopes(ctx context.Context, subject string, d *ent.FieldDefinition) error {
 	if d.Type == "lookup" {
-		r, e := s.authorize(ctx, subject, d.Options.LookupContainerID, "read")
+		r, e := s.Client.Resource.Get(ctx, d.Options.LookupContainerID)
+		if ent.IsNotFound(e) {
+			return invalid("unknown lookup collection")
+		}
 		if e != nil {
 			return e
 		}
-		if (r.Kind != "list" && r.Kind != "library") || r.WorkspaceID != workspaceID {
-			return invalid("lookup must target a collection in this workspace")
+		if (r.Kind != "list" && r.Kind != "library") || r.DeletedAt != nil {
+			return invalid("lookup must target a live collection")
 		}
 	}
 	if d.Type == "term" {
@@ -386,7 +389,7 @@ func (s *Service) validateReferenceScopes(ctx context.Context, subject string, w
 	}
 	return nil
 }
-func (s *Service) normalizeItemValues(ctx context.Context, subject, workspaceID string, defs []*ent.FieldDefinition, values, previous map[string]any) error {
+func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs []*ent.FieldDefinition, values, previous map[string]any) error {
 	if e := normalizeRevisionValues(defs, values, previous); e != nil {
 		return e
 	}
@@ -432,11 +435,15 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject, workspaceID 
 			if old[id] {
 				continue
 			}
-			r, e := s.Get(ctx, subject, id)
+			// Reference validation does not grant read access to the target.
+			r, e := s.Client.Resource.Get(ctx, id)
+			if ent.IsNotFound(e) {
+				return invalid("unknown lookup item")
+			}
 			if e != nil {
 				return e
 			}
-			if r.Kind != "item" || r.ContainerID == nil || *r.ContainerID != d.Options.LookupContainerID || r.WorkspaceID != workspaceID {
+			if r.Kind != "item" || r.DeletedAt != nil || r.ContainerID == nil || *r.ContainerID != d.Options.LookupContainerID {
 				return invalid("lookup target belongs to a different collection")
 			}
 		}

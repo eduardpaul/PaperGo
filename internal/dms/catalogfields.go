@@ -35,22 +35,11 @@ func (s *Service) CreateCatalogField(ctx context.Context, subject string, in Cre
 		if e := validateFieldDefinition(d); e != nil {
 			return e
 		}
-		workspaceID := ""
-		if d.Type == fielddefinition.TypeLookup {
-			r, e := t.Client.Resource.Get(ctx, d.Options.LookupContainerID)
-			if ent.IsNotFound(e) {
-				return invalid("unknown lookup collection")
-			}
-			if e != nil {
-				return e
-			}
-			workspaceID = r.WorkspaceID
-		}
-		if e := t.validateReferenceScopes(ctx, subject, workspaceID, d); e != nil {
+		if e := t.validateReferenceScopes(ctx, subject, d); e != nil {
 			return e
 		}
 		if len(d.Options.DefaultValue) > 0 {
-			if e := t.normalizeItemValues(ctx, subject, workspaceID, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
+			if e := t.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
 				return e
 			}
 		}

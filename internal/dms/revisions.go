@@ -169,7 +169,7 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 			blobID = old.BlobID
 		}
 	}
-	if err = s.normalizeItemValues(ctx, actor, r.WorkspaceID, defs, r.Values, previous); err != nil {
+	if err = s.normalizeItemValues(ctx, actor, defs, r.Values, previous); err != nil {
 		return nil, err
 	}
 	if err = evaluateRules(defs, rules, r.Values); err != nil {

@@ -13096,7 +13096,8 @@
             "default": false
           },
           "lookup_container_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Existing live organization collection. May be in any workspace. Lookup values require a live non-folder item in this collection; validation does not require target read permission or grant access to target content."
           },
           "term_set_id": {
             "type": "string"
