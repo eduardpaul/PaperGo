@@ -165,7 +165,7 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 	case "unpublish":
 		_, err = s.unpublish(ctx, subject, op.ID, op.Version)
 	case "delete":
-		err = s.delete(ctx, subject, op.ID, op.Version)
+		err = s.delete(ctx, subject, op.ID, op.Version, false)
 	}
 	return result, err
 }

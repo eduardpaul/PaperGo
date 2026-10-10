@@ -354,7 +354,15 @@ func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := a.DMS.Delete(r.Context(), subject(r), r.PathValue("id"), version); err != nil {
+	var options dms.DeleteOptions
+	if values, present := r.URL.Query()["recursive"]; present {
+		if len(values) != 1 || values[0] != "true" && values[0] != "false" {
+			a.problem(w, r, 400, "invalid_query", "recursive must be true or false")
+			return
+		}
+		options.Recursive = values[0] == "true"
+	}
+	if err := a.DMS.Delete(r.Context(), subject(r), r.PathValue("id"), version, options); err != nil {
 		a.failure(w, r, err)
 		return
 	}

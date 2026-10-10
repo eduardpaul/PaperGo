@@ -43,7 +43,7 @@ func TestSmartFolderPhysicalFoldersAndExactTimes(t *testing.T) {
 	if err != nil || counted(rows.Total) != 1 {
 		t.Fatal(rows, err)
 	}
-	if err = s.Delete(testContext, "alice", folder.ID, folder.Version); err != nil {
+	if err = s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	rows, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})

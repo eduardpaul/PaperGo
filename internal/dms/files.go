@@ -189,7 +189,8 @@ func (s *Service) MakeFolder(ctx context.Context, subject, libraryID string, pat
 	return
 }
 
-// DeleteFile deletes a file or empty folder at path.
+// DeleteFile deletes a file or folder tree at path, requiring write access to
+// every live descendant.
 func (s *Service) DeleteFile(ctx context.Context, subject, libraryID string, path []string, cond FileConditions) error {
 	if len(path) == 0 {
 		return ErrForbidden
@@ -202,7 +203,7 @@ func (s *Service) DeleteFile(ctx context.Context, subject, libraryID string, pat
 		if e = cond.check(f); e != nil {
 			return e
 		}
-		return t.delete(ctx, subject, f.ID, f.Version)
+		return t.delete(ctx, subject, f.ID, f.Version, true)
 	})
 }
 
@@ -235,7 +236,7 @@ func (s *Service) MoveFile(ctx context.Context, subject, libraryID string, from,
 			if !overwrite {
 				return ErrPreconditionFailed
 			}
-			if e = t.delete(ctx, subject, existing.ID, existing.Version); e != nil {
+			if e = t.delete(ctx, subject, existing.ID, existing.Version, true); e != nil {
 				return e
 			}
 		}

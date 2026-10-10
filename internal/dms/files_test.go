@@ -55,7 +55,7 @@ func TestLibraryEntriesHaveUniqueFileNames(t *testing.T) {
 	if _, err := s.Update(testContext, "alice", other.ID, other.Version, UpdateResource{Name: ptr("REPORT.pdf")}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("rename onto a sibling accepted: %v", err)
 	}
-	if err := s.Delete(testContext, "alice", report.ID, report.Version); err != nil {
+	if err := s.Delete(testContext, "alice", report.ID, report.Version, DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Update(testContext, "alice", other.ID, other.Version, UpdateResource{Name: ptr("REPORT.pdf")}); err != nil {
@@ -88,18 +88,22 @@ func TestWebDAVFlagBelongsToManagedLibraries(t *testing.T) {
 	}
 }
 
-func TestDeleteRequiresEmptyFolderAndRetainsHistory(t *testing.T) {
+func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	s, w, _ := fixture(t)
 	lib := davLibrary(t, s, w, false)
+	if _, err := s.CreateField(testContext, "alice", lib.ID, CreateField{Key: "status", Label: "Status", Type: "text", Indexed: true}); err != nil {
+		t.Fatal(err)
+	}
 	folder := create(t, s, lib.ID, "folder", "Projects", nil)
-	inner := create(t, s, folder.ID, "item", "Plan.txt", nil)
+	nested := create(t, s, folder.ID, "folder", "Nested", nil)
+	inner := create(t, s, nested.ID, "item", "Plan.txt", map[string]any{"status": "active"})
 	outside := create(t, s, lib.ID, "item", "Index.txt", nil)
 	typ := referencesType(t, s, w.ID)
 	if _, err := s.Link(testContext, "alice", outside.ID, CreateRelationship{TypeID: typ.ID, TargetID: inner.ID}); err != nil {
 		t.Fatal(err)
 	}
 	readers(t, s, current(t, s, w.ID))
-	// A populated folder cannot be removed, even when its child is unreadable.
+	// Ordinary deletion rejects a populated folder, even with an unreadable child.
 	locked := current(t, s, inner.ID)
 	locked, err := s.SetPermissions(testContext, "alice", inner.ID, locked.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}})
 	if err != nil {
@@ -108,19 +112,26 @@ func TestDeleteRequiresEmptyFolderAndRetainsHistory(t *testing.T) {
 	if _, err := s.Get(testContext, "editor", inner.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("child should be hidden from editor: %v", err)
 	}
-	if err := s.Delete(testContext, "editor", folder.ID, folder.Version); !errors.Is(err, ErrFolderNotEmpty) {
+	if err := s.Delete(testContext, "editor", folder.ID, folder.Version, DeleteOptions{}); !errors.Is(err, ErrFolderNotEmpty) {
 		t.Fatalf("editor deleted populated folder: %v", err)
 	}
-	if err := s.Delete(testContext, "alice", folder.ID, folder.Version+1); !errors.Is(err, ErrConflict) {
+	if err := s.Delete(testContext, "editor", folder.ID, folder.Version, DeleteOptions{Recursive: true}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("editor recursively deleted protected content: %v", err)
+	}
+	if err := s.Delete(testContext, "alice", folder.ID, folder.Version+1, DeleteOptions{}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stale delete accepted: %v", err)
 	}
-	if err := s.Delete(testContext, "editor", lib.ID, current(t, s, lib.ID).Version); !errors.Is(err, ErrForbidden) {
+	if err := s.Delete(testContext, "alice", folder.ID, folder.Version+1, DeleteOptions{Recursive: true}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("stale recursive delete accepted: %v", err)
+	}
+	if err := s.Delete(testContext, "editor", lib.ID, current(t, s, lib.ID).Version, DeleteOptions{}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("editor deleted library", err)
 	}
-	if err := s.Delete(testContext, "alice", folder.ID, folder.Version); !errors.Is(err, ErrFolderNotEmpty) {
+	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{}); !errors.Is(err, ErrFolderNotEmpty) {
 		t.Fatalf("owner deleted populated folder: %v", err)
 	}
-	for id, version := range map[string]int{folder.ID: folder.Version, inner.ID: locked.Version} {
+	versions := map[string]int{folder.ID: folder.Version, nested.ID: nested.Version, inner.ID: locked.Version}
+	for id, version := range versions {
 		raw, err := s.Client.Resource.Get(testContext, id)
 		if err != nil || raw.DeletedAt != nil || raw.Version != version {
 			t.Fatalf("rejected delete changed resource: %+v %v", raw, err)
@@ -132,13 +143,41 @@ func TestDeleteRequiresEmptyFolderAndRetainsHistory(t *testing.T) {
 	if n, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(folder.ID), auditevent.ActionEQ("resource.delete")).Count(testContext); err != nil || n != 0 {
 		t.Fatalf("rejected delete was audited: %d %v", n, err)
 	}
-	if err := s.Delete(testContext, "alice", inner.ID, current(t, s, inner.ID).Version); err != nil {
+	counts := map[string]int{}
+	for _, table := range []string{"field_values", "item_surfaces", "relationships", "audit_events", "domain_events", "item_revisions"} {
+		var n int
+		if err := s.scan(testContext, []any{&n}, "SELECT count(*) FROM "+table); err != nil {
+			t.Fatal(err)
+		}
+		counts[table] = n
+	}
+	// Fail after projections and relationships have been removed to exercise
+	// transaction rollback, including queued deletion events.
+	if _, err := s.Client.ExecContext(testContext, `CREATE TRIGGER reject_folder_tree_delete BEFORE UPDATE OF deleted_at ON resources WHEN NEW.kind='item' AND NEW.deleted_at IS NOT NULL BEGIN SELECT RAISE(ABORT, 'test delete failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Delete(testContext, "alice", folder.ID, folder.Version); err != nil {
+	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{Recursive: true}); err == nil {
+		t.Fatal("injected failure did not reject recursive deletion")
+	}
+	for table, expected := range counts {
+		var n int
+		if err := s.scan(testContext, []any{&n}, "SELECT count(*) FROM "+table); err != nil || n != expected {
+			t.Fatalf("recursive rollback changed %s: %d, want %d: %v", table, n, expected, err)
+		}
+	}
+	for id, version := range versions {
+		raw, err := s.Client.Resource.Get(testContext, id)
+		if err != nil || raw.DeletedAt != nil || raw.Version != version {
+			t.Fatalf("recursive rollback changed resource: %+v %v", raw, err)
+		}
+	}
+	if _, err := s.Client.ExecContext(testContext, `DROP TRIGGER reject_folder_tree_delete`); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{folder.ID, inner.ID} {
+	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{Recursive: true}); err != nil {
+		t.Fatal(err)
+	}
+	for id := range versions {
 		if _, err := s.Get(testContext, "alice", id); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("deleted resource readable: %v", err)
 		}
@@ -161,8 +200,12 @@ func TestDeleteRequiresEmptyFolderAndRetainsHistory(t *testing.T) {
 		t.Fatalf("relationship to deleted item kept: %d %v", n, err)
 	}
 	event, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(folder.ID), auditevent.ActionEQ("resource.delete")).Only(testContext)
-	if err != nil || event.Details["descendants"] != float64(0) && event.Details["descendants"] != 0 {
+	if err != nil || event.Details["descendants"] != float64(2) && event.Details["descendants"] != 2 {
 		t.Fatalf("delete not audited: %+v %v", event, err)
+	}
+	var deletedEvents int
+	if err := s.scan(testContext, []any{&deletedEvents}, `SELECT count(*) FROM domain_events WHERE type=? AND resource_id=?`, EventItemDeleted, inner.ID); err != nil || deletedEvents != 1 {
+		t.Fatalf("recursive item deletion event: %d %v", deletedEvents, err)
 	}
 	// Tombstones are final.
 	if _, err = s.Client.Resource.UpdateOneID(inner.ID).ClearDeletedAt().Save(testContext); err == nil {
@@ -236,10 +279,16 @@ func TestLibraryFilesPutMoveAndDelete(t *testing.T) {
 	if _, err := s.MakeFolder(testContext, "alice", lib.ID, []string{"Docs", "Nested"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteFile(testContext, "alice", lib.ID, []string{"Docs"}, FileConditions{}); !errors.Is(err, ErrFolderNotEmpty) {
-		t.Fatalf("deleted folder with a nested folder: %v", err)
+	if err := s.DeleteFile(testContext, "alice", lib.ID, []string{"Docs"}, FileConditions{IfMatch: `"stale"`}); !errors.Is(err, ErrPreconditionFailed) {
+		t.Fatalf("stale tree delete accepted: %v", err)
 	}
-	if err := s.DeleteFile(testContext, "alice", lib.ID, []string{"Docs", "Nested"}, FileConditions{}); err != nil {
+	if err := s.DeleteFile(testContext, "alice", lib.ID, []string{"Docs"}, FileConditions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LibraryFile(testContext, "alice", lib.ID, []string{"Docs", "Nested"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("nested folder survived deletion: %v", err)
+	}
+	if _, err := s.MakeFolder(testContext, "alice", lib.ID, []string{"Docs"}); err != nil {
 		t.Fatal(err)
 	}
 	f, created, err := s.PutFile(testContext, "alice", lib.ID, []string{"docs", "a.txt"}, PutFile{Blob: content("a.txt")})

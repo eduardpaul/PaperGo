@@ -71,7 +71,7 @@ func TestCollectionDeletionRemovesLiveContentAndRetainsHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Delete(testContext, "bob", collection.ID, latest(t, s, collection.ID).Version); !errors.Is(err, ErrForbidden) {
+	if err := s.Delete(testContext, "bob", collection.ID, latest(t, s, collection.ID).Version, DeleteOptions{}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("member deleted collection", err)
 	}
 	collection, err = s.SetPermissions(testContext, "alice", collection.ID, latest(t, s, collection.ID).Version, Permissions{Grants: []Permission{{"bob", "manage", "allow"}}})
@@ -81,10 +81,10 @@ func TestCollectionDeletionRemovesLiveContentAndRetainsHistory(t *testing.T) {
 	if _, err = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Delete(testContext, "bob", collection.ID, collection.Version-1); !errors.Is(err, ErrConflict) {
+	if err = s.Delete(testContext, "bob", collection.ID, collection.Version-1, DeleteOptions{}); !errors.Is(err, ErrConflict) {
 		t.Fatal("stale delete accepted", err)
 	}
-	if err = s.Delete(testContext, "bob", collection.ID, collection.Version); err != nil {
+	if err = s.Delete(testContext, "bob", collection.ID, collection.Version, DeleteOptions{}); err != nil {
 		t.Fatal("manager could not delete exclusive descendants", err)
 	}
 	for _, id := range []string{collection.ID, folder.ID, a.ID, b.ID} {

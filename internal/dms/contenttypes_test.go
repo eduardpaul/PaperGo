@@ -136,7 +136,7 @@ func TestUniqueKeysReserveBothSurfacesAndRollbackBulk(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := create(t, s, l.ID, "item", "Freed", map[string]any{"code": json.Number("9007199254740993")})
-	if err = s.Delete(testContext, "alice", second.ID, second.Version); err != nil {
+	if err = s.Delete(testContext, "alice", second.ID, second.Version, DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	create(t, s, l.ID, "item", "Reused", map[string]any{"code": json.Number("9007199254740993")})

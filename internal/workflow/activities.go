@@ -716,7 +716,7 @@ func runItemDelete(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	if err = e.t.Delete(e.ctx, e.author, id, r.Version); err != nil {
+	if err = e.t.Delete(e.ctx, e.author, id, r.Version, dms.DeleteOptions{}); err != nil {
 		return outcome{}, err
 	}
 	return outcome{Output: map[string]any{"deleted": true}}, nil

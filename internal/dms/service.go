@@ -590,13 +590,18 @@ func (s *Service) scan(ctx context.Context, dest []any, query string, args ...an
 	return rows.Close()
 }
 
-// Delete turns a workspace, collection, folder or item, with everything below it, into retained
-// tombstones. Their revisions, publications and audit history stay; derived
-// read projections and live relationships go, so they vanish from every read.
-func (s *Service) Delete(ctx context.Context, subject, id string, version int) error {
-	return s.write(ctx, func(t *Service) error { return t.delete(ctx, subject, id, version) })
+type DeleteOptions struct {
+	Recursive bool
 }
-func (s *Service) delete(ctx context.Context, subject, id string, version int) error {
+
+// Delete removes an item or empty folder, or a folder tree when Recursive is
+// explicit. Workspace and collection management deletes their full trees.
+// Revisions, publications and audit history remain in retained tombstones;
+// derived read projections and live relationships are removed.
+func (s *Service) Delete(ctx context.Context, subject, id string, version int, options DeleteOptions) error {
+	return s.write(ctx, func(t *Service) error { return t.delete(ctx, subject, id, version, options.Recursive) })
+}
+func (s *Service) delete(ctx context.Context, subject, id string, version int, recursive bool) error {
 	r, err := s.authorize(ctx, subject, id, "write")
 	if err != nil {
 		return err
@@ -610,7 +615,7 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int) e
 	if r.Version != version {
 		return ErrConflict
 	}
-	if r.Kind == resource.KindFolder {
+	if r.Kind == resource.KindFolder && !recursive {
 		populated, err := s.Client.Resource.Query().Where(resource.ParentIDEQ(id), resource.DeletedAtIsNil()).Exist(ctx)
 		if err != nil {
 			return err
@@ -625,6 +630,7 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int) e
 	if err = s.scan(ctx, []any{&total, &allowed}, `SELECT count(*), coalesce(sum(CASE WHEN `+writable+` THEN 1 ELSE 0 END),0) FROM resources r WHERE r.id IN (`+subtree+`)`, append(args, id)...); err != nil {
 		return err
 	}
+	// Explicit recursion authorizes every descendant before removing any content.
 	if !collection && allowed != total {
 		return ErrForbidden
 	}

@@ -33,7 +33,7 @@ func TestWorkspaceDescriptionsMembershipAndOwnerControl(t *testing.T) {
 	if _, err = s.Update(testContext, "bob", w.ID, w.Version, UpdateResource{Name: &w.Name}); !errors.Is(err, ErrNotFound) {
 		t.Fatal("member renamed workspace", err)
 	}
-	if err = s.Delete(testContext, "carol", w.ID, w.Version); !errors.Is(err, ErrNotFound) {
+	if err = s.Delete(testContext, "carol", w.ID, w.Version, DeleteOptions{}); !errors.Is(err, ErrNotFound) {
 		t.Fatal("visitor deleted workspace", err)
 	}
 	if _, err = s.Create(testContext, "bob", list.ID, CreateResource{Kind: "item", Name: "Contribution"}); err != nil {
@@ -153,10 +153,10 @@ func TestWorkspaceValidationAndDeletionCoversExclusiveDescendants(t *testing.T) 
 	if _, err := s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Delete(testContext, "alice", w.ID, w.Version+1); !errors.Is(err, ErrConflict) {
+	if err := s.Delete(testContext, "alice", w.ID, w.Version+1, DeleteOptions{}); !errors.Is(err, ErrConflict) {
 		t.Fatal("stale deletion accepted", err)
 	}
-	if err := s.Delete(testContext, "alice", w.ID, w.Version); err != nil {
+	if err := s.Delete(testContext, "alice", w.ID, w.Version, DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{w.ID, list.ID, item.ID} {

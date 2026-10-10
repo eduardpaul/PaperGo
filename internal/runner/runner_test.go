@@ -622,7 +622,7 @@ func TestDeletingAMemberCancelsSelectionRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.wait(t, ids[0], func(r Run) bool { return r.Status == "running" })
-	if err = f.dms.Delete(ctx, "alice", b.ID, f.head(t, b.ID).Version); err != nil {
+	if err = f.dms.Delete(ctx, "alice", b.ID, f.head(t, b.ID).Version, dms.DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if run := f.wait(t, ids[0], finished); run.Status != "cancelled" {
