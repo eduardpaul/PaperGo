@@ -376,7 +376,7 @@
         ]
       },
       "patch": {
-        "summary": "Update resource; values replaces the whole custom-value object",
+        "summary": "Update resource metadata and patch custom field values",
         "responses": {
           "200": {
             "description": "Success",
@@ -1675,7 +1675,7 @@
       "delete": {
         "operationId": "deleteField",
         "summary": "Remove field from the active schema (manage required)",
-        "description": "Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicit replacement values reject removed keys.",
+        "description": "Uses the collection ETag. Rejects dependencies in rules and saved views. Removes memberships, query indexes and business key claims; immutable revisions retain their original fields and values. Removed keys cannot be reused. Later edits prune carried values, while explicitly supplied patch keys reject removed keys.",
         "parameters": [
           {
             "name": "If-Match",
@@ -10877,7 +10877,8 @@
           },
           "values": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "description": "Per-field patch: omitted keys retain their values; null removes an optional field. Defaults apply only when creating an item. The resulting item must satisfy its current content type."
           },
           "publishing_enabled": {
             "default": false,
@@ -11610,7 +11611,8 @@
         "properties": {
           "metadata": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "description": "Per-key patch: omitted keys retain their values; null removes a key. The resulting metadata must satisfy the relationship type."
           }
         },
         "required": [
@@ -14158,7 +14160,7 @@
           },
           "is_open": {
             "type": "boolean",
-            "description": "Open sets accept new terms from people with write access."
+            "description": "Open sets accept new terms from people with read access. Curation requires manage access."
           }
         },
         "required": [

@@ -163,12 +163,12 @@ func (s *Service) UpdateRelationshipType(ctx context.Context, subject, id string
 	})
 	return
 }
-func normalizeMetadata(raw json.RawMessage, values map[string]any) error {
+func normalizeMetadata(raw json.RawMessage, values, previous map[string]any) error {
 	defs, e := definitions(raw)
 	if e != nil {
 		return e
 	}
-	if e = normalizeValues(defs, values); e != nil {
+	if e = normalizeRevisionValues(defs, values, previous); e != nil {
 		return e
 	}
 	b, e := json.Marshal(values)
@@ -203,17 +203,18 @@ func (s *Service) UpdateRelationship(ctx context.Context, subject, itemID, linkI
 				return e
 			}
 		}
-		if b, e := json.Marshal(in.Metadata); e != nil || len(b) > 16*1024 {
+		values := patchValues(old.Metadata, in.Metadata)
+		if b, e := json.Marshal(values); e != nil || len(b) > 16*1024 {
 			return invalid("metadata exceeds 16 KiB")
 		}
 		typ, e := t.Client.RelationshipType.Get(ctx, old.TypeID)
 		if e != nil {
 			return e
 		}
-		if e = normalizeMetadata(typ.Attributes, in.Metadata); e != nil {
+		if e = normalizeMetadata(typ.Attributes, values, old.Metadata); e != nil {
 			return e
 		}
-		out, e = t.Client.Relationship.UpdateOne(old).SetMetadata(in.Metadata).AddVersion(1).Save(ctx)
+		out, e = t.Client.Relationship.UpdateOne(old).SetMetadata(values).AddVersion(1).Save(ctx)
 		if e != nil {
 			return e
 		}

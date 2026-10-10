@@ -420,7 +420,27 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 			r.Tags = *in.Tags
 		}
 		if in.Values != nil {
-			r.Values = *in.Values
+			// Prune fields removed from the live schema before applying this patch.
+			c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
+			if err != nil {
+				return nil, err
+			}
+			schema, err := s.Client.SchemaRevision.Get(ctx, *c.SchemaHeadID)
+			if err != nil {
+				return nil, err
+			}
+			defs, _, err := typedDefinitions(schema.Definition, *r.ContentTypeID)
+			if err != nil {
+				return nil, err
+			}
+			known := definitionMap(defs)
+			current := map[string]any{}
+			for key, value := range r.Values {
+				if known[key] != nil {
+					current[key] = value
+				}
+			}
+			r.Values = patchValues(current, *in.Values)
 		}
 		b.SetValues(r.Values)
 	}

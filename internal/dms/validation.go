@@ -126,7 +126,7 @@ func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[s
 		v, exists := values[d.Key]
 		old, existed := previous[d.Key]
 		kept := previous != nil && exists == existed && (!exists || sameJSON(v, old))
-		if !exists && len(d.Options.DefaultValue) > 0 {
+		if !exists && previous == nil && len(d.Options.DefaultValue) > 0 {
 			var e error
 			v, e = decodeValue(d.Options.DefaultValue)
 			if e != nil {

@@ -555,10 +555,6 @@ func runItemUpdate(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	head, err := e.load(id)
-	if err != nil {
-		return outcome{}, err
-	}
 	var u dms.UpdateResource
 	if v, ok := in["name"]; ok {
 		name, err := e.scope.text(v)
@@ -579,18 +575,7 @@ func runItemUpdate(e *env, in map[string]any) (outcome, error) {
 		if err != nil {
 			return outcome{}, err
 		}
-		values := map[string]any{}
-		for k, x := range head.Values {
-			values[k] = x
-		}
-		for k, x := range changes {
-			if x == nil {
-				delete(values, k)
-			} else {
-				values[k] = x
-			}
-		}
-		u.Values = &values
+		u.Values = &changes
 	}
 	if u.Name == nil && u.Tags == nil && u.Values == nil {
 		return outcome{}, errors.New("item.update needs name, tags or values")

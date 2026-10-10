@@ -12,7 +12,7 @@ import (
 
 // Keywords are the terms of a workspace's keywords set plus the terms of
 // other sets that are available as keywords (promoted keywords). People with
-// write access add keywords; managers curate them by promoting keywords into
+// read access add keywords; managers curate them by promoting keywords into
 // managed sets.
 
 const maxKeywordSuggestions = 20
@@ -73,7 +73,7 @@ func (s *Service) AddKeyword(ctx context.Context, subject, workspaceID string, i
 		return out, false, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.workspace(ctx, subject, workspaceID, "write")
+		w, e := t.workspace(ctx, subject, workspaceID, "read")
 		if e != nil {
 			return e
 		}

@@ -157,7 +157,7 @@ type TermSetInput struct {
 	Key         string `json:"key"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	// IsOpen lets people with write access add terms; closed sets change
+	// IsOpen lets people with read access add terms; closed sets change
 	// only with manage access.
 	IsOpen bool `json:"is_open"`
 }
@@ -454,7 +454,7 @@ func (s *Service) insertTerm(ctx context.Context, set *ent.TermSet, parent *ent.
 // termAction is the workspace access needed to add terms to set.
 func termAction(set *ent.TermSet) string {
 	if set.IsOpen {
-		return "write"
+		return "read"
 	}
 	return "manage"
 }

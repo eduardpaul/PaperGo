@@ -106,6 +106,15 @@ func TestTermTreeOpenSetsAndListing(t *testing.T) {
 	if _, err = s.CreateTerm(testContext, "writer", open.ID, TermInput{Name: "Travel"}); err != nil {
 		t.Fatal("writer adds to an open set", err)
 	}
+	if _, err = s.CreateTerm(testContext, "reader", open.ID, TermInput{Name: "Books"}); err != nil {
+		t.Fatal("reader adds to an open set", err)
+	}
+	if _, err = s.CreateTerm(testContext, "reader", closed.ID, TermInput{Name: "France"}); !errors.Is(err, ErrNotFound) {
+		t.Fatal("reader added to a closed set", err)
+	}
+	if _, err = s.CreateTerm(testContext, "reader", open.ID, TermInput{Name: "Curated", AvailableAsKeyword: true}); !errors.Is(err, ErrNotFound) {
+		t.Fatal("reader changed keyword curation", err)
+	}
 	if _, err = s.CreateTerm(testContext, "writer", open.ID, TermInput{Name: "Retired", Deprecated: true}); !errors.Is(err, ErrNotFound) {
 		t.Fatal("writer added a deprecated term", err)
 	}
@@ -245,10 +254,10 @@ func TestKeywords(t *testing.T) {
 	if err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "writer", Role: "member"}, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.AddKeyword(testContext, "reader", w.ID, KeywordInput{Name: "budget"}); !errors.Is(err, ErrNotFound) {
-		t.Fatal("reader added a keyword", err)
+	if _, _, err := s.AddKeyword(testContext, "outsider", w.ID, KeywordInput{Name: "budget"}); !errors.Is(err, ErrNotFound) {
+		t.Fatal("outsider added a keyword", err)
 	}
-	budget, created, err := s.AddKeyword(testContext, "writer", w.ID, KeywordInput{Name: " Budget "})
+	budget, created, err := s.AddKeyword(testContext, "reader", w.ID, KeywordInput{Name: " Budget "})
 	if err != nil || !created || budget.Name != "Budget" {
 		t.Fatal("keyword", budget, created, err)
 	}

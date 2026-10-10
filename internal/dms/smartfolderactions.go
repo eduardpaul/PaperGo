@@ -379,7 +379,7 @@ SELECT id FROM sub WHERE id IN (SELECT value FROM json_each(?)) UNION SELECT m.i
 		if fd.Options.Multiple {
 			values[fd.Key] = slices.DeleteFunc(smartArray(values[fd.Key]), func(v any) bool { id, ok := v.(string); return ok && removed[id] })
 		} else if id, ok := values[fd.Key].(string); ok && removed[id] {
-			delete(values, fd.Key)
+			values[fd.Key] = nil
 		}
 	}
 	return nil
@@ -462,7 +462,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 			if fd.Options.Multiple {
 				values[fd.Key] = slices.DeleteFunc(smartArray(values[fd.Key]), func(x any) bool { return smartEqual(x, v) })
 			} else if smartEqual(values[fd.Key], v) {
-				delete(values, fd.Key)
+				values[fd.Key] = nil
 			}
 		}
 		if e = t.smartRemoveTerms(ctx, d.Terms, values, defs); e != nil {

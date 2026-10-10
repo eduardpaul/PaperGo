@@ -58,7 +58,7 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 		if typ.WorkspaceID != source.WorkspaceID {
 			return invalid("relationship type belongs to another workspace")
 		}
-		if e = normalizeMetadata(typ.Attributes, in.Metadata); e != nil {
+		if e = normalizeMetadata(typ.Attributes, in.Metadata, nil); e != nil {
 			return e
 		}
 		sourceKey, targetKey := sourceID, in.TargetID
