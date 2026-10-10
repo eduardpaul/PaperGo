@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"math"
 	"math/big"
 	"net/mail"
 	"net/url"
@@ -25,7 +24,7 @@ var fieldTypes = map[string]fieldNormalizer{
 	"text": normalizeString, "note": normalizeString, "choice": normalizeChoice,
 	"email": normalizeEmail, "url": normalizeURL, "date": normalizeDate,
 	"datetime": normalizeDateTime, "lookup": normalizeIdentifier, "term": normalizeTermRef, "keywords": normalizeTermRef,
-	"integer": normalizeInteger, "decimal": normalizeDecimal, "number": normalizeNumber, "boolean": normalizeBoolean,
+	"integer": normalizeInteger, "decimal": normalizeDecimal, "number": normalizeNumber, "currency": normalizeNumber, "boolean": normalizeBoolean,
 }
 
 func FieldTypes() []string {
@@ -134,11 +133,7 @@ func normalizeDecimal(d *ent.FieldDefinition, v any) (any, error) {
 	return c, e
 }
 func normalizeNumber(d *ent.FieldDefinition, v any) (any, error) {
-	n, e := number(v)
-	if e != nil || math.IsNaN(n) || math.IsInf(n, 0) {
-		return nil, invalid("expected finite number")
-	}
-	return v, nil
+	return number(v)
 }
 func normalizeBoolean(d *ent.FieldDefinition, v any) (any, error) {
 	x, ok := v.(bool)
@@ -172,24 +167,17 @@ func scalarValue(d *ent.FieldDefinition, v any) (any, error) {
 	return out, nil
 }
 func compareNumeric(d *ent.FieldDefinition, value any, bound string) (int, error) {
-	// Approximate numbers use float comparisons. Expanding arbitrary scientific
-	// exponents into rationals could allocate unbounded memory on schema input.
-	if d.Type == "number" {
+	if d.Type == "number" || d.Type == "currency" {
 		a, e := number(value)
 		if e != nil {
 			return 0, e
 		}
-		b, e := number(json.Number(bound))
-		if e != nil || math.IsInf(b, 0) || math.IsNaN(b) {
+		value = a
+		n, e := number(json.Number(bound))
+		if e != nil {
 			return 0, invalid("invalid numeric bound")
 		}
-		if a < b {
-			return -1, nil
-		}
-		if a > b {
-			return 1, nil
-		}
-		return 0, nil
+		bound = n.String()
 	}
 	a, ok := new(big.Rat).SetString(numericString(value))
 	if !ok {
@@ -288,11 +276,18 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 		return invalid("choices belong to choice fields")
 	}
 	o := d.Options
-	if o.Unique && (!d.Indexed || o.Multiple || typ == "number") {
+	if o.Unique && (!d.Indexed || o.Multiple) {
 		return invalid("unique business keys require an indexed scalar field with an exact type")
 	}
 	if len(o.Description) > 4096 {
 		return invalid("description exceeds 4096 bytes")
+	}
+	if typ == "currency" {
+		if len(o.CurrencyCode) != 3 || strings.IndexFunc(o.CurrencyCode, func(r rune) bool { return r < 'A' || r > 'Z' }) >= 0 {
+			return invalid("currency_code requires three uppercase letters")
+		}
+	} else if o.CurrencyCode != "" {
+		return invalid("currency_code belongs to currency fields")
 	}
 	if o.MaxLength != nil {
 		if *o.MaxLength < 1 || *o.MaxLength > 65536 || !(typ == "text" || typ == "note" || typ == "email" || typ == "url" || typ == "choice") {
@@ -309,7 +304,7 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 		return invalid("keywords fields must be indexed")
 	}
 	if o.Minimum != nil || o.Maximum != nil {
-		if typ != "number" && typ != "integer" && typ != "decimal" {
+		if typ != "number" && typ != "currency" && typ != "integer" && typ != "decimal" {
 			return invalid("numeric bounds require a numeric field")
 		}
 		clone := *d

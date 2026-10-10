@@ -33,16 +33,6 @@ func validateTags(tags []string) error {
 	}
 	return nil
 }
-func number(v any) (float64, error) {
-	switch n := v.(type) {
-	case json.Number:
-		return n.Float64()
-	case float64:
-		return n, nil
-	default:
-		return 0, invalid("expected JSON number")
-	}
-}
 func integer(v any) (int64, error) {
 	n, ok := v.(json.Number)
 	if !ok {

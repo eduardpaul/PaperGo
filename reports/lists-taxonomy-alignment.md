@@ -6,8 +6,8 @@ The two modules do **not** yet cover all the same user stories. A matching story
 
 | Assessment | Stories |
 | --- | ---: |
-| Covered | 28 |
-| Partial | 2 |
+| Covered | 29 |
+| Partial | 1 |
 | Drift | 3 |
 | Drift (accepted) | 1 |
 | Missing | 10 |
@@ -21,6 +21,7 @@ Validation for LST-33, LST-28 and LST-25: `go test -count=1 ./...`, `go vet ./..
 
 | Story | Result | Verification |
 | --- | --- | --- |
+| LST-09 | Currency metadata and System.Decimal numeric domain | Boundary/rounding and overflow cases; exact filters, sorting, grouping and cursors; bounds/defaults/frozen currency codes; uniqueness, Smart Folder navigation and REST validation |
 | LST-25 | Multiple sort keys and ad hoc selection | Exact integers; mixed directions; missing secondary values; stable ties; published/draft selection; cursor binding/types; saved-view overrides and invalid field rejection |
 | LST-28 | Taxonomy predicate identity and label creation | Contributor link creation, shared vocabulary, synonyms/translations, renames, merged IDs, direction mismatch, deprecated/foreign terms, immutable policy ensure and merge limit rollback; REST routes |
 | LST-33 | Complete collection template provisioning | Built-in settings/types/views; cross-workspace shared identity; customized type retention; module registration; default values; atomic rollback; denied and invalid requests; REST creation |
@@ -49,7 +50,7 @@ Validation for LST-33, LST-28 and LST-25: `go test -count=1 ./...`, `go vet ./..
 | LST-06 | Change an existing item's content type or detach a list content type | Missing | Item PATCH contentTypeId; list DELETE contentTypes/{id}. | Resource content_type_id is immutable; no content-type detach/delete route. | Cannot reclassify Invoice into Contract or detach an unused type through equivalent APIs. | [.NET: ItemEndpoints.cs:18][N-ITEM]<br>[.NET: ListEndpoints.cs:41][N-LIST]<br>[Go: resource.go:16][G-RESOURCE]<br>[Go: service.go:359][G-PATCH]<br>[Go: foundation.go:69][G-FOUND] |
 | LST-07 | Model the shared basic field types with validation/defaults | Covered | Text/note/email/URL/date/dateTime/choice/boolean/lookup/managed metadata/keywords normalizers. | Corresponding Go normalizers plus default/required/bounds/multiplicity options. | Core field modeling exists; individual type contracts need the following drift checks. | [.NET: FieldTypes.cs:12][N-FIELDS]<br>[.NET: ContentTypeEndpoints.cs:83][N-CT]<br>[Go: fieldtypes.go:24][G-FIELDS] |
 | LST-08 | Model people as validated field values | Missing | person normalizer checks an active organization's user ID, with multiple values. | No person type in fieldTypes. | A text field cannot reproduce assignee selection and active-user validation. | [.NET: FieldTypes.cs:12][N-FIELDS]<br>[Go: fieldtypes.go:24][G-FIELDS] |
-| LST-09 | Model currency and precise numerical values | Partial | currency validates a three-letter CurrencyCode; number/currency use decimal normalization. | decimal/int64 preserve exact values and scale; no currencyCode/type. | Money amounts can be precise, but currency metadata and the same numerical range are not represented. | [.NET: FieldTypes.cs:12][N-FIELDS]<br>[Go: fieldtypes.go:24][G-FIELDS] |
+| LST-09 | Model currency and precise numerical values | Covered | currency requires three uppercase CurrencyCode letters; number/currency normalize through System.Decimal. | Currency code metadata and exact JSON number/currency values use a 96-bit coefficient and scale 0..28, with nearest/ties-to-even rounding. Bounds, indexed filters, ordering, grouping, cursors and uniqueness remain exact. | Currency metadata survives frozen schemas. Go additionally offers signed integer and fixed-scale decimal field types; canonical JSON removes insignificant trailing zeroes. | [.NET: FieldTypes.cs:12][N-FIELDS]<br>[Go exact numbers](C:/Users/eduapaul/Documents/PaperGo/internal/dms/exactnumber.go)<br>[Currency regressions](C:/Users/eduapaul/Documents/PaperGo/internal/dms/currency_test.go) |
 | LST-10 | Apply the same default string/URL validation limits | Drift | Default text max 255, note 100000, URL 2048; configurable text ceiling 4000/note 1000000; length counts UTF-16 units; HTTP(S) URL parser. | No default max; configured max must be 1..65536, counted as Unicode runes; URL rejects credentials. | Identical constraints can accept/reject different lengths, especially non-BMP characters. Some .NET limits cannot be configured identically in Go. | [.NET: FieldTypes.cs:12][N-FIELDS]<br>[Go: fieldtypes.go:24][G-FIELDS] |
 | LST-11 | Create/update/read validated items with optimistic concurrency | Covered | Item CRUD uses writer validation and If-Match. | Item resource CRUD validates values and requires versions/If-Match. | Concurrent edits are guarded in both; error status codes differ (see API contracts). | [.NET: ItemEndpoints.cs:18][N-ITEM]<br>[.NET: ItemWriter.cs:31][N-WRITER]<br>[Go: service.go:129][G-SERVICE]<br>[Go: api.go:43][G-ROUTES] |
 | LST-12 | Retry item creation safely with a caller-selected identity | Missing | CreateItemRequest accepts Id; a repeated authorized create returns the original item. | CreateResource has no caller ID/idempotency key. | A client retry after a lost response can create a second item. | [.NET: ItemEndpoints.cs:18][N-ITEM]<br>[Go: service.go:129][G-SERVICE] |

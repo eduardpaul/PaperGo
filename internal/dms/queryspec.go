@@ -115,8 +115,8 @@ func indexColumn(d *ent.FieldDefinition) (string, string) {
 	switch string(d.Type) {
 	case "integer", "decimal":
 		return "value_integer", "integer"
-	case "number":
-		return "value_number", "number"
+	case "number", "currency":
+		return "value_text", "exact"
 	case "boolean":
 		return "value_boolean", "boolean"
 	default:
@@ -143,8 +143,8 @@ func queryValue(d *ent.FieldDefinition, v any) (any, error) {
 	case "decimal":
 		_, n, e := decimal(x, d.Scale)
 		return n, e
-	case "number":
-		return number(x)
+	case "number", "currency":
+		return numberKey(x)
 	case "datetime":
 		t, e := time.Parse(time.RFC3339Nano, x.(string))
 		if e != nil {
@@ -515,8 +515,13 @@ func cursorDecodeValues(q compiledQuery, after string) (queryCursor, []any, erro
 			switch kind {
 			case "integer", "boolean":
 				v, e = integer(v)
-			case "number":
-				v, e = number(v)
+			case "exact":
+				key, ok := v.(string)
+				if !ok {
+					e = invalid("expected exact numeric cursor")
+				} else {
+					_, e = numberFromKey(key)
+				}
 			default:
 				if _, ok := v.(string); !ok {
 					e = invalid("expected text cursor")
@@ -805,6 +810,15 @@ func (s *Service) queryGroupsCompiled(ctx context.Context, in QueryRequest, q co
 						value = digits
 					}
 					g.Value = value
+				}
+			} else if q.kind == "exact" {
+				key, ok := g.Value.(string)
+				if !ok {
+					return Page[QueryGroup]{}, invalid("invalid exact numeric group")
+				}
+				g.Value, e = numberFromKey(key)
+				if e != nil {
+					return Page[QueryGroup]{}, e
 				}
 			} else if q.kind == "boolean" {
 				if n, ok := g.Value.(int64); ok {

@@ -62,15 +62,14 @@ CREATE TABLE "field_values" (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, surface_id TEXT NOT NULL REFERENCES item_surfaces(id),
  container_id TEXT NOT NULL, item_id TEXT NOT NULL, surface TEXT NOT NULL, field_key TEXT NOT NULL, field_type TEXT NOT NULL,
  scale INTEGER NOT NULL DEFAULT 0, ordinal INTEGER NOT NULL DEFAULT 0 CHECK(ordinal>=0 AND ordinal<100),
- value_text TEXT, value_integer INTEGER, value_number REAL, value_boolean BOOLEAN,
- CHECK((value_text IS NOT NULL)+(value_integer IS NOT NULL)+(value_number IS NOT NULL)+(value_boolean IS NOT NULL)=1),
+ value_text TEXT, value_integer INTEGER, value_boolean BOOLEAN,
+ CHECK((value_text IS NOT NULL)+(value_integer IS NOT NULL)+(value_boolean IS NOT NULL)=1),
  CHECK((field_type IN ('text','note','email','url','date','lookup','term','keywords','choice','datetime') AND value_text IS NOT NULL)
  OR (field_type IN ('integer','decimal') AND value_integer IS NOT NULL)
- OR (field_type='number' AND value_number IS NOT NULL)
+ OR (field_type IN ('number','currency') AND value_text IS NOT NULL AND length(value_text)=58 AND substr(value_text,1,1) IN ('0','1') AND value_text NOT GLOB '*[^0-9]*')
  OR (field_type='boolean' AND value_boolean IS NOT NULL AND value_boolean IN (0,1))),
  CHECK(scale BETWEEN 0 AND 9 AND (field_type='decimal' OR scale=0)),
- CHECK(value_integer IS NULL OR typeof(value_integer)='integer'),
- CHECK(value_number IS NULL OR typeof(value_number) IN ('real','integer'))
+ CHECK(value_integer IS NULL OR typeof(value_integer)='integer')
 );
 CREATE TABLE schema_templates (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,workspace_id TEXT NOT NULL REFERENCES resources(id),
@@ -236,7 +235,6 @@ CREATE INDEX item_surface_tags_by_surface ON item_surface_tags(surface_id,tag);
 CREATE UNIQUE INDEX fieldvalue_surface_id_field_key_ordinal ON field_values(surface_id,field_key,ordinal);
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_integer_item_id ON field_values(container_id,surface,field_key,value_integer,item_id);
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_text_item_id ON field_values(container_id,surface,field_key,value_text,item_id);
-CREATE INDEX fieldvalue_container_id_surface_field_key_value_number_item_id ON field_values(container_id,surface,field_key,value_number,item_id);
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_boolean_item_id ON field_values(container_id,surface,field_key,value_boolean,item_id);
 CREATE UNIQUE INDEX schematemplate_workspace_id_key ON schema_templates(workspace_id,key);
 CREATE UNIQUE INDEX termgroup_name ON term_groups(name);
@@ -489,7 +487,7 @@ CREATE TRIGGER grant_exclusive_scope_update BEFORE UPDATE OF resource_id ON gran
  SELECT CASE WHEN EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND inherit_permissions) THEN RAISE(ABORT,'grants require an exclusive permission scope') END;
 END;
 CREATE TRIGGER field_type_validate BEFORE INSERT ON field_definitions BEGIN
- SELECT CASE WHEN new.type NOT IN ('text','note','email','url','date','lookup','term','keywords','choice','datetime','integer','decimal','number','boolean') OR new.scale<0 OR new.scale>9 OR (new.type<>'decimal' AND new.scale<>0)
+ SELECT CASE WHEN new.type NOT IN ('text','note','email','url','date','lookup','term','keywords','choice','datetime','integer','decimal','number','currency','boolean') OR new.scale<0 OR new.scale>9 OR (new.type<>'decimal' AND new.scale<>0)
  THEN RAISE(ABORT,'invalid field type or scale') END;
 END;
 CREATE TRIGGER field_options_identity BEFORE UPDATE OF options ON field_definitions BEGIN

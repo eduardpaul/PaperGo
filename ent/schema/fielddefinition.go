@@ -14,7 +14,7 @@ func (FieldDefinition) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("key").NotEmpty().MaxLen(64).Immutable(),
 		field.String("label").NotEmpty().MaxLen(255),
-		field.Enum("type").Values("text", "number", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"),
+		field.Enum("type").Values("text", "number", "currency", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"),
 		field.JSON("options", model.FieldOptions{}).Default(model.FieldOptions{}),
 		field.Bool("indexed").Default(false),
 		field.Int("version").Default(1).Positive(),

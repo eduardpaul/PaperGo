@@ -228,7 +228,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "key", Type: field.TypeString, Size: 64},
 		{Name: "label", Type: field.TypeString, Size: 255},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"text", "number", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"}},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"text", "number", "currency", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"}},
 		{Name: "options", Type: field.TypeJSON},
 		{Name: "indexed", Type: field.TypeBool, Default: false},
 		{Name: "version", Type: field.TypeInt, Default: 1},
@@ -258,12 +258,11 @@ var (
 		{Name: "item_id", Type: field.TypeString},
 		{Name: "surface", Type: field.TypeEnum, Enums: []string{"head", "published"}},
 		{Name: "field_key", Type: field.TypeString},
-		{Name: "field_type", Type: field.TypeEnum, Enums: []string{"text", "number", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"}},
+		{Name: "field_type", Type: field.TypeEnum, Enums: []string{"text", "number", "currency", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"}},
 		{Name: "ordinal", Type: field.TypeInt, Default: 0},
 		{Name: "scale", Type: field.TypeInt, Default: 0},
 		{Name: "value_text", Type: field.TypeString, Nullable: true},
 		{Name: "value_integer", Type: field.TypeInt64, Nullable: true},
-		{Name: "value_number", Type: field.TypeFloat64, Nullable: true},
 		{Name: "value_boolean", Type: field.TypeBool, Nullable: true},
 		{Name: "surface_id", Type: field.TypeString, Size: 36},
 	}
@@ -275,7 +274,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "field_values_item_surfaces_item_surface",
-				Columns:    []*schema.Column{FieldValuesColumns[13]},
+				Columns:    []*schema.Column{FieldValuesColumns[12]},
 				RefColumns: []*schema.Column{ItemSurfacesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -284,7 +283,7 @@ var (
 			{
 				Name:    "fieldvalue_surface_id_field_key_ordinal",
 				Unique:  true,
-				Columns: []*schema.Column{FieldValuesColumns[13], FieldValuesColumns[5], FieldValuesColumns[7]},
+				Columns: []*schema.Column{FieldValuesColumns[12], FieldValuesColumns[5], FieldValuesColumns[7]},
 			},
 			{
 				Name:    "fieldvalue_container_id_surface_field_key_value_integer_item_id",
@@ -297,14 +296,9 @@ var (
 				Columns: []*schema.Column{FieldValuesColumns[2], FieldValuesColumns[4], FieldValuesColumns[5], FieldValuesColumns[9], FieldValuesColumns[3]},
 			},
 			{
-				Name:    "fieldvalue_container_id_surface_field_key_value_number_item_id",
-				Unique:  false,
-				Columns: []*schema.Column{FieldValuesColumns[2], FieldValuesColumns[4], FieldValuesColumns[5], FieldValuesColumns[11], FieldValuesColumns[3]},
-			},
-			{
 				Name:    "fieldvalue_container_id_surface_field_key_value_boolean_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{FieldValuesColumns[2], FieldValuesColumns[4], FieldValuesColumns[5], FieldValuesColumns[12], FieldValuesColumns[3]},
+				Columns: []*schema.Column{FieldValuesColumns[2], FieldValuesColumns[4], FieldValuesColumns[5], FieldValuesColumns[11], FieldValuesColumns[3]},
 			},
 		},
 	}

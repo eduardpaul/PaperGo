@@ -11,6 +11,7 @@ type FieldOptions struct {
 	MaxLength         *int            `json:"max_length,omitempty"`
 	Minimum           *string         `json:"minimum,omitempty"`
 	Maximum           *string         `json:"maximum,omitempty"`
+	CurrencyCode      string          `json:"currency_code,omitempty"`
 	Multiple          bool            `json:"multiple,omitempty"`
 	LookupContainerID string          `json:"lookup_container_id,omitempty"`
 	TermSetID         string          `json:"term_set_id,omitempty"`

@@ -5524,8 +5524,6 @@ type FieldValueMutation struct {
 	value_text          *string
 	value_integer       *int64
 	addvalue_integer    *int64
-	value_number        *float64
-	addvalue_number     *float64
 	value_boolean       *bool
 	clearedFields       map[string]struct{}
 	item_surface        *string
@@ -6122,76 +6120,6 @@ func (m *FieldValueMutation) ResetValueInteger() {
 	delete(m.clearedFields, fieldvalue.FieldValueInteger)
 }
 
-// SetValueNumber sets the "value_number" field.
-func (m *FieldValueMutation) SetValueNumber(f float64) {
-	m.value_number = &f
-	m.addvalue_number = nil
-}
-
-// ValueNumber returns the value of the "value_number" field in the mutation.
-func (m *FieldValueMutation) ValueNumber() (r float64, exists bool) {
-	v := m.value_number
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldValueNumber returns the old "value_number" field's value of the FieldValue entity.
-// If the FieldValue object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *FieldValueMutation) OldValueNumber(ctx context.Context) (v *float64, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldValueNumber is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldValueNumber requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldValueNumber: %w", err)
-	}
-	return oldValue.ValueNumber, nil
-}
-
-// AddValueNumber adds f to the "value_number" field.
-func (m *FieldValueMutation) AddValueNumber(f float64) {
-	if m.addvalue_number != nil {
-		*m.addvalue_number += f
-	} else {
-		m.addvalue_number = &f
-	}
-}
-
-// AddedValueNumber returns the value that was added to the "value_number" field in this mutation.
-func (m *FieldValueMutation) AddedValueNumber() (r float64, exists bool) {
-	v := m.addvalue_number
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearValueNumber clears the value of the "value_number" field.
-func (m *FieldValueMutation) ClearValueNumber() {
-	m.value_number = nil
-	m.addvalue_number = nil
-	m.clearedFields[fieldvalue.FieldValueNumber] = struct{}{}
-}
-
-// ValueNumberCleared returns if the "value_number" field was cleared in this mutation.
-func (m *FieldValueMutation) ValueNumberCleared() bool {
-	_, ok := m.clearedFields[fieldvalue.FieldValueNumber]
-	return ok
-}
-
-// ResetValueNumber resets all changes to the "value_number" field.
-func (m *FieldValueMutation) ResetValueNumber() {
-	m.value_number = nil
-	m.addvalue_number = nil
-	delete(m.clearedFields, fieldvalue.FieldValueNumber)
-}
-
 // SetValueBoolean sets the "value_boolean" field.
 func (m *FieldValueMutation) SetValueBoolean(b bool) {
 	m.value_boolean = &b
@@ -6315,7 +6243,7 @@ func (m *FieldValueMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *FieldValueMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, fieldvalue.FieldCreatedAt)
 	}
@@ -6348,9 +6276,6 @@ func (m *FieldValueMutation) Fields() []string {
 	}
 	if m.value_integer != nil {
 		fields = append(fields, fieldvalue.FieldValueInteger)
-	}
-	if m.value_number != nil {
-		fields = append(fields, fieldvalue.FieldValueNumber)
 	}
 	if m.value_boolean != nil {
 		fields = append(fields, fieldvalue.FieldValueBoolean)
@@ -6385,8 +6310,6 @@ func (m *FieldValueMutation) Field(name string) (ent.Value, bool) {
 		return m.ValueText()
 	case fieldvalue.FieldValueInteger:
 		return m.ValueInteger()
-	case fieldvalue.FieldValueNumber:
-		return m.ValueNumber()
 	case fieldvalue.FieldValueBoolean:
 		return m.ValueBoolean()
 	}
@@ -6420,8 +6343,6 @@ func (m *FieldValueMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldValueText(ctx)
 	case fieldvalue.FieldValueInteger:
 		return m.OldValueInteger(ctx)
-	case fieldvalue.FieldValueNumber:
-		return m.OldValueNumber(ctx)
 	case fieldvalue.FieldValueBoolean:
 		return m.OldValueBoolean(ctx)
 	}
@@ -6510,13 +6431,6 @@ func (m *FieldValueMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetValueInteger(v)
 		return nil
-	case fieldvalue.FieldValueNumber:
-		v, ok := value.(float64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetValueNumber(v)
-		return nil
 	case fieldvalue.FieldValueBoolean:
 		v, ok := value.(bool)
 		if !ok {
@@ -6541,9 +6455,6 @@ func (m *FieldValueMutation) AddedFields() []string {
 	if m.addvalue_integer != nil {
 		fields = append(fields, fieldvalue.FieldValueInteger)
 	}
-	if m.addvalue_number != nil {
-		fields = append(fields, fieldvalue.FieldValueNumber)
-	}
 	return fields
 }
 
@@ -6558,8 +6469,6 @@ func (m *FieldValueMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedScale()
 	case fieldvalue.FieldValueInteger:
 		return m.AddedValueInteger()
-	case fieldvalue.FieldValueNumber:
-		return m.AddedValueNumber()
 	}
 	return nil, false
 }
@@ -6590,13 +6499,6 @@ func (m *FieldValueMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddValueInteger(v)
 		return nil
-	case fieldvalue.FieldValueNumber:
-		v, ok := value.(float64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddValueNumber(v)
-		return nil
 	}
 	return fmt.Errorf("unknown FieldValue numeric field %s", name)
 }
@@ -6610,9 +6512,6 @@ func (m *FieldValueMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(fieldvalue.FieldValueInteger) {
 		fields = append(fields, fieldvalue.FieldValueInteger)
-	}
-	if m.FieldCleared(fieldvalue.FieldValueNumber) {
-		fields = append(fields, fieldvalue.FieldValueNumber)
 	}
 	if m.FieldCleared(fieldvalue.FieldValueBoolean) {
 		fields = append(fields, fieldvalue.FieldValueBoolean)
@@ -6636,9 +6535,6 @@ func (m *FieldValueMutation) ClearField(name string) error {
 		return nil
 	case fieldvalue.FieldValueInteger:
 		m.ClearValueInteger()
-		return nil
-	case fieldvalue.FieldValueNumber:
-		m.ClearValueNumber()
 		return nil
 	case fieldvalue.FieldValueBoolean:
 		m.ClearValueBoolean()
@@ -6683,9 +6579,6 @@ func (m *FieldValueMutation) ResetField(name string) error {
 		return nil
 	case fieldvalue.FieldValueInteger:
 		m.ResetValueInteger()
-		return nil
-	case fieldvalue.FieldValueNumber:
-		m.ResetValueNumber()
 		return nil
 	case fieldvalue.FieldValueBoolean:
 		m.ResetValueBoolean()

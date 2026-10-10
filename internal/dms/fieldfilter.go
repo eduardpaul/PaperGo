@@ -55,9 +55,8 @@ func (s *Service) fieldFilter(ctx context.Context, subject string, in Browse) (f
 	case "decimal":
 		column = "value_integer"
 		_, value, err = decimal(in.FilterValue, d.Scale)
-	case "number":
-		column = "value_number"
-		value, err = number(json.Number(in.FilterValue))
+	case "number", "currency":
+		value, err = numberKey(json.Number(in.FilterValue))
 	case "boolean":
 		if op != "=" {
 			return nil, candidateSet{}, invalid("boolean filters only support eq")

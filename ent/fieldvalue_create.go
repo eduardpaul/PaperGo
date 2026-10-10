@@ -127,20 +127,6 @@ func (_c *FieldValueCreate) SetNillableValueInteger(v *int64) *FieldValueCreate 
 	return _c
 }
 
-// SetValueNumber sets the "value_number" field.
-func (_c *FieldValueCreate) SetValueNumber(v float64) *FieldValueCreate {
-	_c.mutation.SetValueNumber(v)
-	return _c
-}
-
-// SetNillableValueNumber sets the "value_number" field if the given value is not nil.
-func (_c *FieldValueCreate) SetNillableValueNumber(v *float64) *FieldValueCreate {
-	if v != nil {
-		_c.SetValueNumber(*v)
-	}
-	return _c
-}
-
 // SetValueBoolean sets the "value_boolean" field.
 func (_c *FieldValueCreate) SetValueBoolean(v bool) *FieldValueCreate {
 	_c.mutation.SetValueBoolean(v)
@@ -359,10 +345,6 @@ func (_c *FieldValueCreate) createSpec() (*FieldValue, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ValueInteger(); ok {
 		_spec.SetField(fieldvalue.FieldValueInteger, field.TypeInt64, value)
 		_node.ValueInteger = &value
-	}
-	if value, ok := _c.mutation.ValueNumber(); ok {
-		_spec.SetField(fieldvalue.FieldValueNumber, field.TypeFloat64, value)
-		_node.ValueNumber = &value
 	}
 	if value, ok := _c.mutation.ValueBoolean(); ok {
 		_spec.SetField(fieldvalue.FieldValueBoolean, field.TypeBool, value)

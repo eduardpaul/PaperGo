@@ -74,33 +74,6 @@ func (_u *FieldValueUpdate) ClearValueInteger() *FieldValueUpdate {
 	return _u
 }
 
-// SetValueNumber sets the "value_number" field.
-func (_u *FieldValueUpdate) SetValueNumber(v float64) *FieldValueUpdate {
-	_u.mutation.ResetValueNumber()
-	_u.mutation.SetValueNumber(v)
-	return _u
-}
-
-// SetNillableValueNumber sets the "value_number" field if the given value is not nil.
-func (_u *FieldValueUpdate) SetNillableValueNumber(v *float64) *FieldValueUpdate {
-	if v != nil {
-		_u.SetValueNumber(*v)
-	}
-	return _u
-}
-
-// AddValueNumber adds value to the "value_number" field.
-func (_u *FieldValueUpdate) AddValueNumber(v float64) *FieldValueUpdate {
-	_u.mutation.AddValueNumber(v)
-	return _u
-}
-
-// ClearValueNumber clears the value of the "value_number" field.
-func (_u *FieldValueUpdate) ClearValueNumber() *FieldValueUpdate {
-	_u.mutation.ClearValueNumber()
-	return _u
-}
-
 // SetValueBoolean sets the "value_boolean" field.
 func (_u *FieldValueUpdate) SetValueBoolean(v bool) *FieldValueUpdate {
 	_u.mutation.SetValueBoolean(v)
@@ -188,15 +161,6 @@ func (_u *FieldValueUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if _u.mutation.ValueIntegerCleared() {
 		_spec.ClearField(fieldvalue.FieldValueInteger, field.TypeInt64)
 	}
-	if value, ok := _u.mutation.ValueNumber(); ok {
-		_spec.SetField(fieldvalue.FieldValueNumber, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedValueNumber(); ok {
-		_spec.AddField(fieldvalue.FieldValueNumber, field.TypeFloat64, value)
-	}
-	if _u.mutation.ValueNumberCleared() {
-		_spec.ClearField(fieldvalue.FieldValueNumber, field.TypeFloat64)
-	}
 	if value, ok := _u.mutation.ValueBoolean(); ok {
 		_spec.SetField(fieldvalue.FieldValueBoolean, field.TypeBool, value)
 	}
@@ -267,33 +231,6 @@ func (_u *FieldValueUpdateOne) AddValueInteger(v int64) *FieldValueUpdateOne {
 // ClearValueInteger clears the value of the "value_integer" field.
 func (_u *FieldValueUpdateOne) ClearValueInteger() *FieldValueUpdateOne {
 	_u.mutation.ClearValueInteger()
-	return _u
-}
-
-// SetValueNumber sets the "value_number" field.
-func (_u *FieldValueUpdateOne) SetValueNumber(v float64) *FieldValueUpdateOne {
-	_u.mutation.ResetValueNumber()
-	_u.mutation.SetValueNumber(v)
-	return _u
-}
-
-// SetNillableValueNumber sets the "value_number" field if the given value is not nil.
-func (_u *FieldValueUpdateOne) SetNillableValueNumber(v *float64) *FieldValueUpdateOne {
-	if v != nil {
-		_u.SetValueNumber(*v)
-	}
-	return _u
-}
-
-// AddValueNumber adds value to the "value_number" field.
-func (_u *FieldValueUpdateOne) AddValueNumber(v float64) *FieldValueUpdateOne {
-	_u.mutation.AddValueNumber(v)
-	return _u
-}
-
-// ClearValueNumber clears the value of the "value_number" field.
-func (_u *FieldValueUpdateOne) ClearValueNumber() *FieldValueUpdateOne {
-	_u.mutation.ClearValueNumber()
 	return _u
 }
 
@@ -413,15 +350,6 @@ func (_u *FieldValueUpdateOne) sqlSave(ctx context.Context) (_node *FieldValue, 
 	}
 	if _u.mutation.ValueIntegerCleared() {
 		_spec.ClearField(fieldvalue.FieldValueInteger, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.ValueNumber(); ok {
-		_spec.SetField(fieldvalue.FieldValueNumber, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedValueNumber(); ok {
-		_spec.AddField(fieldvalue.FieldValueNumber, field.TypeFloat64, value)
-	}
-	if _u.mutation.ValueNumberCleared() {
-		_spec.ClearField(fieldvalue.FieldValueNumber, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.ValueBoolean(); ok {
 		_spec.SetField(fieldvalue.FieldValueBoolean, field.TypeBool, value)

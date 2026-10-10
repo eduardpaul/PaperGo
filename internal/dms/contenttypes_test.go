@@ -162,7 +162,7 @@ func TestEnablingUniqueRejectsExistingDuplicatesAtomically(t *testing.T) {
 	if err != nil || got.Options.Unique || latest(t, s, l.ID).Version != version {
 		t.Fatal("partial schema", got, err)
 	}
-	for _, in := range []CreateField{{Key: "num", Label: "Num", Type: "number", Indexed: true, Options: options}, {Key: "multi", Label: "Multi", Type: "text", Indexed: true, Options: model.FieldOptions{Unique: true, Multiple: true}}, {Key: "unindexed", Label: "Unindexed", Type: "text", Options: options}} {
+	for _, in := range []CreateField{{Key: "multi", Label: "Multi", Type: "text", Indexed: true, Options: model.FieldOptions{Unique: true, Multiple: true}}, {Key: "unindexed", Label: "Unindexed", Type: "text", Options: options}} {
 		if _, err = s.CreateField(testContext, "alice", l.ID, in); !isValidation(err) {
 			t.Fatal(in, err)
 		}

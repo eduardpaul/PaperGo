@@ -21,7 +21,7 @@ Principals are `user`, `group`, `workspace_visitor`, `workspace_member` or `work
 
 ## Rich fields
 
-The field registry supports `text`, `note`, `email`, `url`, `date`, `datetime`, `choice`, `integer`, `decimal`, `number`, `boolean`, `lookup`, `term`, and `keywords`.
+The field registry supports `text`, `note`, `email`, `url`, `date`, `datetime`, `choice`, `integer`, `decimal`, `number`, `currency`, `boolean`, `lookup`, `term`, and `keywords`.
 
 Field creation retains key, label, type, required, choices, indexed, and decimal scale. Optional configuration belongs in `options`:
 
@@ -46,7 +46,7 @@ Options include description, default_value (a JSON value), max_length, minimum/m
 
 Email fields accept a plain address; URL fields accept an absolute HTTP(S) URL without credentials; date fields use YYYY-MM-DD; datetimes normalize to UTC. Defaults fill absent fields when creating an item. Item PATCH merges supplied fields into current values; omitted keys remain, and null removes an optional field without reapplying its default. Defaults are validated before saving field definitions. Required fields can be added to populated collections when they have a valid default, without rewriting old revisions.
 
-Integer and decimal bounds, defaults, history, and indexed comparisons preserve exact precision. Decimal content is a canonical fixed-scale string; its index is signed 64-bit scaled units. The existing approximate `number` type remains available.
+Integer and decimal bounds, defaults, history, and indexed comparisons preserve exact precision. Decimal content is a canonical fixed-scale string; its index is signed 64-bit scaled units. `number` and `currency` use exact JSON decimals with a 96-bit coefficient and scale 0..28, ranging from -79228162514264337593543950335 to 79228162514264337593543950335. Excess fractional precision rounds to nearest, with midpoint ties to even; very small values round to zero. Currency fields require `options.currency_code` containing three uppercase letters (for example EUR). Numeric bounds, filters, sorting, grouping and pagination use exact values. SQLite indexes store a fixed-width numeric ordering key without conversion to floating point.
 
 Lookup fields require a same-workspace collection and validate newly assigned targets as visible items in that collection. Unchanged references can remain in later revisions when a term is deprecated or lookup access changes.
 
@@ -90,7 +90,7 @@ Editing a catalog type or field validates every attached collection's existing h
 
 Required fields and rules apply only to assigned types. Frozen collection schemas retain resolved fields, type IDs, keys and rules; each immutable item revision pins its effective schema. Shared updates never rewrite historical or published revisions. Lookup fields retain their workspace reference boundary, so a type with a lookup can attach only in its lookup target's workspace.
 
-`options.unique=true` creates a collection-wide business key. It requires an indexed scalar field and excludes approximate `number` and multiple values. Equality is exact and case-sensitive after field normalization; integers and decimals retain full precision. Optional nulls reserve nothing. Both head and published values remain reserved by an item; a draft change releases its former key only when that value leaves both surfaces. Unpublishing and deletion release the applicable claims. Enabling uniqueness validates existing surfaces atomically. Collisions return 409; bulk errors identify the failing operation and roll back all mutations. Constraints are checked in operation order, so key swaps that temporarily collide are rejected.
+`options.unique=true` creates a collection-wide business key. It requires an indexed scalar field and excludes multiple values. Equality is exact and case-sensitive after field normalization; integers and decimals retain full precision. Optional nulls reserve nothing. Both head and published values remain reserved by an item; a draft change releases its former key only when that value leaves both surfaces. Unpublishing and deletion release the applicable claims. Enabling uniqueness validates existing surfaces atomically. Collisions return 409; bulk errors identify the failing operation and roll back all mutations. Constraints are checked in operation order, so key swaps that temporarily collide are rejected.
 
 Cross-field validation supports up to 32 declarative rules per type. A rule has a stable key, field, op and message. Comparisons use other_field of the same scalar type and decimal scale and support eq/ne/gt/gte/lt/lte; ordered operators exclude boolean, choice, lookup, term and keywords. Comparisons skip null operands. Conditional requirements use `{"key":"approval_code","field":"code","op":"required_if","when_field":"approved","when_value":true,"message":"Approved items need a code"}`. Defaults and field normalization run before rules on every new content revision. Templates can define and adopt these rules.
 

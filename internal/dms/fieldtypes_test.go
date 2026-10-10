@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestApproximateNumericBoundsDoNotExpandScientificExponents(t *testing.T) {
+func TestExactNumericBoundsDoNotExpandScientificExponents(t *testing.T) {
 	d := &ent.FieldDefinition{Key: "estimate", Label: "Estimate", Type: fielddefinition.TypeNumber, Options: model.FieldOptions{Minimum: ptr("1e-999999999"), Maximum: ptr("1")}}
 	if e := validateFieldDefinition(d); e != nil {
 		t.Fatal(e)

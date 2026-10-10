@@ -240,7 +240,7 @@ func smartGroupValue(g SmartFolderGroupBy, d *ent.FieldDefinition, value string)
 	}
 	var v any = value
 	switch d.Type {
-	case "integer", "number":
+	case "integer", "number", "currency":
 		v = json.Number(value)
 	case "boolean":
 		b, err := strconv.ParseBool(value)

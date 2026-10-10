@@ -103,6 +103,7 @@ type Type string
 const (
 	TypeText     Type = "text"
 	TypeNumber   Type = "number"
+	TypeCurrency Type = "currency"
 	TypeInteger  Type = "integer"
 	TypeDecimal  Type = "decimal"
 	TypeBoolean  Type = "boolean"
@@ -124,7 +125,7 @@ func (_type Type) String() string {
 // TypeValidator is a validator for the "type" field enum values. It is called by the builders before save.
 func TypeValidator(_type Type) error {
 	switch _type {
-	case TypeText, TypeNumber, TypeInteger, TypeDecimal, TypeBoolean, TypeDatetime, TypeChoice, TypeNote, TypeEmail, TypeURL, TypeDate, TypeLookup, TypeTerm, TypeKeywords:
+	case TypeText, TypeNumber, TypeCurrency, TypeInteger, TypeDecimal, TypeBoolean, TypeDatetime, TypeChoice, TypeNote, TypeEmail, TypeURL, TypeDate, TypeLookup, TypeTerm, TypeKeywords:
 		return nil
 	default:
 		return fmt.Errorf("fielddefinition: invalid enum value for type field: %q", _type)

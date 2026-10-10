@@ -300,12 +300,12 @@ func (s *Service) fieldValueRows(projection *ent.ItemSurface, defs []*ent.FieldD
 					return nil, err
 				}
 				b.SetValueInteger(n)
-			case "number":
-				n, err := number(v)
+			case "number", "currency":
+				n, err := numberKey(v)
 				if err != nil {
 					return nil, err
 				}
-				b.SetValueNumber(n)
+				b.SetValueText(n)
 			case "boolean":
 				b.SetValueBoolean(v.(bool))
 			}

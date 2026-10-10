@@ -40,8 +40,6 @@ type FieldValue struct {
 	ValueText *string `json:"value_text,omitempty"`
 	// ValueInteger holds the value of the "value_integer" field.
 	ValueInteger *int64 `json:"value_integer,omitempty"`
-	// ValueNumber holds the value of the "value_number" field.
-	ValueNumber *float64 `json:"value_number,omitempty"`
 	// ValueBoolean holds the value of the "value_boolean" field.
 	ValueBoolean *bool `json:"value_boolean,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -77,8 +75,6 @@ func (*FieldValue) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case fieldvalue.FieldValueBoolean:
 			values[i] = new(sql.NullBool)
-		case fieldvalue.FieldValueNumber:
-			values[i] = new(sql.NullFloat64)
 		case fieldvalue.FieldOrdinal, fieldvalue.FieldScale, fieldvalue.FieldValueInteger:
 			values[i] = new(sql.NullInt64)
 		case fieldvalue.FieldID, fieldvalue.FieldSurfaceID, fieldvalue.FieldContainerID, fieldvalue.FieldItemID, fieldvalue.FieldSurface, fieldvalue.FieldFieldKey, fieldvalue.FieldFieldType, fieldvalue.FieldValueText:
@@ -174,13 +170,6 @@ func (_m *FieldValue) assignValues(columns []string, values []any) error {
 				_m.ValueInteger = new(int64)
 				*_m.ValueInteger = value.Int64
 			}
-		case fieldvalue.FieldValueNumber:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field value_number", values[i])
-			} else if value.Valid {
-				_m.ValueNumber = new(float64)
-				*_m.ValueNumber = value.Float64
-			}
 		case fieldvalue.FieldValueBoolean:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field value_boolean", values[i])
@@ -263,11 +252,6 @@ func (_m *FieldValue) String() string {
 	builder.WriteString(", ")
 	if v := _m.ValueInteger; v != nil {
 		builder.WriteString("value_integer=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := _m.ValueNumber; v != nil {
-		builder.WriteString("value_number=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
