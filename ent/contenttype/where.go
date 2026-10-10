@@ -79,6 +79,11 @@ func Name(v string) predicate.ContentType {
 	return predicate.ContentType(sql.FieldEQ(FieldName, v))
 }
 
+// TemplateKey applies equality check predicate on the "template_key" field. It's identical to TemplateKeyEQ.
+func TemplateKey(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldEQ(FieldTemplateKey, v))
+}
+
 // Version applies equality check predicate on the "version" field. It's identical to VersionEQ.
 func Version(v int) predicate.ContentType {
 	return predicate.ContentType(sql.FieldEQ(FieldVersion, v))
@@ -257,6 +262,81 @@ func NameEqualFold(v string) predicate.ContentType {
 // NameContainsFold applies the ContainsFold predicate on the "name" field.
 func NameContainsFold(v string) predicate.ContentType {
 	return predicate.ContentType(sql.FieldContainsFold(FieldName, v))
+}
+
+// TemplateKeyEQ applies the EQ predicate on the "template_key" field.
+func TemplateKeyEQ(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldEQ(FieldTemplateKey, v))
+}
+
+// TemplateKeyNEQ applies the NEQ predicate on the "template_key" field.
+func TemplateKeyNEQ(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldNEQ(FieldTemplateKey, v))
+}
+
+// TemplateKeyIn applies the In predicate on the "template_key" field.
+func TemplateKeyIn(vs ...string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldIn(FieldTemplateKey, vs...))
+}
+
+// TemplateKeyNotIn applies the NotIn predicate on the "template_key" field.
+func TemplateKeyNotIn(vs ...string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldNotIn(FieldTemplateKey, vs...))
+}
+
+// TemplateKeyGT applies the GT predicate on the "template_key" field.
+func TemplateKeyGT(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldGT(FieldTemplateKey, v))
+}
+
+// TemplateKeyGTE applies the GTE predicate on the "template_key" field.
+func TemplateKeyGTE(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldGTE(FieldTemplateKey, v))
+}
+
+// TemplateKeyLT applies the LT predicate on the "template_key" field.
+func TemplateKeyLT(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldLT(FieldTemplateKey, v))
+}
+
+// TemplateKeyLTE applies the LTE predicate on the "template_key" field.
+func TemplateKeyLTE(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldLTE(FieldTemplateKey, v))
+}
+
+// TemplateKeyContains applies the Contains predicate on the "template_key" field.
+func TemplateKeyContains(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldContains(FieldTemplateKey, v))
+}
+
+// TemplateKeyHasPrefix applies the HasPrefix predicate on the "template_key" field.
+func TemplateKeyHasPrefix(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldHasPrefix(FieldTemplateKey, v))
+}
+
+// TemplateKeyHasSuffix applies the HasSuffix predicate on the "template_key" field.
+func TemplateKeyHasSuffix(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldHasSuffix(FieldTemplateKey, v))
+}
+
+// TemplateKeyIsNil applies the IsNil predicate on the "template_key" field.
+func TemplateKeyIsNil() predicate.ContentType {
+	return predicate.ContentType(sql.FieldIsNull(FieldTemplateKey))
+}
+
+// TemplateKeyNotNil applies the NotNil predicate on the "template_key" field.
+func TemplateKeyNotNil() predicate.ContentType {
+	return predicate.ContentType(sql.FieldNotNull(FieldTemplateKey))
+}
+
+// TemplateKeyEqualFold applies the EqualFold predicate on the "template_key" field.
+func TemplateKeyEqualFold(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldEqualFold(FieldTemplateKey, v))
+}
+
+// TemplateKeyContainsFold applies the ContainsFold predicate on the "template_key" field.
+func TemplateKeyContainsFold(v string) predicate.ContentType {
+	return predicate.ContentType(sql.FieldContainsFold(FieldTemplateKey, v))
 }
 
 // VersionEQ applies the EQ predicate on the "version" field.

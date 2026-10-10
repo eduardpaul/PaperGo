@@ -24,7 +24,7 @@ CREATE TABLE schema_revisions (
 );
 CREATE TABLE content_types (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
- key TEXT NOT NULL, name TEXT NOT NULL,
+ key TEXT NOT NULL, name TEXT NOT NULL, template_key TEXT NULL,
  field_ids JSON NOT NULL CHECK(json_valid(field_ids) AND json_type(field_ids)='array'),
  rules JSON NOT NULL CHECK(json_valid(rules) AND json_type(rules)='array'),
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
@@ -211,6 +211,7 @@ CREATE INDEX `resource_container_id_id` ON `resources` (`container_id`, `id`);
 CREATE INDEX resource_container_id_content_type_id_id ON resources(container_id,content_type_id,id);
 CREATE INDEX resource_container_id_scope_id ON resources(container_id,scope_id);
 CREATE INDEX contenttype_key ON content_types(key);
+CREATE UNIQUE INDEX contenttype_template_key ON content_types(template_key);
 CREATE UNIQUE INDEX collectiontype_container_id_content_type_id ON collection_types(container_id,content_type_id);
 CREATE INDEX collectiontype_content_type_id_container_id ON collection_types(content_type_id,container_id);
 CREATE UNIQUE INDEX collectiontype_container_id ON collection_types(container_id) WHERE is_default=1;

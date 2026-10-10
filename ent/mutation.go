@@ -2824,6 +2824,7 @@ type ContentTypeMutation struct {
 	created_at      *time.Time
 	key             *string
 	name            *string
+	template_key    *string
 	field_ids       *[]string
 	appendfield_ids []string
 	rules           *[]model.ValidationRule
@@ -3047,6 +3048,55 @@ func (m *ContentTypeMutation) OldName(ctx context.Context) (v string, err error)
 // ResetName resets all changes to the "name" field.
 func (m *ContentTypeMutation) ResetName() {
 	m.name = nil
+}
+
+// SetTemplateKey sets the "template_key" field.
+func (m *ContentTypeMutation) SetTemplateKey(s string) {
+	m.template_key = &s
+}
+
+// TemplateKey returns the value of the "template_key" field in the mutation.
+func (m *ContentTypeMutation) TemplateKey() (r string, exists bool) {
+	v := m.template_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemplateKey returns the old "template_key" field's value of the ContentType entity.
+// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ContentTypeMutation) OldTemplateKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemplateKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemplateKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemplateKey: %w", err)
+	}
+	return oldValue.TemplateKey, nil
+}
+
+// ClearTemplateKey clears the value of the "template_key" field.
+func (m *ContentTypeMutation) ClearTemplateKey() {
+	m.template_key = nil
+	m.clearedFields[contenttype.FieldTemplateKey] = struct{}{}
+}
+
+// TemplateKeyCleared returns if the "template_key" field was cleared in this mutation.
+func (m *ContentTypeMutation) TemplateKeyCleared() bool {
+	_, ok := m.clearedFields[contenttype.FieldTemplateKey]
+	return ok
+}
+
+// ResetTemplateKey resets all changes to the "template_key" field.
+func (m *ContentTypeMutation) ResetTemplateKey() {
+	m.template_key = nil
+	delete(m.clearedFields, contenttype.FieldTemplateKey)
 }
 
 // SetFieldIds sets the "field_ids" field.
@@ -3277,7 +3327,7 @@ func (m *ContentTypeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ContentTypeMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.created_at != nil {
 		fields = append(fields, contenttype.FieldCreatedAt)
 	}
@@ -3286,6 +3336,9 @@ func (m *ContentTypeMutation) Fields() []string {
 	}
 	if m.name != nil {
 		fields = append(fields, contenttype.FieldName)
+	}
+	if m.template_key != nil {
+		fields = append(fields, contenttype.FieldTemplateKey)
 	}
 	if m.field_ids != nil {
 		fields = append(fields, contenttype.FieldFieldIds)
@@ -3313,6 +3366,8 @@ func (m *ContentTypeMutation) Field(name string) (ent.Value, bool) {
 		return m.Key()
 	case contenttype.FieldName:
 		return m.Name()
+	case contenttype.FieldTemplateKey:
+		return m.TemplateKey()
 	case contenttype.FieldFieldIds:
 		return m.FieldIds()
 	case contenttype.FieldRules:
@@ -3336,6 +3391,8 @@ func (m *ContentTypeMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldKey(ctx)
 	case contenttype.FieldName:
 		return m.OldName(ctx)
+	case contenttype.FieldTemplateKey:
+		return m.OldTemplateKey(ctx)
 	case contenttype.FieldFieldIds:
 		return m.OldFieldIds(ctx)
 	case contenttype.FieldRules:
@@ -3373,6 +3430,13 @@ func (m *ContentTypeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetName(v)
+		return nil
+	case contenttype.FieldTemplateKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemplateKey(v)
 		return nil
 	case contenttype.FieldFieldIds:
 		v, ok := value.([]string)
@@ -3446,7 +3510,11 @@ func (m *ContentTypeMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *ContentTypeMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(contenttype.FieldTemplateKey) {
+		fields = append(fields, contenttype.FieldTemplateKey)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -3459,6 +3527,11 @@ func (m *ContentTypeMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *ContentTypeMutation) ClearField(name string) error {
+	switch name {
+	case contenttype.FieldTemplateKey:
+		m.ClearTemplateKey()
+		return nil
+	}
 	return fmt.Errorf("unknown ContentType nullable field %s", name)
 }
 
@@ -3474,6 +3547,9 @@ func (m *ContentTypeMutation) ResetField(name string) error {
 		return nil
 	case contenttype.FieldName:
 		m.ResetName()
+		return nil
+	case contenttype.FieldTemplateKey:
+		m.ResetTemplateKey()
 		return nil
 	case contenttype.FieldFieldIds:
 		m.ResetFieldIds()

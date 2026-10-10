@@ -74,6 +74,9 @@ func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFun
 	}
 }
 func (a *API) registerFoundation(m *http.ServeMux) {
+	m.HandleFunc("GET /v1/collection-templates", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.CollectionTemplates(r.Context(), subject(r))
+	}))
 	m.HandleFunc("GET /v1/content-types/audit", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.ContentTypeAudit(r.Context(), subject(r), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	}))

@@ -165,6 +165,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "key", Type: field.TypeString, Size: 64},
 		{Name: "name", Type: field.TypeString, Size: 255},
+		{Name: "template_key", Type: field.TypeString, Unique: true, Nullable: true, Size: 64},
 		{Name: "field_ids", Type: field.TypeJSON},
 		{Name: "rules", Type: field.TypeJSON},
 		{Name: "version", Type: field.TypeInt, Default: 1},

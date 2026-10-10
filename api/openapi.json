@@ -12131,6 +12131,34 @@
           }
         }
       }
+    },
+    "/v1/collection-templates": {
+      "get": {
+        "operationId": "collectionTemplates",
+        "tags": [
+          "Lists"
+        ],
+        "summary": "List registered complete collection templates",
+        "description": "Requires list.read. Built-in Documents and Contacts and templates registered by modules. Create a collection with template_key to provision it.",
+        "responses": {
+          "200": {
+            "description": "Available templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionTemplate"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing list.read scope"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12396,6 +12424,10 @@
             "uniqueItems": true,
             "maxItems": 32,
             "description": "Collections only: attach live organization definitions on creation; the first is default. Omission creates an editable Item catalog definition."
+          },
+          "template_key": {
+            "type": "string",
+            "description": "Registered collection template key; provisions settings, shared content types and saved views atomically. Mutually exclusive with content_type_ids. Template settings determine kind and folder, publishing and WebDAV policies."
           }
         },
         "required": [
@@ -14324,6 +14356,14 @@
               "format": "uuid"
             },
             "description": "Organization field IDs. Each key must be unique within the content type. Definitions remain live in every attached collection."
+          },
+          "template_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true,
+            "description": "Stable provisioning identity of a registered template content type. Existing customized definitions are reused."
           }
         }
       },
@@ -15946,7 +15986,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Ids from the root to the term: /root/…/term/."
+            "description": "Ids from the root to the term: /root/\u2026/term/."
           },
           "labels": {
             "type": "object",
@@ -16130,7 +16170,7 @@
       },
       "TermCSV": {
         "type": "string",
-        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term … Level 7 Term."
+        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term \u2026 Level 7 Term."
       },
       "PortableTerm": {
         "type": "object",
@@ -16630,6 +16670,58 @@
           },
           "reason": {
             "type": "string"
+          }
+        }
+      },
+      "CollectionTemplate": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "kind",
+          "allow_folders",
+          "publishing_enabled",
+          "webdav_enabled",
+          "content_types",
+          "views"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "list",
+              "library"
+            ]
+          },
+          "allow_folders": {
+            "type": "boolean"
+          },
+          "publishing_enabled": {
+            "type": "boolean"
+          },
+          "webdav_enabled": {
+            "type": "boolean"
+          },
+          "content_types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateInput"
+            }
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ViewInput"
+            }
           }
         }
       }

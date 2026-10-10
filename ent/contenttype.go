@@ -25,6 +25,8 @@ type ContentType struct {
 	Key string `json:"key,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
+	// TemplateKey holds the value of the "template_key" field.
+	TemplateKey *string `json:"template_key,omitempty"`
 	// FieldIds holds the value of the "field_ids" field.
 	FieldIds []string `json:"field_ids,omitempty"`
 	// Rules holds the value of the "rules" field.
@@ -45,7 +47,7 @@ func (*ContentType) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case contenttype.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case contenttype.FieldID, contenttype.FieldKey, contenttype.FieldName:
+		case contenttype.FieldID, contenttype.FieldKey, contenttype.FieldName, contenttype.FieldTemplateKey:
 			values[i] = new(sql.NullString)
 		case contenttype.FieldCreatedAt, contenttype.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -87,6 +89,13 @@ func (_m *ContentType) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
 				_m.Name = value.String
+			}
+		case contenttype.FieldTemplateKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field template_key", values[i])
+			} else if value.Valid {
+				_m.TemplateKey = new(string)
+				*_m.TemplateKey = value.String
 			}
 		case contenttype.FieldFieldIds:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -160,6 +169,11 @@ func (_m *ContentType) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
+	builder.WriteString(", ")
+	if v := _m.TemplateKey; v != nil {
+		builder.WriteString("template_key=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("field_ids=")
 	builder.WriteString(fmt.Sprintf("%v", _m.FieldIds))

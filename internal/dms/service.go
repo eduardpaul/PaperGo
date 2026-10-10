@@ -23,15 +23,16 @@ type Service struct {
 	writeMu     chan struct{}
 	transaction bool
 	// operations wakes RunOperations when work is queued.
-	operations chan struct{}
-	onCommit   func()
-	tx         *sql.Tx
-	pending    *[]Event
+	operations          chan struct{}
+	onCommit            func()
+	tx                  *sql.Tx
+	pending             *[]Event
+	collectionTemplates map[string]CollectionTemplate
 }
 
 // NewService serves the PaperGo database db.
 func NewService(db *sql.DB) *Service {
-	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1)}
+	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates()}
 }
 
 // OnCommit calls f after each committed write that recorded domain events,
@@ -87,7 +88,7 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 // writes. It returns how many events it recorded.
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
 	var pending []Event
-	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending}
+	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates}
 	if err := fn(t); err != nil {
 		return 0, err
 	}
@@ -112,7 +113,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx})
+	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates})
 	if err != nil {
 		return out, err
 	}
@@ -128,6 +129,7 @@ func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, e
 }
 
 type CreateResource struct {
+	TemplateKey       string         `json:"template_key,omitempty"`
 	ContentTypeID     string         `json:"content_type_id,omitempty"`
 	ContentTypeIDs    []string       `json:"content_type_ids,omitempty"`
 	Kind              string         `json:"kind"`
@@ -152,6 +154,22 @@ func (s *Service) Create(ctx context.Context, subject, parentID string, in Creat
 // create inserts a resource inside a write transaction. A library item may be
 // created with its first blob, so its first revision already carries content.
 func (s *Service) create(ctx context.Context, subject, parentID string, in CreateResource, content *BlobInput) (*ent.Resource, error) {
+	var template *CollectionTemplate
+	if in.TemplateKey != "" {
+		tpl, ok := s.collectionTemplates[in.TemplateKey]
+		if !ok {
+			return nil, invalid("unknown collection template")
+		}
+		if in.Kind != "" && in.Kind != "list" && in.Kind != "library" {
+			return nil, invalid("template_key belongs to collections")
+		}
+		if len(in.ContentTypeIDs) > 0 {
+			return nil, invalid("template_key and content_type_ids are mutually exclusive")
+		}
+		template = &tpl
+		in.Kind, in.AllowFolders = tpl.Kind, &tpl.AllowFolders
+		in.PublishingEnabled, in.WebDAVEnabled = tpl.PublishingEnabled, tpl.WebDAVEnabled
+	}
 	collection := in.Kind == "list" || in.Kind == "library"
 	scope := "list.write"
 	if in.Kind == "workspace" {
@@ -279,6 +297,16 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		return nil, invalid("custom values are supported on items only")
 	}
 	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetTags(in.Tags).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
+	if template != nil {
+		if e = s.RequireScope(ctx, subject, "contentType.read"); e != nil {
+			return nil, e
+		}
+		in.ContentTypeIDs, e = s.provisionCollectionTypes(ctx, subject, *template)
+		if e != nil {
+			return nil, e
+		}
+		builder.SetTemplateKeys([]string{template.Key})
+	}
 	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
 	builder.SetDescription(in.Description)
 	if in.AllowFolders != nil {
@@ -323,6 +351,13 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		}
 		if e = s.refreshCollections(ctx, subject, []*ent.Resource{out}); e != nil {
 			return nil, e
+		}
+	}
+	if template != nil {
+		for _, view := range template.Views {
+			if _, e = s.CreateView(ctx, subject, out.ID, view); e != nil {
+				return nil, e
+			}
 		}
 	}
 	details := map[string]any{"kind": in.Kind}

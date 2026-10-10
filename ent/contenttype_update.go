@@ -166,6 +166,9 @@ func (_u *ContentTypeUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(contenttype.FieldName, field.TypeString, value)
 	}
+	if _u.mutation.TemplateKeyCleared() {
+		_spec.ClearField(contenttype.FieldTemplateKey, field.TypeString)
+	}
 	if value, ok := _u.mutation.FieldIds(); ok {
 		_spec.SetField(contenttype.FieldFieldIds, field.TypeJSON, value)
 	}
@@ -376,6 +379,9 @@ func (_u *ContentTypeUpdateOne) sqlSave(ctx context.Context) (_node *ContentType
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(contenttype.FieldName, field.TypeString, value)
+	}
+	if _u.mutation.TemplateKeyCleared() {
+		_spec.ClearField(contenttype.FieldTemplateKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.FieldIds(); ok {
 		_spec.SetField(contenttype.FieldFieldIds, field.TypeJSON, value)

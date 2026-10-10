@@ -247,22 +247,26 @@ func init() {
 			return nil
 		}
 	}()
+	// contenttypeDescTemplateKey is the schema descriptor for template_key field.
+	contenttypeDescTemplateKey := contenttypeFields[2].Descriptor()
+	// contenttype.TemplateKeyValidator is a validator for the "template_key" field. It is called by the builders before save.
+	contenttype.TemplateKeyValidator = contenttypeDescTemplateKey.Validators[0].(func(string) error)
 	// contenttypeDescFieldIds is the schema descriptor for field_ids field.
-	contenttypeDescFieldIds := contenttypeFields[2].Descriptor()
+	contenttypeDescFieldIds := contenttypeFields[3].Descriptor()
 	// contenttype.DefaultFieldIds holds the default value on creation for the field_ids field.
 	contenttype.DefaultFieldIds = contenttypeDescFieldIds.Default.([]string)
 	// contenttypeDescRules is the schema descriptor for rules field.
-	contenttypeDescRules := contenttypeFields[3].Descriptor()
+	contenttypeDescRules := contenttypeFields[4].Descriptor()
 	// contenttype.DefaultRules holds the default value on creation for the rules field.
 	contenttype.DefaultRules = contenttypeDescRules.Default.([]model.ValidationRule)
 	// contenttypeDescVersion is the schema descriptor for version field.
-	contenttypeDescVersion := contenttypeFields[4].Descriptor()
+	contenttypeDescVersion := contenttypeFields[5].Descriptor()
 	// contenttype.DefaultVersion holds the default value on creation for the version field.
 	contenttype.DefaultVersion = contenttypeDescVersion.Default.(int)
 	// contenttype.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	contenttype.VersionValidator = contenttypeDescVersion.Validators[0].(func(int) error)
 	// contenttypeDescUpdatedAt is the schema descriptor for updated_at field.
-	contenttypeDescUpdatedAt := contenttypeFields[5].Descriptor()
+	contenttypeDescUpdatedAt := contenttypeFields[6].Descriptor()
 	// contenttype.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	contenttype.DefaultUpdatedAt = contenttypeDescUpdatedAt.Default.(func() time.Time)
 	// contenttype.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

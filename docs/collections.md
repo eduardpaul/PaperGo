@@ -11,3 +11,8 @@ Item PATCH merges supplied custom-value keys into the current item. Omitted keys
 Item history is available at `GET /v1/items/{id}/revisions` and `GET /v1/items/{id}/revisions/{number}` with draft-read permission. Each result includes its frozen schema, whether it is the current head, and the fields changed from the preceding revision. `$name` and `$tags` identify system metadata. `after_revision` paginates by revision number.
 
 `POST /v1/items/{id}/revisions/{number}/restore` requires write permission and the item's current `If-Match`. It restores historical metadata through current validation, clears current fields absent from the snapshot, and creates a new revision with ordinary indexing, publication and events. Removed fields remain removed. The current file blob is retained.
+# Collection templates
+
+GET `/v1/collection-templates` lists built-in Documents and Contacts templates and templates registered by modules. It requires `list.read`. POST `/v1/resources/{workspaceID}/children` with `name` and `template_key` creates a complete collection with settings, shared content types and saved views in one transaction. The caller needs workspace manage access, `list.read` and `contentType.read`. A template determines the collection kind, folder policy, publishing and WebDAV settings; `content_type_ids` cannot be supplied with it.
+
+Template content types have a stable organization provisioning identity. Reusing a template attaches the same live type and preserves curator customizations. Every item retains immutable revision history. Modules call `RegisterCollectionTemplate` before serving requests. Workspace schema recipes remain available for applying fields and rules to an existing collection.

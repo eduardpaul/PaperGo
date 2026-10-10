@@ -20,6 +20,8 @@ const (
 	FieldKey = "key"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// FieldTemplateKey holds the string denoting the template_key field in the database.
+	FieldTemplateKey = "template_key"
 	// FieldFieldIds holds the string denoting the field_ids field in the database.
 	FieldFieldIds = "field_ids"
 	// FieldRules holds the string denoting the rules field in the database.
@@ -38,6 +40,7 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldKey,
 	FieldName,
+	FieldTemplateKey,
 	FieldFieldIds,
 	FieldRules,
 	FieldVersion,
@@ -61,6 +64,8 @@ var (
 	KeyValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// TemplateKeyValidator is a validator for the "template_key" field. It is called by the builders before save.
+	TemplateKeyValidator func(string) error
 	// DefaultFieldIds holds the default value on creation for the "field_ids" field.
 	DefaultFieldIds []string
 	// DefaultRules holds the default value on creation for the "rules" field.
@@ -100,6 +105,11 @@ func ByKey(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByTemplateKey orders the results by the template_key field.
+func ByTemplateKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTemplateKey, opts...).ToFunc()
 }
 
 // ByVersion orders the results by the version field.

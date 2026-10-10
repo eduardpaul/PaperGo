@@ -47,6 +47,20 @@ func (_c *ContentTypeCreate) SetName(v string) *ContentTypeCreate {
 	return _c
 }
 
+// SetTemplateKey sets the "template_key" field.
+func (_c *ContentTypeCreate) SetTemplateKey(v string) *ContentTypeCreate {
+	_c.mutation.SetTemplateKey(v)
+	return _c
+}
+
+// SetNillableTemplateKey sets the "template_key" field if the given value is not nil.
+func (_c *ContentTypeCreate) SetNillableTemplateKey(v *string) *ContentTypeCreate {
+	if v != nil {
+		_c.SetTemplateKey(*v)
+	}
+	return _c
+}
+
 // SetFieldIds sets the "field_ids" field.
 func (_c *ContentTypeCreate) SetFieldIds(v []string) *ContentTypeCreate {
 	_c.mutation.SetFieldIds(v)
@@ -183,6 +197,11 @@ func (_c *ContentTypeCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "ContentType.name": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.TemplateKey(); ok {
+		if err := contenttype.TemplateKeyValidator(v); err != nil {
+			return &ValidationError{Name: "template_key", err: fmt.Errorf(`ent: validator failed for field "ContentType.template_key": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.FieldIds(); !ok {
 		return &ValidationError{Name: "field_ids", err: errors.New(`ent: missing required field "ContentType.field_ids"`)}
 	}
@@ -251,6 +270,10 @@ func (_c *ContentTypeCreate) createSpec() (*ContentType, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(contenttype.FieldName, field.TypeString, value)
 		_node.Name = value
+	}
+	if value, ok := _c.mutation.TemplateKey(); ok {
+		_spec.SetField(contenttype.FieldTemplateKey, field.TypeString, value)
+		_node.TemplateKey = &value
 	}
 	if value, ok := _c.mutation.FieldIds(); ok {
 		_spec.SetField(contenttype.FieldFieldIds, field.TypeJSON, value)
