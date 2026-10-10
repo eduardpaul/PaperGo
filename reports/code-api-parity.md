@@ -2,6 +2,8 @@
 
 **Result: the two apps do not currently cover the same user stories.** PaperGo implements the shared resource, schema, taxonomy and workflow foundations, but many application modules are absent. Existing overlapping features also differ in destructive edits, permission checks, content-type scope, bulk behavior and workflow authority.
 
+Current implementation results are in [workspace alignment](workspaces-alignment.md) and the [47-story Lists/Taxonomy table](lists-taxonomy-alignment.md). The module inventory below records the pinned audit baseline.
+
 Audit date: 2026-10-10. Baselines: PaperDotNet [`96df412`](https://github.com/eduardpaul/PaperDotNet/tree/96df412f040f53cc14711aaba35880e24817e084) and local PaperGo `8bc2724afaf9e819b0bf99c2b20df5dc36acc363`. PaperGo was clean when the audit began. This report is the only repository change made for the audit.
 
 Evidence comes from registered host modules/routes, request and response types, handlers, service implementations, persistence schemas, activity registries and targeted tests. Project documentation, planning files and OpenAPI documents were not used to establish feature coverage. Generated client code was not treated as implementation evidence.
@@ -16,14 +18,14 @@ This is a source and API audit. PaperDotNet was not built or run, and no shared 
 
 ## Module overview
 
-**130 story comparisons:** 18 covered, 16 partial, 19 drift, 73 missing, 4 go extra.
+**130 story comparisons:** 19 covered, 16 partial, 19 drift, 72 missing, 4 go extra.
 
 | Module | Stories | Covered | Partial | Drift | Missing | Go extra | Observed coverage / principal gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | [Tenancy](#tenancy) | 3 | 0 | 0 | 1 | 2 | 0 | Single-service workspace model; tenant isolation, host resolution and organization API missing. |
 | [Identity](#identity) | 10 | 0 | 1 | 1 | 8 | 0 | External token verification exists; local accounts, OAuth issuance, groups, roles, client registry and preferences missing. |
 | [Workspaces](#workspaces) | 4 | 1 | 0 | 0 | 3 | 0 | Create/discover/rename covered; descriptions, membership and delete missing. |
-| [Lists](#lists) | 42 | 9 | 5 | 11 | 14 | 3 | Core item/schema/query/view/ACL/relations covered; moves, restore, delta and templates incomplete; several write semantics drift. |
+| [Lists](#lists) | 42 | 10 | 5 | 11 | 13 | 3 | Core item/schema/query/view/ACL/relations covered; moves, restore, delta and templates incomplete; several write semantics drift. |
 | [Taxonomy](#taxonomy) | 5 | 3 | 0 | 2 | 0 | 0 | Curation/import/keywords covered; vocabulary scope and contributor rights drift. |
 | [Documents](#documents) | 13 | 1 | 1 | 1 | 9 | 1 | Raw versioned files covered; OCR, text, previews, pages, inboxes, duplicates and reviews missing; WebDAV added. |
 | [Search](#search) | 6 | 0 | 1 | 1 | 4 | 0 | Metadata search exists; body search, snippets, facets, relevance and semantic/hybrid retrieval missing or drifted. |
@@ -128,7 +130,7 @@ Core item/schema/query/view/ACL/relations covered; moves, restore, delta and tem
 | LST-21 | Restore an earlier metadata version | Missing | POST versions/{number}/restore rewrites old values through the writer. | No revision-restore endpoint. | Reading old values is possible; one operation to restore them is unavailable. | [.NET: ItemHistoryEndpoints.cs:28][N-HISTORY]<br>[Go: api.go:43][G-ROUTES] |
 | LST-22 | Bulk edit by filter with operation progress and per-item failures | Drift | bulkUpdate starts a filtered operation, merges fields, returns matched/updated/failed counts. | bulk accepts 1..100 explicit operations in one transaction; all roll back on any failure. | Large filtered edits and partial-success semantics differ, although explicit atomic batch editing exists. | [.NET: BulkUpdate.cs:17][N-BULK]<br>[Go: bulk.go:10][G-BULK] |
 | LST-23 | Save views with columns, filters, sorting and grouping | Covered | ViewRequest and viewId on item queries. | ListView plus typed QuerySpec; view query/group endpoints project columns. | Saved-query and column-selection stories exist in both. | [.NET: ViewEndpoints.cs:18][N-VIEW]<br>[Go: listview.go:15][G-VIEW]<br>[Go: foundation.go:69][G-FOUND]<br>[Go: queryspec.go:30][G-QUERY] |
-| LST-24 | Store a view's table/board/calendar/gallery layout | Missing | ViewRequest has ViewLayout persisted with the definition. | ListView has query, columns and default flag, no layout. | API consumers cannot save the presentation choice alongside a view. | [.NET: ViewEndpoints.cs:18][N-VIEW]<br>[Go: listview.go:15][G-VIEW] |
+| LST-24 | Store a view's table/board/calendar/gallery layout | Covered | ViewRequest has ViewLayout persisted with the definition. | ListView and ViewInput persist and validate layout. The field exists in the pinned Go baseline. | Saved presentation choice is covered; corrected by inspecting the baseline schema and view service. | [.NET: ViewEndpoints.cs:18][N-VIEW]<br>[Go: listview.go:15][G-VIEW] |
 | LST-25 | Query items with multiple sort keys and selectable fields | Partial | OData orderBy/select, filters, count, paging and view defaults. | Typed expression tree and one SortSpec; select is available through view columns. | Single-key filtering/sorting is covered; arbitrary multi-key order and ad hoc field projection are not equivalent. | [.NET: ItemEndpoints.cs:18][N-ITEM]<br>[.NET: ItemQueryRunner.cs:59][N-QUERY]<br>[Go: queryspec.go:30][G-QUERY]<br>[Go: listview.go:15][G-VIEW] |
 | LST-26 | Use relations with direction, cardinality and editable attributes | Covered | Typed edge handlers, direction policy, limits, attribute ETags. | RelationshipType policy, max_incoming/outgoing and attribute schema; PATCH edge metadata. | The structured same-workspace relationship story is present. | [.NET: ItemRelationshipEndpoints.cs:15][N-REL]<br>[Go: relationships.go:16][G-REL]<br>[Go: relationshiptypes.go:12][G-RELT] |
 | LST-27 | Link items across workspaces or without a relationship type | Missing | Global relations and typed relationships support tenant-local peers; type is optional. | Link requires type_id and rejects endpoints in different workspaces. | Organization knowledge graphs and quick untyped related-item links are missing. | [.NET: GlobalItemEndpoints.cs:16][N-GLOBAL]<br>[.NET: ItemRelationshipEndpoints.cs:15][N-REL]<br>[Go: relationships.go:16][G-REL] |
