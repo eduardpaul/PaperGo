@@ -455,7 +455,7 @@ func (a *API) link(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) relationships(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	out, err := a.DMS.Relationships(r.Context(), subject(r), r.PathValue("id"), q.Get("direction"), q.Get("name"), q.Get("after"), queryInt(r, "limit"))
+	out, err := a.DMS.Relationships(r.Context(), subject(r), r.PathValue("id"), q.Get("direction"), q.Get("type"), q.Get("after"), queryInt(r, "limit"))
 	if err != nil {
 		a.failure(w, r, err)
 		return

@@ -46,6 +46,10 @@ func TestRelationshipTaxonomyAPI(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	// The workspace catalog route and type_id input have been replaced outright.
+	res = request(bob, "GET", "/v1/items/"+a.ID+"/relationships?type=unknown", "", testToken, "", "")
+	if res.Code != 200 || strings.Contains(res.Body.String(), edge.ID) {
+		t.Fatal("type filter ignored", res.Code, res.Body.String())
+	}
 	res = request(bob, "GET", "/v1/workspaces/"+w.ID+"/relationship-types", "", testToken, "", "")
 	if res.Code != 404 {
 		t.Fatal(res.Code, res.Body.String())
