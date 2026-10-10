@@ -13,6 +13,8 @@ const (
 	Label = "identity_user"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldActive holds the string denoting the active field in the database.
+	FieldActive = "active"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the identityuser in the database.
@@ -22,6 +24,7 @@ const (
 // Columns holds all SQL columns for identityuser fields.
 var Columns = []string{
 	FieldID,
+	FieldActive,
 	FieldCreatedAt,
 }
 
@@ -36,6 +39,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultActive holds the default value on creation for the "active" field.
+	DefaultActive bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -48,6 +53,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByActive orders the results by the active field.
+func ByActive(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActive, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

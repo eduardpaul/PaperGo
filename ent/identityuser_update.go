@@ -27,6 +27,20 @@ func (_u *IdentityUserUpdate) Where(ps ...predicate.IdentityUser) *IdentityUserU
 	return _u
 }
 
+// SetActive sets the "active" field.
+func (_u *IdentityUserUpdate) SetActive(v bool) *IdentityUserUpdate {
+	_u.mutation.SetActive(v)
+	return _u
+}
+
+// SetNillableActive sets the "active" field if the given value is not nil.
+func (_u *IdentityUserUpdate) SetNillableActive(v *bool) *IdentityUserUpdate {
+	if v != nil {
+		_u.SetActive(*v)
+	}
+	return _u
+}
+
 // Mutation returns the IdentityUserMutation object of the builder.
 func (_u *IdentityUserUpdate) Mutation() *IdentityUserMutation {
 	return _u.mutation
@@ -68,6 +82,9 @@ func (_u *IdentityUserUpdate) sqlSave(ctx context.Context) (_node int, err error
 			}
 		}
 	}
+	if value, ok := _u.mutation.Active(); ok {
+		_spec.SetField(identityuser.FieldActive, field.TypeBool, value)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{identityuser.Label}
@@ -86,6 +103,20 @@ type IdentityUserUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *IdentityUserMutation
+}
+
+// SetActive sets the "active" field.
+func (_u *IdentityUserUpdateOne) SetActive(v bool) *IdentityUserUpdateOne {
+	_u.mutation.SetActive(v)
+	return _u
+}
+
+// SetNillableActive sets the "active" field if the given value is not nil.
+func (_u *IdentityUserUpdateOne) SetNillableActive(v *bool) *IdentityUserUpdateOne {
+	if v != nil {
+		_u.SetActive(*v)
+	}
+	return _u
 }
 
 // Mutation returns the IdentityUserMutation object of the builder.
@@ -158,6 +189,9 @@ func (_u *IdentityUserUpdateOne) sqlSave(ctx context.Context) (_node *IdentityUs
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.Active(); ok {
+		_spec.SetField(identityuser.FieldActive, field.TypeBool, value)
 	}
 	_node = &IdentityUser{config: _u.config}
 	_spec.Assign = _node.assignValues

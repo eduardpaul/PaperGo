@@ -20,6 +20,20 @@ type IdentityUserCreate struct {
 	hooks    []Hook
 }
 
+// SetActive sets the "active" field.
+func (_c *IdentityUserCreate) SetActive(v bool) *IdentityUserCreate {
+	_c.mutation.SetActive(v)
+	return _c
+}
+
+// SetNillableActive sets the "active" field if the given value is not nil.
+func (_c *IdentityUserCreate) SetNillableActive(v *bool) *IdentityUserCreate {
+	if v != nil {
+		_c.SetActive(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *IdentityUserCreate) SetCreatedAt(v time.Time) *IdentityUserCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -75,6 +89,10 @@ func (_c *IdentityUserCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *IdentityUserCreate) defaults() {
+	if _, ok := _c.mutation.Active(); !ok {
+		v := identityuser.DefaultActive
+		_c.mutation.SetActive(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := identityuser.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -83,6 +101,9 @@ func (_c *IdentityUserCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *IdentityUserCreate) check() error {
+	if _, ok := _c.mutation.Active(); !ok {
+		return &ValidationError{Name: "active", err: errors.New(`ent: missing required field "IdentityUser.active"`)}
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "IdentityUser.created_at"`)}
 	}
@@ -125,6 +146,10 @@ func (_c *IdentityUserCreate) createSpec() (*IdentityUser, *sqlgraph.CreateSpec)
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.Active(); ok {
+		_spec.SetField(identityuser.FieldActive, field.TypeBool, value)
+		_node.Active = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(identityuser.FieldCreatedAt, field.TypeTime, value)

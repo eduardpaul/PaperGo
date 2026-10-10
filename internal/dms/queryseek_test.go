@@ -134,7 +134,7 @@ func TestViewRowsProjectTheirColumns(t *testing.T) {
 	for _, f := range []CreateField{
 		{Key: "amount", Label: "Amount", Type: "decimal", Scale: 2},
 		{Key: "serial", Label: "Serial", Type: "integer"},
-		{Key: "labels", Label: "Labels", Type: "text", Options: model.FieldOptions{Multiple: true}},
+		{Key: "labels", Label: "Labels", Type: "choice", Choices: []string{"a", "0", "1", "2", "3", "4", "5"}, Options: model.FieldOptions{Multiple: true}},
 		{Key: "done", Label: "Done", Type: "boolean"},
 		{Key: "note", Label: "Note", Type: "note"},
 	} {

@@ -24,7 +24,7 @@ type fieldNormalizer func(*ent.FieldDefinition, any) (any, error)
 var fieldTypes = map[string]fieldNormalizer{
 	"text": normalizeString, "note": normalizeString, "choice": normalizeChoice,
 	"email": normalizeEmail, "url": normalizeURL, "date": normalizeDate,
-	"datetime": normalizeDateTime, "lookup": normalizeIdentifier, "term": normalizeTermRef, "keywords": normalizeTermRef,
+	"datetime": normalizeDateTime, "person": normalizePersonRef, "lookup": normalizeIdentifier, "term": normalizeTermRef, "keywords": normalizeTermRef,
 	"integer": normalizeInteger, "decimal": normalizeDecimal, "number": normalizeNumber, "currency": normalizeNumber, "boolean": normalizeBoolean,
 }
 
@@ -321,8 +321,8 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 			return invalid("max_length exceeds the field type's UTF-16 length range")
 		}
 	}
-	if o.Multiple && !(typ == "choice" || typ == "term" || typ == "keywords" || typ == "lookup" || typ == "text" || typ == "email" || typ == "url") {
-		return invalid("multiple requires a text, choice or reference field")
+	if o.Multiple && !(typ == "choice" || typ == "term" || typ == "keywords" || typ == "lookup" || typ == "person") {
+		return invalid("multiple requires choice, person, lookup, term or keywords")
 	}
 	if (typ == "lookup") != (o.LookupContainerID != "") || (typ == "term") != (o.TermSetID != "") {
 		return invalid("reference fields require their matching reference scope")
@@ -416,7 +416,7 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs 
 		return e
 	}
 	for _, d := range defs {
-		if d.Type != "term" && d.Type != "keywords" && d.Type != "lookup" {
+		if d.Type != "term" && d.Type != "keywords" && d.Type != "lookup" && d.Type != "person" {
 			continue
 		}
 		if values[d.Key] == nil {
@@ -439,6 +439,12 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs 
 					old[x] = true
 				}
 			}
+		}
+		if d.Type == "person" {
+			if e := s.validatePersonValues(ctx, current, old); e != nil {
+				return e
+			}
+			continue
 		}
 		if d.Type != "lookup" {
 			resolved, e := s.resolveTermValues(ctx, subject, d, current, old)

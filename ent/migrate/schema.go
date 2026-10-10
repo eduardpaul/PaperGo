@@ -228,7 +228,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "key", Type: field.TypeString, Size: 64},
 		{Name: "label", Type: field.TypeString, Size: 255},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"text", "number", "currency", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"}},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"text", "number", "currency", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "person", "term", "keywords"}},
 		{Name: "options", Type: field.TypeJSON},
 		{Name: "indexed", Type: field.TypeBool, Default: false},
 		{Name: "version", Type: field.TypeInt, Default: 1},
@@ -258,7 +258,7 @@ var (
 		{Name: "item_id", Type: field.TypeString},
 		{Name: "surface", Type: field.TypeEnum, Enums: []string{"head", "published"}},
 		{Name: "field_key", Type: field.TypeString},
-		{Name: "field_type", Type: field.TypeEnum, Enums: []string{"text", "number", "currency", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"}},
+		{Name: "field_type", Type: field.TypeEnum, Enums: []string{"text", "number", "currency", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "person", "term", "keywords"}},
 		{Name: "ordinal", Type: field.TypeInt, Default: 0},
 		{Name: "scale", Type: field.TypeInt, Default: 0},
 		{Name: "value_text", Type: field.TypeString, Nullable: true},
@@ -453,6 +453,7 @@ var (
 	// IdentityUsersColumns holds the columns for the "identity_users" table.
 	IdentityUsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 255},
+		{Name: "active", Type: field.TypeBool, Default: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// IdentityUsersTable holds the schema information for the "identity_users" table.

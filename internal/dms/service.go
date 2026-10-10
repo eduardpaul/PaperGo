@@ -558,9 +558,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 				if known[key] == nil {
 					return nil, invalid("unknown field for this content type: " + key)
 				}
-				// An explicit lookup assignment validates every supplied target,
+				// An explicit lookup/person assignment validates every supplied target,
 				// even a retained ID. Omitted references survive unrelated edits.
-				if d := known[key]; d.Type == fielddefinition.TypeLookup && (*in.Values)[key] != nil {
+				if d := known[key]; (d.Type == fielddefinition.TypeLookup || d.Type == fielddefinition.TypePerson) && (*in.Values)[key] != nil {
 					assigned := map[string]any{key: (*in.Values)[key]}
 					if err = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, assigned, nil); err != nil {
 						return nil, err

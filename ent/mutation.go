@@ -9605,6 +9605,7 @@ type IdentityUserMutation struct {
 	op            Op
 	typ           string
 	id            *string
+	active        *bool
 	created_at    *time.Time
 	clearedFields map[string]struct{}
 	done          bool
@@ -9716,6 +9717,42 @@ func (m *IdentityUserMutation) IDs(ctx context.Context) ([]string, error) {
 	}
 }
 
+// SetActive sets the "active" field.
+func (m *IdentityUserMutation) SetActive(b bool) {
+	m.active = &b
+}
+
+// Active returns the value of the "active" field in the mutation.
+func (m *IdentityUserMutation) Active() (r bool, exists bool) {
+	v := m.active
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActive returns the old "active" field's value of the IdentityUser entity.
+// If the IdentityUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityUserMutation) OldActive(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActive is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActive requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActive: %w", err)
+	}
+	return oldValue.Active, nil
+}
+
+// ResetActive resets all changes to the "active" field.
+func (m *IdentityUserMutation) ResetActive() {
+	m.active = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *IdentityUserMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -9786,7 +9823,10 @@ func (m *IdentityUserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IdentityUserMutation) Fields() []string {
-	fields := make([]string, 0, 1)
+	fields := make([]string, 0, 2)
+	if m.active != nil {
+		fields = append(fields, identityuser.FieldActive)
+	}
 	if m.created_at != nil {
 		fields = append(fields, identityuser.FieldCreatedAt)
 	}
@@ -9798,6 +9838,8 @@ func (m *IdentityUserMutation) Fields() []string {
 // schema.
 func (m *IdentityUserMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case identityuser.FieldActive:
+		return m.Active()
 	case identityuser.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -9809,6 +9851,8 @@ func (m *IdentityUserMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *IdentityUserMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case identityuser.FieldActive:
+		return m.OldActive(ctx)
 	case identityuser.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -9820,6 +9864,13 @@ func (m *IdentityUserMutation) OldField(ctx context.Context, name string) (ent.V
 // type.
 func (m *IdentityUserMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case identityuser.FieldActive:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActive(v)
+		return nil
 	case identityuser.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -9876,6 +9927,9 @@ func (m *IdentityUserMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *IdentityUserMutation) ResetField(name string) error {
 	switch name {
+	case identityuser.FieldActive:
+		m.ResetActive()
+		return nil
 	case identityuser.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil

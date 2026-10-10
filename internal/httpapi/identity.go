@@ -7,6 +7,20 @@ import (
 
 func (a *API) registerIdentity(m *http.ServeMux) {
 	d := a.DMS.Directory()
+	m.HandleFunc("GET /v1/people", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.People(r.Context(), subject(r))
+	}))
+	m.HandleFunc("GET /v1/identity/users/{subject}/status", foundationRead(a, func(r *http.Request) (any, error) {
+		return d.UserStatus(r.Context(), subject(r), r.PathValue("subject"))
+	}))
+	m.HandleFunc("PUT /v1/identity/users/{subject}/status", foundationMutation(a, 200, false, func(r *http.Request, in struct {
+		Active *bool `json:"active"`
+	}, _ int) (any, error) {
+		if in.Active == nil {
+			return nil, &identity.ValidationError{Message: "active is required"}
+		}
+		return d.SetUserActive(r.Context(), subject(r), r.PathValue("subject"), *in.Active)
+	}))
 	m.HandleFunc("GET /v1/identity/scopes", foundationRead(a, func(r *http.Request) (any, error) {
 		if err := a.DMS.RequireScope(r.Context(), subject(r), "identity.read"); err != nil {
 			return nil, err

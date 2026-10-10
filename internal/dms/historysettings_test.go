@@ -60,6 +60,7 @@ func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	fieldOK(t, s, c.ID, CreateField{Key: "unchanged", Label: "Unchanged", Type: "text"})
+	other := create(t, s, c.ID, "item", "Other", nil)
 	item := create(t, s, c.ID, "item", "First", map[string]any{"unchanged": "value"})
 	publishItem(t, s, item)
 	item = latest(t, s, item.ID)
@@ -72,6 +73,9 @@ func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 	rows, err := s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
 	if err != nil || len(rows) != 2 || rows[0].RevisionNumber != 2 || !slices.Equal(rows[0].ChangedFields, []string{"$name"}) {
 		t.Fatal(rows, err)
+	}
+	if otherRows, e := s.Revisions(testContext, "alice", other.ID, 0, 10); e != nil || len(otherRows) != 1 {
+		t.Fatal("retention affected another item", otherRows, e)
 	}
 	for _, fetch := range []func() error{
 		func() error { _, e := s.Revision(testContext, "alice", item.ID, 1); return e },

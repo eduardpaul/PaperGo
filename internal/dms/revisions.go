@@ -285,7 +285,7 @@ func (s *Service) fieldValueRows(projection *ent.ItemSurface, defs []*ent.FieldD
 		for ordinal, v := range list {
 			b := s.Client.FieldValue.Create().SetOrdinal(ordinal).SetSurfaceID(projection.ID).SetContainerID(projection.ContainerID).SetItemID(projection.ItemID).SetSurface(fieldvalue.Surface(projection.Surface)).SetFieldKey(d.Key).SetFieldType(fieldvalue.FieldType(d.Type)).SetScale(d.Scale)
 			switch string(d.Type) {
-			case "text", "note", "email", "url", "date", "lookup", "term", "keywords", "choice":
+			case "text", "note", "email", "url", "date", "lookup", "person", "term", "keywords", "choice":
 				b.SetValueText(v.(string))
 			case "datetime":
 				date, err := time.Parse(time.RFC3339, v.(string))

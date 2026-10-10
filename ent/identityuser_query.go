@@ -262,12 +262,12 @@ func (_q *IdentityUserQuery) Clone() *IdentityUserQuery {
 // Example:
 //
 //	var v []struct {
-//		CreatedAt time.Time `json:"created_at,omitempty"`
+//		Active bool `json:"active,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.IdentityUser.Query().
-//		GroupBy(identityuser.FieldCreatedAt).
+//		GroupBy(identityuser.FieldActive).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *IdentityUserQuery) GroupBy(field string, fields ...string) *IdentityUserGroupBy {
@@ -285,11 +285,11 @@ func (_q *IdentityUserQuery) GroupBy(field string, fields ...string) *IdentityUs
 // Example:
 //
 //	var v []struct {
-//		CreatedAt time.Time `json:"created_at,omitempty"`
+//		Active bool `json:"active,omitempty"`
 //	}
 //
 //	client.IdentityUser.Query().
-//		Select(identityuser.FieldCreatedAt).
+//		Select(identityuser.FieldActive).
 //		Scan(ctx, &v)
 func (_q *IdentityUserQuery) Select(fields ...string) *IdentityUserSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

@@ -71,7 +71,7 @@ CREATE TABLE "field_values" (
  scale INTEGER NOT NULL DEFAULT 0, ordinal INTEGER NOT NULL DEFAULT 0 CHECK(ordinal>=0 AND ordinal<100),
  value_text TEXT, value_integer INTEGER, value_boolean BOOLEAN,
  CHECK((value_text IS NOT NULL)+(value_integer IS NOT NULL)+(value_boolean IS NOT NULL)=1),
- CHECK((field_type IN ('text','note','email','url','date','lookup','term','keywords','choice','datetime') AND value_text IS NOT NULL)
+ CHECK((field_type IN ('text','note','email','url','date','lookup','person','term','keywords','choice','datetime') AND value_text IS NOT NULL)
  OR (field_type IN ('integer','decimal') AND value_integer IS NOT NULL)
  OR (field_type IN ('number','currency') AND value_text IS NOT NULL AND length(value_text)=58 AND substr(value_text,1,1) IN ('0','1') AND value_text NOT GLOB '*[^0-9]*')
  OR (field_type='boolean' AND value_boolean IS NOT NULL AND value_boolean IN (0,1))),
@@ -494,7 +494,7 @@ CREATE TRIGGER grant_exclusive_scope_update BEFORE UPDATE OF resource_id ON gran
  SELECT CASE WHEN EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND inherit_permissions) THEN RAISE(ABORT,'grants require an exclusive permission scope') END;
 END;
 CREATE TRIGGER field_type_validate BEFORE INSERT ON field_definitions BEGIN
- SELECT CASE WHEN new.type NOT IN ('text','note','email','url','date','lookup','term','keywords','choice','datetime','integer','decimal','number','currency','boolean') OR new.scale<0 OR new.scale>9 OR (new.type<>'decimal' AND new.scale<>0)
+ SELECT CASE WHEN new.type NOT IN ('text','note','email','url','date','lookup','person','term','keywords','choice','datetime','integer','decimal','number','currency','boolean') OR new.scale<0 OR new.scale>9 OR (new.type<>'decimal' AND new.scale<>0) OR (coalesce(json_extract(new.options,'$.multiple'),0) AND new.type NOT IN ('choice','person','lookup','term','keywords'))
  THEN RAISE(ABORT,'invalid field type or scale') END;
 END;
 CREATE TRIGGER field_options_identity BEFORE UPDATE OF options ON field_definitions BEGIN
@@ -598,7 +598,7 @@ WHEN old.action='manage' AND EXISTS(SELECT 1 FROM resources WHERE id=old.resourc
 END;
 
 -- Organization directory, nested groups and module-scoped roles.
-CREATE TABLE identity_users (id TEXT NOT NULL PRIMARY KEY CHECK(length(id) BETWEEN 1 AND 255 AND id=trim(id)), created_at datetime NOT NULL);
+CREATE TABLE identity_users (id TEXT NOT NULL PRIMARY KEY CHECK(length(id) BETWEEN 1 AND 255 AND id=trim(id)), created_at datetime NOT NULL, active BOOLEAN NOT NULL DEFAULT 1 CHECK(active IN (0,1)));
 CREATE TABLE identity_groups (id TEXT NOT NULL PRIMARY KEY, created_at datetime NOT NULL, name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 200), description TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
 CREATE UNIQUE INDEX identitygroup_name ON identity_groups(name);
 CREATE TABLE identity_roles (id TEXT NOT NULL PRIMARY KEY, created_at datetime NOT NULL, name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 200), description TEXT NOT NULL DEFAULT '', scopes JSON NOT NULL DEFAULT '[]' CHECK(json_valid(scopes) AND json_type(scopes)='array'), builtin bool NOT NULL DEFAULT false, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));

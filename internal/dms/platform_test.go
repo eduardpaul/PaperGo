@@ -473,7 +473,7 @@ func TestQueriesCanMatchHistoricalChoicesAfterValidationChanges(t *testing.T) {
 }
 func TestExpandedFieldIndexesSurviveIndexRebuild(t *testing.T) {
 	s, _, l := fixture(t)
-	d, e := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "labels", Label: "Labels", Type: "text", Indexed: true, Options: model.FieldOptions{Multiple: true}})
+	d, e := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "labels", Label: "Labels", Type: "choice", Choices: []string{"one", "two"}, Indexed: true, Options: model.FieldOptions{Multiple: true}})
 	if e != nil {
 		t.Fatal(e)
 	}

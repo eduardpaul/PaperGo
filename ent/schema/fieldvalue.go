@@ -17,7 +17,7 @@ func (FieldValue) Fields() []ent.Field {
 		field.String("item_id").Immutable(),
 		field.Enum("surface").Values("head", "published").Immutable(),
 		field.String("field_key").Immutable(),
-		field.Enum("field_type").Values("text", "number", "currency", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords").Immutable(),
+		field.Enum("field_type").Values("text", "number", "currency", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "person", "term", "keywords").Immutable(),
 		field.Int("ordinal").Default(0).NonNegative().Immutable(),
 		field.Int("scale").Default(0).Immutable(),
 		field.String("value_text").Optional().Nillable(),

@@ -113,7 +113,7 @@ func (d Directory) write(ctx context.Context, actor string, fn func(*sql.Tx) err
 		principal, _ := PrincipalSQL("a", "unused")
 		principal = strings.ReplaceAll(principal, "?", "u.id")
 		var exists bool
-		err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM identity_users u WHERE EXISTS(SELECT 1 FROM identity_assignments a WHERE a.role_id='administrator' AND `+principal+`))`).Scan(&exists)
+		err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM identity_users u WHERE u.active=1 AND EXISTS(SELECT 1 FROM identity_assignments a WHERE a.role_id='administrator' AND `+principal+`))`).Scan(&exists)
 		if err != nil {
 			return err
 		}
@@ -196,7 +196,7 @@ func (d Directory) Users(ctx context.Context, actor string) ([]string, error) {
 	if err := RequireScope(ctx, d.DB, actor, "identity.read"); err != nil {
 		return nil, err
 	}
-	rows, err := d.DB.QueryContext(ctx, "SELECT id FROM identity_users ORDER BY id")
+	rows, err := d.DB.QueryContext(ctx, "SELECT id FROM identity_users WHERE active=1 ORDER BY id")
 	if err != nil {
 		return nil, err
 	}

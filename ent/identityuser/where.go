@@ -64,9 +64,24 @@ func IDContainsFold(id string) predicate.IdentityUser {
 	return predicate.IdentityUser(sql.FieldContainsFold(FieldID, id))
 }
 
+// Active applies equality check predicate on the "active" field. It's identical to ActiveEQ.
+func Active(v bool) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldEQ(FieldActive, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.IdentityUser {
 	return predicate.IdentityUser(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// ActiveEQ applies the EQ predicate on the "active" field.
+func ActiveEQ(v bool) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldEQ(FieldActive, v))
+}
+
+// ActiveNEQ applies the NEQ predicate on the "active" field.
+func ActiveNEQ(v bool) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldNEQ(FieldActive, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

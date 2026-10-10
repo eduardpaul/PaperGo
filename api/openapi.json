@@ -10562,7 +10562,7 @@
         "x-module-scopes": [
           "identity.read"
         ],
-        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
+        "description": "List active directory subjects. Requires identity.read."
       },
       "post": {
         "operationId": "createIdentityUser",
@@ -11985,6 +11985,126 @@
         ],
         "description": "Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy."
       }
+    },
+    "/v1/identity/users/{subject}/status": {
+      "get": {
+        "operationId": "getIdentityUserStatus",
+        "summary": "Read user activation status",
+        "description": "Requires identity.read.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subject",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityUserStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Unknown user"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setIdentityUserStatus",
+        "summary": "Activate or deactivate a directory user",
+        "description": "Requires identity.manage. Inactive users cannot use module scopes or be assigned to person fields. Disabling the last active administrator is rejected.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subject",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "active"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityUserStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Unknown user"
+          },
+          "409": {
+            "description": "Last active administrator"
+          },
+          "422": {
+            "description": "Missing or invalid active flag"
+          }
+        }
+      }
+    },
+    "/v1/people": {
+      "get": {
+        "operationId": "listActivePeople",
+        "summary": "List active users for person field selection",
+        "description": "Requires list.read. IDs are enrolled OIDC subjects; selecting a user grants no content access.",
+        "responses": {
+          "200": {
+            "description": "Active person IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12451,7 +12571,8 @@
               "boolean",
               "lookup",
               "term",
-              "keywords"
+              "keywords",
+              "person"
             ]
           },
           "required": {
@@ -12520,7 +12641,8 @@
               "boolean",
               "lookup",
               "term",
-              "keywords"
+              "keywords",
+              "person"
             ]
           },
           "required": {
@@ -13082,7 +13204,8 @@
           },
           "multiple": {
             "type": "boolean",
-            "default": false
+            "default": false,
+            "description": "Array values are supported only for choice, person, lookup, term and keywords. Text, email, URL and other scalar types reject multiple."
           },
           "lookup_container_id": {
             "type": "string",
@@ -14288,7 +14411,8 @@
               "boolean",
               "lookup",
               "term",
-              "keywords"
+              "keywords",
+              "person"
             ]
           },
           "required": {
@@ -16493,7 +16617,8 @@
               "boolean",
               "lookup",
               "term",
-              "keywords"
+              "keywords",
+              "person"
             ]
           },
           "required": {
@@ -16630,6 +16755,22 @@
             "minimum": 1,
             "maximum": 500,
             "description": "History entries kept per item, trimmed on each new recorded version. Defaults to 50."
+          }
+        }
+      },
+      "IdentityUserStatus": {
+        "type": "object",
+        "required": [
+          "subject",
+          "active"
+        ],
+        "properties": {
+          "subject": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "active": {
+            "type": "boolean"
           }
         }
       }

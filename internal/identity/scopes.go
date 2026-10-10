@@ -65,7 +65,7 @@ func ScopeSQL(subject, scope string) (string, []any) {
 // ScopeExpressionSQL accepts only a trusted SQL expression built by the caller.
 func ScopeExpressionSQL(subject, expression string) (string, []any) {
 	principal, args := PrincipalSQL("a", subject)
-	return `EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + ` AND sc.value=` + expression + `)`, args
+	return `(EXISTS (SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + ` AND sc.value=` + expression + `))`, append([]any{subject}, args...)
 }
 
 func RequireScope(ctx context.Context, q Querier, subject, scope string) error {
@@ -82,7 +82,7 @@ func RequireScope(ctx context.Context, q Querier, subject, scope string) error {
 
 func EffectiveScopes(ctx context.Context, q Querier, subject string) ([]string, error) {
 	filter, args := PrincipalSQL("a", subject)
-	rows, err := q.QueryContext(ctx, `SELECT DISTINCT sc.value FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE `+filter+` ORDER BY sc.value`, args...)
+	rows, err := q.QueryContext(ctx, `SELECT DISTINCT sc.value FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE EXISTS(SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND `+filter+` ORDER BY sc.value`, append([]any{subject}, args...)...)
 	if err != nil {
 		return nil, err
 	}
