@@ -12093,7 +12093,7 @@
           "values": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Values validated by the revision schema. Integer, number and currency fields use exact JSON numbers; number/currency have the System.Decimal 96-bit coefficient and scale 0..28 domain. Fixed-scale decimal fields use canonical strings. Clients must use an exact-number parser to retain full precision."
+            "description": "Values validated by the revision schema. Integer, number and currency fields use exact JSON numbers; number/currency have the System.Decimal 96-bit coefficient and scale 0..28 domain. Fixed-scale decimal fields use canonical strings. Clients must use an exact-number parser to retain full precision. The total encoded field-value payload is limited to 8 MiB; JSON request bodies are limited to 16 MiB."
           },
           "webdav_enabled": {
             "type": "boolean",
@@ -13021,7 +13021,8 @@
               "null"
             ],
             "minimum": 1,
-            "maximum": 65536
+            "maximum": 1000000,
+            "description": "Length in UTF-16 code units (non-BMP characters count as two). Text/email/URL ceiling 4000; note ceiling 1000000. Defaults: text/email 255, URL 2048, note 100000. Valid only for these four field types."
           },
           "minimum": {
             "type": [

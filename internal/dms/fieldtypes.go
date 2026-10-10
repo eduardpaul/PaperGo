@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf16"
 	"unicode/utf8"
 )
 
@@ -40,10 +41,35 @@ func normalizeString(d *ent.FieldDefinition, v any) (any, error) {
 	if !ok || !utf8.ValidString(x) {
 		return nil, invalid("expected text")
 	}
-	if d.Options.MaxLength != nil && utf8.RuneCountInString(x) > *d.Options.MaxLength {
+	limit, _ := stringLimits(string(d.Type))
+	if d.Options.MaxLength != nil {
+		limit = *d.Options.MaxLength
+	}
+	if limit > 0 && utf16Length(x) > limit {
 		return nil, invalid("text exceeds maximum length")
 	}
 	return x, nil
+}
+
+func utf16Length(text string) int {
+	length := 0
+	for _, r := range text {
+		length += utf16.RuneLen(r)
+	}
+	return length
+}
+
+func stringLimits(typ string) (defaultLimit, ceiling int) {
+	switch typ {
+	case "text", "email":
+		return 255, 4000
+	case "url":
+		return 2048, 4000
+	case "note":
+		return 100000, 1000000
+	default:
+		return 0, 0
+	}
 }
 func normalizeChoice(d *ent.FieldDefinition, v any) (any, error) {
 	x, e := normalizeString(d, v)
@@ -74,7 +100,7 @@ func normalizeURL(d *ent.FieldDefinition, v any) (any, error) {
 		return nil, e
 	}
 	u, e := url.Parse(x.(string))
-	if e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
+	if e != nil || u.Host == "" || (!strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https")) {
 		return nil, invalid("expected absolute HTTP(S) URL")
 	}
 	return x, nil
@@ -290,8 +316,9 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 		return invalid("currency_code belongs to currency fields")
 	}
 	if o.MaxLength != nil {
-		if *o.MaxLength < 1 || *o.MaxLength > 65536 || !(typ == "text" || typ == "note" || typ == "email" || typ == "url" || typ == "choice") {
-			return invalid("max_length requires a text field and must be 1..65536")
+		_, ceiling := stringLimits(typ)
+		if *o.MaxLength < 1 || *o.MaxLength > ceiling {
+			return invalid("max_length exceeds the field type's UTF-16 length range")
 		}
 	}
 	if o.Multiple && !(typ == "choice" || typ == "term" || typ == "keywords" || typ == "lookup" || typ == "text" || typ == "email" || typ == "url") {

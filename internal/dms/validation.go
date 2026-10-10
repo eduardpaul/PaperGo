@@ -14,6 +14,9 @@ import (
 var fieldKey = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 var decimalPattern = regexp.MustCompile(`^-?[0-9]+(\.[0-9]+)?$`)
 
+// Allows a full million-unit note even when JSON escaping expands its bytes.
+const MaxItemValuesBytes = 8 * 1024 * 1024
+
 func validateName(name string) error {
 	if strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 255 {
 		return invalid("name must contain 1 to 255 characters")
@@ -143,8 +146,8 @@ func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[s
 		}
 	}
 	encoded, e := json.Marshal(values)
-	if e != nil || len(encoded) > 64*1024 {
-		return invalid("field values must be valid JSON of at most 64 KiB")
+	if e != nil || len(encoded) > MaxItemValuesBytes {
+		return invalid("field values must be valid JSON of at most 8 MiB")
 	}
 	return nil
 }

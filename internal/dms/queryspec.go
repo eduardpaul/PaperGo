@@ -133,6 +133,11 @@ func queryValue(d *ent.FieldDefinition, v any) (any, error) {
 	if queryDefinition.Type == "choice" {
 		queryDefinition.Type = "text"
 	}
+	// Retained values can exceed today's write limits. Query representability
+	// is separate from both configured and default text constraints.
+	if _, ceiling := stringLimits(string(queryDefinition.Type)); ceiling > 0 {
+		queryDefinition.Options.MaxLength = &ceiling
+	}
 	x, e := scalarValue(&queryDefinition, v)
 	if e != nil {
 		return nil, e

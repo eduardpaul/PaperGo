@@ -254,7 +254,7 @@ func (a *API) decode(w http.ResponseWriter, r *http.Request, dst any) bool {
 		a.problem(w, r, 415, "unsupported_media_type", "Content-Type must be application/json")
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, 2*dms.MaxItemValuesBytes)
 	decoder := json.NewDecoder(r.Body)
 	decoder.UseNumber()
 	decoder.DisallowUnknownFields()
