@@ -327,14 +327,18 @@ func (a *API) create(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.DMS.Create(r.Context(), subject(r), r.PathValue("id"), in)
+	out, created, err := a.DMS.CreateWithStatus(r.Context(), subject(r), r.PathValue("id"), in)
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
 	w.Header().Set("Location", "/v1/resources/"+out.ID)
 	etag(w, out.Version)
-	respond(w, 201, out)
+	status := 200
+	if created {
+		status = 201
+	}
+	respond(w, status, out)
 }
 func (a *API) get(w http.ResponseWriter, r *http.Request) {
 	out, err := a.DMS.GetSurface(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("surface"))

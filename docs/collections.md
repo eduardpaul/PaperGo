@@ -2,6 +2,8 @@
 
 Lists and libraries are collections. Workspace owners create them with `POST /v1/resources/{workspace_id}/children`. Collection managers update or delete them at `/v1/resources/{id}` using the current ETag in `If-Match`.
 
+For safe item/folder creation retries, supply an optional non-empty UUID in `id`. The first create returns 201; a repeated create in the same collection returns the current readable live entry unchanged with 200, its Location and current ETag. Request content on a retry does not update the item. Retrying requires `list.write` module scope and read access to the existing entry; it adds no revisions, audit events or domain events. IDs belonging to a different collection, deleted content or inaccessible entries return 409 without exposing content. Collections/workspaces use server-generated IDs.
+
 Collection names are trimmed and limited to 200 UTF-16 code units. Descriptions are limited to 2000. Both creation and PATCH accept `description` and `allow_folders`. Folder creation is enabled by default. Disabling it prevents new folders at every depth; existing folders and their contents remain usable.
 
 Deleting a collection removes its live content and indexes and hides relationships, including descendants with exclusive ACLs. Revisions, publications and audit records remain retained history. Workflows bound to the collection or with a trigger targeting it are disabled and deleted. Tombstones are hidden by ordinary reads. Items and folders deleted inside live collections support [recycle-bin recovery and permanent purge](recycle-bin.md).

@@ -129,6 +129,7 @@ func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, e
 }
 
 type CreateResource struct {
+	ID                string         `json:"id,omitempty"`
 	TemplateKey       string         `json:"template_key,omitempty"`
 	ContentTypeID     string         `json:"content_type_id,omitempty"`
 	ContentTypeIDs    []string       `json:"content_type_ids,omitempty"`
@@ -145,11 +146,7 @@ type CreateResource struct {
 }
 
 func (s *Service) Create(ctx context.Context, subject, parentID string, in CreateResource) (out *ent.Resource, err error) {
-	err = s.write(ctx, func(t *Service) error {
-		var e error
-		out, e = t.create(ctx, subject, parentID, in, nil)
-		return e
-	})
+	out, _, err = s.CreateWithStatus(ctx, subject, parentID, in)
 	return
 }
 
@@ -242,7 +239,10 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if len(in.ContentTypeIDs) > 32 {
 		return nil, invalid("at most 32 content types per collection")
 	}
-	id := uuid.NewString()
+	id := in.ID
+	if id == "" {
+		id = uuid.NewString()
+	}
 	workspaceID := id
 	var parent *ent.Resource
 	var containerID *string

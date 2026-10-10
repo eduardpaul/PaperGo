@@ -679,7 +679,7 @@
         "summary": "Create a child resource",
         "responses": {
           "201": {
-            "description": "Success",
+            "description": "Newly created resource",
             "content": {
               "application/json": {
                 "schema": {
@@ -698,6 +698,24 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "200": {
+            "description": "Existing readable live item/folder, unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Quoted numeric resource lock version. Field updates use the container version.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -709,7 +727,8 @@
               }
             }
           }
-        }
+        },
+        "description": "First create returns 201. Retrying an item/folder create with the same caller ID returns the current readable live entry unchanged with 200 and its current ETag, regardless of new body fields. Requires list.write module scope; an existing retry requires read access rather than create ACL access. Conflicting IDs, including deleted, different-collection and inaccessible entries, return 409 without content. All retry checks and the initial insertion are serialized in one write transaction; retries append no revisions, audit or events."
       }
     },
     "/v1/resources/{id}/fields": {
@@ -12656,6 +12675,11 @@
             "minimum": 1,
             "maximum": 500,
             "description": "History entries kept per item, trimmed on each new recorded version. Defaults to 50."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional non-empty caller UUID for items or folders. An existing readable live entry in the same collection is returned unchanged; a different/deleted/inaccessible entry conflicts. Omitting id generates a server UUID."
           }
         },
         "required": [

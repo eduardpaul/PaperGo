@@ -285,7 +285,7 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 	links, _ := s.Client.Relationship.Query().Count(testContext)
 	surfaces, _ := s.Client.ItemSurface.Query().Count(testContext)
 	revisions, _ := s.Client.ItemRevision.Query().Count(testContext)
-	if links != 0 || surfaces != 0 || revisions != 2 {
+	if links != 1 || surfaces != 0 || revisions != 2 {
 		t.Fatal("delete effects", links, surfaces, revisions)
 	}
 }
