@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	"papergo/ent"
+	"papergo/ent/resource"
 	"papergo/ent/term"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ type MoveTermInput struct {
 // MoveTerm moves a term and its subtree under another parent of its set.
 func (s *Service) MoveTerm(ctx context.Context, subject, id string, version int, in MoveTermInput) (out TermView, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		v, set, w, e := t.termForChange(ctx, subject, id, version)
+		v, set, e := t.termForChange(ctx, subject, id, version)
 		if e != nil {
 			return e
 		}
@@ -37,7 +38,7 @@ func (s *Service) MoveTerm(ctx context.Context, subject, id string, version int,
 			return e
 		}
 		out = views[0]
-		return t.audit(ctx, subject, "term.move", w, map[string]any{"term_id": id, "parent_id": in.ParentID})
+		return t.auditTaxonomy(ctx, subject, "term.move", map[string]any{"term_id": id, "parent_id": in.ParentID})
 	})
 	return
 }
@@ -53,7 +54,7 @@ func (s *Service) moveParent(ctx context.Context, set *ent.TermSet, id *string) 
 }
 
 // relocate moves v and its subtree under parent (nil for a root) of set,
-// which may be another set of the workspace. Paths of the subtree follow.
+// which may be another organization set. Paths of the subtree follow.
 func (s *Service) relocate(ctx context.Context, v *ent.Term, set *ent.TermSet, parent *ent.Term) (*ent.Term, error) {
 	path := "/" + v.ID + "/"
 	var parentID *string
@@ -129,7 +130,7 @@ type MergeTermInput struct {
 // writes follow merged_into_id.
 func (s *Service) MergeTerm(ctx context.Context, subject, id string, version int, in MergeTermInput) (out TermView, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		source, set, w, e := t.termForChange(ctx, subject, id, version)
+		source, set, e := t.termForChange(ctx, subject, id, version)
 		if e != nil {
 			return e
 		}
@@ -149,7 +150,7 @@ func (s *Service) MergeTerm(ctx context.Context, subject, id string, version int
 			return e
 		}
 		out = views[0]
-		return t.audit(ctx, subject, "term.merge", w, map[string]any{"term_id": id, "target_term_id": target.ID})
+		return t.auditTaxonomy(ctx, subject, "term.merge", map[string]any{"term_id": id, "target_term_id": target.ID})
 	})
 	return
 }
@@ -206,6 +207,13 @@ func (s *Service) mergeInto(ctx context.Context, subject string, source, target 
 	if e != nil {
 		return nil, e
 	}
-	s.emit(ctx, EventTermMerged, subject, targetSet.WorkspaceID, nil, "", map[string]any{"source_term_id": source.ID, "target_term_id": target.ID, "term_set_id": targetSet.ID})
+	// Deliver organization curation to workspace workflow subscriptions.
+	workspaces, e := s.Client.Resource.Query().Where(resource.KindEQ(resource.KindWorkspace), resource.DeletedAtIsNil()).All(ctx)
+	if e != nil {
+		return nil, e
+	}
+	for _, w := range workspaces {
+		s.emit(ctx, EventTermMerged, subject, w.ID, nil, "", map[string]any{"source_term_id": source.ID, "target_term_id": target.ID, "term_set_id": targetSet.ID})
+	}
 	return merged, nil
 }

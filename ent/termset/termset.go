@@ -16,8 +16,6 @@ const (
 	FieldID = "id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
-	// FieldWorkspaceID holds the string denoting the workspace_id field in the database.
-	FieldWorkspaceID = "workspace_id"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
 	// FieldKey holds the string denoting the key field in the database.
@@ -34,21 +32,12 @@ const (
 	FieldVersion = "version"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
-	// EdgeWorkspace holds the string denoting the workspace edge name in mutations.
-	EdgeWorkspace = "workspace"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
 	EdgeGroup = "group"
 	// EdgeTerms holds the string denoting the terms edge name in mutations.
 	EdgeTerms = "terms"
 	// Table holds the table name of the termset in the database.
 	Table = "term_sets"
-	// WorkspaceTable is the table that holds the workspace relation/edge.
-	WorkspaceTable = "term_sets"
-	// WorkspaceInverseTable is the table name for the Resource entity.
-	// It exists in this package in order to avoid circular dependency with the "resource" package.
-	WorkspaceInverseTable = "resources"
-	// WorkspaceColumn is the table column denoting the workspace relation/edge.
-	WorkspaceColumn = "workspace_id"
 	// GroupTable is the table that holds the group relation/edge.
 	GroupTable = "term_sets"
 	// GroupInverseTable is the table name for the TermGroup entity.
@@ -69,7 +58,6 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
-	FieldWorkspaceID,
 	FieldGroupID,
 	FieldKey,
 	FieldName,
@@ -126,11 +114,6 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
-// ByWorkspaceID orders the results by the workspace_id field.
-func ByWorkspaceID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWorkspaceID, opts...).ToFunc()
-}
-
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
@@ -171,13 +154,6 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
-// ByWorkspaceField orders the results by workspace field.
-func ByWorkspaceField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newWorkspaceStep(), sql.OrderByField(field, opts...))
-	}
-}
-
 // ByGroupField orders the results by group field.
 func ByGroupField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -197,13 +173,6 @@ func ByTerms(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newTermsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
-}
-func newWorkspaceStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(WorkspaceInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, WorkspaceTable, WorkspaceColumn),
-	)
 }
 func newGroupStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

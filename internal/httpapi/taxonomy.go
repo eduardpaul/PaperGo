@@ -11,11 +11,14 @@ import (
 )
 
 func (a *API) registerTaxonomy(m *http.ServeMux) {
-	m.HandleFunc("GET /v1/workspaces/{id}/term-groups", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.TermGroups(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
+	m.HandleFunc("GET /v1/taxonomy/audit", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.TaxonomyAudit(r.Context(), subject(r), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	}))
-	m.HandleFunc("POST /v1/workspaces/{id}/term-groups", foundationMutation(a, 201, false, func(r *http.Request, in dms.TermGroupInput, v int) (any, error) {
-		return a.DMS.CreateTermGroup(r.Context(), subject(r), r.PathValue("id"), in)
+	m.HandleFunc("GET /v1/term-groups", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.TermGroups(r.Context(), subject(r), r.URL.Query().Get("after"), queryInt(r, "limit"))
+	}))
+	m.HandleFunc("POST /v1/term-groups", foundationMutation(a, 201, false, func(r *http.Request, in dms.TermGroupInput, v int) (any, error) {
+		return a.DMS.CreateTermGroup(r.Context(), subject(r), in)
 	}))
 	m.HandleFunc("GET /v1/term-groups/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.TermGroup(r.Context(), subject(r), r.PathValue("id")) }))
 	m.HandleFunc("PUT /v1/term-groups/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.TermGroupInput, v int) (any, error) {
@@ -25,18 +28,18 @@ func (a *API) registerTaxonomy(m *http.ServeMux) {
 		return a.DMS.DeleteTermGroup(r.Context(), subject(r), r.PathValue("id"), v)
 	}))
 	m.HandleFunc("POST /v1/term-groups/{id}/import", a.importTerms)
-	m.HandleFunc("GET /v1/workspaces/{id}/taxonomy/export", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.ExportTaxonomy(r.Context(), subject(r), r.PathValue("id"))
+	m.HandleFunc("GET /v1/taxonomy/export", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.ExportTaxonomy(r.Context(), subject(r))
 	}))
-	m.HandleFunc("POST /v1/workspaces/{id}/taxonomy/import", foundationMutation(a, 200, false, func(r *http.Request, in dms.TaxonomyPackage, v int) (any, error) {
-		return a.DMS.ImportTaxonomy(r.Context(), subject(r), r.PathValue("id"), in)
+	m.HandleFunc("POST /v1/taxonomy/import", foundationMutation(a, 200, false, func(r *http.Request, in dms.TaxonomyPackage, v int) (any, error) {
+		return a.DMS.ImportTaxonomy(r.Context(), subject(r), in)
 	}))
-	m.HandleFunc("GET /v1/workspaces/{id}/term-sets", foundationRead(a, func(r *http.Request) (any, error) {
+	m.HandleFunc("GET /v1/term-sets", foundationRead(a, func(r *http.Request) (any, error) {
 		q := r.URL.Query()
-		return a.DMS.TermSets(r.Context(), subject(r), r.PathValue("id"), q.Get("group_id"), q.Get("after"), queryInt(r, "limit"))
+		return a.DMS.TermSets(r.Context(), subject(r), q.Get("group_id"), q.Get("after"), queryInt(r, "limit"))
 	}))
-	m.HandleFunc("POST /v1/workspaces/{id}/term-sets", foundationMutation(a, 201, false, func(r *http.Request, in dms.TermSetInput, v int) (any, error) {
-		return a.DMS.CreateTermSet(r.Context(), subject(r), r.PathValue("id"), in)
+	m.HandleFunc("POST /v1/term-sets", foundationMutation(a, 201, false, func(r *http.Request, in dms.TermSetInput, v int) (any, error) {
+		return a.DMS.CreateTermSet(r.Context(), subject(r), in)
 	}))
 	m.HandleFunc("GET /v1/term-sets/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.TermSet(r.Context(), subject(r), r.PathValue("id")) }))
 	m.HandleFunc("PUT /v1/term-sets/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.TermSetInput, v int) (any, error) {
@@ -75,16 +78,16 @@ func (a *API) registerTaxonomy(m *http.ServeMux) {
 	m.HandleFunc("POST /v1/terms/{id}/merge", foundationMutation(a, 200, true, func(r *http.Request, in dms.MergeTermInput, v int) (any, error) {
 		return a.DMS.MergeTerm(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
-	m.HandleFunc("GET /v1/workspaces/{id}/keywords", foundationRead(a, func(r *http.Request) (any, error) {
-		out, e := a.DMS.Keywords(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("q"), queryInt(r, "limit"))
+	m.HandleFunc("GET /v1/keywords", foundationRead(a, func(r *http.Request) (any, error) {
+		out, e := a.DMS.Keywords(r.Context(), subject(r), r.URL.Query().Get("q"), queryInt(r, "limit"))
 		return map[string]any{"data": out}, e
 	}))
-	m.HandleFunc("POST /v1/workspaces/{id}/keywords", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("POST /v1/keywords", func(w http.ResponseWriter, r *http.Request) {
 		var in dms.KeywordInput
 		if !a.decode(w, r, &in) {
 			return
 		}
-		out, created, err := a.DMS.AddKeyword(r.Context(), subject(r), r.PathValue("id"), in)
+		out, created, err := a.DMS.AddKeyword(r.Context(), subject(r), in)
 		if err != nil {
 			a.failure(w, r, err)
 			return
@@ -96,8 +99,8 @@ func (a *API) registerTaxonomy(m *http.ServeMux) {
 		etag(w, out.Version)
 		respond(w, status, out)
 	})
-	m.HandleFunc("GET /v1/workspaces/{id}/keywords/popular", foundationRead(a, func(r *http.Request) (any, error) {
-		out, e := a.DMS.PopularKeywords(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "top"))
+	m.HandleFunc("GET /v1/keywords/popular", foundationRead(a, func(r *http.Request) (any, error) {
+		out, e := a.DMS.PopularKeywords(r.Context(), subject(r), queryInt(r, "top"))
 		return map[string]any{"data": out}, e
 	}))
 	m.HandleFunc("POST /v1/keywords/{id}/promote", foundationMutation(a, 200, true, func(r *http.Request, in dms.PromoteKeywordInput, v int) (any, error) {

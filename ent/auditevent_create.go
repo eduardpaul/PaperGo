@@ -40,9 +40,25 @@ func (_c *AuditEventCreate) SetWorkspaceID(v string) *AuditEventCreate {
 	return _c
 }
 
+// SetNillableWorkspaceID sets the "workspace_id" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableWorkspaceID(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetWorkspaceID(*v)
+	}
+	return _c
+}
+
 // SetResourceID sets the "resource_id" field.
 func (_c *AuditEventCreate) SetResourceID(v string) *AuditEventCreate {
 	_c.mutation.SetResourceID(v)
+	return _c
+}
+
+// SetNillableResourceID sets the "resource_id" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableResourceID(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetResourceID(*v)
+	}
 	return _c
 }
 
@@ -132,16 +148,10 @@ func (_c *AuditEventCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "AuditEvent.created_at"`)}
 	}
-	if _, ok := _c.mutation.WorkspaceID(); !ok {
-		return &ValidationError{Name: "workspace_id", err: errors.New(`ent: missing required field "AuditEvent.workspace_id"`)}
-	}
 	if v, ok := _c.mutation.WorkspaceID(); ok {
 		if err := auditevent.WorkspaceIDValidator(v); err != nil {
 			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "AuditEvent.workspace_id": %w`, err)}
 		}
-	}
-	if _, ok := _c.mutation.ResourceID(); !ok {
-		return &ValidationError{Name: "resource_id", err: errors.New(`ent: missing required field "AuditEvent.resource_id"`)}
 	}
 	if v, ok := _c.mutation.ResourceID(); ok {
 		if err := auditevent.ResourceIDValidator(v); err != nil {

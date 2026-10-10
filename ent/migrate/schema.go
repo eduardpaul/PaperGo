@@ -13,8 +13,8 @@ var (
 	AuditEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "workspace_id", Type: field.TypeString},
-		{Name: "resource_id", Type: field.TypeString},
+		{Name: "workspace_id", Type: field.TypeString, Nullable: true},
+		{Name: "resource_id", Type: field.TypeString, Nullable: true},
 		{Name: "subject", Type: field.TypeString},
 		{Name: "action", Type: field.TypeString},
 		{Name: "details", Type: field.TypeJSON},
@@ -1142,31 +1142,22 @@ var (
 		{Name: "is_system", Type: field.TypeBool, Default: false},
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "workspace_id", Type: field.TypeString, Size: 36},
 	}
 	// TermGroupsTable holds the schema information for the "term_groups" table.
 	TermGroupsTable = &schema.Table{
 		Name:       "term_groups",
 		Columns:    TermGroupsColumns,
 		PrimaryKey: []*schema.Column{TermGroupsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "term_groups_resources_workspace",
-				Columns:    []*schema.Column{TermGroupsColumns[7]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "termgroup_workspace_id_name",
+				Name:    "termgroup_name",
 				Unique:  true,
-				Columns: []*schema.Column{TermGroupsColumns[7], TermGroupsColumns[2]},
+				Columns: []*schema.Column{TermGroupsColumns[2]},
 			},
 			{
-				Name:    "termgroup_workspace_id_system",
+				Name:    "termgroup_system",
 				Unique:  true,
-				Columns: []*schema.Column{TermGroupsColumns[7]},
+				Columns: []*schema.Column{TermGroupsColumns[4]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "is_system",
 				},
@@ -1185,7 +1176,6 @@ var (
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "group_id", Type: field.TypeString, Size: 36},
-		{Name: "workspace_id", Type: field.TypeString, Size: 36},
 	}
 	// TermSetsTable holds the schema information for the "term_sets" table.
 	TermSetsTable = &schema.Table{
@@ -1199,18 +1189,12 @@ var (
 				RefColumns: []*schema.Column{TermGroupsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
-			{
-				Symbol:     "term_sets_resources_workspace",
-				Columns:    []*schema.Column{TermSetsColumns[10]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "termset_workspace_id_key",
+				Name:    "termset_key",
 				Unique:  true,
-				Columns: []*schema.Column{TermSetsColumns[10], TermSetsColumns[2]},
+				Columns: []*schema.Column{TermSetsColumns[2]},
 			},
 			{
 				Name:    "termset_group_id_name",
@@ -1218,9 +1202,9 @@ var (
 				Columns: []*schema.Column{TermSetsColumns[9], TermSetsColumns[3]},
 			},
 			{
-				Name:    "termset_workspace_id_keywords",
+				Name:    "termset_keywords",
 				Unique:  true,
-				Columns: []*schema.Column{TermSetsColumns[10]},
+				Columns: []*schema.Column{TermSetsColumns[6]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "is_keywords",
 				},
@@ -1505,9 +1489,7 @@ func init() {
 	TermsTable.ForeignKeys[0].RefTable = TermsTable
 	TermsTable.ForeignKeys[1].RefTable = TermsTable
 	TermsTable.ForeignKeys[2].RefTable = TermSetsTable
-	TermGroupsTable.ForeignKeys[0].RefTable = ResourcesTable
 	TermSetsTable.ForeignKeys[0].RefTable = TermGroupsTable
-	TermSetsTable.ForeignKeys[1].RefTable = ResourcesTable
 	WebdavCredentialsTable.Annotation = &entsql.Annotation{
 		Table: "webdav_credentials",
 	}

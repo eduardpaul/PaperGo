@@ -22,18 +22,18 @@ import (
 //     localized labels, then the synonyms of the set's active terms; a label
 //     that matches several terms is ambiguous. An open set gets a new root
 //     term for an unknown label; a closed set rejects it.
-//   - A keywords field takes keywords: terms of the workspace's keywords set
+//   - A keywords field takes keywords: terms of the organization's keywords set
 //     and terms available as keywords. A label finds the keyword with that
 //     name or synonym, or adds it to the keywords set.
 //
 // An ID of a merged term stands for the term it was merged into. Deprecated
 // terms are rejected unless the value was already there.
 
-func (s *Service) resolveTermValues(ctx context.Context, workspaceID string, d *ent.FieldDefinition, values []any, old map[string]bool) ([]any, error) {
+func (s *Service) resolveTermValues(ctx context.Context, subject string, d *ent.FieldDefinition, values []any, old map[string]bool) ([]any, error) {
 	var set *ent.TermSet
 	var e error
 	if d.Type == "keywords" {
-		set, e = s.keywordsSet(ctx, workspaceID)
+		set, e = s.keywordsSet(ctx)
 	} else {
 		set, e = s.Client.TermSet.Get(ctx, d.Options.TermSetID)
 	}
@@ -44,7 +44,7 @@ func (s *Service) resolveTermValues(ctx context.Context, workspaceID string, d *
 	seen := map[string]bool{}
 	for _, v := range values {
 		raw := v.(string)
-		id, e := s.resolveTermID(ctx, workspaceID, d, set, raw, old[raw])
+		id, e := s.resolveTermID(ctx, subject, d, set, raw, old[raw])
 		if e != nil {
 			return nil, e
 		}
@@ -55,7 +55,7 @@ func (s *Service) resolveTermValues(ctx context.Context, workspaceID string, d *
 	}
 	return out, nil
 }
-func (s *Service) resolveTermID(ctx context.Context, workspaceID string, d *ent.FieldDefinition, set *ent.TermSet, raw string, kept bool) (string, error) {
+func (s *Service) resolveTermID(ctx context.Context, subject string, d *ent.FieldDefinition, set *ent.TermSet, raw string, kept bool) (string, error) {
 	t, e := s.Client.Term.Get(ctx, raw)
 	if e != nil && !ent.IsNotFound(e) {
 		return "", e
@@ -66,7 +66,7 @@ func (s *Service) resolveTermID(ctx context.Context, workspaceID string, d *ent.
 				return "", e
 			}
 		}
-		in, e := s.termInScope(ctx, workspaceID, d, set, t)
+		in, e := s.termInScope(ctx, d, set, t)
 		if e != nil {
 			return "", e
 		}
@@ -82,7 +82,7 @@ func (s *Service) resolveTermID(ctx context.Context, workspaceID string, d *ent.
 		return "", invalid("term " + raw + " of " + d.Key + " is deprecated")
 	}
 	if d.Type == "keywords" {
-		kw, _, e := s.keyword(ctx, workspaceID, raw)
+		kw, _, e := s.keyword(ctx, raw)
 		if e != nil || kw != nil {
 			return idOf(kw), e
 		}
@@ -110,6 +110,9 @@ func (s *Service) resolveTermID(ctx context.Context, workspaceID string, d *ent.
 			return "", invalid("label " + raw + " of " + d.Key + " is not a term of its closed term set")
 		}
 	}
+	if e := s.requireTaxonomy(ctx, subject, "read"); e != nil {
+		return "", e
+	}
 	created, e := s.insertTerm(ctx, set, nil, TermInput{Name: raw, Labels: map[string]string{}, Synonyms: []string{}})
 	if e != nil {
 		return "", e
@@ -124,14 +127,14 @@ func idOf(t *ent.Term) string {
 }
 
 // termInScope reports whether t may be a value of d.
-func (s *Service) termInScope(ctx context.Context, workspaceID string, d *ent.FieldDefinition, set *ent.TermSet, t *ent.Term) (bool, error) {
+func (s *Service) termInScope(ctx context.Context, d *ent.FieldDefinition, set *ent.TermSet, t *ent.Term) (bool, error) {
 	if t.TermSetID == set.ID {
 		return true, nil
 	}
 	if d.Type != "keywords" || !t.AvailableAsKeyword {
 		return false, nil
 	}
-	return s.Client.TermSet.Query().Where(termset.IDEQ(t.TermSetID), termset.WorkspaceIDEQ(workspaceID)).Exist(ctx)
+	return s.Client.TermSet.Query().Where(termset.IDEQ(t.TermSetID)).Exist(ctx)
 }
 
 // termText is the search text of a revision's terms: the names, labels and

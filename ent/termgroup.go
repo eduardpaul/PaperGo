@@ -4,7 +4,6 @@ package ent
 
 import (
 	"fmt"
-	"papergo/ent/resource"
 	"papergo/ent/termgroup"
 	"strings"
 	"time"
@@ -20,8 +19,6 @@ type TermGroup struct {
 	ID string `json:"id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
-	// WorkspaceID holds the value of the "workspace_id" field.
-	WorkspaceID string `json:"workspace_id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
@@ -40,30 +37,17 @@ type TermGroup struct {
 
 // TermGroupEdges holds the relations/edges for other nodes in the graph.
 type TermGroupEdges struct {
-	// Workspace holds the value of the workspace edge.
-	Workspace *Resource `json:"workspace,omitempty"`
 	// TermSets holds the value of the term_sets edge.
 	TermSets []*TermSet `json:"term_sets,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
-}
-
-// WorkspaceOrErr returns the Workspace value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e TermGroupEdges) WorkspaceOrErr() (*Resource, error) {
-	if e.Workspace != nil {
-		return e.Workspace, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: resource.Label}
-	}
-	return nil, &NotLoadedError{edge: "workspace"}
+	loadedTypes [1]bool
 }
 
 // TermSetsOrErr returns the TermSets value or an error if the edge
 // was not loaded in eager-loading.
 func (e TermGroupEdges) TermSetsOrErr() ([]*TermSet, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[0] {
 		return e.TermSets, nil
 	}
 	return nil, &NotLoadedError{edge: "term_sets"}
@@ -78,7 +62,7 @@ func (*TermGroup) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case termgroup.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case termgroup.FieldID, termgroup.FieldWorkspaceID, termgroup.FieldName, termgroup.FieldDescription:
+		case termgroup.FieldID, termgroup.FieldName, termgroup.FieldDescription:
 			values[i] = new(sql.NullString)
 		case termgroup.FieldCreatedAt, termgroup.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -108,12 +92,6 @@ func (_m *TermGroup) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
-			}
-		case termgroup.FieldWorkspaceID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field workspace_id", values[i])
-			} else if value.Valid {
-				_m.WorkspaceID = value.String
 			}
 		case termgroup.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -158,11 +136,6 @@ func (_m *TermGroup) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// QueryWorkspace queries the "workspace" edge of the TermGroup entity.
-func (_m *TermGroup) QueryWorkspace() *ResourceQuery {
-	return NewTermGroupClient(_m.config).QueryWorkspace(_m)
-}
-
 // QueryTermSets queries the "term_sets" edge of the TermGroup entity.
 func (_m *TermGroup) QueryTermSets() *TermSetQuery {
 	return NewTermGroupClient(_m.config).QueryTermSets(_m)
@@ -193,9 +166,6 @@ func (_m *TermGroup) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("workspace_id=")
-	builder.WriteString(_m.WorkspaceID)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)

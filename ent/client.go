@@ -4663,22 +4663,6 @@ func (c *TermGroupClient) GetX(ctx context.Context, id string) *TermGroup {
 	return obj
 }
 
-// QueryWorkspace queries the workspace edge of a TermGroup.
-func (c *TermGroupClient) QueryWorkspace(_m *TermGroup) *ResourceQuery {
-	query := (&ResourceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(termgroup.Table, termgroup.FieldID, id),
-			sqlgraph.To(resource.Table, resource.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, termgroup.WorkspaceTable, termgroup.WorkspaceColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryTermSets queries the term_sets edge of a TermGroup.
 func (c *TermGroupClient) QueryTermSets(_m *TermGroup) *TermSetQuery {
 	query := (&TermSetClient{config: c.config}).Query()
@@ -4826,22 +4810,6 @@ func (c *TermSetClient) GetX(ctx context.Context, id string) *TermSet {
 		panic(err)
 	}
 	return obj
-}
-
-// QueryWorkspace queries the workspace edge of a TermSet.
-func (c *TermSetClient) QueryWorkspace(_m *TermSet) *ResourceQuery {
-	query := (&ResourceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(termset.Table, termset.FieldID, id),
-			sqlgraph.To(resource.Table, resource.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, termset.WorkspaceTable, termset.WorkspaceColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // QueryGroup queries the group edge of a TermSet.

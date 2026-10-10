@@ -83,7 +83,7 @@ The `data` for each event type:
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
 - `wf.*`: `run_id` and the raised data; `completed`/`failed` add `status`, `node` and, on failure, `error`
 
-Only items raise item events. Folders, collections and settings do not; merging terms raises `term.merged`.
+Only items raise item events. Folders, collections and settings do not; merging organization terms delivers `term.merged` to every live workspace so its workflow subscriptions can react.
 
 ## Conditions
 
@@ -194,13 +194,13 @@ Property names are lowercase identifiers, and forms nest at most 6 levels.
 | `item` | items of the workspace the person may read | `collection_id`: only that list or library |
 | `collection` | lists and libraries of the workspace the person may read | |
 | `relationship` | items to use with a relationship type; no link is created, nodes decide | `relationship_type_id` (required) |
-| `terms` | terms of the workspace's taxonomy, not deprecated | `group_id`, `term_set_id`, `term_ids` (only those terms) |
-| `keywords` | keywords of the workspace, not deprecated: terms of its keywords set and terms available as keywords | |
+| `terms` | organization taxonomy terms, not deprecated | `group_id`, `term_set_id`, `term_ids` (only those terms) |
+| `keywords` | organization keywords, not deprecated: terms of its keywords set and terms available as keywords | |
 | `people` | principal subjects that have access to the workspace | `access`: `read` (default), `read_draft`, `write`, `publish` or `manage` |
 
-Term pickers browse `GET /v1/term-sets/{id}/terms`; keyword pickers suggest from `GET /v1/workspaces/{id}/keywords?q=` and add new keywords with `POST /v1/workspaces/{id}/keywords` before the form is submitted (see [taxonomy](application-foundation.md#controlled-taxonomy)).
+Term pickers browse `GET /v1/term-sets/{id}/terms`; keyword pickers suggest from `GET /v1/keywords?q=` and add new keywords with `POST /v1/keywords` before the form is submitted (see [taxonomy](application-foundation.md#controlled-taxonomy)).
 
-Saving a workflow checks that the collections, relationship types, term groups, term sets and terms its pickers name belong to the workspace.
+Saving a workflow checks that collections and relationship types belong to the workspace, and that taxonomy pickers reference existing organization groups, sets and terms. Taxonomy pickers require `taxonomy.read`.
 
 **Selection hints.** The root of a [selection](#selection-runs) workflow's launch form can carry `x-papergo-selection`, text hints for the screen that chooses and orders the items: `preview` (such as `image`), `item_label` (such as `page`), `order_label` and `primary_description`. They are presentation only.
 

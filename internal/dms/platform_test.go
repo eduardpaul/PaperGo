@@ -125,7 +125,7 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 }
 func TestTaxonomyAndLookupPreserveIDsAndValidateNewAssignments(t *testing.T) {
 	s, w, l := fixture(t)
-	set, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "topics", Name: "Topics"})
+	set, e := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "topics", Name: "Topics"})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -176,14 +176,14 @@ func TestTaxonomyAndLookupPreserveIDsAndValidateNewAssignments(t *testing.T) {
 	if e != nil || len(matches.Data) != 1 {
 		t.Fatal("synonym search", matches, e)
 	}
-	another, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "other", Name: "Other"})
+	another, e := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "other", Name: "Other"})
 	if e != nil {
 		t.Fatal(e)
 	}
 	if _, e = s.CreateTerm(testContext, "alice", another.ID, TermInput{Name: "Bad parent", ParentID: &root.ID}); e == nil {
 		t.Fatal("cross-set parent")
 	}
-	if _, e = s.CreateTermSet(testContext, "reader", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
+	if _, e = s.CreateTermSet(testContext, "reader", TermSetInput{GroupID: testTermGroup(s), Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
 		t.Fatal("taxonomy management authorization", e)
 	}
 }

@@ -17,10 +17,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// The taxonomy of a workspace: term groups hold term sets, term sets hold
-// trees of terms. Every workspace has a system group with its keywords set,
-// the open set of free keywords. Reading needs workspace read; adding terms
-// to an open set needs write; everything else needs manage.
+// The organization term store is shared by all workspaces. Open sets accept
+// contributions with taxonomy.read; curation requires taxonomy.manage.
 
 const (
 	SystemTermGroupName = "System"
@@ -37,17 +35,6 @@ func validateDescription(s string) error {
 	return nil
 }
 
-// createWorkspaceTaxonomy adds the system group and the keywords set of a
-// new workspace.
-func (s *Service) createWorkspaceTaxonomy(ctx context.Context, workspaceID string) error {
-	g, e := s.Client.TermGroup.Create().SetWorkspaceID(workspaceID).SetName(SystemTermGroupName).SetDescription("Term sets managed by PaperGo.").SetIsSystem(true).Save(ctx)
-	if e != nil {
-		return e
-	}
-	return s.Client.TermSet.Create().SetWorkspaceID(workspaceID).SetGroupID(g.ID).SetKey(KeywordsTermSetKey).SetName("Keywords").
-		SetDescription("Free keywords that people add while tagging items.").SetIsOpen(true).SetIsKeywords(true).Exec(ctx)
-}
-
 type TermGroupInput struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -60,54 +47,53 @@ func (in *TermGroupInput) validate() error {
 	}
 	return validateDescription(in.Description)
 }
-func (s *Service) CreateTermGroup(ctx context.Context, subject, workspaceID string, in TermGroupInput) (out *ent.TermGroup, err error) {
+func (s *Service) CreateTermGroup(ctx context.Context, subject string, in TermGroupInput) (out *ent.TermGroup, err error) {
 	if e := in.validate(); e != nil {
 		return nil, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "manage")
-		if e != nil {
+		if e := t.requireTaxonomy(ctx, subject, "manage"); e != nil {
 			return e
 		}
-		if out, e = t.Client.TermGroup.Create().SetWorkspaceID(w.ID).SetName(in.Name).SetDescription(in.Description).Save(ctx); e != nil {
+		var e error
+		if out, e = t.Client.TermGroup.Create().SetName(in.Name).SetDescription(in.Description).Save(ctx); e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "term_group.create", w, map[string]any{"term_group_id": out.ID})
+		return t.auditTaxonomy(ctx, subject, "term_group.create", map[string]any{"term_group_id": out.ID})
 	})
 	return
 }
-func (s *Service) TermGroups(ctx context.Context, subject, workspaceID, after string, limit int) (Page[*ent.TermGroup], error) {
+func (s *Service) TermGroups(ctx context.Context, subject, after string, limit int) (Page[*ent.TermGroup], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.TermGroup], error) {
-		if _, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "read"); e != nil {
+		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return Page[*ent.TermGroup]{}, e
 		}
-		rows, e := t.Client.TermGroup.Query().Where(termgroup.WorkspaceIDEQ(workspaceID), termgroup.IDGT(after)).Order(ent.Asc(termgroup.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
+		rows, e := t.Client.TermGroup.Query().Where(termgroup.IDGT(after)).Order(ent.Asc(termgroup.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
 		return entityPage(rows, limit, func(v *ent.TermGroup) string { return v.ID }), e
 	})
 }
 func (s *Service) TermGroup(ctx context.Context, subject, id string) (*ent.TermGroup, error) {
 	return read(ctx, s, func(t *Service) (*ent.TermGroup, error) {
-		g, _, e := t.termGroup(ctx, subject, id, "read")
+		g, e := t.termGroup(ctx, subject, id, "read")
 		return g, e
 	})
 }
-func (s *Service) termGroup(ctx context.Context, subject, id, action string) (*ent.TermGroup, *ent.Resource, error) {
+func (s *Service) termGroup(ctx context.Context, subject, id, action string) (*ent.TermGroup, error) {
 	g, e := s.Client.TermGroup.Get(ctx, id)
 	if ent.IsNotFound(e) {
-		return nil, nil, ErrNotFound
+		return nil, ErrNotFound
 	}
 	if e != nil {
-		return nil, nil, e
+		return nil, e
 	}
-	w, e := s.taxonomyWorkspace(ctx, subject, g.WorkspaceID, action)
-	return g, w, e
+	return g, s.requireTaxonomy(ctx, subject, action)
 }
 func (s *Service) UpdateTermGroup(ctx context.Context, subject, id string, version int, in TermGroupInput) (out *ent.TermGroup, err error) {
 	if e := in.validate(); e != nil {
 		return nil, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		g, w, e := t.termGroup(ctx, subject, id, "manage")
+		g, e := t.termGroup(ctx, subject, id, "manage")
 		if e != nil {
 			return e
 		}
@@ -120,7 +106,7 @@ func (s *Service) UpdateTermGroup(ctx context.Context, subject, id string, versi
 		if out, e = t.Client.TermGroup.UpdateOne(g).SetName(in.Name).SetDescription(in.Description).AddVersion(1).Save(ctx); e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "term_group.update", w, map[string]any{"term_group_id": id})
+		return t.auditTaxonomy(ctx, subject, "term_group.update", map[string]any{"term_group_id": id})
 	})
 	return
 }
@@ -128,7 +114,7 @@ func (s *Service) UpdateTermGroup(ctx context.Context, subject, id string, versi
 // DeleteTermGroup deletes an empty group other than the system group.
 func (s *Service) DeleteTermGroup(ctx context.Context, subject, id string, version int) error {
 	return s.write(ctx, func(t *Service) error {
-		g, w, e := t.termGroup(ctx, subject, id, "manage")
+		g, e := t.termGroup(ctx, subject, id, "manage")
 		if e != nil {
 			return e
 		}
@@ -148,7 +134,7 @@ func (s *Service) DeleteTermGroup(ctx context.Context, subject, id string, versi
 		if e = t.Client.TermGroup.DeleteOne(g).Exec(ctx); e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "term_group.delete", w, map[string]any{"term_group_id": id})
+		return t.auditTaxonomy(ctx, subject, "term_group.delete", map[string]any{"term_group_id": id})
 	})
 }
 
@@ -169,7 +155,7 @@ func (in *TermSetInput) validate() error {
 	}
 	return validateDescription(in.Description)
 }
-func (s *Service) CreateTermSet(ctx context.Context, subject, workspaceID string, in TermSetInput) (out *ent.TermSet, err error) {
+func (s *Service) CreateTermSet(ctx context.Context, subject string, in TermSetInput) (out *ent.TermSet, err error) {
 	if !fieldKey.MatchString(in.Key) {
 		return nil, invalid("invalid term set key")
 	}
@@ -177,13 +163,12 @@ func (s *Service) CreateTermSet(ctx context.Context, subject, workspaceID string
 		return nil, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "manage")
-		if e != nil {
+		if e := t.requireTaxonomy(ctx, subject, "manage"); e != nil {
 			return e
 		}
 		g, e := t.Client.TermGroup.Get(ctx, in.GroupID)
-		if ent.IsNotFound(e) || e == nil && g.WorkspaceID != w.ID {
-			return invalid("group_id must identify a term group of the workspace")
+		if ent.IsNotFound(e) {
+			return invalid("group_id must identify an organization term group")
 		}
 		if e != nil {
 			return e
@@ -191,19 +176,19 @@ func (s *Service) CreateTermSet(ctx context.Context, subject, workspaceID string
 		if g.IsSystem {
 			return invalid("the system term group holds only the keywords set")
 		}
-		if out, e = t.Client.TermSet.Create().SetWorkspaceID(w.ID).SetGroupID(g.ID).SetKey(in.Key).SetName(in.Name).SetDescription(in.Description).SetIsOpen(in.IsOpen).Save(ctx); e != nil {
+		if out, e = t.Client.TermSet.Create().SetGroupID(g.ID).SetKey(in.Key).SetName(in.Name).SetDescription(in.Description).SetIsOpen(in.IsOpen).Save(ctx); e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "term_set.create", w, map[string]any{"term_set_id": out.ID})
+		return t.auditTaxonomy(ctx, subject, "term_set.create", map[string]any{"term_set_id": out.ID})
 	})
 	return
 }
-func (s *Service) TermSets(ctx context.Context, subject, workspaceID, groupID, after string, limit int) (Page[*ent.TermSet], error) {
+func (s *Service) TermSets(ctx context.Context, subject, groupID, after string, limit int) (Page[*ent.TermSet], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.TermSet], error) {
-		if _, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "read"); e != nil {
+		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return Page[*ent.TermSet]{}, e
 		}
-		q := t.Client.TermSet.Query().Where(termset.WorkspaceIDEQ(workspaceID), termset.IDGT(after))
+		q := t.Client.TermSet.Query().Where(termset.IDGT(after))
 		if groupID != "" {
 			q.Where(termset.GroupIDEQ(groupID))
 		}
@@ -213,27 +198,26 @@ func (s *Service) TermSets(ctx context.Context, subject, workspaceID, groupID, a
 }
 func (s *Service) TermSet(ctx context.Context, subject, id string) (*ent.TermSet, error) {
 	return read(ctx, s, func(t *Service) (*ent.TermSet, error) {
-		set, _, e := t.termSet(ctx, subject, id, "read")
+		set, e := t.termSet(ctx, subject, id, "read")
 		return set, e
 	})
 }
-func (s *Service) termSet(ctx context.Context, subject, id, action string) (*ent.TermSet, *ent.Resource, error) {
+func (s *Service) termSet(ctx context.Context, subject, id, action string) (*ent.TermSet, error) {
 	set, e := s.Client.TermSet.Get(ctx, id)
 	if ent.IsNotFound(e) {
-		return nil, nil, ErrNotFound
+		return nil, ErrNotFound
 	}
 	if e != nil {
-		return nil, nil, e
+		return nil, e
 	}
-	w, e := s.taxonomyWorkspace(ctx, subject, set.WorkspaceID, action)
-	return set, w, e
+	return set, s.requireTaxonomy(ctx, subject, action)
 }
 func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, version int, in TermSetInput) (out *ent.TermSet, err error) {
 	if e := in.validate(); e != nil {
 		return nil, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		set, w, e := t.termSet(ctx, subject, setID, "manage")
+		set, e := t.termSet(ctx, subject, setID, "manage")
 		if e != nil {
 			return e
 		}
@@ -249,7 +233,7 @@ func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, vers
 		if out, e = t.Client.TermSet.UpdateOne(set).SetName(in.Name).SetDescription(in.Description).SetIsOpen(in.IsOpen).AddVersion(1).Save(ctx); e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "term_set.update", w, map[string]any{"term_set_id": setID})
+		return t.auditTaxonomy(ctx, subject, "term_set.update", map[string]any{"term_set_id": setID})
 	})
 	return
 }
@@ -258,7 +242,7 @@ func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, vers
 // retained, so a set that ever had terms stays.
 func (s *Service) DeleteTermSet(ctx context.Context, subject, id string, version int) error {
 	return s.write(ctx, func(t *Service) error {
-		set, w, e := t.termSet(ctx, subject, id, "manage")
+		set, e := t.termSet(ctx, subject, id, "manage")
 		if e != nil {
 			return e
 		}
@@ -287,7 +271,7 @@ func (s *Service) DeleteTermSet(ctx context.Context, subject, id string, version
 		if e = t.Client.TermSet.DeleteOne(set).Exec(ctx); e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "term_set.delete", w, map[string]any{"term_set_id": id})
+		return t.auditTaxonomy(ctx, subject, "term_set.delete", map[string]any{"term_set_id": id})
 	})
 }
 
@@ -332,21 +316,13 @@ func (s *Service) termNames(ctx context.Context, subject string, ids []string) (
 	if e != nil {
 		return nil, e
 	}
-	readable := map[string]bool{}
+	if e := s.requireTaxonomy(ctx, subject, "read"); e != nil {
+		if errors.Is(e, ErrForbidden) {
+			return out, nil
+		}
+		return nil, e
+	}
 	for _, v := range rows {
-		ws := v.Edges.TermSet.WorkspaceID
-		ok, seen := readable[ws]
-		if !seen {
-			_, e = s.taxonomyWorkspace(ctx, subject, ws, "read")
-			if e != nil && !errors.Is(e, ErrForbidden) && !errors.Is(e, ErrNotFound) {
-				return nil, e
-			}
-			ok = e == nil
-			readable[ws] = ok
-		}
-		if !ok {
-			continue
-		}
 		out[v.ID] = v.Name
 		if v.Edges.MergedInto != nil {
 			out[v.ID] = v.Edges.MergedInto.Name
@@ -451,7 +427,7 @@ func (s *Service) insertTerm(ctx context.Context, set *ent.TermSet, parent *ent.
 		SetDeprecated(in.Deprecated).SetAvailableAsKeyword(in.AvailableAsKeyword).Save(ctx)
 }
 
-// termAction is the workspace access needed to add terms to set.
+// termAction is the taxonomy scope needed to add terms to set.
 func termAction(set *ent.TermSet) string {
 	if set.IsOpen {
 		return "read"
@@ -463,6 +439,9 @@ func (s *Service) CreateTerm(ctx context.Context, subject, setID string, in Term
 		return out, e
 	}
 	err = s.write(ctx, func(t *Service) error {
+		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
+			return e
+		}
 		set, e := t.Client.TermSet.Get(ctx, setID)
 		if ent.IsNotFound(e) {
 			return ErrNotFound
@@ -474,8 +453,7 @@ func (s *Service) CreateTerm(ctx context.Context, subject, setID string, in Term
 		if in.Deprecated || in.AvailableAsKeyword {
 			action = "manage"
 		}
-		w, e := t.taxonomyWorkspace(ctx, subject, set.WorkspaceID, action)
-		if e != nil {
+		if e := t.requireTaxonomy(ctx, subject, action); e != nil {
 			return e
 		}
 		var parent *ent.Term
@@ -491,39 +469,39 @@ func (s *Service) CreateTerm(ctx context.Context, subject, setID string, in Term
 			return e
 		}
 		out = TermView{Term: created}
-		return t.audit(ctx, subject, "term.create", w, map[string]any{"term_id": created.ID, "term_set_id": setID})
+		return t.auditTaxonomy(ctx, subject, "term.create", map[string]any{"term_id": created.ID, "term_set_id": setID})
 	})
 	return
 }
 
 // termForChange loads a term that a manager changes; merged terms are
 // read-only.
-func (s *Service) termForChange(ctx context.Context, subject, id string, version int) (*ent.Term, *ent.TermSet, *ent.Resource, error) {
+func (s *Service) termForChange(ctx context.Context, subject, id string, version int) (*ent.Term, *ent.TermSet, error) {
 	v, e := s.Client.Term.Get(ctx, id)
 	if ent.IsNotFound(e) {
-		return nil, nil, nil, ErrNotFound
+		return nil, nil, ErrNotFound
 	}
 	if e != nil {
-		return nil, nil, nil, e
+		return nil, nil, e
 	}
-	set, w, e := s.termSet(ctx, subject, v.TermSetID, "manage")
+	set, e := s.termSet(ctx, subject, v.TermSetID, "manage")
 	if e != nil {
-		return nil, nil, nil, e
+		return nil, nil, e
 	}
 	if v.Version != version {
-		return nil, nil, nil, ErrConflict
+		return nil, nil, ErrConflict
 	}
 	if v.MergedIntoID != nil {
-		return nil, nil, nil, invalid("the term was merged into " + *v.MergedIntoID)
+		return nil, nil, invalid("the term was merged into " + *v.MergedIntoID)
 	}
-	return v, set, w, nil
+	return v, set, nil
 }
 func (s *Service) UpdateTerm(ctx context.Context, subject, termID string, version int, in TermInput) (out TermView, err error) {
 	if e := normalizeTerm(&in); e != nil {
 		return out, e
 	}
 	err = s.write(ctx, func(t *Service) error {
-		old, set, w, e := t.termForChange(ctx, subject, termID, version)
+		old, set, e := t.termForChange(ctx, subject, termID, version)
 		if e != nil {
 			return e
 		}
@@ -549,7 +527,7 @@ func (s *Service) UpdateTerm(ctx context.Context, subject, termID string, versio
 			return e
 		}
 		out = views[0]
-		return t.audit(ctx, subject, "term.update", w, map[string]any{"term_id": termID, "deprecated": in.Deprecated})
+		return t.auditTaxonomy(ctx, subject, "term.update", map[string]any{"term_id": termID, "deprecated": in.Deprecated})
 	})
 	return
 }
@@ -562,7 +540,7 @@ func (s *Service) Term(ctx context.Context, subject, id string) (TermView, error
 		if e != nil {
 			return TermView{}, e
 		}
-		if _, _, e = t.termSet(ctx, subject, v.TermSetID, "read"); e != nil {
+		if _, e = t.termSet(ctx, subject, v.TermSetID, "read"); e != nil {
 			return TermView{}, e
 		}
 		views, e := t.termViews(ctx, []*ent.Term{v})
@@ -574,7 +552,7 @@ func (s *Service) Term(ctx context.Context, subject, id string) (TermView, error
 }
 
 // TermsByID returns the readable terms among ids, in the order asked;
-// unknown ids and terms of workspaces the caller cannot read are left out.
+// unknown IDs are left out; taxonomy.read authorizes the organization store.
 // Merged terms come back too: merged_into_id names the term to show.
 func (s *Service) TermsByID(ctx context.Context, subject string, ids []string) ([]TermView, error) {
 	if len(ids) < 1 || len(ids) > 200 {
@@ -585,22 +563,12 @@ func (s *Service) TermsByID(ctx context.Context, subject string, ids []string) (
 		if e != nil {
 			return nil, e
 		}
-		readable := map[string]bool{}
+		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
+			return nil, e
+		}
 		byID := map[string]*ent.Term{}
 		for _, v := range rows {
-			ws := v.Edges.TermSet.WorkspaceID
-			ok, seen := readable[ws]
-			if !seen {
-				_, e = t.taxonomyWorkspace(ctx, subject, ws, "read")
-				if e != nil && !errors.Is(e, ErrForbidden) && !errors.Is(e, ErrNotFound) {
-					return nil, e
-				}
-				ok = e == nil
-				readable[ws] = ok
-			}
-			if ok {
-				byID[v.ID] = v
-			}
+			byID[v.ID] = v
 		}
 		ordered := []*ent.Term{}
 		for _, id := range ids {
@@ -644,7 +612,7 @@ func (s *Service) Terms(ctx context.Context, subject, setID string, in TermsQuer
 		}
 	}
 	return read(ctx, s, func(t *Service) (Page[TermView], error) {
-		if _, _, e := t.termSet(ctx, subject, setID, "read"); e != nil {
+		if _, e := t.termSet(ctx, subject, setID, "read"); e != nil {
 			return Page[TermView]{}, e
 		}
 		q := t.Client.Term.Query().Where(term.TermSetIDEQ(setID), term.MergedIntoIDIsNil())

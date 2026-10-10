@@ -28,11 +28,11 @@ func TestTaxonomyRoutes(t *testing.T) {
 			}
 		}
 	}
-	base := "/v1/workspaces/" + ws.ID
+	_ = ws
 	var group ent.TermGroup
-	send("POST", base+"/term-groups", `{"name":"Records"}`, "", json_, 201, &group)
+	send("POST", "/v1/term-groups", `{"name":"Records"}`, "", json_, 201, &group)
 	var set ent.TermSet
-	send("POST", base+"/term-sets", `{"group_id":"`+group.ID+`","key":"topics","name":"Topics"}`, "", json_, 201, &set)
+	send("POST", "/v1/term-sets", `{"group_id":"`+group.ID+`","key":"topics","name":"Topics"}`, "", json_, 201, &set)
 	var finance, money dms.TermView
 	send("POST", "/v1/term-sets/"+set.ID+"/terms", `{"name":"Finance","color":"#336699"}`, "", json_, 201, &finance)
 	send("POST", "/v1/term-sets/"+set.ID+"/terms", `{"name":"Money"}`, "", json_, 201, &money)
@@ -60,14 +60,14 @@ func TestTaxonomyRoutes(t *testing.T) {
 	}
 
 	var keyword dms.TermView
-	send("POST", base+"/keywords", `{"name":"Budget"}`, "", json_, 201, &keyword)
-	send("POST", base+"/keywords", `{"name":"budget"}`, "", json_, 200, nil)
+	send("POST", "/v1/keywords", `{"name":"Budget"}`, "", json_, 201, &keyword)
+	send("POST", "/v1/keywords", `{"name":"budget"}`, "", json_, 200, nil)
 	var suggestions struct{ Data []dms.TermView }
-	send("GET", base+"/keywords?q=bud", "", "", "", 200, &suggestions)
+	send("GET", "/v1/keywords?q=bud", "", "", "", 200, &suggestions)
 	if len(suggestions.Data) != 1 || suggestions.Data[0].ID != keyword.ID {
 		t.Fatalf("suggestions: %+v", suggestions)
 	}
-	send("GET", base+"/keywords/popular?top=5", "", "", "", 200, nil)
+	send("GET", "/v1/keywords/popular?top=5", "", "", "", 200, nil)
 	var promoted dms.TermView
 	send("POST", "/v1/keywords/"+keyword.ID+"/promote", `{"term_set_id":"`+set.ID+`"}`, `"1"`, json_, 200, &promoted)
 	if promoted.TermSetID != set.ID || !promoted.AvailableAsKeyword {
@@ -82,23 +82,19 @@ func TestTaxonomyRoutes(t *testing.T) {
 		t.Fatalf("import: %+v", imported)
 	}
 	var empty ent.TermSet
-	send("POST", base+"/term-sets", `{"group_id":"`+group.ID+`","key":"empty","name":"Empty"}`, "", json_, 201, &empty)
+	send("POST", "/v1/term-sets", `{"group_id":"`+group.ID+`","key":"empty","name":"Empty"}`, "", json_, 201, &empty)
 	send("DELETE", "/v1/term-sets/"+empty.ID, "", `"1"`, "", 204, nil)
 	send("DELETE", "/v1/term-groups/"+group.ID, "", `"1"`, "", 422, nil)
 	var pkg dms.TaxonomyPackage
-	send("GET", base+"/taxonomy/export", "", "", "", 200, &pkg)
-	other, err := s.Create(t.Context(), "alice", "", dms.CreateResource{Kind: "workspace", Name: "Copy"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	send("GET", "/v1/taxonomy/export", "", "", "", 200, &pkg)
 	raw, _ := json.Marshal(pkg)
 	var result dms.TaxonomyImportResult
-	send("POST", "/v1/workspaces/"+other.ID+"/taxonomy/import", string(raw), "", json_, 200, &result)
-	if result.GroupsCreated != 1 || result.SetsCreated != 2 || result.TermsCreated != 5 {
+	send("POST", "/v1/taxonomy/import", string(raw), "", json_, 200, &result)
+	if result != (dms.TaxonomyImportResult{}) {
 		t.Fatalf("taxonomy import: %+v", result)
 	}
 	var groups dms.Page[ent.TermGroup]
-	send("GET", base+"/term-groups", "", "", "", 200, &groups)
+	send("GET", "/v1/term-groups", "", "", "", 200, &groups)
 	if len(groups.Data) != 2 {
 		t.Fatalf("groups: %+v", groups)
 	}

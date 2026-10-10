@@ -6,7 +6,7 @@
 -- runner launches; their names are reserved (docs/workflows.md).
 
 -- Tables
-CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `resource_id` text NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `details` json NOT NULL, PRIMARY KEY (`id`));
+CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NULL, `resource_id` text NULL, `subject` text NOT NULL, `action` text NOT NULL, `details` json NOT NULL, PRIMARY KEY (`id`));
 CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL, `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT NULL, `key` text NOT NULL, `label` text NOT NULL, `type` text NOT NULL, `required` bool NOT NULL DEFAULT (false), `choices` json NOT NULL, `container_id` text NOT NULL, indexed BOOLEAN NOT NULL DEFAULT 0, index_status TEXT NOT NULL DEFAULT 'ready' CHECK(index_status IN ('ready','building','failed')), scale INTEGER NOT NULL DEFAULT 0, options JSON NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object'), PRIMARY KEY (`id`), CONSTRAINT `field_definitions_resources_definitions` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `principal_type` text NOT NULL CHECK(principal_type IN ('user','group','workspace_visitor','workspace_member','workspace_owner')), `principal_id` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
@@ -73,11 +73,11 @@ CREATE TABLE schema_templates (
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
 );
 CREATE TABLE term_groups (
- id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,workspace_id TEXT NOT NULL REFERENCES resources(id),
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,
  name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',is_system BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
 );
 CREATE TABLE term_sets (
- id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,workspace_id TEXT NOT NULL REFERENCES resources(id),
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,
  group_id TEXT NOT NULL REFERENCES term_groups(id),
  key TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',is_open BOOLEAN NOT NULL DEFAULT 0,is_keywords BOOLEAN NOT NULL DEFAULT 0,
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
@@ -224,11 +224,11 @@ CREATE INDEX fieldvalue_container_id_surface_field_key_value_text_item_id ON fie
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_number_item_id ON field_values(container_id,surface,field_key,value_number,item_id);
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_boolean_item_id ON field_values(container_id,surface,field_key,value_boolean,item_id);
 CREATE UNIQUE INDEX schematemplate_workspace_id_key ON schema_templates(workspace_id,key);
-CREATE UNIQUE INDEX termgroup_workspace_id_name ON term_groups(workspace_id,name);
-CREATE UNIQUE INDEX termgroup_workspace_id_system ON term_groups(workspace_id) WHERE is_system;
-CREATE UNIQUE INDEX termset_workspace_id_key ON term_sets(workspace_id,key);
+CREATE UNIQUE INDEX termgroup_name ON term_groups(name);
+CREATE UNIQUE INDEX termgroup_system ON term_groups(is_system) WHERE is_system;
+CREATE UNIQUE INDEX termset_key ON term_sets(key);
 CREATE UNIQUE INDEX termset_group_id_name ON term_sets(group_id,name);
-CREATE UNIQUE INDEX termset_workspace_id_keywords ON term_sets(workspace_id) WHERE is_keywords;
+CREATE UNIQUE INDEX termset_keywords ON term_sets(is_keywords) WHERE is_keywords;
 CREATE UNIQUE INDEX term_active_sibling_name ON terms(term_set_id,ifnull(parent_id,''),normalized_name) WHERE merged_into_id IS NULL;
 CREATE INDEX term_term_set_id_parent_id_sort ON terms(term_set_id,parent_id,sort_order,normalized_name,id);
 CREATE INDEX term_term_set_id_id ON terms(term_set_id,id);
@@ -495,15 +495,9 @@ END;
 CREATE TRIGGER term_parent_move_validate BEFORE UPDATE OF term_set_id,parent_id ON terms WHEN new.parent_id IS NOT NULL BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM terms WHERE id=new.parent_id AND term_set_id=new.term_set_id) THEN RAISE(ABORT,'term parent must belong to the same term set') END;
 END;
-CREATE TRIGGER term_set_workspace_stable BEFORE UPDATE OF term_set_id ON terms BEGIN
- SELECT CASE WHEN (SELECT workspace_id FROM term_sets WHERE id=new.term_set_id) IS NOT (SELECT workspace_id FROM term_sets WHERE id=old.term_set_id) THEN RAISE(ABORT,'terms stay in their workspace') END;
-END;
 CREATE TRIGGER term_retained BEFORE DELETE ON terms BEGIN SELECT RAISE(ABORT,'terms are retained; deprecate or merge them'); END;
-CREATE TRIGGER term_groups_workspace_validate BEFORE INSERT ON term_groups BEGIN
- SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND kind='workspace') THEN RAISE(ABORT,'configuration requires a workspace') END;
-END;
-CREATE TRIGGER term_groups_identity_immutable BEFORE UPDATE OF workspace_id,is_system ON term_groups BEGIN
- SELECT CASE WHEN new.workspace_id IS NOT old.workspace_id OR new.is_system IS NOT old.is_system THEN RAISE(ABORT,'term group identity is immutable') END;
+CREATE TRIGGER term_groups_identity_immutable BEFORE UPDATE OF is_system ON term_groups BEGIN
+ SELECT CASE WHEN new.is_system IS NOT old.is_system THEN RAISE(ABORT,'term group identity is immutable') END;
 END;
 CREATE TRIGGER listview_container_validate BEFORE INSERT ON list_views BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.container_id AND kind IN ('list','library')) THEN RAISE(ABORT,'view requires a collection') END;
@@ -517,12 +511,8 @@ END;
 CREATE TRIGGER schema_templates_identity_immutable BEFORE UPDATE OF workspace_id,key ON schema_templates BEGIN
  SELECT CASE WHEN new.workspace_id IS NOT old.workspace_id OR new.key IS NOT old.key THEN RAISE(ABORT,'configuration identity is immutable') END;
 END;
-CREATE TRIGGER term_sets_workspace_validate BEFORE INSERT ON term_sets BEGIN
- SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND kind='workspace') THEN RAISE(ABORT,'configuration requires a workspace') END;
- SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM term_groups WHERE id=new.group_id AND workspace_id=new.workspace_id) THEN RAISE(ABORT,'term set group must belong to its workspace') END;
-END;
-CREATE TRIGGER term_sets_identity_immutable BEFORE UPDATE OF workspace_id,key,group_id,is_keywords ON term_sets BEGIN
- SELECT CASE WHEN new.workspace_id IS NOT old.workspace_id OR new.key IS NOT old.key OR new.group_id IS NOT old.group_id OR new.is_keywords IS NOT old.is_keywords THEN RAISE(ABORT,'configuration identity is immutable') END;
+CREATE TRIGGER term_sets_identity_immutable BEFORE UPDATE OF key,group_id,is_keywords ON term_sets BEGIN
+ SELECT CASE WHEN new.key IS NOT old.key OR new.group_id IS NOT old.group_id OR new.is_keywords IS NOT old.is_keywords THEN RAISE(ABORT,'configuration identity is immutable') END;
 END;
 CREATE TRIGGER relationship_types_workspace_validate BEFORE INSERT ON relationship_types BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND kind='workspace') THEN RAISE(ABORT,'configuration requires a workspace') END;
@@ -625,3 +615,9 @@ END;
 CREATE TRIGGER grant_principal_update BEFORE UPDATE OF principal_type,principal_id,action ON grants BEGIN
  SELECT CASE WHEN (new.principal_type='user' AND NOT EXISTS(SELECT 1 FROM identity_users WHERE id=new.principal_id)) OR (new.principal_type='group' AND NOT EXISTS(SELECT 1 FROM identity_groups WHERE id=new.principal_id)) OR (new.principal_type IN ('workspace_visitor','workspace_member','workspace_owner') AND NOT EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND workspace_id=new.principal_id)) OR (new.principal_type='workspace_owner' AND new.action<>'manage') THEN RAISE(ABORT,'invalid ACL principal') END;
 END;
+
+-- One organization term store exists before any workspace is created.
+INSERT INTO term_groups(id,created_at,updated_at,name,description,is_system,version)
+VALUES('00000000-0000-4000-8000-000000000001',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'System','Term sets managed by PaperGo.',1,1);
+INSERT INTO term_sets(id,created_at,updated_at,group_id,key,name,description,is_open,is_keywords,version)
+VALUES('00000000-0000-4000-8000-000000000002',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'00000000-0000-4000-8000-000000000001','keywords','Keywords','Free keywords that people add while tagging items.',1,1,1);

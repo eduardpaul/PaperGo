@@ -9,24 +9,23 @@ import (
 	"time"
 )
 
-// TermGroup organizes a workspace's term sets. Each workspace has one system
-// group, which holds its keywords set.
+// TermGroup organizes the organization's shared term sets. The system group holds keywords.
 type TermGroup struct{ ent.Schema }
 
 func (TermGroup) Mixin() []ent.Mixin { return []ent.Mixin{Identity{}} }
 func (TermGroup) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("workspace_id").Immutable(), field.String("name"), field.String("description").Default(""),
+		field.String("name"), field.String("description").Default(""),
 		field.Bool("is_system").Default(false).Immutable(),
 		field.Int("version").Default(1).Positive(), field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}
 }
 func (TermGroup) Edges() []ent.Edge {
-	return []ent.Edge{edge.To("workspace", Resource.Type).Field("workspace_id").Unique().Required().Immutable(), edge.To("term_sets", TermSet.Type)}
+	return []ent.Edge{edge.To("term_sets", TermSet.Type)}
 }
 func (TermGroup) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("workspace_id", "name").Unique(),
-		index.Fields("workspace_id").Unique().StorageKey("termgroup_workspace_id_system").Annotations(entsql.IndexWhere("is_system")),
+		index.Fields("name").Unique(),
+		index.Fields("is_system").Unique().StorageKey("termgroup_system").Annotations(entsql.IndexWhere("is_system")),
 	}
 }

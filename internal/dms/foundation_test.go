@@ -401,9 +401,9 @@ func counted(total *int) int {
 	return *total
 }
 
-// testTermGroup returns the id of a "Test" term group of the workspace.
-func testTermGroup(s *Service, workspaceID string) string {
-	page, err := s.TermGroups(testContext, "alice", workspaceID, "", 100)
+// testTermGroup returns the id of a "Test" organization term group.
+func testTermGroup(s *Service) string {
+	page, err := s.TermGroups(testContext, "alice", "", 100)
 	if err != nil {
 		panic(err)
 	}
@@ -412,7 +412,7 @@ func testTermGroup(s *Service, workspaceID string) string {
 			return g.ID
 		}
 	}
-	g, err := s.CreateTermGroup(testContext, "alice", workspaceID, TermGroupInput{Name: "Test"})
+	g, err := s.CreateTermGroup(testContext, "alice", TermGroupInput{Name: "Test"})
 	if err != nil {
 		panic(err)
 	}

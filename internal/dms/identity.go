@@ -20,15 +20,15 @@ func (s *Service) RequireScope(ctx context.Context, subject, scope string) error
 	return err
 }
 
-func (s *Service) taxonomyWorkspace(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
+func (s *Service) requireTaxonomy(ctx context.Context, subject, action string) error {
 	scope := "taxonomy.read"
 	if action == "manage" {
 		scope = "taxonomy.manage"
 	}
-	if err := s.RequireScope(ctx, subject, scope); err != nil {
-		return nil, err
-	}
-	return s.workspace(ctx, subject, id, action)
+	return s.RequireScope(ctx, subject, scope)
+}
+func (s *Service) auditTaxonomy(ctx context.Context, subject, action string, details map[string]any) error {
+	return s.Client.AuditEvent.Create().SetSubject(subject).SetAction(action).SetDetails(details).Exec(ctx)
 }
 func (s *Service) contentTypeResource(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
 	scope := "contentType.read"

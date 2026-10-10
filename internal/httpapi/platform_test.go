@@ -31,10 +31,10 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	var l ent.Resource
 	json.Unmarshal(lbody, &l)
 	base := "/v1/workspaces/" + w.ID
-	groupBody := send("POST", base+"/term-groups", `{"name":"Subjects"}`, "", 201)
+	groupBody := send("POST", "/v1/term-groups", `{"name":"Subjects"}`, "", 201)
 	var group ent.TermGroup
 	json.Unmarshal(groupBody, &group)
-	setBody := send("POST", base+"/term-sets", fmt.Sprintf(`{"group_id":%q,"key":"topics","name":"Topics"}`, group.ID), "", 201)
+	setBody := send("POST", "/v1/term-sets", fmt.Sprintf(`{"group_id":%q,"key":"topics","name":"Topics"}`, group.ID), "", 201)
 	var set ent.TermSet
 	json.Unmarshal(setBody, &set)
 	termBody := send("POST", "/v1/term-sets/"+set.ID+"/terms", `{"name":"Finance","labels":{"es":"Finanzas"},"synonyms":["Money"]}`, "", 201)
@@ -92,7 +92,7 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	send("DELETE", path, "", `"2"`, 204)
 	send("PUT", "/v1/terms/"+term.ID, `{"name":"Renamed","deprecated":true}`, `"1"`, 200)
 	send("GET", "/v1/terms/"+term.ID, "", "", 200)
-	send("GET", base+"/term-sets", "", "", 200)
+	send("GET", "/v1/term-sets", "", "", 200)
 	send("GET", base+"/relationship-types", "", "", 200)
 	send("POST", "/v1/resources/"+l.ID+"/query", `{"query":{"unknown":"bad"}}`, "", 400)
 	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":true,"grants":[{"principal_type":"user","principal_id":"alice","action":"manage"}]}`, `"2"`, 422)

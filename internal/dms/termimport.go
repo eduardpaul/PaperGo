@@ -44,7 +44,7 @@ func (s *Service) ImportTerms(ctx context.Context, subject, groupID string, body
 	}
 	err = s.write(ctx, func(t *Service) error {
 		out = TermImportResult{TermSets: []*ent.TermSet{}}
-		g, w, e := t.termGroup(ctx, subject, groupID, "manage")
+		g, e := t.termGroup(ctx, subject, groupID, "manage")
 		if e != nil {
 			return e
 		}
@@ -141,7 +141,7 @@ func (s *Service) ImportTerms(ctx context.Context, subject, groupID string, body
 				parent = v
 			}
 		}
-		return t.audit(ctx, subject, "term.import", w, map[string]any{"term_group_id": groupID, "sets_created": out.SetsCreated, "terms_created": out.TermsCreated})
+		return t.auditTaxonomy(ctx, subject, "term.import", map[string]any{"term_group_id": groupID, "sets_created": out.SetsCreated, "terms_created": out.TermsCreated})
 	})
 	return
 }
@@ -201,7 +201,7 @@ func (s *Service) importSet(ctx context.Context, g *ent.TermGroup, name, descrip
 	}
 	key := base
 	for i := 2; ; i++ {
-		taken, e := s.Client.TermSet.Query().Where(termset.WorkspaceIDEQ(g.WorkspaceID), termset.KeyEQ(key)).Exist(ctx)
+		taken, e := s.Client.TermSet.Query().Where(termset.KeyEQ(key)).Exist(ctx)
 		if e != nil {
 			return nil, false, e
 		}
@@ -210,6 +210,6 @@ func (s *Service) importSet(ctx context.Context, g *ent.TermGroup, name, descrip
 		}
 		key = base + "_" + strconv.Itoa(i)
 	}
-	set, e = s.Client.TermSet.Create().SetWorkspaceID(g.WorkspaceID).SetGroupID(g.ID).SetKey(key).SetName(name).SetDescription(description).Save(ctx)
+	set, e = s.Client.TermSet.Create().SetGroupID(g.ID).SetKey(key).SetName(name).SetDescription(description).Save(ctx)
 	return set, e == nil, e
 }

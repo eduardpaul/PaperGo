@@ -1322,21 +1322,21 @@ func init() {
 	// termgroup.DefaultCreatedAt holds the default value on creation for the created_at field.
 	termgroup.DefaultCreatedAt = termgroupDescCreatedAt.Default.(func() time.Time)
 	// termgroupDescDescription is the schema descriptor for description field.
-	termgroupDescDescription := termgroupFields[2].Descriptor()
+	termgroupDescDescription := termgroupFields[1].Descriptor()
 	// termgroup.DefaultDescription holds the default value on creation for the description field.
 	termgroup.DefaultDescription = termgroupDescDescription.Default.(string)
 	// termgroupDescIsSystem is the schema descriptor for is_system field.
-	termgroupDescIsSystem := termgroupFields[3].Descriptor()
+	termgroupDescIsSystem := termgroupFields[2].Descriptor()
 	// termgroup.DefaultIsSystem holds the default value on creation for the is_system field.
 	termgroup.DefaultIsSystem = termgroupDescIsSystem.Default.(bool)
 	// termgroupDescVersion is the schema descriptor for version field.
-	termgroupDescVersion := termgroupFields[4].Descriptor()
+	termgroupDescVersion := termgroupFields[3].Descriptor()
 	// termgroup.DefaultVersion holds the default value on creation for the version field.
 	termgroup.DefaultVersion = termgroupDescVersion.Default.(int)
 	// termgroup.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	termgroup.VersionValidator = termgroupDescVersion.Validators[0].(func(int) error)
 	// termgroupDescUpdatedAt is the schema descriptor for updated_at field.
-	termgroupDescUpdatedAt := termgroupFields[5].Descriptor()
+	termgroupDescUpdatedAt := termgroupFields[4].Descriptor()
 	// termgroup.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	termgroup.DefaultUpdatedAt = termgroupDescUpdatedAt.Default.(func() time.Time)
 	// termgroup.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -1357,25 +1357,25 @@ func init() {
 	// termset.DefaultCreatedAt holds the default value on creation for the created_at field.
 	termset.DefaultCreatedAt = termsetDescCreatedAt.Default.(func() time.Time)
 	// termsetDescDescription is the schema descriptor for description field.
-	termsetDescDescription := termsetFields[4].Descriptor()
+	termsetDescDescription := termsetFields[3].Descriptor()
 	// termset.DefaultDescription holds the default value on creation for the description field.
 	termset.DefaultDescription = termsetDescDescription.Default.(string)
 	// termsetDescIsOpen is the schema descriptor for is_open field.
-	termsetDescIsOpen := termsetFields[5].Descriptor()
+	termsetDescIsOpen := termsetFields[4].Descriptor()
 	// termset.DefaultIsOpen holds the default value on creation for the is_open field.
 	termset.DefaultIsOpen = termsetDescIsOpen.Default.(bool)
 	// termsetDescIsKeywords is the schema descriptor for is_keywords field.
-	termsetDescIsKeywords := termsetFields[6].Descriptor()
+	termsetDescIsKeywords := termsetFields[5].Descriptor()
 	// termset.DefaultIsKeywords holds the default value on creation for the is_keywords field.
 	termset.DefaultIsKeywords = termsetDescIsKeywords.Default.(bool)
 	// termsetDescVersion is the schema descriptor for version field.
-	termsetDescVersion := termsetFields[7].Descriptor()
+	termsetDescVersion := termsetFields[6].Descriptor()
 	// termset.DefaultVersion holds the default value on creation for the version field.
 	termset.DefaultVersion = termsetDescVersion.Default.(int)
 	// termset.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	termset.VersionValidator = termsetDescVersion.Validators[0].(func(int) error)
 	// termsetDescUpdatedAt is the schema descriptor for updated_at field.
-	termsetDescUpdatedAt := termsetFields[8].Descriptor()
+	termsetDescUpdatedAt := termsetFields[7].Descriptor()
 	// termset.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	termset.DefaultUpdatedAt = termsetDescUpdatedAt.Default.(func() time.Time)
 	// termset.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

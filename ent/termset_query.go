@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"papergo/ent/predicate"
-	"papergo/ent/resource"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
@@ -22,13 +21,12 @@ import (
 // TermSetQuery is the builder for querying TermSet entities.
 type TermSetQuery struct {
 	config
-	ctx           *QueryContext
-	order         []termset.OrderOption
-	inters        []Interceptor
-	predicates    []predicate.TermSet
-	withWorkspace *ResourceQuery
-	withGroup     *TermGroupQuery
-	withTerms     *TermQuery
+	ctx        *QueryContext
+	order      []termset.OrderOption
+	inters     []Interceptor
+	predicates []predicate.TermSet
+	withGroup  *TermGroupQuery
+	withTerms  *TermQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -63,28 +61,6 @@ func (_q *TermSetQuery) Unique(unique bool) *TermSetQuery {
 func (_q *TermSetQuery) Order(o ...termset.OrderOption) *TermSetQuery {
 	_q.order = append(_q.order, o...)
 	return _q
-}
-
-// QueryWorkspace chains the current query on the "workspace" edge.
-func (_q *TermSetQuery) QueryWorkspace() *ResourceQuery {
-	query := (&ResourceClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(termset.Table, termset.FieldID, selector),
-			sqlgraph.To(resource.Table, resource.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, termset.WorkspaceTable, termset.WorkspaceColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // QueryGroup chains the current query on the "group" edge.
@@ -318,29 +294,17 @@ func (_q *TermSetQuery) Clone() *TermSetQuery {
 		return nil
 	}
 	return &TermSetQuery{
-		config:        _q.config,
-		ctx:           _q.ctx.Clone(),
-		order:         append([]termset.OrderOption{}, _q.order...),
-		inters:        append([]Interceptor{}, _q.inters...),
-		predicates:    append([]predicate.TermSet{}, _q.predicates...),
-		withWorkspace: _q.withWorkspace.Clone(),
-		withGroup:     _q.withGroup.Clone(),
-		withTerms:     _q.withTerms.Clone(),
+		config:     _q.config,
+		ctx:        _q.ctx.Clone(),
+		order:      append([]termset.OrderOption{}, _q.order...),
+		inters:     append([]Interceptor{}, _q.inters...),
+		predicates: append([]predicate.TermSet{}, _q.predicates...),
+		withGroup:  _q.withGroup.Clone(),
+		withTerms:  _q.withTerms.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
-}
-
-// WithWorkspace tells the query-builder to eager-load the nodes that are connected to
-// the "workspace" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *TermSetQuery) WithWorkspace(opts ...func(*ResourceQuery)) *TermSetQuery {
-	query := (&ResourceClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withWorkspace = query
-	return _q
 }
 
 // WithGroup tells the query-builder to eager-load the nodes that are connected to
@@ -443,8 +407,7 @@ func (_q *TermSetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Term
 	var (
 		nodes       = []*TermSet{}
 		_spec       = _q.querySpec()
-		loadedTypes = [3]bool{
-			_q.withWorkspace != nil,
+		loadedTypes = [2]bool{
 			_q.withGroup != nil,
 			_q.withTerms != nil,
 		}
@@ -467,12 +430,6 @@ func (_q *TermSetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Term
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := _q.withWorkspace; query != nil {
-		if err := _q.loadWorkspace(ctx, query, nodes, nil,
-			func(n *TermSet, e *Resource) { n.Edges.Workspace = e }); err != nil {
-			return nil, err
-		}
-	}
 	if query := _q.withGroup; query != nil {
 		if err := _q.loadGroup(ctx, query, nodes, nil,
 			func(n *TermSet, e *TermGroup) { n.Edges.Group = e }); err != nil {
@@ -489,35 +446,6 @@ func (_q *TermSetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Term
 	return nodes, nil
 }
 
-func (_q *TermSetQuery) loadWorkspace(ctx context.Context, query *ResourceQuery, nodes []*TermSet, init func(*TermSet), assign func(*TermSet, *Resource)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*TermSet)
-	for i := range nodes {
-		fk := nodes[i].WorkspaceID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(resource.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "workspace_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
 func (_q *TermSetQuery) loadGroup(ctx context.Context, query *TermGroupQuery, nodes []*TermSet, init func(*TermSet), assign func(*TermSet, *TermGroup)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*TermSet)
@@ -602,9 +530,6 @@ func (_q *TermSetQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != termset.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
-		}
-		if _q.withWorkspace != nil {
-			_spec.Node.AddColumnOnce(termset.FieldWorkspaceID)
 		}
 		if _q.withGroup != nil {
 			_spec.Node.AddColumnOnce(termset.FieldGroupID)

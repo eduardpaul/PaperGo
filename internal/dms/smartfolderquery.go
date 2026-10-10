@@ -183,18 +183,8 @@ func (s *Service) smartTerms(ctx context.Context, subject string, ids []string) 
 			terms[i] = t.Edges.MergedInto
 		}
 	}
-	checked := map[string]bool{}
-	for _, t := range terms {
-		set, err := t.Edges.TermSetOrErr()
-		if err != nil {
-			return nil, err
-		}
-		if !checked[set.WorkspaceID] {
-			if _, err = s.workspace(ctx, subject, set.WorkspaceID, "read"); err != nil {
-				return nil, err
-			}
-			checked[set.WorkspaceID] = true
-		}
+	if err := s.requireTaxonomy(ctx, subject, "read"); err != nil {
+		return nil, err
 	}
 	return terms, nil
 }

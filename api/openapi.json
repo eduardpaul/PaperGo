@@ -7426,19 +7426,11 @@
         }
       }
     },
-    "/v1/workspaces/{id}/term-groups": {
+    "/v1/term-groups": {
       "get": {
         "summary": "Term Groups",
         "operationId": "termGroups",
         "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "after",
             "in": "query",
@@ -7566,22 +7558,13 @@
         "x-module-scopes": [
           "taxonomy.read"
         ],
-        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy."
       },
       "post": {
         "summary": "Create Term Group",
         "operationId": "createTermGroup",
-        "description": "Requires workspace manage. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "description": "Requires taxonomy.manage. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -7834,12 +7817,12 @@
         "x-module-scopes": [
           "taxonomy.read"
         ],
-        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy."
       },
       "put": {
         "summary": "Update Term Group",
         "operationId": "updateTermGroup",
-        "description": "The system group cannot change. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "The system group cannot change. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -7987,7 +7970,7 @@
       "delete": {
         "summary": "Delete Term Group",
         "operationId": "deleteTermGroup",
-        "description": "Deletes an empty group other than the system group. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Deletes an empty group other than the system group. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -8112,7 +8095,7 @@
       "post": {
         "summary": "Import Term Sets",
         "operationId": "importTermSets",
-        "description": "Adds the sets and terms of a SharePoint term set CSV (at most 1 MiB) to the group. Existing sets (by name) and terms (by name under the same parent) are reused; new sets are closed. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Adds the sets and terms of a SharePoint term set CSV (at most 1 MiB) to the group. Existing sets (by name) and terms (by name under the same parent) are reused; new sets are closed. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -8240,19 +8223,11 @@
         ]
       }
     },
-    "/v1/workspaces/{id}/term-sets": {
+    "/v1/term-sets": {
       "get": {
         "summary": "Term Sets",
         "operationId": "termSets",
         "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "group_id",
             "in": "query",
@@ -8389,22 +8364,13 @@
         "x-module-scopes": [
           "taxonomy.read"
         ],
-        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy."
       },
       "post": {
         "summary": "Create Term Set",
         "operationId": "createTermSet",
-        "description": "Requires workspace manage; not in the system group. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "description": "Requires taxonomy.manage; not in the system group. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -8657,12 +8623,12 @@
         "x-module-scopes": [
           "taxonomy.read"
         ],
-        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy."
       },
       "put": {
         "summary": "Update Term Set",
         "operationId": "updateTermSet",
-        "description": "Key and group are immutable; the keywords set stays open. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Key and group are immutable; the keywords set stays open. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -8810,7 +8776,7 @@
       "delete": {
         "summary": "Delete Term Set",
         "operationId": "deleteTermSet",
-        "description": "Deletes a set without terms or fields; not the keywords set. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Deletes a set without terms or fields; not the keywords set. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -8935,7 +8901,7 @@
       "get": {
         "summary": "Terms",
         "operationId": "terms",
-        "description": "Ordered by sort_order, then name. Merged terms are never listed. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Ordered by sort_order, then name. Merged terms are never listed. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -9103,7 +9069,7 @@
       "post": {
         "summary": "Create Term",
         "operationId": "createTerm",
-        "description": "Open sets need workspace write, closed sets manage; deprecated or keyword-available terms need manage. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Open sets require taxonomy.read; closed sets and deprecated or keyword-available terms require taxonomy.manage. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -9243,7 +9209,7 @@
       "get": {
         "summary": "Terms by ID",
         "operationId": "termsByID",
-        "description": "Readable terms in the order asked; unknown ids are left out. Merged terms name their replacement in merged_into_id. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Readable terms in the order asked; unknown ids are left out. Merged terms name their replacement in merged_into_id. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "ids",
@@ -9489,12 +9455,12 @@
         "x-module-scopes": [
           "taxonomy.read"
         ],
-        "description": " Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy."
       },
       "put": {
         "summary": "Update Term",
         "operationId": "updateTerm",
-        "description": "Requires manage. Merged terms are read-only. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Requires manage. Merged terms are read-only. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -9644,7 +9610,7 @@
       "post": {
         "summary": "Move Term",
         "operationId": "moveTerm",
-        "description": "Moves the term and its subtree in its set. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Moves the term and its subtree in its set. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -9794,7 +9760,7 @@
       "post": {
         "summary": "Merge Term",
         "operationId": "mergeTerm",
-        "description": "Merges the term into another term of its set and returns the target: children move, the source's name and synonyms become synonyms, and the source keeps merged_into_id. Raises term.merged. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Merges the term into another term of its set and returns the target: children move, the source's name and synonyms become synonyms, and the source keeps merged_into_id. Raises term.merged. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -9940,20 +9906,12 @@
         ]
       }
     },
-    "/v1/workspaces/{id}/keywords": {
+    "/v1/keywords": {
       "get": {
         "summary": "Keywords",
         "operationId": "keywords",
-        "description": "Keywords of the keywords set and terms available as keywords; names starting with q first. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Keywords of the keywords set and terms available as keywords; names starting with q first. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "q",
             "in": "query",
@@ -10085,17 +10043,8 @@
       "post": {
         "summary": "Add Keyword",
         "operationId": "addKeyword",
-        "description": "Returns the keyword with this name or synonym, or adds it to the keywords set. Requires workspace write. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "description": "Returns the keyword with this name or synonym, or adds it to the keywords set. Requires taxonomy.read. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.",
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -10231,20 +10180,12 @@
         ]
       }
     },
-    "/v1/workspaces/{id}/keywords/popular": {
+    "/v1/keywords/popular": {
       "get": {
         "summary": "Popular Keywords",
         "operationId": "popularKeywords",
-        "description": "Requires workspace manage. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Requires taxonomy.manage. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "top",
             "in": "query",
@@ -10369,7 +10310,7 @@
       "post": {
         "summary": "Promote Keyword",
         "operationId": "promoteKeyword",
-        "description": "Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Moves a keyword into a managed set, available as a keyword, or merges it into the set's term with the same name, label or synonym. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
         "parameters": [
           {
             "name": "id",
@@ -10515,21 +10456,12 @@
         ]
       }
     },
-    "/v1/workspaces/{id}/taxonomy/export": {
+    "/v1/taxonomy/export": {
       "get": {
         "summary": "Export Taxonomy",
         "operationId": "exportTaxonomy",
-        "description": "Term groups, sets and nested terms by name; merged terms are left out. Required module scopes: taxonomy.read. Resource ACLs and any additional use-case checks also apply.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "description": "Term groups, sets and nested terms by name; merged terms are left out. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.read. Workspace membership and resource ACLs do not govern taxonomy.",
+        "parameters": [],
         "responses": {
           "200": {
             "description": "Success",
@@ -10637,21 +10569,12 @@
         ]
       }
     },
-    "/v1/workspaces/{id}/taxonomy/import": {
+    "/v1/taxonomy/import": {
       "post": {
         "summary": "Import Taxonomy",
         "operationId": "importTaxonomy",
-        "description": "Additive: groups match by name (the system group by system), sets by key, terms by name under the same parent; missing ones are created. Requires workspace manage. Required module scopes: taxonomy.manage. Resource ACLs and any additional use-case checks also apply.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "description": "Additive: groups match by name (the system group by system), sets by key, terms by name under the same parent; missing ones are created. Requires taxonomy.manage. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -11771,6 +11694,67 @@
           "identity.manage"
         ],
         "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+      }
+    },
+    "/v1/taxonomy/audit": {
+      "parameters": [],
+      "get": {
+        "summary": "Read organization taxonomy audit events",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AuditEvent"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "operationId": "taxonomyAudit",
+        "description": "Requires taxonomy.manage independently of workspace ACLs. Returns organization curation events.",
+        "x-module-scopes": [
+          "taxonomy.manage"
+        ]
       }
     }
   },
@@ -13184,7 +13168,7 @@
           "value": {},
           "label": {
             "type": "string",
-            "description": "Name of the term of a term or keywords group, when the caller can read the workspace's taxonomy."
+            "description": "Name of the term of a term or keywords group, when the caller has taxonomy.read."
           },
           "count": {
             "type": "integer"
@@ -14414,7 +14398,7 @@
         "additionalProperties": false
       },
       "SmartFolderTermRef": {
-        "description": "Taxonomy set key and root-to-leaf term names, resolved in the target workspace.",
+        "description": "Taxonomy set key and root-to-leaf term names, resolved in the organization term store.",
         "required": [
           "term_set_key",
           "path"
@@ -15319,9 +15303,6 @@
             "type": "object",
             "additionalProperties": true
           },
-          "workspace_id": {
-            "type": "string"
-          },
           "name": {
             "type": "string"
           },
@@ -15330,7 +15311,7 @@
           },
           "is_system": {
             "type": "boolean",
-            "description": "The workspace's system group, which holds the keywords set; it cannot change."
+            "description": "The organization's system group, which holds the keywords set; it cannot change."
           }
         },
         "required": [],
@@ -15406,9 +15387,6 @@
             "type": "object",
             "additionalProperties": true
           },
-          "workspace_id": {
-            "type": "string"
-          },
           "group_id": {
             "type": "string"
           },
@@ -15426,7 +15404,7 @@
           },
           "is_keywords": {
             "type": "boolean",
-            "description": "The workspace's keywords set."
+            "description": "The organization's keywords set."
           }
         },
         "required": [],
@@ -15560,7 +15538,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Ids from the root to the term: /root/\u2026/term/."
+            "description": "Ids from the root to the term: /root/…/term/."
           },
           "labels": {
             "type": "object",
@@ -15744,7 +15722,7 @@
       },
       "TermCSV": {
         "type": "string",
-        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term \u2026 Level 7 Term."
+        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term … Level 7 Term."
       },
       "PortableTerm": {
         "type": "object",

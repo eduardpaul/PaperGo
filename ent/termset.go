@@ -4,7 +4,6 @@ package ent
 
 import (
 	"fmt"
-	"papergo/ent/resource"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 	"strings"
@@ -21,8 +20,6 @@ type TermSet struct {
 	ID string `json:"id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
-	// WorkspaceID holds the value of the "workspace_id" field.
-	WorkspaceID string `json:"workspace_id,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID string `json:"group_id,omitempty"`
 	// Key holds the value of the "key" field.
@@ -47,26 +44,13 @@ type TermSet struct {
 
 // TermSetEdges holds the relations/edges for other nodes in the graph.
 type TermSetEdges struct {
-	// Workspace holds the value of the workspace edge.
-	Workspace *Resource `json:"workspace,omitempty"`
 	// Group holds the value of the group edge.
 	Group *TermGroup `json:"group,omitempty"`
 	// Terms holds the value of the terms edge.
 	Terms []*Term `json:"terms,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
-}
-
-// WorkspaceOrErr returns the Workspace value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e TermSetEdges) WorkspaceOrErr() (*Resource, error) {
-	if e.Workspace != nil {
-		return e.Workspace, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: resource.Label}
-	}
-	return nil, &NotLoadedError{edge: "workspace"}
+	loadedTypes [2]bool
 }
 
 // GroupOrErr returns the Group value or an error if the edge
@@ -74,7 +58,7 @@ func (e TermSetEdges) WorkspaceOrErr() (*Resource, error) {
 func (e TermSetEdges) GroupOrErr() (*TermGroup, error) {
 	if e.Group != nil {
 		return e.Group, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[0] {
 		return nil, &NotFoundError{label: termgroup.Label}
 	}
 	return nil, &NotLoadedError{edge: "group"}
@@ -83,7 +67,7 @@ func (e TermSetEdges) GroupOrErr() (*TermGroup, error) {
 // TermsOrErr returns the Terms value or an error if the edge
 // was not loaded in eager-loading.
 func (e TermSetEdges) TermsOrErr() ([]*Term, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[1] {
 		return e.Terms, nil
 	}
 	return nil, &NotLoadedError{edge: "terms"}
@@ -98,7 +82,7 @@ func (*TermSet) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case termset.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case termset.FieldID, termset.FieldWorkspaceID, termset.FieldGroupID, termset.FieldKey, termset.FieldName, termset.FieldDescription:
+		case termset.FieldID, termset.FieldGroupID, termset.FieldKey, termset.FieldName, termset.FieldDescription:
 			values[i] = new(sql.NullString)
 		case termset.FieldCreatedAt, termset.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -128,12 +112,6 @@ func (_m *TermSet) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
-			}
-		case termset.FieldWorkspaceID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field workspace_id", values[i])
-			} else if value.Valid {
-				_m.WorkspaceID = value.String
 			}
 		case termset.FieldGroupID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -196,11 +174,6 @@ func (_m *TermSet) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// QueryWorkspace queries the "workspace" edge of the TermSet entity.
-func (_m *TermSet) QueryWorkspace() *ResourceQuery {
-	return NewTermSetClient(_m.config).QueryWorkspace(_m)
-}
-
 // QueryGroup queries the "group" edge of the TermSet entity.
 func (_m *TermSet) QueryGroup() *TermGroupQuery {
 	return NewTermSetClient(_m.config).QueryGroup(_m)
@@ -236,9 +209,6 @@ func (_m *TermSet) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("workspace_id=")
-	builder.WriteString(_m.WorkspaceID)
 	builder.WriteString(", ")
 	builder.WriteString("group_id=")
 	builder.WriteString(_m.GroupID)

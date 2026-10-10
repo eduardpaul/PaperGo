@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"papergo/ent/resource"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
@@ -34,12 +33,6 @@ func (_c *TermSetCreate) SetNillableCreatedAt(v *time.Time) *TermSetCreate {
 	if v != nil {
 		_c.SetCreatedAt(*v)
 	}
-	return _c
-}
-
-// SetWorkspaceID sets the "workspace_id" field.
-func (_c *TermSetCreate) SetWorkspaceID(v string) *TermSetCreate {
-	_c.mutation.SetWorkspaceID(v)
 	return _c
 }
 
@@ -145,11 +138,6 @@ func (_c *TermSetCreate) SetNillableID(v *string) *TermSetCreate {
 	return _c
 }
 
-// SetWorkspace sets the "workspace" edge to the Resource entity.
-func (_c *TermSetCreate) SetWorkspace(v *Resource) *TermSetCreate {
-	return _c.SetWorkspaceID(v.ID)
-}
-
 // SetGroup sets the "group" edge to the TermGroup entity.
 func (_c *TermSetCreate) SetGroup(v *TermGroup) *TermSetCreate {
 	return _c.SetGroupID(v.ID)
@@ -240,9 +228,6 @@ func (_c *TermSetCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "TermSet.created_at"`)}
 	}
-	if _, ok := _c.mutation.WorkspaceID(); !ok {
-		return &ValidationError{Name: "workspace_id", err: errors.New(`ent: missing required field "TermSet.workspace_id"`)}
-	}
 	if _, ok := _c.mutation.GroupID(); !ok {
 		return &ValidationError{Name: "group_id", err: errors.New(`ent: missing required field "TermSet.group_id"`)}
 	}
@@ -276,9 +261,6 @@ func (_c *TermSetCreate) check() error {
 		if err := termset.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "TermSet.id": %w`, err)}
 		}
-	}
-	if len(_c.mutation.WorkspaceIDs()) == 0 {
-		return &ValidationError{Name: "workspace", err: errors.New(`ent: missing required edge "TermSet.workspace"`)}
 	}
 	if len(_c.mutation.GroupIDs()) == 0 {
 		return &ValidationError{Name: "group", err: errors.New(`ent: missing required edge "TermSet.group"`)}
@@ -349,23 +331,6 @@ func (_c *TermSetCreate) createSpec() (*TermSet, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(termset.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
-	}
-	if nodes := _c.mutation.WorkspaceIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   termset.WorkspaceTable,
-			Columns: []string{termset.WorkspaceColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.WorkspaceID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.GroupIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

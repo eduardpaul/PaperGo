@@ -373,17 +373,14 @@ func (s *Service) validateReferenceScopes(ctx context.Context, subject string, w
 		}
 	}
 	if d.Type == "term" {
-		set, e := s.Client.TermSet.Get(ctx, d.Options.TermSetID)
+		_, e := s.Client.TermSet.Get(ctx, d.Options.TermSetID)
 		if ent.IsNotFound(e) {
 			return invalid("unknown term set")
 		}
 		if e != nil {
 			return e
 		}
-		if set.WorkspaceID != workspaceID {
-			return invalid("term set must belong to this workspace")
-		}
-		if _, e = s.authorize(ctx, subject, set.WorkspaceID, "read"); e != nil {
+		if e = s.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return e
 		}
 	}
@@ -419,7 +416,7 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject, workspaceID 
 			}
 		}
 		if d.Type != "lookup" {
-			resolved, e := s.resolveTermValues(ctx, workspaceID, d, current, old)
+			resolved, e := s.resolveTermValues(ctx, subject, d, current, old)
 			if e != nil {
 				return e
 			}

@@ -107,24 +107,8 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 		if len(terms) != len(d.Terms) {
 			return invalid("unknown smart folder term")
 		}
-		checked := map[string]bool{}
-		if in.WorkspaceID != nil {
-			checked[*in.WorkspaceID] = true
-		}
-		for _, t := range terms {
-			set, err := t.Edges.TermSetOrErr()
-			if err != nil {
-				return err
-			}
-			if in.WorkspaceID != nil && set.WorkspaceID != *in.WorkspaceID {
-				return invalid("smart folder terms must belong to its workspace")
-			}
-			if !checked[set.WorkspaceID] {
-				if _, err = s.workspace(ctx, subject, set.WorkspaceID, "read"); err != nil {
-					return err
-				}
-				checked[set.WorkspaceID] = true
-			}
+		if err := s.requireTaxonomy(ctx, subject, "read"); err != nil {
+			return err
 		}
 	}
 	if _, err := resolveFilter(d.Filter, subject, time.Now().UTC(), nil); err != nil {

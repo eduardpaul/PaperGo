@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// A taxonomy package carries a workspace's term groups, sets and terms by
-// name, so the taxonomy can be set up again in another workspace or
+// A taxonomy package carries the organization's term groups, sets and terms by
+// name, so the taxonomy can be set up again in another
 // deployment. Terms nest under their parents; merged terms are left out.
 // Import is additive: groups match by name (the system group by system),
 // sets by key and terms by name under the same parent; what exists stays as
@@ -55,12 +55,12 @@ const (
 	maxPackageTerms  = 20000
 )
 
-func (s *Service) ExportTaxonomy(ctx context.Context, subject, workspaceID string) (TaxonomyPackage, error) {
+func (s *Service) ExportTaxonomy(ctx context.Context, subject string) (TaxonomyPackage, error) {
 	return read(ctx, s, func(t *Service) (TaxonomyPackage, error) {
-		if _, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "read"); e != nil {
+		if e := t.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return TaxonomyPackage{}, e
 		}
-		groups, e := t.Client.TermGroup.Query().Where(termgroup.WorkspaceIDEQ(workspaceID)).Order(ent.Desc(termgroup.FieldIsSystem), ent.Asc(termgroup.FieldName)).
+		groups, e := t.Client.TermGroup.Query().Order(ent.Desc(termgroup.FieldIsSystem), ent.Asc(termgroup.FieldName)).
 			WithTermSets(func(q *ent.TermSetQuery) { q.Order(ent.Asc(termset.FieldKey)) }).All(ctx)
 		if e != nil {
 			return TaxonomyPackage{}, e
@@ -99,29 +99,28 @@ func (s *Service) ExportTaxonomy(ctx context.Context, subject, workspaceID strin
 	})
 }
 
-func (s *Service) ImportTaxonomy(ctx context.Context, subject, workspaceID string, pkg TaxonomyPackage) (out TaxonomyImportResult, err error) {
+func (s *Service) ImportTaxonomy(ctx context.Context, subject string, pkg TaxonomyPackage) (out TaxonomyImportResult, err error) {
 	if e := pkg.validate(); e != nil {
 		return out, e
 	}
 	err = s.write(ctx, func(t *Service) error {
 		out = TaxonomyImportResult{}
-		w, e := t.taxonomyWorkspace(ctx, subject, workspaceID, "manage")
-		if e != nil {
+		if e := t.requireTaxonomy(ctx, subject, "manage"); e != nil {
 			return e
 		}
 		for _, pg := range pkg.Groups {
-			g, e := t.importGroup(ctx, w.ID, pg, &out)
+			g, e := t.importGroup(ctx, pg, &out)
 			if e != nil {
 				return e
 			}
 			for _, ps := range pg.Sets {
-				set, e := t.Client.TermSet.Query().Where(termset.WorkspaceIDEQ(w.ID), termset.KeyEQ(ps.Key)).Only(ctx)
+				set, e := t.Client.TermSet.Query().Where(termset.KeyEQ(ps.Key)).Only(ctx)
 				switch {
 				case ent.IsNotFound(e):
 					if g.IsSystem {
 						return invalid("set " + ps.Key + ": the system group holds only the keywords set")
 					}
-					if set, e = t.Client.TermSet.Create().SetWorkspaceID(w.ID).SetGroupID(g.ID).SetKey(ps.Key).SetName(ps.Name).SetDescription(ps.Description).SetIsOpen(ps.IsOpen).Save(ctx); e != nil {
+					if set, e = t.Client.TermSet.Create().SetGroupID(g.ID).SetKey(ps.Key).SetName(ps.Name).SetDescription(ps.Description).SetIsOpen(ps.IsOpen).Save(ctx); e != nil {
 						return e
 					}
 					out.SetsCreated++
@@ -143,12 +142,12 @@ func (s *Service) ImportTaxonomy(ctx context.Context, subject, workspaceID strin
 				}
 			}
 		}
-		return t.audit(ctx, subject, "taxonomy.import", w, map[string]any{"groups_created": out.GroupsCreated, "sets_created": out.SetsCreated, "terms_created": out.TermsCreated})
+		return t.auditTaxonomy(ctx, subject, "taxonomy.import", map[string]any{"groups_created": out.GroupsCreated, "sets_created": out.SetsCreated, "terms_created": out.TermsCreated})
 	})
 	return
 }
-func (s *Service) importGroup(ctx context.Context, workspaceID string, pg PortableTermGroup, out *TaxonomyImportResult) (*ent.TermGroup, error) {
-	q := s.Client.TermGroup.Query().Where(termgroup.WorkspaceIDEQ(workspaceID))
+func (s *Service) importGroup(ctx context.Context, pg PortableTermGroup, out *TaxonomyImportResult) (*ent.TermGroup, error) {
+	q := s.Client.TermGroup.Query()
 	if pg.System {
 		return q.Where(termgroup.IsSystemEQ(true)).Only(ctx)
 	}
@@ -160,7 +159,7 @@ func (s *Service) importGroup(ctx context.Context, workspaceID string, pg Portab
 		return g, e
 	}
 	out.GroupsCreated++
-	return s.Client.TermGroup.Create().SetWorkspaceID(workspaceID).SetName(pg.Name).SetDescription(pg.Description).Save(ctx)
+	return s.Client.TermGroup.Create().SetName(pg.Name).SetDescription(pg.Description).Save(ctx)
 }
 func (s *Service) importTerms(ctx context.Context, set *ent.TermSet, parent *ent.Term, nodes []PortableTerm, children map[string]*ent.Term, out *TaxonomyImportResult) error {
 	var parentID *string

@@ -168,9 +168,6 @@ func (_u *TermGroupUpdate) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "TermGroup.version": %w`, err)}
 		}
 	}
-	if _u.mutation.WorkspaceCleared() && len(_u.mutation.WorkspaceIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "TermGroup.workspace"`)
-	}
 	return nil
 }
 
@@ -417,9 +414,6 @@ func (_u *TermGroupUpdateOne) check() error {
 		if err := termgroup.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "TermGroup.version": %w`, err)}
 		}
-	}
-	if _u.mutation.WorkspaceCleared() && len(_u.mutation.WorkspaceIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "TermGroup.workspace"`)
 	}
 	return nil
 }

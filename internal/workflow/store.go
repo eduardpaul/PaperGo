@@ -16,7 +16,6 @@ import (
 	"papergo/ent/contenttype"
 	"papergo/ent/resource"
 	"papergo/ent/term"
-	"papergo/ent/termset"
 	"papergo/ent/workflow"
 	"papergo/ent/workflowrun"
 	"papergo/ent/workflowtrigger"
@@ -305,12 +304,12 @@ func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceI
 			}
 		}
 		for _, id := range tr.Terms {
-			ok, err := t.Client.Term.Query().Where(term.IDEQ(id), term.HasTermSetWith(termset.WorkspaceIDEQ(workspaceID))).Exist(ctx)
+			ok, err := t.Client.Term.Query().Where(term.IDEQ(id)).Exist(ctx)
 			if err != nil {
 				return def, nil, err
 			}
 			if !ok {
-				return def, nil, dms.Invalid(at + "terms must be terms of the workspace")
+				return def, nil, dms.Invalid(at + "terms must exist in the organization term store")
 			}
 		}
 		if m := eventPattern.FindStringSubmatch(tr.Type); m != nil && m[2] != "completed" && m[2] != "failed" {
@@ -320,7 +319,7 @@ func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceI
 		}
 	}
 	if def.InputSchema != nil {
-		if err = checkDomainConfig(ctx, t, workspaceID, def.InputSchema, "input_schema"); err != nil {
+		if err = checkDomainConfig(ctx, t, subject, workspaceID, def.InputSchema, "input_schema"); err != nil {
 			return def, nil, err
 		}
 	}

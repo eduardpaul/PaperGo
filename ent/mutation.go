@@ -282,9 +282,22 @@ func (m *AuditEventMutation) OldWorkspaceID(ctx context.Context) (v string, err 
 	return oldValue.WorkspaceID, nil
 }
 
+// ClearWorkspaceID clears the value of the "workspace_id" field.
+func (m *AuditEventMutation) ClearWorkspaceID() {
+	m.workspace_id = nil
+	m.clearedFields[auditevent.FieldWorkspaceID] = struct{}{}
+}
+
+// WorkspaceIDCleared returns if the "workspace_id" field was cleared in this mutation.
+func (m *AuditEventMutation) WorkspaceIDCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldWorkspaceID]
+	return ok
+}
+
 // ResetWorkspaceID resets all changes to the "workspace_id" field.
 func (m *AuditEventMutation) ResetWorkspaceID() {
 	m.workspace_id = nil
+	delete(m.clearedFields, auditevent.FieldWorkspaceID)
 }
 
 // SetResourceID sets the "resource_id" field.
@@ -318,9 +331,22 @@ func (m *AuditEventMutation) OldResourceID(ctx context.Context) (v string, err e
 	return oldValue.ResourceID, nil
 }
 
+// ClearResourceID clears the value of the "resource_id" field.
+func (m *AuditEventMutation) ClearResourceID() {
+	m.resource_id = nil
+	m.clearedFields[auditevent.FieldResourceID] = struct{}{}
+}
+
+// ResourceIDCleared returns if the "resource_id" field was cleared in this mutation.
+func (m *AuditEventMutation) ResourceIDCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldResourceID]
+	return ok
+}
+
 // ResetResourceID resets all changes to the "resource_id" field.
 func (m *AuditEventMutation) ResetResourceID() {
 	m.resource_id = nil
+	delete(m.clearedFields, auditevent.FieldResourceID)
 }
 
 // SetSubject sets the "subject" field.
@@ -605,7 +631,14 @@ func (m *AuditEventMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *AuditEventMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(auditevent.FieldWorkspaceID) {
+		fields = append(fields, auditevent.FieldWorkspaceID)
+	}
+	if m.FieldCleared(auditevent.FieldResourceID) {
+		fields = append(fields, auditevent.FieldResourceID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -618,6 +651,14 @@ func (m *AuditEventMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *AuditEventMutation) ClearField(name string) error {
+	switch name {
+	case auditevent.FieldWorkspaceID:
+		m.ClearWorkspaceID()
+		return nil
+	case auditevent.FieldResourceID:
+		m.ClearResourceID()
+		return nil
+	}
 	return fmt.Errorf("unknown AuditEvent nullable field %s", name)
 }
 
@@ -23749,8 +23790,6 @@ type TermGroupMutation struct {
 	addversion       *int
 	updated_at       *time.Time
 	clearedFields    map[string]struct{}
-	workspace        *string
-	clearedworkspace bool
 	term_sets        map[string]struct{}
 	removedterm_sets map[string]struct{}
 	clearedterm_sets bool
@@ -23897,42 +23936,6 @@ func (m *TermGroupMutation) OldCreatedAt(ctx context.Context) (v time.Time, err 
 // ResetCreatedAt resets all changes to the "created_at" field.
 func (m *TermGroupMutation) ResetCreatedAt() {
 	m.created_at = nil
-}
-
-// SetWorkspaceID sets the "workspace_id" field.
-func (m *TermGroupMutation) SetWorkspaceID(s string) {
-	m.workspace = &s
-}
-
-// WorkspaceID returns the value of the "workspace_id" field in the mutation.
-func (m *TermGroupMutation) WorkspaceID() (r string, exists bool) {
-	v := m.workspace
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWorkspaceID returns the old "workspace_id" field's value of the TermGroup entity.
-// If the TermGroup object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TermGroupMutation) OldWorkspaceID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWorkspaceID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWorkspaceID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWorkspaceID: %w", err)
-	}
-	return oldValue.WorkspaceID, nil
-}
-
-// ResetWorkspaceID resets all changes to the "workspace_id" field.
-func (m *TermGroupMutation) ResetWorkspaceID() {
-	m.workspace = nil
 }
 
 // SetName sets the "name" field.
@@ -24135,33 +24138,6 @@ func (m *TermGroupMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
-// ClearWorkspace clears the "workspace" edge to the Resource entity.
-func (m *TermGroupMutation) ClearWorkspace() {
-	m.clearedworkspace = true
-	m.clearedFields[termgroup.FieldWorkspaceID] = struct{}{}
-}
-
-// WorkspaceCleared reports if the "workspace" edge to the Resource entity was cleared.
-func (m *TermGroupMutation) WorkspaceCleared() bool {
-	return m.clearedworkspace
-}
-
-// WorkspaceIDs returns the "workspace" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// WorkspaceID instead. It exists only for internal usage by the builders.
-func (m *TermGroupMutation) WorkspaceIDs() (ids []string) {
-	if id := m.workspace; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetWorkspace resets all changes to the "workspace" edge.
-func (m *TermGroupMutation) ResetWorkspace() {
-	m.workspace = nil
-	m.clearedworkspace = false
-}
-
 // AddTermSetIDs adds the "term_sets" edge to the TermSet entity by ids.
 func (m *TermGroupMutation) AddTermSetIDs(ids ...string) {
 	if m.term_sets == nil {
@@ -24250,12 +24226,9 @@ func (m *TermGroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TermGroupMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 6)
 	if m.created_at != nil {
 		fields = append(fields, termgroup.FieldCreatedAt)
-	}
-	if m.workspace != nil {
-		fields = append(fields, termgroup.FieldWorkspaceID)
 	}
 	if m.name != nil {
 		fields = append(fields, termgroup.FieldName)
@@ -24282,8 +24255,6 @@ func (m *TermGroupMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case termgroup.FieldCreatedAt:
 		return m.CreatedAt()
-	case termgroup.FieldWorkspaceID:
-		return m.WorkspaceID()
 	case termgroup.FieldName:
 		return m.Name()
 	case termgroup.FieldDescription:
@@ -24305,8 +24276,6 @@ func (m *TermGroupMutation) OldField(ctx context.Context, name string) (ent.Valu
 	switch name {
 	case termgroup.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
-	case termgroup.FieldWorkspaceID:
-		return m.OldWorkspaceID(ctx)
 	case termgroup.FieldName:
 		return m.OldName(ctx)
 	case termgroup.FieldDescription:
@@ -24332,13 +24301,6 @@ func (m *TermGroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCreatedAt(v)
-		return nil
-	case termgroup.FieldWorkspaceID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWorkspaceID(v)
 		return nil
 	case termgroup.FieldName:
 		v, ok := value.(string)
@@ -24442,9 +24404,6 @@ func (m *TermGroupMutation) ResetField(name string) error {
 	case termgroup.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
-	case termgroup.FieldWorkspaceID:
-		m.ResetWorkspaceID()
-		return nil
 	case termgroup.FieldName:
 		m.ResetName()
 		return nil
@@ -24466,10 +24425,7 @@ func (m *TermGroupMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *TermGroupMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.workspace != nil {
-		edges = append(edges, termgroup.EdgeWorkspace)
-	}
+	edges := make([]string, 0, 1)
 	if m.term_sets != nil {
 		edges = append(edges, termgroup.EdgeTermSets)
 	}
@@ -24480,10 +24436,6 @@ func (m *TermGroupMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *TermGroupMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case termgroup.EdgeWorkspace:
-		if id := m.workspace; id != nil {
-			return []ent.Value{*id}
-		}
 	case termgroup.EdgeTermSets:
 		ids := make([]ent.Value, 0, len(m.term_sets))
 		for id := range m.term_sets {
@@ -24496,7 +24448,7 @@ func (m *TermGroupMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *TermGroupMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.removedterm_sets != nil {
 		edges = append(edges, termgroup.EdgeTermSets)
 	}
@@ -24519,10 +24471,7 @@ func (m *TermGroupMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *TermGroupMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.clearedworkspace {
-		edges = append(edges, termgroup.EdgeWorkspace)
-	}
+	edges := make([]string, 0, 1)
 	if m.clearedterm_sets {
 		edges = append(edges, termgroup.EdgeTermSets)
 	}
@@ -24533,8 +24482,6 @@ func (m *TermGroupMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *TermGroupMutation) EdgeCleared(name string) bool {
 	switch name {
-	case termgroup.EdgeWorkspace:
-		return m.clearedworkspace
 	case termgroup.EdgeTermSets:
 		return m.clearedterm_sets
 	}
@@ -24545,9 +24492,6 @@ func (m *TermGroupMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *TermGroupMutation) ClearEdge(name string) error {
 	switch name {
-	case termgroup.EdgeWorkspace:
-		m.ClearWorkspace()
-		return nil
 	}
 	return fmt.Errorf("unknown TermGroup unique edge %s", name)
 }
@@ -24556,9 +24500,6 @@ func (m *TermGroupMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *TermGroupMutation) ResetEdge(name string) error {
 	switch name {
-	case termgroup.EdgeWorkspace:
-		m.ResetWorkspace()
-		return nil
 	case termgroup.EdgeTermSets:
 		m.ResetTermSets()
 		return nil
@@ -24569,29 +24510,27 @@ func (m *TermGroupMutation) ResetEdge(name string) error {
 // TermSetMutation represents an operation that mutates the TermSet nodes in the graph.
 type TermSetMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *string
-	created_at       *time.Time
-	key              *string
-	name             *string
-	description      *string
-	is_open          *bool
-	is_keywords      *bool
-	version          *int
-	addversion       *int
-	updated_at       *time.Time
-	clearedFields    map[string]struct{}
-	workspace        *string
-	clearedworkspace bool
-	group            *string
-	clearedgroup     bool
-	terms            map[string]struct{}
-	removedterms     map[string]struct{}
-	clearedterms     bool
-	done             bool
-	oldValue         func(context.Context) (*TermSet, error)
-	predicates       []predicate.TermSet
+	op            Op
+	typ           string
+	id            *string
+	created_at    *time.Time
+	key           *string
+	name          *string
+	description   *string
+	is_open       *bool
+	is_keywords   *bool
+	version       *int
+	addversion    *int
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	group         *string
+	clearedgroup  bool
+	terms         map[string]struct{}
+	removedterms  map[string]struct{}
+	clearedterms  bool
+	done          bool
+	oldValue      func(context.Context) (*TermSet, error)
+	predicates    []predicate.TermSet
 }
 
 var _ ent.Mutation = (*TermSetMutation)(nil)
@@ -24732,42 +24671,6 @@ func (m *TermSetMutation) OldCreatedAt(ctx context.Context) (v time.Time, err er
 // ResetCreatedAt resets all changes to the "created_at" field.
 func (m *TermSetMutation) ResetCreatedAt() {
 	m.created_at = nil
-}
-
-// SetWorkspaceID sets the "workspace_id" field.
-func (m *TermSetMutation) SetWorkspaceID(s string) {
-	m.workspace = &s
-}
-
-// WorkspaceID returns the value of the "workspace_id" field in the mutation.
-func (m *TermSetMutation) WorkspaceID() (r string, exists bool) {
-	v := m.workspace
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWorkspaceID returns the old "workspace_id" field's value of the TermSet entity.
-// If the TermSet object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TermSetMutation) OldWorkspaceID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWorkspaceID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWorkspaceID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWorkspaceID: %w", err)
-	}
-	return oldValue.WorkspaceID, nil
-}
-
-// ResetWorkspaceID resets all changes to the "workspace_id" field.
-func (m *TermSetMutation) ResetWorkspaceID() {
-	m.workspace = nil
 }
 
 // SetGroupID sets the "group_id" field.
@@ -25078,33 +24981,6 @@ func (m *TermSetMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
-// ClearWorkspace clears the "workspace" edge to the Resource entity.
-func (m *TermSetMutation) ClearWorkspace() {
-	m.clearedworkspace = true
-	m.clearedFields[termset.FieldWorkspaceID] = struct{}{}
-}
-
-// WorkspaceCleared reports if the "workspace" edge to the Resource entity was cleared.
-func (m *TermSetMutation) WorkspaceCleared() bool {
-	return m.clearedworkspace
-}
-
-// WorkspaceIDs returns the "workspace" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// WorkspaceID instead. It exists only for internal usage by the builders.
-func (m *TermSetMutation) WorkspaceIDs() (ids []string) {
-	if id := m.workspace; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetWorkspace resets all changes to the "workspace" edge.
-func (m *TermSetMutation) ResetWorkspace() {
-	m.workspace = nil
-	m.clearedworkspace = false
-}
-
 // ClearGroup clears the "group" edge to the TermGroup entity.
 func (m *TermSetMutation) ClearGroup() {
 	m.clearedgroup = true
@@ -25220,12 +25096,9 @@ func (m *TermSetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TermSetMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 9)
 	if m.created_at != nil {
 		fields = append(fields, termset.FieldCreatedAt)
-	}
-	if m.workspace != nil {
-		fields = append(fields, termset.FieldWorkspaceID)
 	}
 	if m.group != nil {
 		fields = append(fields, termset.FieldGroupID)
@@ -25261,8 +25134,6 @@ func (m *TermSetMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case termset.FieldCreatedAt:
 		return m.CreatedAt()
-	case termset.FieldWorkspaceID:
-		return m.WorkspaceID()
 	case termset.FieldGroupID:
 		return m.GroupID()
 	case termset.FieldKey:
@@ -25290,8 +25161,6 @@ func (m *TermSetMutation) OldField(ctx context.Context, name string) (ent.Value,
 	switch name {
 	case termset.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
-	case termset.FieldWorkspaceID:
-		return m.OldWorkspaceID(ctx)
 	case termset.FieldGroupID:
 		return m.OldGroupID(ctx)
 	case termset.FieldKey:
@@ -25323,13 +25192,6 @@ func (m *TermSetMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCreatedAt(v)
-		return nil
-	case termset.FieldWorkspaceID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWorkspaceID(v)
 		return nil
 	case termset.FieldGroupID:
 		v, ok := value.(string)
@@ -25454,9 +25316,6 @@ func (m *TermSetMutation) ResetField(name string) error {
 	case termset.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
-	case termset.FieldWorkspaceID:
-		m.ResetWorkspaceID()
-		return nil
 	case termset.FieldGroupID:
 		m.ResetGroupID()
 		return nil
@@ -25487,10 +25346,7 @@ func (m *TermSetMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *TermSetMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
-	if m.workspace != nil {
-		edges = append(edges, termset.EdgeWorkspace)
-	}
+	edges := make([]string, 0, 2)
 	if m.group != nil {
 		edges = append(edges, termset.EdgeGroup)
 	}
@@ -25504,10 +25360,6 @@ func (m *TermSetMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *TermSetMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case termset.EdgeWorkspace:
-		if id := m.workspace; id != nil {
-			return []ent.Value{*id}
-		}
 	case termset.EdgeGroup:
 		if id := m.group; id != nil {
 			return []ent.Value{*id}
@@ -25524,7 +25376,7 @@ func (m *TermSetMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *TermSetMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 2)
 	if m.removedterms != nil {
 		edges = append(edges, termset.EdgeTerms)
 	}
@@ -25547,10 +25399,7 @@ func (m *TermSetMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *TermSetMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
-	if m.clearedworkspace {
-		edges = append(edges, termset.EdgeWorkspace)
-	}
+	edges := make([]string, 0, 2)
 	if m.clearedgroup {
 		edges = append(edges, termset.EdgeGroup)
 	}
@@ -25564,8 +25413,6 @@ func (m *TermSetMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *TermSetMutation) EdgeCleared(name string) bool {
 	switch name {
-	case termset.EdgeWorkspace:
-		return m.clearedworkspace
 	case termset.EdgeGroup:
 		return m.clearedgroup
 	case termset.EdgeTerms:
@@ -25578,9 +25425,6 @@ func (m *TermSetMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *TermSetMutation) ClearEdge(name string) error {
 	switch name {
-	case termset.EdgeWorkspace:
-		m.ClearWorkspace()
-		return nil
 	case termset.EdgeGroup:
 		m.ClearGroup()
 		return nil
@@ -25592,9 +25436,6 @@ func (m *TermSetMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *TermSetMutation) ResetEdge(name string) error {
 	switch name {
-	case termset.EdgeWorkspace:
-		m.ResetWorkspace()
-		return nil
 	case termset.EdgeGroup:
 		m.ResetGroup()
 		return nil

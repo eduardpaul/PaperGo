@@ -129,7 +129,7 @@ func TestModuleRolesRestrictOwnersAndResolveGroupAssignments(t *testing.T) {
 	if _, err = s.CreateContentType(ctx, "bob", list.ID, list.Version, ContentTypeInput{Key: "blocked", Name: "Blocked"}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("owner bypassed contentType.manage", err)
 	}
-	if _, err = s.CreateTermGroup(ctx, "bob", w.ID, TermGroupInput{Name: "Blocked"}); !errors.Is(err, ErrForbidden) {
+	if _, err = s.CreateTermGroup(ctx, "bob", TermGroupInput{Name: "Blocked"}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("owner bypassed taxonomy.manage", err)
 	}
 	group, err := d.SaveGroup(ctx, "alice", "", 0, identity.GroupInput{Name: "Writers"})

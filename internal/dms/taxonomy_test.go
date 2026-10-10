@@ -20,14 +20,14 @@ func mustTerm(t *testing.T, s *Service, setID string, in TermInput) TermView {
 	return v
 }
 
-func TestWorkspaceTaxonomyGroupsAndSets(t *testing.T) {
+func TestOrganizationTaxonomyGroupsAndSets(t *testing.T) {
 	s, w, _ := fixture(t)
-	groups, err := s.TermGroups(testContext, "alice", w.ID, "", 10)
+	groups, err := s.TermGroups(testContext, "alice", "", 10)
 	if err != nil || len(groups.Data) != 1 || !groups.Data[0].IsSystem || groups.Data[0].Name != SystemTermGroupName {
 		t.Fatal("system group", groups, err)
 	}
 	system := groups.Data[0]
-	sets, err := s.TermSets(testContext, "alice", w.ID, system.ID, "", 10)
+	sets, err := s.TermSets(testContext, "alice", system.ID, "", 10)
 	if err != nil || len(sets.Data) != 1 || !sets.Data[0].IsKeywords || !sets.Data[0].IsOpen || sets.Data[0].Key != KeywordsTermSetKey {
 		t.Fatal("keywords set", sets, err)
 	}
@@ -38,7 +38,7 @@ func TestWorkspaceTaxonomyGroupsAndSets(t *testing.T) {
 	if err = s.DeleteTermGroup(testContext, "alice", system.ID, system.Version); err == nil {
 		t.Fatal("deleted the system group")
 	}
-	if _, err = s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: system.ID, Key: "extra", Name: "Extra"}); err == nil {
+	if _, err = s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: system.ID, Key: "extra", Name: "Extra"}); err == nil {
 		t.Fatal("set in the system group")
 	}
 	if _, err = s.UpdateTermSet(testContext, "alice", keywords.ID, keywords.Version, TermSetInput{Name: "Tags"}); err == nil {
@@ -48,14 +48,14 @@ func TestWorkspaceTaxonomyGroupsAndSets(t *testing.T) {
 		t.Fatal("deleted the keywords set")
 	}
 
-	group, err := s.CreateTermGroup(testContext, "alice", w.ID, TermGroupInput{Name: "Records"})
+	group, err := s.CreateTermGroup(testContext, "alice", TermGroupInput{Name: "Records"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.CreateTermGroup(testContext, "alice", w.ID, TermGroupInput{Name: "Records"}); !errors.Is(err, ErrConflict) {
+	if _, err = s.CreateTermGroup(testContext, "alice", TermGroupInput{Name: "Records"}); !errors.Is(err, ErrConflict) {
 		t.Fatal("duplicate group name", err)
 	}
-	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: group.ID, Key: "regions", Name: "Regions"})
+	set, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: group.ID, Key: "regions", Name: "Regions"})
 	if err != nil || set.IsOpen {
 		t.Fatal("sets are closed unless asked", set, err)
 	}
@@ -69,7 +69,7 @@ func TestWorkspaceTaxonomyGroupsAndSets(t *testing.T) {
 		t.Fatal("empty group", err)
 	}
 
-	used, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "used", Name: "Used"})
+	used, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "used", Name: "Used"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,12 +91,12 @@ func TestTermTreeOpenSetsAndListing(t *testing.T) {
 	if err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "writer", Role: "member"}, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	group := testTermGroup(s, w.ID)
-	closed, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: group, Key: "places", Name: "Places"})
+	group := testTermGroup(s)
+	closed, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: group, Key: "places", Name: "Places"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	open, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: group, Key: "topics", Name: "Topics", IsOpen: true})
+	open, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: group, Key: "topics", Name: "Topics", IsOpen: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,14 +166,14 @@ func TestTermTreeOpenSetsAndListing(t *testing.T) {
 	if err != nil || len(byID) != 2 || byID[0].ID != spain.ID || byID[1].ID != america.ID {
 		t.Fatal("batch lookup", byID, err)
 	}
-	if byID, err = s.TermsByID(testContext, "stranger", []string{spain.ID}); err != nil || len(byID) != 0 {
-		t.Fatal("batch lookup hides unreadable terms", byID, err)
+	if byID, err = s.TermsByID(testContext, "stranger", []string{spain.ID}); err != nil || len(byID) != 1 {
+		t.Fatal("organization member reads terms without workspace access", byID, err)
 	}
 }
 
 func TestMoveAndMergeTerms(t *testing.T) {
-	s, w, l := fixture(t)
-	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "topics", Name: "Topics"})
+	s, _, l := fixture(t)
+	set, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "topics", Name: "Topics"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,25 +254,25 @@ func TestKeywords(t *testing.T) {
 	if err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "writer", Role: "member"}, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.AddKeyword(testContext, "outsider", w.ID, KeywordInput{Name: "budget"}); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.AddKeyword(testContext, "outsider", KeywordInput{Name: "Shared outsider"}); err != nil {
 		t.Fatal("outsider added a keyword", err)
 	}
-	budget, created, err := s.AddKeyword(testContext, "reader", w.ID, KeywordInput{Name: " Budget "})
+	budget, created, err := s.AddKeyword(testContext, "reader", KeywordInput{Name: " Budget "})
 	if err != nil || !created || budget.Name != "Budget" {
 		t.Fatal("keyword", budget, created, err)
 	}
-	again, created, err := s.AddKeyword(testContext, "writer", w.ID, KeywordInput{Name: "BUDGET"})
+	again, created, err := s.AddKeyword(testContext, "writer", KeywordInput{Name: "BUDGET"})
 	if err != nil || created || again.ID != budget.ID {
 		t.Fatal("get or create", again, created, err)
 	}
-	trip, _, _ := s.AddKeyword(testContext, "writer", w.ID, KeywordInput{Name: "Trip"})
+	trip, _, _ := s.AddKeyword(testContext, "writer", KeywordInput{Name: "Trip"})
 	mustTerm(t, s, budget.TermSetID, TermInput{Name: "Business trip"})
-	suggested, err := s.Keywords(testContext, "reader", w.ID, "trip", 0)
+	suggested, err := s.Keywords(testContext, "reader", "trip", 0)
 	if err != nil || len(suggested) != 2 || suggested[0].ID != trip.ID {
 		t.Fatal("prefix matches first", suggested, err)
 	}
 
-	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "costs", Name: "Costs"})
+	set, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "costs", Name: "Costs"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,38 +288,38 @@ func TestKeywords(t *testing.T) {
 	if err != nil || promoted.ID != budget.ID || promoted.TermSetID != set.ID || !promoted.AvailableAsKeyword || promoted.Path != travel.Path+budget.ID+"/" {
 		t.Fatal("promote moves", promoted.Term, err)
 	}
-	suggested, _ = s.Keywords(testContext, "reader", w.ID, "", 0)
+	suggested, _ = s.Keywords(testContext, "reader", "", 0)
 	names := []string{}
 	for _, v := range suggested {
 		names = append(names, v.Name)
 	}
-	if strings.Join(names, ",") != "Budget,Business trip,Travel" {
+	if strings.Join(names, ",") != "Budget,Business trip,Shared outsider,Travel" {
 		t.Fatal("keywords include promoted terms", names)
 	}
-	if again, created, _ = s.AddKeyword(testContext, "writer", w.ID, KeywordInput{Name: "trip"}); created || again.ID != travel.ID {
+	if again, created, _ = s.AddKeyword(testContext, "writer", KeywordInput{Name: "trip"}); created || again.ID != travel.ID {
 		t.Fatal("a merged keyword name finds its term", again.Term, created)
 	}
 
-	keywordsSet, _ := s.keywordsSet(testContext, w.ID)
+	keywordsSet, _ := s.keywordsSet(testContext)
 	if _, err = s.CreateField(testContext, "alice", l.ID, CreateField{Key: "keywords", Label: "Keywords", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: keywordsSet.ID, Multiple: true}}); err != nil {
 		t.Fatal(err)
 	}
-	lunch, _, _ := s.AddKeyword(testContext, "writer", w.ID, KeywordInput{Name: "Lunch"})
-	snack, _, _ := s.AddKeyword(testContext, "writer", w.ID, KeywordInput{Name: "Snack"})
+	lunch, _, _ := s.AddKeyword(testContext, "writer", KeywordInput{Name: "Lunch"})
+	snack, _, _ := s.AddKeyword(testContext, "writer", KeywordInput{Name: "Snack"})
 	create(t, s, l.ID, "item", "One", map[string]any{"keywords": []any{lunch.ID, snack.ID}})
 	create(t, s, l.ID, "item", "Two", map[string]any{"keywords": []any{lunch.ID}})
-	if _, err = s.PopularKeywords(testContext, "writer", w.ID, 10); !errors.Is(err, ErrForbidden) {
+	if _, err = s.PopularKeywords(testContext, "writer", 10); !errors.Is(err, ErrForbidden) {
 		t.Fatal("popular keywords are for managers", err)
 	}
-	popular, err := s.PopularKeywords(testContext, "alice", w.ID, 10)
+	popular, err := s.PopularKeywords(testContext, "alice", 10)
 	if err != nil || len(popular) != 2 || popular[0].Term.ID != lunch.ID || popular[0].Count != 2 || popular[1].Count != 1 {
 		t.Fatal("popular", popular, err)
 	}
 }
 
 func TestImportTermsCSV(t *testing.T) {
-	s, w, _ := fixture(t)
-	group, err := s.CreateTermGroup(testContext, "alice", w.ID, TermGroupInput{Name: "Imported"})
+	s, _, _ := fixture(t)
+	group, err := s.CreateTermGroup(testContext, "alice", TermGroupInput{Name: "Imported"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +354,7 @@ func TestImportTermsCSV(t *testing.T) {
 	if _, err = s.ImportTerms(testContext, "alice", group.ID, strings.NewReader("Term Set Name,Level 1 Term,Level 2 Term\nA,,B\n")); err == nil {
 		t.Fatal("level gap")
 	}
-	groups, _ := s.TermGroups(testContext, "alice", w.ID, "", 10)
+	groups, _ := s.TermGroups(testContext, "alice", "", 10)
 	for _, g := range groups.Data {
 		if g.IsSystem {
 			if _, err = s.ImportTerms(testContext, "alice", g.ID, strings.NewReader(csv)); err == nil {
@@ -365,13 +365,13 @@ func TestImportTermsCSV(t *testing.T) {
 }
 
 func TestTermAndKeywordsFieldValues(t *testing.T) {
-	s, w, l := fixture(t)
-	group := testTermGroup(s, w.ID)
-	regions, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: group, Key: "regions", Name: "Regions"})
+	s, _, l := fixture(t)
+	group := testTermGroup(s)
+	regions, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: group, Key: "regions", Name: "Regions"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	topics, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: group, Key: "topics", Name: "Topics", IsOpen: true})
+	topics, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: group, Key: "topics", Name: "Topics", IsOpen: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,7 +491,7 @@ func TestTermAndKeywordsFieldValues(t *testing.T) {
 	if err != nil || len(found.Data) != 1 || found.Data[0].ID != madrid.ID {
 		t.Fatal("search finds keywords", found, err)
 	}
-	popular, err := s.PopularKeywords(testContext, "alice", w.ID, 10)
+	popular, err := s.PopularKeywords(testContext, "alice", 10)
 	if err != nil || len(popular) != 2 {
 		t.Fatal("popular counts keywords fields", popular, err)
 	}
@@ -499,7 +499,7 @@ func TestTermAndKeywordsFieldValues(t *testing.T) {
 
 func TestSmartFoldersMatchKeywordsAndMergedTerms(t *testing.T) {
 	s, w, l := fixture(t)
-	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "projects", Name: "Projects"})
+	set, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "projects", Name: "Projects"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -540,19 +540,19 @@ func TestSmartFoldersMatchKeywordsAndMergedTerms(t *testing.T) {
 	if got := names(old.ID); got != "Pitch,Spec" {
 		t.Fatal("a merged term stands for its target", got)
 	}
-	budget, _, _ := s.AddKeyword(testContext, "alice", w.ID, KeywordInput{Name: "budget"})
+	budget, _, _ := s.AddKeyword(testContext, "alice", KeywordInput{Name: "budget"})
 	if got := names(budget.ID); got != "Spec" {
 		t.Fatal("keywords fields", got)
 	}
 }
 
 func TestTaxonomyPackageRoundTrip(t *testing.T) {
-	s, w, _ := fixture(t)
-	group, err := s.CreateTermGroup(testContext, "alice", w.ID, TermGroupInput{Name: "Records", Description: "Filing"})
+	s, _, _ := fixture(t)
+	group, err := s.CreateTermGroup(testContext, "alice", TermGroupInput{Name: "Records", Description: "Filing"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{GroupID: group.ID, Key: "regions", Name: "Regions", IsOpen: true})
+	set, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: group.ID, Key: "regions", Name: "Regions", IsOpen: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -563,8 +563,8 @@ func TestTaxonomyPackageRoundTrip(t *testing.T) {
 	if _, err = s.MergeTerm(testContext, "alice", old.ID, old.Version, MergeTermInput{TargetTermID: europe.ID}); err != nil {
 		t.Fatal(err)
 	}
-	s.AddKeyword(testContext, "alice", w.ID, KeywordInput{Name: "Budget"})
-	pkg, err := s.ExportTaxonomy(testContext, "alice", w.ID)
+	s.AddKeyword(testContext, "alice", KeywordInput{Name: "Budget"})
+	pkg, err := s.ExportTaxonomy(testContext, "alice")
 	if err != nil || len(pkg.Groups) != 2 || !pkg.Groups[0].System || pkg.Groups[1].Sets[0].Terms[0].Children[0].Name != "Spain" || len(pkg.Groups[1].Sets[0].Terms) != 1 {
 		t.Fatal("export", pkg, err)
 	}
@@ -573,16 +573,16 @@ func TestTaxonomyPackageRoundTrip(t *testing.T) {
 		t.Fatal("packages hold names, not IDs or merged terms", string(raw))
 	}
 
-	target := create(t, s, "", "workspace", "Copy", nil)
-	out, err := s.ImportTaxonomy(testContext, "alice", target.ID, pkg)
+	targetService, _, _ := fixture(t)
+	out, err := targetService.ImportTaxonomy(testContext, "alice", pkg)
 	if err != nil || out.GroupsCreated != 1 || out.SetsCreated != 1 || out.TermsCreated != 3 {
 		t.Fatal("import", out, err)
 	}
-	again, err := s.ImportTaxonomy(testContext, "alice", target.ID, pkg)
+	again, err := targetService.ImportTaxonomy(testContext, "alice", pkg)
 	if err != nil || again != (TaxonomyImportResult{}) {
 		t.Fatal("import is additive", again, err)
 	}
-	copied, err := s.ExportTaxonomy(testContext, "alice", target.ID)
+	copied, err := targetService.ExportTaxonomy(testContext, "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -590,7 +590,7 @@ func TestTaxonomyPackageRoundTrip(t *testing.T) {
 		t.Fatalf("round trip\n%s\n%s", raw, got)
 	}
 	pkg.Groups[1].Sets = append(pkg.Groups[1].Sets, PortableTermSet{Key: "regions", Name: "Again"})
-	if _, err = s.ImportTaxonomy(testContext, "alice", target.ID, pkg); err == nil {
+	if _, err = targetService.ImportTaxonomy(testContext, "alice", pkg); err == nil {
 		t.Fatal("duplicate set keys")
 	}
 }

@@ -644,11 +644,11 @@ func TestDeletingAMemberCancelsSelectionRuns(t *testing.T) {
 
 func TestLaunchFormDomainPickers(t *testing.T) {
 	f := setup(t)
-	group, err := f.dms.CreateTermGroup(ctx, "alice", f.ws.ID, dms.TermGroupInput{Name: "Subjects"})
+	group, err := f.dms.CreateTermGroup(ctx, "alice", dms.TermGroupInput{Name: "Subjects"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := f.dms.CreateTermSet(ctx, "alice", f.ws.ID, dms.TermSetInput{GroupID: group.ID, Key: "topics", Name: "Topics"})
+	set, err := f.dms.CreateTermSet(ctx, "alice", dms.TermSetInput{GroupID: group.ID, Key: "topics", Name: "Topics"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -660,15 +660,11 @@ func TestLaunchFormDomainPickers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherWS, err := f.dms.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Other"})
+	otherGroup, err := f.dms.CreateTermGroup(ctx, "alice", dms.TermGroupInput{Name: "Other subjects"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherGroup, err := f.dms.CreateTermGroup(ctx, "alice", otherWS.ID, dms.TermGroupInput{Name: "Subjects"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	foreign, err := f.dms.CreateTermSet(ctx, "alice", otherWS.ID, dms.TermSetInput{GroupID: otherGroup.ID, Key: "foreign", Name: "Foreign"})
+	foreign, err := f.dms.CreateTermSet(ctx, "alice", dms.TermSetInput{GroupID: otherGroup.ID, Key: "foreign", Name: "Foreign"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -684,12 +680,12 @@ func TestLaunchFormDomainPickers(t *testing.T) {
 		"flow": {"start": "note", "nodes": {"note": {"activity": "item.update", "inputs": {"values": {"note": "{input:priority} by {input:reviewer}"}}}}}}`
 	}
 	def := strings.ReplaceAll(form(foreign.ID), "$LIST", f.list.ID)
-	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Foreign terms", Definition: json.RawMessage(def)}); err == nil || !strings.Contains(err.Error(), "term_set_id") {
-		t.Fatalf("term set of another workspace: %v", err)
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Foreign terms", Definition: json.RawMessage(def)}); err != nil {
+		t.Fatalf("shared organization term set: %v", err)
 	}
 	def = strings.Replace(strings.ReplaceAll(form(set.ID), "$LIST", f.list.ID), `"kind": "terms",`, `"kind": "terms", "group_id": "`+otherGroup.ID+`",`, 1)
-	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Foreign group", Definition: json.RawMessage(def)}); err == nil || !strings.Contains(err.Error(), "group_id") {
-		t.Fatalf("term group of another workspace: %v", err)
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Foreign group", Definition: json.RawMessage(def)}); err != nil {
+		t.Fatalf("organization group configuration: %v", err)
 	}
 	w := f.workflow(t, "Review", form(set.ID))
 	it := f.item(t, "alice", "Contract", nil)
@@ -726,15 +722,15 @@ func TestLaunchFormDomainPickers(t *testing.T) {
 
 func TestKeywordsPicker(t *testing.T) {
 	f := setup(t)
-	budget, _, err := f.dms.AddKeyword(ctx, "alice", f.ws.ID, dms.KeywordInput{Name: "Budget"})
+	budget, _, err := f.dms.AddKeyword(ctx, "alice", dms.KeywordInput{Name: "Budget"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	group, err := f.dms.CreateTermGroup(ctx, "alice", f.ws.ID, dms.TermGroupInput{Name: "Subjects"})
+	group, err := f.dms.CreateTermGroup(ctx, "alice", dms.TermGroupInput{Name: "Subjects"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := f.dms.CreateTermSet(ctx, "alice", f.ws.ID, dms.TermSetInput{GroupID: group.ID, Key: "costs", Name: "Costs"})
+	set, err := f.dms.CreateTermSet(ctx, "alice", dms.TermSetInput{GroupID: group.ID, Key: "costs", Name: "Costs"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -762,7 +758,7 @@ func TestKeywordsPicker(t *testing.T) {
 	start := func(ids ...any) ([]string, error) {
 		return f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{it.ID}, Inputs: map[string]any{"keywords": ids}})
 	}
-	if _, err = start(managed.ID); err == nil || !strings.Contains(err.Error(), "not a keyword") {
+	if _, err = start(managed.ID); err == nil || !strings.Contains(err.Error(), "not an organization keyword") {
 		t.Fatalf("managed term: %v", err)
 	}
 	if _, err = start("missing"); err == nil {
@@ -785,11 +781,11 @@ func TestKeywordsPicker(t *testing.T) {
 
 func TestTermTriggersAndHasTerms(t *testing.T) {
 	f := setup(t)
-	group, err := f.dms.CreateTermGroup(ctx, "alice", f.ws.ID, dms.TermGroupInput{Name: "Subjects"})
+	group, err := f.dms.CreateTermGroup(ctx, "alice", dms.TermGroupInput{Name: "Subjects"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := f.dms.CreateTermSet(ctx, "alice", f.ws.ID, dms.TermSetInput{GroupID: group.ID, Key: "projects", Name: "Projects"})
+	set, err := f.dms.CreateTermSet(ctx, "alice", dms.TermSetInput{GroupID: group.ID, Key: "projects", Name: "Projects"})
 	if err != nil {
 		t.Fatal(err)
 	}
