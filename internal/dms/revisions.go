@@ -416,7 +416,7 @@ func (s *Service) Revisions(ctx context.Context, subject, id string, after, limi
 	if !s.transaction {
 		return read(ctx, s, func(t *Service) ([]*ent.ItemRevision, error) { return t.Revisions(ctx, subject, id, after, limit) })
 	}
-	r, err := s.authorize(ctx, subject, id, "read_draft")
+	r, err := s.authorize(ctx, subject, id, "read")
 	if err != nil {
 		return nil, err
 	}

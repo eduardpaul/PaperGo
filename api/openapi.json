@@ -1852,7 +1852,7 @@
         }
       ],
       "get": {
-        "summary": "Read immutable item history (read_draft required)",
+        "summary": "Read immutable item history (ordinary item read required)",
         "responses": {
           "200": {
             "description": "Success",
@@ -1904,7 +1904,7 @@
         "x-module-scopes": [
           "list.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": "Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write."
       }
     },
     "/v1/items/{id}/unpublish": {
@@ -10391,7 +10391,7 @@
         }
       ],
       "get": {
-        "summary": "Read one numbered revision and its original schema (read_draft required)",
+        "summary": "Read one numbered revision and its original schema (ordinary item read required)",
         "responses": {
           "200": {
             "description": "Revision",
@@ -10410,7 +10410,7 @@
         "x-module-scopes": [
           "list.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": "Requires list.read scope and ordinary read permission on the live item. All retained metadata revisions, including unpublished revisions, are available with their frozen schema. Current head content still requires read_draft; restoring history requires write."
       }
     },
     "/v1/items/{id}/revisions/{number}/restore": {

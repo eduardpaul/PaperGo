@@ -2,6 +2,7 @@ package dms
 
 import (
 	"errors"
+	"papergo/internal/identity"
 	"slices"
 	"testing"
 )
@@ -33,8 +34,8 @@ func TestRevisionHistoryChangesPaginationAndRestore(t *testing.T) {
 	if err = s.SetWorkspaceMember(testContext, "alice", workspace.ID, WorkspaceMember{"reader", "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Revision(testContext, "reader", item.ID, 1); !errors.Is(err, ErrForbidden) {
-		t.Fatal("draft history leaked", err)
+	if revision, err := s.Revision(testContext, "reader", item.ID, 1); err != nil || revision.Name != "Original" {
+		t.Fatal("ordinary reader cannot read history", revision, err)
 	}
 	if _, err = s.RestoreRevision(testContext, "alice", item.ID, 1, item.Version-1); !errors.Is(err, ErrConflict) {
 		t.Fatal("stale restore", err)
@@ -53,6 +54,85 @@ func TestRevisionHistoryChangesPaginationAndRestore(t *testing.T) {
 	current, err := s.Revision(testContext, "alice", item.ID, 3)
 	if err != nil || !current.IsCurrent || current.CreatedBy != "alice" {
 		t.Fatal(current, err)
+	}
+}
+
+func TestOrdinaryReaderHistorySnapshotsAndAuthorization(t *testing.T) {
+	s, w, l := fixture(t)
+	grantReader(t, s, w)
+	field := fieldOK(t, s, l.ID, CreateField{Key: "note", Label: "Original label", Type: "text"})
+	item := create(t, s, l.ID, "item", "First", map[string]any{"note": "first"})
+	publishItem(t, s, item)
+	item = latest(t, s, item.ID)
+	item, err := s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: ptr("Unpublished"), Values: &map[string]any{"note": "draft"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.UpdateField(testContext, "alice", l.ID, field.ID, latest(t, s, l.ID).Version, UpdateField{Label: ptr("Current label")}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.RevisionHistory(testContext, "reader", item.ID, 0, 1)
+	if err != nil || len(rows) != 1 || rows[0].IsCurrent || rows[0].Name != "First" {
+		t.Fatal(rows, err)
+	}
+	defs, _, err := typedDefinitions(rows[0].Edges.SchemaRevision.Definition, rows[0].ContentTypeID)
+	if err != nil || definitionMap(defs)["note"].Label != "Original label" {
+		t.Fatal("original schema lost", defs, err)
+	}
+	rows, err = s.RevisionHistory(testContext, "reader", item.ID, 1, 1)
+	if err != nil || len(rows) != 1 || !rows[0].IsCurrent || rows[0].Name != "Unpublished" || !slices.Equal(rows[0].ChangedFields, []string{"$name", "note"}) {
+		t.Fatal(rows, err)
+	}
+	if current, err := s.Get(testContext, "reader", item.ID); err != nil || current.Name != "First" {
+		t.Fatal("current content visibility changed", current, err)
+	}
+	if _, err = s.GetSurface(testContext, "reader", item.ID, "head"); !errors.Is(err, ErrForbidden) {
+		t.Fatal("head permission changed", err)
+	}
+	if _, err = s.RestoreRevision(testContext, "reader", item.ID, 1, item.Version); !errors.Is(err, ErrForbidden) {
+		t.Fatal("reader restored history", err)
+	}
+	private := create(t, s, l.ID, "item", "Private", nil)
+	private, err = s.SetPermissions(testContext, "alice", private.ID, private.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, get := range []func() error{
+		func() error { _, e := s.RevisionHistory(testContext, "reader", private.ID, 0, 10); return e },
+		func() error { _, e := s.Revisions(testContext, "reader", private.ID, 0, 10); return e },
+		func() error { _, e := s.Revision(testContext, "reader", private.ID, 1); return e },
+	} {
+		if e := get(); !errors.Is(e, ErrForbidden) {
+			t.Fatal("private history exposed", e)
+		}
+	}
+	if err = s.Directory().SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "reader"}, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Revision(testContext, "reader", item.ID, 1); !errors.Is(err, ErrForbidden) {
+		t.Fatal("module scope bypassed", err)
+	}
+	if _, err = s.RevisionHistory(testContext, "reader", item.ID, 0, 10); !errors.Is(err, ErrForbidden) {
+		t.Fatal("history list bypassed module scope", err)
+	}
+	if err = s.Directory().SetAssignment(testContext, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "reader"}, false); err != nil {
+		t.Fatal(err)
+	}
+	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.RevisionHistory(testContext, "reader", item.ID, 0, 10); !errors.Is(err, ErrForbidden) {
+		t.Fatal("revoked permission retained", err)
+	}
+	if err = s.Delete(testContext, "alice", item.ID, item.Version, DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Revision(testContext, "alice", item.ID, 1); !errors.Is(err, ErrNotFound) {
+		t.Fatal("deleted history exposed", err)
+	}
+	if _, err = s.RevisionHistory(testContext, "alice", item.ID, 0, 10); !errors.Is(err, ErrNotFound) {
+		t.Fatal("deleted history list exposed", err)
 	}
 }
 

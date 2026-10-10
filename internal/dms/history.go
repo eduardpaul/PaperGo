@@ -90,7 +90,7 @@ func (s *Service) RevisionHistory(ctx context.Context, subject, id string, after
 
 func (s *Service) Revision(ctx context.Context, subject, id string, number int) (RevisionView, error) {
 	return read(ctx, s, func(t *Service) (RevisionView, error) {
-		item, err := t.authorize(ctx, subject, id, "read_draft")
+		item, err := t.authorize(ctx, subject, id, "read")
 		if err != nil {
 			return RevisionView{}, err
 		}
