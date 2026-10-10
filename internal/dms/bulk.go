@@ -17,10 +17,11 @@ type BulkCreate struct {
 }
 
 type BulkUpdate struct {
-	Name     *string         `json:"name,omitempty"`
-	Tags     *[]string       `json:"tags,omitempty"`
-	Values   *map[string]any `json:"values,omitempty"`
-	ParentID *string         `json:"parent_id,omitempty"`
+	ContentTypeID *string         `json:"content_type_id,omitempty"`
+	Name          *string         `json:"name,omitempty"`
+	Tags          *[]string       `json:"tags,omitempty"`
+	Values        *map[string]any `json:"values,omitempty"`
+	ParentID      *string         `json:"parent_id,omitempty"`
 }
 
 type BulkOperation struct {
@@ -159,7 +160,7 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 	}
 	switch op.Action {
 	case "update":
-		_, err = s.update(ctx, subject, op.ID, op.Version, UpdateResource{Name: op.Update.Name, Tags: op.Update.Tags, Values: op.Update.Values, ParentID: op.Update.ParentID})
+		_, err = s.update(ctx, subject, op.ID, op.Version, UpdateResource{Name: op.Update.Name, Tags: op.Update.Tags, Values: op.Update.Values, ParentID: op.Update.ParentID, ContentTypeID: op.Update.ContentTypeID})
 	case "publish":
 		_, err = s.publish(ctx, subject, op.ID, op.Version)
 	case "unpublish":

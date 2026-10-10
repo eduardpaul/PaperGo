@@ -113,6 +113,11 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 			}
 		}
 		for _, row := range rows {
+			if row.Kind == resource.KindItem {
+				if _, e = t.contentType(ctx, collection, *row.ContentTypeID); e != nil {
+					return invalid("reattach the deleted item's content type before restoring it")
+				}
+			}
 			parent := collection
 			if row.ParentID != nil {
 				p, e := t.Client.Resource.Get(ctx, *row.ParentID)

@@ -109,6 +109,19 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 	m.HandleFunc("POST /v1/resources/{id}/content-types", foundationMutation(a, 201, true, func(r *http.Request, in dms.AttachContentTypeInput, v int) (any, error) {
 		return a.DMS.AttachContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
+	m.HandleFunc("DELETE /v1/resources/{id}/content-types/{typeID}", func(w http.ResponseWriter, r *http.Request) {
+		v, ok := a.version(w, r)
+		if !ok {
+			return
+		}
+		out, err := a.DMS.DetachContentType(r.Context(), subject(r), r.PathValue("id"), r.PathValue("typeID"), v)
+		if err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		etag(w, out.Version)
+		w.WriteHeader(204)
+	})
 	m.HandleFunc("GET /v1/content-types/{id}", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.GetContentType(r.Context(), subject(r), r.PathValue("id"))
 	}))

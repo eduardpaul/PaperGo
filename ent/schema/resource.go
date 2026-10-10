@@ -19,7 +19,7 @@ func (Resource) Fields() []ent.Field {
 		// Folders and items can move within their collection; triggers keep containment valid.
 		field.String("parent_id").Optional().Nillable().MaxLen(36),
 		field.String("container_id").Optional().Nillable().MaxLen(36),
-		field.String("content_type_id").Optional().Nillable().Immutable().MaxLen(36),
+		field.String("content_type_id").Optional().Nillable().MaxLen(36),
 		field.Enum("kind").Values("workspace", "list", "library", "folder", "item").Immutable(),
 		field.String("name").NotEmpty().MaxRuneLen(255),
 		// Descriptive metadata of a workspace or collection.

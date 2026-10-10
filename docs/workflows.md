@@ -39,7 +39,7 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | Type | Starts a run when | The run's item |
 | --- | --- | --- |
 | `item.created` | an item is created (its first revision) | the item |
-| `item.updated` | an item's content changes (a new head revision) | the item |
+| `item.updated` | an item's content changes or it moves across collections | the item |
 | `item.published` | a revision is published, explicitly or automatically | the item |
 | `item.unpublished` | an item is unpublished | the item |
 | `item.deleted` | an item is deleted, alone or with its folder | none (`{trigger:resource_id}` names it) |
@@ -147,7 +147,7 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `item.has_terms` | flow | tests whether the item's term and keywords fields hold `terms` (or descendants, or terms merged into them): any of them, or all with `match: "all"`; ports `matched`/`unmatched` | `matched`, `terms` (those held) |
 | `end` / `fail` | flow | completes the run / fails it with `message` | |
 | `item.get` | action | reads an item | the item |
-| `item.update` | action | sets `name`, `tags`, and `values` (merged; `null` removes a value) | the item |
+| `item.update` | action | sets `content_type_id`, `name`, `tags`, and `values` (merged; `null` removes a value) | the item |
 | `item.create` | action | creates an item in `collection_id` (optional `parent_id`, `content_type_id`, `tags`, `values`) | `item_id`, `item` |
 | `items.query` | action | queries `collection_id` with `filter`, `sort`, `limit` (≤ 100), on the head surface | `items`, `count` |
 | `item.publish` | action | publishes the head revision, if not already published | `published` |

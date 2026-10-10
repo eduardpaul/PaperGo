@@ -15,15 +15,16 @@ import (
 // FilteredBulkUpdate uses head values to select items. The runner freezes the
 // matching IDs on its first step; edits cannot change membership mid-operation.
 type FilteredBulkUpdate struct {
-	Query  QuerySpec      `json:"query"`
-	Name   *string        `json:"name,omitempty"`
-	Tags   *[]string      `json:"tags,omitempty"`
-	Values map[string]any `json:"values,omitempty"`
+	ContentTypeID *string        `json:"content_type_id,omitempty"`
+	Query         QuerySpec      `json:"query"`
+	Name          *string        `json:"name,omitempty"`
+	Tags          *[]string      `json:"tags,omitempty"`
+	Values        map[string]any `json:"values,omitempty"`
 }
 
 func (s *Service) StartBulkUpdate(ctx context.Context, subject, collectionID string, in FilteredBulkUpdate) (out *ent.Operation, err error) {
-	if in.Name == nil && in.Tags == nil && len(in.Values) == 0 {
-		return nil, invalid("a name, tags or non-empty values patch is required")
+	if in.Name == nil && in.Tags == nil && len(in.Values) == 0 && in.ContentTypeID == nil {
+		return nil, invalid("a content type, name, tags or non-empty values patch is required")
 	}
 	if len(in.Query.Sort) != 0 || in.Query.GroupBy != "" {
 		return nil, invalid("bulk selection does not accept sort or group_by")
@@ -105,7 +106,7 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *ent.Operation) error {
 		if r.ContainerID == nil || *r.ContainerID != op.ContainerID || r.Kind != "item" {
 			e = invalid("bulk target is outside the collection")
 		} else {
-			patch := UpdateResource{Name: in.Name, Tags: in.Tags}
+			patch := UpdateResource{Name: in.Name, Tags: in.Tags, ContentTypeID: in.ContentTypeID}
 			if len(in.Values) > 0 {
 				patch.Values = &in.Values
 			}

@@ -47,6 +47,9 @@ func revisionChanges(current, previous *ent.ItemRevision) ([]string, error) {
 	if previous == nil || !smartEqual(current.Tags, previous.Tags) {
 		changed = append(changed, "$tags")
 	}
+	if previous != nil && current.ContentTypeID != previous.ContentTypeID {
+		changed = append(changed, "$content_type_id")
+	}
 	sort.Strings(changed)
 	return changed, nil
 }
@@ -151,7 +154,7 @@ func (s *Service) RestoreRevision(ctx context.Context, subject, id string, numbe
 				values[key] = nil
 			}
 		}
-		out, err = t.update(ctx, subject, id, version, UpdateResource{Name: &old.Name, Tags: &old.Tags, Values: &values})
+		out, err = t.update(ctx, subject, id, version, UpdateResource{Name: &old.Name, Tags: &old.Tags, Values: &values, ContentTypeID: &old.ContentTypeID})
 		if err != nil {
 			return err
 		}

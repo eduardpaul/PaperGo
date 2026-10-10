@@ -71,7 +71,7 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		}
 		// Revalidate every value and reference against the destination schema;
 		// stale references cannot use the ordinary unchanged-value exception.
-		if e = t.normalizeItemValues(ctx, subject, defs, r.Values, nil); e != nil {
+		if e = t.normalizeItemValues(ctx, subject, defs, r.Values, nil, true); e != nil {
 			return e
 		}
 		if e = evaluateRules(defs, rules, r.Values); e != nil {

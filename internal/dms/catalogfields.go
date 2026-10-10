@@ -39,7 +39,7 @@ func (s *Service) CreateCatalogField(ctx context.Context, subject string, in Cre
 			return e
 		}
 		if len(d.Options.DefaultValue) > 0 {
-			if e := t.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
+			if e := t.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil, true); e != nil {
 				return e
 			}
 		}
@@ -72,6 +72,11 @@ func (s *Service) validateSchemaViews(ctx context.Context, collection string, de
 		var q QuerySpec
 		if e = json.Unmarshal(v.Query, &q); e != nil {
 			return e
+		}
+		if q.ContentTypeID != "" {
+			if _, e = s.contentType(ctx, collection, q.ContentTypeID); e != nil {
+				return invalid("remove dependent saved-view content-type references before detaching a type")
+			}
 		}
 		for _, key := range v.Columns {
 			if !builtinColumn(key) && defs[key] == nil {

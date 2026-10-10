@@ -99,13 +99,13 @@ func decimal(v any, scale int) (string, int64, error) {
 	return canonical, n.Int64(), nil
 }
 func normalizeValues(defs []*ent.FieldDefinition, values map[string]any) error {
-	return normalizeRevisionValues(defs, values, nil)
+	return normalizeRevisionValues(defs, values, nil, true)
 }
 
 // normalizeRevisionValues validates values for a new revision. Values carried over
 // unchanged from previous were valid under the schema they were written with, so
 // later tightening (fewer choices, new bounds, required) never blocks other edits.
-func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[string]any) error {
+func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[string]any, applyDefaults bool) error {
 	known := make(map[string]*ent.FieldDefinition, len(defs))
 	for _, d := range defs {
 		known[d.Key] = d
@@ -119,7 +119,7 @@ func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[s
 		v, exists := values[d.Key]
 		old, existed := previous[d.Key]
 		kept := previous != nil && exists == existed && (!exists || sameJSON(v, old))
-		if !exists && previous == nil && len(d.Options.DefaultValue) > 0 {
+		if !exists && applyDefaults && len(d.Options.DefaultValue) > 0 {
 			var e error
 			v, e = decodeValue(d.Options.DefaultValue)
 			if e != nil {

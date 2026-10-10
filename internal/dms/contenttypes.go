@@ -359,6 +359,58 @@ type SchemaContentType struct {
 	IsDefault bool                   `json:"is_default"`
 }
 
+// DetachContentType removes only this collection's attachment. Frozen revision
+// schemas and the shared organization catalog remain available.
+func (s *Service) DetachContentType(ctx context.Context, subject, collection, typeID string, version int) (out *ent.Resource, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		c, e := t.contentTypeResource(ctx, subject, collection, "manage")
+		if e != nil {
+			return e
+		}
+		if c.Version != version {
+			return ErrConflict
+		}
+		a, e := t.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(collection), collectiontype.ContentTypeIDEQ(typeID)).Only(ctx)
+		if ent.IsNotFound(e) {
+			return ErrNotFound
+		}
+		if e != nil {
+			return e
+		}
+		remaining, e := t.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(collection), collectiontype.IDNEQ(a.ID)).Order(ent.Asc(collectiontype.FieldContentTypeID)).All(ctx)
+		if e != nil {
+			return e
+		}
+		if len(remaining) == 0 {
+			return ErrConflict
+		}
+		inUse, e := t.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.ContentTypeIDEQ(typeID), resource.DeletedAtIsNil()).Exist(ctx)
+		if e != nil {
+			return e
+		}
+		if inUse {
+			return ErrConflict
+		}
+		if e = t.Client.CollectionType.DeleteOne(a).Exec(ctx); e != nil {
+			return e
+		}
+		if a.IsDefault {
+			if e = t.Client.CollectionType.UpdateOne(remaining[0]).SetIsDefault(true).Exec(ctx); e != nil {
+				return e
+			}
+		}
+		if e = t.refreshCollections(ctx, subject, []*ent.Resource{c}); e != nil {
+			return e
+		}
+		out, e = t.Client.Resource.Get(ctx, collection)
+		if e != nil {
+			return e
+		}
+		return t.audit(ctx, subject, "content_type.detach", c, map[string]any{"content_type_id": typeID})
+	})
+	return
+}
+
 func selectDefinitions(defs []*ent.FieldDefinition, keys []string) []*ent.FieldDefinition {
 	wanted := map[string]bool{}
 	for _, key := range keys {
@@ -430,7 +482,7 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *ent.Res
 			}
 			// Reference grants can change independently; schema adoption validates
 			// stored values without requiring managers to impersonate their authors.
-			if e = normalizeRevisionValues(defs, projected, values); e != nil {
+			if e = normalizeRevisionValues(defs, projected, values, false); e != nil {
 				return e
 			}
 			if e = evaluateRules(defs, rules, projected); e != nil {

@@ -411,8 +411,8 @@ func (s *Service) validateReferenceScopes(ctx context.Context, subject string, d
 	}
 	return nil
 }
-func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs []*ent.FieldDefinition, values, previous map[string]any) error {
-	if e := normalizeRevisionValues(defs, values, previous); e != nil {
+func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs []*ent.FieldDefinition, values, previous map[string]any, applyDefaults bool) error {
+	if e := normalizeRevisionValues(defs, values, previous, applyDefaults); e != nil {
 		return e
 	}
 	for _, d := range defs {

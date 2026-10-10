@@ -89,6 +89,26 @@ func (_u *ResourceUpdate) ClearContainerID() *ResourceUpdate {
 	return _u
 }
 
+// SetContentTypeID sets the "content_type_id" field.
+func (_u *ResourceUpdate) SetContentTypeID(v string) *ResourceUpdate {
+	_u.mutation.SetContentTypeID(v)
+	return _u
+}
+
+// SetNillableContentTypeID sets the "content_type_id" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableContentTypeID(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetContentTypeID(*v)
+	}
+	return _u
+}
+
+// ClearContentTypeID clears the value of the "content_type_id" field.
+func (_u *ResourceUpdate) ClearContentTypeID() *ResourceUpdate {
+	_u.mutation.ClearContentTypeID()
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *ResourceUpdate) SetName(v string) *ResourceUpdate {
 	_u.mutation.SetName(v)
@@ -877,6 +897,11 @@ func (_u *ResourceUpdate) check() error {
 			return &ValidationError{Name: "container_id", err: fmt.Errorf(`ent: validator failed for field "Resource.container_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ContentTypeID(); ok {
+		if err := resource.ContentTypeIDValidator(v); err != nil {
+			return &ValidationError{Name: "content_type_id", err: fmt.Errorf(`ent: validator failed for field "Resource.content_type_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := resource.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Resource.name": %w`, err)}
@@ -934,6 +959,9 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.WorkspaceID(); ok {
 		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ContentTypeID(); ok {
+		_spec.SetField(resource.FieldContentTypeID, field.TypeString, value)
 	}
 	if _u.mutation.ContentTypeIDCleared() {
 		_spec.ClearField(resource.FieldContentTypeID, field.TypeString)
@@ -1647,6 +1675,26 @@ func (_u *ResourceUpdateOne) SetNillableContainerID(v *string) *ResourceUpdateOn
 // ClearContainerID clears the value of the "container_id" field.
 func (_u *ResourceUpdateOne) ClearContainerID() *ResourceUpdateOne {
 	_u.mutation.ClearContainerID()
+	return _u
+}
+
+// SetContentTypeID sets the "content_type_id" field.
+func (_u *ResourceUpdateOne) SetContentTypeID(v string) *ResourceUpdateOne {
+	_u.mutation.SetContentTypeID(v)
+	return _u
+}
+
+// SetNillableContentTypeID sets the "content_type_id" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableContentTypeID(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetContentTypeID(*v)
+	}
+	return _u
+}
+
+// ClearContentTypeID clears the value of the "content_type_id" field.
+func (_u *ResourceUpdateOne) ClearContentTypeID() *ResourceUpdateOne {
+	_u.mutation.ClearContentTypeID()
 	return _u
 }
 
@@ -2451,6 +2499,11 @@ func (_u *ResourceUpdateOne) check() error {
 			return &ValidationError{Name: "container_id", err: fmt.Errorf(`ent: validator failed for field "Resource.container_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ContentTypeID(); ok {
+		if err := resource.ContentTypeIDValidator(v); err != nil {
+			return &ValidationError{Name: "content_type_id", err: fmt.Errorf(`ent: validator failed for field "Resource.content_type_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := resource.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Resource.name": %w`, err)}
@@ -2525,6 +2578,9 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if value, ok := _u.mutation.WorkspaceID(); ok {
 		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ContentTypeID(); ok {
+		_spec.SetField(resource.FieldContentTypeID, field.TypeString, value)
 	}
 	if _u.mutation.ContentTypeIDCleared() {
 		_spec.ClearField(resource.FieldContentTypeID, field.TypeString)

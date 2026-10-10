@@ -111,7 +111,7 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 		return nil, e
 	}
 	if len(candidate.Options.DefaultValue) > 0 {
-		if e = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{&candidate}, map[string]any{}, nil); e != nil {
+		if e = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{&candidate}, map[string]any{}, nil, true); e != nil {
 			return nil, e
 		}
 	}

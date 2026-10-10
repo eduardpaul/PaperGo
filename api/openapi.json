@@ -10436,7 +10436,7 @@
       ],
       "post": {
         "summary": "Restore historical metadata as a new revision",
-        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores name, tags and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, tags and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "If-Match",
@@ -12311,6 +12311,54 @@
           }
         }
       }
+    },
+    "/v1/resources/{id}/content-types/{typeID}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "typeID",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "detachContentType",
+        "summary": "Detach an unused collection content type",
+        "description": "Requires collection manage access and the current collection If-Match. Rejects the last attachment, a type used by live items, and dependent saved views. Chooses a remaining default when necessary. Updates the effective schema and business keys atomically; organization catalog types and frozen revisions remain. Deleted items with a detached type require reattachment before restoration.",
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Detached; ETag contains the updated collection version"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12675,6 +12723,11 @@
             "minimum": 1,
             "maximum": 500,
             "description": "History entries kept per item, trimmed on each new recorded version. Defaults to 50."
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
           }
         },
         "required": [],
@@ -14201,6 +14254,11 @@
             "type": "string",
             "minLength": 1,
             "description": "Destination collection or folder in the same collection."
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
           }
         }
       },
@@ -16880,6 +16938,11 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Field patch: omitted fields remain unchanged, null removes a field. Each item is validated against its own current content type."
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
           }
         }
       },

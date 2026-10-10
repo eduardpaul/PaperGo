@@ -255,7 +255,7 @@ func normalizeMetadata(raw json.RawMessage, values, previous map[string]any) err
 	if e != nil {
 		return e
 	}
-	if e = normalizeRevisionValues(defs, values, previous); e != nil {
+	if e = normalizeRevisionValues(defs, values, previous, false); e != nil {
 		return e
 	}
 	b, e := json.Marshal(values)

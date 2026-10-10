@@ -427,6 +427,7 @@ type UpdateResource struct {
 	AllowFolders      *bool           `json:"allow_folders,omitempty"`
 	Tags              *[]string       `json:"tags,omitempty"`
 	Values            *map[string]any `json:"values,omitempty"`
+	ContentTypeID     *string         `json:"content_type_id,omitempty"`
 	Versioning        *string         `json:"versioning,omitempty"`
 	MaxVersions       *int            `json:"max_versions,omitempty"`
 	PublishingEnabled *bool           `json:"publishing_enabled,omitempty"`
@@ -444,7 +445,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 	return
 }
 func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*ent.Resource, error) {
-	content := in.Name != nil || in.Description != nil || in.Tags != nil || in.Values != nil
+	content := in.Name != nil || in.Description != nil || in.Tags != nil || in.Values != nil || in.ContentTypeID != nil
 	if !content && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
 		return nil, invalid("at least one change is required")
 	}
@@ -509,6 +510,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	if in.Values != nil && (r.Kind != resource.KindItem || r.ContainerID == nil) {
 		return nil, invalid("only items support custom values")
 	}
+	if in.ContentTypeID != nil && (r.Kind != resource.KindItem || *in.ContentTypeID == "") {
+		return nil, invalid("content_type_id requires an attached item content type")
+	}
 	moved := in.ParentID != nil && (r.ParentID == nil || *in.ParentID != *r.ParentID)
 	b := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC())
 	b.SetUpdatedBy(subject)
@@ -533,6 +537,28 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	}
 	// Item values are validated and normalized once, by recordRevision below.
 	if r.Kind == resource.KindItem {
+		if in.ContentTypeID != nil && *in.ContentTypeID != *r.ContentTypeID {
+			c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
+			if err != nil {
+				return nil, err
+			}
+			schema, err := s.Client.SchemaRevision.Get(ctx, *c.SchemaHeadID)
+			if err != nil {
+				return nil, err
+			}
+			defs, _, err := typedDefinitions(schema.Definition, *in.ContentTypeID)
+			if err != nil {
+				return nil, err
+			}
+			known := definitionMap(defs)
+			for key := range r.Values {
+				if known[key] == nil {
+					delete(r.Values, key)
+				}
+			}
+			r.ContentTypeID = in.ContentTypeID
+			b.SetContentTypeID(*in.ContentTypeID)
+		}
 		if in.Name != nil {
 			r.Name = *in.Name
 		}
@@ -562,7 +588,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 				// even a retained ID. Omitted references survive unrelated edits.
 				if d := known[key]; (d.Type == fielddefinition.TypeLookup || d.Type == fielddefinition.TypePerson) && (*in.Values)[key] != nil {
 					assigned := map[string]any{key: (*in.Values)[key]}
-					if err = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, assigned, nil); err != nil {
+					if err = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, assigned, nil, true); err != nil {
 						return nil, err
 					}
 					(*in.Values)[key] = assigned[key]
@@ -864,7 +890,7 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 		return nil, e
 	}
 	if len(d.Options.DefaultValue) > 0 {
-		if e := s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
+		if e := s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil, true); e != nil {
 			return nil, e
 		}
 	}

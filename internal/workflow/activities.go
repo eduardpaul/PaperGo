@@ -161,8 +161,8 @@ func init() {
 		InputSchema: inputs(`"message": {"type": "string", "title": "Message"}`, "message"), run: runFail})
 	register(&Activity{Key: "item.get", Kind: "action", Description: "Reads an item; its fields become the output.",
 		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(itemOutput), run: runItemGet})
-	register(&Activity{Key: "item.update", Kind: "action", Description: "Changes an item's name, tags or field values. Values are merged; null removes a value.",
-		InputSchema:  inputs(itemIDProp + `, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`),
+	register(&Activity{Key: "item.update", Kind: "action", Description: "Changes an item's content type, name, tags or field values. Values are merged; null removes a value.",
+		InputSchema:  inputs(itemIDProp + `, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`),
 		OutputSchema: mustSchema(itemOutput), run: runItemUpdate})
 	register(&Activity{Key: "item.create", Kind: "action", Description: "Creates an item; the output has its item_id.",
 		InputSchema:  inputs(collectProp+`, "parent_id": {"type": "string", "title": "Folder", "description": "Defaults to the collection."}, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`, "collection_id", "name"),
@@ -556,6 +556,13 @@ func runItemUpdate(e *env, in map[string]any) (outcome, error) {
 		return outcome{}, err
 	}
 	var u dms.UpdateResource
+	if v, ok := in["content_type_id"]; ok {
+		id, err := e.scope.text(v)
+		if err != nil {
+			return outcome{}, err
+		}
+		u.ContentTypeID = &id
+	}
 	if v, ok := in["name"]; ok {
 		name, err := e.scope.text(v)
 		if err != nil {
@@ -577,8 +584,8 @@ func runItemUpdate(e *env, in map[string]any) (outcome, error) {
 		}
 		u.Values = &changes
 	}
-	if u.Name == nil && u.Tags == nil && u.Values == nil {
-		return outcome{}, errors.New("item.update needs name, tags or values")
+	if u.Name == nil && u.Tags == nil && u.Values == nil && u.ContentTypeID == nil {
+		return outcome{}, errors.New("item.update needs a content type, name, tags or values")
 	}
 	out, err := e.t.Update(e.ctx, e.author, id, r.Version, u)
 	if err != nil {

@@ -118,6 +118,7 @@ func overlayRevision(r *ent.Resource, rev *ent.ItemRevision) error {
 	r.Name = rev.Name
 	r.Tags = append([]string{}, rev.Tags...)
 	r.Values = values
+	r.ContentTypeID = &rev.ContentTypeID
 	r.UpdatedAt = rev.CreatedAt
 	r.UpdatedBy = rev.CreatedBy
 	return nil
@@ -171,7 +172,14 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 			blobID = old.BlobID
 		}
 	}
-	if err = s.normalizeItemValues(ctx, actor, defs, r.Values, previous); err != nil {
+	applyDefaults := previous == nil
+	if previousRevision != nil && previousRevision.ContentTypeID != *r.ContentTypeID {
+		// Reclassification enforces the destination type and required fields;
+		// creation defaults are not implicitly applied by an update.
+		previous = nil
+		applyDefaults = false
+	}
+	if err = s.normalizeItemValues(ctx, actor, defs, r.Values, previous, applyDefaults); err != nil {
 		return nil, err
 	}
 	if err = evaluateRules(defs, rules, r.Values); err != nil {
