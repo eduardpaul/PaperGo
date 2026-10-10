@@ -88,7 +88,7 @@ func TestWebDAVFlagBelongsToManagedLibraries(t *testing.T) {
 	}
 }
 
-func TestDeleteRetainsHistoryAndHidesTheSubtree(t *testing.T) {
+func TestDeleteRequiresEmptyFolderAndRetainsHistory(t *testing.T) {
 	s, w, _ := fixture(t)
 	lib := davLibrary(t, s, w, false)
 	folder := create(t, s, lib.ID, "folder", "Projects", nil)
@@ -99,19 +99,41 @@ func TestDeleteRetainsHistoryAndHidesTheSubtree(t *testing.T) {
 		t.Fatal(err)
 	}
 	readers(t, s, current(t, s, w.ID))
-	// An editor cannot remove content below that they could not change themselves.
+	// A populated folder cannot be removed, even when its child is unreadable.
 	locked := current(t, s, inner.ID)
-	if _, err := s.SetPermissions(testContext, "alice", inner.ID, locked.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"editor", "read", "allow"}}}); err != nil {
+	locked, err := s.SetPermissions(testContext, "alice", inner.ID, locked.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Delete(testContext, "editor", folder.ID, folder.Version); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("editor deleted unwritable content: %v", err)
+	if _, err := s.Get(testContext, "editor", inner.ID); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("child should be hidden from editor: %v", err)
+	}
+	if err := s.Delete(testContext, "editor", folder.ID, folder.Version); !errors.Is(err, ErrFolderNotEmpty) {
+		t.Fatalf("editor deleted populated folder: %v", err)
 	}
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version+1); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stale delete accepted: %v", err)
 	}
 	if err := s.Delete(testContext, "editor", lib.ID, current(t, s, lib.ID).Version); !errors.Is(err, ErrForbidden) {
 		t.Fatal("editor deleted library", err)
+	}
+	if err := s.Delete(testContext, "alice", folder.ID, folder.Version); !errors.Is(err, ErrFolderNotEmpty) {
+		t.Fatalf("owner deleted populated folder: %v", err)
+	}
+	for id, version := range map[string]int{folder.ID: folder.Version, inner.ID: locked.Version} {
+		raw, err := s.Client.Resource.Get(testContext, id)
+		if err != nil || raw.DeletedAt != nil || raw.Version != version {
+			t.Fatalf("rejected delete changed resource: %+v %v", raw, err)
+		}
+	}
+	if n, err := s.Client.Relationship.Query().Where(relationship.TargetIDEQ(inner.ID)).Count(testContext); err != nil || n != 1 {
+		t.Fatalf("rejected delete removed relationship: %d %v", n, err)
+	}
+	if n, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(folder.ID), auditevent.ActionEQ("resource.delete")).Count(testContext); err != nil || n != 0 {
+		t.Fatalf("rejected delete was audited: %d %v", n, err)
+	}
+	if err := s.Delete(testContext, "alice", inner.ID, current(t, s, inner.ID).Version); err != nil {
+		t.Fatal(err)
 	}
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version); err != nil {
 		t.Fatal(err)
@@ -139,7 +161,7 @@ func TestDeleteRetainsHistoryAndHidesTheSubtree(t *testing.T) {
 		t.Fatalf("relationship to deleted item kept: %d %v", n, err)
 	}
 	event, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(folder.ID), auditevent.ActionEQ("resource.delete")).Only(testContext)
-	if err != nil || event.Details["descendants"] != float64(1) && event.Details["descendants"] != 1 {
+	if err != nil || event.Details["descendants"] != float64(0) && event.Details["descendants"] != 0 {
 		t.Fatalf("delete not audited: %+v %v", event, err)
 	}
 	// Tombstones are final.
@@ -210,6 +232,15 @@ func TestLibraryFilesPutMoveAndDelete(t *testing.T) {
 	}
 	if _, err := s.MakeFolder(testContext, "alice", lib.ID, []string{"Missing", "Child"}); !errors.Is(err, ErrMissingParent) {
 		t.Fatalf("missing parent: %v", err)
+	}
+	if _, err := s.MakeFolder(testContext, "alice", lib.ID, []string{"Docs", "Nested"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteFile(testContext, "alice", lib.ID, []string{"Docs"}, FileConditions{}); !errors.Is(err, ErrFolderNotEmpty) {
+		t.Fatalf("deleted folder with a nested folder: %v", err)
+	}
+	if err := s.DeleteFile(testContext, "alice", lib.ID, []string{"Docs", "Nested"}, FileConditions{}); err != nil {
+		t.Fatal(err)
 	}
 	f, created, err := s.PutFile(testContext, "alice", lib.ID, []string{"docs", "a.txt"}, PutFile{Blob: content("a.txt")})
 	if err != nil || !created || f.Blob == nil || f.Name != "a.txt" {

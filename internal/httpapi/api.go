@@ -227,6 +227,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(403, "forbidden", "access denied")
 	case errors.Is(err, dms.ErrLastOwner):
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
+	case errors.Is(err, dms.ErrFolderNotEmpty):
+		problem(409, "folder_not_empty", "The folder is not empty.")
 	case errors.Is(err, dms.ErrConflict):
 		problem(409, "conflict", "version conflict or duplicate")
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &max):

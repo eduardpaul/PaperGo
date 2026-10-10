@@ -1,14 +1,14 @@
 # Lists and Taxonomy: code/API parity and alignment
 
-PaperDotNet source: `96df412f040f53cc14711aaba35880e24817e084`. PaperGo code baseline: `9f403ae`, including the committed workspace, PATCH/taxonomy, collection, history and relationship changes described below. The comparison uses handlers, services, schemas, triggers, validators and tests. Project documentation is not feature evidence. This is static parity analysis plus PaperGo integration testing; the .NET application was not executed.
+PaperDotNet source: `96df412f040f53cc14711aaba35880e24817e084`. PaperGo code baseline: `9f403ae` plus the empty-folder deletion alignment represented by this report, including the workspace, PATCH/taxonomy, collection, history and relationship changes described below. The comparison uses handlers, services, schemas, triggers, validators and tests. Project documentation is not feature evidence. This is static parity analysis plus PaperGo integration testing; the .NET application was not executed.
 
 The two modules do **not** yet cover all the same user stories. A matching story means the corresponding capability exists; it does not imply identical URLs, payload names, error statuses or authorization models. Publishing, declarative validation, frozen schemas and typed edge policies remain PaperGo features.
 
 | Assessment | Stories |
 | --- | ---: |
-| Covered | 19 |
+| Covered | 20 |
 | Partial | 6 |
-| Drift | 9 |
+| Drift | 8 |
 | Missing | 10 |
 | Go extra | 3 |
 
@@ -18,6 +18,7 @@ The two modules do **not** yet cover all the same user stories. A matching story
 | --- | --- | --- |
 | LST-02/03 | Collection descriptions, folder policy, manager changes and collection deletion | Service + HTTP lifecycle tests; nested/raw folder insertion rejection; exclusive descendant deletion; bound workflow shutdown; single schema regenerated/applied |
 | LST-13 | Item field PATCH merges, null removes, defaults apply at creation | Field retention/default removal and unknown/removed-null rollback tests; existing Smart Folder tests; durable workflow null-removal test; bulk/API suites |
+| LST-17 | Populated folders reject deletion; empty folders can be deleted | Service, REST and WebDAV tests; hidden/nested children; stale preconditions; unchanged versions, relationships and audit on rejection; deletion after child tombstones; COPY/MOVE overwrite rejection; retained locks on rejection |
 | LST-20/21 | Numbered history, changed fields and metadata restore | Schema pairing, pagination, current marker, missing revisions, stale restore, current validation rollback and blob retention; HTTP tests |
 | LST-24 | Existing persisted view layout recognized | Code inspection of ViewInput, validation and SetLayout on create/update |
 | LST-29/41 | Both writable endpoints, either-end mutations, retry ensure, metadata PATCH | Directed/symmetric link tests; full-cardinality retry; no-op audit check; peer ACL rejection; required attribute removal rollback |
@@ -43,7 +44,7 @@ The two modules do **not** yet cover all the same user stories. A matching story
 | LST-14 | Create folders and move within a collection | Covered | Items with IsFolder, parentId and children API. | Distinct folder resources and parent_id move. | Physical organization within one list/library is covered. | [.NET: ItemEndpoints.cs:18][N-ITEM]<br>[Go: service.go:129][G-SERVICE]<br>[Go: service.go:533][G-MOVE] |
 | LST-15 | Classify folders using content-type fields | Missing | Folders are items and writer supports their custom fields. | Create/update explicitly restricts custom values/content_type_id to items. | Folder keywords/terms/custom metadata cannot be expressed as folder fields. | [.NET: ItemWriter.cs:31][N-WRITER]<br>[Go: service.go:129][G-SERVICE]<br>[Go: service.go:359][G-PATCH] |
 | LST-16 | Move an item across lists/libraries/workspaces, retaining identity | Missing | POST items/{id}/move calls MoveAcrossListsAsync and module move participants. | Move validates the same immutable container; workspace/container IDs are immutable. | Cannot file Inbox content into a destination library while preserving identity/history/links. | [.NET: GlobalItemEndpoints.cs:16][N-GLOBAL]<br>[Go: service.go:533][G-MOVE]<br>[Go: resource.go:16][G-RESOURCE]<br>[Go: files_test.go:154][G-FILETEST] |
-| LST-17 | Delete a populated folder | Drift | ItemWriter DeleteAsync rejects a nonempty folder. | Folder DELETE tombstones the entire subtree after write checks. | The same delete intent fails in PaperDotNet and removes a subtree in PaperGo. | [.NET: ItemWriter.cs:31][N-WRITER]<br>[Go: service.go:599][G-DELETE] |
+| LST-17 | Delete a populated folder | Covered | ItemWriter DeleteAsync rejects a nonempty folder. | Folder DELETE returns 409 folder_not_empty when any live child exists; files and empty folders use the shared delete service. | Children must be deleted or moved first. Unreadable children and nested folders count; deleted children do not. Workspace and collection tree deletion remains a separate management story. | [.NET: ItemWriter.cs:286][N-FOLDERDELETE]<br>[Go: service.go:599][G-DELETE]<br>[files_test.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/files_test.go:91) |
 | LST-18 | Browse a recycle bin, restore deleted content and purge | Missing | recycleBin GET, POST restore and DELETE purge. | Final hidden tombstones; no restore, recycle-bin browsing or purge endpoint. | Accidental deletion cannot be undone through the product API. | [.NET: ItemHistoryEndpoints.cs:28][N-HISTORY]<br>[Go: service.go:599][G-DELETE]<br>[Go: api.go:43][G-ROUTES] |
 | LST-19 | Choose whether history is kept and limit its length | Drift | List Versioning and MaxVersions; writer skips history when off and prunes it. | Every item write creates retained immutable revision/schema records; no collection retention switch. | History-off and bounded-history stories are not covered; Go favors retained auditability. | [.NET: ListEndpoints.cs:41][N-LIST]<br>[.NET: ItemWriter.cs:31][N-WRITER]<br>[Go: revisions.go:119][G-SCHEMA]<br>[Go: resource.go:16][G-RESOURCE] |
 | LST-20 | Read history and interpret its original schema | Partial | Item version list/get returns snapshot values, changed fields and content type. | History list/get includes original frozen schema, changed_fields and is_current; a numbered revision has its own GET route. | Numbered history/diff metadata is implemented. Go requires read_draft, whereas the baseline permits ordinary item readers; publishing visibility remains an explicit difference. | [.NET: ItemHistoryEndpoints.cs:28][N-HISTORY]<br>[history.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/history.go:91) |
@@ -86,7 +87,7 @@ The two modules do **not** yet cover all the same user stories. A matching story
 | --- | --- | --- |
 | Organization identity, active-user directory and module scopes | Auth.Verifier returns only a subject; DMS authorization has resource capabilities. Neither identifies active people nor a global taxonomy manager. These roles must have an explicit authority before vocabulary becomes organization-wide. | Person fields, independent taxonomy roles, group ACLs, personal Home |
 | Organization content-type and vocabulary catalogs | ContentType.container_id and TermSet.workspace_id are immutable ownership boundaries; collection type and term-field validators depend on them. Templates currently copy definitions. | Shared live schemas, type detach/reclassification, compatible cross-collection moves, corporate taxonomy and term-backed relationship types |
-| Content lifecycle and folder metadata | Resource kind/type constraints and revision/projection triggers currently distinguish folders from items; tombstones and historical rows cannot be restored/purged. Durable workflow records also reference items. | Folder classification, empty-folder deletion semantics, recycle bin, purge and retention settings |
+| Content lifecycle and folder metadata | Resource kind/type constraints and revision/projection triggers currently distinguish folders from items; tombstones and historical rows cannot be restored/purged. Durable workflow records also reference items. | Folder classification, recycle bin, purge and retention settings |
 | Tracked filtered edits and query contracts | Atomic explicit bulk requests differ from independently committed filtered operations; SortSpec represents one sort key. | Filtered bulk progress/failures, multiple sorts and ad hoc projection |
 | Durable change feed | Audit events are managerial and domain events do not provide an item delta cursor with ACL-change/deletion semantics. | Initial/offline sync, incremental access changes and tombstones |
 
@@ -95,6 +96,8 @@ The remaining architecture should be changed in place under the new-app rules: o
 ## Validation
 
 The PATCH/taxonomy change passed `scripts/check.ps1` (module verification, vet, all packages and build). The collection change passed all packages after replacing obsolete assertions, plus a fresh build; Ent was regenerated and Atlas reports schema version `20261007000100` with zero pending files. Numbered history passed focused service tests, the full HTTP suite, vet and build; the durable workflow PATCH regression also passed. `scripts/check.ps1` passed module verification, vet, all package tests and the app build for the collection, taxonomy, history and relationship changes. The subsequent unknown/removed-null PATCH guard passed focused item PATCH and field-removal checks, followed by vet and a fresh app build.
+
+Empty-folder deletion alignment passed the DMS, HTTP and WebDAV suites, vet and a fresh app build. All remaining package tests passed; the OIDC suite ran separately outside the sandbox to permit its local test server. Test temporary files used the workspace cache to avoid sandbox temporary-directory rename restrictions. The WebDAV suite was rerun after updating the locking test to assert conflict, retained lock and successful deletion after child removal.
 
 | Commit | Change |
 | --- | --- |
@@ -112,7 +115,7 @@ The PATCH/taxonomy change passed `scripts/check.ps1` (module verification, vet, 
 [G-CT]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/contenttypes.go:15
 [G-DELETE]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/service.go:599
 [G-FIELDS]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/fieldtypes.go:24
-[G-FILETEST]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/files_test.go:154
+[G-FILETEST]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/files_test.go:176
 [G-FOUND]: C:/Users/eduapaul/Documents/PaperGo/internal/httpapi/foundation.go:69
 [G-IMPORT]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/termimport.go:40
 [G-KEYWORDS]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/keywords.go:20
@@ -147,6 +150,7 @@ The PATCH/taxonomy change passed `scripts/check.ps1` (module verification, vet, 
 [N-FIELDS]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Fields/FieldTypes.cs#L12
 [N-GLOBAL]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/GlobalItemEndpoints.cs#L16
 [N-HISTORY]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/ItemHistoryEndpoints.cs#L28
+[N-FOLDERDELETE]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/ItemWriter.cs#L286
 [N-HOME]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/HomeEndpoints.cs#L27
 [N-ITEM]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/ItemEndpoints.cs#L18
 [N-LIST]: https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/ListEndpoints.cs#L41

@@ -424,8 +424,8 @@
         "description": "Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required."
       },
       "delete": {
-        "summary": "Delete a folder or item with everything below it (write required on all of it)",
-        "description": "Deletes a workspace, collection, folder or item and its live descendants. Workspace and collection deletion require manage access; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed. Workflows bound to a deleted workspace or collection are disabled and deleted.",
+        "summary": "Delete an item, empty folder, collection or workspace",
+        "description": "Deletes an item or empty folder with write access and the current If-Match. A folder with any live child, including a hidden item or nested folder, returns 409 with code folder_not_empty and leaves all content unchanged. Deleted children do not prevent deletion. Workspace and collection deletion require manage access and remove the entire live resource tree; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed. Workflows bound to a deleted workspace or collection are disabled and deleted.",
         "responses": {
           "204": {
             "description": "Deleted"

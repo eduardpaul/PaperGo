@@ -224,11 +224,34 @@ func TestFileLifecycle(t *testing.T) {
 	e.expect(e.do("MOVE", e.root+"/Copy", alice, "", "Destination", e.root+"/Docs/Copy"), 201)
 
 	e.expect(e.do("DELETE", e.root+"/", alice, ""), 403)
+	e.expect(e.do("DELETE", e.root+"/Docs", alice, ""), 409)
+	e.expect(e.do("GET", e.root+"/Docs/hi%20THERE.txt", alice, ""), 200)
+	e.expect(e.do("PROPFIND", e.root+"/Docs/Copy/", alice, "", "Depth", "0"), 207)
+	e.expect(e.do("DELETE", e.root+"/Docs/Copy", alice, ""), 204)
+	e.expect(e.do("DELETE", e.root+"/Docs/hi%20THERE.txt", alice, ""), 204)
 	e.expect(e.do("DELETE", e.root+"/Docs", alice, ""), 204)
 	e.expect(e.do("PROPFIND", e.root+"/Docs/", alice, "", "Depth", "0"), 404)
 	w = e.expect(e.do("PROPFIND", e.root+"/", alice, "", "Depth", "1"), 207)
 	if strings.Count(w.Body.String(), "<D:response>") != 1 || strings.Contains(w.Body.String(), "404 Not Found") {
 		t.Fatal("deleted folder still listed", w.Body.String())
+	}
+}
+
+func TestCopyMoveCannotOverwritePopulatedFolder(t *testing.T) {
+	for _, method := range []string{"COPY", "MOVE"} {
+		t.Run(method, func(t *testing.T) {
+			e := setup(t)
+			alice := "alice-token"
+			e.expect(e.do("MKCOL", e.root+"/Source", alice, ""), 201)
+			e.expect(e.do("MKCOL", e.root+"/Target", alice, ""), 201)
+			e.expect(e.do("PUT", e.root+"/Target/keep.txt", alice, "keep"), 201)
+			e.expect(e.do(method, e.root+"/Source", alice, "", "Destination", e.root+"/Target", "Overwrite", "T"), 409)
+			e.expect(e.do("PROPFIND", e.root+"/Source/", alice, "", "Depth", "0"), 207)
+			w := e.expect(e.do("GET", e.root+"/Target/keep.txt", alice, ""), 200)
+			if w.Body.String() != "keep" {
+				t.Fatal("overwrite changed destination content", w.Body.String())
+			}
+		})
 	}
 }
 
@@ -268,6 +291,9 @@ func TestLocking(t *testing.T) {
 	e.expect(e.do("PUT", e.root+"/Team/a.txt", alice, "a"), 423)
 	e.expect(e.do("PUT", e.root+"/Team/a.txt", alice, "a", "If", "("+folderToken+")"), 201)
 	e.expect(e.do("MOVE", e.root+"/report.docx", alice, "", "Destination", e.root+"/Team/report.docx"), 423)
+	e.expect(e.do("DELETE", e.root+"/Team", alice, "", "If", "("+folderToken+")"), 409)
+	e.expect(e.do("DELETE", e.root+"/Team/a.txt", alice, ""), 423)
+	e.expect(e.do("DELETE", e.root+"/Team/a.txt", alice, "", "If", "("+folderToken+")"), 204)
 	e.expect(e.do("DELETE", e.root+"/Team", alice, "", "If", "("+folderToken+")"), 204)
 	// Deleting the folder released its lock.
 	e.expect(e.do("MKCOL", e.root+"/Team", alice, ""), 201)

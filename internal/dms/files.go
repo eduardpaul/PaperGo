@@ -189,7 +189,7 @@ func (s *Service) MakeFolder(ctx context.Context, subject, libraryID string, pat
 	return
 }
 
-// DeleteFile deletes the entry at path, with everything below it.
+// DeleteFile deletes a file or empty folder at path.
 func (s *Service) DeleteFile(ctx context.Context, subject, libraryID string, path []string, cond FileConditions) error {
 	if len(path) == 0 {
 		return ErrForbidden

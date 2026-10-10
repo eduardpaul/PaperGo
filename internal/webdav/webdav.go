@@ -184,6 +184,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		h.status(w, http.StatusForbidden, "access denied")
 	case errors.Is(err, dms.ErrMissingParent):
 		h.status(w, http.StatusConflict, "parent folder not found")
+	case errors.Is(err, dms.ErrFolderNotEmpty):
+		h.status(w, http.StatusConflict, "the folder is not empty")
 	case errors.Is(err, dms.ErrConflict):
 		h.status(w, http.StatusConflict, "conflicts with the current state of the library")
 	case errors.Is(err, dms.ErrExists):

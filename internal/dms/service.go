@@ -610,13 +610,21 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int) e
 	if r.Version != version {
 		return ErrConflict
 	}
+	if r.Kind == resource.KindFolder {
+		populated, err := s.Client.Resource.Query().Where(resource.ParentIDEQ(id), resource.DeletedAtIsNil()).Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if populated {
+			return ErrFolderNotEmpty
+		}
+	}
 	subtree := `WITH RECURSIVE sub(id) AS (SELECT ? UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL) SELECT id FROM sub`
 	writable, args := permissionSQL("r.id", subject, "write")
 	var total, allowed int
 	if err = s.scan(ctx, []any{&total, &allowed}, `SELECT count(*), coalesce(sum(CASE WHEN `+writable+` THEN 1 ELSE 0 END),0) FROM resources r WHERE r.id IN (`+subtree+`)`, append(args, id)...); err != nil {
 		return err
 	}
-	// Removing a folder removes content the caller may not otherwise change.
 	if !collection && allowed != total {
 		return ErrForbidden
 	}

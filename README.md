@@ -32,7 +32,7 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 | Requirement | Implementation |
 | --- | --- |
 | Workspaces, lists, libraries, folders and items | One typed resource hierarchy. A workspace contains lists/libraries; those contain folders/items. Items have one immutable list/library container, including when nested under folders; folders and items move freely within it. Library folders and items carry file names, unique among siblings ignoring case. |
-| Delete folders and items | Deleting a folder or item removes it and everything below it from every read, search, query and relationship, and frees its name. The rows remain as final tombstones, so revisions, publications and audit history are retained. |
+| Delete folders and items | Deleting an item or empty folder hides it from reads and frees its name. Populated folders return 409 without changing content. The rows remain as final tombstones, so revisions, publications and audit history are retained. |
 | WebDAV access to libraries | Optional per library (`webdav_enabled`). Windows Explorer, macOS Finder and Office can browse, open, create, overwrite, rename, move, copy, lock and delete files and folders, with the same permissions, publishing and history as the REST API. |
 | Flexible SharePoint-style fields | Per-container typed fields and immutable schema revisions. Types: text/note/email/url/date/datetime, choice, number/integer/decimal, boolean, lookup, term and keywords (by term ID or label); defaults, bounds, length limits, and indexed multi-values. Unknown fields, wrong types and missing required values are rejected. |
 | Library as blob plus list item | A library item has the same metadata and permission behavior as a list item, plus immutable blob revisions stored outside SQLite. |
@@ -140,7 +140,7 @@ The link takes its name, direction, attribute schema and cardinality from the ty
 
 ACL and publication visibility filtering happen before LIMIT, so hidden rows neither shorten pages nor supply cursors. Search treats input as a literal FTS phrase, uses Unicode tokenization, and returns stable ID order, not relevance order. FTS indexes metadata text but does not extract PDF/Office document contents. Browsing a scope requires read access to that scope; explicitly granted items remain accessible directly by ID. Relationships are live, separately audited edges; publication does not freeze a relationship graph.
 
-Move a folder or item with PATCH `{"parent_id":"<folder or collection id>"}`: the target must be in the same list or library, not below the moved folder, and writable by the caller. A move consumes a lock version but creates no content revision; inheriting resources take the new location's permission scope. DELETE `/v1/resources/{id}` with `If-Match` deletes a folder or item and everything below it; it requires write access to all of it, removes relationships to the deleted items, and records one `resource.delete` audit event. Workspaces, lists and libraries cannot be deleted. Deletion is final, but the tombstones keep every revision, publication and audit event.
+Move a folder or item with PATCH `{"parent_id":"<folder or collection id>"}`: the target must be in the same list or library, not below the moved folder, and writable by the caller. A move consumes a lock version but creates no content revision; inheriting resources take the new location's permission scope. DELETE `/v1/resources/{id}` with `If-Match` deletes an item or empty folder with write access. Any live child, including an unreadable item or nested folder, prevents folder deletion with `409 folder_not_empty`; delete or move the children first. Deleted children do not prevent deletion. Workspace owners and collection managers can delete their respective resource trees. Deletion removes search projections and live relationships and records a `resource.delete` audit event. Deletion is final, but the tombstones keep every revision, publication and audit event.
 
 ## WebDAV
 
@@ -158,7 +158,7 @@ To connect from Windows, choose **Map network drive** in Explorer and enter `htt
 | MKCOL | Create a folder. |
 | MOVE | Rename or move within the library in one transaction, replacing the destination unless `Overwrite: F`. Destinations in other libraries return 502, so clients copy and delete instead. |
 | COPY | Create new items carrying the source's bytes, tags and field values; copying onto an existing file adds a content revision. COPY and MOVE refuse (403) a destination that is the source itself, contains it, or lies inside it. |
-| DELETE | Delete the folder or file and everything below it, as the REST API does. |
+| DELETE | Delete a file or empty folder. Populated folders return 409, as the REST API does. |
 | LOCK / UNLOCK | Exclusive or shared write locks of at most one hour, refreshable, held in memory and released on restart. |
 | PROPPATCH | Live DAV properties are refused; others, such as Windows timestamps, are acknowledged but not stored. |
 
