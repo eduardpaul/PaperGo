@@ -85,6 +85,27 @@ func (_u *FieldDefinitionUpdate) SetNillableIndexed(v *bool) *FieldDefinitionUpd
 	return _u
 }
 
+// SetVersion sets the "version" field.
+func (_u *FieldDefinitionUpdate) SetVersion(v int) *FieldDefinitionUpdate {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
+}
+
+// SetNillableVersion sets the "version" field if the given value is not nil.
+func (_u *FieldDefinitionUpdate) SetNillableVersion(v *int) *FieldDefinitionUpdate {
+	if v != nil {
+		_u.SetVersion(*v)
+	}
+	return _u
+}
+
+// AddVersion adds value to the "version" field.
+func (_u *FieldDefinitionUpdate) AddVersion(v int) *FieldDefinitionUpdate {
+	_u.mutation.AddVersion(v)
+	return _u
+}
+
 // SetIndexStatus sets the "index_status" field.
 func (_u *FieldDefinitionUpdate) SetIndexStatus(v fielddefinition.IndexStatus) *FieldDefinitionUpdate {
 	_u.mutation.SetIndexStatus(v)
@@ -190,6 +211,11 @@ func (_u *FieldDefinitionUpdate) check() error {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Version(); ok {
+		if err := fielddefinition.VersionValidator(v); err != nil {
+			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.version": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.IndexStatus(); ok {
 		if err := fielddefinition.IndexStatusValidator(v); err != nil {
 			return &ValidationError{Name: "index_status", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.index_status": %w`, err)}
@@ -199,9 +225,6 @@ func (_u *FieldDefinitionUpdate) check() error {
 		if err := fielddefinition.ScaleValidator(v); err != nil {
 			return &ValidationError{Name: "scale", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.scale": %w`, err)}
 		}
-	}
-	if _u.mutation.ContainerCleared() && len(_u.mutation.ContainerIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "FieldDefinition.container"`)
 	}
 	return nil
 }
@@ -229,6 +252,12 @@ func (_u *FieldDefinitionUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.Indexed(); ok {
 		_spec.SetField(fielddefinition.FieldIndexed, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Version(); ok {
+		_spec.SetField(fielddefinition.FieldVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVersion(); ok {
+		_spec.AddField(fielddefinition.FieldVersion, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.IndexStatus(); ok {
 		_spec.SetField(fielddefinition.FieldIndexStatus, field.TypeEnum, value)
@@ -323,6 +352,27 @@ func (_u *FieldDefinitionUpdateOne) SetNillableIndexed(v *bool) *FieldDefinition
 	if v != nil {
 		_u.SetIndexed(*v)
 	}
+	return _u
+}
+
+// SetVersion sets the "version" field.
+func (_u *FieldDefinitionUpdateOne) SetVersion(v int) *FieldDefinitionUpdateOne {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
+}
+
+// SetNillableVersion sets the "version" field if the given value is not nil.
+func (_u *FieldDefinitionUpdateOne) SetNillableVersion(v *int) *FieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetVersion(*v)
+	}
+	return _u
+}
+
+// AddVersion adds value to the "version" field.
+func (_u *FieldDefinitionUpdateOne) AddVersion(v int) *FieldDefinitionUpdateOne {
+	_u.mutation.AddVersion(v)
 	return _u
 }
 
@@ -444,6 +494,11 @@ func (_u *FieldDefinitionUpdateOne) check() error {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Version(); ok {
+		if err := fielddefinition.VersionValidator(v); err != nil {
+			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.version": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.IndexStatus(); ok {
 		if err := fielddefinition.IndexStatusValidator(v); err != nil {
 			return &ValidationError{Name: "index_status", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.index_status": %w`, err)}
@@ -453,9 +508,6 @@ func (_u *FieldDefinitionUpdateOne) check() error {
 		if err := fielddefinition.ScaleValidator(v); err != nil {
 			return &ValidationError{Name: "scale", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.scale": %w`, err)}
 		}
-	}
-	if _u.mutation.ContainerCleared() && len(_u.mutation.ContainerIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "FieldDefinition.container"`)
 	}
 	return nil
 }
@@ -500,6 +552,12 @@ func (_u *FieldDefinitionUpdateOne) sqlSave(ctx context.Context) (_node *FieldDe
 	}
 	if value, ok := _u.mutation.Indexed(); ok {
 		_spec.SetField(fielddefinition.FieldIndexed, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Version(); ok {
+		_spec.SetField(fielddefinition.FieldVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVersion(); ok {
+		_spec.AddField(fielddefinition.FieldVersion, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.IndexStatus(); ok {
 		_spec.SetField(fielddefinition.FieldIndexStatus, field.TypeEnum, value)

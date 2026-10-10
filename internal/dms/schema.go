@@ -3,7 +3,6 @@ package dms
 import (
 	"context"
 	"papergo/ent"
-	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/itemrevision"
@@ -24,6 +23,47 @@ type UpdateField struct {
 }
 
 func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID string, version int, in UpdateField) (out *ent.FieldDefinition, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
+		if e != nil {
+			return e
+		}
+		if c.Version != version {
+			return ErrConflict
+		}
+		d, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.IDEQ(fieldID)).Only(ctx)
+		if ent.IsNotFound(e) {
+			return ErrNotFound
+		}
+		if e != nil {
+			return e
+		}
+		out, e = t.updateCatalogField(ctx, subject, d, in)
+		return e
+	})
+	return
+}
+func (s *Service) UpdateCatalogField(ctx context.Context, subject, id string, version int, in UpdateField) (out *ent.FieldDefinition, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
+			return e
+		}
+		d, e := t.Client.FieldDefinition.Get(ctx, id)
+		if ent.IsNotFound(e) {
+			return ErrNotFound
+		}
+		if e != nil {
+			return e
+		}
+		if d.Version != version {
+			return ErrConflict
+		}
+		out, e = t.updateCatalogField(ctx, subject, d, in)
+		return e
+	})
+	return
+}
+func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent.FieldDefinition, in UpdateField) (out *ent.FieldDefinition, err error) {
 	if in.Label == nil && in.Required == nil && in.Choices == nil && in.Indexed == nil && in.Options == nil {
 		return nil, invalid("at least one field change is required")
 	}
@@ -40,98 +80,98 @@ func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID
 			return
 		}
 	}
-	err = s.write(ctx, func(t *Service) error {
-		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
+
+	workspaceID := ""
+	if d.Type == fielddefinition.TypeLookup {
+		target, e := s.Client.Resource.Get(ctx, d.Options.LookupContainerID)
 		if e != nil {
-			return e
+			return nil, e
 		}
-		if c.Version != version {
-			return ErrConflict
+		workspaceID = target.WorkspaceID
+	}
+	var e error
+	if in.Choices != nil && d.Type != fielddefinition.TypeChoice {
+		return nil, invalid("choices belong to choice fields")
+	}
+	candidate := *d
+	if in.Label != nil {
+		candidate.Label = *in.Label
+	}
+	if in.Required != nil {
+		candidate.Required = *in.Required
+	}
+	if in.Indexed != nil {
+		candidate.Indexed = *in.Indexed
+	}
+	if in.Choices != nil {
+		candidate.Choices = *in.Choices
+	}
+	if in.Options != nil {
+		candidate.Options = *in.Options
+	}
+	if !optionsIdentityEqual(d.Options, candidate.Options) {
+		return nil, invalid("cardinality and reference scope are immutable")
+	}
+	if e = validateFieldDefinition(&candidate); e != nil {
+		return nil, e
+	}
+	if e = s.validateReferenceScopes(ctx, subject, workspaceID, &candidate); e != nil {
+		return nil, e
+	}
+	if len(candidate.Options.DefaultValue) > 0 {
+		if e = s.normalizeItemValues(ctx, subject, workspaceID, []*ent.FieldDefinition{&candidate}, map[string]any{}, nil); e != nil {
+			return nil, e
 		}
-		d, e := t.Client.FieldDefinition.Get(ctx, fieldID)
-		if ent.IsNotFound(e) {
-			return ErrNotFound
-		}
+	}
+	if newlyRequired(d, &candidate) {
+		collections, e := s.fieldCollections(ctx, d.ID)
 		if e != nil {
-			return e
+			return nil, e
 		}
-		if d.ContainerID != containerID {
-			return ErrNotFound
-		}
-		if in.Choices != nil && d.Type != fielddefinition.TypeChoice {
-			return invalid("choices belong to choice fields")
-		}
-		candidate := *d
-		if in.Label != nil {
-			candidate.Label = *in.Label
-		}
-		if in.Required != nil {
-			candidate.Required = *in.Required
-		}
-		if in.Indexed != nil {
-			candidate.Indexed = *in.Indexed
-		}
-		if in.Choices != nil {
-			candidate.Choices = *in.Choices
-		}
-		if in.Options != nil {
-			candidate.Options = *in.Options
-		}
-		if !optionsIdentityEqual(d.Options, candidate.Options) {
-			return invalid("cardinality and reference scope are immutable")
-		}
-		if e = validateFieldDefinition(&candidate); e != nil {
-			return e
-		}
-		if e = t.validateReferenceScopes(ctx, subject, c.WorkspaceID, &candidate); e != nil {
-			return e
-		}
-		if len(candidate.Options.DefaultValue) > 0 {
-			if e = t.normalizeItemValues(ctx, subject, c.WorkspaceID, []*ent.FieldDefinition{&candidate}, map[string]any{}, nil); e != nil {
-				return e
+		for _, c := range collections {
+			if e = s.checkRequiredFilled(ctx, c.ID, []string{d.Key}); e != nil {
+				return nil, e
 			}
 		}
-		if newlyRequired(d, &candidate) {
-			if e = t.checkRequiredFilled(ctx, containerID, []string{d.Key}); e != nil {
-				return e
-			}
+	}
+	reindex := in.Indexed != nil && *in.Indexed != d.Indexed
+	b := s.Client.FieldDefinition.UpdateOne(d).AddVersion(1).SetOptions(candidate.Options)
+	if in.Label != nil {
+		b.SetLabel(*in.Label)
+	}
+	if in.Required != nil {
+		b.SetRequired(*in.Required)
+	}
+	if in.Choices != nil {
+		b.SetChoices(*in.Choices)
+	}
+	if in.Indexed != nil {
+		b.SetIndexed(*in.Indexed)
+	}
+	out, e = b.Save(ctx)
+	if e != nil {
+		return nil, e
+	}
+	if e = s.bumpFieldTypes(ctx, d.ID); e != nil {
+		return nil, e
+	}
+	collections, e := s.fieldCollections(ctx, d.ID)
+	if e != nil {
+		return nil, e
+	}
+	if e = s.refreshCollections(ctx, subject, collections); e != nil {
+		return nil, e
+	}
+	if reindex {
+		if e = s.enqueueFieldIndex(ctx, subject, out); e != nil {
+			return nil, e
 		}
-		reindex := in.Indexed != nil && *in.Indexed != d.Indexed
-		b := t.Client.FieldDefinition.UpdateOne(d).SetOptions(candidate.Options)
-		if in.Label != nil {
-			b.SetLabel(*in.Label)
+		if out, e = s.Client.FieldDefinition.Get(ctx, d.ID); e != nil {
+			return nil, e
 		}
-		if in.Required != nil {
-			b.SetRequired(*in.Required)
-		}
-		if in.Choices != nil {
-			b.SetChoices(*in.Choices)
-		}
-		if in.Indexed != nil {
-			b.SetIndexed(*in.Indexed)
-		}
-		out, e = b.Save(ctx)
-		if e != nil {
-			return e
-		}
-		if e = t.recordSchema(ctx, subject, c); e != nil {
-			return e
-		}
-		if reindex {
-			if e = t.enqueueFieldIndex(ctx, subject, out); e != nil {
-				return e
-			}
-			if out, e = t.Client.FieldDefinition.Get(ctx, fieldID); e != nil {
-				return e
-			}
-		}
-		if d.Options.Unique != candidate.Options.Unique {
-			if e = t.rebuildBusinessKeys(ctx, containerID); e != nil {
-				return e
-			}
-		}
-		return t.audit(ctx, subject, "field.update", c, map[string]any{"field_id": fieldID, "key": d.Key})
-	})
+	}
+
+	err = s.auditCatalog(ctx, subject, "field.update", map[string]any{"field_id": d.ID, "key": d.Key, "version": out.Version})
 	return
 }
 
@@ -146,14 +186,18 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	if len(keys) == 0 {
 		return nil
 	}
-	types, err := s.Client.ContentType.Query().Where(contenttype.ContainerIDEQ(containerID)).All(ctx)
+	types, err := s.Client.ContentType.Query().Where(collectionTypePredicate(containerID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	defs, err := s.collectionFields(ctx, containerID)
 	if err != nil {
 		return err
 	}
 	membership := map[string]map[string]bool{}
 	for _, typ := range types {
 		membership[typ.ID] = map[string]bool{}
-		for _, key := range typ.FieldKeys {
+		for _, key := range fieldKeys(selectTypeDefinitions(defs, typ)) {
 			membership[typ.ID][key] = true
 		}
 	}

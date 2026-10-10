@@ -24,17 +24,29 @@ func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *ent.
 	if _, err := s.Client.Operation.Update().Where(operation.FieldIDEQ(d.ID), operation.StatusEQ(operation.StatusPending)).SetStatus(operation.StatusSuperseded).Save(ctx); err != nil {
 		return err
 	}
-	populated, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(d.ContainerID)).Exist(ctx)
+	collections, err := s.fieldCollections(ctx, d.ID)
 	if err != nil {
 		return err
 	}
-	if !populated {
-		return s.Client.FieldDefinition.UpdateOneID(d.ID).SetIndexStatus(fielddefinition.IndexStatusReady).Exec(ctx)
+	queued := false
+	for _, c := range collections {
+		populated, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(c.ID)).Exist(ctx)
+		if e != nil {
+			return e
+		}
+		if !populated {
+			continue
+		}
+		if e = s.Client.Operation.Create().SetContainerID(c.ID).SetFieldID(d.ID).SetKind(operation.KindFieldIndex).SetCreatedBy(subject).Exec(ctx); e != nil {
+			return e
+		}
+		queued = true
 	}
-	if err = s.Client.FieldDefinition.UpdateOneID(d.ID).SetIndexStatus(fielddefinition.IndexStatusBuilding).Exec(ctx); err != nil {
-		return err
+	status := fielddefinition.IndexStatusReady
+	if queued {
+		status = fielddefinition.IndexStatusBuilding
 	}
-	if err = s.Client.Operation.Create().SetContainerID(d.ContainerID).SetFieldID(d.ID).SetKind(operation.KindFieldIndex).SetCreatedBy(subject).Exec(ctx); err != nil {
+	if err = s.Client.FieldDefinition.UpdateOneID(d.ID).SetIndexStatus(status).Exec(ctx); err != nil {
 		return err
 	}
 	// The runner's batch waits for this transaction's writer slot, so it
@@ -151,6 +163,13 @@ func (s *Service) fieldIndexBatch(ctx context.Context, op *ent.Operation) error 
 	}
 	if err = b.SetStatus(operation.StatusSucceeded).Exec(ctx); err != nil {
 		return err
+	}
+	pending, err := s.Client.Operation.Query().Where(operation.FieldIDEQ(d.ID), operation.StatusIn(operation.StatusPending, operation.StatusFailed)).Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if pending {
+		return nil
 	}
 	return s.Client.FieldDefinition.UpdateOne(d).SetIndexStatus(fielddefinition.IndexStatusReady).Exec(ctx)
 }

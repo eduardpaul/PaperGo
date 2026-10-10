@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"papergo/ent/blob"
-	"papergo/ent/fielddefinition"
 	"papergo/ent/grant"
 	"papergo/ent/itemrevision"
 	"papergo/ent/publication"
@@ -395,21 +394,6 @@ func (_c *ResourceCreate) AddContainedItems(v ...*Resource) *ResourceCreate {
 // SetContainer sets the "container" edge to the Resource entity.
 func (_c *ResourceCreate) SetContainer(v *Resource) *ResourceCreate {
 	return _c.SetContainerID(v.ID)
-}
-
-// AddDefinitionIDs adds the "definitions" edge to the FieldDefinition entity by IDs.
-func (_c *ResourceCreate) AddDefinitionIDs(ids ...string) *ResourceCreate {
-	_c.mutation.AddDefinitionIDs(ids...)
-	return _c
-}
-
-// AddDefinitions adds the "definitions" edges to the FieldDefinition entity.
-func (_c *ResourceCreate) AddDefinitions(v ...*FieldDefinition) *ResourceCreate {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddDefinitionIDs(ids...)
 }
 
 // AddGrantIDs adds the "grants" edge to the Grant entity by IDs.
@@ -925,22 +909,6 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.ContainerID = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.DefinitionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.GrantsIDs(); len(nodes) > 0 {

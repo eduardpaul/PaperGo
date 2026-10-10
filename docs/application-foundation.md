@@ -72,15 +72,23 @@ Existing item revisions keep their frozen schema. Later content edits adopt thei
 
 ## Content types, business keys and cross-field rules
 
-Each collection has a shared catalog of at most 200 fields and up to 32 content types. A new collection has one default type with key `item`. Creating a field assigns it to the selected `content_type_id`, or the default type when omitted. Types select catalog keys with `field_keys`; a shared key has one field definition across the collection. Each item has an immutable `content_type_id`; omitted on creation, it selects the current default. Bulk creates accept the same selector, and every bulk content update validates against its assigned type.
+Content types and field definitions form an organization catalog. Types reference immutable field IDs with `field_ids`; collections attach type IDs without copying. Each collection resolves at most 200 fields and 32 types. Types sharing a field key within a collection must use the same catalog field ID. Creating a collection with `content_type_ids` attaches those definitions, with the first as default. Omitting this list creates an editable `Item` catalog definition and attaches it as default. Each item has an immutable `content_type_id`; omission on item creation selects its collection's default. Bulk creation and content updates use the same resolution.
 
 | Method | Route | Concurrency |
 | --- | --- | --- |
-| GET / POST | /v1/resources/{id}/content-types | Creation requires collection If-Match |
+| GET | /v1/content-types/audit | Catalog curation audit; contentType.manage |
+| GET / POST | /v1/content-types | Organization catalog; creation needs no collection ETag |
 | GET / PUT | /v1/content-types/{id} | Replacement requires content type If-Match |
+| GET / POST | /v1/fields | Organization field catalog |
+| PATCH / DELETE | /v1/fields/{id} | Field If-Match |
+| GET / POST | /v1/resources/{id}/content-types | POST attaches by ID using collection If-Match |
 | DELETE | /v1/resources/{id}/fields/{fieldID} | Collection If-Match; returns the new collection ETag |
 
-Content type creation and replacement require manage access. Bodies contain key (required on creation, immutable), name, field_keys, optional rules and is_default. Exactly one type is default. Selecting a new default advances the former default's version; replacing the current default cannot clear it until another type is selected. Field and rule changes validate existing heads in bounded batches before recording the schema. Required fields and rules apply only to their assigned types. Frozen collection schemas retain every type's ID, keys and rules, and each item revision records its type ID.
+Catalog reads require `contentType.read`; curation requires `contentType.manage`, independently of workspace membership. Content type bodies contain key (required on creation, immutable), name, field_ids and optional rules. Attachment bodies contain `content_type_id` and optional `is_default`; attachment requires `list.read`, `contentType.read` and collection manage access. Exactly one attachment is default. Selecting a default changes only that collection and its ETag.
+
+Editing a catalog type or field validates every attached collection's existing heads and saved-view dependencies before advancing all effective schema revisions in one transaction. A validation failure anywhere rolls back every definition, schema revision, ETag, key claim and audit event. Field changes also advance all referencing type versions. Index changes enqueue work for every populated attached collection; the shared field remains building until every operation completes. Collection field creation, patching, deletion and template adoption edit these same live catalog definitions.
+
+Required fields and rules apply only to assigned types. Frozen collection schemas retain resolved fields, type IDs, keys and rules; each immutable item revision pins its effective schema. Shared updates never rewrite historical or published revisions. Lookup fields retain their workspace reference boundary, so a type with a lookup can attach only in its lookup target's workspace.
 
 `options.unique=true` creates a collection-wide business key. It requires an indexed scalar field and excludes approximate `number` and multiple values. Equality is exact and case-sensitive after field normalization; integers and decimals retain full precision. Optional nulls reserve nothing. Both head and published values remain reserved by an item; a draft change releases its former key only when that value leaves both surfaces. Unpublishing and deletion release the applicable claims. Enabling uniqueness validates existing surfaces atomically. Collisions return 409; bulk errors identify the failing operation and roll back all mutations. Constraints are checked in operation order, so key swaps that temporarily collide are rejected.
 

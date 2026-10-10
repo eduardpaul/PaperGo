@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"papergo/ent/fielddefinition"
-	"papergo/ent/resource"
 	"papergo/internal/model"
 	"strings"
 	"time"
@@ -22,8 +21,6 @@ type FieldDefinition struct {
 	ID string `json:"id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
-	// ContainerID holds the value of the "container_id" field.
-	ContainerID string `json:"container_id,omitempty"`
 	// Key holds the value of the "key" field.
 	Key string `json:"key,omitempty"`
 	// Label holds the value of the "label" field.
@@ -34,6 +31,8 @@ type FieldDefinition struct {
 	Options model.FieldOptions `json:"options,omitempty"`
 	// Indexed holds the value of the "indexed" field.
 	Indexed bool `json:"indexed,omitempty"`
+	// Version holds the value of the "version" field.
+	Version int `json:"version,omitempty"`
 	// IndexStatus holds the value of the "index_status" field.
 	IndexStatus fielddefinition.IndexStatus `json:"index_status,omitempty"`
 	// Scale holds the value of the "scale" field.
@@ -41,31 +40,8 @@ type FieldDefinition struct {
 	// Required holds the value of the "required" field.
 	Required bool `json:"required,omitempty"`
 	// Choices holds the value of the "choices" field.
-	Choices []string `json:"choices,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the FieldDefinitionQuery when eager-loading is set.
-	Edges        FieldDefinitionEdges `json:"edges"`
+	Choices      []string `json:"choices,omitempty"`
 	selectValues sql.SelectValues
-}
-
-// FieldDefinitionEdges holds the relations/edges for other nodes in the graph.
-type FieldDefinitionEdges struct {
-	// Container holds the value of the container edge.
-	Container *Resource `json:"container,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
-}
-
-// ContainerOrErr returns the Container value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e FieldDefinitionEdges) ContainerOrErr() (*Resource, error) {
-	if e.Container != nil {
-		return e.Container, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: resource.Label}
-	}
-	return nil, &NotLoadedError{edge: "container"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -77,9 +53,9 @@ func (*FieldDefinition) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case fielddefinition.FieldIndexed, fielddefinition.FieldRequired:
 			values[i] = new(sql.NullBool)
-		case fielddefinition.FieldScale:
+		case fielddefinition.FieldVersion, fielddefinition.FieldScale:
 			values[i] = new(sql.NullInt64)
-		case fielddefinition.FieldID, fielddefinition.FieldContainerID, fielddefinition.FieldKey, fielddefinition.FieldLabel, fielddefinition.FieldType, fielddefinition.FieldIndexStatus:
+		case fielddefinition.FieldID, fielddefinition.FieldKey, fielddefinition.FieldLabel, fielddefinition.FieldType, fielddefinition.FieldIndexStatus:
 			values[i] = new(sql.NullString)
 		case fielddefinition.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -109,12 +85,6 @@ func (_m *FieldDefinition) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
-			}
-		case fielddefinition.FieldContainerID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field container_id", values[i])
-			} else if value.Valid {
-				_m.ContainerID = value.String
 			}
 		case fielddefinition.FieldKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -147,6 +117,12 @@ func (_m *FieldDefinition) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field indexed", values[i])
 			} else if value.Valid {
 				_m.Indexed = value.Bool
+			}
+		case fielddefinition.FieldVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field version", values[i])
+			} else if value.Valid {
+				_m.Version = int(value.Int64)
 			}
 		case fielddefinition.FieldIndexStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -187,11 +163,6 @@ func (_m *FieldDefinition) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// QueryContainer queries the "container" edge of the FieldDefinition entity.
-func (_m *FieldDefinition) QueryContainer() *ResourceQuery {
-	return NewFieldDefinitionClient(_m.config).QueryContainer(_m)
-}
-
 // Update returns a builder for updating this FieldDefinition.
 // Note that you need to call FieldDefinition.Unwrap() before calling this method if this FieldDefinition
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -218,9 +189,6 @@ func (_m *FieldDefinition) String() string {
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("container_id=")
-	builder.WriteString(_m.ContainerID)
-	builder.WriteString(", ")
 	builder.WriteString("key=")
 	builder.WriteString(_m.Key)
 	builder.WriteString(", ")
@@ -235,6 +203,9 @@ func (_m *FieldDefinition) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("indexed=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Indexed))
+	builder.WriteString(", ")
+	builder.WriteString("version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Version))
 	builder.WriteString(", ")
 	builder.WriteString("index_status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IndexStatus))

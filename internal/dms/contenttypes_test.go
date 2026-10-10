@@ -17,10 +17,13 @@ func isValidation(err error) bool {
 	return errors.As(err, &v)
 }
 
-func typeOK(t *testing.T, s *Service, collection string, in ContentTypeInput) *ent.ContentType {
+func typeOK(t *testing.T, s *Service, collection string, in ContentTypeInput, defaults ...bool) *ent.ContentType {
 	t.Helper()
-	typ, err := s.CreateContentType(testContext, "alice", collection, latest(t, s, collection).Version, in)
+	typ, err := s.CreateContentType(testContext, "alice", in)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.AttachContentType(testContext, "alice", collection, latest(t, s, collection).Version, AttachContentTypeInput{ContentTypeID: typ.ID, IsDefault: len(defaults) > 0 && defaults[0]}); err != nil {
 		t.Fatal(err)
 	}
 	return typ
@@ -38,7 +41,7 @@ func fieldOK(t *testing.T, s *Service, collection string, in CreateField) *ent.F
 func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	s, _, l := fixture(t)
 	fieldOK(t, s, l.ID, CreateField{Key: "title", Label: "Title", Type: "text", Required: true})
-	typ := typeOK(t, s, l.ID, ContentTypeInput{Key: "invoice", Name: "Invoice", IsDefault: true, FieldKeys: []string{"title"}})
+	typ := typeOK(t, s, l.ID, ContentTypeInput{Key: "invoice", Name: "Invoice", FieldIds: fixtureFieldIds(t, s, l.ID, []string{"title"})}, true)
 	for _, key := range []string{"subtotal", "total"} {
 		fieldOK(t, s, l.ID, CreateField{ContentTypeID: typ.ID, Key: key, Label: key, Type: "decimal", Scale: 2, Indexed: true, Required: true})
 	}
@@ -47,7 +50,7 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	rules := []model.ValidationRule{{Key: "sum", Field: "total", Op: "gte", OtherField: "subtotal", Message: "Total must cover subtotal"}}
-	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldKeys: typ.FieldKeys, IsDefault: true, Rules: rules})
+	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: rules})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +99,7 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	}
 	strict := []model.ValidationRule{{Key: "sum", Field: "total", Op: "lt", OtherField: "subtotal", Message: "Too high"}}
 	version := latest(t, s, l.ID).Version
-	if _, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldKeys: typ.FieldKeys, IsDefault: true, Rules: strict}); !isValidation(err) {
+	if _, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: strict}); !isValidation(err) {
 		t.Fatal(err)
 	}
 	if latest(t, s, l.ID).Version != version {
@@ -176,7 +179,7 @@ func TestRequiredIfAndRemovalKeepHistory(t *testing.T) {
 	}
 	typ := types[0]
 	rules := []model.ValidationRule{{Key: "approval_code", Field: "code", Op: "required_if", WhenField: "approved", WhenValue: json.RawMessage("true"), Message: "Approved items need a code"}}
-	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, IsDefault: true, FieldKeys: typ.FieldKeys, Rules: rules})
+	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: rules})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +189,7 @@ func TestRequiredIfAndRemovalKeepHistory(t *testing.T) {
 	if err = s.DeleteField(testContext, "alice", l.ID, d.ID, latest(t, s, l.ID).Version); !isValidation(err) {
 		t.Fatal("dependent rule", err)
 	}
-	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, IsDefault: true, FieldKeys: typ.FieldKeys})
+	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,4 +342,21 @@ func TestUniqueKeyRebuildAcrossBatchesAndInsertChunks(t *testing.T) {
 	if err != nil || count != 500 {
 		t.Fatal("cleared claim policy", count, err)
 	}
+}
+
+func fixtureFieldIds(t *testing.T, s *Service, collection string, keys []string) []string {
+	t.Helper()
+	defs, err := s.Fields(testContext, "alice", collection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := []string{}
+	for _, key := range keys {
+		d := definitionMap(defs)[key]
+		if d == nil {
+			t.Fatal("missing fixture field", key)
+		}
+		out = append(out, d.ID)
+	}
+	return out
 }

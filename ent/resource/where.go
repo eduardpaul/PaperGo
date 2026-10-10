@@ -1462,29 +1462,6 @@ func HasContainerWith(preds ...predicate.Resource) predicate.Resource {
 	})
 }
 
-// HasDefinitions applies the HasEdge predicate on the "definitions" edge.
-func HasDefinitions() predicate.Resource {
-	return predicate.Resource(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, DefinitionsTable, DefinitionsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasDefinitionsWith applies the HasEdge predicate on the "definitions" edge with a given conditions (other predicates).
-func HasDefinitionsWith(preds ...predicate.FieldDefinition) predicate.Resource {
-	return predicate.Resource(func(s *sql.Selector) {
-		step := newDefinitionsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasGrants applies the HasEdge predicate on the "grants" edge.
 func HasGrants() predicate.Resource {
 	return predicate.Resource(func(s *sql.Selector) {

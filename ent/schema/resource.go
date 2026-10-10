@@ -57,7 +57,6 @@ func (Resource) Edges() []ent.Edge {
 		edge.From("parent", Resource.Type).Ref("children").Field("parent_id").Unique(),
 		edge.To("contained_items", Resource.Type),
 		edge.From("container", Resource.Type).Ref("contained_items").Field("container_id").Unique().Immutable(),
-		edge.To("definitions", FieldDefinition.Type),
 		edge.To("grants", Grant.Type),
 		edge.To("outgoing", Relationship.Type),
 		edge.To("incoming", Relationship.Type),

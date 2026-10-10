@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"papergo/ent"
-	"papergo/ent/contenttype"
+	"papergo/ent/collectiontype"
 	"papergo/ent/resource"
 	"papergo/ent/term"
 	"papergo/ent/workflow"
@@ -295,7 +295,7 @@ func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceI
 			checked[tr.CollectionID] = true
 		}
 		if tr.ContentTypeID != "" {
-			ok, err := t.Client.ContentType.Query().Where(contenttype.IDEQ(tr.ContentTypeID), contenttype.ContainerIDEQ(tr.CollectionID)).Exist(ctx)
+			ok, err := t.Client.CollectionType.Query().Where(collectiontype.ContentTypeIDEQ(tr.ContentTypeID), collectiontype.ContainerIDEQ(tr.CollectionID)).Exist(ctx)
 			if err != nil {
 				return def, nil, err
 			}

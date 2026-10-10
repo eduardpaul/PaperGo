@@ -88,8 +88,6 @@ type ResourceEdges struct {
 	ContainedItems []*Resource `json:"contained_items,omitempty"`
 	// Container holds the value of the container edge.
 	Container *Resource `json:"container,omitempty"`
-	// Definitions holds the value of the definitions edge.
-	Definitions []*FieldDefinition `json:"definitions,omitempty"`
 	// Grants holds the value of the grants edge.
 	Grants []*Grant `json:"grants,omitempty"`
 	// Outgoing holds the value of the outgoing edge.
@@ -112,7 +110,7 @@ type ResourceEdges struct {
 	SchemaHead *SchemaRevision `json:"schema_head,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [15]bool
+	loadedTypes [14]bool
 }
 
 // ChildrenOrErr returns the Children value or an error if the edge
@@ -155,19 +153,10 @@ func (e ResourceEdges) ContainerOrErr() (*Resource, error) {
 	return nil, &NotLoadedError{edge: "container"}
 }
 
-// DefinitionsOrErr returns the Definitions value or an error if the edge
-// was not loaded in eager-loading.
-func (e ResourceEdges) DefinitionsOrErr() ([]*FieldDefinition, error) {
-	if e.loadedTypes[4] {
-		return e.Definitions, nil
-	}
-	return nil, &NotLoadedError{edge: "definitions"}
-}
-
 // GrantsOrErr returns the Grants value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) GrantsOrErr() ([]*Grant, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[4] {
 		return e.Grants, nil
 	}
 	return nil, &NotLoadedError{edge: "grants"}
@@ -176,7 +165,7 @@ func (e ResourceEdges) GrantsOrErr() ([]*Grant, error) {
 // OutgoingOrErr returns the Outgoing value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) OutgoingOrErr() ([]*Relationship, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[5] {
 		return e.Outgoing, nil
 	}
 	return nil, &NotLoadedError{edge: "outgoing"}
@@ -185,7 +174,7 @@ func (e ResourceEdges) OutgoingOrErr() ([]*Relationship, error) {
 // IncomingOrErr returns the Incoming value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) IncomingOrErr() ([]*Relationship, error) {
-	if e.loadedTypes[7] {
+	if e.loadedTypes[6] {
 		return e.Incoming, nil
 	}
 	return nil, &NotLoadedError{edge: "incoming"}
@@ -194,7 +183,7 @@ func (e ResourceEdges) IncomingOrErr() ([]*Relationship, error) {
 // PublicationsOrErr returns the Publications value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) PublicationsOrErr() ([]*Publication, error) {
-	if e.loadedTypes[8] {
+	if e.loadedTypes[7] {
 		return e.Publications, nil
 	}
 	return nil, &NotLoadedError{edge: "publications"}
@@ -203,7 +192,7 @@ func (e ResourceEdges) PublicationsOrErr() ([]*Publication, error) {
 // BlobsOrErr returns the Blobs value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) BlobsOrErr() ([]*Blob, error) {
-	if e.loadedTypes[9] {
+	if e.loadedTypes[8] {
 		return e.Blobs, nil
 	}
 	return nil, &NotLoadedError{edge: "blobs"}
@@ -212,7 +201,7 @@ func (e ResourceEdges) BlobsOrErr() ([]*Blob, error) {
 // RevisionsOrErr returns the Revisions value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) RevisionsOrErr() ([]*ItemRevision, error) {
-	if e.loadedTypes[10] {
+	if e.loadedTypes[9] {
 		return e.Revisions, nil
 	}
 	return nil, &NotLoadedError{edge: "revisions"}
@@ -221,7 +210,7 @@ func (e ResourceEdges) RevisionsOrErr() ([]*ItemRevision, error) {
 // SchemaRevisionsOrErr returns the SchemaRevisions value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) SchemaRevisionsOrErr() ([]*SchemaRevision, error) {
-	if e.loadedTypes[11] {
+	if e.loadedTypes[10] {
 		return e.SchemaRevisions, nil
 	}
 	return nil, &NotLoadedError{edge: "schema_revisions"}
@@ -232,7 +221,7 @@ func (e ResourceEdges) SchemaRevisionsOrErr() ([]*SchemaRevision, error) {
 func (e ResourceEdges) HeadRevisionOrErr() (*ItemRevision, error) {
 	if e.HeadRevision != nil {
 		return e.HeadRevision, nil
-	} else if e.loadedTypes[12] {
+	} else if e.loadedTypes[11] {
 		return nil, &NotFoundError{label: itemrevision.Label}
 	}
 	return nil, &NotLoadedError{edge: "head_revision"}
@@ -243,7 +232,7 @@ func (e ResourceEdges) HeadRevisionOrErr() (*ItemRevision, error) {
 func (e ResourceEdges) PublishedRevisionOrErr() (*ItemRevision, error) {
 	if e.PublishedRevision != nil {
 		return e.PublishedRevision, nil
-	} else if e.loadedTypes[13] {
+	} else if e.loadedTypes[12] {
 		return nil, &NotFoundError{label: itemrevision.Label}
 	}
 	return nil, &NotLoadedError{edge: "published_revision"}
@@ -254,7 +243,7 @@ func (e ResourceEdges) PublishedRevisionOrErr() (*ItemRevision, error) {
 func (e ResourceEdges) SchemaHeadOrErr() (*SchemaRevision, error) {
 	if e.SchemaHead != nil {
 		return e.SchemaHead, nil
-	} else if e.loadedTypes[14] {
+	} else if e.loadedTypes[13] {
 		return nil, &NotFoundError{label: schemarevision.Label}
 	}
 	return nil, &NotLoadedError{edge: "schema_head"}
@@ -498,11 +487,6 @@ func (_m *Resource) QueryContainedItems() *ResourceQuery {
 // QueryContainer queries the "container" edge of the Resource entity.
 func (_m *Resource) QueryContainer() *ResourceQuery {
 	return NewResourceClient(_m.config).QueryContainer(_m)
-}
-
-// QueryDefinitions queries the "definitions" edge of the Resource entity.
-func (_m *Resource) QueryDefinitions() *FieldDefinitionQuery {
-	return NewResourceClient(_m.config).QueryDefinitions(_m)
 }
 
 // QueryGrants queries the "grants" edge of the Resource entity.

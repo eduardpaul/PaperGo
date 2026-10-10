@@ -75,8 +75,6 @@ const (
 	EdgeContainedItems = "contained_items"
 	// EdgeContainer holds the string denoting the container edge name in mutations.
 	EdgeContainer = "container"
-	// EdgeDefinitions holds the string denoting the definitions edge name in mutations.
-	EdgeDefinitions = "definitions"
 	// EdgeGrants holds the string denoting the grants edge name in mutations.
 	EdgeGrants = "grants"
 	// EdgeOutgoing holds the string denoting the outgoing edge name in mutations.
@@ -115,13 +113,6 @@ const (
 	ContainerTable = "resources"
 	// ContainerColumn is the table column denoting the container relation/edge.
 	ContainerColumn = "container_id"
-	// DefinitionsTable is the table that holds the definitions relation/edge.
-	DefinitionsTable = "field_definitions"
-	// DefinitionsInverseTable is the table name for the FieldDefinition entity.
-	// It exists in this package in order to avoid circular dependency with the "fielddefinition" package.
-	DefinitionsInverseTable = "field_definitions"
-	// DefinitionsColumn is the table column denoting the definitions relation/edge.
-	DefinitionsColumn = "container_id"
 	// GrantsTable is the table that holds the grants relation/edge.
 	GrantsTable = "grants"
 	// GrantsInverseTable is the table name for the Grant entity.
@@ -483,20 +474,6 @@ func ByContainerField(field string, opts ...sql.OrderTermOption) OrderOption {
 	}
 }
 
-// ByDefinitionsCount orders the results by definitions count.
-func ByDefinitionsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newDefinitionsStep(), opts...)
-	}
-}
-
-// ByDefinitions orders the results by definitions terms.
-func ByDefinitions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newDefinitionsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByGrantsCount orders the results by grants count.
 func ByGrantsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -641,13 +618,6 @@ func newContainerStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(Table, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, ContainerTable, ContainerColumn),
-	)
-}
-func newDefinitionsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(DefinitionsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, DefinitionsTable, DefinitionsColumn),
 	)
 }
 func newGrantsStep() *sqlgraph.Step {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"papergo/ent"
 	"papergo/ent/businesskey"
-	"papergo/ent/fielddefinition"
 	"papergo/ent/itemsurface"
 	"papergo/ent/resource"
 )
@@ -13,7 +12,7 @@ import (
 // Claims cover both live surfaces. A draft rename cannot free a business key
 // that readers still see on the published revision of another item.
 func (s *Service) syncBusinessKeys(ctx context.Context, r *ent.Resource) error {
-	defs, err := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(*r.ContainerID)).All(ctx)
+	defs, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(*r.ContainerID)).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -81,7 +80,7 @@ func (s *Service) businessKeyRows(collection string, surfaces []*ent.ItemSurface
 }
 
 func (s *Service) rebuildBusinessKeys(ctx context.Context, collection string) error {
-	defs, err := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(collection)).All(ctx)
+	defs, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(collection)).All(ctx)
 	if err != nil {
 		return err
 	}

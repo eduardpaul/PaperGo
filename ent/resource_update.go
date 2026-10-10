@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"papergo/ent/blob"
-	"papergo/ent/fielddefinition"
 	"papergo/ent/grant"
 	"papergo/ent/itemrevision"
 	"papergo/ent/predicate"
@@ -387,21 +386,6 @@ func (_u *ResourceUpdate) AddContainedItems(v ...*Resource) *ResourceUpdate {
 	return _u.AddContainedItemIDs(ids...)
 }
 
-// AddDefinitionIDs adds the "definitions" edge to the FieldDefinition entity by IDs.
-func (_u *ResourceUpdate) AddDefinitionIDs(ids ...string) *ResourceUpdate {
-	_u.mutation.AddDefinitionIDs(ids...)
-	return _u
-}
-
-// AddDefinitions adds the "definitions" edges to the FieldDefinition entity.
-func (_u *ResourceUpdate) AddDefinitions(v ...*FieldDefinition) *ResourceUpdate {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddDefinitionIDs(ids...)
-}
-
 // AddGrantIDs adds the "grants" edge to the Grant entity by IDs.
 func (_u *ResourceUpdate) AddGrantIDs(ids ...string) *ResourceUpdate {
 	_u.mutation.AddGrantIDs(ids...)
@@ -573,27 +557,6 @@ func (_u *ResourceUpdate) RemoveContainedItems(v ...*Resource) *ResourceUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveContainedItemIDs(ids...)
-}
-
-// ClearDefinitions clears all "definitions" edges to the FieldDefinition entity.
-func (_u *ResourceUpdate) ClearDefinitions() *ResourceUpdate {
-	_u.mutation.ClearDefinitions()
-	return _u
-}
-
-// RemoveDefinitionIDs removes the "definitions" edge to FieldDefinition entities by IDs.
-func (_u *ResourceUpdate) RemoveDefinitionIDs(ids ...string) *ResourceUpdate {
-	_u.mutation.RemoveDefinitionIDs(ids...)
-	return _u
-}
-
-// RemoveDefinitions removes "definitions" edges to FieldDefinition entities.
-func (_u *ResourceUpdate) RemoveDefinitions(v ...*FieldDefinition) *ResourceUpdate {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveDefinitionIDs(ids...)
 }
 
 // ClearGrants clears all "grants" edges to the Grant entity.
@@ -1037,51 +1000,6 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    true,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.DefinitionsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedDefinitionsIDs(); len(nodes) > 0 && !_u.mutation.DefinitionsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.DefinitionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1862,21 +1780,6 @@ func (_u *ResourceUpdateOne) AddContainedItems(v ...*Resource) *ResourceUpdateOn
 	return _u.AddContainedItemIDs(ids...)
 }
 
-// AddDefinitionIDs adds the "definitions" edge to the FieldDefinition entity by IDs.
-func (_u *ResourceUpdateOne) AddDefinitionIDs(ids ...string) *ResourceUpdateOne {
-	_u.mutation.AddDefinitionIDs(ids...)
-	return _u
-}
-
-// AddDefinitions adds the "definitions" edges to the FieldDefinition entity.
-func (_u *ResourceUpdateOne) AddDefinitions(v ...*FieldDefinition) *ResourceUpdateOne {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddDefinitionIDs(ids...)
-}
-
 // AddGrantIDs adds the "grants" edge to the Grant entity by IDs.
 func (_u *ResourceUpdateOne) AddGrantIDs(ids ...string) *ResourceUpdateOne {
 	_u.mutation.AddGrantIDs(ids...)
@@ -2048,27 +1951,6 @@ func (_u *ResourceUpdateOne) RemoveContainedItems(v ...*Resource) *ResourceUpdat
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveContainedItemIDs(ids...)
-}
-
-// ClearDefinitions clears all "definitions" edges to the FieldDefinition entity.
-func (_u *ResourceUpdateOne) ClearDefinitions() *ResourceUpdateOne {
-	_u.mutation.ClearDefinitions()
-	return _u
-}
-
-// RemoveDefinitionIDs removes the "definitions" edge to FieldDefinition entities by IDs.
-func (_u *ResourceUpdateOne) RemoveDefinitionIDs(ids ...string) *ResourceUpdateOne {
-	_u.mutation.RemoveDefinitionIDs(ids...)
-	return _u
-}
-
-// RemoveDefinitions removes "definitions" edges to FieldDefinition entities.
-func (_u *ResourceUpdateOne) RemoveDefinitions(v ...*FieldDefinition) *ResourceUpdateOne {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveDefinitionIDs(ids...)
 }
 
 // ClearGrants clears all "grants" edges to the Grant entity.
@@ -2542,51 +2424,6 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 			Bidi:    true,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.DefinitionsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedDefinitionsIDs(); len(nodes) > 0 && !_u.mutation.DefinitionsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.DefinitionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

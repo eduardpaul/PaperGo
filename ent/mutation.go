@@ -10,6 +10,7 @@ import (
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/businesskey"
+	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
 	"papergo/ent/domainevent"
 	"papergo/ent/fielddefinition"
@@ -61,6 +62,7 @@ const (
 	TypeAuditEvent         = "AuditEvent"
 	TypeBlob               = "Blob"
 	TypeBusinessKey        = "BusinessKey"
+	TypeCollectionType     = "CollectionType"
 	TypeContentType        = "ContentType"
 	TypeDomainEvent        = "DomainEvent"
 	TypeFieldDefinition    = "FieldDefinition"
@@ -2217,29 +2219,620 @@ func (m *BusinessKeyMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown BusinessKey edge %s", name)
 }
 
+// CollectionTypeMutation represents an operation that mutates the CollectionType nodes in the graph.
+type CollectionTypeMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *string
+	created_at          *time.Time
+	is_default          *bool
+	clearedFields       map[string]struct{}
+	container           *string
+	clearedcontainer    bool
+	content_type        *string
+	clearedcontent_type bool
+	done                bool
+	oldValue            func(context.Context) (*CollectionType, error)
+	predicates          []predicate.CollectionType
+}
+
+var _ ent.Mutation = (*CollectionTypeMutation)(nil)
+
+// collectiontypeOption allows management of the mutation configuration using functional options.
+type collectiontypeOption func(*CollectionTypeMutation)
+
+// newCollectionTypeMutation creates new mutation for the CollectionType entity.
+func newCollectionTypeMutation(c config, op Op, opts ...collectiontypeOption) *CollectionTypeMutation {
+	m := &CollectionTypeMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCollectionType,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCollectionTypeID sets the ID field of the mutation.
+func withCollectionTypeID(id string) collectiontypeOption {
+	return func(m *CollectionTypeMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CollectionType
+		)
+		m.oldValue = func(ctx context.Context) (*CollectionType, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CollectionType.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCollectionType sets the old CollectionType of the mutation.
+func withCollectionType(node *CollectionType) collectiontypeOption {
+	return func(m *CollectionTypeMutation) {
+		m.oldValue = func(context.Context) (*CollectionType, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CollectionTypeMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CollectionTypeMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of CollectionType entities.
+func (m *CollectionTypeMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CollectionTypeMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CollectionTypeMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CollectionType.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CollectionTypeMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CollectionTypeMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CollectionType entity.
+// If the CollectionType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTypeMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CollectionTypeMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetContainerID sets the "container_id" field.
+func (m *CollectionTypeMutation) SetContainerID(s string) {
+	m.container = &s
+}
+
+// ContainerID returns the value of the "container_id" field in the mutation.
+func (m *CollectionTypeMutation) ContainerID() (r string, exists bool) {
+	v := m.container
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContainerID returns the old "container_id" field's value of the CollectionType entity.
+// If the CollectionType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTypeMutation) OldContainerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContainerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContainerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContainerID: %w", err)
+	}
+	return oldValue.ContainerID, nil
+}
+
+// ResetContainerID resets all changes to the "container_id" field.
+func (m *CollectionTypeMutation) ResetContainerID() {
+	m.container = nil
+}
+
+// SetContentTypeID sets the "content_type_id" field.
+func (m *CollectionTypeMutation) SetContentTypeID(s string) {
+	m.content_type = &s
+}
+
+// ContentTypeID returns the value of the "content_type_id" field in the mutation.
+func (m *CollectionTypeMutation) ContentTypeID() (r string, exists bool) {
+	v := m.content_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContentTypeID returns the old "content_type_id" field's value of the CollectionType entity.
+// If the CollectionType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTypeMutation) OldContentTypeID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContentTypeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContentTypeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContentTypeID: %w", err)
+	}
+	return oldValue.ContentTypeID, nil
+}
+
+// ResetContentTypeID resets all changes to the "content_type_id" field.
+func (m *CollectionTypeMutation) ResetContentTypeID() {
+	m.content_type = nil
+}
+
+// SetIsDefault sets the "is_default" field.
+func (m *CollectionTypeMutation) SetIsDefault(b bool) {
+	m.is_default = &b
+}
+
+// IsDefault returns the value of the "is_default" field in the mutation.
+func (m *CollectionTypeMutation) IsDefault() (r bool, exists bool) {
+	v := m.is_default
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsDefault returns the old "is_default" field's value of the CollectionType entity.
+// If the CollectionType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTypeMutation) OldIsDefault(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsDefault is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsDefault requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsDefault: %w", err)
+	}
+	return oldValue.IsDefault, nil
+}
+
+// ResetIsDefault resets all changes to the "is_default" field.
+func (m *CollectionTypeMutation) ResetIsDefault() {
+	m.is_default = nil
+}
+
+// ClearContainer clears the "container" edge to the Resource entity.
+func (m *CollectionTypeMutation) ClearContainer() {
+	m.clearedcontainer = true
+	m.clearedFields[collectiontype.FieldContainerID] = struct{}{}
+}
+
+// ContainerCleared reports if the "container" edge to the Resource entity was cleared.
+func (m *CollectionTypeMutation) ContainerCleared() bool {
+	return m.clearedcontainer
+}
+
+// ContainerIDs returns the "container" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ContainerID instead. It exists only for internal usage by the builders.
+func (m *CollectionTypeMutation) ContainerIDs() (ids []string) {
+	if id := m.container; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetContainer resets all changes to the "container" edge.
+func (m *CollectionTypeMutation) ResetContainer() {
+	m.container = nil
+	m.clearedcontainer = false
+}
+
+// ClearContentType clears the "content_type" edge to the ContentType entity.
+func (m *CollectionTypeMutation) ClearContentType() {
+	m.clearedcontent_type = true
+	m.clearedFields[collectiontype.FieldContentTypeID] = struct{}{}
+}
+
+// ContentTypeCleared reports if the "content_type" edge to the ContentType entity was cleared.
+func (m *CollectionTypeMutation) ContentTypeCleared() bool {
+	return m.clearedcontent_type
+}
+
+// ContentTypeIDs returns the "content_type" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ContentTypeID instead. It exists only for internal usage by the builders.
+func (m *CollectionTypeMutation) ContentTypeIDs() (ids []string) {
+	if id := m.content_type; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetContentType resets all changes to the "content_type" edge.
+func (m *CollectionTypeMutation) ResetContentType() {
+	m.content_type = nil
+	m.clearedcontent_type = false
+}
+
+// Where appends a list predicates to the CollectionTypeMutation builder.
+func (m *CollectionTypeMutation) Where(ps ...predicate.CollectionType) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CollectionTypeMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CollectionTypeMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CollectionType, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CollectionTypeMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CollectionTypeMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CollectionType).
+func (m *CollectionTypeMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CollectionTypeMutation) Fields() []string {
+	fields := make([]string, 0, 4)
+	if m.created_at != nil {
+		fields = append(fields, collectiontype.FieldCreatedAt)
+	}
+	if m.container != nil {
+		fields = append(fields, collectiontype.FieldContainerID)
+	}
+	if m.content_type != nil {
+		fields = append(fields, collectiontype.FieldContentTypeID)
+	}
+	if m.is_default != nil {
+		fields = append(fields, collectiontype.FieldIsDefault)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CollectionTypeMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case collectiontype.FieldCreatedAt:
+		return m.CreatedAt()
+	case collectiontype.FieldContainerID:
+		return m.ContainerID()
+	case collectiontype.FieldContentTypeID:
+		return m.ContentTypeID()
+	case collectiontype.FieldIsDefault:
+		return m.IsDefault()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CollectionTypeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case collectiontype.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case collectiontype.FieldContainerID:
+		return m.OldContainerID(ctx)
+	case collectiontype.FieldContentTypeID:
+		return m.OldContentTypeID(ctx)
+	case collectiontype.FieldIsDefault:
+		return m.OldIsDefault(ctx)
+	}
+	return nil, fmt.Errorf("unknown CollectionType field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionTypeMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case collectiontype.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case collectiontype.FieldContainerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContainerID(v)
+		return nil
+	case collectiontype.FieldContentTypeID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContentTypeID(v)
+		return nil
+	case collectiontype.FieldIsDefault:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsDefault(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionType field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CollectionTypeMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CollectionTypeMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionTypeMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown CollectionType numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CollectionTypeMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CollectionTypeMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CollectionTypeMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown CollectionType nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CollectionTypeMutation) ResetField(name string) error {
+	switch name {
+	case collectiontype.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case collectiontype.FieldContainerID:
+		m.ResetContainerID()
+		return nil
+	case collectiontype.FieldContentTypeID:
+		m.ResetContentTypeID()
+		return nil
+	case collectiontype.FieldIsDefault:
+		m.ResetIsDefault()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionType field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CollectionTypeMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.container != nil {
+		edges = append(edges, collectiontype.EdgeContainer)
+	}
+	if m.content_type != nil {
+		edges = append(edges, collectiontype.EdgeContentType)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CollectionTypeMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case collectiontype.EdgeContainer:
+		if id := m.container; id != nil {
+			return []ent.Value{*id}
+		}
+	case collectiontype.EdgeContentType:
+		if id := m.content_type; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CollectionTypeMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CollectionTypeMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CollectionTypeMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedcontainer {
+		edges = append(edges, collectiontype.EdgeContainer)
+	}
+	if m.clearedcontent_type {
+		edges = append(edges, collectiontype.EdgeContentType)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CollectionTypeMutation) EdgeCleared(name string) bool {
+	switch name {
+	case collectiontype.EdgeContainer:
+		return m.clearedcontainer
+	case collectiontype.EdgeContentType:
+		return m.clearedcontent_type
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CollectionTypeMutation) ClearEdge(name string) error {
+	switch name {
+	case collectiontype.EdgeContainer:
+		m.ClearContainer()
+		return nil
+	case collectiontype.EdgeContentType:
+		m.ClearContentType()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionType unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CollectionTypeMutation) ResetEdge(name string) error {
+	switch name {
+	case collectiontype.EdgeContainer:
+		m.ResetContainer()
+		return nil
+	case collectiontype.EdgeContentType:
+		m.ResetContentType()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionType edge %s", name)
+}
+
 // ContentTypeMutation represents an operation that mutates the ContentType nodes in the graph.
 type ContentTypeMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *string
-	created_at       *time.Time
-	key              *string
-	name             *string
-	field_keys       *[]string
-	appendfield_keys []string
-	rules            *[]model.ValidationRule
-	appendrules      []model.ValidationRule
-	is_default       *bool
-	version          *int
-	addversion       *int
-	updated_at       *time.Time
-	clearedFields    map[string]struct{}
-	container        *string
-	clearedcontainer bool
-	done             bool
-	oldValue         func(context.Context) (*ContentType, error)
-	predicates       []predicate.ContentType
+	op              Op
+	typ             string
+	id              *string
+	created_at      *time.Time
+	key             *string
+	name            *string
+	field_ids       *[]string
+	appendfield_ids []string
+	rules           *[]model.ValidationRule
+	appendrules     []model.ValidationRule
+	version         *int
+	addversion      *int
+	updated_at      *time.Time
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*ContentType, error)
+	predicates      []predicate.ContentType
 }
 
 var _ ent.Mutation = (*ContentTypeMutation)(nil)
@@ -2382,42 +2975,6 @@ func (m *ContentTypeMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
-// SetContainerID sets the "container_id" field.
-func (m *ContentTypeMutation) SetContainerID(s string) {
-	m.container = &s
-}
-
-// ContainerID returns the value of the "container_id" field in the mutation.
-func (m *ContentTypeMutation) ContainerID() (r string, exists bool) {
-	v := m.container
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldContainerID returns the old "container_id" field's value of the ContentType entity.
-// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ContentTypeMutation) OldContainerID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldContainerID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldContainerID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldContainerID: %w", err)
-	}
-	return oldValue.ContainerID, nil
-}
-
-// ResetContainerID resets all changes to the "container_id" field.
-func (m *ContentTypeMutation) ResetContainerID() {
-	m.container = nil
-}
-
 // SetKey sets the "key" field.
 func (m *ContentTypeMutation) SetKey(s string) {
 	m.key = &s
@@ -2490,55 +3047,55 @@ func (m *ContentTypeMutation) ResetName() {
 	m.name = nil
 }
 
-// SetFieldKeys sets the "field_keys" field.
-func (m *ContentTypeMutation) SetFieldKeys(s []string) {
-	m.field_keys = &s
-	m.appendfield_keys = nil
+// SetFieldIds sets the "field_ids" field.
+func (m *ContentTypeMutation) SetFieldIds(s []string) {
+	m.field_ids = &s
+	m.appendfield_ids = nil
 }
 
-// FieldKeys returns the value of the "field_keys" field in the mutation.
-func (m *ContentTypeMutation) FieldKeys() (r []string, exists bool) {
-	v := m.field_keys
+// FieldIds returns the value of the "field_ids" field in the mutation.
+func (m *ContentTypeMutation) FieldIds() (r []string, exists bool) {
+	v := m.field_ids
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldFieldKeys returns the old "field_keys" field's value of the ContentType entity.
+// OldFieldIds returns the old "field_ids" field's value of the ContentType entity.
 // If the ContentType object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ContentTypeMutation) OldFieldKeys(ctx context.Context) (v []string, err error) {
+func (m *ContentTypeMutation) OldFieldIds(ctx context.Context) (v []string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldFieldKeys is only allowed on UpdateOne operations")
+		return v, errors.New("OldFieldIds is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldFieldKeys requires an ID field in the mutation")
+		return v, errors.New("OldFieldIds requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldFieldKeys: %w", err)
+		return v, fmt.Errorf("querying old value for OldFieldIds: %w", err)
 	}
-	return oldValue.FieldKeys, nil
+	return oldValue.FieldIds, nil
 }
 
-// AppendFieldKeys adds s to the "field_keys" field.
-func (m *ContentTypeMutation) AppendFieldKeys(s []string) {
-	m.appendfield_keys = append(m.appendfield_keys, s...)
+// AppendFieldIds adds s to the "field_ids" field.
+func (m *ContentTypeMutation) AppendFieldIds(s []string) {
+	m.appendfield_ids = append(m.appendfield_ids, s...)
 }
 
-// AppendedFieldKeys returns the list of values that were appended to the "field_keys" field in this mutation.
-func (m *ContentTypeMutation) AppendedFieldKeys() ([]string, bool) {
-	if len(m.appendfield_keys) == 0 {
+// AppendedFieldIds returns the list of values that were appended to the "field_ids" field in this mutation.
+func (m *ContentTypeMutation) AppendedFieldIds() ([]string, bool) {
+	if len(m.appendfield_ids) == 0 {
 		return nil, false
 	}
-	return m.appendfield_keys, true
+	return m.appendfield_ids, true
 }
 
-// ResetFieldKeys resets all changes to the "field_keys" field.
-func (m *ContentTypeMutation) ResetFieldKeys() {
-	m.field_keys = nil
-	m.appendfield_keys = nil
+// ResetFieldIds resets all changes to the "field_ids" field.
+func (m *ContentTypeMutation) ResetFieldIds() {
+	m.field_ids = nil
+	m.appendfield_ids = nil
 }
 
 // SetRules sets the "rules" field.
@@ -2590,42 +3147,6 @@ func (m *ContentTypeMutation) AppendedRules() ([]model.ValidationRule, bool) {
 func (m *ContentTypeMutation) ResetRules() {
 	m.rules = nil
 	m.appendrules = nil
-}
-
-// SetIsDefault sets the "is_default" field.
-func (m *ContentTypeMutation) SetIsDefault(b bool) {
-	m.is_default = &b
-}
-
-// IsDefault returns the value of the "is_default" field in the mutation.
-func (m *ContentTypeMutation) IsDefault() (r bool, exists bool) {
-	v := m.is_default
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIsDefault returns the old "is_default" field's value of the ContentType entity.
-// If the ContentType object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ContentTypeMutation) OldIsDefault(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIsDefault is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIsDefault requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIsDefault: %w", err)
-	}
-	return oldValue.IsDefault, nil
-}
-
-// ResetIsDefault resets all changes to the "is_default" field.
-func (m *ContentTypeMutation) ResetIsDefault() {
-	m.is_default = nil
 }
 
 // SetVersion sets the "version" field.
@@ -2720,33 +3241,6 @@ func (m *ContentTypeMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
-// ClearContainer clears the "container" edge to the Resource entity.
-func (m *ContentTypeMutation) ClearContainer() {
-	m.clearedcontainer = true
-	m.clearedFields[contenttype.FieldContainerID] = struct{}{}
-}
-
-// ContainerCleared reports if the "container" edge to the Resource entity was cleared.
-func (m *ContentTypeMutation) ContainerCleared() bool {
-	return m.clearedcontainer
-}
-
-// ContainerIDs returns the "container" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ContainerID instead. It exists only for internal usage by the builders.
-func (m *ContentTypeMutation) ContainerIDs() (ids []string) {
-	if id := m.container; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetContainer resets all changes to the "container" edge.
-func (m *ContentTypeMutation) ResetContainer() {
-	m.container = nil
-	m.clearedcontainer = false
-}
-
 // Where appends a list predicates to the ContentTypeMutation builder.
 func (m *ContentTypeMutation) Where(ps ...predicate.ContentType) {
 	m.predicates = append(m.predicates, ps...)
@@ -2781,12 +3275,9 @@ func (m *ContentTypeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ContentTypeMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 7)
 	if m.created_at != nil {
 		fields = append(fields, contenttype.FieldCreatedAt)
-	}
-	if m.container != nil {
-		fields = append(fields, contenttype.FieldContainerID)
 	}
 	if m.key != nil {
 		fields = append(fields, contenttype.FieldKey)
@@ -2794,14 +3285,11 @@ func (m *ContentTypeMutation) Fields() []string {
 	if m.name != nil {
 		fields = append(fields, contenttype.FieldName)
 	}
-	if m.field_keys != nil {
-		fields = append(fields, contenttype.FieldFieldKeys)
+	if m.field_ids != nil {
+		fields = append(fields, contenttype.FieldFieldIds)
 	}
 	if m.rules != nil {
 		fields = append(fields, contenttype.FieldRules)
-	}
-	if m.is_default != nil {
-		fields = append(fields, contenttype.FieldIsDefault)
 	}
 	if m.version != nil {
 		fields = append(fields, contenttype.FieldVersion)
@@ -2819,18 +3307,14 @@ func (m *ContentTypeMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case contenttype.FieldCreatedAt:
 		return m.CreatedAt()
-	case contenttype.FieldContainerID:
-		return m.ContainerID()
 	case contenttype.FieldKey:
 		return m.Key()
 	case contenttype.FieldName:
 		return m.Name()
-	case contenttype.FieldFieldKeys:
-		return m.FieldKeys()
+	case contenttype.FieldFieldIds:
+		return m.FieldIds()
 	case contenttype.FieldRules:
 		return m.Rules()
-	case contenttype.FieldIsDefault:
-		return m.IsDefault()
 	case contenttype.FieldVersion:
 		return m.Version()
 	case contenttype.FieldUpdatedAt:
@@ -2846,18 +3330,14 @@ func (m *ContentTypeMutation) OldField(ctx context.Context, name string) (ent.Va
 	switch name {
 	case contenttype.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
-	case contenttype.FieldContainerID:
-		return m.OldContainerID(ctx)
 	case contenttype.FieldKey:
 		return m.OldKey(ctx)
 	case contenttype.FieldName:
 		return m.OldName(ctx)
-	case contenttype.FieldFieldKeys:
-		return m.OldFieldKeys(ctx)
+	case contenttype.FieldFieldIds:
+		return m.OldFieldIds(ctx)
 	case contenttype.FieldRules:
 		return m.OldRules(ctx)
-	case contenttype.FieldIsDefault:
-		return m.OldIsDefault(ctx)
 	case contenttype.FieldVersion:
 		return m.OldVersion(ctx)
 	case contenttype.FieldUpdatedAt:
@@ -2878,13 +3358,6 @@ func (m *ContentTypeMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCreatedAt(v)
 		return nil
-	case contenttype.FieldContainerID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetContainerID(v)
-		return nil
 	case contenttype.FieldKey:
 		v, ok := value.(string)
 		if !ok {
@@ -2899,12 +3372,12 @@ func (m *ContentTypeMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetName(v)
 		return nil
-	case contenttype.FieldFieldKeys:
+	case contenttype.FieldFieldIds:
 		v, ok := value.([]string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetFieldKeys(v)
+		m.SetFieldIds(v)
 		return nil
 	case contenttype.FieldRules:
 		v, ok := value.([]model.ValidationRule)
@@ -2912,13 +3385,6 @@ func (m *ContentTypeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRules(v)
-		return nil
-	case contenttype.FieldIsDefault:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIsDefault(v)
 		return nil
 	case contenttype.FieldVersion:
 		v, ok := value.(int)
@@ -3001,23 +3467,17 @@ func (m *ContentTypeMutation) ResetField(name string) error {
 	case contenttype.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
-	case contenttype.FieldContainerID:
-		m.ResetContainerID()
-		return nil
 	case contenttype.FieldKey:
 		m.ResetKey()
 		return nil
 	case contenttype.FieldName:
 		m.ResetName()
 		return nil
-	case contenttype.FieldFieldKeys:
-		m.ResetFieldKeys()
+	case contenttype.FieldFieldIds:
+		m.ResetFieldIds()
 		return nil
 	case contenttype.FieldRules:
 		m.ResetRules()
-		return nil
-	case contenttype.FieldIsDefault:
-		m.ResetIsDefault()
 		return nil
 	case contenttype.FieldVersion:
 		m.ResetVersion()
@@ -3031,28 +3491,19 @@ func (m *ContentTypeMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ContentTypeMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.container != nil {
-		edges = append(edges, contenttype.EdgeContainer)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *ContentTypeMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case contenttype.EdgeContainer:
-		if id := m.container; id != nil {
-			return []ent.Value{*id}
-		}
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ContentTypeMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 0)
 	return edges
 }
 
@@ -3064,42 +3515,25 @@ func (m *ContentTypeMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ContentTypeMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearedcontainer {
-		edges = append(edges, contenttype.EdgeContainer)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *ContentTypeMutation) EdgeCleared(name string) bool {
-	switch name {
-	case contenttype.EdgeContainer:
-		return m.clearedcontainer
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *ContentTypeMutation) ClearEdge(name string) error {
-	switch name {
-	case contenttype.EdgeContainer:
-		m.ClearContainer()
-		return nil
-	}
 	return fmt.Errorf("unknown ContentType unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *ContentTypeMutation) ResetEdge(name string) error {
-	switch name {
-	case contenttype.EdgeContainer:
-		m.ResetContainer()
-		return nil
-	}
 	return fmt.Errorf("unknown ContentType edge %s", name)
 }
 
@@ -4039,27 +4473,27 @@ func (m *DomainEventMutation) ResetEdge(name string) error {
 // FieldDefinitionMutation represents an operation that mutates the FieldDefinition nodes in the graph.
 type FieldDefinitionMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *string
-	created_at       *time.Time
-	key              *string
-	label            *string
-	_type            *fielddefinition.Type
-	options          *model.FieldOptions
-	indexed          *bool
-	index_status     *fielddefinition.IndexStatus
-	scale            *int
-	addscale         *int
-	required         *bool
-	choices          *[]string
-	appendchoices    []string
-	clearedFields    map[string]struct{}
-	container        *string
-	clearedcontainer bool
-	done             bool
-	oldValue         func(context.Context) (*FieldDefinition, error)
-	predicates       []predicate.FieldDefinition
+	op            Op
+	typ           string
+	id            *string
+	created_at    *time.Time
+	key           *string
+	label         *string
+	_type         *fielddefinition.Type
+	options       *model.FieldOptions
+	indexed       *bool
+	version       *int
+	addversion    *int
+	index_status  *fielddefinition.IndexStatus
+	scale         *int
+	addscale      *int
+	required      *bool
+	choices       *[]string
+	appendchoices []string
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*FieldDefinition, error)
+	predicates    []predicate.FieldDefinition
 }
 
 var _ ent.Mutation = (*FieldDefinitionMutation)(nil)
@@ -4200,42 +4634,6 @@ func (m *FieldDefinitionMutation) OldCreatedAt(ctx context.Context) (v time.Time
 // ResetCreatedAt resets all changes to the "created_at" field.
 func (m *FieldDefinitionMutation) ResetCreatedAt() {
 	m.created_at = nil
-}
-
-// SetContainerID sets the "container_id" field.
-func (m *FieldDefinitionMutation) SetContainerID(s string) {
-	m.container = &s
-}
-
-// ContainerID returns the value of the "container_id" field in the mutation.
-func (m *FieldDefinitionMutation) ContainerID() (r string, exists bool) {
-	v := m.container
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldContainerID returns the old "container_id" field's value of the FieldDefinition entity.
-// If the FieldDefinition object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *FieldDefinitionMutation) OldContainerID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldContainerID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldContainerID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldContainerID: %w", err)
-	}
-	return oldValue.ContainerID, nil
-}
-
-// ResetContainerID resets all changes to the "container_id" field.
-func (m *FieldDefinitionMutation) ResetContainerID() {
-	m.container = nil
 }
 
 // SetKey sets the "key" field.
@@ -4418,6 +4816,62 @@ func (m *FieldDefinitionMutation) ResetIndexed() {
 	m.indexed = nil
 }
 
+// SetVersion sets the "version" field.
+func (m *FieldDefinitionMutation) SetVersion(i int) {
+	m.version = &i
+	m.addversion = nil
+}
+
+// Version returns the value of the "version" field in the mutation.
+func (m *FieldDefinitionMutation) Version() (r int, exists bool) {
+	v := m.version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersion returns the old "version" field's value of the FieldDefinition entity.
+// If the FieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FieldDefinitionMutation) OldVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
+	}
+	return oldValue.Version, nil
+}
+
+// AddVersion adds i to the "version" field.
+func (m *FieldDefinitionMutation) AddVersion(i int) {
+	if m.addversion != nil {
+		*m.addversion += i
+	} else {
+		m.addversion = &i
+	}
+}
+
+// AddedVersion returns the value that was added to the "version" field in this mutation.
+func (m *FieldDefinitionMutation) AddedVersion() (r int, exists bool) {
+	v := m.addversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVersion resets all changes to the "version" field.
+func (m *FieldDefinitionMutation) ResetVersion() {
+	m.version = nil
+	m.addversion = nil
+}
+
 // SetIndexStatus sets the "index_status" field.
 func (m *FieldDefinitionMutation) SetIndexStatus(fs fielddefinition.IndexStatus) {
 	m.index_status = &fs
@@ -4597,33 +5051,6 @@ func (m *FieldDefinitionMutation) ResetChoices() {
 	m.appendchoices = nil
 }
 
-// ClearContainer clears the "container" edge to the Resource entity.
-func (m *FieldDefinitionMutation) ClearContainer() {
-	m.clearedcontainer = true
-	m.clearedFields[fielddefinition.FieldContainerID] = struct{}{}
-}
-
-// ContainerCleared reports if the "container" edge to the Resource entity was cleared.
-func (m *FieldDefinitionMutation) ContainerCleared() bool {
-	return m.clearedcontainer
-}
-
-// ContainerIDs returns the "container" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ContainerID instead. It exists only for internal usage by the builders.
-func (m *FieldDefinitionMutation) ContainerIDs() (ids []string) {
-	if id := m.container; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetContainer resets all changes to the "container" edge.
-func (m *FieldDefinitionMutation) ResetContainer() {
-	m.container = nil
-	m.clearedcontainer = false
-}
-
 // Where appends a list predicates to the FieldDefinitionMutation builder.
 func (m *FieldDefinitionMutation) Where(ps ...predicate.FieldDefinition) {
 	m.predicates = append(m.predicates, ps...)
@@ -4662,9 +5089,6 @@ func (m *FieldDefinitionMutation) Fields() []string {
 	if m.created_at != nil {
 		fields = append(fields, fielddefinition.FieldCreatedAt)
 	}
-	if m.container != nil {
-		fields = append(fields, fielddefinition.FieldContainerID)
-	}
 	if m.key != nil {
 		fields = append(fields, fielddefinition.FieldKey)
 	}
@@ -4679,6 +5103,9 @@ func (m *FieldDefinitionMutation) Fields() []string {
 	}
 	if m.indexed != nil {
 		fields = append(fields, fielddefinition.FieldIndexed)
+	}
+	if m.version != nil {
+		fields = append(fields, fielddefinition.FieldVersion)
 	}
 	if m.index_status != nil {
 		fields = append(fields, fielddefinition.FieldIndexStatus)
@@ -4702,8 +5129,6 @@ func (m *FieldDefinitionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case fielddefinition.FieldCreatedAt:
 		return m.CreatedAt()
-	case fielddefinition.FieldContainerID:
-		return m.ContainerID()
 	case fielddefinition.FieldKey:
 		return m.Key()
 	case fielddefinition.FieldLabel:
@@ -4714,6 +5139,8 @@ func (m *FieldDefinitionMutation) Field(name string) (ent.Value, bool) {
 		return m.Options()
 	case fielddefinition.FieldIndexed:
 		return m.Indexed()
+	case fielddefinition.FieldVersion:
+		return m.Version()
 	case fielddefinition.FieldIndexStatus:
 		return m.IndexStatus()
 	case fielddefinition.FieldScale:
@@ -4733,8 +5160,6 @@ func (m *FieldDefinitionMutation) OldField(ctx context.Context, name string) (en
 	switch name {
 	case fielddefinition.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
-	case fielddefinition.FieldContainerID:
-		return m.OldContainerID(ctx)
 	case fielddefinition.FieldKey:
 		return m.OldKey(ctx)
 	case fielddefinition.FieldLabel:
@@ -4745,6 +5170,8 @@ func (m *FieldDefinitionMutation) OldField(ctx context.Context, name string) (en
 		return m.OldOptions(ctx)
 	case fielddefinition.FieldIndexed:
 		return m.OldIndexed(ctx)
+	case fielddefinition.FieldVersion:
+		return m.OldVersion(ctx)
 	case fielddefinition.FieldIndexStatus:
 		return m.OldIndexStatus(ctx)
 	case fielddefinition.FieldScale:
@@ -4768,13 +5195,6 @@ func (m *FieldDefinitionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCreatedAt(v)
-		return nil
-	case fielddefinition.FieldContainerID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetContainerID(v)
 		return nil
 	case fielddefinition.FieldKey:
 		v, ok := value.(string)
@@ -4810,6 +5230,13 @@ func (m *FieldDefinitionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIndexed(v)
+		return nil
+	case fielddefinition.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersion(v)
 		return nil
 	case fielddefinition.FieldIndexStatus:
 		v, ok := value.(fielddefinition.IndexStatus)
@@ -4847,6 +5274,9 @@ func (m *FieldDefinitionMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *FieldDefinitionMutation) AddedFields() []string {
 	var fields []string
+	if m.addversion != nil {
+		fields = append(fields, fielddefinition.FieldVersion)
+	}
 	if m.addscale != nil {
 		fields = append(fields, fielddefinition.FieldScale)
 	}
@@ -4858,6 +5288,8 @@ func (m *FieldDefinitionMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *FieldDefinitionMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case fielddefinition.FieldVersion:
+		return m.AddedVersion()
 	case fielddefinition.FieldScale:
 		return m.AddedScale()
 	}
@@ -4869,6 +5301,13 @@ func (m *FieldDefinitionMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *FieldDefinitionMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case fielddefinition.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVersion(v)
+		return nil
 	case fielddefinition.FieldScale:
 		v, ok := value.(int)
 		if !ok {
@@ -4906,9 +5345,6 @@ func (m *FieldDefinitionMutation) ResetField(name string) error {
 	case fielddefinition.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
-	case fielddefinition.FieldContainerID:
-		m.ResetContainerID()
-		return nil
 	case fielddefinition.FieldKey:
 		m.ResetKey()
 		return nil
@@ -4923,6 +5359,9 @@ func (m *FieldDefinitionMutation) ResetField(name string) error {
 		return nil
 	case fielddefinition.FieldIndexed:
 		m.ResetIndexed()
+		return nil
+	case fielddefinition.FieldVersion:
+		m.ResetVersion()
 		return nil
 	case fielddefinition.FieldIndexStatus:
 		m.ResetIndexStatus()
@@ -4942,28 +5381,19 @@ func (m *FieldDefinitionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *FieldDefinitionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.container != nil {
-		edges = append(edges, fielddefinition.EdgeContainer)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *FieldDefinitionMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case fielddefinition.EdgeContainer:
-		if id := m.container; id != nil {
-			return []ent.Value{*id}
-		}
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *FieldDefinitionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 0)
 	return edges
 }
 
@@ -4975,42 +5405,25 @@ func (m *FieldDefinitionMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *FieldDefinitionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearedcontainer {
-		edges = append(edges, fielddefinition.EdgeContainer)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *FieldDefinitionMutation) EdgeCleared(name string) bool {
-	switch name {
-	case fielddefinition.EdgeContainer:
-		return m.clearedcontainer
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *FieldDefinitionMutation) ClearEdge(name string) error {
-	switch name {
-	case fielddefinition.EdgeContainer:
-		m.ClearContainer()
-		return nil
-	}
 	return fmt.Errorf("unknown FieldDefinition unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *FieldDefinitionMutation) ResetEdge(name string) error {
-	switch name {
-	case fielddefinition.EdgeContainer:
-		m.ResetContainer()
-		return nil
-	}
 	return fmt.Errorf("unknown FieldDefinition edge %s", name)
 }
 
@@ -16670,9 +17083,6 @@ type ResourceMutation struct {
 	clearedcontained_items    bool
 	container                 *string
 	clearedcontainer          bool
-	definitions               map[string]struct{}
-	removeddefinitions        map[string]struct{}
-	cleareddefinitions        bool
 	grants                    map[string]struct{}
 	removedgrants             map[string]struct{}
 	clearedgrants             bool
@@ -18094,60 +18504,6 @@ func (m *ResourceMutation) ResetContainer() {
 	m.clearedcontainer = false
 }
 
-// AddDefinitionIDs adds the "definitions" edge to the FieldDefinition entity by ids.
-func (m *ResourceMutation) AddDefinitionIDs(ids ...string) {
-	if m.definitions == nil {
-		m.definitions = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.definitions[ids[i]] = struct{}{}
-	}
-}
-
-// ClearDefinitions clears the "definitions" edge to the FieldDefinition entity.
-func (m *ResourceMutation) ClearDefinitions() {
-	m.cleareddefinitions = true
-}
-
-// DefinitionsCleared reports if the "definitions" edge to the FieldDefinition entity was cleared.
-func (m *ResourceMutation) DefinitionsCleared() bool {
-	return m.cleareddefinitions
-}
-
-// RemoveDefinitionIDs removes the "definitions" edge to the FieldDefinition entity by IDs.
-func (m *ResourceMutation) RemoveDefinitionIDs(ids ...string) {
-	if m.removeddefinitions == nil {
-		m.removeddefinitions = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.definitions, ids[i])
-		m.removeddefinitions[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedDefinitions returns the removed IDs of the "definitions" edge to the FieldDefinition entity.
-func (m *ResourceMutation) RemovedDefinitionsIDs() (ids []string) {
-	for id := range m.removeddefinitions {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// DefinitionsIDs returns the "definitions" edge IDs in the mutation.
-func (m *ResourceMutation) DefinitionsIDs() (ids []string) {
-	for id := range m.definitions {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetDefinitions resets all changes to the "definitions" edge.
-func (m *ResourceMutation) ResetDefinitions() {
-	m.definitions = nil
-	m.cleareddefinitions = false
-	m.removeddefinitions = nil
-}
-
 // AddGrantIDs adds the "grants" edge to the Grant entity by ids.
 func (m *ResourceMutation) AddGrantIDs(ids ...string) {
 	if m.grants == nil {
@@ -19249,7 +19605,7 @@ func (m *ResourceMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ResourceMutation) AddedEdges() []string {
-	edges := make([]string, 0, 15)
+	edges := make([]string, 0, 14)
 	if m.children != nil {
 		edges = append(edges, resource.EdgeChildren)
 	}
@@ -19261,9 +19617,6 @@ func (m *ResourceMutation) AddedEdges() []string {
 	}
 	if m.container != nil {
 		edges = append(edges, resource.EdgeContainer)
-	}
-	if m.definitions != nil {
-		edges = append(edges, resource.EdgeDefinitions)
 	}
 	if m.grants != nil {
 		edges = append(edges, resource.EdgeGrants)
@@ -19322,12 +19675,6 @@ func (m *ResourceMutation) AddedIDs(name string) []ent.Value {
 		if id := m.container; id != nil {
 			return []ent.Value{*id}
 		}
-	case resource.EdgeDefinitions:
-		ids := make([]ent.Value, 0, len(m.definitions))
-		for id := range m.definitions {
-			ids = append(ids, id)
-		}
-		return ids
 	case resource.EdgeGrants:
 		ids := make([]ent.Value, 0, len(m.grants))
 		for id := range m.grants {
@@ -19388,15 +19735,12 @@ func (m *ResourceMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ResourceMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 15)
+	edges := make([]string, 0, 14)
 	if m.removedchildren != nil {
 		edges = append(edges, resource.EdgeChildren)
 	}
 	if m.removedcontained_items != nil {
 		edges = append(edges, resource.EdgeContainedItems)
-	}
-	if m.removeddefinitions != nil {
-		edges = append(edges, resource.EdgeDefinitions)
 	}
 	if m.removedgrants != nil {
 		edges = append(edges, resource.EdgeGrants)
@@ -19435,12 +19779,6 @@ func (m *ResourceMutation) RemovedIDs(name string) []ent.Value {
 	case resource.EdgeContainedItems:
 		ids := make([]ent.Value, 0, len(m.removedcontained_items))
 		for id := range m.removedcontained_items {
-			ids = append(ids, id)
-		}
-		return ids
-	case resource.EdgeDefinitions:
-		ids := make([]ent.Value, 0, len(m.removeddefinitions))
-		for id := range m.removeddefinitions {
 			ids = append(ids, id)
 		}
 		return ids
@@ -19492,7 +19830,7 @@ func (m *ResourceMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ResourceMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 15)
+	edges := make([]string, 0, 14)
 	if m.clearedchildren {
 		edges = append(edges, resource.EdgeChildren)
 	}
@@ -19504,9 +19842,6 @@ func (m *ResourceMutation) ClearedEdges() []string {
 	}
 	if m.clearedcontainer {
 		edges = append(edges, resource.EdgeContainer)
-	}
-	if m.cleareddefinitions {
-		edges = append(edges, resource.EdgeDefinitions)
 	}
 	if m.clearedgrants {
 		edges = append(edges, resource.EdgeGrants)
@@ -19553,8 +19888,6 @@ func (m *ResourceMutation) EdgeCleared(name string) bool {
 		return m.clearedcontained_items
 	case resource.EdgeContainer:
 		return m.clearedcontainer
-	case resource.EdgeDefinitions:
-		return m.cleareddefinitions
 	case resource.EdgeGrants:
 		return m.clearedgrants
 	case resource.EdgeOutgoing:
@@ -19617,9 +19950,6 @@ func (m *ResourceMutation) ResetEdge(name string) error {
 		return nil
 	case resource.EdgeContainer:
 		m.ResetContainer()
-		return nil
-	case resource.EdgeDefinitions:
-		m.ResetDefinitions()
 		return nil
 	case resource.EdgeGrants:
 		m.ResetGrants()

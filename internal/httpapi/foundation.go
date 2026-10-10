@@ -40,6 +40,8 @@ func entityETag(w http.ResponseWriter, v any) {
 		etag(w, x.Version)
 	case *ent.SchemaTemplate:
 		etag(w, x.Version)
+	case *ent.FieldDefinition:
+		etag(w, x.Version)
 	case *ent.ContentType:
 		etag(w, x.Version)
 	case *ent.SmartFolder:
@@ -72,11 +74,37 @@ func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFun
 	}
 }
 func (a *API) registerFoundation(m *http.ServeMux) {
-	m.HandleFunc("GET /v1/resources/{id}/content-types", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.ContentTypes(r.Context(), subject(r), r.PathValue("id"))
+	m.HandleFunc("GET /v1/content-types/audit", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.ContentTypeAudit(r.Context(), subject(r), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	}))
-	m.HandleFunc("POST /v1/resources/{id}/content-types", foundationMutation(a, 201, true, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
-		return a.DMS.CreateContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
+	m.HandleFunc("GET /v1/content-types", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.CatalogContentTypes(r.Context(), subject(r)) }))
+	m.HandleFunc("POST /v1/content-types", foundationMutation(a, 201, false, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
+		return a.DMS.CreateContentType(r.Context(), subject(r), in)
+	}))
+	m.HandleFunc("GET /v1/fields", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.CatalogFields(r.Context(), subject(r)) }))
+	m.HandleFunc("POST /v1/fields", foundationMutation(a, 201, false, func(r *http.Request, in dms.CreateField, v int) (any, error) {
+		return a.DMS.CreateCatalogField(r.Context(), subject(r), in)
+	}))
+
+	m.HandleFunc("PATCH /v1/fields/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.UpdateField, v int) (any, error) {
+		return a.DMS.UpdateCatalogField(r.Context(), subject(r), r.PathValue("id"), v, in)
+	}))
+	m.HandleFunc("DELETE /v1/fields/{id}", func(w http.ResponseWriter, r *http.Request) {
+		v, ok := a.version(w, r)
+		if !ok {
+			return
+		}
+		if e := a.DMS.DeleteCatalogField(r.Context(), subject(r), r.PathValue("id"), v); e != nil {
+			a.failure(w, r, e)
+			return
+		}
+		w.WriteHeader(204)
+	})
+	m.HandleFunc("GET /v1/resources/{id}/content-types", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.CollectionContentTypes(r.Context(), subject(r), r.PathValue("id"))
+	}))
+	m.HandleFunc("POST /v1/resources/{id}/content-types", foundationMutation(a, 201, true, func(r *http.Request, in dms.AttachContentTypeInput, v int) (any, error) {
+		return a.DMS.AttachContentType(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
 	m.HandleFunc("GET /v1/content-types/{id}", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.GetContentType(r.Context(), subject(r), r.PathValue("id"))

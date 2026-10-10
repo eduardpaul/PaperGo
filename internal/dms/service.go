@@ -129,6 +129,7 @@ func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, e
 
 type CreateResource struct {
 	ContentTypeID     string         `json:"content_type_id,omitempty"`
+	ContentTypeIDs    []string       `json:"content_type_ids,omitempty"`
 	Kind              string         `json:"kind"`
 	Name              string         `json:"name"`
 	Description       string         `json:"description,omitempty"`
@@ -199,6 +200,12 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if in.ContentTypeID != "" && in.Kind != "item" {
 		return nil, invalid("content_type_id belongs to items")
 	}
+	if len(in.ContentTypeIDs) > 0 && !collection {
+		return nil, invalid("content_type_ids belongs to collections")
+	}
+	if len(in.ContentTypeIDs) > 32 {
+		return nil, invalid("at most 32 content types per collection")
+	}
 	id := uuid.NewString()
 	workspaceID := id
 	var parent *ent.Resource
@@ -256,7 +263,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		if containerID == nil {
 			return nil, invalid("item must belong to a list or library")
 		}
-		defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(*containerID)).All(ctx)
+		defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(*containerID)).All(ctx)
 		if e != nil {
 			return nil, e
 		}
@@ -265,7 +272,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, e
 		}
 		typeID = &typ.ID
-		if e = normalizeValues(selectDefinitions(defs, typ.FieldKeys), in.Values); e != nil {
+		if e = normalizeValues(selectTypeDefinitions(defs, typ), in.Values); e != nil {
 			return nil, e
 		}
 	} else if len(in.Values) > 0 {
@@ -294,10 +301,27 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		}
 	}
 	if out.Kind == resource.KindList || out.Kind == resource.KindLibrary {
-		if _, e = s.Client.ContentType.Create().SetContainerID(out.ID).SetKey("item").SetName("Item").SetIsDefault(true).Save(ctx); e != nil {
+		ids := in.ContentTypeIDs
+		if len(ids) == 0 {
+			typ, e := s.Client.ContentType.Create().SetKey("item").SetName("Item").Save(ctx)
+			if e != nil {
+				return nil, e
+			}
+			ids = []string{typ.ID}
+		} else if e = s.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
 		}
-		if e = s.recordSchema(ctx, subject, out); e != nil {
+		for i, id := range ids {
+			if _, e = s.Client.ContentType.Get(ctx, id); ent.IsNotFound(e) {
+				return nil, ErrNotFound
+			} else if e != nil {
+				return nil, e
+			}
+			if e = s.Client.CollectionType.Create().SetContainerID(out.ID).SetContentTypeID(id).SetIsDefault(i == 0).Exec(ctx); e != nil {
+				return nil, e
+			}
+		}
+		if e = s.refreshCollections(ctx, subject, []*ent.Resource{out}); e != nil {
 			return nil, e
 		}
 	}
@@ -733,7 +757,11 @@ func (s *Service) CreateField(ctx context.Context, subject, containerID string, 
 		if e != nil {
 			return e
 		}
-		if e = t.recordSchema(ctx, subject, c); e != nil {
+		collections, e := t.fieldCollections(ctx, out.ID)
+		if e != nil {
+			return e
+		}
+		if e = t.refreshCollections(ctx, subject, collections); e != nil {
 			return e
 		}
 		return t.audit(ctx, subject, "field.create", c, map[string]any{"key": in.Key})
@@ -770,7 +798,7 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 			return nil, e
 		}
 	}
-	n, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID)).Count(ctx)
+	n, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID)).Count(ctx)
 	if e != nil {
 		return nil, e
 	}
@@ -786,11 +814,11 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 			return nil, invalid("required fields on populated collections need a default")
 		}
 	}
-	out, e := s.Client.FieldDefinition.Create().SetContainerID(c.ID).SetKey(d.Key).SetLabel(d.Label).SetType(d.Type).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetScale(d.Scale).SetOptions(d.Options).Save(ctx)
+	out, e := s.Client.FieldDefinition.Create().SetKey(d.Key).SetLabel(d.Label).SetType(d.Type).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetScale(d.Scale).SetOptions(d.Options).Save(ctx)
 	if e != nil {
 		return nil, e
 	}
-	if e = s.Client.ContentType.UpdateOne(typ).SetFieldKeys(append(append([]string{}, typ.FieldKeys...), d.Key)).AddVersion(1).Exec(ctx); e != nil {
+	if e = s.Client.ContentType.UpdateOne(typ).SetFieldIds(append(append([]string{}, typ.FieldIds...), out.ID)).AddVersion(1).Exec(ctx); e != nil {
 		return nil, e
 	}
 	return out, nil
@@ -802,7 +830,7 @@ func (s *Service) Fields(ctx context.Context, subject, id string) ([]*ent.FieldD
 	if _, err := s.authorize(ctx, subject, id, "read"); err != nil {
 		return nil, err
 	}
-	return s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(id)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
+	return s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(id)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
 }
 
 type Permission struct {

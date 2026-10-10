@@ -14,6 +14,7 @@ import (
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/businesskey"
+	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
 	"papergo/ent/domainevent"
 	"papergo/ent/fielddefinition"
@@ -64,6 +65,8 @@ type Client struct {
 	Blob *BlobClient
 	// BusinessKey is the client for interacting with the BusinessKey builders.
 	BusinessKey *BusinessKeyClient
+	// CollectionType is the client for interacting with the CollectionType builders.
+	CollectionType *CollectionTypeClient
 	// ContentType is the client for interacting with the ContentType builders.
 	ContentType *ContentTypeClient
 	// DomainEvent is the client for interacting with the DomainEvent builders.
@@ -138,6 +141,7 @@ func (c *Client) init() {
 	c.AuditEvent = NewAuditEventClient(c.config)
 	c.Blob = NewBlobClient(c.config)
 	c.BusinessKey = NewBusinessKeyClient(c.config)
+	c.CollectionType = NewCollectionTypeClient(c.config)
 	c.ContentType = NewContentTypeClient(c.config)
 	c.DomainEvent = NewDomainEventClient(c.config)
 	c.FieldDefinition = NewFieldDefinitionClient(c.config)
@@ -263,6 +267,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AuditEvent:         NewAuditEventClient(cfg),
 		Blob:               NewBlobClient(cfg),
 		BusinessKey:        NewBusinessKeyClient(cfg),
+		CollectionType:     NewCollectionTypeClient(cfg),
 		ContentType:        NewContentTypeClient(cfg),
 		DomainEvent:        NewDomainEventClient(cfg),
 		FieldDefinition:    NewFieldDefinitionClient(cfg),
@@ -315,6 +320,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AuditEvent:         NewAuditEventClient(cfg),
 		Blob:               NewBlobClient(cfg),
 		BusinessKey:        NewBusinessKeyClient(cfg),
+		CollectionType:     NewCollectionTypeClient(cfg),
 		ContentType:        NewContentTypeClient(cfg),
 		DomainEvent:        NewDomainEventClient(cfg),
 		FieldDefinition:    NewFieldDefinitionClient(cfg),
@@ -374,8 +380,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.DomainEvent,
-		c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
+		c.AuditEvent, c.Blob, c.BusinessKey, c.CollectionType, c.ContentType,
+		c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
 		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
 		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.Publication,
 		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
@@ -391,8 +397,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.DomainEvent,
-		c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
+		c.AuditEvent, c.Blob, c.BusinessKey, c.CollectionType, c.ContentType,
+		c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
 		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
 		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.Publication,
 		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
@@ -413,6 +419,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Blob.mutate(ctx, m)
 	case *BusinessKeyMutation:
 		return c.BusinessKey.mutate(ctx, m)
+	case *CollectionTypeMutation:
+		return c.CollectionType.mutate(ctx, m)
 	case *ContentTypeMutation:
 		return c.ContentType.mutate(ctx, m)
 	case *DomainEventMutation:
@@ -925,6 +933,171 @@ func (c *BusinessKeyClient) mutate(ctx context.Context, m *BusinessKeyMutation) 
 	}
 }
 
+// CollectionTypeClient is a client for the CollectionType schema.
+type CollectionTypeClient struct {
+	config
+}
+
+// NewCollectionTypeClient returns a client for the CollectionType from the given config.
+func NewCollectionTypeClient(c config) *CollectionTypeClient {
+	return &CollectionTypeClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `collectiontype.Hooks(f(g(h())))`.
+func (c *CollectionTypeClient) Use(hooks ...Hook) {
+	c.hooks.CollectionType = append(c.hooks.CollectionType, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `collectiontype.Intercept(f(g(h())))`.
+func (c *CollectionTypeClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CollectionType = append(c.inters.CollectionType, interceptors...)
+}
+
+// Create returns a builder for creating a CollectionType entity.
+func (c *CollectionTypeClient) Create() *CollectionTypeCreate {
+	mutation := newCollectionTypeMutation(c.config, OpCreate)
+	return &CollectionTypeCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CollectionType entities.
+func (c *CollectionTypeClient) CreateBulk(builders ...*CollectionTypeCreate) *CollectionTypeCreateBulk {
+	return &CollectionTypeCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CollectionTypeClient) MapCreateBulk(slice any, setFunc func(*CollectionTypeCreate, int)) *CollectionTypeCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CollectionTypeCreateBulk{err: fmt.Errorf("calling to CollectionTypeClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CollectionTypeCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CollectionTypeCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CollectionType.
+func (c *CollectionTypeClient) Update() *CollectionTypeUpdate {
+	mutation := newCollectionTypeMutation(c.config, OpUpdate)
+	return &CollectionTypeUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CollectionTypeClient) UpdateOne(_m *CollectionType) *CollectionTypeUpdateOne {
+	mutation := newCollectionTypeMutation(c.config, OpUpdateOne, withCollectionType(_m))
+	return &CollectionTypeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CollectionTypeClient) UpdateOneID(id string) *CollectionTypeUpdateOne {
+	mutation := newCollectionTypeMutation(c.config, OpUpdateOne, withCollectionTypeID(id))
+	return &CollectionTypeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CollectionType.
+func (c *CollectionTypeClient) Delete() *CollectionTypeDelete {
+	mutation := newCollectionTypeMutation(c.config, OpDelete)
+	return &CollectionTypeDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CollectionTypeClient) DeleteOne(_m *CollectionType) *CollectionTypeDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CollectionTypeClient) DeleteOneID(id string) *CollectionTypeDeleteOne {
+	builder := c.Delete().Where(collectiontype.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CollectionTypeDeleteOne{builder}
+}
+
+// Query returns a query builder for CollectionType.
+func (c *CollectionTypeClient) Query() *CollectionTypeQuery {
+	return &CollectionTypeQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCollectionType},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CollectionType entity by its id.
+func (c *CollectionTypeClient) Get(ctx context.Context, id string) (*CollectionType, error) {
+	return c.Query().Where(collectiontype.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CollectionTypeClient) GetX(ctx context.Context, id string) *CollectionType {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryContainer queries the container edge of a CollectionType.
+func (c *CollectionTypeClient) QueryContainer(_m *CollectionType) *ResourceQuery {
+	query := (&ResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(collectiontype.Table, collectiontype.FieldID, id),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, collectiontype.ContainerTable, collectiontype.ContainerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryContentType queries the content_type edge of a CollectionType.
+func (c *CollectionTypeClient) QueryContentType(_m *CollectionType) *ContentTypeQuery {
+	query := (&ContentTypeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(collectiontype.Table, collectiontype.FieldID, id),
+			sqlgraph.To(contenttype.Table, contenttype.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, collectiontype.ContentTypeTable, collectiontype.ContentTypeColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CollectionTypeClient) Hooks() []Hook {
+	return c.hooks.CollectionType
+}
+
+// Interceptors returns the client interceptors.
+func (c *CollectionTypeClient) Interceptors() []Interceptor {
+	return c.inters.CollectionType
+}
+
+func (c *CollectionTypeClient) mutate(ctx context.Context, m *CollectionTypeMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CollectionTypeCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CollectionTypeUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CollectionTypeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CollectionTypeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CollectionType mutation op: %q", m.Op())
+	}
+}
+
 // ContentTypeClient is a client for the ContentType schema.
 type ContentTypeClient struct {
 	config
@@ -1031,22 +1204,6 @@ func (c *ContentTypeClient) GetX(ctx context.Context, id string) *ContentType {
 		panic(err)
 	}
 	return obj
-}
-
-// QueryContainer queries the container edge of a ContentType.
-func (c *ContentTypeClient) QueryContainer(_m *ContentType) *ResourceQuery {
-	query := (&ResourceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(contenttype.Table, contenttype.FieldID, id),
-			sqlgraph.To(resource.Table, resource.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, contenttype.ContainerTable, contenttype.ContainerColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // Hooks returns the client hooks.
@@ -1313,22 +1470,6 @@ func (c *FieldDefinitionClient) GetX(ctx context.Context, id string) *FieldDefin
 		panic(err)
 	}
 	return obj
-}
-
-// QueryContainer queries the container edge of a FieldDefinition.
-func (c *FieldDefinitionClient) QueryContainer(_m *FieldDefinition) *ResourceQuery {
-	query := (&ResourceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(fielddefinition.Table, fielddefinition.FieldID, id),
-			sqlgraph.To(resource.Table, resource.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, fielddefinition.ContainerTable, fielddefinition.ContainerColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // Hooks returns the client hooks.
@@ -3678,22 +3819,6 @@ func (c *ResourceClient) QueryContainer(_m *Resource) *ResourceQuery {
 	return query
 }
 
-// QueryDefinitions queries the definitions edge of a Resource.
-func (c *ResourceClient) QueryDefinitions(_m *Resource) *FieldDefinitionQuery {
-	query := (&FieldDefinitionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(resource.Table, resource.FieldID, id),
-			sqlgraph.To(fielddefinition.Table, fielddefinition.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, resource.DefinitionsTable, resource.DefinitionsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryGrants queries the grants edge of a Resource.
 func (c *ResourceClient) QueryGrants(_m *Resource) *GrantQuery {
 	query := (&GrantClient{config: c.config}).Query()
@@ -5670,21 +5795,21 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditEvent, Blob, BusinessKey, ContentType, DomainEvent, FieldDefinition,
-		FieldValue, Grant, IdentityAssignment, IdentityGroup, IdentityMembership,
-		IdentityRole, IdentityUser, ItemRevision, ItemSurface, ListView, Operation,
-		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
-		SchemaTemplate, SmartFolder, Term, TermGroup, TermSet, WebDAVCredential,
-		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		AuditEvent, Blob, BusinessKey, CollectionType, ContentType, DomainEvent,
+		FieldDefinition, FieldValue, Grant, IdentityAssignment, IdentityGroup,
+		IdentityMembership, IdentityRole, IdentityUser, ItemRevision, ItemSurface,
+		ListView, Operation, Publication, Relationship, RelationshipType, Resource,
+		SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup, TermSet,
+		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
 		WorkflowVersion []ent.Hook
 	}
 	inters struct {
-		AuditEvent, Blob, BusinessKey, ContentType, DomainEvent, FieldDefinition,
-		FieldValue, Grant, IdentityAssignment, IdentityGroup, IdentityMembership,
-		IdentityRole, IdentityUser, ItemRevision, ItemSurface, ListView, Operation,
-		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
-		SchemaTemplate, SmartFolder, Term, TermGroup, TermSet, WebDAVCredential,
-		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		AuditEvent, Blob, BusinessKey, CollectionType, ContentType, DomainEvent,
+		FieldDefinition, FieldValue, Grant, IdentityAssignment, IdentityGroup,
+		IdentityMembership, IdentityRole, IdentityUser, ItemRevision, ItemSurface,
+		ListView, Operation, Publication, Relationship, RelationshipType, Resource,
+		SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup, TermSet,
+		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
 		WorkflowVersion []ent.Interceptor
 	}
 )

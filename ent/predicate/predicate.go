@@ -15,6 +15,9 @@ type Blob func(*sql.Selector)
 // BusinessKey is the predicate function for businesskey builders.
 type BusinessKey func(*sql.Selector)
 
+// CollectionType is the predicate function for collectiontype builders.
+type CollectionType func(*sql.Selector)
+
 // ContentType is the predicate function for contenttype builders.
 type ContentType func(*sql.Selector)
 

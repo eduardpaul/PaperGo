@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	entsql "entgo.io/ent/dialect/sql"
 	"papergo/ent"
+	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
@@ -19,14 +20,15 @@ import (
 )
 
 type SchemaField struct {
-	Options  model.FieldOptions `json:"options,omitempty"`
-	ID       string             `json:"id"`
-	Label    string             `json:"label"`
-	Type     string             `json:"type"`
-	Required bool               `json:"required"`
-	Choices  []string           `json:"choices"`
-	Indexed  bool               `json:"indexed"`
-	Scale    int                `json:"scale"`
+	DefinitionID string             `json:"definition_id,omitempty"`
+	Options      model.FieldOptions `json:"options,omitempty"`
+	ID           string             `json:"id"`
+	Label        string             `json:"label"`
+	Type         string             `json:"type"`
+	Required     bool               `json:"required"`
+	Choices      []string           `json:"choices"`
+	Indexed      bool               `json:"indexed"`
+	Scale        int                `json:"scale"`
 }
 type SchemaDefinition struct {
 	Fields       []SchemaField          `json:"fields"`
@@ -45,7 +47,7 @@ func decodeValues(raw json.RawMessage) (map[string]any, error) {
 	return values, err
 }
 func (s *Service) recordSchema(ctx context.Context, actor string, c *ent.Resource) error {
-	defs, err := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
+	defs, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -53,13 +55,17 @@ func (s *Service) recordSchema(ctx context.Context, actor string, c *ent.Resourc
 	for _, d := range defs {
 		definition.Fields = append(definition.Fields, schemaField(d))
 	}
-	types, err := s.Client.ContentType.Query().Where(contenttype.ContainerIDEQ(c.ID)).Order(ent.Asc(contenttype.FieldKey)).All(ctx)
+	types, err := s.Client.ContentType.Query().Where(collectionTypePredicate(c.ID)).Order(ent.Asc(contenttype.FieldKey)).All(ctx)
 	if err != nil {
 		return err
 	}
 	definition.ContentTypes = []SchemaContentType{}
+	a, err := s.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(c.ID), collectiontype.IsDefaultEQ(true)).Only(ctx)
+	if err != nil {
+		return err
+	}
 	for _, typ := range types {
-		definition.ContentTypes = append(definition.ContentTypes, SchemaContentType{ID: typ.ID, Key: typ.Key, Name: typ.Name, FieldKeys: typ.FieldKeys, Rules: typ.Rules, IsDefault: typ.IsDefault})
+		definition.ContentTypes = append(definition.ContentTypes, SchemaContentType{ID: typ.ID, Key: typ.Key, Name: typ.Name, FieldKeys: fieldKeys(selectTypeDefinitions(defs, typ)), Rules: typ.Rules, IsDefault: typ.ID == a.ContentTypeID})
 	}
 	number := 1
 	if c.SchemaHeadID != nil {
@@ -202,7 +208,7 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	return rev, nil
 }
 func (s *Service) replaceSurface(ctx context.Context, r *ent.Resource, rev *ent.ItemRevision, surface itemsurface.Surface, defs []*ent.FieldDefinition) error {
-	current, err := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(*r.ContainerID)).All(ctx)
+	current, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(*r.ContainerID)).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -461,5 +467,5 @@ func (s *Service) Schemas(ctx context.Context, subject, id string, after, limit 
 }
 
 func schemaField(d *ent.FieldDefinition) SchemaField {
-	return SchemaField{ID: d.Key, Label: d.Label, Type: string(d.Type), Required: d.Required, Choices: d.Choices, Indexed: d.Indexed, Scale: d.Scale, Options: d.Options}
+	return SchemaField{DefinitionID: d.ID, ID: d.Key, Label: d.Label, Type: string(d.Type), Required: d.Required, Choices: d.Choices, Indexed: d.Indexed, Scale: d.Scale, Options: d.Options}
 }

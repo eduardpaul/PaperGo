@@ -8,7 +8,6 @@ import (
 	"math"
 	"papergo/ent/contenttype"
 	"papergo/ent/predicate"
-	"papergo/ent/resource"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -19,11 +18,10 @@ import (
 // ContentTypeQuery is the builder for querying ContentType entities.
 type ContentTypeQuery struct {
 	config
-	ctx           *QueryContext
-	order         []contenttype.OrderOption
-	inters        []Interceptor
-	predicates    []predicate.ContentType
-	withContainer *ResourceQuery
+	ctx        *QueryContext
+	order      []contenttype.OrderOption
+	inters     []Interceptor
+	predicates []predicate.ContentType
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -58,28 +56,6 @@ func (_q *ContentTypeQuery) Unique(unique bool) *ContentTypeQuery {
 func (_q *ContentTypeQuery) Order(o ...contenttype.OrderOption) *ContentTypeQuery {
 	_q.order = append(_q.order, o...)
 	return _q
-}
-
-// QueryContainer chains the current query on the "container" edge.
-func (_q *ContentTypeQuery) QueryContainer() *ResourceQuery {
-	query := (&ResourceClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(contenttype.Table, contenttype.FieldID, selector),
-			sqlgraph.To(resource.Table, resource.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, contenttype.ContainerTable, contenttype.ContainerColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // First returns the first ContentType entity from the query.
@@ -269,27 +245,15 @@ func (_q *ContentTypeQuery) Clone() *ContentTypeQuery {
 		return nil
 	}
 	return &ContentTypeQuery{
-		config:        _q.config,
-		ctx:           _q.ctx.Clone(),
-		order:         append([]contenttype.OrderOption{}, _q.order...),
-		inters:        append([]Interceptor{}, _q.inters...),
-		predicates:    append([]predicate.ContentType{}, _q.predicates...),
-		withContainer: _q.withContainer.Clone(),
+		config:     _q.config,
+		ctx:        _q.ctx.Clone(),
+		order:      append([]contenttype.OrderOption{}, _q.order...),
+		inters:     append([]Interceptor{}, _q.inters...),
+		predicates: append([]predicate.ContentType{}, _q.predicates...),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
-}
-
-// WithContainer tells the query-builder to eager-load the nodes that are connected to
-// the "container" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *ContentTypeQuery) WithContainer(opts ...func(*ResourceQuery)) *ContentTypeQuery {
-	query := (&ResourceClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withContainer = query
-	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -368,11 +332,8 @@ func (_q *ContentTypeQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *ContentTypeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ContentType, error) {
 	var (
-		nodes       = []*ContentType{}
-		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
-			_q.withContainer != nil,
-		}
+		nodes = []*ContentType{}
+		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*ContentType).scanValues(nil, columns)
@@ -380,7 +341,6 @@ func (_q *ContentTypeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &ContentType{config: _q.config}
 		nodes = append(nodes, node)
-		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -392,43 +352,7 @@ func (_q *ContentTypeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := _q.withContainer; query != nil {
-		if err := _q.loadContainer(ctx, query, nodes, nil,
-			func(n *ContentType, e *Resource) { n.Edges.Container = e }); err != nil {
-			return nil, err
-		}
-	}
 	return nodes, nil
-}
-
-func (_q *ContentTypeQuery) loadContainer(ctx context.Context, query *ResourceQuery, nodes []*ContentType, init func(*ContentType), assign func(*ContentType, *Resource)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*ContentType)
-	for i := range nodes {
-		fk := nodes[i].ContainerID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(resource.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "container_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
 }
 
 func (_q *ContentTypeQuery) sqlCount(ctx context.Context) (int, error) {
@@ -455,9 +379,6 @@ func (_q *ContentTypeQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != contenttype.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
-		}
-		if _q.withContainer != nil {
-			_spec.Node.AddColumnOnce(contenttype.FieldContainerID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

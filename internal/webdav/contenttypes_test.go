@@ -11,10 +11,14 @@ func TestCopyPreservesContentTypeAndPrunesRemovedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	typ, err := e.s.CreateContentType(ctx, "alice", lib.ID, lib.Version, dms.ContentTypeInput{Key: "document", Name: "Document"})
+	typ, err := e.s.CreateContentType(ctx, "alice", dms.ContentTypeInput{Key: "document", Name: "Document"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err = e.s.AttachContentType(ctx, "alice", lib.ID, lib.Version, dms.AttachContentTypeInput{ContentTypeID: typ.ID}); err != nil {
+		t.Fatal(err)
+	}
+
 	d, err := e.s.CreateField(ctx, "alice", lib.ID, dms.CreateField{ContentTypeID: typ.ID, Key: "caption", Label: "Caption", Type: "text"})
 	if err != nil {
 		t.Fatal(err)

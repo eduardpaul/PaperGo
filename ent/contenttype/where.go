@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // ID filters vertices based on their ID field.
@@ -70,11 +69,6 @@ func CreatedAt(v time.Time) predicate.ContentType {
 	return predicate.ContentType(sql.FieldEQ(FieldCreatedAt, v))
 }
 
-// ContainerID applies equality check predicate on the "container_id" field. It's identical to ContainerIDEQ.
-func ContainerID(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldEQ(FieldContainerID, v))
-}
-
 // Key applies equality check predicate on the "key" field. It's identical to KeyEQ.
 func Key(v string) predicate.ContentType {
 	return predicate.ContentType(sql.FieldEQ(FieldKey, v))
@@ -83,11 +77,6 @@ func Key(v string) predicate.ContentType {
 // Name applies equality check predicate on the "name" field. It's identical to NameEQ.
 func Name(v string) predicate.ContentType {
 	return predicate.ContentType(sql.FieldEQ(FieldName, v))
-}
-
-// IsDefault applies equality check predicate on the "is_default" field. It's identical to IsDefaultEQ.
-func IsDefault(v bool) predicate.ContentType {
-	return predicate.ContentType(sql.FieldEQ(FieldIsDefault, v))
 }
 
 // Version applies equality check predicate on the "version" field. It's identical to VersionEQ.
@@ -138,71 +127,6 @@ func CreatedAtLT(v time.Time) predicate.ContentType {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.ContentType {
 	return predicate.ContentType(sql.FieldLTE(FieldCreatedAt, v))
-}
-
-// ContainerIDEQ applies the EQ predicate on the "container_id" field.
-func ContainerIDEQ(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldEQ(FieldContainerID, v))
-}
-
-// ContainerIDNEQ applies the NEQ predicate on the "container_id" field.
-func ContainerIDNEQ(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldNEQ(FieldContainerID, v))
-}
-
-// ContainerIDIn applies the In predicate on the "container_id" field.
-func ContainerIDIn(vs ...string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldIn(FieldContainerID, vs...))
-}
-
-// ContainerIDNotIn applies the NotIn predicate on the "container_id" field.
-func ContainerIDNotIn(vs ...string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldNotIn(FieldContainerID, vs...))
-}
-
-// ContainerIDGT applies the GT predicate on the "container_id" field.
-func ContainerIDGT(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldGT(FieldContainerID, v))
-}
-
-// ContainerIDGTE applies the GTE predicate on the "container_id" field.
-func ContainerIDGTE(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldGTE(FieldContainerID, v))
-}
-
-// ContainerIDLT applies the LT predicate on the "container_id" field.
-func ContainerIDLT(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldLT(FieldContainerID, v))
-}
-
-// ContainerIDLTE applies the LTE predicate on the "container_id" field.
-func ContainerIDLTE(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldLTE(FieldContainerID, v))
-}
-
-// ContainerIDContains applies the Contains predicate on the "container_id" field.
-func ContainerIDContains(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldContains(FieldContainerID, v))
-}
-
-// ContainerIDHasPrefix applies the HasPrefix predicate on the "container_id" field.
-func ContainerIDHasPrefix(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldHasPrefix(FieldContainerID, v))
-}
-
-// ContainerIDHasSuffix applies the HasSuffix predicate on the "container_id" field.
-func ContainerIDHasSuffix(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldHasSuffix(FieldContainerID, v))
-}
-
-// ContainerIDEqualFold applies the EqualFold predicate on the "container_id" field.
-func ContainerIDEqualFold(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldEqualFold(FieldContainerID, v))
-}
-
-// ContainerIDContainsFold applies the ContainsFold predicate on the "container_id" field.
-func ContainerIDContainsFold(v string) predicate.ContentType {
-	return predicate.ContentType(sql.FieldContainsFold(FieldContainerID, v))
 }
 
 // KeyEQ applies the EQ predicate on the "key" field.
@@ -335,16 +259,6 @@ func NameContainsFold(v string) predicate.ContentType {
 	return predicate.ContentType(sql.FieldContainsFold(FieldName, v))
 }
 
-// IsDefaultEQ applies the EQ predicate on the "is_default" field.
-func IsDefaultEQ(v bool) predicate.ContentType {
-	return predicate.ContentType(sql.FieldEQ(FieldIsDefault, v))
-}
-
-// IsDefaultNEQ applies the NEQ predicate on the "is_default" field.
-func IsDefaultNEQ(v bool) predicate.ContentType {
-	return predicate.ContentType(sql.FieldNEQ(FieldIsDefault, v))
-}
-
 // VersionEQ applies the EQ predicate on the "version" field.
 func VersionEQ(v int) predicate.ContentType {
 	return predicate.ContentType(sql.FieldEQ(FieldVersion, v))
@@ -423,29 +337,6 @@ func UpdatedAtLT(v time.Time) predicate.ContentType {
 // UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
 func UpdatedAtLTE(v time.Time) predicate.ContentType {
 	return predicate.ContentType(sql.FieldLTE(FieldUpdatedAt, v))
-}
-
-// HasContainer applies the HasEdge predicate on the "container" edge.
-func HasContainer() predicate.ContentType {
-	return predicate.ContentType(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, ContainerTable, ContainerColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasContainerWith applies the HasEdge predicate on the "container" edge with a given conditions (other predicates).
-func HasContainerWith(preds ...predicate.Resource) predicate.ContentType {
-	return predicate.ContentType(func(s *sql.Selector) {
-		step := newContainerStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
 }
 
 // And groups predicates with the AND operator between them.

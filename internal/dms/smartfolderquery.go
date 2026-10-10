@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"papergo/ent"
-	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/resource"
 	"papergo/ent/term"
@@ -113,7 +112,7 @@ func (s *Service) smartCandidates(ctx context.Context, subject string, f *ent.Sm
 		key, keyArgs := namedSelector(d.ContentTypes, "ct.key")
 		name, nameArgs := namedSelector(d.ContentTypes, "ct.name")
 		q.Where(func(sel *entsql.Selector) {
-			sel.Where(entsql.ExprP("EXISTS(SELECT 1 FROM content_types ct WHERE ct.container_id="+sel.C(resource.FieldID)+" AND ("+key+" OR "+name+"))", append(keyArgs, nameArgs...)...))
+			sel.Where(entsql.ExprP("EXISTS(SELECT 1 FROM collection_types ca JOIN content_types ct ON ct.id=ca.content_type_id WHERE ca.container_id="+sel.C(resource.FieldID)+" AND ("+key+" OR "+name+"))", append(keyArgs, nameArgs...)...))
 		})
 	}
 	collections, err := q.Order(ent.Asc(resource.FieldID)).Limit(MaxSmartCollections + 1).All(ctx)
@@ -126,34 +125,30 @@ func (s *Service) smartCandidates(ctx context.Context, subject string, f *ent.Sm
 	if len(collections) == 0 {
 		return []smartCandidate{}, nil
 	}
-	ids := make([]string, len(collections))
-	for i, c := range collections {
-		ids[i] = c.ID
-	}
-	defs, err := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDIn(ids...)).All(ctx)
-	if err != nil {
-		return nil, err
-	}
-	types, err := s.Client.ContentType.Query().Where(contenttype.ContainerIDIn(ids...)).Order(ent.Asc(contenttype.FieldKey)).All(ctx)
-	if err != nil {
-		return nil, err
-	}
 	fields := map[string][]*ent.FieldDefinition{}
-	for _, fd := range defs {
-		fields[fd.ContainerID] = append(fields[fd.ContainerID], fd)
-	}
 	byCollection := map[string][]*ent.ContentType{}
-	for _, typ := range types {
-		if len(d.ContentTypes) > 0 {
-			match := false
-			for _, key := range d.ContentTypes {
-				match = match || strings.EqualFold(key, typ.Key) || strings.EqualFold(key, typ.Name)
-			}
-			if !match {
-				continue
-			}
+	for _, c := range collections {
+		defs, e := s.collectionFields(ctx, c.ID)
+		if e != nil {
+			return nil, e
 		}
-		byCollection[typ.ContainerID] = append(byCollection[typ.ContainerID], typ)
+		fields[c.ID] = defs
+		types, e := s.collectionTypes(ctx, c.ID)
+		if e != nil {
+			return nil, e
+		}
+		for _, typ := range types {
+			if len(d.ContentTypes) > 0 {
+				match := false
+				for _, key := range d.ContentTypes {
+					match = match || strings.EqualFold(key, typ.Key) || strings.EqualFold(key, typ.Name)
+				}
+				if !match {
+					continue
+				}
+			}
+			byCollection[c.ID] = append(byCollection[c.ID], typ)
+		}
 	}
 	out := []smartCandidate{}
 	for _, c := range collections {
@@ -319,7 +314,7 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 		if smartTermField(&ent.FieldDefinition{Type: "keywords", Indexed: true, IndexStatus: fielddefinition.IndexStatusReady}, root) {
 			fields = "(fd.type='keywords' OR " + fields + ")"
 		}
-		parts = append(parts, `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.container_id=f.container_id AND fd.key=f.field_key JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.indexed=1 AND `+fields+` AND st.root=?)`)
+		parts = append(parts, `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.key=f.field_key JOIN collection_types ca ON ca.container_id=f.container_id JOIN content_types ct ON ct.id=ca.content_type_id AND EXISTS(SELECT 1 FROM json_each(ct.field_ids) WHERE value=fd.id) JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.indexed=1 AND `+fields+` AND st.root=?)`)
 		args = append(args, root.TermSetID, root.ID)
 	}
 	if len(parts) == 0 {

@@ -155,7 +155,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		if !slices.ContainsFunc(c.types, func(v *ent.ContentType) bool { return v.ID == typ.ID }) {
 			return invalid("content type is outside the smart folder selectors")
 		}
-		defs := selectDefinitions(c.defs, typ.FieldKeys)
+		defs := selectTypeDefinitions(c.defs, typ)
 		known := definitionMap(defs)
 		if item != nil {
 			for key, v := range item.Values {
@@ -429,7 +429,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 		if e != nil {
 			return e
 		}
-		defs := selectDefinitions(c.defs, typ.FieldKeys)
+		defs := selectTypeDefinitions(c.defs, typ)
 		known := definitionMap(defs)
 		values := map[string]any{}
 		for key, v := range item.Values {

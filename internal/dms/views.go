@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"papergo/ent"
-	"papergo/ent/fielddefinition"
 	"papergo/ent/listview"
 	"strings"
 )
@@ -33,7 +32,7 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 	if len(in.Columns) == 0 {
 		in.Columns = []string{"$name"}
 	}
-	defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(containerID)).All(ctx)
+	defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(containerID)).All(ctx)
 	if e != nil {
 		return e
 	}

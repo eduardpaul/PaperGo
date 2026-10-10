@@ -189,7 +189,7 @@ func (s *Service) termText(ctx context.Context, payload []byte, defs []*ent.Fiel
 // ItemTerms returns the term IDs that values hold in the term and keywords
 // fields of a collection.
 func (s *Service) ItemTerms(ctx context.Context, collectionID string, values map[string]any) ([]string, error) {
-	defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(collectionID), fielddefinition.TypeIn("term", "keywords")).All(ctx)
+	defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(collectionID), fielddefinition.TypeIn("term", "keywords")).All(ctx)
 	if e != nil {
 		return nil, e
 	}

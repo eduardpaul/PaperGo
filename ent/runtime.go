@@ -6,6 +6,7 @@ import (
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/businesskey"
+	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
 	"papergo/ent/domainevent"
 	"papergo/ent/fielddefinition"
@@ -194,6 +195,25 @@ func init() {
 	businesskey.DefaultID = businesskeyDescID.Default.(func() string)
 	// businesskey.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	businesskey.IDValidator = businesskeyDescID.Validators[0].(func(string) error)
+	collectiontypeMixin := schema.CollectionType{}.Mixin()
+	collectiontypeMixinFields0 := collectiontypeMixin[0].Fields()
+	_ = collectiontypeMixinFields0
+	collectiontypeFields := schema.CollectionType{}.Fields()
+	_ = collectiontypeFields
+	// collectiontypeDescCreatedAt is the schema descriptor for created_at field.
+	collectiontypeDescCreatedAt := collectiontypeMixinFields0[1].Descriptor()
+	// collectiontype.DefaultCreatedAt holds the default value on creation for the created_at field.
+	collectiontype.DefaultCreatedAt = collectiontypeDescCreatedAt.Default.(func() time.Time)
+	// collectiontypeDescIsDefault is the schema descriptor for is_default field.
+	collectiontypeDescIsDefault := collectiontypeFields[2].Descriptor()
+	// collectiontype.DefaultIsDefault holds the default value on creation for the is_default field.
+	collectiontype.DefaultIsDefault = collectiontypeDescIsDefault.Default.(bool)
+	// collectiontypeDescID is the schema descriptor for id field.
+	collectiontypeDescID := collectiontypeMixinFields0[0].Descriptor()
+	// collectiontype.DefaultID holds the default value on creation for the id field.
+	collectiontype.DefaultID = collectiontypeDescID.Default.(func() string)
+	// collectiontype.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	collectiontype.IDValidator = collectiontypeDescID.Validators[0].(func(string) error)
 	contenttypeMixin := schema.ContentType{}.Mixin()
 	contenttypeMixinFields0 := contenttypeMixin[0].Fields()
 	_ = contenttypeMixinFields0
@@ -204,11 +224,11 @@ func init() {
 	// contenttype.DefaultCreatedAt holds the default value on creation for the created_at field.
 	contenttype.DefaultCreatedAt = contenttypeDescCreatedAt.Default.(func() time.Time)
 	// contenttypeDescKey is the schema descriptor for key field.
-	contenttypeDescKey := contenttypeFields[1].Descriptor()
+	contenttypeDescKey := contenttypeFields[0].Descriptor()
 	// contenttype.KeyValidator is a validator for the "key" field. It is called by the builders before save.
 	contenttype.KeyValidator = contenttypeDescKey.Validators[0].(func(string) error)
 	// contenttypeDescName is the schema descriptor for name field.
-	contenttypeDescName := contenttypeFields[2].Descriptor()
+	contenttypeDescName := contenttypeFields[1].Descriptor()
 	// contenttype.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	contenttype.NameValidator = func() func(string) error {
 		validators := contenttypeDescName.Validators
@@ -225,26 +245,22 @@ func init() {
 			return nil
 		}
 	}()
-	// contenttypeDescFieldKeys is the schema descriptor for field_keys field.
-	contenttypeDescFieldKeys := contenttypeFields[3].Descriptor()
-	// contenttype.DefaultFieldKeys holds the default value on creation for the field_keys field.
-	contenttype.DefaultFieldKeys = contenttypeDescFieldKeys.Default.([]string)
+	// contenttypeDescFieldIds is the schema descriptor for field_ids field.
+	contenttypeDescFieldIds := contenttypeFields[2].Descriptor()
+	// contenttype.DefaultFieldIds holds the default value on creation for the field_ids field.
+	contenttype.DefaultFieldIds = contenttypeDescFieldIds.Default.([]string)
 	// contenttypeDescRules is the schema descriptor for rules field.
-	contenttypeDescRules := contenttypeFields[4].Descriptor()
+	contenttypeDescRules := contenttypeFields[3].Descriptor()
 	// contenttype.DefaultRules holds the default value on creation for the rules field.
 	contenttype.DefaultRules = contenttypeDescRules.Default.([]model.ValidationRule)
-	// contenttypeDescIsDefault is the schema descriptor for is_default field.
-	contenttypeDescIsDefault := contenttypeFields[5].Descriptor()
-	// contenttype.DefaultIsDefault holds the default value on creation for the is_default field.
-	contenttype.DefaultIsDefault = contenttypeDescIsDefault.Default.(bool)
 	// contenttypeDescVersion is the schema descriptor for version field.
-	contenttypeDescVersion := contenttypeFields[6].Descriptor()
+	contenttypeDescVersion := contenttypeFields[4].Descriptor()
 	// contenttype.DefaultVersion holds the default value on creation for the version field.
 	contenttype.DefaultVersion = contenttypeDescVersion.Default.(int)
 	// contenttype.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	contenttype.VersionValidator = contenttypeDescVersion.Validators[0].(func(int) error)
 	// contenttypeDescUpdatedAt is the schema descriptor for updated_at field.
-	contenttypeDescUpdatedAt := contenttypeFields[7].Descriptor()
+	contenttypeDescUpdatedAt := contenttypeFields[5].Descriptor()
 	// contenttype.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	contenttype.DefaultUpdatedAt = contenttypeDescUpdatedAt.Default.(func() time.Time)
 	// contenttype.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -286,26 +302,8 @@ func init() {
 	fielddefinitionDescCreatedAt := fielddefinitionMixinFields0[1].Descriptor()
 	// fielddefinition.DefaultCreatedAt holds the default value on creation for the created_at field.
 	fielddefinition.DefaultCreatedAt = fielddefinitionDescCreatedAt.Default.(func() time.Time)
-	// fielddefinitionDescContainerID is the schema descriptor for container_id field.
-	fielddefinitionDescContainerID := fielddefinitionFields[0].Descriptor()
-	// fielddefinition.ContainerIDValidator is a validator for the "container_id" field. It is called by the builders before save.
-	fielddefinition.ContainerIDValidator = func() func(string) error {
-		validators := fielddefinitionDescContainerID.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(container string) error {
-			for _, fn := range fns {
-				if err := fn(container); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
 	// fielddefinitionDescKey is the schema descriptor for key field.
-	fielddefinitionDescKey := fielddefinitionFields[1].Descriptor()
+	fielddefinitionDescKey := fielddefinitionFields[0].Descriptor()
 	// fielddefinition.KeyValidator is a validator for the "key" field. It is called by the builders before save.
 	fielddefinition.KeyValidator = func() func(string) error {
 		validators := fielddefinitionDescKey.Validators
@@ -323,7 +321,7 @@ func init() {
 		}
 	}()
 	// fielddefinitionDescLabel is the schema descriptor for label field.
-	fielddefinitionDescLabel := fielddefinitionFields[2].Descriptor()
+	fielddefinitionDescLabel := fielddefinitionFields[1].Descriptor()
 	// fielddefinition.LabelValidator is a validator for the "label" field. It is called by the builders before save.
 	fielddefinition.LabelValidator = func() func(string) error {
 		validators := fielddefinitionDescLabel.Validators
@@ -341,13 +339,19 @@ func init() {
 		}
 	}()
 	// fielddefinitionDescOptions is the schema descriptor for options field.
-	fielddefinitionDescOptions := fielddefinitionFields[4].Descriptor()
+	fielddefinitionDescOptions := fielddefinitionFields[3].Descriptor()
 	// fielddefinition.DefaultOptions holds the default value on creation for the options field.
 	fielddefinition.DefaultOptions = fielddefinitionDescOptions.Default.(model.FieldOptions)
 	// fielddefinitionDescIndexed is the schema descriptor for indexed field.
-	fielddefinitionDescIndexed := fielddefinitionFields[5].Descriptor()
+	fielddefinitionDescIndexed := fielddefinitionFields[4].Descriptor()
 	// fielddefinition.DefaultIndexed holds the default value on creation for the indexed field.
 	fielddefinition.DefaultIndexed = fielddefinitionDescIndexed.Default.(bool)
+	// fielddefinitionDescVersion is the schema descriptor for version field.
+	fielddefinitionDescVersion := fielddefinitionFields[5].Descriptor()
+	// fielddefinition.DefaultVersion holds the default value on creation for the version field.
+	fielddefinition.DefaultVersion = fielddefinitionDescVersion.Default.(int)
+	// fielddefinition.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	fielddefinition.VersionValidator = fielddefinitionDescVersion.Validators[0].(func(int) error)
 	// fielddefinitionDescScale is the schema descriptor for scale field.
 	fielddefinitionDescScale := fielddefinitionFields[7].Descriptor()
 	// fielddefinition.DefaultScale holds the default value on creation for the scale field.

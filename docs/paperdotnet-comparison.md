@@ -18,8 +18,8 @@ The following core definitions are implemented in [Lists entities](https://githu
 
 | Entity | Purpose and principal fields | PaperGo equivalent or gap |
 | --- | --- | --- |
-| ContentType | Reusable schema: Id, Name, Description, IsBuiltIn, stable Key, ExtensionId, ordered Fields. | FieldDefinition and SchemaRevision are currently collection-specific; no reusable content-type catalog. |
-| ListDefinition | List/library: WorkspaceId, Name, Description, Kind, AllowFolders, ordered ContentTypeIds, Versioning, TemplateKey, HasUniquePermissions, SystemKey, IndexedFields, IndexPending, MaxVersions, DeletedAt/By. | Resource with kind list/library. PaperGo adds publishing_enabled, webdav_enabled and schema_head_id; it has no content-type choices, recycle state, or optional history pruning. |
+| ContentType | Reusable schema: Id, Name, Description, IsBuiltIn, stable Key, ExtensionId, ordered Fields. | Organization ContentType and FieldDefinition catalogs, live collection attachments and immutable effective SchemaRevision snapshots. |
+| ListDefinition | List/library: WorkspaceId, Name, Description, Kind, AllowFolders, ordered ContentTypeIds, Versioning, TemplateKey, HasUniquePermissions, SystemKey, IndexedFields, IndexPending, MaxVersions, DeletedAt/By. | Resource with kind list/library. PaperGo adds publishing_enabled, webdav_enabled and schema_head_id; content-type IDs attach live catalog definitions; recycle state and optional history pruning are unavailable. |
 | ListItem | Row or folder: ListId, ContentTypeId, ParentId, IsFolder, Title, Fields JSON, HasUniquePermissions, ScopeId, promoted Text/Number/Date columns, DeletedAt/By. | Resource with kind item/folder, plus ItemRevision and ItemSurface. One container owns each item in both models. Deletion leaves a final `deleted_at` tombstone (the audit trail records who deleted it); there is no restore. |
 | ItemVersion | Historical snapshot: ItemId, ListId, Number, ContentTypeId, Title, Fields JSON, ChangedFields, CreatedAt/By. | ItemRevision additionally pins an immutable SchemaRevision and optional Blob. |
 | IndexedField | Embedded indexing plan: Field, Kind, Column, ValueField, Ready. | FieldDefinition.indexed plus typed FieldValue projections; no fixed column-slot allocation. |
@@ -76,7 +76,7 @@ The order below prioritizes a reusable foundation rather than feature parity.
 
 Introduce a field-type registry with definition validation, value normalization, and index encoding. Start with descriptions, defaults, length/range limits, date-only values, email/URL validation, and multi-choice/reference support as needed.
 
-Add reusable schema templates with stable keys before adding unrestricted shared mutable content types. Template adoption should create a new collection SchemaRevision. If we later allow multiple content types within one collection, each item revision should pin its content-type identity/version and fully resolved effective schema. Editing a shared template must not silently reinterpret existing revisions or published content.
+PaperGo provides workspace templates with explicit adoption and organization content types with live attachments. Shared definition edits validate all attached collection heads, then advance their effective schema snapshots atomically. Item revisions pin content-type identity and the resolved immutable schema; published content retains its saved interpretation.
 
 PaperDotNet supplies the [field registry contracts](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists.Contracts/Fields.cs) and [template provisioning pattern](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Templates/ListTemplates.cs). Its ItemVersion stores ContentTypeId, but the inspected list model does not provide the immutable schema pairing already present in PaperGo.
 

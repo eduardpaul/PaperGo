@@ -191,7 +191,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 					return e
 				}
 			}
-			old, e := t.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
+			old, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
 			if ent.IsNotFound(e) {
 				_, e = t.createField(ctx, subject, c, CreateField{ContentTypeID: typ.ID, Key: d.Key, Label: d.Label, Type: string(d.Type), Required: d.Required, Choices: d.Choices, Indexed: d.Indexed, Scale: d.Scale, Options: d.Options})
 				if e != nil {
@@ -208,7 +208,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			if newlyRequired(old, d) {
 				required = append(required, d.Key)
 			}
-			updated, e := t.Client.FieldDefinition.UpdateOne(old).SetLabel(d.Label).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetOptions(d.Options).Save(ctx)
+			updated, e := t.Client.FieldDefinition.UpdateOne(old).AddVersion(1).SetLabel(d.Label).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetOptions(d.Options).Save(ctx)
 			if e != nil {
 				return e
 			}
@@ -223,10 +223,14 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e != nil {
 			return e
 		}
-		keys := slices.Clone(typ.FieldKeys)
+		ids := slices.Clone(typ.FieldIds)
 		for _, d := range defs {
-			if !slices.Contains(keys, d.Key) {
-				keys = append(keys, d.Key)
+			live, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
+			if e != nil {
+				return e
+			}
+			if !slices.Contains(ids, live.ID) {
+				ids = append(ids, live.ID)
 			}
 		}
 		rules := slices.Clone(typ.Rules)
@@ -238,17 +242,44 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 				rules[i] = rule
 			}
 		}
-		candidate := ContentTypeInput{Key: typ.Key, Name: typ.Name, FieldKeys: keys, Rules: rules, IsDefault: typ.IsDefault}
-		if e = t.validateContentType(ctx, c.ID, &candidate); e != nil {
+		candidate := ContentTypeInput{Key: typ.Key, Name: typ.Name, FieldIds: ids, Rules: rules}
+		if e = t.validateContentType(ctx, &candidate); e != nil {
 			return e
 		}
-		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, keys, rules); e != nil {
+		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, fieldKeys(defs), rules); e != nil {
 			return e
 		}
-		if _, e = t.Client.ContentType.Update().Where(contenttype.IDEQ(typ.ID)).SetFieldKeys(keys).SetRules(candidate.Rules).AddVersion(1).Save(ctx); e != nil {
+		if _, e = t.Client.ContentType.Update().Where(contenttype.IDEQ(typ.ID)).SetFieldIds(ids).SetRules(candidate.Rules).AddVersion(1).Save(ctx); e != nil {
 			return e
 		}
-		if e = t.recordSchema(ctx, subject, c); e != nil {
+		affected, e := t.attachedCollections(ctx, []string{typ.ID})
+		if e != nil {
+			return e
+		}
+		seen := map[string]bool{}
+		for _, a := range affected {
+			seen[a.ID] = true
+		}
+		for _, d := range defs {
+			live, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
+			if e != nil {
+				return e
+			}
+			if e = t.bumpFieldTypes(ctx, live.ID); e != nil {
+				return e
+			}
+			all, e := t.fieldCollections(ctx, live.ID)
+			if e != nil {
+				return e
+			}
+			for _, a := range all {
+				if !seen[a.ID] {
+					seen[a.ID] = true
+					affected = append(affected, a)
+				}
+			}
+		}
+		if e = t.refreshCollections(ctx, subject, affected); e != nil {
 			return e
 		}
 		for _, d := range reindex {

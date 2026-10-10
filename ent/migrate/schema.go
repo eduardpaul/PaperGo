@@ -111,50 +111,75 @@ var (
 			},
 		},
 	}
+	// CollectionTypesColumns holds the columns for the "collection_types" table.
+	CollectionTypesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "is_default", Type: field.TypeBool, Default: false},
+		{Name: "container_id", Type: field.TypeString, Size: 36},
+		{Name: "content_type_id", Type: field.TypeString, Size: 36},
+	}
+	// CollectionTypesTable holds the schema information for the "collection_types" table.
+	CollectionTypesTable = &schema.Table{
+		Name:       "collection_types",
+		Columns:    CollectionTypesColumns,
+		PrimaryKey: []*schema.Column{CollectionTypesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "collection_types_resources_container",
+				Columns:    []*schema.Column{CollectionTypesColumns[3]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "collection_types_content_types_content_type",
+				Columns:    []*schema.Column{CollectionTypesColumns[4]},
+				RefColumns: []*schema.Column{ContentTypesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "collectiontype_container_id_content_type_id",
+				Unique:  true,
+				Columns: []*schema.Column{CollectionTypesColumns[3], CollectionTypesColumns[4]},
+			},
+			{
+				Name:    "collectiontype_content_type_id_container_id",
+				Unique:  false,
+				Columns: []*schema.Column{CollectionTypesColumns[4], CollectionTypesColumns[3]},
+			},
+			{
+				Name:    "collectiontype_container_id",
+				Unique:  true,
+				Columns: []*schema.Column{CollectionTypesColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "is_default=1",
+				},
+			},
+		},
+	}
 	// ContentTypesColumns holds the columns for the "content_types" table.
 	ContentTypesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "key", Type: field.TypeString, Size: 64},
 		{Name: "name", Type: field.TypeString, Size: 255},
-		{Name: "field_keys", Type: field.TypeJSON},
+		{Name: "field_ids", Type: field.TypeJSON},
 		{Name: "rules", Type: field.TypeJSON},
-		{Name: "is_default", Type: field.TypeBool, Default: false},
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "container_id", Type: field.TypeString, Size: 36},
 	}
 	// ContentTypesTable holds the schema information for the "content_types" table.
 	ContentTypesTable = &schema.Table{
 		Name:       "content_types",
 		Columns:    ContentTypesColumns,
 		PrimaryKey: []*schema.Column{ContentTypesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "content_types_resources_container",
-				Columns:    []*schema.Column{ContentTypesColumns[9]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "contenttype_container_id_key",
-				Unique:  true,
-				Columns: []*schema.Column{ContentTypesColumns[9], ContentTypesColumns[2]},
-			},
-			{
-				Name:    "contenttype_container_id_id",
-				Unique:  true,
-				Columns: []*schema.Column{ContentTypesColumns[9], ContentTypesColumns[0]},
-			},
-			{
-				Name:    "contenttype_container_id",
-				Unique:  true,
-				Columns: []*schema.Column{ContentTypesColumns[9]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "is_default=1",
-				},
+				Name:    "contenttype_key",
+				Unique:  false,
+				Columns: []*schema.Column{ContentTypesColumns[2]},
 			},
 		},
 	}
@@ -205,30 +230,22 @@ var (
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"text", "number", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"}},
 		{Name: "options", Type: field.TypeJSON},
 		{Name: "indexed", Type: field.TypeBool, Default: false},
+		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "index_status", Type: field.TypeEnum, Enums: []string{"ready", "building", "failed"}, Default: "ready"},
 		{Name: "scale", Type: field.TypeInt, Default: 0},
 		{Name: "required", Type: field.TypeBool, Default: false},
 		{Name: "choices", Type: field.TypeJSON},
-		{Name: "container_id", Type: field.TypeString, Size: 36},
 	}
 	// FieldDefinitionsTable holds the schema information for the "field_definitions" table.
 	FieldDefinitionsTable = &schema.Table{
 		Name:       "field_definitions",
 		Columns:    FieldDefinitionsColumns,
 		PrimaryKey: []*schema.Column{FieldDefinitionsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "field_definitions_resources_definitions",
-				Columns:    []*schema.Column{FieldDefinitionsColumns[11]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "fielddefinition_container_id_key",
-				Unique:  true,
-				Columns: []*schema.Column{FieldDefinitionsColumns[11], FieldDefinitionsColumns[2]},
+				Name:    "fielddefinition_key",
+				Unique:  false,
+				Columns: []*schema.Column{FieldDefinitionsColumns[2]},
 			},
 		},
 	}
@@ -1422,6 +1439,7 @@ var (
 		AuditEventsTable,
 		BlobsTable,
 		BusinessKeysTable,
+		CollectionTypesTable,
 		ContentTypesTable,
 		DomainEventsTable,
 		FieldDefinitionsTable,
@@ -1459,8 +1477,8 @@ func init() {
 	BlobsTable.ForeignKeys[0].RefTable = ResourcesTable
 	BusinessKeysTable.ForeignKeys[0].RefTable = ResourcesTable
 	BusinessKeysTable.ForeignKeys[1].RefTable = ResourcesTable
-	ContentTypesTable.ForeignKeys[0].RefTable = ResourcesTable
-	FieldDefinitionsTable.ForeignKeys[0].RefTable = ResourcesTable
+	CollectionTypesTable.ForeignKeys[0].RefTable = ResourcesTable
+	CollectionTypesTable.ForeignKeys[1].RefTable = ContentTypesTable
 	FieldValuesTable.ForeignKeys[0].RefTable = ItemSurfacesTable
 	GrantsTable.ForeignKeys[0].RefTable = ResourcesTable
 	IdentityAssignmentsTable.ForeignKeys[0].RefTable = IdentityRolesTable

@@ -44,15 +44,15 @@ func (_u *ContentTypeUpdate) SetNillableName(v *string) *ContentTypeUpdate {
 	return _u
 }
 
-// SetFieldKeys sets the "field_keys" field.
-func (_u *ContentTypeUpdate) SetFieldKeys(v []string) *ContentTypeUpdate {
-	_u.mutation.SetFieldKeys(v)
+// SetFieldIds sets the "field_ids" field.
+func (_u *ContentTypeUpdate) SetFieldIds(v []string) *ContentTypeUpdate {
+	_u.mutation.SetFieldIds(v)
 	return _u
 }
 
-// AppendFieldKeys appends value to the "field_keys" field.
-func (_u *ContentTypeUpdate) AppendFieldKeys(v []string) *ContentTypeUpdate {
-	_u.mutation.AppendFieldKeys(v)
+// AppendFieldIds appends value to the "field_ids" field.
+func (_u *ContentTypeUpdate) AppendFieldIds(v []string) *ContentTypeUpdate {
+	_u.mutation.AppendFieldIds(v)
 	return _u
 }
 
@@ -65,20 +65,6 @@ func (_u *ContentTypeUpdate) SetRules(v []model.ValidationRule) *ContentTypeUpda
 // AppendRules appends value to the "rules" field.
 func (_u *ContentTypeUpdate) AppendRules(v []model.ValidationRule) *ContentTypeUpdate {
 	_u.mutation.AppendRules(v)
-	return _u
-}
-
-// SetIsDefault sets the "is_default" field.
-func (_u *ContentTypeUpdate) SetIsDefault(v bool) *ContentTypeUpdate {
-	_u.mutation.SetIsDefault(v)
-	return _u
-}
-
-// SetNillableIsDefault sets the "is_default" field if the given value is not nil.
-func (_u *ContentTypeUpdate) SetNillableIsDefault(v *bool) *ContentTypeUpdate {
-	if v != nil {
-		_u.SetIsDefault(*v)
-	}
 	return _u
 }
 
@@ -162,9 +148,6 @@ func (_u *ContentTypeUpdate) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ContentType.version": %w`, err)}
 		}
 	}
-	if _u.mutation.ContainerCleared() && len(_u.mutation.ContainerIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "ContentType.container"`)
-	}
 	return nil
 }
 
@@ -183,12 +166,12 @@ func (_u *ContentTypeUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(contenttype.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.FieldKeys(); ok {
-		_spec.SetField(contenttype.FieldFieldKeys, field.TypeJSON, value)
+	if value, ok := _u.mutation.FieldIds(); ok {
+		_spec.SetField(contenttype.FieldFieldIds, field.TypeJSON, value)
 	}
-	if value, ok := _u.mutation.AppendedFieldKeys(); ok {
+	if value, ok := _u.mutation.AppendedFieldIds(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, contenttype.FieldFieldKeys, value)
+			sqljson.Append(u, contenttype.FieldFieldIds, value)
 		})
 	}
 	if value, ok := _u.mutation.Rules(); ok {
@@ -198,9 +181,6 @@ func (_u *ContentTypeUpdate) sqlSave(ctx context.Context) (_node int, err error)
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, contenttype.FieldRules, value)
 		})
-	}
-	if value, ok := _u.mutation.IsDefault(); ok {
-		_spec.SetField(contenttype.FieldIsDefault, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(contenttype.FieldVersion, field.TypeInt, value)
@@ -245,15 +225,15 @@ func (_u *ContentTypeUpdateOne) SetNillableName(v *string) *ContentTypeUpdateOne
 	return _u
 }
 
-// SetFieldKeys sets the "field_keys" field.
-func (_u *ContentTypeUpdateOne) SetFieldKeys(v []string) *ContentTypeUpdateOne {
-	_u.mutation.SetFieldKeys(v)
+// SetFieldIds sets the "field_ids" field.
+func (_u *ContentTypeUpdateOne) SetFieldIds(v []string) *ContentTypeUpdateOne {
+	_u.mutation.SetFieldIds(v)
 	return _u
 }
 
-// AppendFieldKeys appends value to the "field_keys" field.
-func (_u *ContentTypeUpdateOne) AppendFieldKeys(v []string) *ContentTypeUpdateOne {
-	_u.mutation.AppendFieldKeys(v)
+// AppendFieldIds appends value to the "field_ids" field.
+func (_u *ContentTypeUpdateOne) AppendFieldIds(v []string) *ContentTypeUpdateOne {
+	_u.mutation.AppendFieldIds(v)
 	return _u
 }
 
@@ -266,20 +246,6 @@ func (_u *ContentTypeUpdateOne) SetRules(v []model.ValidationRule) *ContentTypeU
 // AppendRules appends value to the "rules" field.
 func (_u *ContentTypeUpdateOne) AppendRules(v []model.ValidationRule) *ContentTypeUpdateOne {
 	_u.mutation.AppendRules(v)
-	return _u
-}
-
-// SetIsDefault sets the "is_default" field.
-func (_u *ContentTypeUpdateOne) SetIsDefault(v bool) *ContentTypeUpdateOne {
-	_u.mutation.SetIsDefault(v)
-	return _u
-}
-
-// SetNillableIsDefault sets the "is_default" field if the given value is not nil.
-func (_u *ContentTypeUpdateOne) SetNillableIsDefault(v *bool) *ContentTypeUpdateOne {
-	if v != nil {
-		_u.SetIsDefault(*v)
-	}
 	return _u
 }
 
@@ -376,9 +342,6 @@ func (_u *ContentTypeUpdateOne) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ContentType.version": %w`, err)}
 		}
 	}
-	if _u.mutation.ContainerCleared() && len(_u.mutation.ContainerIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "ContentType.container"`)
-	}
 	return nil
 }
 
@@ -414,12 +377,12 @@ func (_u *ContentTypeUpdateOne) sqlSave(ctx context.Context) (_node *ContentType
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(contenttype.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.FieldKeys(); ok {
-		_spec.SetField(contenttype.FieldFieldKeys, field.TypeJSON, value)
+	if value, ok := _u.mutation.FieldIds(); ok {
+		_spec.SetField(contenttype.FieldFieldIds, field.TypeJSON, value)
 	}
-	if value, ok := _u.mutation.AppendedFieldKeys(); ok {
+	if value, ok := _u.mutation.AppendedFieldIds(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, contenttype.FieldFieldKeys, value)
+			sqljson.Append(u, contenttype.FieldFieldIds, value)
 		})
 	}
 	if value, ok := _u.mutation.Rules(); ok {
@@ -429,9 +392,6 @@ func (_u *ContentTypeUpdateOne) sqlSave(ctx context.Context) (_node *ContentType
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, contenttype.FieldRules, value)
 		})
-	}
-	if value, ok := _u.mutation.IsDefault(); ok {
-		_spec.SetField(contenttype.FieldIsDefault, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(contenttype.FieldVersion, field.TypeInt, value)

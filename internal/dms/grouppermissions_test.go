@@ -126,7 +126,7 @@ func TestModuleRolesRestrictOwnersAndResolveGroupAssignments(t *testing.T) {
 	if _, err = s.Create(ctx, "bob", "", CreateResource{Kind: "workspace", Name: "Blocked"}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("workspace creation scope bypassed", err)
 	}
-	if _, err = s.CreateContentType(ctx, "bob", list.ID, list.Version, ContentTypeInput{Key: "blocked", Name: "Blocked"}); !errors.Is(err, ErrForbidden) {
+	if _, err = s.CreateContentType(ctx, "bob", ContentTypeInput{Key: "blocked", Name: "Blocked"}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("owner bypassed contentType.manage", err)
 	}
 	if _, err = s.CreateTermGroup(ctx, "bob", TermGroupInput{Name: "Blocked"}); !errors.Is(err, ErrForbidden) {

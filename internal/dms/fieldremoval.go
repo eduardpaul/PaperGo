@@ -2,12 +2,10 @@ package dms
 
 import (
 	"context"
-	"encoding/json"
 	"papergo/ent"
 	"papergo/ent/businesskey"
-	"papergo/ent/contenttype"
+	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
-	"papergo/ent/listview"
 	"slices"
 )
 
@@ -45,59 +43,80 @@ func (s *Service) DeleteField(ctx context.Context, subject, collection, id strin
 		if err != nil {
 			return err
 		}
-		if d.ContainerID != c.ID {
+		if found, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.IDEQ(d.ID)).Exist(ctx); e != nil {
+			return e
+		} else if !found {
 			return ErrNotFound
 		}
-		types, err := t.Client.ContentType.Query().Where(contenttype.ContainerIDEQ(c.ID)).All(ctx)
-		if err != nil {
-			return err
+		return t.deleteCatalogField(ctx, subject, d)
+	})
+}
+func (s *Service) DeleteCatalogField(ctx context.Context, subject, id string, version int) error {
+	return s.write(ctx, func(t *Service) error {
+		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
+			return e
 		}
-		for _, typ := range types {
-			for _, rule := range typ.Rules {
-				if rule.Field == d.Key || rule.OtherField == d.Key || rule.WhenField == d.Key {
-					return invalid("remove dependent content-type rules before deleting this field")
-				}
+		d, e := t.Client.FieldDefinition.Get(ctx, id)
+		if ent.IsNotFound(e) {
+			return ErrNotFound
+		}
+		if e != nil {
+			return e
+		}
+		if d.Version != version {
+			return ErrConflict
+		}
+		return t.deleteCatalogField(ctx, subject, d)
+	})
+}
+func (s *Service) deleteCatalogField(ctx context.Context, subject string, d *ent.FieldDefinition) error {
+	types, err := s.Client.ContentType.Query().Where(fieldTypePredicate(d.ID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, typ := range types {
+		for _, rule := range typ.Rules {
+			if rule.Field == d.Key || rule.OtherField == d.Key || rule.WhenField == d.Key {
+				return invalid("remove dependent content-type rules before deleting this field")
 			}
 		}
-		for after := ""; ; {
-			views, err := t.Client.ListView.Query().Where(listview.ContainerIDEQ(c.ID), listview.IDGT(after)).Order(ent.Asc(listview.FieldID)).Limit(surfaceBatch).All(ctx)
-			if err != nil {
+	}
+	collections, err := s.fieldCollections(ctx, d.ID)
+	if err != nil {
+		return err
+	}
+	for _, c := range collections {
+		defs, e := s.collectionFields(ctx, c.ID)
+		if e != nil {
+			return e
+		}
+		known := definitionMap(defs)
+		delete(known, d.Key)
+		if e = s.validateSchemaViews(ctx, c.ID, known); e != nil {
+			return e
+		}
+	}
+	for _, typ := range types {
+		if slices.Contains(typ.FieldIds, d.ID) {
+			ids := slices.DeleteFunc(slices.Clone(typ.FieldIds), func(id string) bool { return id == d.ID })
+			if err := s.Client.ContentType.UpdateOne(typ).SetFieldIds(ids).AddVersion(1).Exec(ctx); err != nil {
 				return err
 			}
-			for _, view := range views {
-				var query QuerySpec
-				if err := json.Unmarshal(view.Query, &query); err != nil {
-					return err
-				}
-				if slices.Contains(view.Columns, d.Key) || query.Sort.Field == d.Key || query.GroupBy == d.Key || filterUsesField(query.Filter, d.Key) {
-					return invalid("remove dependent saved-view references before deleting this field")
-				}
-			}
-			if len(views) < surfaceBatch {
-				break
-			}
-			after = views[len(views)-1].ID
 		}
-		for _, typ := range types {
-			if slices.Contains(typ.FieldKeys, d.Key) {
-				keys := slices.DeleteFunc(slices.Clone(typ.FieldKeys), func(key string) bool { return key == d.Key })
-				if err := t.Client.ContentType.UpdateOne(typ).SetFieldKeys(keys).AddVersion(1).Exec(ctx); err != nil {
-					return err
-				}
-			}
+	}
+	if err := s.Client.FieldDefinition.DeleteOne(d).Exec(ctx); err != nil {
+		return err
+	}
+	for _, c := range collections {
+		if _, e := s.Client.FieldValue.Delete().Where(fieldvalue.ContainerIDEQ(c.ID), fieldvalue.FieldKeyEQ(d.Key)).Exec(ctx); e != nil {
+			return e
 		}
-		if err := t.Client.FieldDefinition.DeleteOne(d).Exec(ctx); err != nil {
-			return err
+		if _, e := s.Client.BusinessKey.Delete().Where(businesskey.ContainerIDEQ(c.ID), businesskey.FieldKeyEQ(d.Key)).Exec(ctx); e != nil {
+			return e
 		}
-		if _, err := t.Client.FieldValue.Delete().Where(fieldvalue.ContainerIDEQ(c.ID), fieldvalue.FieldKeyEQ(d.Key)).Exec(ctx); err != nil {
-			return err
-		}
-		if _, err := t.Client.BusinessKey.Delete().Where(businesskey.ContainerIDEQ(c.ID), businesskey.FieldKeyEQ(d.Key)).Exec(ctx); err != nil {
-			return err
-		}
-		if err := t.recordSchema(ctx, subject, c); err != nil {
-			return err
-		}
-		return t.audit(ctx, subject, "field.delete", c, map[string]any{"field_id": id, "key": d.Key})
-	})
+	}
+	if err = s.refreshCollections(ctx, subject, collections); err != nil {
+		return err
+	}
+	return s.auditCatalog(ctx, subject, "field.delete", map[string]any{"field_id": d.ID, "key": d.Key})
 }

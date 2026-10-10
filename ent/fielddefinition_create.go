@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"papergo/ent/fielddefinition"
-	"papergo/ent/resource"
 	"papergo/internal/model"
 	"time"
 
@@ -33,12 +32,6 @@ func (_c *FieldDefinitionCreate) SetNillableCreatedAt(v *time.Time) *FieldDefini
 	if v != nil {
 		_c.SetCreatedAt(*v)
 	}
-	return _c
-}
-
-// SetContainerID sets the "container_id" field.
-func (_c *FieldDefinitionCreate) SetContainerID(v string) *FieldDefinitionCreate {
-	_c.mutation.SetContainerID(v)
 	return _c
 }
 
@@ -84,6 +77,20 @@ func (_c *FieldDefinitionCreate) SetIndexed(v bool) *FieldDefinitionCreate {
 func (_c *FieldDefinitionCreate) SetNillableIndexed(v *bool) *FieldDefinitionCreate {
 	if v != nil {
 		_c.SetIndexed(*v)
+	}
+	return _c
+}
+
+// SetVersion sets the "version" field.
+func (_c *FieldDefinitionCreate) SetVersion(v int) *FieldDefinitionCreate {
+	_c.mutation.SetVersion(v)
+	return _c
+}
+
+// SetNillableVersion sets the "version" field if the given value is not nil.
+func (_c *FieldDefinitionCreate) SetNillableVersion(v *int) *FieldDefinitionCreate {
+	if v != nil {
+		_c.SetVersion(*v)
 	}
 	return _c
 }
@@ -150,11 +157,6 @@ func (_c *FieldDefinitionCreate) SetNillableID(v *string) *FieldDefinitionCreate
 	return _c
 }
 
-// SetContainer sets the "container" edge to the Resource entity.
-func (_c *FieldDefinitionCreate) SetContainer(v *Resource) *FieldDefinitionCreate {
-	return _c.SetContainerID(v.ID)
-}
-
 // Mutation returns the FieldDefinitionMutation object of the builder.
 func (_c *FieldDefinitionCreate) Mutation() *FieldDefinitionMutation {
 	return _c.mutation
@@ -202,6 +204,10 @@ func (_c *FieldDefinitionCreate) defaults() {
 		v := fielddefinition.DefaultIndexed
 		_c.mutation.SetIndexed(v)
 	}
+	if _, ok := _c.mutation.Version(); !ok {
+		v := fielddefinition.DefaultVersion
+		_c.mutation.SetVersion(v)
+	}
 	if _, ok := _c.mutation.IndexStatus(); !ok {
 		v := fielddefinition.DefaultIndexStatus
 		_c.mutation.SetIndexStatus(v)
@@ -228,14 +234,6 @@ func (_c *FieldDefinitionCreate) defaults() {
 func (_c *FieldDefinitionCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "FieldDefinition.created_at"`)}
-	}
-	if _, ok := _c.mutation.ContainerID(); !ok {
-		return &ValidationError{Name: "container_id", err: errors.New(`ent: missing required field "FieldDefinition.container_id"`)}
-	}
-	if v, ok := _c.mutation.ContainerID(); ok {
-		if err := fielddefinition.ContainerIDValidator(v); err != nil {
-			return &ValidationError{Name: "container_id", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.container_id": %w`, err)}
-		}
 	}
 	if _, ok := _c.mutation.Key(); !ok {
 		return &ValidationError{Name: "key", err: errors.New(`ent: missing required field "FieldDefinition.key"`)}
@@ -267,6 +265,14 @@ func (_c *FieldDefinitionCreate) check() error {
 	if _, ok := _c.mutation.Indexed(); !ok {
 		return &ValidationError{Name: "indexed", err: errors.New(`ent: missing required field "FieldDefinition.indexed"`)}
 	}
+	if _, ok := _c.mutation.Version(); !ok {
+		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "FieldDefinition.version"`)}
+	}
+	if v, ok := _c.mutation.Version(); ok {
+		if err := fielddefinition.VersionValidator(v); err != nil {
+			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.version": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.IndexStatus(); !ok {
 		return &ValidationError{Name: "index_status", err: errors.New(`ent: missing required field "FieldDefinition.index_status"`)}
 	}
@@ -293,9 +299,6 @@ func (_c *FieldDefinitionCreate) check() error {
 		if err := fielddefinition.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.id": %w`, err)}
 		}
-	}
-	if len(_c.mutation.ContainerIDs()) == 0 {
-		return &ValidationError{Name: "container", err: errors.New(`ent: missing required edge "FieldDefinition.container"`)}
 	}
 	return nil
 }
@@ -356,6 +359,10 @@ func (_c *FieldDefinitionCreate) createSpec() (*FieldDefinition, *sqlgraph.Creat
 		_spec.SetField(fielddefinition.FieldIndexed, field.TypeBool, value)
 		_node.Indexed = value
 	}
+	if value, ok := _c.mutation.Version(); ok {
+		_spec.SetField(fielddefinition.FieldVersion, field.TypeInt, value)
+		_node.Version = value
+	}
 	if value, ok := _c.mutation.IndexStatus(); ok {
 		_spec.SetField(fielddefinition.FieldIndexStatus, field.TypeEnum, value)
 		_node.IndexStatus = value
@@ -371,23 +378,6 @@ func (_c *FieldDefinitionCreate) createSpec() (*FieldDefinition, *sqlgraph.Creat
 	if value, ok := _c.mutation.Choices(); ok {
 		_spec.SetField(fielddefinition.FieldChoices, field.TypeJSON, value)
 		_node.Choices = value
-	}
-	if nodes := _c.mutation.ContainerIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   fielddefinition.ContainerTable,
-			Columns: []string{fielddefinition.ContainerColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.ContainerID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

@@ -315,7 +315,7 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 	if c.Kind != "list" && c.Kind != "library" {
 		return compiledQuery{}, invalid("queries require a collection")
 	}
-	defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID)).All(ctx)
+	defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID)).All(ctx)
 	if e != nil {
 		return compiledQuery{}, e
 	}
@@ -348,7 +348,7 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		if e != nil {
 			return compiledQuery{}, e
 		}
-		compiler.defs = definitionMap(selectDefinitions(defs, typ.FieldKeys))
+		compiler.defs = definitionMap(selectTypeDefinitions(defs, typ))
 	}
 	rankField := in.Query.Sort.Field
 	if rankField == "" {

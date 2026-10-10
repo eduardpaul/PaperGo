@@ -252,7 +252,7 @@ func TestSmartFolderSkipsIncompatibleCollectionsAndSelectsTypesTemplates(t *test
 	s, w, a := fixture(t)
 	b := create(t, s, w.ID, "list", "Papers", nil)
 	fieldOK(t, s, a.ID, CreateField{Key: "status", Label: "Status", Type: "text", Indexed: true})
-	typ := typeOK(t, s, a.ID, ContentTypeInput{Key: "invoice", Name: "Invoice", FieldKeys: []string{"status"}})
+	typ := typeOK(t, s, a.ID, ContentTypeInput{Key: "invoice", Name: "Invoice", FieldIds: fixtureFieldIds(t, s, a.ID, []string{"status"})})
 	item, err := s.Create(testContext, "alice", a.ID, CreateResource{Kind: "item", Name: "Invoice", ContentTypeID: typ.ID, Values: map[string]any{"status": "open"}})
 	if err != nil {
 		t.Fatal(err)

@@ -44,6 +44,18 @@ func (f BusinessKeyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BusinessKeyMutation", m)
 }
 
+// The CollectionTypeFunc type is an adapter to allow the use of ordinary
+// function as CollectionType mutator.
+type CollectionTypeFunc func(context.Context, *ent.CollectionTypeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CollectionTypeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CollectionTypeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CollectionTypeMutation", m)
+}
+
 // The ContentTypeFunc type is an adapter to allow the use of ordinary
 // function as ContentType mutator.
 type ContentTypeFunc func(context.Context, *ent.ContentTypeMutation) (ent.Value, error)
