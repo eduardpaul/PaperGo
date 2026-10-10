@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"papergo/ent"
-	"papergo/ent/relationshiptype"
 	"papergo/ent/resource"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
@@ -60,7 +59,7 @@ var schemaKeywords = map[string]bool{
 //
 //	item          items the person may read; collection_id limits them to one list or library
 //	collection    lists and libraries of the workspace the person may read
-//	relationship  items to link with relationship_type_id (a type of the workspace); no edge is created
+//	relationship  items to link with relationship_type_id (an organization taxonomy predicate); no edge is created
 //	terms         organization taxonomy terms, not deprecated; group_id, term_set_id and term_ids narrow them
 //	keywords      organization keywords: terms of its keywords set and terms available as keywords, not deprecated
 //	people        principal subjects with access (default read) to the workspace
@@ -541,12 +540,12 @@ func checkDomainConfig(ctx context.Context, t *dms.Service, subject, workspaceID
 			}
 		}
 		if id, _ := f.opts["relationship_type_id"].(string); id != "" {
-			ok, err := t.Client.RelationshipType.Query().Where(relationshiptype.IDEQ(id), relationshiptype.WorkspaceIDEQ(workspaceID)).Exist(ctx)
+			ok, err := t.Client.Term.Query().Where(term.IDEQ(id), term.DeprecatedEQ(false), term.HasTermSetWith(termset.KeyEQ(dms.RelationshipTypesTermSetKey))).Exist(ctx)
 			if err != nil {
 				return err
 			}
 			if !ok {
-				return dms.Invalid(at + "relationship_type_id must be a relationship type of the workspace")
+				return dms.Invalid(at + "relationship_type_id must be an organization relationship type")
 			}
 		}
 		group, _ := f.opts["group_id"].(string)

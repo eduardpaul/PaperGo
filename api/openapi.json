@@ -951,11 +951,12 @@
             }
           },
           {
-            "name": "name",
+            "name": "type",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Relationship term ID or label, including synonyms and localized labels."
           }
         ],
         "x-module-scopes": [
@@ -4122,283 +4123,6 @@
         "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
-    "/v1/workspaces/{id}/relationship-types": {
-      "get": {
-        "summary": "Relationship Types",
-        "operationId": "relationshipTypes",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "after",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RelationshipTypePage"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "x-module-scopes": [
-          "list.read"
-        ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
-      },
-      "post": {
-        "summary": "Create Relationship Type",
-        "operationId": "createRelationshipType",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RelationshipType"
-                }
-              }
-            },
-            "headers": {
-              "ETag": {
-                "description": "Current entity version",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RelationshipTypeInput"
-              }
-            }
-          }
-        },
-        "x-module-scopes": [
-          "list.write"
-        ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
-      }
-    },
     "/v1/relationship-types/{id}": {
       "get": {
         "summary": "Relationship Type",
@@ -4527,164 +4251,6 @@
           "list.read"
         ],
         "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
-      },
-      "put": {
-        "summary": "Update Relationship Type",
-        "operationId": "updateRelationshipType",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^\"[1-9][0-9]*\"$"
-            },
-            "description": "Current entity ETag. Template adoption uses the collection ETag and also requires template_version."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RelationshipType"
-                }
-              }
-            },
-            "headers": {
-              "ETag": {
-                "description": "Current entity version",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "428": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RelationshipTypeInput"
-              }
-            }
-          }
-        },
-        "x-module-scopes": [
-          "list.write"
-        ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/resources/{id}/bulk": {
@@ -12159,6 +11725,266 @@
           }
         }
       }
+    },
+    "/v1/relationship-types": {
+      "get": {
+        "summary": "Relationship Types",
+        "operationId": "relationshipTypes",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipTypePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "description": "Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy."
+      },
+      "post": {
+        "summary": "Create Relationship Type",
+        "operationId": "createRelationshipType",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipType"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Current entity version",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationshipTypeInput"
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "description": "Organization taxonomy predicates; requires list.read and taxonomy.read to discover, list.write and taxonomy.read to ensure an immutable policy. Names, translations and synonyms are curated through taxonomy."
+      }
     }
   },
   "components": {
@@ -12820,10 +12646,6 @@
       "CreateRelationship": {
         "type": "object",
         "properties": {
-          "type_id": {
-            "type": "string",
-            "description": "Relationship type; it supplies the name, direction, attributes and cardinality."
-          },
           "target_id": {
             "type": "string",
             "format": "uuid"
@@ -12831,10 +12653,18 @@
           "metadata": {
             "type": "object",
             "additionalProperties": true
+          },
+          "type": {
+            "type": "string",
+            "description": "Active relationship term ID, name, localized label or synonym; new labels are ensured in the open set. Requires taxonomy.read."
+          },
+          "directed": {
+            "type": "boolean",
+            "description": "Optional direction when creating a predicate; must match an existing policy. New predicates default to symmetric."
           }
         },
         "required": [
-          "type_id",
+          "type",
           "target_id"
         ],
         "additionalProperties": false
@@ -12854,10 +12684,6 @@
           "target_id": {
             "type": "string"
           },
-          "name": {
-            "type": "string",
-            "description": "Key of the relationship type."
-          },
           "metadata": {
             "type": "object",
             "additionalProperties": true
@@ -12875,7 +12701,8 @@
           "version": {
             "type": "integer"
           }
-        }
+        },
+        "required": []
       },
       "Publication": {
         "type": "object",
@@ -13301,15 +13128,6 @@
       "RelationshipTypeInput": {
         "type": "object",
         "properties": {
-          "key": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{0,63}$"
-          },
-          "label": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 255
-          },
           "inverse_label": {
             "type": "string"
           },
@@ -13338,12 +13156,14 @@
               "$ref": "#/components/schemas/CreateField"
             },
             "maxItems": 64
+          },
+          "name": {
+            "type": "string",
+            "description": "Predicate term ID or label. A new label contributes a term to the open Relationships/Types vocabulary."
           }
         },
         "required": [
-          "key",
-          "label",
-          "directed"
+          "name"
         ],
         "additionalProperties": false
       },
@@ -13663,15 +13483,6 @@
             "type": "object",
             "additionalProperties": true
           },
-          "workspace_id": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
           "inverse_label": {
             "type": "string"
           },
@@ -13693,10 +13504,14 @@
           "attributes": {
             "type": "object",
             "additionalProperties": true
+          },
+          "term": {
+            "$ref": "#/components/schemas/Term"
           }
         },
         "required": [],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Graph policy whose ID is an organization taxonomy term ID. Vocabulary identity, names, labels and synonyms live in term. Existing policy semantics cannot be changed by ensure."
       },
       "ListView": {
         "type": "object",

@@ -28,8 +28,6 @@ type Relationship struct {
 	SourceID string `json:"source_id,omitempty"`
 	// TargetID holds the value of the "target_id" field.
 	TargetID string `json:"target_id,omitempty"`
-	// Name holds the value of the "name" field.
-	Name string `json:"name,omitempty"`
 	// TypeID holds the value of the "type_id" field.
 	TypeID string `json:"type_id,omitempty"`
 	// Directed holds the value of the "directed" field.
@@ -101,7 +99,7 @@ func (*Relationship) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case relationship.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case relationship.FieldID, relationship.FieldWorkspaceID, relationship.FieldSourceID, relationship.FieldTargetID, relationship.FieldName, relationship.FieldTypeID:
+		case relationship.FieldID, relationship.FieldWorkspaceID, relationship.FieldSourceID, relationship.FieldTargetID, relationship.FieldTypeID:
 			values[i] = new(sql.NullString)
 		case relationship.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -149,12 +147,6 @@ func (_m *Relationship) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field target_id", values[i])
 			} else if value.Valid {
 				_m.TargetID = value.String
-			}
-		case relationship.FieldName:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field name", values[i])
-			} else if value.Valid {
-				_m.Name = value.String
 			}
 		case relationship.FieldTypeID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -244,9 +236,6 @@ func (_m *Relationship) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("target_id=")
 	builder.WriteString(_m.TargetID)
-	builder.WriteString(", ")
-	builder.WriteString("name=")
-	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("type_id=")
 	builder.WriteString(_m.TypeID)

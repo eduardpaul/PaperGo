@@ -67,7 +67,7 @@ func TestCollectionDeletionRemovesLiveContentAndRetainsHistory(t *testing.T) {
 	folder := create(t, s, collection.ID, "folder", "Folder", nil)
 	b := create(t, s, folder.ID, "item", "B", nil)
 	typ := referencesType(t, s, workspace.ID)
-	edge, err := s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: typ.ID, TargetID: b.ID})
+	edge, err := s.Link(testContext, "alice", a.ID, CreateRelationship{Type: typ.ID, TargetID: b.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

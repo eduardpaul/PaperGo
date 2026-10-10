@@ -14,14 +14,15 @@ import (
 // Every relationship has a type; its name, direction, attributes and
 // cardinality all come from that type.
 type CreateRelationship struct {
-	TypeID   string         `json:"type_id"`
+	Type     string         `json:"type"`
+	Directed *bool          `json:"directed,omitempty"`
 	TargetID string         `json:"target_id"`
 	Metadata map[string]any `json:"metadata"`
 }
 
 func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateRelationship) (out *ent.Relationship, err error) {
-	if in.TypeID == "" {
-		return nil, invalid("type_id is required")
+	if in.Type == "" {
+		return nil, invalid("type is required")
 	}
 	if sourceID == in.TargetID {
 		return nil, invalid("self relationships are not supported")
@@ -48,15 +49,23 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 		if source.WorkspaceID != target.WorkspaceID {
 			return invalid("relationships must remain within one workspace")
 		}
-		typ, e := t.Client.RelationshipType.Get(ctx, in.TypeID)
+		predicate, e := t.resolveRelationshipTerm(ctx, subject, in.Type, true)
+		if e != nil {
+			return e
+		}
+		typ, e := t.Client.RelationshipType.Get(ctx, predicate.ID)
 		if ent.IsNotFound(e) {
-			return invalid("unknown relationship type")
+			directed := false
+			if in.Directed != nil {
+				directed = *in.Directed
+			}
+			typ, e = t.ensureRelationshipPolicy(ctx, subject, RelationshipTypeInput{Name: predicate.ID, Directed: directed})
 		}
 		if e != nil {
 			return e
 		}
-		if typ.WorkspaceID != source.WorkspaceID {
-			return invalid("relationship type belongs to another workspace")
+		if in.Directed != nil && *in.Directed != typ.Directed {
+			return invalid("direction differs from the relationship type")
 		}
 		sourceKey, targetKey := sourceID, in.TargetID
 		if !typ.Directed && sourceKey > targetKey {
@@ -91,7 +100,7 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 				return ErrConflict
 			}
 		}
-		out, e = t.Client.Relationship.Create().SetWorkspaceID(source.WorkspaceID).SetSourceID(sourceKey).SetTargetID(targetKey).SetTypeID(typ.ID).SetName(typ.Key).SetMetadata(in.Metadata).SetDirected(typ.Directed).Save(ctx)
+		out, e = t.Client.Relationship.Create().SetWorkspaceID(source.WorkspaceID).SetSourceID(sourceKey).SetTargetID(targetKey).SetTypeID(typ.ID).SetMetadata(in.Metadata).SetDirected(typ.Directed).Save(ctx)
 		if e != nil {
 			return e
 		}
@@ -99,10 +108,10 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 	})
 	return
 }
-func (s *Service) Relationships(ctx context.Context, subject, itemID, direction, name, after string, limit int) (Page[*ent.Relationship], error) {
+func (s *Service) Relationships(ctx context.Context, subject, itemID, direction, typeValue, after string, limit int) (Page[*ent.Relationship], error) {
 	if !s.transaction {
 		return read(ctx, s, func(t *Service) (Page[*ent.Relationship], error) {
-			return t.Relationships(ctx, subject, itemID, direction, name, after, limit)
+			return t.Relationships(ctx, subject, itemID, direction, typeValue, after, limit)
 		})
 	}
 	if _, err := s.Get(ctx, subject, itemID); err != nil {
@@ -112,16 +121,20 @@ func (s *Service) Relationships(ctx context.Context, subject, itemID, direction,
 	switch direction {
 	case "", "outgoing":
 		q.Where(relationship.Or(relationship.SourceIDEQ(itemID), relationship.And(relationship.DirectedEQ(false), relationship.TargetIDEQ(itemID))))
-		if name != "" {
-			q.Where(relationship.NameEQ(name))
-		}
 	case "incoming":
 		q.Where(relationship.Or(relationship.TargetIDEQ(itemID), relationship.And(relationship.DirectedEQ(false), relationship.SourceIDEQ(itemID))))
-		if name != "" {
-			q.Where(relationship.NameEQ(name))
-		}
 	default:
 		return Page[*ent.Relationship]{}, invalid("direction must be outgoing or incoming")
+	}
+	if typeValue != "" {
+		predicate, err := s.resolveRelationshipTerm(ctx, subject, typeValue, false)
+		if err != nil {
+			return Page[*ent.Relationship]{}, err
+		}
+		if predicate == nil {
+			return Page[*ent.Relationship]{Data: []*ent.Relationship{}}, nil
+		}
+		q.Where(relationship.TypeIDEQ(predicate.ID))
 	}
 	if after != "" {
 		q.Where(relationship.IDGT(after))

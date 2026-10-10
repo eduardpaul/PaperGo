@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/google/uuid"
 	"papergo/ent"
-	"papergo/ent/relationship"
-	"papergo/ent/relationshiptype"
+	"papergo/ent/term"
+	"papergo/ent/termgroup"
+	"papergo/ent/termset"
+	"strings"
 )
 
 type RelationshipTypeInput struct {
-	Key          string        `json:"key"`
-	Label        string        `json:"label"`
+	Name         string        `json:"name"`
 	InverseLabel string        `json:"inverse_label"`
 	Directed     bool          `json:"directed"`
 	MaxIncoming  *int          `json:"max_incoming,omitempty"`
@@ -20,10 +23,7 @@ type RelationshipTypeInput struct {
 }
 
 func relationshipPolicy(in RelationshipTypeInput) (json.RawMessage, error) {
-	if !fieldKey.MatchString(in.Key) {
-		return nil, invalid("invalid relationship type key")
-	}
-	if e := validateName(in.Label); e != nil {
+	if e := validateName(in.Name); e != nil {
 		return nil, e
 	}
 	if in.InverseLabel != "" {
@@ -66,103 +66,190 @@ func relationshipPolicy(in RelationshipTypeInput) (json.RawMessage, error) {
 	}
 	return json.Marshal(schema)
 }
-func (s *Service) CreateRelationshipType(ctx context.Context, subject, workspaceID string, in RelationshipTypeInput) (out *ent.RelationshipType, err error) {
-	raw, e := relationshipPolicy(in)
-	if e != nil {
-		return nil, e
+
+// Relationship policy IDs are taxonomy term IDs; labels live only in the term store.
+const RelationshipTypesTermSetKey = "relationship_types"
+
+type RelationshipTypeView struct {
+	*ent.RelationshipType
+	Term *ent.Term `json:"term"`
+}
+
+func (s *Service) relationshipSet(ctx context.Context, create bool) (*ent.TermSet, error) {
+	set, err := s.Client.TermSet.Query().Where(termset.KeyEQ(RelationshipTypesTermSetKey)).Only(ctx)
+	if !ent.IsNotFound(err) || !create {
+		return set, err
 	}
+	group, err := s.Client.TermGroup.Query().Where(termgroup.NameEqualFold("Relationships")).Only(ctx)
+	if ent.IsNotFound(err) {
+		group, err = s.Client.TermGroup.Create().SetName("Relationships").Save(ctx)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.Client.TermSet.Create().SetGroupID(group.ID).SetKey(RelationshipTypesTermSetKey).SetName("Types").SetDescription("Item relationship predicates").SetIsOpen(true).Save(ctx)
+}
+
+func (s *Service) resolveRelationshipTerm(ctx context.Context, subject, value string, create bool) (*ent.Term, error) {
+	if err := s.requireTaxonomy(ctx, subject, "read"); err != nil {
+		return nil, err
+	}
+	value = strings.TrimSpace(value)
+	if err := validateName(value); err != nil {
+		return nil, err
+	}
+	set, err := s.relationshipSet(ctx, create)
+	if ent.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	v, err := s.Client.Term.Get(ctx, value)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, err
+	}
+	if v != nil {
+		for hops := 0; v.MergedIntoID != nil && hops < MaxDepth; hops++ {
+			v, err = s.Client.Term.Get(ctx, *v.MergedIntoID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if v.TermSetID != set.ID || v.Deprecated {
+			return nil, invalid("relationship type must be an active predicate term")
+		}
+		return v, nil
+	}
+	if _, err := uuid.Parse(value); err == nil {
+		return nil, invalid("unknown relationship type term")
+	}
+	key := strings.ToLower(value)
+	for _, match := range []string{"normalized_name=?", "EXISTS(SELECT 1 FROM json_each(labels) WHERE unicode_lower(value)=?)", "EXISTS(SELECT 1 FROM json_each(synonyms) WHERE unicode_lower(value)=?)"} {
+		rows, err := s.Client.Term.Query().Where(term.TermSetIDEQ(set.ID), term.DeprecatedEQ(false), term.MergedIntoIDIsNil(), func(sel *entsql.Selector) { sel.Where(entsql.ExprP(match, key)) }).Limit(2).All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) > 1 {
+			return nil, invalid("ambiguous relationship type label; use its term ID")
+		}
+		if len(rows) == 1 {
+			return rows[0], nil
+		}
+	}
+	if !create {
+		return nil, nil
+	}
+	if !set.IsOpen {
+		return nil, invalid("unknown relationship type in closed term set")
+	}
+	v, err = s.insertTerm(ctx, set, nil, TermInput{Name: value, Labels: map[string]string{}, Synonyms: []string{}})
+	if err != nil {
+		return nil, err
+	}
+	return v, s.auditTaxonomy(ctx, subject, "term.create", map[string]any{"term_id": v.ID, "term_set_id": set.ID})
+}
+
+func (s *Service) ensureRelationshipPolicy(ctx context.Context, subject string, in RelationshipTypeInput) (*ent.RelationshipType, error) {
+	in.Name = strings.TrimSpace(in.Name)
+	raw, err := relationshipPolicy(in)
+	if err != nil {
+		return nil, err
+	}
+	term, err := s.resolveRelationshipTerm(ctx, subject, in.Name, true)
+	if err != nil {
+		return nil, err
+	}
+	old, err := s.Client.RelationshipType.Get(ctx, term.ID)
+	if err == nil {
+		if old.Directed != in.Directed || old.InverseLabel != in.InverseLabel || !sameLimit(old.MaxIncoming, in.MaxIncoming) || !sameLimit(old.MaxOutgoing, in.MaxOutgoing) || !bytes.Equal(old.Attributes, raw) {
+			return nil, invalid("relationship type already has different behavior")
+		}
+		return old, nil
+	}
+	if !ent.IsNotFound(err) {
+		return nil, err
+	}
+	out, err := s.Client.RelationshipType.Create().SetID(term.ID).SetInverseLabel(in.InverseLabel).SetDirected(in.Directed).SetNillableMaxIncoming(in.MaxIncoming).SetNillableMaxOutgoing(in.MaxOutgoing).SetAttributes(raw).Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return out, s.auditCatalog(ctx, subject, "relationship_type.create", map[string]any{"relationship_type_id": out.ID})
+}
+func sameLimit(a, b *int) bool { return a == nil && b == nil || a != nil && b != nil && *a == *b }
+
+func (s *Service) CreateRelationshipType(ctx context.Context, subject string, in RelationshipTypeInput) (out RelationshipTypeView, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.listWorkspace(ctx, subject, workspaceID, "manage")
-		if e != nil {
-			return e
+		if err := t.RequireScope(ctx, subject, "list.write"); err != nil {
+			return err
 		}
-		out, e = t.Client.RelationshipType.Create().SetWorkspaceID(w.ID).SetKey(in.Key).SetLabel(in.Label).SetInverseLabel(in.InverseLabel).SetDirected(in.Directed).SetNillableMaxIncoming(in.MaxIncoming).SetNillableMaxOutgoing(in.MaxOutgoing).SetAttributes(raw).Save(ctx)
-		if e != nil {
-			return e
+		policy, err := t.ensureRelationshipPolicy(ctx, subject, in)
+		if err != nil {
+			return err
 		}
-		return t.audit(ctx, subject, "relationship_type.create", w, map[string]any{"relationship_type_id": out.ID})
+		term, err := t.Client.Term.Get(ctx, policy.ID)
+		out = RelationshipTypeView{policy, term}
+		return err
 	})
 	return
 }
-func (s *Service) RelationshipTypes(ctx context.Context, subject, workspaceID, after string, limit int) (Page[*ent.RelationshipType], error) {
-	return read(ctx, s, func(t *Service) (Page[*ent.RelationshipType], error) {
-		if _, e := t.listWorkspace(ctx, subject, workspaceID, "read"); e != nil {
-			return Page[*ent.RelationshipType]{}, e
+
+func (s *Service) describeRelationshipTerm(ctx context.Context, v *ent.Term) (RelationshipTypeView, error) {
+	policy, err := s.Client.RelationshipType.Get(ctx, v.ID)
+	if ent.IsNotFound(err) {
+		raw, _ := relationshipPolicy(RelationshipTypeInput{Name: v.Name})
+		policy = &ent.RelationshipType{ID: v.ID, Attributes: raw, Version: 1}
+		err = nil
+	}
+	return RelationshipTypeView{policy, v}, err
+}
+func (s *Service) RelationshipTypes(ctx context.Context, subject, after string, limit int) (Page[RelationshipTypeView], error) {
+	return read(ctx, s, func(t *Service) (Page[RelationshipTypeView], error) {
+		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
+			return Page[RelationshipTypeView]{}, err
 		}
-		rows, e := t.Client.RelationshipType.Query().Where(relationshiptype.WorkspaceIDEQ(workspaceID), relationshiptype.IDGT(after)).Order(ent.Asc(relationshiptype.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-		return entityPage(rows, limit, func(v *ent.RelationshipType) string { return v.ID }), e
+		if err := t.requireTaxonomy(ctx, subject, "read"); err != nil {
+			return Page[RelationshipTypeView]{}, err
+		}
+		set, err := t.relationshipSet(ctx, false)
+		if ent.IsNotFound(err) {
+			return Page[RelationshipTypeView]{Data: []RelationshipTypeView{}}, nil
+		}
+		if err != nil {
+			return Page[RelationshipTypeView]{}, err
+		}
+		terms, err := t.Client.Term.Query().Where(term.TermSetIDEQ(set.ID), term.MergedIntoIDIsNil(), term.DeprecatedEQ(false), term.IDGT(after)).Order(ent.Asc(term.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
+		if err != nil {
+			return Page[RelationshipTypeView]{}, err
+		}
+		page := entityPage(terms, limit, func(v *ent.Term) string { return v.ID })
+		out := Page[RelationshipTypeView]{Data: []RelationshipTypeView{}, NextCursor: page.NextCursor}
+		for _, v := range page.Data {
+			view, err := t.describeRelationshipTerm(ctx, v)
+			if err != nil {
+				return out, err
+			}
+			out.Data = append(out.Data, view)
+		}
+		return out, nil
 	})
 }
-func (s *Service) UpdateRelationshipType(ctx context.Context, subject, id string, version int, in RelationshipTypeInput) (out *ent.RelationshipType, err error) {
-	err = s.write(ctx, func(t *Service) error {
-		old, e := t.Client.RelationshipType.Get(ctx, id)
-		if ent.IsNotFound(e) {
-			return ErrNotFound
+func (s *Service) RelationshipType(ctx context.Context, subject, id string) (RelationshipTypeView, error) {
+	return read(ctx, s, func(t *Service) (RelationshipTypeView, error) {
+		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
+			return RelationshipTypeView{}, err
 		}
-		if e != nil {
-			return e
+		v, err := t.resolveRelationshipTerm(ctx, subject, id, false)
+		if err != nil {
+			return RelationshipTypeView{}, err
 		}
-		w, e := t.listWorkspace(ctx, subject, old.WorkspaceID, "manage")
-		if e != nil {
-			return e
+		if v == nil {
+			return RelationshipTypeView{}, ErrNotFound
 		}
-		if old.Version != version {
-			return ErrConflict
-		}
-		if in.Key == "" {
-			in.Key = old.Key
-		}
-		if in.Key != old.Key || in.Directed != old.Directed {
-			return invalid("key and direction are immutable")
-		}
-		raw, e := relationshipPolicy(in)
-		if e != nil {
-			return e
-		}
-		used, e := t.Client.Relationship.Query().Where(relationship.TypeIDEQ(id)).Exist(ctx)
-		if e != nil {
-			return e
-		}
-		if used && !bytes.Equal(raw, old.Attributes) {
-			return invalid("attribute schema cannot change while relationships use this type")
-		}
-		for i, max := range []*int{in.MaxIncoming, in.MaxOutgoing} {
-			if max == nil {
-				continue
-			}
-			column := "target_id"
-			if i == 1 {
-				column = "source_id"
-			}
-			rows, e := t.Client.QueryContext(ctx, "SELECT 1 FROM relationships WHERE type_id=? GROUP BY "+column+" HAVING count(*)>? LIMIT 1", id, *max)
-			if e != nil {
-				return e
-			}
-			exceeded := rows.Next()
-			e = rows.Err()
-			rows.Close()
-			if e != nil {
-				return e
-			}
-			if exceeded {
-				return invalid("cardinality would invalidate existing relationships")
-			}
-		}
-		b := t.Client.RelationshipType.UpdateOne(old).SetLabel(in.Label).SetInverseLabel(in.InverseLabel).SetAttributes(raw).ClearMaxIncoming().ClearMaxOutgoing().AddVersion(1)
-		if in.MaxIncoming != nil {
-			b.SetMaxIncoming(*in.MaxIncoming)
-		}
-		if in.MaxOutgoing != nil {
-			b.SetMaxOutgoing(*in.MaxOutgoing)
-		}
-		out, e = b.Save(ctx)
-		if e != nil {
-			return e
-		}
-		return t.audit(ctx, subject, "relationship_type.update", w, map[string]any{"relationship_type_id": id})
+		return t.describeRelationshipTerm(ctx, v)
 	})
-	return
 }
+
 func normalizeMetadata(raw json.RawMessage, values, previous map[string]any) error {
 	defs, e := definitions(raw)
 	if e != nil {

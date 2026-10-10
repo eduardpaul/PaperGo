@@ -1013,40 +1013,22 @@ func init() {
 			return nil
 		}
 	}()
-	// relationshipDescName is the schema descriptor for name field.
-	relationshipDescName := relationshipFields[3].Descriptor()
-	// relationship.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	relationship.NameValidator = func() func(string) error {
-		validators := relationshipDescName.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(name string) error {
-			for _, fn := range fns {
-				if err := fn(name); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
 	// relationshipDescTypeID is the schema descriptor for type_id field.
-	relationshipDescTypeID := relationshipFields[4].Descriptor()
+	relationshipDescTypeID := relationshipFields[3].Descriptor()
 	// relationship.TypeIDValidator is a validator for the "type_id" field. It is called by the builders before save.
 	relationship.TypeIDValidator = relationshipDescTypeID.Validators[0].(func(string) error)
 	// relationshipDescDirected is the schema descriptor for directed field.
-	relationshipDescDirected := relationshipFields[5].Descriptor()
+	relationshipDescDirected := relationshipFields[4].Descriptor()
 	// relationship.DefaultDirected holds the default value on creation for the directed field.
 	relationship.DefaultDirected = relationshipDescDirected.Default.(bool)
 	// relationshipDescVersion is the schema descriptor for version field.
-	relationshipDescVersion := relationshipFields[6].Descriptor()
+	relationshipDescVersion := relationshipFields[5].Descriptor()
 	// relationship.DefaultVersion holds the default value on creation for the version field.
 	relationship.DefaultVersion = relationshipDescVersion.Default.(int)
 	// relationship.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	relationship.VersionValidator = relationshipDescVersion.Validators[0].(func(int) error)
 	// relationshipDescMetadata is the schema descriptor for metadata field.
-	relationshipDescMetadata := relationshipFields[7].Descriptor()
+	relationshipDescMetadata := relationshipFields[6].Descriptor()
 	// relationship.DefaultMetadata holds the default value on creation for the metadata field.
 	relationship.DefaultMetadata = relationshipDescMetadata.Default.(map[string]interface{})
 	// relationshipDescID is the schema descriptor for id field.
@@ -1065,29 +1047,29 @@ func init() {
 	// relationshiptype.DefaultCreatedAt holds the default value on creation for the created_at field.
 	relationshiptype.DefaultCreatedAt = relationshiptypeDescCreatedAt.Default.(func() time.Time)
 	// relationshiptypeDescInverseLabel is the schema descriptor for inverse_label field.
-	relationshiptypeDescInverseLabel := relationshiptypeFields[3].Descriptor()
+	relationshiptypeDescInverseLabel := relationshiptypeFields[0].Descriptor()
 	// relationshiptype.DefaultInverseLabel holds the default value on creation for the inverse_label field.
 	relationshiptype.DefaultInverseLabel = relationshiptypeDescInverseLabel.Default.(string)
 	// relationshiptypeDescDirected is the schema descriptor for directed field.
-	relationshiptypeDescDirected := relationshiptypeFields[4].Descriptor()
+	relationshiptypeDescDirected := relationshiptypeFields[1].Descriptor()
 	// relationshiptype.DefaultDirected holds the default value on creation for the directed field.
 	relationshiptype.DefaultDirected = relationshiptypeDescDirected.Default.(bool)
 	// relationshiptypeDescMaxIncoming is the schema descriptor for max_incoming field.
-	relationshiptypeDescMaxIncoming := relationshiptypeFields[5].Descriptor()
+	relationshiptypeDescMaxIncoming := relationshiptypeFields[2].Descriptor()
 	// relationshiptype.MaxIncomingValidator is a validator for the "max_incoming" field. It is called by the builders before save.
 	relationshiptype.MaxIncomingValidator = relationshiptypeDescMaxIncoming.Validators[0].(func(int) error)
 	// relationshiptypeDescMaxOutgoing is the schema descriptor for max_outgoing field.
-	relationshiptypeDescMaxOutgoing := relationshiptypeFields[6].Descriptor()
+	relationshiptypeDescMaxOutgoing := relationshiptypeFields[3].Descriptor()
 	// relationshiptype.MaxOutgoingValidator is a validator for the "max_outgoing" field. It is called by the builders before save.
 	relationshiptype.MaxOutgoingValidator = relationshiptypeDescMaxOutgoing.Validators[0].(func(int) error)
 	// relationshiptypeDescVersion is the schema descriptor for version field.
-	relationshiptypeDescVersion := relationshiptypeFields[8].Descriptor()
+	relationshiptypeDescVersion := relationshiptypeFields[5].Descriptor()
 	// relationshiptype.DefaultVersion holds the default value on creation for the version field.
 	relationshiptype.DefaultVersion = relationshiptypeDescVersion.Default.(int)
 	// relationshiptype.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	relationshiptype.VersionValidator = relationshiptypeDescVersion.Validators[0].(func(int) error)
 	// relationshiptypeDescUpdatedAt is the schema descriptor for updated_at field.
-	relationshiptypeDescUpdatedAt := relationshiptypeFields[9].Descriptor()
+	relationshiptypeDescUpdatedAt := relationshiptypeFields[6].Descriptor()
 	// relationshiptype.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	relationshiptype.DefaultUpdatedAt = relationshiptypeDescUpdatedAt.Default.(func() time.Time)
 	// relationshiptype.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

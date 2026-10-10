@@ -22,8 +22,6 @@ const (
 	FieldSourceID = "source_id"
 	// FieldTargetID holds the string denoting the target_id field in the database.
 	FieldTargetID = "target_id"
-	// FieldName holds the string denoting the name field in the database.
-	FieldName = "name"
 	// FieldTypeID holds the string denoting the type_id field in the database.
 	FieldTypeID = "type_id"
 	// FieldDirected holds the string denoting the directed field in the database.
@@ -70,7 +68,6 @@ var Columns = []string{
 	FieldWorkspaceID,
 	FieldSourceID,
 	FieldTargetID,
-	FieldName,
 	FieldTypeID,
 	FieldDirected,
 	FieldVersion,
@@ -96,8 +93,6 @@ var (
 	SourceIDValidator func(string) error
 	// TargetIDValidator is a validator for the "target_id" field. It is called by the builders before save.
 	TargetIDValidator func(string) error
-	// NameValidator is a validator for the "name" field. It is called by the builders before save.
-	NameValidator func(string) error
 	// TypeIDValidator is a validator for the "type_id" field. It is called by the builders before save.
 	TypeIDValidator func(string) error
 	// DefaultDirected holds the default value on creation for the "directed" field.
@@ -140,11 +135,6 @@ func BySourceID(opts ...sql.OrderTermOption) OrderOption {
 // ByTargetID orders the results by the target_id field.
 func ByTargetID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTargetID, opts...).ToFunc()
-}
-
-// ByName orders the results by the name field.
-func ByName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldName, opts...).ToFunc()
 }
 
 // ByTypeID orders the results by the type_id field.

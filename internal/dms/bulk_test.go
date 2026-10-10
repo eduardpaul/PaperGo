@@ -257,11 +257,11 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 		BulkOperation{Action: "publish", ID: first.ID, Version: 1},
 		BulkOperation{Action: "publish", ID: second.ID, Version: 1},
 	)
-	typ, err := s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "related", Label: "Related", Directed: true})
+	typ, err := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Related", Directed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	link, err := s.Link(testContext, "alice", first.ID, CreateRelationship{TypeID: typ.ID, TargetID: second.ID})
+	link, err := s.Link(testContext, "alice", first.ID, CreateRelationship{Type: typ.ID, TargetID: second.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

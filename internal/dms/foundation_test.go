@@ -295,7 +295,7 @@ func TestAuthorizedPaginationAndRelationships(t *testing.T) {
 			}
 			visible[r.ID] = true
 		}
-		link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: r.ID})
+		link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: r.ID})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -149,7 +149,7 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	source := create(t, s, list.ID, "item", "Source", nil)
 	target := create(t, s, list.ID, "item", "Target", nil)
 	typ := referencesType(t, s, w.ID)
-	link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID})
+	link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: target.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	if err != nil || len(incoming.Data) != 1 || incoming.Data[0].ID != link.ID {
 		t.Fatalf("incoming relationship: %+v %v", incoming, err)
 	}
-	if again, e := s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID}); e != nil || again.ID != link.ID || again.Version != link.Version {
+	if again, e := s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: target.ID}); e != nil || again.ID != link.ID || again.Version != link.Version {
 		t.Fatalf("retry did not return the same relationship: %v %v", again, e)
 	}
 	err = setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"})
@@ -175,7 +175,7 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	w2 := create(t, s, "", "workspace", "Other", nil)
 	l2 := create(t, s, w2.ID, "list", "Other list", nil)
 	i2 := create(t, s, l2.ID, "item", "Other item", nil)
-	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: i2.ID}); err == nil {
+	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: i2.ID}); err == nil {
 		t.Fatal("cross-workspace link accepted")
 	}
 	var validation *ValidationError
@@ -226,9 +226,9 @@ func TestLibraryRequiresBlobForPublishing(t *testing.T) {
 		t.Fatal("library item published without content")
 	}
 }
-func referencesType(t *testing.T, s *Service, workspaceID string) *ent.RelationshipType {
+func referencesType(t *testing.T, s *Service, workspaceID string) RelationshipTypeView {
 	t.Helper()
-	typ, err := s.CreateRelationshipType(testContext, "alice", workspaceID, RelationshipTypeInput{Key: "references", Label: "References", InverseLabel: "Referenced by", Directed: true})
+	typ, err := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "References", InverseLabel: "Referenced by", Directed: true})
 	if err != nil {
 		t.Fatal(err)
 	}

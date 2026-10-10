@@ -764,7 +764,6 @@ var (
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "workspace_id", Type: field.TypeString, Size: 36},
-		{Name: "name", Type: field.TypeString, Size: 64},
 		{Name: "directed", Type: field.TypeBool, Default: true},
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "metadata", Type: field.TypeJSON},
@@ -780,19 +779,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "relationships_relationship_types_relationships",
-				Columns:    []*schema.Column{RelationshipsColumns[7]},
+				Columns:    []*schema.Column{RelationshipsColumns[6]},
 				RefColumns: []*schema.Column{RelationshipTypesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "relationships_resources_outgoing",
-				Columns:    []*schema.Column{RelationshipsColumns[8]},
+				Columns:    []*schema.Column{RelationshipsColumns[7]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "relationships_resources_incoming",
-				Columns:    []*schema.Column{RelationshipsColumns[9]},
+				Columns:    []*schema.Column{RelationshipsColumns[8]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -801,32 +800,32 @@ var (
 			{
 				Name:    "relationship_type_id_source_id_target_id",
 				Unique:  true,
-				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[8], RelationshipsColumns[9]},
+				Columns: []*schema.Column{RelationshipsColumns[6], RelationshipsColumns[7], RelationshipsColumns[8]},
 			},
 			{
 				Name:    "relationship_type_id_target_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[9]},
+				Columns: []*schema.Column{RelationshipsColumns[6], RelationshipsColumns[8]},
 			},
 			{
-				Name:    "relationship_source_id_name_id",
+				Name:    "relationship_source_id_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[3], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[6], RelationshipsColumns[0]},
 			},
 			{
 				Name:    "relationship_source_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[0]},
 			},
 			{
-				Name:    "relationship_target_id_name_id",
+				Name:    "relationship_target_id_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[9], RelationshipsColumns[3], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[6], RelationshipsColumns[0]},
 			},
 			{
 				Name:    "relationship_target_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[9], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[0]},
 			},
 		},
 	}
@@ -834,37 +833,19 @@ var (
 	RelationshipTypesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "key", Type: field.TypeString},
-		{Name: "label", Type: field.TypeString},
 		{Name: "inverse_label", Type: field.TypeString, Default: ""},
-		{Name: "directed", Type: field.TypeBool, Default: true},
+		{Name: "directed", Type: field.TypeBool, Default: false},
 		{Name: "max_incoming", Type: field.TypeInt, Nullable: true},
 		{Name: "max_outgoing", Type: field.TypeInt, Nullable: true},
 		{Name: "attributes", Type: field.TypeJSON},
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "workspace_id", Type: field.TypeString, Size: 36},
 	}
 	// RelationshipTypesTable holds the schema information for the "relationship_types" table.
 	RelationshipTypesTable = &schema.Table{
 		Name:       "relationship_types",
 		Columns:    RelationshipTypesColumns,
 		PrimaryKey: []*schema.Column{RelationshipTypesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "relationship_types_resources_workspace",
-				Columns:    []*schema.Column{RelationshipTypesColumns[11]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "relationshiptype_workspace_id_key",
-				Unique:  true,
-				Columns: []*schema.Column{RelationshipTypesColumns[11], RelationshipTypesColumns[2]},
-			},
-		},
 	}
 	// ResourcesColumns holds the columns for the "resources" table.
 	ResourcesColumns = []*schema.Column{
@@ -1540,7 +1521,6 @@ func init() {
 	RelationshipsTable.ForeignKeys[0].RefTable = RelationshipTypesTable
 	RelationshipsTable.ForeignKeys[1].RefTable = ResourcesTable
 	RelationshipsTable.ForeignKeys[2].RefTable = ResourcesTable
-	RelationshipTypesTable.ForeignKeys[0].RefTable = ResourcesTable
 	ResourcesTable.ForeignKeys[0].RefTable = ResourcesTable
 	ResourcesTable.ForeignKeys[1].RefTable = ResourcesTable
 	ResourcesTable.ForeignKeys[2].RefTable = ItemRevisionsTable

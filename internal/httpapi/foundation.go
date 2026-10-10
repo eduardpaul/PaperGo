@@ -56,7 +56,7 @@ func entityETag(w http.ResponseWriter, v any) {
 		etag(w, x.Version)
 	case *ent.ListView:
 		etag(w, x.Version)
-	case *ent.RelationshipType:
+	case dms.RelationshipTypeView:
 		etag(w, x.Version)
 	case *ent.Relationship:
 		etag(w, x.Version)
@@ -183,17 +183,14 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 		return a.DMS.QueryViewGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	a.registerTaxonomy(m)
-	m.HandleFunc("GET /v1/workspaces/{id}/relationship-types", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.RelationshipTypes(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
+	m.HandleFunc("GET /v1/relationship-types", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.RelationshipTypes(r.Context(), subject(r), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	}))
-	m.HandleFunc("POST /v1/workspaces/{id}/relationship-types", foundationMutation(a, 201, false, func(r *http.Request, in dms.RelationshipTypeInput, v int) (any, error) {
-		return a.DMS.CreateRelationshipType(r.Context(), subject(r), r.PathValue("id"), in)
+	m.HandleFunc("POST /v1/relationship-types", foundationMutation(a, 201, false, func(r *http.Request, in dms.RelationshipTypeInput, v int) (any, error) {
+		return a.DMS.CreateRelationshipType(r.Context(), subject(r), in)
 	}))
 	m.HandleFunc("GET /v1/relationship-types/{id}", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.RelationshipType(r.Context(), subject(r), r.PathValue("id"))
-	}))
-	m.HandleFunc("PUT /v1/relationship-types/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.RelationshipTypeInput, v int) (any, error) {
-		return a.DMS.UpdateRelationshipType(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
 	m.HandleFunc("PATCH /v1/items/{id}/relationships/{linkID}", foundationMutation(a, 200, true, func(r *http.Request, in dms.UpdateRelationship, v int) (any, error) {
 		return a.DMS.UpdateRelationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"), v, in)

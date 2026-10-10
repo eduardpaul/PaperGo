@@ -79,10 +79,10 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	send("PUT", "/v1/views/"+view.ID, `{"name":"Stale","query":{}}`, `"1"`, 409)
 	send("DELETE", "/v1/views/"+view.ID, "", `"1"`, 409)
 	send("DELETE", "/v1/views/"+view.ID, "", `"2"`, 204)
-	typeBody := send("POST", base+"/relationship-types", `{"key":"links","label":"Links","directed":true,"max_outgoing":1,"attributes":[{"key":"note","label":"Note","type":"text","options":{"max_length":20}}]}`, "", 201)
+	typeBody := send("POST", "/v1/relationship-types", `{"name":"Links","directed":true,"max_outgoing":1,"attributes":[{"key":"note","label":"Note","type":"text","options":{"max_length":20}}]}`, "", 201)
 	var typ ent.RelationshipType
 	json.Unmarshal(typeBody, &typ)
-	linkBody := send("POST", "/v1/items/"+item.ID+"/relationships", fmt.Sprintf(`{"type_id":%q,"target_id":%q,"metadata":{"note":"Original"}}`, typ.ID, other.ID), "", 201)
+	linkBody := send("POST", "/v1/items/"+item.ID+"/relationships", fmt.Sprintf(`{"type":%q,"target_id":%q,"metadata":{"note":"Original"}}`, typ.ID, other.ID), "", 201)
 	var edge ent.Relationship
 	json.Unmarshal(linkBody, &edge)
 	path := "/v1/items/" + item.ID + "/relationships/" + edge.ID
@@ -93,7 +93,7 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	send("PUT", "/v1/terms/"+term.ID, `{"name":"Renamed","deprecated":true}`, `"1"`, 200)
 	send("GET", "/v1/terms/"+term.ID, "", "", 200)
 	send("GET", "/v1/term-sets", "", "", 200)
-	send("GET", base+"/relationship-types", "", "", 200)
+	send("GET", "/v1/relationship-types", "", "", 200)
 	send("POST", "/v1/resources/"+l.ID+"/query", `{"query":{"unknown":"bad"}}`, "", 400)
 	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":true,"grants":[{"principal_type":"user","principal_id":"alice","action":"manage"}]}`, `"2"`, 422)
 	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":false,"copy_inherited":true,"grants":[]}`, `"2"`, 200)

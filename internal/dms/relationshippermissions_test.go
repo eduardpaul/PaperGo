@@ -12,11 +12,11 @@ func TestRelationshipsRequireWritableEndpointsAndCanMutateFromEitherEnd(t *testi
 	}
 	source := create(t, s, list.ID, "item", "Source", nil)
 	target := create(t, s, list.ID, "item", "Target", nil)
-	typ, err := s.CreateRelationshipType(testContext, "alice", workspace.ID, RelationshipTypeInput{Key: "owns", Label: "Owns", Directed: true, MaxOutgoing: ptr(1), Attributes: []CreateField{{Key: "note", Label: "Note", Type: "text", Required: true}}})
+	typ, err := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Owns", Directed: true, MaxOutgoing: ptr(1), Attributes: []CreateField{{Key: "note", Label: "Note", Type: "text", Required: true}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	edge, err := s.Link(testContext, "bob", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID, Metadata: map[string]any{"note": "original"}})
+	edge, err := s.Link(testContext, "bob", source.ID, CreateRelationship{Type: typ.ID, TargetID: target.ID, Metadata: map[string]any{"note": "original"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestRelationshipsRequireWritableEndpointsAndCanMutateFromEitherEnd(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	retry, err := s.Link(testContext, "bob", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID})
+	retry, err := s.Link(testContext, "bob", source.ID, CreateRelationship{Type: typ.ID, TargetID: target.ID})
 	if err != nil || retry.ID != edge.ID || retry.Version != edge.Version || retry.Metadata["note"] != "original" {
 		t.Fatal("retry at full cardinality mutated edge", retry, err)
 	}
@@ -40,7 +40,7 @@ func TestRelationshipsRequireWritableEndpointsAndCanMutateFromEitherEnd(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Link(testContext, "bob", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID}); !errors.Is(err, ErrForbidden) {
+	if _, err = s.Link(testContext, "bob", source.ID, CreateRelationship{Type: typ.ID, TargetID: target.ID}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("read-only target allowed link", err)
 	}
 	if _, err = s.UpdateRelationship(testContext, "bob", source.ID, edge.ID, edge.Version, UpdateRelationship{Metadata: map[string]any{"note": "denied"}}); !errors.Is(err, ErrForbidden) {

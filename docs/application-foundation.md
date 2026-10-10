@@ -217,21 +217,21 @@ Curation, closed-set creation, imports, popularity counts and audit reads requir
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| GET / POST | /v1/workspaces/{id}/relationship-types | List or create policies |
-| GET / PUT | /v1/relationship-types/{id} | Read or replace policy metadata |
+| GET / POST | /v1/relationship-types | Discover predicates or ensure an immutable policy |
+| GET | /v1/relationship-types/{id} | Read policy and taxonomy term |
 | PATCH | /v1/items/{id}/relationships/{linkID} | Replace validated edge metadata |
 
-A relationship type has key, label, inverse_label, explicit directed flag, optional max_incoming/max_outgoing (1..1000), attribute definitions, and version. Attributes use unindexed scalar field definitions, including defaults and validation. Reference/multiple attributes are rejected. An empty attribute schema permits no custom keys.
+A relationship type's ID is a term ID in the organization Relationships/Types vocabulary (`relationship_types`). Its name, localized labels, synonyms and deprecation are curated through taxonomy. POST accepts `name` (label or term ID), inverse_label, directed, optional max_incoming/max_outgoing (1..1000) and attributes. Reads require `list.read` and `taxonomy.read`; ensure requires `list.write` and `taxonomy.read`. Unknown labels contribute terms to the open set. Attributes use unindexed scalar field definitions, including defaults and validation. Reference/multiple attributes are rejected. An empty attribute schema permits no custom keys.
 
 Directed=false creates symmetric links: endpoints are stored in canonical order, reverse retries return the existing edge, and incoming/outgoing queries include either endpoint. Symmetric types cannot have directional cardinality or inverse labels.
 
 POST an item's existing relationships endpoint with:
 
 ```json
-{"type_id":"TYPE_ID","target_id":"TARGET_ID","metadata":{"weight":"1.20"}}
+{"type":"TYPE_ID_OR_LABEL","target_id":"TARGET_ID","metadata":{"weight":"1.20"}}
 ```
 
-The type supplies the stable relationship name. Typed attributes are validated and normalized; cardinality allocation is transactional. Keys and direction are immutable. Attribute schemas cannot change while edges use a type; label changes are allowed. Lowering cardinality cannot invalidate existing edges.
+Link creation resolves a term ID, name, localized label or synonym and ensures a new label when allowed. New predicates default to symmetric; optional `directed` must match an existing policy. Typed attributes are validated and cardinality allocation is transactional. Ensuring an existing policy is a no-op when semantics match and rejects changed behavior. Taxonomy term renames retain identity. Compatible term merges retarget edges and consolidate duplicates; conflicting attributes or semantics and used cardinality-bound predicates reject the entire merge.
 
 Every relationship requires a type. Links stay within one workspace. Creating, editing or removing an edge requires write permission on both endpoints. Either endpoint may edit or remove directed and symmetric edges. Repeating creation returns the existing edge without changing its attributes, version or audit history; the retry succeeds even when a cardinality limit is full. Query visibility still requires both endpoints to have authorized visible content.
 

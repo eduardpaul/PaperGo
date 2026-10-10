@@ -16078,7 +16078,6 @@ type RelationshipMutation struct {
 	id                       *string
 	created_at               *time.Time
 	workspace_id             *string
-	name                     *string
 	directed                 *bool
 	version                  *int
 	addversion               *int
@@ -16341,42 +16340,6 @@ func (m *RelationshipMutation) OldTargetID(ctx context.Context) (v string, err e
 // ResetTargetID resets all changes to the "target_id" field.
 func (m *RelationshipMutation) ResetTargetID() {
 	m.target = nil
-}
-
-// SetName sets the "name" field.
-func (m *RelationshipMutation) SetName(s string) {
-	m.name = &s
-}
-
-// Name returns the value of the "name" field in the mutation.
-func (m *RelationshipMutation) Name() (r string, exists bool) {
-	v := m.name
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldName returns the old "name" field's value of the Relationship entity.
-// If the Relationship object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RelationshipMutation) OldName(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldName is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldName requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldName: %w", err)
-	}
-	return oldValue.Name, nil
-}
-
-// ResetName resets all changes to the "name" field.
-func (m *RelationshipMutation) ResetName() {
-	m.name = nil
 }
 
 // SetTypeID sets the "type_id" field.
@@ -16671,7 +16634,7 @@ func (m *RelationshipMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RelationshipMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 8)
 	if m.created_at != nil {
 		fields = append(fields, relationship.FieldCreatedAt)
 	}
@@ -16683,9 +16646,6 @@ func (m *RelationshipMutation) Fields() []string {
 	}
 	if m.target != nil {
 		fields = append(fields, relationship.FieldTargetID)
-	}
-	if m.name != nil {
-		fields = append(fields, relationship.FieldName)
 	}
 	if m.relationship_type != nil {
 		fields = append(fields, relationship.FieldTypeID)
@@ -16715,8 +16675,6 @@ func (m *RelationshipMutation) Field(name string) (ent.Value, bool) {
 		return m.SourceID()
 	case relationship.FieldTargetID:
 		return m.TargetID()
-	case relationship.FieldName:
-		return m.Name()
 	case relationship.FieldTypeID:
 		return m.TypeID()
 	case relationship.FieldDirected:
@@ -16742,8 +16700,6 @@ func (m *RelationshipMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldSourceID(ctx)
 	case relationship.FieldTargetID:
 		return m.OldTargetID(ctx)
-	case relationship.FieldName:
-		return m.OldName(ctx)
 	case relationship.FieldTypeID:
 		return m.OldTypeID(ctx)
 	case relationship.FieldDirected:
@@ -16788,13 +16744,6 @@ func (m *RelationshipMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTargetID(v)
-		return nil
-	case relationship.FieldName:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetName(v)
 		return nil
 	case relationship.FieldTypeID:
 		v, ok := value.(string)
@@ -16899,9 +16848,6 @@ func (m *RelationshipMutation) ResetField(name string) error {
 		return nil
 	case relationship.FieldTargetID:
 		m.ResetTargetID()
-		return nil
-	case relationship.FieldName:
-		m.ResetName()
 		return nil
 	case relationship.FieldTypeID:
 		m.ResetTypeID()
@@ -17036,8 +16982,6 @@ type RelationshipTypeMutation struct {
 	typ                  string
 	id                   *string
 	created_at           *time.Time
-	key                  *string
-	label                *string
 	inverse_label        *string
 	directed             *bool
 	max_incoming         *int
@@ -17050,8 +16994,6 @@ type RelationshipTypeMutation struct {
 	addversion           *int
 	updated_at           *time.Time
 	clearedFields        map[string]struct{}
-	workspace            *string
-	clearedworkspace     bool
 	relationships        map[string]struct{}
 	removedrelationships map[string]struct{}
 	clearedrelationships bool
@@ -17198,114 +17140,6 @@ func (m *RelationshipTypeMutation) OldCreatedAt(ctx context.Context) (v time.Tim
 // ResetCreatedAt resets all changes to the "created_at" field.
 func (m *RelationshipTypeMutation) ResetCreatedAt() {
 	m.created_at = nil
-}
-
-// SetWorkspaceID sets the "workspace_id" field.
-func (m *RelationshipTypeMutation) SetWorkspaceID(s string) {
-	m.workspace = &s
-}
-
-// WorkspaceID returns the value of the "workspace_id" field in the mutation.
-func (m *RelationshipTypeMutation) WorkspaceID() (r string, exists bool) {
-	v := m.workspace
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWorkspaceID returns the old "workspace_id" field's value of the RelationshipType entity.
-// If the RelationshipType object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RelationshipTypeMutation) OldWorkspaceID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWorkspaceID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWorkspaceID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWorkspaceID: %w", err)
-	}
-	return oldValue.WorkspaceID, nil
-}
-
-// ResetWorkspaceID resets all changes to the "workspace_id" field.
-func (m *RelationshipTypeMutation) ResetWorkspaceID() {
-	m.workspace = nil
-}
-
-// SetKey sets the "key" field.
-func (m *RelationshipTypeMutation) SetKey(s string) {
-	m.key = &s
-}
-
-// Key returns the value of the "key" field in the mutation.
-func (m *RelationshipTypeMutation) Key() (r string, exists bool) {
-	v := m.key
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldKey returns the old "key" field's value of the RelationshipType entity.
-// If the RelationshipType object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RelationshipTypeMutation) OldKey(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldKey is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldKey requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldKey: %w", err)
-	}
-	return oldValue.Key, nil
-}
-
-// ResetKey resets all changes to the "key" field.
-func (m *RelationshipTypeMutation) ResetKey() {
-	m.key = nil
-}
-
-// SetLabel sets the "label" field.
-func (m *RelationshipTypeMutation) SetLabel(s string) {
-	m.label = &s
-}
-
-// Label returns the value of the "label" field in the mutation.
-func (m *RelationshipTypeMutation) Label() (r string, exists bool) {
-	v := m.label
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldLabel returns the old "label" field's value of the RelationshipType entity.
-// If the RelationshipType object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RelationshipTypeMutation) OldLabel(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLabel is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLabel requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLabel: %w", err)
-	}
-	return oldValue.Label, nil
-}
-
-// ResetLabel resets all changes to the "label" field.
-func (m *RelationshipTypeMutation) ResetLabel() {
-	m.label = nil
 }
 
 // SetInverseLabel sets the "inverse_label" field.
@@ -17663,33 +17497,6 @@ func (m *RelationshipTypeMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
-// ClearWorkspace clears the "workspace" edge to the Resource entity.
-func (m *RelationshipTypeMutation) ClearWorkspace() {
-	m.clearedworkspace = true
-	m.clearedFields[relationshiptype.FieldWorkspaceID] = struct{}{}
-}
-
-// WorkspaceCleared reports if the "workspace" edge to the Resource entity was cleared.
-func (m *RelationshipTypeMutation) WorkspaceCleared() bool {
-	return m.clearedworkspace
-}
-
-// WorkspaceIDs returns the "workspace" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// WorkspaceID instead. It exists only for internal usage by the builders.
-func (m *RelationshipTypeMutation) WorkspaceIDs() (ids []string) {
-	if id := m.workspace; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetWorkspace resets all changes to the "workspace" edge.
-func (m *RelationshipTypeMutation) ResetWorkspace() {
-	m.workspace = nil
-	m.clearedworkspace = false
-}
-
 // AddRelationshipIDs adds the "relationships" edge to the Relationship entity by ids.
 func (m *RelationshipTypeMutation) AddRelationshipIDs(ids ...string) {
 	if m.relationships == nil {
@@ -17778,18 +17585,9 @@ func (m *RelationshipTypeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RelationshipTypeMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 8)
 	if m.created_at != nil {
 		fields = append(fields, relationshiptype.FieldCreatedAt)
-	}
-	if m.workspace != nil {
-		fields = append(fields, relationshiptype.FieldWorkspaceID)
-	}
-	if m.key != nil {
-		fields = append(fields, relationshiptype.FieldKey)
-	}
-	if m.label != nil {
-		fields = append(fields, relationshiptype.FieldLabel)
 	}
 	if m.inverse_label != nil {
 		fields = append(fields, relationshiptype.FieldInverseLabel)
@@ -17822,12 +17620,6 @@ func (m *RelationshipTypeMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case relationshiptype.FieldCreatedAt:
 		return m.CreatedAt()
-	case relationshiptype.FieldWorkspaceID:
-		return m.WorkspaceID()
-	case relationshiptype.FieldKey:
-		return m.Key()
-	case relationshiptype.FieldLabel:
-		return m.Label()
 	case relationshiptype.FieldInverseLabel:
 		return m.InverseLabel()
 	case relationshiptype.FieldDirected:
@@ -17853,12 +17645,6 @@ func (m *RelationshipTypeMutation) OldField(ctx context.Context, name string) (e
 	switch name {
 	case relationshiptype.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
-	case relationshiptype.FieldWorkspaceID:
-		return m.OldWorkspaceID(ctx)
-	case relationshiptype.FieldKey:
-		return m.OldKey(ctx)
-	case relationshiptype.FieldLabel:
-		return m.OldLabel(ctx)
 	case relationshiptype.FieldInverseLabel:
 		return m.OldInverseLabel(ctx)
 	case relationshiptype.FieldDirected:
@@ -17888,27 +17674,6 @@ func (m *RelationshipTypeMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCreatedAt(v)
-		return nil
-	case relationshiptype.FieldWorkspaceID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWorkspaceID(v)
-		return nil
-	case relationshiptype.FieldKey:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetKey(v)
-		return nil
-	case relationshiptype.FieldLabel:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetLabel(v)
 		return nil
 	case relationshiptype.FieldInverseLabel:
 		v, ok := value.(string)
@@ -18065,15 +17830,6 @@ func (m *RelationshipTypeMutation) ResetField(name string) error {
 	case relationshiptype.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
-	case relationshiptype.FieldWorkspaceID:
-		m.ResetWorkspaceID()
-		return nil
-	case relationshiptype.FieldKey:
-		m.ResetKey()
-		return nil
-	case relationshiptype.FieldLabel:
-		m.ResetLabel()
-		return nil
 	case relationshiptype.FieldInverseLabel:
 		m.ResetInverseLabel()
 		return nil
@@ -18101,10 +17857,7 @@ func (m *RelationshipTypeMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *RelationshipTypeMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.workspace != nil {
-		edges = append(edges, relationshiptype.EdgeWorkspace)
-	}
+	edges := make([]string, 0, 1)
 	if m.relationships != nil {
 		edges = append(edges, relationshiptype.EdgeRelationships)
 	}
@@ -18115,10 +17868,6 @@ func (m *RelationshipTypeMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *RelationshipTypeMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case relationshiptype.EdgeWorkspace:
-		if id := m.workspace; id != nil {
-			return []ent.Value{*id}
-		}
 	case relationshiptype.EdgeRelationships:
 		ids := make([]ent.Value, 0, len(m.relationships))
 		for id := range m.relationships {
@@ -18131,7 +17880,7 @@ func (m *RelationshipTypeMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *RelationshipTypeMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.removedrelationships != nil {
 		edges = append(edges, relationshiptype.EdgeRelationships)
 	}
@@ -18154,10 +17903,7 @@ func (m *RelationshipTypeMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *RelationshipTypeMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.clearedworkspace {
-		edges = append(edges, relationshiptype.EdgeWorkspace)
-	}
+	edges := make([]string, 0, 1)
 	if m.clearedrelationships {
 		edges = append(edges, relationshiptype.EdgeRelationships)
 	}
@@ -18168,8 +17914,6 @@ func (m *RelationshipTypeMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *RelationshipTypeMutation) EdgeCleared(name string) bool {
 	switch name {
-	case relationshiptype.EdgeWorkspace:
-		return m.clearedworkspace
 	case relationshiptype.EdgeRelationships:
 		return m.clearedrelationships
 	}
@@ -18180,9 +17924,6 @@ func (m *RelationshipTypeMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *RelationshipTypeMutation) ClearEdge(name string) error {
 	switch name {
-	case relationshiptype.EdgeWorkspace:
-		m.ClearWorkspace()
-		return nil
 	}
 	return fmt.Errorf("unknown RelationshipType unique edge %s", name)
 }
@@ -18191,9 +17932,6 @@ func (m *RelationshipTypeMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *RelationshipTypeMutation) ResetEdge(name string) error {
 	switch name {
-	case relationshiptype.EdgeWorkspace:
-		m.ResetWorkspace()
-		return nil
 	case relationshiptype.EdgeRelationships:
 		m.ResetRelationships()
 		return nil

@@ -31,20 +31,6 @@ func (_u *RelationshipTypeUpdate) Where(ps ...predicate.RelationshipType) *Relat
 	return _u
 }
 
-// SetLabel sets the "label" field.
-func (_u *RelationshipTypeUpdate) SetLabel(v string) *RelationshipTypeUpdate {
-	_u.mutation.SetLabel(v)
-	return _u
-}
-
-// SetNillableLabel sets the "label" field if the given value is not nil.
-func (_u *RelationshipTypeUpdate) SetNillableLabel(v *string) *RelationshipTypeUpdate {
-	if v != nil {
-		_u.SetLabel(*v)
-	}
-	return _u
-}
-
 // SetInverseLabel sets the "inverse_label" field.
 func (_u *RelationshipTypeUpdate) SetInverseLabel(v string) *RelationshipTypeUpdate {
 	_u.mutation.SetInverseLabel(v)
@@ -246,9 +232,6 @@ func (_u *RelationshipTypeUpdate) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "RelationshipType.version": %w`, err)}
 		}
 	}
-	if _u.mutation.WorkspaceCleared() && len(_u.mutation.WorkspaceIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "RelationshipType.workspace"`)
-	}
 	return nil
 }
 
@@ -263,9 +246,6 @@ func (_u *RelationshipTypeUpdate) sqlSave(ctx context.Context) (_node int, err e
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.Label(); ok {
-		_spec.SetField(relationshiptype.FieldLabel, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.InverseLabel(); ok {
 		_spec.SetField(relationshiptype.FieldInverseLabel, field.TypeString, value)
@@ -368,20 +348,6 @@ type RelationshipTypeUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *RelationshipTypeMutation
-}
-
-// SetLabel sets the "label" field.
-func (_u *RelationshipTypeUpdateOne) SetLabel(v string) *RelationshipTypeUpdateOne {
-	_u.mutation.SetLabel(v)
-	return _u
-}
-
-// SetNillableLabel sets the "label" field if the given value is not nil.
-func (_u *RelationshipTypeUpdateOne) SetNillableLabel(v *string) *RelationshipTypeUpdateOne {
-	if v != nil {
-		_u.SetLabel(*v)
-	}
-	return _u
 }
 
 // SetInverseLabel sets the "inverse_label" field.
@@ -598,9 +564,6 @@ func (_u *RelationshipTypeUpdateOne) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "RelationshipType.version": %w`, err)}
 		}
 	}
-	if _u.mutation.WorkspaceCleared() && len(_u.mutation.WorkspaceIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "RelationshipType.workspace"`)
-	}
 	return nil
 }
 
@@ -632,9 +595,6 @@ func (_u *RelationshipTypeUpdateOne) sqlSave(ctx context.Context) (_node *Relati
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.Label(); ok {
-		_spec.SetField(relationshiptype.FieldLabel, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.InverseLabel(); ok {
 		_spec.SetField(relationshiptype.FieldInverseLabel, field.TypeString, value)

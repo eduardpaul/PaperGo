@@ -99,7 +99,7 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	inner := create(t, s, nested.ID, "item", "Plan.txt", map[string]any{"status": "active"})
 	outside := create(t, s, lib.ID, "item", "Index.txt", nil)
 	typ := referencesType(t, s, w.ID)
-	if _, err := s.Link(testContext, "alice", outside.ID, CreateRelationship{TypeID: typ.ID, TargetID: inner.ID}); err != nil {
+	if _, err := s.Link(testContext, "alice", outside.ID, CreateRelationship{Type: typ.ID, TargetID: inner.ID}); err != nil {
 		t.Fatal(err)
 	}
 	readers(t, s, current(t, s, w.ID))

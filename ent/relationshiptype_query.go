@@ -10,7 +10,6 @@ import (
 	"papergo/ent/predicate"
 	"papergo/ent/relationship"
 	"papergo/ent/relationshiptype"
-	"papergo/ent/resource"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -25,7 +24,6 @@ type RelationshipTypeQuery struct {
 	order             []relationshiptype.OrderOption
 	inters            []Interceptor
 	predicates        []predicate.RelationshipType
-	withWorkspace     *ResourceQuery
 	withRelationships *RelationshipQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -61,28 +59,6 @@ func (_q *RelationshipTypeQuery) Unique(unique bool) *RelationshipTypeQuery {
 func (_q *RelationshipTypeQuery) Order(o ...relationshiptype.OrderOption) *RelationshipTypeQuery {
 	_q.order = append(_q.order, o...)
 	return _q
-}
-
-// QueryWorkspace chains the current query on the "workspace" edge.
-func (_q *RelationshipTypeQuery) QueryWorkspace() *ResourceQuery {
-	query := (&ResourceClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(relationshiptype.Table, relationshiptype.FieldID, selector),
-			sqlgraph.To(resource.Table, resource.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, relationshiptype.WorkspaceTable, relationshiptype.WorkspaceColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // QueryRelationships chains the current query on the "relationships" edge.
@@ -299,23 +275,11 @@ func (_q *RelationshipTypeQuery) Clone() *RelationshipTypeQuery {
 		order:             append([]relationshiptype.OrderOption{}, _q.order...),
 		inters:            append([]Interceptor{}, _q.inters...),
 		predicates:        append([]predicate.RelationshipType{}, _q.predicates...),
-		withWorkspace:     _q.withWorkspace.Clone(),
 		withRelationships: _q.withRelationships.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
-}
-
-// WithWorkspace tells the query-builder to eager-load the nodes that are connected to
-// the "workspace" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *RelationshipTypeQuery) WithWorkspace(opts ...func(*ResourceQuery)) *RelationshipTypeQuery {
-	query := (&ResourceClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withWorkspace = query
-	return _q
 }
 
 // WithRelationships tells the query-builder to eager-load the nodes that are connected to
@@ -407,8 +371,7 @@ func (_q *RelationshipTypeQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	var (
 		nodes       = []*RelationshipType{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
-			_q.withWorkspace != nil,
+		loadedTypes = [1]bool{
 			_q.withRelationships != nil,
 		}
 	)
@@ -430,12 +393,6 @@ func (_q *RelationshipTypeQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := _q.withWorkspace; query != nil {
-		if err := _q.loadWorkspace(ctx, query, nodes, nil,
-			func(n *RelationshipType, e *Resource) { n.Edges.Workspace = e }); err != nil {
-			return nil, err
-		}
-	}
 	if query := _q.withRelationships; query != nil {
 		if err := _q.loadRelationships(ctx, query, nodes,
 			func(n *RelationshipType) { n.Edges.Relationships = []*Relationship{} },
@@ -446,35 +403,6 @@ func (_q *RelationshipTypeQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	return nodes, nil
 }
 
-func (_q *RelationshipTypeQuery) loadWorkspace(ctx context.Context, query *ResourceQuery, nodes []*RelationshipType, init func(*RelationshipType), assign func(*RelationshipType, *Resource)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*RelationshipType)
-	for i := range nodes {
-		fk := nodes[i].WorkspaceID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(resource.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "workspace_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
 func (_q *RelationshipTypeQuery) loadRelationships(ctx context.Context, query *RelationshipQuery, nodes []*RelationshipType, init func(*RelationshipType), assign func(*RelationshipType, *Relationship)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*RelationshipType)
@@ -530,9 +458,6 @@ func (_q *RelationshipTypeQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != relationshiptype.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
-		}
-		if _q.withWorkspace != nil {
-			_spec.Node.AddColumnOnce(relationshiptype.FieldWorkspaceID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

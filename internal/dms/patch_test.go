@@ -54,17 +54,17 @@ func TestItemPatchRejectsUnknownAndRemovedKeysEvenWhenNull(t *testing.T) {
 }
 
 func TestRelationshipPatchRetainsRequiredFieldsAndRollsBackInvalidRemoval(t *testing.T) {
-	s, workspace, list := fixture(t)
+	s, _, list := fixture(t)
 	a := create(t, s, list.ID, "item", "A", nil)
 	b := create(t, s, list.ID, "item", "B", nil)
-	typ, err := s.CreateRelationshipType(testContext, "alice", workspace.ID, RelationshipTypeInput{Key: "related", Label: "Related", Attributes: []CreateField{
+	typ, err := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Related", Attributes: []CreateField{
 		{Key: "required", Label: "Required", Type: "text", Required: true},
 		{Key: "optional", Label: "Optional", Type: "text"},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	edge, err := s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: typ.ID, TargetID: b.ID, Metadata: map[string]any{"required": "keep", "optional": "remove"}})
+	edge, err := s.Link(testContext, "alice", a.ID, CreateRelationship{Type: typ.ID, TargetID: b.ID, Metadata: map[string]any{"required": "keep", "optional": "remove"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3763,22 +3763,6 @@ func (c *RelationshipTypeClient) GetX(ctx context.Context, id string) *Relations
 	return obj
 }
 
-// QueryWorkspace queries the workspace edge of a RelationshipType.
-func (c *RelationshipTypeClient) QueryWorkspace(_m *RelationshipType) *ResourceQuery {
-	query := (&ResourceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(relationshiptype.Table, relationshiptype.FieldID, id),
-			sqlgraph.To(resource.Table, resource.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, relationshiptype.WorkspaceTable, relationshiptype.WorkspaceColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryRelationships queries the relationships edge of a RelationshipType.
 func (c *RelationshipTypeClient) QueryRelationships(_m *RelationshipType) *RelationshipQuery {
 	query := (&RelationshipClient{config: c.config}).Query()

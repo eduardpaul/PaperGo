@@ -360,22 +360,22 @@ func TestExclusiveScopesInheritanceCopyAndReset(t *testing.T) {
 	}
 }
 func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
-	s, w, l := fixture(t)
+	s, _, l := fixture(t)
 	a := create(t, s, l.ID, "item", "A", nil)
 	b := create(t, s, l.ID, "item", "B", nil)
 	c := create(t, s, l.ID, "item", "C", nil)
-	typ, e := s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "owns", Label: "Owns", InverseLabel: "Owned by", Directed: true, MaxOutgoing: ptr(1), Attributes: []CreateField{{Key: "weight", Label: "Weight", Type: "decimal", Scale: 2, Required: true, Options: model.FieldOptions{Maximum: ptr("10.00")}}}})
+	typ, e := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Owns", InverseLabel: "Owned by", Directed: true, MaxOutgoing: ptr(1), Attributes: []CreateField{{Key: "weight", Label: "Weight", Type: "decimal", Scale: 2, Required: true, Options: model.FieldOptions{Maximum: ptr("10.00")}}}})
 	if e != nil {
 		t.Fatal(e)
 	}
-	edge, e := s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: typ.ID, TargetID: b.ID, Metadata: map[string]any{"weight": "1.20"}})
+	edge, e := s.Link(testContext, "alice", a.ID, CreateRelationship{Type: typ.ID, TargetID: b.ID, Metadata: map[string]any{"weight": "1.20"}})
 	if e != nil {
 		t.Fatal(e)
 	}
-	if edge.TypeID != typ.ID || edge.Name != "owns" || edge.Metadata["weight"] != "1.20" {
+	if edge.TypeID != typ.ID || edge.Metadata["weight"] != "1.20" {
 		t.Fatal("typed edge normalization", edge)
 	}
-	if _, e = s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: typ.ID, TargetID: c.ID, Metadata: map[string]any{"weight": "1.20"}}); !errors.Is(e, ErrConflict) {
+	if _, e = s.Link(testContext, "alice", a.ID, CreateRelationship{Type: typ.ID, TargetID: c.ID, Metadata: map[string]any{"weight": "1.20"}}); !errors.Is(e, ErrConflict) {
 		t.Fatal("cardinality ignored", e)
 	}
 	if _, e = s.UpdateRelationship(testContext, "alice", a.ID, edge.ID, edge.Version, UpdateRelationship{Metadata: map[string]any{"weight": "11.00"}}); e == nil {
@@ -394,18 +394,18 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 	if e = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, updated.Version); e != nil {
 		t.Fatal(e)
 	}
-	sym, e := s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "related", Label: "Related"})
+	sym, e := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Related"})
 	if e != nil {
 		t.Fatal(e)
 	}
-	edge, e = s.Link(testContext, "alice", b.ID, CreateRelationship{TypeID: sym.ID, TargetID: a.ID})
+	edge, e = s.Link(testContext, "alice", b.ID, CreateRelationship{Type: sym.ID, TargetID: a.ID})
 	if e != nil {
 		t.Fatal(e)
 	}
 	if edge.Directed || edge.SourceID > edge.TargetID {
 		t.Fatal("noncanonical symmetric edge")
 	}
-	if again, e := s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: sym.ID, TargetID: b.ID}); e != nil || again.ID != edge.ID {
+	if again, e := s.Link(testContext, "alice", a.ID, CreateRelationship{Type: sym.ID, TargetID: b.ID}); e != nil || again.ID != edge.ID {
 		t.Fatal("symmetric retry", again, e)
 	}
 	for _, id := range []string{a.ID, b.ID} {
@@ -416,11 +416,11 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 			}
 		}
 	}
-	if _, e = s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "bad", Label: "Bad", MaxIncoming: ptr(1)}); e == nil {
+	if _, e = s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Bad", MaxIncoming: ptr(1)}); e == nil {
 		t.Fatal("directional cardinality on symmetric policy")
 	}
 	// Competing links allocate the single outgoing slot atomically.
-	single, e := s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "single", Label: "Single", Directed: true, MaxOutgoing: ptr(1)})
+	single, e := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Single", Directed: true, MaxOutgoing: ptr(1)})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -430,7 +430,7 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 		wg.Add(1)
 		go func(target string) {
 			defer wg.Done()
-			_, e := s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: single.ID, TargetID: target})
+			_, e := s.Link(testContext, "alice", a.ID, CreateRelationship{Type: single.ID, TargetID: target})
 			results <- e
 		}(id)
 	}

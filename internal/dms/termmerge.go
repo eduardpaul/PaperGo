@@ -164,6 +164,9 @@ func (s *Service) mergeInto(ctx context.Context, subject string, source, target 
 	if target.Deprecated {
 		return nil, invalid("the target term must be active")
 	}
+	if err := s.mergeRelationshipTerms(ctx, source, target); err != nil {
+		return nil, err
+	}
 	children, e := s.Client.Term.Query().Where(term.ParentIDEQ(source.ID)).Order(ent.Asc(term.FieldID)).All(ctx)
 	if e != nil {
 		return nil, e

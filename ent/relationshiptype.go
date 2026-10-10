@@ -7,7 +7,6 @@ import (
 	"encoding/json/jsontext"
 	"fmt"
 	"papergo/ent/relationshiptype"
-	"papergo/ent/resource"
 	"strings"
 	"time"
 
@@ -22,12 +21,6 @@ type RelationshipType struct {
 	ID string `json:"id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
-	// WorkspaceID holds the value of the "workspace_id" field.
-	WorkspaceID string `json:"workspace_id,omitempty"`
-	// Key holds the value of the "key" field.
-	Key string `json:"key,omitempty"`
-	// Label holds the value of the "label" field.
-	Label string `json:"label,omitempty"`
 	// InverseLabel holds the value of the "inverse_label" field.
 	InverseLabel string `json:"inverse_label,omitempty"`
 	// Directed holds the value of the "directed" field.
@@ -50,30 +43,17 @@ type RelationshipType struct {
 
 // RelationshipTypeEdges holds the relations/edges for other nodes in the graph.
 type RelationshipTypeEdges struct {
-	// Workspace holds the value of the workspace edge.
-	Workspace *Resource `json:"workspace,omitempty"`
 	// Relationships holds the value of the relationships edge.
 	Relationships []*Relationship `json:"relationships,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
-}
-
-// WorkspaceOrErr returns the Workspace value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e RelationshipTypeEdges) WorkspaceOrErr() (*Resource, error) {
-	if e.Workspace != nil {
-		return e.Workspace, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: resource.Label}
-	}
-	return nil, &NotLoadedError{edge: "workspace"}
+	loadedTypes [1]bool
 }
 
 // RelationshipsOrErr returns the Relationships value or an error if the edge
 // was not loaded in eager-loading.
 func (e RelationshipTypeEdges) RelationshipsOrErr() ([]*Relationship, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[0] {
 		return e.Relationships, nil
 	}
 	return nil, &NotLoadedError{edge: "relationships"}
@@ -90,7 +70,7 @@ func (*RelationshipType) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case relationshiptype.FieldMaxIncoming, relationshiptype.FieldMaxOutgoing, relationshiptype.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case relationshiptype.FieldID, relationshiptype.FieldWorkspaceID, relationshiptype.FieldKey, relationshiptype.FieldLabel, relationshiptype.FieldInverseLabel:
+		case relationshiptype.FieldID, relationshiptype.FieldInverseLabel:
 			values[i] = new(sql.NullString)
 		case relationshiptype.FieldCreatedAt, relationshiptype.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -120,24 +100,6 @@ func (_m *RelationshipType) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
-			}
-		case relationshiptype.FieldWorkspaceID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field workspace_id", values[i])
-			} else if value.Valid {
-				_m.WorkspaceID = value.String
-			}
-		case relationshiptype.FieldKey:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field key", values[i])
-			} else if value.Valid {
-				_m.Key = value.String
-			}
-		case relationshiptype.FieldLabel:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field label", values[i])
-			} else if value.Valid {
-				_m.Label = value.String
 			}
 		case relationshiptype.FieldInverseLabel:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -198,11 +160,6 @@ func (_m *RelationshipType) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// QueryWorkspace queries the "workspace" edge of the RelationshipType entity.
-func (_m *RelationshipType) QueryWorkspace() *ResourceQuery {
-	return NewRelationshipTypeClient(_m.config).QueryWorkspace(_m)
-}
-
 // QueryRelationships queries the "relationships" edge of the RelationshipType entity.
 func (_m *RelationshipType) QueryRelationships() *RelationshipQuery {
 	return NewRelationshipTypeClient(_m.config).QueryRelationships(_m)
@@ -233,15 +190,6 @@ func (_m *RelationshipType) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("workspace_id=")
-	builder.WriteString(_m.WorkspaceID)
-	builder.WriteString(", ")
-	builder.WriteString("key=")
-	builder.WriteString(_m.Key)
-	builder.WriteString(", ")
-	builder.WriteString("label=")
-	builder.WriteString(_m.Label)
 	builder.WriteString(", ")
 	builder.WriteString("inverse_label=")
 	builder.WriteString(_m.InverseLabel)
