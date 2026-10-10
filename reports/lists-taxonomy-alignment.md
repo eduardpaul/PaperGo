@@ -1,14 +1,14 @@
 # Lists and Taxonomy: code/API parity and alignment
 
-PaperDotNet source: `96df412f040f53cc14711aaba35880e24817e084`. PaperGo code baseline: `4e19f54`, including organization groups/module roles, explicit recursive deletion, workspace, PATCH/taxonomy, collection, history and relationship changes described below. The comparison uses handlers, services, schemas, triggers, validators and tests. Project documentation is not feature evidence. This is static parity analysis plus PaperGo integration testing; the .NET application was not executed.
+PaperDotNet source: `96df412f040f53cc14711aaba35880e24817e084`. PaperGo code baseline: `c0fdd01`, including the organization term store and independent taxonomy scopes, organization groups/module roles, explicit recursive deletion, workspace, PATCH/taxonomy, collection, history and relationship changes described below. The comparison uses handlers, services, schemas, triggers, validators and tests. Project documentation is not feature evidence. This is static parity analysis plus PaperGo integration testing; the .NET application was not executed.
 
 The two modules do **not** yet cover all the same user stories. A matching story means the corresponding capability exists; it does not imply identical URLs, payload names, error statuses or authorization models. Publishing, declarative validation, frozen schemas and typed edge policies remain PaperGo features.
 
 | Assessment | Stories |
 | --- | ---: |
-| Covered | 20 |
-| Partial | 5 |
-| Drift | 8 |
+| Covered | 22 |
+| Partial | 4 |
+| Drift | 7 |
 | Drift (accepted) | 1 |
 | Missing | 10 |
 | Go extra | 3 |
@@ -26,7 +26,7 @@ LST-17 is an accepted difference: the user requires deleting a folder with its c
 | LST-20/21 | Numbered history, changed fields and metadata restore | Schema pairing, pagination, current marker, missing revisions, stale restore, current validation rollback and blob retention; HTTP tests |
 | LST-24 | Existing persisted view layout recognized | Code inspection of ViewInput, validation and SetLayout on create/update |
 | LST-29/41 | Both writable endpoints, either-end mutations, retry ensure, metadata PATCH | Directed/symmetric link tests; full-cardinality retry; no-op audit check; peer ACL rejection; required attribute removal rollback |
-| TAX-03/04 | Read-only workspace contributors add open terms and keywords | Visitor tests; outsiders denied; closed-set/deprecated/keyword-curation manager checks |
+| TAX-01/03/04 | One organization vocabulary; independent taxonomy reader/curator scopes | Service and HTTP tests without workspace membership, group role revocation, cross-workspace fields/merge/counts, import round trips, workflow pickers and vocabulary retention after workspace deletion |
 
 ## Lists
 
@@ -79,23 +79,23 @@ LST-17 is an accepted difference: the user requires deleting a folder with its c
 
 | ID | User story | Assessment | PaperDotNet | PaperGo | Remaining consequence / contract | Code evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| TAX-01 | Share one governed vocabulary across the organization | Drift | Tenant termStore groups/sets/terms, available across workspace lists. | Every term group/set belongs to a workspace; term fields require same-workspace sets. | One shared corporate term set cannot directly classify content in multiple workspaces. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:62][G-TAX]<br>[Go: termvalues.go:32][G-TERMVALUE] |
-| TAX-02 | Curate hierarchical terms with labels, synonyms, colors, deprecation, move and merge | Covered | Term store handlers and persisted hierarchy/merge state. | Term APIs and MoveTerm/MergeTerm preserve managed IDs and paths. | Principal vocabulary curation stories are covered. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[Go: taxonomy.go:62][G-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI] |
-| TAX-03 | Allow contributors to add terms in open sets | Partial | CreateTerm allows taxonomy.read in an open set; closed set needs taxonomy.manage. | Workspace read access permits ordinary new terms in open sets and keyword creation. Closed sets and deprecated/available-as-keyword curation still require manage. | The read-only contributor story works inside a workspace. Persisted taxonomy.read/manage roles are implemented. Vocabulary and curation still require workspace access; a shared organization term store remains TAX-01. | [.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[taxonomy.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:455) |
-| TAX-04 | Add/suggest keywords and promote popular keywords into managed terms | Covered | Keyword creation/suggestions/popular/promote handlers. | Workspace keywords, popular counts and promote API; free resource tags are an additional system. | Controlled keywords/promotion exist. Free tags and term-valued keywords need deliberate client mapping. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI]<br>[Go: keywords.go:20][G-KEYWORDS] |
+| TAX-01 | Share one governed vocabulary across the organization | Covered | Tenant termStore groups/sets/terms, available across workspace lists. | Organization-owned groups/sets/terms and one shared keywords set; term fields in any workspace reference the same IDs. | Shared IDs resolve in fields, queries, smart folders, portable packages and workflow pickers. Workspace deletion retains the organization vocabulary. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:50][G-TAX]<br>[organization_taxonomy_test.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/organization_taxonomy_test.go:137) |
+| TAX-02 | Curate hierarchical terms with labels, synonyms, colors, deprecation, move and merge | Covered | Term store handlers and persisted hierarchy/merge state. | Term APIs and MoveTerm/MergeTerm preserve managed IDs and paths. | Principal vocabulary curation stories are covered. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[Go: taxonomy.go:50][G-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI] |
+| TAX-03 | Allow contributors to add terms in open sets | Covered | CreateTerm allows taxonomy.read in an open set; closed set needs taxonomy.manage. | taxonomy.read permits open-set terms and keywords independently of workspace membership; taxonomy.manage gates curation and closed-set creation. Persisted user/group role revocation applies immediately. | Taxonomy-only contributors and curators work without content access. Item-field auto-contributions also require taxonomy.read. | [.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[taxonomy.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:437)<br>[organization_taxonomy_test.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/organization_taxonomy_test.go:30) |
+| TAX-04 | Add/suggest keywords and promote popular keywords into managed terms | Covered | Keyword creation/suggestions/popular/promote handlers. | Organization keywords, cross-workspace popular counts and promote API; free resource tags are an additional system. | Controlled keywords/promotion exist. Free tags and term-valued keywords need deliberate client mapping. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI]<br>[Go: keywords.go:20][G-KEYWORDS] |
 | TAX-05 | Import a governed taxonomy and resolve labels/IDs | Covered | Term store CSV import and term ID lookup. | CSV group import, taxonomy package import/export, IDs/labels/synonyms normalization. | Seed/import and term lookup stories are covered with different package contracts. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[Go: termimport.go:40][G-IMPORT]<br>[Go: termexport.go:58][G-TAXPORT]<br>[Go: termvalues.go:32][G-TERMVALUE] |
 
 ## Dependency order for the remaining alignment
 
 | Work | Why it comes first | Dependent gaps |
 | --- | --- | --- |
-| Active-user/account lifecycle and organization catalogs | Enrolled subjects, nested groups and module roles now have explicit organization authority. Account disable/delete, person field validation and a shared organization term store remain incomplete. | Person fields, corporate taxonomy, personal Home |
-| Organization content-type and vocabulary catalogs | ContentType.container_id and TermSet.workspace_id are immutable ownership boundaries; collection type and term-field validators depend on them. Templates currently copy definitions. | Shared live schemas, type detach/reclassification, compatible cross-collection moves, corporate taxonomy and term-backed relationship types |
+| Active-user/account lifecycle | Enrolled subjects, nested groups and module roles now have explicit organization authority. Account disable/delete and person field validation remain incomplete. | Person fields, personal Home |
+| Organization content-type catalogs | ContentType.container_id remains an immutable ownership boundary; collection type validators depend on it. Templates currently copy definitions. Taxonomy is organization-wide. | Shared live schemas, type detach/reclassification, compatible cross-collection moves and term-backed relationship types |
 | Content lifecycle and folder metadata | Resource kind/type constraints and revision/projection triggers currently distinguish folders from items; tombstones and historical rows cannot be restored/purged. Durable workflow records also reference items. | Folder classification, recycle bin, purge and retention settings |
 | Tracked filtered edits and query contracts | Atomic explicit bulk requests differ from independently committed filtered operations; SortSpec represents one sort key. | Filtered bulk progress/failures, multiple sorts and ad hoc projection |
 | Durable change feed | Audit events are managerial and domain events do not provide an item delta cursor with ACL-change/deletion semantics. | Initial/offline sync, incremental access changes and tombstones |
 
-The remaining architecture should be changed in place under the new-app rules: one schema, matching Ent models, callers and contracts. Organization vocabulary should use the persisted scope model while its ownership boundary is changed in place.
+The remaining architecture should be changed in place under the new-app rules: one schema, matching Ent models, callers and contracts. Organization vocabulary uses persisted taxonomy scopes independently of workspace ACLs.
 
 ## Validation
 
@@ -105,6 +105,7 @@ Deletion tests cover both ordinary REST empty-folder deletion and explicit recur
 
 | Commit | Change |
 | --- | --- |
+| `c0fdd01` | Organization taxonomy, independent taxonomy permissions and shared consumers |
 | `5bc9d70` | Shared workspace metadata, membership, permissions and deletion |
 | `448f18c` | Item/edge PATCH and open Taxonomy contribution permissions |
 | `643f1b1` | Collection metadata, folder policy, manager permissions and deletion |
@@ -142,7 +143,7 @@ Deletion tests cover both ordinary REST empty-folder deletion and explicit recur
 [G-SMACTION]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/smartfolderactions.go:28
 [G-SMART]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/smartfolders.go:24
 [G-SMPORT]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/smartfoldertemplates.go:42
-[G-TAX]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:62
+[G-TAX]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:50
 [G-TAXAPI]: C:/Users/eduapaul/Documents/PaperGo/internal/httpapi/taxonomy.go:13
 [G-TAXPORT]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/termexport.go:58
 [G-TEMPL]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/templates.go:14
@@ -185,4 +186,16 @@ Deletion tests cover both ordinary REST empty-folder deletion and explicit recur
 | Authority boundaries | Covered | Directory changes require identity.manage; unknown principals/scopes and user/group ID collisions cannot grant access; last Administrator removal or group deletion rolls back. |
 | REST / WebDAV / workflow item actions | Covered | Each uses current persisted group/role state; content authorization and mutations share a transaction. HTTP and WebDAV revocation tests pass; transactional service and durable runner suites pass. |
 
-Validation: `go test -count=1 ./...`, `go vet ./...` and the app build passed. Ent was regenerated, including cascade annotations matching the directory schema. Atlas validated the checksum and applied the single schema to the recreated disposable local database. The .NET evidence remains source inspection of the pinned commit; the .NET app was not executed. This closes LST-31 without claiming the separate account-lifecycle, shared content-type or organization term-store stories are complete.
+Validation: `go test -count=1 ./...`, `go vet ./...` and the app build passed. Ent was regenerated, including cascade annotations matching the directory schema. Atlas validated the checksum and applied the single schema to the recreated disposable local database. The .NET evidence remains source inspection of the pinned commit; the .NET app was not executed. This closes LST-31 without claiming the separate account-lifecycle or shared content-type stories are complete.
+
+## TAX-01 / TAX-03 code/API verification
+
+| Priority / story | Result | Verified behavior |
+| --- | --- | --- |
+| P1 · TAX-03 | Covered | Taxonomy-only readers contribute open terms and keywords without workspace membership. Closed-set additions, flags, updates, imports, promotion, usage counts and audit require taxonomy.manage. |
+| P1 · TAX-01 | Covered | One organization store initializes before any workspace. Group names and set keys are organization-unique; every workspace uses the same term and keyword IDs. |
+| Authority | Covered | Direct and group roles supply scopes. Removing a group membership or role assignment revokes taxonomy access immediately; taxonomy scopes do not grant content access. |
+| Shared consumers | Covered | Fields/defaults, labels, query filters, smart folders, imports and workflow pickers use organization vocabulary. Term merge notifications reach every live workspace subscription. |
+| Retention and audit | Covered | Deleting a workspace retains vocabulary and removes its content from keyword counts. GET /v1/taxonomy/audit exposes organization curation to taxonomy managers. |
+
+Validation: `go test -count=1 ./...`, `go vet ./...`, module verification and the application build passed. Additional [HTTP tests](C:/Users/eduapaul/Documents/PaperGo/internal/httpapi/organization_taxonomy_test.go:14) verify group-assigned taxonomy.read and immediate revocation with no workspace/list scopes. The [runner regression](C:/Users/eduapaul/Documents/PaperGo/internal/runner/organization_taxonomy_test.go:10) verifies that a shared term merge completes subscribed workflows in both workspaces. Ent was regenerated, Atlas validated the single migration checksum, and the disposable local database was recreated from schema version `20261007000100` with zero pending migrations. Evidence comes from Go services, SQL constraints, HTTP handlers, integration tests and the pinned .NET TaxonomyDbContext/TermStoreEndpoints code; the .NET application was not executed.

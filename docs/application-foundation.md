@@ -185,6 +185,7 @@ Run `go test ./internal/dms -run '^$' -bench BenchmarkItemUpdates -benchmem` to 
 | GET / POST | /v1/keywords | Suggest keywords, or get or add one |
 | GET | /v1/keywords/popular | Most used keywords |
 | POST | /v1/keywords/{id}/promote | Promote a keyword into a managed set |
+| GET | /v1/taxonomy/audit | Organization curation audit (taxonomy.manage) |
 | GET | /v1/taxonomy/export | Export the taxonomy as a package |
 | POST | /v1/taxonomy/import | Import a taxonomy package |
 

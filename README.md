@@ -127,10 +127,10 @@ When publishing is disabled, library metadata is visible immediately, including 
 Break item permission inheritance using PUT `/permissions` and its current `If-Match`:
 
 ```json
-{"inherit":false,"grants":[{"subject":"local-admin","action":"manage","effect":"allow"},{"subject":"reviewer-subject","action":"read","effect":"allow"}]}
+{"inherit":false,"grants":[{"principal_type":"user","principal_id":"local-admin","action":"manage","effect":"allow"},{"principal_type":"user","principal_id":"reviewer-subject","action":"read","effect":"allow"}]}
 ```
 
-Reset with `{"inherit":true,"grants":[]}`, or break and copy with `{"inherit":false,"copy_inherited":true}`. Inherited resources cannot carry local grants. GET permissions identifies the effective scope and grants. An ACL replacement that removes the caller's manage access is rolled back. A workspace creator receives manage access atomically. Every authenticated principal can create its own workspace. Subject values are exact OIDC `sub` claims; groups and organization provisioning are not implemented.
+Reset with `{"inherit":true,"grants":[]}`, or break and copy with `{"inherit":false,"copy_inherited":true}`. Inherited resources cannot carry local grants. GET permissions identifies the effective scope and grants. An ACL replacement that removes the caller's manage access is rolled back. A workspace creator receives manage access atomically and needs `workspace.create`. User principals identify enrolled OIDC subjects; group principals identify organization groups, including nested members. Persisted module roles apply independently of content ACLs. The shared organization term store uses `taxonomy.read` for reads/open contributions and `taxonomy.manage` for curation, without requiring workspace membership.
 
 Create a relationship type in the workspace (`POST /v1/workspaces/{id}/relationship-types`), then link items with it:
 

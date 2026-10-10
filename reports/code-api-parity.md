@@ -2,7 +2,7 @@
 
 **Result: the two apps do not currently cover the same user stories.** PaperGo implements the shared resource, schema, taxonomy and workflow foundations, but many application modules are absent. Existing overlapping features also differ in destructive edits, permission checks, content-type scope, bulk behavior and workflow authority.
 
-LST-31 is now covered through nested group ACLs and persisted module roles. Current implementation results are in [workspace alignment](workspaces-alignment.md) and the [47-story Lists/Taxonomy table](lists-taxonomy-alignment.md). The module inventory below records the pinned audit baseline.
+LST-31 is covered through nested group ACLs and persisted module roles. TAX-01 and TAX-03 are covered by the organization term store and independent taxonomy scopes (`c0fdd01`). Current implementation results are in [workspace alignment](workspaces-alignment.md) and the [47-story Lists/Taxonomy table](lists-taxonomy-alignment.md). The module inventory below records the pinned audit baseline.
 
 Audit date: 2026-10-10. Baselines: PaperDotNet [`96df412`](https://github.com/eduardpaul/PaperDotNet/tree/96df412f040f53cc14711aaba35880e24817e084) and local PaperGo `8bc2724afaf9e819b0bf99c2b20df5dc36acc363`. PaperGo was clean when the audit began. This report is the only repository change made for the audit.
 
@@ -18,7 +18,7 @@ This is a source and API audit. PaperDotNet was not built or run, and no shared 
 
 ## Module overview
 
-**130 story comparisons:** 20 covered, 15 partial, 19 drift, 72 missing, 4 go extra. The LST-31 row includes its current alignment; other baseline rows retain the pinned module audit, with subsequent implementation results in the linked alignment reports.
+**130 story comparisons:** 22 covered, 15 partial, 17 drift, 72 missing, 4 go extra. The LST-31, TAX-01 and TAX-03 rows include their current alignment; other baseline rows retain the pinned module audit, with subsequent implementation results in the linked alignment reports.
 
 | Module | Stories | Covered | Partial | Drift | Missing | Go extra | Observed coverage / principal gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ This is a source and API audit. PaperDotNet was not built or run, and no shared 
 | [Identity](#identity) | 10 | 0 | 1 | 1 | 8 | 0 | External token verification exists; local accounts, OAuth issuance, groups, roles, client registry and preferences missing. |
 | [Workspaces](#workspaces) | 4 | 1 | 0 | 0 | 3 | 0 | Create/discover/rename covered; descriptions, membership and delete missing. |
 | [Lists](#lists) | 42 | 11 | 4 | 11 | 13 | 3 | Core item/schema/query/view/ACL/relations covered; moves, restore, delta and templates incomplete; several write semantics drift. |
-| [Taxonomy](#taxonomy) | 5 | 3 | 0 | 2 | 0 | 0 | Curation/import/keywords covered; vocabulary scope and contributor rights drift. |
+| [Taxonomy](#taxonomy) | 5 | 5 | 0 | 0 | 0 | 0 | Organization vocabulary, independent contributor/curator scopes, curation/import/keywords covered. |
 | [Documents](#documents) | 13 | 1 | 1 | 1 | 9 | 1 | Raw versioned files covered; OCR, text, previews, pages, inboxes, duplicates and reviews missing; WebDAV added. |
 | [Search](#search) | 6 | 0 | 1 | 1 | 4 | 0 | Metadata search exists; body search, snippets, facets, relevance and semantic/hybrid retrieval missing or drifted. |
 | [Jobs](#jobs) | 4 | 1 | 2 | 0 | 1 | 0 | Durable runner exists; generic operations, live events and subscriber/mutator extension contracts incomplete. |
@@ -152,14 +152,14 @@ Core item/schema/query/view/ACL/relations covered; moves, restore, delta and tem
 
 ## Taxonomy
 
-Curation/import/keywords covered; vocabulary scope and contributor rights drift.
+Organization vocabulary, independent contributor/curator scopes, curation/import/keywords covered.
 
 | ID | User story | Status | PaperDotNet code/API | PaperGo code/API | Effect / acceptance gap | Code evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| TAX-01 | Share one governed vocabulary across the organization | Drift | Tenant termStore groups/sets/terms, available across workspace lists. | Every term group/set belongs to a workspace; term fields require same-workspace sets. | One shared corporate term set cannot directly classify content in multiple workspaces. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:62][G-TAX]<br>[Go: termvalues.go:32][G-TERMVALUE] |
-| TAX-02 | Curate hierarchical terms with labels, synonyms, colors, deprecation, move and merge | Covered | Term store handlers and persisted hierarchy/merge state. | Term APIs and MoveTerm/MergeTerm preserve managed IDs and paths. | Principal vocabulary curation stories are covered. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[Go: taxonomy.go:62][G-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI] |
-| TAX-03 | Allow contributors to add terms in open sets | Drift | CreateTerm allows taxonomy.read in an open set; closed set needs taxonomy.manage. | Open-set additions require workspace write; closed set requires manage. | Users with taxonomy read but no content write can add terms in .NET; no equivalent role in Go. | [.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[Go: taxonomy.go:466][G-TERMAUTH] |
-| TAX-04 | Add/suggest keywords and promote popular keywords into managed terms | Covered | Keyword creation/suggestions/popular/promote handlers. | Workspace keywords, popular counts and promote API; free resource tags are an additional system. | Controlled keywords/promotion exist. Free tags and term-valued keywords need deliberate client mapping. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI]<br>[Go: keywords.go:20][G-KEYWORDS] |
+| TAX-01 | Share one governed vocabulary across the organization | Covered | Tenant termStore groups/sets/terms, available across workspace lists. | Organization-owned groups/sets/terms and one shared keywords set; term fields in any workspace reference the same IDs. | Shared IDs resolve in fields, queries, smart folders, portable packages and workflow pickers. Workspace deletion retains the organization vocabulary. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:50][G-TAX]<br>[organization_taxonomy_test.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/organization_taxonomy_test.go:137) |
+| TAX-02 | Curate hierarchical terms with labels, synonyms, colors, deprecation, move and merge | Covered | Term store handlers and persisted hierarchy/merge state. | Term APIs and MoveTerm/MergeTerm preserve managed IDs and paths. | Principal vocabulary curation stories are covered. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[Go: taxonomy.go:50][G-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI] |
+| TAX-03 | Allow contributors to add terms in open sets | Covered | CreateTerm allows taxonomy.read in an open set; closed set needs taxonomy.manage. | taxonomy.read permits open-set terms and keywords independently of workspace membership; taxonomy.manage gates curation and closed-set creation. Persisted user/group role revocation applies immediately. | Taxonomy-only contributors and curators work without content access. Item-field auto-contributions also require taxonomy.read. | [.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[taxonomy.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:437)<br>[organization_taxonomy_test.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/organization_taxonomy_test.go:30) |
+| TAX-04 | Add/suggest keywords and promote popular keywords into managed terms | Covered | Keyword creation/suggestions/popular/promote handlers. | Organization keywords, cross-workspace popular counts and promote API; free resource tags are an additional system. | Controlled keywords/promotion exist. Free tags and term-valued keywords need deliberate client mapping. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[Go: taxonomy.go:13][G-TAXAPI]<br>[Go: keywords.go:20][G-KEYWORDS] |
 | TAX-05 | Import a governed taxonomy and resolve labels/IDs | Covered | Term store CSV import and term ID lookup. | CSV group import, taxonomy package import/export, IDs/labels/synonyms normalization. | Seed/import and term lookup stories are covered with different package contracts. | [.NET: TermStoreEndpoints.cs:104][N-TAX]<br>[.NET: TermStoreEndpoints.Terms.cs:99][N-TAXTERMS]<br>[Go: termimport.go:40][G-IMPORT]<br>[Go: termexport.go:58][G-TAXPORT]<br>[Go: termvalues.go:32][G-TERMVALUE] |
 
 ## Documents
@@ -550,11 +550,11 @@ Every detailed finding links to its implementation evidence. For missing Go stor
 [G-SMART]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/smartfolders.go:24
 [G-SMPORT]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/smartfoldertemplates.go:42
 [G-STORE]: C:/Users/eduapaul/Documents/PaperGo/internal/storage/local.go:54
-[G-TAX]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:62
+[G-TAX]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:50
 [G-TAXAPI]: C:/Users/eduapaul/Documents/PaperGo/internal/httpapi/taxonomy.go:13
 [G-TAXPORT]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/termexport.go:58
 [G-TEMPL]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/templates.go:14
-[G-TERMAUTH]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:466
+[G-TERMAUTH]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/taxonomy.go:437
 [G-TERMVALUE]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/termvalues.go:32
 [G-TX]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/service.go:55
 [G-TYPETEST]: C:/Users/eduapaul/Documents/PaperGo/internal/dms/contenttypes_test.go:38
