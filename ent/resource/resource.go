@@ -31,6 +31,8 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
+	// FieldAllowFolders holds the string denoting the allow_folders field in the database.
+	FieldAllowFolders = "allow_folders"
 	// FieldTags holds the string denoting the tags field in the database.
 	FieldTags = "tags"
 	// FieldTemplateKeys holds the string denoting the template_keys field in the database.
@@ -203,6 +205,7 @@ var Columns = []string{
 	FieldKind,
 	FieldName,
 	FieldDescription,
+	FieldAllowFolders,
 	FieldTags,
 	FieldTemplateKeys,
 	FieldValues,
@@ -249,6 +252,8 @@ var (
 	DefaultDescription string
 	// DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
 	DescriptionValidator func(string) error
+	// DefaultAllowFolders holds the default value on creation for the "allow_folders" field.
+	DefaultAllowFolders bool
 	// DefaultTags holds the default value on creation for the "tags" field.
 	DefaultTags []string
 	// DefaultTemplateKeys holds the default value on creation for the "template_keys" field.
@@ -359,6 +364,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByDescription orders the results by the description field.
 func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByAllowFolders orders the results by the allow_folders field.
+func ByAllowFolders(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllowFolders, opts...).ToFunc()
 }
 
 // ByInheritPermissions orders the results by the inherit_permissions field.

@@ -421,11 +421,11 @@
             }
           }
         },
-        "description": "Workspace metadata changes require owner access. Other resources require write; collection policy changes require manage. If-Match is required."
+        "description": "Workspace and collection metadata changes require manage access. Items and folders require write access. If-Match is required."
       },
       "delete": {
         "summary": "Delete a folder or item with everything below it (write required on all of it)",
-        "description": "Workspace owners can delete the workspace and all descendants, including exclusive scopes, and disable/tombstone its workflows. Folder/item deletion requires write on every live descendant. Deletion is final; immutable history is retained. Collections cannot be deleted individually.",
+        "description": "Deletes a workspace, collection, folder or item and its live descendants. Workspace and collection deletion require manage access; collection managers may delete the entire collection regardless of descendant ACLs. Tombstones, revisions and audit history are retained. Read projections and live relationships are removed. Workflows bound to a deleted workspace or collection are disabled and deleted.",
         "responses": {
           "204": {
             "description": "Deleted"
@@ -10787,7 +10787,12 @@
           "description": {
             "type": "string",
             "maxLength": 2000,
-            "description": "Workspace description. Only workspaces accept this property; an empty string clears it."
+            "description": "Workspace or collection description, limited to 2000 UTF-16 code units. Changes require manage access."
+          },
+          "allow_folders": {
+            "type": "boolean",
+            "description": "Lists and libraries only: permits creating physical folders. Disabling retains existing folders. Changes require manage access.",
+            "default": true
           }
         },
         "required": [
@@ -10847,8 +10852,13 @@
           "description": {
             "type": "string",
             "maxLength": 2000,
-            "description": "Workspace description. Only workspaces accept this property; an empty string clears it.",
+            "description": "Workspace or collection description, limited to 2000 UTF-16 code units. Changes require manage access.",
             "default": ""
+          },
+          "allow_folders": {
+            "type": "boolean",
+            "description": "Lists and libraries only: permits creating physical folders. Disabling retains existing folders. Changes require manage access.",
+            "default": true
           }
         },
         "required": [
@@ -10897,7 +10907,11 @@
           "description": {
             "type": "string",
             "maxLength": 2000,
-            "description": "Workspace description. Only workspaces accept this property; an empty string clears it."
+            "description": "Workspace or collection description, limited to 2000 UTF-16 code units. Changes require manage access."
+          },
+          "allow_folders": {
+            "type": "boolean",
+            "description": "Lists and libraries only: permits creating physical folders. Disabling retains existing folders. Changes require manage access."
           }
         },
         "required": [],

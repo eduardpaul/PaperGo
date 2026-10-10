@@ -13923,6 +13923,7 @@ type ResourceMutation struct {
 	kind                      *resource.Kind
 	name                      *string
 	description               *string
+	allow_folders             *bool
 	tags                      *[]string
 	appendtags                []string
 	template_keys             *[]string
@@ -14416,6 +14417,42 @@ func (m *ResourceMutation) OldDescription(ctx context.Context) (v string, err er
 // ResetDescription resets all changes to the "description" field.
 func (m *ResourceMutation) ResetDescription() {
 	m.description = nil
+}
+
+// SetAllowFolders sets the "allow_folders" field.
+func (m *ResourceMutation) SetAllowFolders(b bool) {
+	m.allow_folders = &b
+}
+
+// AllowFolders returns the value of the "allow_folders" field in the mutation.
+func (m *ResourceMutation) AllowFolders() (r bool, exists bool) {
+	v := m.allow_folders
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllowFolders returns the old "allow_folders" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldAllowFolders(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllowFolders is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllowFolders requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllowFolders: %w", err)
+	}
+	return oldValue.AllowFolders, nil
+}
+
+// ResetAllowFolders resets all changes to the "allow_folders" field.
+func (m *ResourceMutation) ResetAllowFolders() {
+	m.allow_folders = nil
 }
 
 // SetTags sets the "tags" field.
@@ -15887,7 +15924,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -15911,6 +15948,9 @@ func (m *ResourceMutation) Fields() []string {
 	}
 	if m.description != nil {
 		fields = append(fields, resource.FieldDescription)
+	}
+	if m.allow_folders != nil {
+		fields = append(fields, resource.FieldAllowFolders)
 	}
 	if m.tags != nil {
 		fields = append(fields, resource.FieldTags)
@@ -15987,6 +16027,8 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case resource.FieldDescription:
 		return m.Description()
+	case resource.FieldAllowFolders:
+		return m.AllowFolders()
 	case resource.FieldTags:
 		return m.Tags()
 	case resource.FieldTemplateKeys:
@@ -16046,6 +16088,8 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldName(ctx)
 	case resource.FieldDescription:
 		return m.OldDescription(ctx)
+	case resource.FieldAllowFolders:
+		return m.OldAllowFolders(ctx)
 	case resource.FieldTags:
 		return m.OldTags(ctx)
 	case resource.FieldTemplateKeys:
@@ -16144,6 +16188,13 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDescription(v)
+		return nil
+	case resource.FieldAllowFolders:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllowFolders(v)
 		return nil
 	case resource.FieldTags:
 		v, ok := value.([]string)
@@ -16420,6 +16471,9 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldDescription:
 		m.ResetDescription()
+		return nil
+	case resource.FieldAllowFolders:
+		m.ResetAllowFolders()
 		return nil
 	case resource.FieldTags:
 		m.ResetTags()

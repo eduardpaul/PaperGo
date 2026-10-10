@@ -110,8 +110,8 @@ func TestDeleteRetainsHistoryAndHidesTheSubtree(t *testing.T) {
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version+1); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stale delete accepted: %v", err)
 	}
-	if err := s.Delete(testContext, "alice", lib.ID, current(t, s, lib.ID).Version); err == nil {
-		t.Fatal("library deleted")
+	if err := s.Delete(testContext, "editor", lib.ID, current(t, s, lib.ID).Version); !errors.Is(err, ErrForbidden) {
+		t.Fatal("editor deleted library", err)
 	}
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version); err != nil {
 		t.Fatal(err)

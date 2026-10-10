@@ -36,6 +36,8 @@ type Resource struct {
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
+	// AllowFolders holds the value of the "allow_folders" field.
+	AllowFolders bool `json:"allow_folders,omitempty"`
 	// Tags holds the value of the "tags" field.
 	Tags []string `json:"tags,omitempty"`
 	// TemplateKeys holds the value of the "template_keys" field.
@@ -265,7 +267,7 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case resource.FieldTags, resource.FieldTemplateKeys, resource.FieldValues:
 			values[i] = new([]byte)
-		case resource.FieldInheritPermissions, resource.FieldPublishingEnabled, resource.FieldWebdavEnabled:
+		case resource.FieldAllowFolders, resource.FieldInheritPermissions, resource.FieldPublishingEnabled, resource.FieldWebdavEnabled:
 			values[i] = new(sql.NullBool)
 		case resource.FieldVersion, resource.FieldNextRevisionNumber:
 			values[i] = new(sql.NullInt64)
@@ -344,6 +346,12 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
 				_m.Description = value.String
+			}
+		case resource.FieldAllowFolders:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field allow_folders", values[i])
+			} else if value.Valid {
+				_m.AllowFolders = value.Bool
 			}
 		case resource.FieldTags:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -599,6 +607,9 @@ func (_m *Resource) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)
+	builder.WriteString(", ")
+	builder.WriteString("allow_folders=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllowFolders))
 	builder.WriteString(", ")
 	builder.WriteString("tags=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Tags))

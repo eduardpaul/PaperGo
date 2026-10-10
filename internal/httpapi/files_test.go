@@ -52,8 +52,8 @@ func TestDeleteMoveAndWebDAVSettings(t *testing.T) {
 		}
 	}
 	response = request(h, "DELETE", "/v1/resources/"+lib.ID, "", testToken, `"1"`, "")
-	if response.Code != 422 {
-		t.Fatal("library deleted", response.Code)
+	if response.Code != 204 {
+		t.Fatal("library deletion failed", response.Code)
 	}
 }
 

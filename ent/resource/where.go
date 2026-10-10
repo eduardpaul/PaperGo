@@ -100,6 +100,11 @@ func Description(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldDescription, v))
 }
 
+// AllowFolders applies equality check predicate on the "allow_folders" field. It's identical to AllowFoldersEQ.
+func AllowFolders(v bool) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldAllowFolders, v))
+}
+
 // InheritPermissions applies equality check predicate on the "inherit_permissions" field. It's identical to InheritPermissionsEQ.
 func InheritPermissions(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldInheritPermissions, v))
@@ -648,6 +653,16 @@ func DescriptionEqualFold(v string) predicate.Resource {
 // DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
 func DescriptionContainsFold(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldContainsFold(FieldDescription, v))
+}
+
+// AllowFoldersEQ applies the EQ predicate on the "allow_folders" field.
+func AllowFoldersEQ(v bool) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldAllowFolders, v))
+}
+
+// AllowFoldersNEQ applies the NEQ predicate on the "allow_folders" field.
+func AllowFoldersNEQ(v bool) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldAllowFolders, v))
 }
 
 // InheritPermissionsEQ applies the EQ predicate on the "inherit_permissions" field.

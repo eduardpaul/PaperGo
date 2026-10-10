@@ -115,6 +115,20 @@ func (_c *ResourceCreate) SetNillableDescription(v *string) *ResourceCreate {
 	return _c
 }
 
+// SetAllowFolders sets the "allow_folders" field.
+func (_c *ResourceCreate) SetAllowFolders(v bool) *ResourceCreate {
+	_c.mutation.SetAllowFolders(v)
+	return _c
+}
+
+// SetNillableAllowFolders sets the "allow_folders" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableAllowFolders(v *bool) *ResourceCreate {
+	if v != nil {
+		_c.SetAllowFolders(*v)
+	}
+	return _c
+}
+
 // SetTags sets the "tags" field.
 func (_c *ResourceCreate) SetTags(v []string) *ResourceCreate {
 	_c.mutation.SetTags(v)
@@ -561,6 +575,10 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultDescription
 		_c.mutation.SetDescription(v)
 	}
+	if _, ok := _c.mutation.AllowFolders(); !ok {
+		v := resource.DefaultAllowFolders
+		_c.mutation.SetAllowFolders(v)
+	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		v := resource.DefaultTags
 		_c.mutation.SetTags(v)
@@ -662,6 +680,9 @@ func (_c *ResourceCreate) check() error {
 		if err := resource.DescriptionValidator(v); err != nil {
 			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Resource.description": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.AllowFolders(); !ok {
+		return &ValidationError{Name: "allow_folders", err: errors.New(`ent: missing required field "Resource.allow_folders"`)}
 	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		return &ValidationError{Name: "tags", err: errors.New(`ent: missing required field "Resource.tags"`)}
@@ -779,6 +800,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(resource.FieldDescription, field.TypeString, value)
 		_node.Description = value
+	}
+	if value, ok := _c.mutation.AllowFolders(); ok {
+		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
+		_node.AllowFolders = value
 	}
 	if value, ok := _c.mutation.Tags(); ok {
 		_spec.SetField(resource.FieldTags, field.TypeJSON, value)

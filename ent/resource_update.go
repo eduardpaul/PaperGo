@@ -84,6 +84,20 @@ func (_u *ResourceUpdate) SetNillableDescription(v *string) *ResourceUpdate {
 	return _u
 }
 
+// SetAllowFolders sets the "allow_folders" field.
+func (_u *ResourceUpdate) SetAllowFolders(v bool) *ResourceUpdate {
+	_u.mutation.SetAllowFolders(v)
+	return _u
+}
+
+// SetNillableAllowFolders sets the "allow_folders" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableAllowFolders(v *bool) *ResourceUpdate {
+	if v != nil {
+		_u.SetAllowFolders(*v)
+	}
+	return _u
+}
+
 // SetTags sets the "tags" field.
 func (_u *ResourceUpdate) SetTags(v []string) *ResourceUpdate {
 	_u.mutation.SetTags(v)
@@ -844,6 +858,9 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(resource.FieldDescription, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.AllowFolders(); ok {
+		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Tags(); ok {
 		_spec.SetField(resource.FieldTags, field.TypeJSON, value)
 	}
@@ -1538,6 +1555,20 @@ func (_u *ResourceUpdateOne) SetDescription(v string) *ResourceUpdateOne {
 func (_u *ResourceUpdateOne) SetNillableDescription(v *string) *ResourceUpdateOne {
 	if v != nil {
 		_u.SetDescription(*v)
+	}
+	return _u
+}
+
+// SetAllowFolders sets the "allow_folders" field.
+func (_u *ResourceUpdateOne) SetAllowFolders(v bool) *ResourceUpdateOne {
+	_u.mutation.SetAllowFolders(v)
+	return _u
+}
+
+// SetNillableAllowFolders sets the "allow_folders" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableAllowFolders(v *bool) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetAllowFolders(*v)
 	}
 	return _u
 }
@@ -2331,6 +2362,9 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(resource.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AllowFolders(); ok {
+		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Tags(); ok {
 		_spec.SetField(resource.FieldTags, field.TypeJSON, value)

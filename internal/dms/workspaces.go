@@ -19,12 +19,12 @@ type WorkspaceMember struct {
 	Role    string `json:"role"`
 }
 
-func validateWorkspace(name, description string) error {
+func validateContainerMetadata(name, description string) error {
 	if !utf8.ValidString(name) || len(utf16.Encode([]rune(name))) > 200 {
-		return invalid("workspace name is limited to 200 characters")
+		return invalid("workspace and collection names are limited to 200 characters")
 	}
 	if !utf8.ValidString(description) || len(utf16.Encode([]rune(description))) > 2000 {
-		return invalid("workspace description is limited to 2000 characters")
+		return invalid("workspace and collection descriptions are limited to 2000 characters")
 	}
 	return validateName(name)
 }

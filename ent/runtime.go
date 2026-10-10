@@ -853,62 +853,66 @@ func init() {
 	resource.DefaultDescription = resourceDescDescription.Default.(string)
 	// resource.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
 	resource.DescriptionValidator = resourceDescDescription.Validators[0].(func(string) error)
+	// resourceDescAllowFolders is the schema descriptor for allow_folders field.
+	resourceDescAllowFolders := resourceFields[7].Descriptor()
+	// resource.DefaultAllowFolders holds the default value on creation for the allow_folders field.
+	resource.DefaultAllowFolders = resourceDescAllowFolders.Default.(bool)
 	// resourceDescTags is the schema descriptor for tags field.
-	resourceDescTags := resourceFields[7].Descriptor()
+	resourceDescTags := resourceFields[8].Descriptor()
 	// resource.DefaultTags holds the default value on creation for the tags field.
 	resource.DefaultTags = resourceDescTags.Default.([]string)
 	// resourceDescTemplateKeys is the schema descriptor for template_keys field.
-	resourceDescTemplateKeys := resourceFields[8].Descriptor()
+	resourceDescTemplateKeys := resourceFields[9].Descriptor()
 	// resource.DefaultTemplateKeys holds the default value on creation for the template_keys field.
 	resource.DefaultTemplateKeys = resourceDescTemplateKeys.Default.([]string)
 	// resourceDescValues is the schema descriptor for values field.
-	resourceDescValues := resourceFields[9].Descriptor()
+	resourceDescValues := resourceFields[10].Descriptor()
 	// resource.DefaultValues holds the default value on creation for the values field.
 	resource.DefaultValues = resourceDescValues.Default.(map[string]interface{})
 	// resourceDescInheritPermissions is the schema descriptor for inherit_permissions field.
-	resourceDescInheritPermissions := resourceFields[10].Descriptor()
+	resourceDescInheritPermissions := resourceFields[11].Descriptor()
 	// resource.DefaultInheritPermissions holds the default value on creation for the inherit_permissions field.
 	resource.DefaultInheritPermissions = resourceDescInheritPermissions.Default.(bool)
 	// resourceDescVersion is the schema descriptor for version field.
-	resourceDescVersion := resourceFields[11].Descriptor()
+	resourceDescVersion := resourceFields[12].Descriptor()
 	// resource.DefaultVersion holds the default value on creation for the version field.
 	resource.DefaultVersion = resourceDescVersion.Default.(int)
 	// resource.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	resource.VersionValidator = resourceDescVersion.Validators[0].(func(int) error)
 	// resourceDescNextRevisionNumber is the schema descriptor for next_revision_number field.
-	resourceDescNextRevisionNumber := resourceFields[15].Descriptor()
+	resourceDescNextRevisionNumber := resourceFields[16].Descriptor()
 	// resource.DefaultNextRevisionNumber holds the default value on creation for the next_revision_number field.
 	resource.DefaultNextRevisionNumber = resourceDescNextRevisionNumber.Default.(int)
 	// resource.NextRevisionNumberValidator is a validator for the "next_revision_number" field. It is called by the builders before save.
 	resource.NextRevisionNumberValidator = resourceDescNextRevisionNumber.Validators[0].(func(int) error)
 	// resourceDescPublishingEnabled is the schema descriptor for publishing_enabled field.
-	resourceDescPublishingEnabled := resourceFields[16].Descriptor()
+	resourceDescPublishingEnabled := resourceFields[17].Descriptor()
 	// resource.DefaultPublishingEnabled holds the default value on creation for the publishing_enabled field.
 	resource.DefaultPublishingEnabled = resourceDescPublishingEnabled.Default.(bool)
 	// resourceDescWebdavEnabled is the schema descriptor for webdav_enabled field.
-	resourceDescWebdavEnabled := resourceFields[17].Descriptor()
+	resourceDescWebdavEnabled := resourceFields[18].Descriptor()
 	// resource.DefaultWebdavEnabled holds the default value on creation for the webdav_enabled field.
 	resource.DefaultWebdavEnabled = resourceDescWebdavEnabled.Default.(bool)
 	// resourceDescUpdatedAt is the schema descriptor for updated_at field.
-	resourceDescUpdatedAt := resourceFields[18].Descriptor()
+	resourceDescUpdatedAt := resourceFields[19].Descriptor()
 	// resource.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	resource.DefaultUpdatedAt = resourceDescUpdatedAt.Default.(func() time.Time)
 	// resource.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	resource.UpdateDefaultUpdatedAt = resourceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// resourceDescCreatedBy is the schema descriptor for created_by field.
-	resourceDescCreatedBy := resourceFields[19].Descriptor()
+	resourceDescCreatedBy := resourceFields[20].Descriptor()
 	// resource.DefaultCreatedBy holds the default value on creation for the created_by field.
 	resource.DefaultCreatedBy = resourceDescCreatedBy.Default.(string)
 	// resourceDescUpdatedBy is the schema descriptor for updated_by field.
-	resourceDescUpdatedBy := resourceFields[20].Descriptor()
+	resourceDescUpdatedBy := resourceFields[21].Descriptor()
 	// resource.DefaultUpdatedBy holds the default value on creation for the updated_by field.
 	resource.DefaultUpdatedBy = resourceDescUpdatedBy.Default.(string)
 	// resourceDescScopeID is the schema descriptor for scope_id field.
-	resourceDescScopeID := resourceFields[21].Descriptor()
+	resourceDescScopeID := resourceFields[22].Descriptor()
 	// resource.ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
 	resource.ScopeIDValidator = resourceDescScopeID.Validators[0].(func(string) error)
 	// resourceDescNameKey is the schema descriptor for name_key field.
-	resourceDescNameKey := resourceFields[22].Descriptor()
+	resourceDescNameKey := resourceFields[23].Descriptor()
 	// resource.NameKeyValidator is a validator for the "name_key" field. It is called by the builders before save.
 	resource.NameKeyValidator = resourceDescNameKey.Validators[0].(func(string) error)
 	// resourceDescID is the schema descriptor for id field.

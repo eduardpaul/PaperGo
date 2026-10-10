@@ -146,10 +146,10 @@ func TestWorkspaceValidationAndDeletionCoversExclusiveDescendants(t *testing.T) 
 			t.Fatal("invalid workspace accepted")
 		}
 	}
-	if _, err := s.Update(testContext, "alice", list.ID, list.Version, UpdateResource{Description: ptr("Invalid")}); err == nil {
-		t.Fatal("list accepted workspace description")
-	}
 	item := create(t, s, list.ID, "item", "Retained history", nil)
+	if _, err := s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Description: ptr("Invalid")}); err == nil {
+		t.Fatal("item accepted container description")
+	}
 	if _, err := s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{}); err != nil {
 		t.Fatal(err)
 	}
