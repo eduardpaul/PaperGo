@@ -30,6 +30,16 @@ type Tx struct {
 	FieldValue *FieldValueClient
 	// Grant is the client for interacting with the Grant builders.
 	Grant *GrantClient
+	// IdentityAssignment is the client for interacting with the IdentityAssignment builders.
+	IdentityAssignment *IdentityAssignmentClient
+	// IdentityGroup is the client for interacting with the IdentityGroup builders.
+	IdentityGroup *IdentityGroupClient
+	// IdentityMembership is the client for interacting with the IdentityMembership builders.
+	IdentityMembership *IdentityMembershipClient
+	// IdentityRole is the client for interacting with the IdentityRole builders.
+	IdentityRole *IdentityRoleClient
+	// IdentityUser is the client for interacting with the IdentityUser builders.
+	IdentityUser *IdentityUserClient
 	// ItemRevision is the client for interacting with the ItemRevision builders.
 	ItemRevision *ItemRevisionClient
 	// ItemSurface is the client for interacting with the ItemSurface builders.
@@ -209,6 +219,11 @@ func (tx *Tx) init() {
 	tx.FieldDefinition = NewFieldDefinitionClient(tx.config)
 	tx.FieldValue = NewFieldValueClient(tx.config)
 	tx.Grant = NewGrantClient(tx.config)
+	tx.IdentityAssignment = NewIdentityAssignmentClient(tx.config)
+	tx.IdentityGroup = NewIdentityGroupClient(tx.config)
+	tx.IdentityMembership = NewIdentityMembershipClient(tx.config)
+	tx.IdentityRole = NewIdentityRoleClient(tx.config)
+	tx.IdentityUser = NewIdentityUserClient(tx.config)
 	tx.ItemRevision = NewItemRevisionClient(tx.config)
 	tx.ItemSurface = NewItemSurfaceClient(tx.config)
 	tx.ListView = NewListViewClient(tx.config)

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
+	"papergo/internal/identity"
 	"papergo/internal/runner"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
@@ -42,6 +43,7 @@ type requestKey struct{}
 func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
 func (a *API) Handler() http.Handler {
 	api := http.NewServeMux()
+	a.registerIdentity(api)
 	a.registerFoundation(api)
 	a.registerSmartFolders(api)
 	a.registerWorkflows(api)
@@ -217,19 +219,24 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		a.problem(w, r, status, code, message, operationIndex...)
 	}
 	var validation *dms.ValidationError
+	var identityValidation *identity.ValidationError
 	var max *http.MaxBytesError
 	switch {
+	case errors.As(err, &identityValidation):
+		problem(422, "validation_failed", identityValidation.Error())
+	case errors.Is(err, identity.ErrLastAdministrator):
+		problem(409, "last_administrator", "An organization needs at least one administrator.")
 	case errors.As(err, &validation):
 		problem(422, "validation_failed", validation.Error())
-	case errors.Is(err, dms.ErrNotFound):
+	case errors.Is(err, dms.ErrNotFound) || errors.Is(err, identity.ErrNotFound):
 		problem(404, "not_found", "resource not found")
-	case errors.Is(err, dms.ErrForbidden):
+	case errors.Is(err, dms.ErrForbidden) || errors.Is(err, identity.ErrForbidden):
 		problem(403, "forbidden", "access denied")
 	case errors.Is(err, dms.ErrLastOwner):
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):
 		problem(409, "folder_not_empty", "The folder is not empty.")
-	case errors.Is(err, dms.ErrConflict):
+	case errors.Is(err, dms.ErrConflict) || errors.Is(err, identity.ErrConflict) || identity.IsConstraint(err):
 		problem(409, "conflict", "version conflict or duplicate")
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &max):
 		problem(413, "payload_too_large", "request body exceeds size limit")
@@ -555,6 +562,10 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			a.problem(w, r, 401, "unauthorized", "valid bearer authentication is required")
+			return
+		}
+		if err = a.DMS.Directory().EnsureUser(r.Context(), id); err != nil {
+			a.failure(w, r, err)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), subjectKey{}, id)))

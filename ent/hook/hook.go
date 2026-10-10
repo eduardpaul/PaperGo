@@ -104,6 +104,66 @@ func (f GrantFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GrantMutation", m)
 }
 
+// The IdentityAssignmentFunc type is an adapter to allow the use of ordinary
+// function as IdentityAssignment mutator.
+type IdentityAssignmentFunc func(context.Context, *ent.IdentityAssignmentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IdentityAssignmentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IdentityAssignmentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityAssignmentMutation", m)
+}
+
+// The IdentityGroupFunc type is an adapter to allow the use of ordinary
+// function as IdentityGroup mutator.
+type IdentityGroupFunc func(context.Context, *ent.IdentityGroupMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IdentityGroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IdentityGroupMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityGroupMutation", m)
+}
+
+// The IdentityMembershipFunc type is an adapter to allow the use of ordinary
+// function as IdentityMembership mutator.
+type IdentityMembershipFunc func(context.Context, *ent.IdentityMembershipMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IdentityMembershipFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IdentityMembershipMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityMembershipMutation", m)
+}
+
+// The IdentityRoleFunc type is an adapter to allow the use of ordinary
+// function as IdentityRole mutator.
+type IdentityRoleFunc func(context.Context, *ent.IdentityRoleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IdentityRoleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IdentityRoleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityRoleMutation", m)
+}
+
+// The IdentityUserFunc type is an adapter to allow the use of ordinary
+// function as IdentityUser mutator.
+type IdentityUserFunc func(context.Context, *ent.IdentityUserMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IdentityUserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IdentityUserMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityUserMutation", m)
+}
+
 // The ItemRevisionFunc type is an adapter to allow the use of ordinary
 // function as ItemRevision mutator.
 type ItemRevisionFunc func(context.Context, *ent.ItemRevisionMutation) (ent.Value, error)

@@ -3,7 +3,7 @@
   "info": {
     "title": "PaperGo headless DMS",
     "version": "0.4.0",
-    "description": "One organization per SQLite deployment. Immutable schema/content revisions, SharePoint-style exclusive permission scopes, head/published projections, rich typed fields, reusable templates, saved queries, personal/shared smart folders with cross-collection navigation and classification, taxonomy, and typed relationships. Libraries with webdav_enabled are also served over WebDAV (RFC 4918 class 1 and 2) at /webdav/{libraryID}/, outside this contract; WebDAV accepts these bearer tokens or HTTP Basic with a WebDAV credential password. Workflows (triggers, a condition and a flow of activities, with built-in workflows people can turn on, configure or copy) react to committed item changes, schedules and manual starts; runs are durable and are listed under each workspace."
+    "description": "One organization per SQLite deployment. Immutable schema/content revisions, SharePoint-style exclusive permission scopes, head/published projections, rich typed fields, reusable templates, saved queries, personal/shared smart folders with cross-collection navigation and classification, taxonomy, and typed relationships. Libraries with webdav_enabled are also served over WebDAV (RFC 4918 class 1 and 2) at /webdav/{libraryID}/, outside this contract; WebDAV accepts these bearer tokens or HTTP Basic with a WebDAV credential password. Workflows (triggers, a condition and a flow of activities, with built-in workflows people can turn on, configure or copy) react to committed item changes, schedules and manual starts; runs are durable and are listed under each workspace. Organization groups support nested membership; persisted roles grant module scopes independently of resource ACLs. Verified subjects enroll with the Member role on first authentication. ADMIN_SUBJECT provisions the first administrator once; development defaults to DEV_SUBJECT."
   },
   "servers": [
     {
@@ -10708,6 +10708,735 @@
           }
         }
       }
+    },
+    "/v1/identity/scopes": {
+      "get": {
+        "operationId": "listIdentityScopes",
+        "summary": "List module scope catalog (identity.read)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IdentityScope"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        }
+      }
+    },
+    "/v1/identity/me/scopes": {
+      "get": {
+        "operationId": "getMyScopes",
+        "summary": "Read effective scopes from direct and nested group roles",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        }
+      }
+    },
+    "/v1/identity/users": {
+      "get": {
+        "operationId": "listIdentityUsers",
+        "summary": "List enrolled subjects (identity.read)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createIdentityUser",
+        "summary": "Enroll subject with Member role (identity.manage)",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityUserInput"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityUserInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/identity/groups": {
+      "get": {
+        "operationId": "listIdentityGroups",
+        "summary": "List groups (identity.read)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IdentityGroup"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createIdentityGroup",
+        "summary": "Create group (identity.manage)",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityGroup"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityGroupInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/identity/groups/{id}": {
+      "put": {
+        "operationId": "replaceIdentityGroup",
+        "summary": "Replace group (identity.manage)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityGroup"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          },
+          "428": {
+            "description": "If-Match required"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Quoted current integer version."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityGroupInput"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteIdentityGroup",
+        "summary": "Delete group (identity.manage)",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          },
+          "428": {
+            "description": "If-Match required"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Quoted current integer version."
+          }
+        ]
+      }
+    },
+    "/v1/identity/groups/{id}/members": {
+      "get": {
+        "operationId": "listIdentityGroupMembers",
+        "summary": "List direct members (identity.read)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IdentityPrincipal"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/identity/groups/{id}/members/{principalType}/{principalID}": {
+      "put": {
+        "operationId": "setIdentityGroupMembers",
+        "summary": "Change members (identity.manage)",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user",
+                "group"
+              ]
+            }
+          },
+          {
+            "name": "principalID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "removeIdentityGroupMembers",
+        "summary": "Change members (identity.manage)",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user",
+                "group"
+              ]
+            }
+          },
+          {
+            "name": "principalID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/identity/roles": {
+      "get": {
+        "operationId": "listIdentityRoles",
+        "summary": "List roles (identity.read)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IdentityRole"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createIdentityRole",
+        "summary": "Create role (identity.manage)",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityRole"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityRoleInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/identity/roles/{id}": {
+      "put": {
+        "operationId": "replaceIdentityRole",
+        "summary": "Replace role (identity.manage)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityRole"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          },
+          "428": {
+            "description": "If-Match required"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Quoted current integer version."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityRoleInput"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteIdentityRole",
+        "summary": "Delete role (identity.manage)",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          },
+          "428": {
+            "description": "If-Match required"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Quoted current integer version."
+          }
+        ]
+      }
+    },
+    "/v1/identity/roles/{id}/assignments": {
+      "get": {
+        "operationId": "listIdentityRoleAssignments",
+        "summary": "List direct assignments (identity.read)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IdentityPrincipal"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/identity/roles/{id}/assignments/{principalType}/{principalID}": {
+      "put": {
+        "operationId": "setIdentityRoleAssignments",
+        "summary": "Change assignments (identity.manage)",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user",
+                "group"
+              ]
+            }
+          },
+          {
+            "name": "principalID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "removeIdentityRoleAssignments",
+        "summary": "Change assignments (identity.manage)",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "403": {
+            "description": "Required identity scope is missing"
+          },
+          "409": {
+            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+          },
+          "422": {
+            "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user",
+                "group"
+              ]
+            }
+          },
+          {
+            "name": "principalID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -14853,6 +15582,172 @@
             "default": "member"
           }
         }
+      },
+      "IdentityPrincipal": {
+        "type": "object",
+        "properties": {
+          "principal_type": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group"
+            ]
+          },
+          "principal_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "principal_type",
+          "principal_id"
+        ],
+        "additionalProperties": false
+      },
+      "IdentityGroupInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "IdentityGroup": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "IdentityRoleInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true,
+            "description": "Distinct module scopes from GET /v1/identity/scopes; scopes do not replace resource ACLs."
+          }
+        },
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "additionalProperties": false
+      },
+      "IdentityRole": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true,
+            "description": "Distinct module scopes from GET /v1/identity/scopes; scopes do not replace resource ACLs."
+          },
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "builtin": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "scopes",
+          "version",
+          "builtin"
+        ],
+        "additionalProperties": false
+      },
+      "IdentityUserInput": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "subject"
+        ],
+        "additionalProperties": false
+      },
+      "IdentityScope": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "granted_to_members": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "granted_to_members"
+        ],
+        "additionalProperties": false
       }
     }
   }

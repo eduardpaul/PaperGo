@@ -587,3 +587,34 @@ WHEN old.action='manage' AND EXISTS(SELECT 1 FROM resources WHERE id=old.resourc
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM grants WHERE resource_id=old.resource_id AND subject<>old.subject AND action='manage')
  THEN RAISE(ABORT,'a workspace needs at least one owner') END;
 END;
+
+-- Organization directory, nested groups and module-scoped roles.
+CREATE TABLE identity_users (id TEXT NOT NULL PRIMARY KEY CHECK(length(id) BETWEEN 1 AND 255 AND id=trim(id)), created_at datetime NOT NULL);
+CREATE TABLE identity_groups (id TEXT NOT NULL PRIMARY KEY, created_at datetime NOT NULL, name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 200), description TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
+CREATE UNIQUE INDEX identitygroup_name ON identity_groups(name);
+CREATE TABLE identity_roles (id TEXT NOT NULL PRIMARY KEY, created_at datetime NOT NULL, name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 200), description TEXT NOT NULL DEFAULT '', scopes JSON NOT NULL DEFAULT '[]' CHECK(json_valid(scopes) AND json_type(scopes)='array'), builtin bool NOT NULL DEFAULT false, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
+CREATE UNIQUE INDEX identityrole_name ON identity_roles(name);
+CREATE TABLE identity_memberships (id TEXT NOT NULL PRIMARY KEY, created_at datetime NOT NULL, group_id TEXT NOT NULL REFERENCES identity_groups(id) ON DELETE CASCADE, principal_type TEXT NOT NULL CHECK(principal_type IN ('user','group')), principal_id TEXT NOT NULL);
+CREATE UNIQUE INDEX identitymembership_group_id_principal_type_principal_id ON identity_memberships(group_id,principal_type,principal_id);
+CREATE INDEX identitymembership_principal_type_principal_id_group_id ON identity_memberships(principal_type,principal_id,group_id);
+CREATE TABLE identity_assignments (id TEXT NOT NULL PRIMARY KEY, created_at datetime NOT NULL, role_id TEXT NOT NULL REFERENCES identity_roles(id) ON DELETE CASCADE, principal_type TEXT NOT NULL CHECK(principal_type IN ('user','group')), principal_id TEXT NOT NULL);
+CREATE UNIQUE INDEX identityassignment_role_id_principal_type_principal_id ON identity_assignments(role_id,principal_type,principal_id);
+CREATE INDEX identityassignment_principal_type_principal_id_role_id ON identity_assignments(principal_type,principal_id,role_id);
+CREATE TRIGGER identity_membership_principal BEFORE INSERT ON identity_memberships BEGIN
+ SELECT CASE WHEN (new.principal_type='user' AND NOT EXISTS(SELECT 1 FROM identity_users WHERE id=new.principal_id)) OR (new.principal_type='group' AND NOT EXISTS(SELECT 1 FROM identity_groups WHERE id=new.principal_id)) THEN RAISE(ABORT,'unknown group member') END;
+END;
+CREATE TRIGGER identity_assignment_principal BEFORE INSERT ON identity_assignments BEGIN
+ SELECT CASE WHEN (new.principal_type='user' AND NOT EXISTS(SELECT 1 FROM identity_users WHERE id=new.principal_id)) OR (new.principal_type='group' AND NOT EXISTS(SELECT 1 FROM identity_groups WHERE id=new.principal_id)) THEN RAISE(ABORT,'unknown role principal') END;
+END;
+CREATE TRIGGER identity_membership_immutable BEFORE UPDATE ON identity_memberships BEGIN SELECT RAISE(ABORT,'replace group memberships instead of updating them'); END;
+CREATE TRIGGER identity_assignment_immutable BEFORE UPDATE ON identity_assignments BEGIN SELECT RAISE(ABORT,'replace role assignments instead of updating them'); END;
+CREATE TRIGGER identity_group_delete AFTER DELETE ON identity_groups BEGIN
+ DELETE FROM identity_memberships WHERE principal_type='group' AND principal_id=old.id;
+ DELETE FROM identity_assignments WHERE principal_type='group' AND principal_id=old.id;
+END;
+CREATE TRIGGER identity_user_delete AFTER DELETE ON identity_users BEGIN
+ DELETE FROM identity_memberships WHERE principal_type='user' AND principal_id=old.id;
+ DELETE FROM identity_assignments WHERE principal_type='user' AND principal_id=old.id;
+END;
+CREATE TRIGGER identity_builtin_role_update BEFORE UPDATE ON identity_roles WHEN old.builtin=1 BEGIN SELECT RAISE(ABORT,'built-in roles are immutable'); END;
+CREATE TRIGGER identity_builtin_role_delete BEFORE DELETE ON identity_roles WHEN old.builtin=1 BEGIN SELECT RAISE(ABORT,'built-in roles cannot be deleted'); END;

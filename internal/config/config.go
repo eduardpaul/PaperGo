@@ -16,6 +16,7 @@ type Config struct {
 	AuthMode     string
 	DevToken     string
 	DevSubject   string
+	AdminSubject string
 	Issuer       string
 	Audience     string
 	MaxUpload    int64
@@ -32,6 +33,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "oidc"), DevToken: os.Getenv("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: os.Getenv("OIDC_ISSUER"), Audience: os.Getenv("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour}
+	c.AdminSubject = os.Getenv("ADMIN_SUBJECT")
 	if v := os.Getenv("MAX_UPLOAD_BYTES"); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || n < 1 || n > 1024*1024*1024 {
@@ -68,6 +70,9 @@ func Load() (Config, error) {
 	}
 	switch c.AuthMode {
 	case "development":
+		if c.AdminSubject == "" {
+			c.AdminSubject = c.DevSubject
+		}
 		if c.Env == "production" {
 			return c, fmt.Errorf("production requires OIDC authentication")
 		}
@@ -86,6 +91,9 @@ func Load() (Config, error) {
 		}
 	default:
 		return c, fmt.Errorf("AUTH_MODE must be development or oidc")
+	}
+	if c.AdminSubject == "" || c.AdminSubject != strings.TrimSpace(c.AdminSubject) || len(c.AdminSubject) > 255 {
+		return c, fmt.Errorf("ADMIN_SUBJECT must identify the first organization administrator")
 	}
 	return c, nil
 }

@@ -14,6 +14,11 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
+	"papergo/ent/identityassignment"
+	"papergo/ent/identitygroup"
+	"papergo/ent/identitymembership"
+	"papergo/ent/identityrole"
+	"papergo/ent/identityuser"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
@@ -100,34 +105,39 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			auditevent.Table:       auditevent.ValidColumn,
-			blob.Table:             blob.ValidColumn,
-			businesskey.Table:      businesskey.ValidColumn,
-			contenttype.Table:      contenttype.ValidColumn,
-			domainevent.Table:      domainevent.ValidColumn,
-			fielddefinition.Table:  fielddefinition.ValidColumn,
-			fieldvalue.Table:       fieldvalue.ValidColumn,
-			grant.Table:            grant.ValidColumn,
-			itemrevision.Table:     itemrevision.ValidColumn,
-			itemsurface.Table:      itemsurface.ValidColumn,
-			listview.Table:         listview.ValidColumn,
-			operation.Table:        operation.ValidColumn,
-			publication.Table:      publication.ValidColumn,
-			relationship.Table:     relationship.ValidColumn,
-			relationshiptype.Table: relationshiptype.ValidColumn,
-			resource.Table:         resource.ValidColumn,
-			schemarevision.Table:   schemarevision.ValidColumn,
-			schematemplate.Table:   schematemplate.ValidColumn,
-			smartfolder.Table:      smartfolder.ValidColumn,
-			term.Table:             term.ValidColumn,
-			termgroup.Table:        termgroup.ValidColumn,
-			termset.Table:          termset.ValidColumn,
-			webdavcredential.Table: webdavcredential.ValidColumn,
-			workflow.Table:         workflow.ValidColumn,
-			workflowrun.Table:      workflowrun.ValidColumn,
-			workflowrunitem.Table:  workflowrunitem.ValidColumn,
-			workflowtrigger.Table:  workflowtrigger.ValidColumn,
-			workflowversion.Table:  workflowversion.ValidColumn,
+			auditevent.Table:         auditevent.ValidColumn,
+			blob.Table:               blob.ValidColumn,
+			businesskey.Table:        businesskey.ValidColumn,
+			contenttype.Table:        contenttype.ValidColumn,
+			domainevent.Table:        domainevent.ValidColumn,
+			fielddefinition.Table:    fielddefinition.ValidColumn,
+			fieldvalue.Table:         fieldvalue.ValidColumn,
+			grant.Table:              grant.ValidColumn,
+			identityassignment.Table: identityassignment.ValidColumn,
+			identitygroup.Table:      identitygroup.ValidColumn,
+			identitymembership.Table: identitymembership.ValidColumn,
+			identityrole.Table:       identityrole.ValidColumn,
+			identityuser.Table:       identityuser.ValidColumn,
+			itemrevision.Table:       itemrevision.ValidColumn,
+			itemsurface.Table:        itemsurface.ValidColumn,
+			listview.Table:           listview.ValidColumn,
+			operation.Table:          operation.ValidColumn,
+			publication.Table:        publication.ValidColumn,
+			relationship.Table:       relationship.ValidColumn,
+			relationshiptype.Table:   relationshiptype.ValidColumn,
+			resource.Table:           resource.ValidColumn,
+			schemarevision.Table:     schemarevision.ValidColumn,
+			schematemplate.Table:     schematemplate.ValidColumn,
+			smartfolder.Table:        smartfolder.ValidColumn,
+			term.Table:               term.ValidColumn,
+			termgroup.Table:          termgroup.ValidColumn,
+			termset.Table:            termset.ValidColumn,
+			webdavcredential.Table:   webdavcredential.ValidColumn,
+			workflow.Table:           workflow.ValidColumn,
+			workflowrun.Table:        workflowrun.ValidColumn,
+			workflowrunitem.Table:    workflowrunitem.ValidColumn,
+			workflowtrigger.Table:    workflowtrigger.ValidColumn,
+			workflowversion.Table:    workflowversion.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

@@ -19,6 +19,11 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
+	"papergo/ent/identityassignment"
+	"papergo/ent/identitygroup"
+	"papergo/ent/identitymembership"
+	"papergo/ent/identityrole"
+	"papergo/ent/identityuser"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
@@ -69,6 +74,16 @@ type Client struct {
 	FieldValue *FieldValueClient
 	// Grant is the client for interacting with the Grant builders.
 	Grant *GrantClient
+	// IdentityAssignment is the client for interacting with the IdentityAssignment builders.
+	IdentityAssignment *IdentityAssignmentClient
+	// IdentityGroup is the client for interacting with the IdentityGroup builders.
+	IdentityGroup *IdentityGroupClient
+	// IdentityMembership is the client for interacting with the IdentityMembership builders.
+	IdentityMembership *IdentityMembershipClient
+	// IdentityRole is the client for interacting with the IdentityRole builders.
+	IdentityRole *IdentityRoleClient
+	// IdentityUser is the client for interacting with the IdentityUser builders.
+	IdentityUser *IdentityUserClient
 	// ItemRevision is the client for interacting with the ItemRevision builders.
 	ItemRevision *ItemRevisionClient
 	// ItemSurface is the client for interacting with the ItemSurface builders.
@@ -128,6 +143,11 @@ func (c *Client) init() {
 	c.FieldDefinition = NewFieldDefinitionClient(c.config)
 	c.FieldValue = NewFieldValueClient(c.config)
 	c.Grant = NewGrantClient(c.config)
+	c.IdentityAssignment = NewIdentityAssignmentClient(c.config)
+	c.IdentityGroup = NewIdentityGroupClient(c.config)
+	c.IdentityMembership = NewIdentityMembershipClient(c.config)
+	c.IdentityRole = NewIdentityRoleClient(c.config)
+	c.IdentityUser = NewIdentityUserClient(c.config)
 	c.ItemRevision = NewItemRevisionClient(c.config)
 	c.ItemSurface = NewItemSurfaceClient(c.config)
 	c.ListView = NewListViewClient(c.config)
@@ -238,36 +258,41 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		AuditEvent:       NewAuditEventClient(cfg),
-		Blob:             NewBlobClient(cfg),
-		BusinessKey:      NewBusinessKeyClient(cfg),
-		ContentType:      NewContentTypeClient(cfg),
-		DomainEvent:      NewDomainEventClient(cfg),
-		FieldDefinition:  NewFieldDefinitionClient(cfg),
-		FieldValue:       NewFieldValueClient(cfg),
-		Grant:            NewGrantClient(cfg),
-		ItemRevision:     NewItemRevisionClient(cfg),
-		ItemSurface:      NewItemSurfaceClient(cfg),
-		ListView:         NewListViewClient(cfg),
-		Operation:        NewOperationClient(cfg),
-		Publication:      NewPublicationClient(cfg),
-		Relationship:     NewRelationshipClient(cfg),
-		RelationshipType: NewRelationshipTypeClient(cfg),
-		Resource:         NewResourceClient(cfg),
-		SchemaRevision:   NewSchemaRevisionClient(cfg),
-		SchemaTemplate:   NewSchemaTemplateClient(cfg),
-		SmartFolder:      NewSmartFolderClient(cfg),
-		Term:             NewTermClient(cfg),
-		TermGroup:        NewTermGroupClient(cfg),
-		TermSet:          NewTermSetClient(cfg),
-		WebDAVCredential: NewWebDAVCredentialClient(cfg),
-		Workflow:         NewWorkflowClient(cfg),
-		WorkflowRun:      NewWorkflowRunClient(cfg),
-		WorkflowRunItem:  NewWorkflowRunItemClient(cfg),
-		WorkflowTrigger:  NewWorkflowTriggerClient(cfg),
-		WorkflowVersion:  NewWorkflowVersionClient(cfg),
+		ctx:                ctx,
+		config:             cfg,
+		AuditEvent:         NewAuditEventClient(cfg),
+		Blob:               NewBlobClient(cfg),
+		BusinessKey:        NewBusinessKeyClient(cfg),
+		ContentType:        NewContentTypeClient(cfg),
+		DomainEvent:        NewDomainEventClient(cfg),
+		FieldDefinition:    NewFieldDefinitionClient(cfg),
+		FieldValue:         NewFieldValueClient(cfg),
+		Grant:              NewGrantClient(cfg),
+		IdentityAssignment: NewIdentityAssignmentClient(cfg),
+		IdentityGroup:      NewIdentityGroupClient(cfg),
+		IdentityMembership: NewIdentityMembershipClient(cfg),
+		IdentityRole:       NewIdentityRoleClient(cfg),
+		IdentityUser:       NewIdentityUserClient(cfg),
+		ItemRevision:       NewItemRevisionClient(cfg),
+		ItemSurface:        NewItemSurfaceClient(cfg),
+		ListView:           NewListViewClient(cfg),
+		Operation:          NewOperationClient(cfg),
+		Publication:        NewPublicationClient(cfg),
+		Relationship:       NewRelationshipClient(cfg),
+		RelationshipType:   NewRelationshipTypeClient(cfg),
+		Resource:           NewResourceClient(cfg),
+		SchemaRevision:     NewSchemaRevisionClient(cfg),
+		SchemaTemplate:     NewSchemaTemplateClient(cfg),
+		SmartFolder:        NewSmartFolderClient(cfg),
+		Term:               NewTermClient(cfg),
+		TermGroup:          NewTermGroupClient(cfg),
+		TermSet:            NewTermSetClient(cfg),
+		WebDAVCredential:   NewWebDAVCredentialClient(cfg),
+		Workflow:           NewWorkflowClient(cfg),
+		WorkflowRun:        NewWorkflowRunClient(cfg),
+		WorkflowRunItem:    NewWorkflowRunItemClient(cfg),
+		WorkflowTrigger:    NewWorkflowTriggerClient(cfg),
+		WorkflowVersion:    NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -285,36 +310,41 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		AuditEvent:       NewAuditEventClient(cfg),
-		Blob:             NewBlobClient(cfg),
-		BusinessKey:      NewBusinessKeyClient(cfg),
-		ContentType:      NewContentTypeClient(cfg),
-		DomainEvent:      NewDomainEventClient(cfg),
-		FieldDefinition:  NewFieldDefinitionClient(cfg),
-		FieldValue:       NewFieldValueClient(cfg),
-		Grant:            NewGrantClient(cfg),
-		ItemRevision:     NewItemRevisionClient(cfg),
-		ItemSurface:      NewItemSurfaceClient(cfg),
-		ListView:         NewListViewClient(cfg),
-		Operation:        NewOperationClient(cfg),
-		Publication:      NewPublicationClient(cfg),
-		Relationship:     NewRelationshipClient(cfg),
-		RelationshipType: NewRelationshipTypeClient(cfg),
-		Resource:         NewResourceClient(cfg),
-		SchemaRevision:   NewSchemaRevisionClient(cfg),
-		SchemaTemplate:   NewSchemaTemplateClient(cfg),
-		SmartFolder:      NewSmartFolderClient(cfg),
-		Term:             NewTermClient(cfg),
-		TermGroup:        NewTermGroupClient(cfg),
-		TermSet:          NewTermSetClient(cfg),
-		WebDAVCredential: NewWebDAVCredentialClient(cfg),
-		Workflow:         NewWorkflowClient(cfg),
-		WorkflowRun:      NewWorkflowRunClient(cfg),
-		WorkflowRunItem:  NewWorkflowRunItemClient(cfg),
-		WorkflowTrigger:  NewWorkflowTriggerClient(cfg),
-		WorkflowVersion:  NewWorkflowVersionClient(cfg),
+		ctx:                ctx,
+		config:             cfg,
+		AuditEvent:         NewAuditEventClient(cfg),
+		Blob:               NewBlobClient(cfg),
+		BusinessKey:        NewBusinessKeyClient(cfg),
+		ContentType:        NewContentTypeClient(cfg),
+		DomainEvent:        NewDomainEventClient(cfg),
+		FieldDefinition:    NewFieldDefinitionClient(cfg),
+		FieldValue:         NewFieldValueClient(cfg),
+		Grant:              NewGrantClient(cfg),
+		IdentityAssignment: NewIdentityAssignmentClient(cfg),
+		IdentityGroup:      NewIdentityGroupClient(cfg),
+		IdentityMembership: NewIdentityMembershipClient(cfg),
+		IdentityRole:       NewIdentityRoleClient(cfg),
+		IdentityUser:       NewIdentityUserClient(cfg),
+		ItemRevision:       NewItemRevisionClient(cfg),
+		ItemSurface:        NewItemSurfaceClient(cfg),
+		ListView:           NewListViewClient(cfg),
+		Operation:          NewOperationClient(cfg),
+		Publication:        NewPublicationClient(cfg),
+		Relationship:       NewRelationshipClient(cfg),
+		RelationshipType:   NewRelationshipTypeClient(cfg),
+		Resource:           NewResourceClient(cfg),
+		SchemaRevision:     NewSchemaRevisionClient(cfg),
+		SchemaTemplate:     NewSchemaTemplateClient(cfg),
+		SmartFolder:        NewSmartFolderClient(cfg),
+		Term:               NewTermClient(cfg),
+		TermGroup:          NewTermGroupClient(cfg),
+		TermSet:            NewTermSetClient(cfg),
+		WebDAVCredential:   NewWebDAVCredentialClient(cfg),
+		Workflow:           NewWorkflowClient(cfg),
+		WorkflowRun:        NewWorkflowRunClient(cfg),
+		WorkflowRunItem:    NewWorkflowRunItemClient(cfg),
+		WorkflowTrigger:    NewWorkflowTriggerClient(cfg),
+		WorkflowVersion:    NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -345,11 +375,13 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.DomainEvent,
-		c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface,
-		c.ListView, c.Operation, c.Publication, c.Relationship, c.RelationshipType,
-		c.Resource, c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term,
-		c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun,
-		c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
+		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
+		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.Publication,
+		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
+		c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup, c.TermSet,
+		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -360,11 +392,13 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AuditEvent, c.Blob, c.BusinessKey, c.ContentType, c.DomainEvent,
-		c.FieldDefinition, c.FieldValue, c.Grant, c.ItemRevision, c.ItemSurface,
-		c.ListView, c.Operation, c.Publication, c.Relationship, c.RelationshipType,
-		c.Resource, c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term,
-		c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun,
-		c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
+		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
+		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.Publication,
+		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
+		c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup, c.TermSet,
+		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -389,6 +423,16 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.FieldValue.mutate(ctx, m)
 	case *GrantMutation:
 		return c.Grant.mutate(ctx, m)
+	case *IdentityAssignmentMutation:
+		return c.IdentityAssignment.mutate(ctx, m)
+	case *IdentityGroupMutation:
+		return c.IdentityGroup.mutate(ctx, m)
+	case *IdentityMembershipMutation:
+		return c.IdentityMembership.mutate(ctx, m)
+	case *IdentityRoleMutation:
+		return c.IdentityRole.mutate(ctx, m)
+	case *IdentityUserMutation:
+		return c.IdentityUser.mutate(ctx, m)
 	case *ItemRevisionMutation:
 		return c.ItemRevision.mutate(ctx, m)
 	case *ItemSurfaceMutation:
@@ -1607,6 +1651,703 @@ func (c *GrantClient) mutate(ctx context.Context, m *GrantMutation) (Value, erro
 		return (&GrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Grant mutation op: %q", m.Op())
+	}
+}
+
+// IdentityAssignmentClient is a client for the IdentityAssignment schema.
+type IdentityAssignmentClient struct {
+	config
+}
+
+// NewIdentityAssignmentClient returns a client for the IdentityAssignment from the given config.
+func NewIdentityAssignmentClient(c config) *IdentityAssignmentClient {
+	return &IdentityAssignmentClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `identityassignment.Hooks(f(g(h())))`.
+func (c *IdentityAssignmentClient) Use(hooks ...Hook) {
+	c.hooks.IdentityAssignment = append(c.hooks.IdentityAssignment, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `identityassignment.Intercept(f(g(h())))`.
+func (c *IdentityAssignmentClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IdentityAssignment = append(c.inters.IdentityAssignment, interceptors...)
+}
+
+// Create returns a builder for creating a IdentityAssignment entity.
+func (c *IdentityAssignmentClient) Create() *IdentityAssignmentCreate {
+	mutation := newIdentityAssignmentMutation(c.config, OpCreate)
+	return &IdentityAssignmentCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IdentityAssignment entities.
+func (c *IdentityAssignmentClient) CreateBulk(builders ...*IdentityAssignmentCreate) *IdentityAssignmentCreateBulk {
+	return &IdentityAssignmentCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IdentityAssignmentClient) MapCreateBulk(slice any, setFunc func(*IdentityAssignmentCreate, int)) *IdentityAssignmentCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IdentityAssignmentCreateBulk{err: fmt.Errorf("calling to IdentityAssignmentClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IdentityAssignmentCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IdentityAssignmentCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IdentityAssignment.
+func (c *IdentityAssignmentClient) Update() *IdentityAssignmentUpdate {
+	mutation := newIdentityAssignmentMutation(c.config, OpUpdate)
+	return &IdentityAssignmentUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IdentityAssignmentClient) UpdateOne(_m *IdentityAssignment) *IdentityAssignmentUpdateOne {
+	mutation := newIdentityAssignmentMutation(c.config, OpUpdateOne, withIdentityAssignment(_m))
+	return &IdentityAssignmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IdentityAssignmentClient) UpdateOneID(id string) *IdentityAssignmentUpdateOne {
+	mutation := newIdentityAssignmentMutation(c.config, OpUpdateOne, withIdentityAssignmentID(id))
+	return &IdentityAssignmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IdentityAssignment.
+func (c *IdentityAssignmentClient) Delete() *IdentityAssignmentDelete {
+	mutation := newIdentityAssignmentMutation(c.config, OpDelete)
+	return &IdentityAssignmentDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IdentityAssignmentClient) DeleteOne(_m *IdentityAssignment) *IdentityAssignmentDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IdentityAssignmentClient) DeleteOneID(id string) *IdentityAssignmentDeleteOne {
+	builder := c.Delete().Where(identityassignment.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IdentityAssignmentDeleteOne{builder}
+}
+
+// Query returns a query builder for IdentityAssignment.
+func (c *IdentityAssignmentClient) Query() *IdentityAssignmentQuery {
+	return &IdentityAssignmentQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIdentityAssignment},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IdentityAssignment entity by its id.
+func (c *IdentityAssignmentClient) Get(ctx context.Context, id string) (*IdentityAssignment, error) {
+	return c.Query().Where(identityassignment.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IdentityAssignmentClient) GetX(ctx context.Context, id string) *IdentityAssignment {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryRole queries the role edge of a IdentityAssignment.
+func (c *IdentityAssignmentClient) QueryRole(_m *IdentityAssignment) *IdentityRoleQuery {
+	query := (&IdentityRoleClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(identityassignment.Table, identityassignment.FieldID, id),
+			sqlgraph.To(identityrole.Table, identityrole.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, identityassignment.RoleTable, identityassignment.RoleColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *IdentityAssignmentClient) Hooks() []Hook {
+	return c.hooks.IdentityAssignment
+}
+
+// Interceptors returns the client interceptors.
+func (c *IdentityAssignmentClient) Interceptors() []Interceptor {
+	return c.inters.IdentityAssignment
+}
+
+func (c *IdentityAssignmentClient) mutate(ctx context.Context, m *IdentityAssignmentMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IdentityAssignmentCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IdentityAssignmentUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IdentityAssignmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IdentityAssignmentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IdentityAssignment mutation op: %q", m.Op())
+	}
+}
+
+// IdentityGroupClient is a client for the IdentityGroup schema.
+type IdentityGroupClient struct {
+	config
+}
+
+// NewIdentityGroupClient returns a client for the IdentityGroup from the given config.
+func NewIdentityGroupClient(c config) *IdentityGroupClient {
+	return &IdentityGroupClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `identitygroup.Hooks(f(g(h())))`.
+func (c *IdentityGroupClient) Use(hooks ...Hook) {
+	c.hooks.IdentityGroup = append(c.hooks.IdentityGroup, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `identitygroup.Intercept(f(g(h())))`.
+func (c *IdentityGroupClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IdentityGroup = append(c.inters.IdentityGroup, interceptors...)
+}
+
+// Create returns a builder for creating a IdentityGroup entity.
+func (c *IdentityGroupClient) Create() *IdentityGroupCreate {
+	mutation := newIdentityGroupMutation(c.config, OpCreate)
+	return &IdentityGroupCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IdentityGroup entities.
+func (c *IdentityGroupClient) CreateBulk(builders ...*IdentityGroupCreate) *IdentityGroupCreateBulk {
+	return &IdentityGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IdentityGroupClient) MapCreateBulk(slice any, setFunc func(*IdentityGroupCreate, int)) *IdentityGroupCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IdentityGroupCreateBulk{err: fmt.Errorf("calling to IdentityGroupClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IdentityGroupCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IdentityGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IdentityGroup.
+func (c *IdentityGroupClient) Update() *IdentityGroupUpdate {
+	mutation := newIdentityGroupMutation(c.config, OpUpdate)
+	return &IdentityGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IdentityGroupClient) UpdateOne(_m *IdentityGroup) *IdentityGroupUpdateOne {
+	mutation := newIdentityGroupMutation(c.config, OpUpdateOne, withIdentityGroup(_m))
+	return &IdentityGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IdentityGroupClient) UpdateOneID(id string) *IdentityGroupUpdateOne {
+	mutation := newIdentityGroupMutation(c.config, OpUpdateOne, withIdentityGroupID(id))
+	return &IdentityGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IdentityGroup.
+func (c *IdentityGroupClient) Delete() *IdentityGroupDelete {
+	mutation := newIdentityGroupMutation(c.config, OpDelete)
+	return &IdentityGroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IdentityGroupClient) DeleteOne(_m *IdentityGroup) *IdentityGroupDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IdentityGroupClient) DeleteOneID(id string) *IdentityGroupDeleteOne {
+	builder := c.Delete().Where(identitygroup.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IdentityGroupDeleteOne{builder}
+}
+
+// Query returns a query builder for IdentityGroup.
+func (c *IdentityGroupClient) Query() *IdentityGroupQuery {
+	return &IdentityGroupQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIdentityGroup},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IdentityGroup entity by its id.
+func (c *IdentityGroupClient) Get(ctx context.Context, id string) (*IdentityGroup, error) {
+	return c.Query().Where(identitygroup.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IdentityGroupClient) GetX(ctx context.Context, id string) *IdentityGroup {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IdentityGroupClient) Hooks() []Hook {
+	return c.hooks.IdentityGroup
+}
+
+// Interceptors returns the client interceptors.
+func (c *IdentityGroupClient) Interceptors() []Interceptor {
+	return c.inters.IdentityGroup
+}
+
+func (c *IdentityGroupClient) mutate(ctx context.Context, m *IdentityGroupMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IdentityGroupCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IdentityGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IdentityGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IdentityGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IdentityGroup mutation op: %q", m.Op())
+	}
+}
+
+// IdentityMembershipClient is a client for the IdentityMembership schema.
+type IdentityMembershipClient struct {
+	config
+}
+
+// NewIdentityMembershipClient returns a client for the IdentityMembership from the given config.
+func NewIdentityMembershipClient(c config) *IdentityMembershipClient {
+	return &IdentityMembershipClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `identitymembership.Hooks(f(g(h())))`.
+func (c *IdentityMembershipClient) Use(hooks ...Hook) {
+	c.hooks.IdentityMembership = append(c.hooks.IdentityMembership, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `identitymembership.Intercept(f(g(h())))`.
+func (c *IdentityMembershipClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IdentityMembership = append(c.inters.IdentityMembership, interceptors...)
+}
+
+// Create returns a builder for creating a IdentityMembership entity.
+func (c *IdentityMembershipClient) Create() *IdentityMembershipCreate {
+	mutation := newIdentityMembershipMutation(c.config, OpCreate)
+	return &IdentityMembershipCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IdentityMembership entities.
+func (c *IdentityMembershipClient) CreateBulk(builders ...*IdentityMembershipCreate) *IdentityMembershipCreateBulk {
+	return &IdentityMembershipCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IdentityMembershipClient) MapCreateBulk(slice any, setFunc func(*IdentityMembershipCreate, int)) *IdentityMembershipCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IdentityMembershipCreateBulk{err: fmt.Errorf("calling to IdentityMembershipClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IdentityMembershipCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IdentityMembershipCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IdentityMembership.
+func (c *IdentityMembershipClient) Update() *IdentityMembershipUpdate {
+	mutation := newIdentityMembershipMutation(c.config, OpUpdate)
+	return &IdentityMembershipUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IdentityMembershipClient) UpdateOne(_m *IdentityMembership) *IdentityMembershipUpdateOne {
+	mutation := newIdentityMembershipMutation(c.config, OpUpdateOne, withIdentityMembership(_m))
+	return &IdentityMembershipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IdentityMembershipClient) UpdateOneID(id string) *IdentityMembershipUpdateOne {
+	mutation := newIdentityMembershipMutation(c.config, OpUpdateOne, withIdentityMembershipID(id))
+	return &IdentityMembershipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IdentityMembership.
+func (c *IdentityMembershipClient) Delete() *IdentityMembershipDelete {
+	mutation := newIdentityMembershipMutation(c.config, OpDelete)
+	return &IdentityMembershipDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IdentityMembershipClient) DeleteOne(_m *IdentityMembership) *IdentityMembershipDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IdentityMembershipClient) DeleteOneID(id string) *IdentityMembershipDeleteOne {
+	builder := c.Delete().Where(identitymembership.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IdentityMembershipDeleteOne{builder}
+}
+
+// Query returns a query builder for IdentityMembership.
+func (c *IdentityMembershipClient) Query() *IdentityMembershipQuery {
+	return &IdentityMembershipQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIdentityMembership},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IdentityMembership entity by its id.
+func (c *IdentityMembershipClient) Get(ctx context.Context, id string) (*IdentityMembership, error) {
+	return c.Query().Where(identitymembership.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IdentityMembershipClient) GetX(ctx context.Context, id string) *IdentityMembership {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryGroup queries the group edge of a IdentityMembership.
+func (c *IdentityMembershipClient) QueryGroup(_m *IdentityMembership) *IdentityGroupQuery {
+	query := (&IdentityGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(identitymembership.Table, identitymembership.FieldID, id),
+			sqlgraph.To(identitygroup.Table, identitygroup.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, identitymembership.GroupTable, identitymembership.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *IdentityMembershipClient) Hooks() []Hook {
+	return c.hooks.IdentityMembership
+}
+
+// Interceptors returns the client interceptors.
+func (c *IdentityMembershipClient) Interceptors() []Interceptor {
+	return c.inters.IdentityMembership
+}
+
+func (c *IdentityMembershipClient) mutate(ctx context.Context, m *IdentityMembershipMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IdentityMembershipCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IdentityMembershipUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IdentityMembershipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IdentityMembershipDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IdentityMembership mutation op: %q", m.Op())
+	}
+}
+
+// IdentityRoleClient is a client for the IdentityRole schema.
+type IdentityRoleClient struct {
+	config
+}
+
+// NewIdentityRoleClient returns a client for the IdentityRole from the given config.
+func NewIdentityRoleClient(c config) *IdentityRoleClient {
+	return &IdentityRoleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `identityrole.Hooks(f(g(h())))`.
+func (c *IdentityRoleClient) Use(hooks ...Hook) {
+	c.hooks.IdentityRole = append(c.hooks.IdentityRole, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `identityrole.Intercept(f(g(h())))`.
+func (c *IdentityRoleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IdentityRole = append(c.inters.IdentityRole, interceptors...)
+}
+
+// Create returns a builder for creating a IdentityRole entity.
+func (c *IdentityRoleClient) Create() *IdentityRoleCreate {
+	mutation := newIdentityRoleMutation(c.config, OpCreate)
+	return &IdentityRoleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IdentityRole entities.
+func (c *IdentityRoleClient) CreateBulk(builders ...*IdentityRoleCreate) *IdentityRoleCreateBulk {
+	return &IdentityRoleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IdentityRoleClient) MapCreateBulk(slice any, setFunc func(*IdentityRoleCreate, int)) *IdentityRoleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IdentityRoleCreateBulk{err: fmt.Errorf("calling to IdentityRoleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IdentityRoleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IdentityRoleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IdentityRole.
+func (c *IdentityRoleClient) Update() *IdentityRoleUpdate {
+	mutation := newIdentityRoleMutation(c.config, OpUpdate)
+	return &IdentityRoleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IdentityRoleClient) UpdateOne(_m *IdentityRole) *IdentityRoleUpdateOne {
+	mutation := newIdentityRoleMutation(c.config, OpUpdateOne, withIdentityRole(_m))
+	return &IdentityRoleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IdentityRoleClient) UpdateOneID(id string) *IdentityRoleUpdateOne {
+	mutation := newIdentityRoleMutation(c.config, OpUpdateOne, withIdentityRoleID(id))
+	return &IdentityRoleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IdentityRole.
+func (c *IdentityRoleClient) Delete() *IdentityRoleDelete {
+	mutation := newIdentityRoleMutation(c.config, OpDelete)
+	return &IdentityRoleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IdentityRoleClient) DeleteOne(_m *IdentityRole) *IdentityRoleDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IdentityRoleClient) DeleteOneID(id string) *IdentityRoleDeleteOne {
+	builder := c.Delete().Where(identityrole.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IdentityRoleDeleteOne{builder}
+}
+
+// Query returns a query builder for IdentityRole.
+func (c *IdentityRoleClient) Query() *IdentityRoleQuery {
+	return &IdentityRoleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIdentityRole},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IdentityRole entity by its id.
+func (c *IdentityRoleClient) Get(ctx context.Context, id string) (*IdentityRole, error) {
+	return c.Query().Where(identityrole.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IdentityRoleClient) GetX(ctx context.Context, id string) *IdentityRole {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IdentityRoleClient) Hooks() []Hook {
+	return c.hooks.IdentityRole
+}
+
+// Interceptors returns the client interceptors.
+func (c *IdentityRoleClient) Interceptors() []Interceptor {
+	return c.inters.IdentityRole
+}
+
+func (c *IdentityRoleClient) mutate(ctx context.Context, m *IdentityRoleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IdentityRoleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IdentityRoleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IdentityRoleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IdentityRoleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IdentityRole mutation op: %q", m.Op())
+	}
+}
+
+// IdentityUserClient is a client for the IdentityUser schema.
+type IdentityUserClient struct {
+	config
+}
+
+// NewIdentityUserClient returns a client for the IdentityUser from the given config.
+func NewIdentityUserClient(c config) *IdentityUserClient {
+	return &IdentityUserClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `identityuser.Hooks(f(g(h())))`.
+func (c *IdentityUserClient) Use(hooks ...Hook) {
+	c.hooks.IdentityUser = append(c.hooks.IdentityUser, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `identityuser.Intercept(f(g(h())))`.
+func (c *IdentityUserClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IdentityUser = append(c.inters.IdentityUser, interceptors...)
+}
+
+// Create returns a builder for creating a IdentityUser entity.
+func (c *IdentityUserClient) Create() *IdentityUserCreate {
+	mutation := newIdentityUserMutation(c.config, OpCreate)
+	return &IdentityUserCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IdentityUser entities.
+func (c *IdentityUserClient) CreateBulk(builders ...*IdentityUserCreate) *IdentityUserCreateBulk {
+	return &IdentityUserCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IdentityUserClient) MapCreateBulk(slice any, setFunc func(*IdentityUserCreate, int)) *IdentityUserCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IdentityUserCreateBulk{err: fmt.Errorf("calling to IdentityUserClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IdentityUserCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IdentityUserCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IdentityUser.
+func (c *IdentityUserClient) Update() *IdentityUserUpdate {
+	mutation := newIdentityUserMutation(c.config, OpUpdate)
+	return &IdentityUserUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IdentityUserClient) UpdateOne(_m *IdentityUser) *IdentityUserUpdateOne {
+	mutation := newIdentityUserMutation(c.config, OpUpdateOne, withIdentityUser(_m))
+	return &IdentityUserUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IdentityUserClient) UpdateOneID(id string) *IdentityUserUpdateOne {
+	mutation := newIdentityUserMutation(c.config, OpUpdateOne, withIdentityUserID(id))
+	return &IdentityUserUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IdentityUser.
+func (c *IdentityUserClient) Delete() *IdentityUserDelete {
+	mutation := newIdentityUserMutation(c.config, OpDelete)
+	return &IdentityUserDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IdentityUserClient) DeleteOne(_m *IdentityUser) *IdentityUserDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IdentityUserClient) DeleteOneID(id string) *IdentityUserDeleteOne {
+	builder := c.Delete().Where(identityuser.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IdentityUserDeleteOne{builder}
+}
+
+// Query returns a query builder for IdentityUser.
+func (c *IdentityUserClient) Query() *IdentityUserQuery {
+	return &IdentityUserQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIdentityUser},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IdentityUser entity by its id.
+func (c *IdentityUserClient) Get(ctx context.Context, id string) (*IdentityUser, error) {
+	return c.Query().Where(identityuser.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IdentityUserClient) GetX(ctx context.Context, id string) *IdentityUser {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IdentityUserClient) Hooks() []Hook {
+	return c.hooks.IdentityUser
+}
+
+// Interceptors returns the client interceptors.
+func (c *IdentityUserClient) Interceptors() []Interceptor {
+	return c.inters.IdentityUser
+}
+
+func (c *IdentityUserClient) mutate(ctx context.Context, m *IdentityUserMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IdentityUserCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IdentityUserUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IdentityUserUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IdentityUserDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IdentityUser mutation op: %q", m.Op())
 	}
 }
 
@@ -4962,17 +5703,21 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 type (
 	hooks struct {
 		AuditEvent, Blob, BusinessKey, ContentType, DomainEvent, FieldDefinition,
-		FieldValue, Grant, ItemRevision, ItemSurface, ListView, Operation, Publication,
-		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
-		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Hook
+		FieldValue, Grant, IdentityAssignment, IdentityGroup, IdentityMembership,
+		IdentityRole, IdentityUser, ItemRevision, ItemSurface, ListView, Operation,
+		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
+		SchemaTemplate, SmartFolder, Term, TermGroup, TermSet, WebDAVCredential,
+		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BusinessKey, ContentType, DomainEvent, FieldDefinition,
-		FieldValue, Grant, ItemRevision, ItemSurface, ListView, Operation, Publication,
-		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
-		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Interceptor
+		FieldValue, Grant, IdentityAssignment, IdentityGroup, IdentityMembership,
+		IdentityRole, IdentityUser, ItemRevision, ItemSurface, ListView, Operation,
+		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
+		SchemaTemplate, SmartFolder, Term, TermGroup, TermSet, WebDAVCredential,
+		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		WorkflowVersion []ent.Interceptor
 	}
 )
 

@@ -120,6 +120,9 @@ func (h *Handler) authenticate(r *http.Request) (string, error) {
 		if err != nil {
 			return "", dms.ErrForbidden
 		}
+		if err = h.DMS.Directory().EnsureUser(r.Context(), subject); err != nil {
+			return "", err
+		}
 		return subject, nil
 	case strings.EqualFold(scheme, "Basic"):
 		_, password, ok := r.BasicAuth()

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"papergo/ent"
 	"papergo/internal/dms"
+	"papergo/internal/identity"
 )
 
 func foundationMutation[T any](a *API, status int, precondition bool, fn func(*http.Request, T, int) (any, error)) http.HandlerFunc {
@@ -31,6 +32,10 @@ func foundationMutation[T any](a *API, status int, precondition bool, fn func(*h
 }
 func entityETag(w http.ResponseWriter, v any) {
 	switch x := v.(type) {
+	case identity.Group:
+		etag(w, x.Version)
+	case identity.Role:
+		etag(w, x.Version)
 	case *ent.Resource:
 		etag(w, x.Version)
 	case *ent.SchemaTemplate:

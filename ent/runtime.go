@@ -11,6 +11,11 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
+	"papergo/ent/identityassignment"
+	"papergo/ent/identitygroup"
+	"papergo/ent/identitymembership"
+	"papergo/ent/identityrole"
+	"papergo/ent/identityuser"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
@@ -453,6 +458,230 @@ func init() {
 	grant.DefaultID = grantDescID.Default.(func() string)
 	// grant.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	grant.IDValidator = grantDescID.Validators[0].(func(string) error)
+	identityassignmentMixin := schema.IdentityAssignment{}.Mixin()
+	identityassignmentMixinFields0 := identityassignmentMixin[0].Fields()
+	_ = identityassignmentMixinFields0
+	identityassignmentFields := schema.IdentityAssignment{}.Fields()
+	_ = identityassignmentFields
+	// identityassignmentDescCreatedAt is the schema descriptor for created_at field.
+	identityassignmentDescCreatedAt := identityassignmentMixinFields0[1].Descriptor()
+	// identityassignment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	identityassignment.DefaultCreatedAt = identityassignmentDescCreatedAt.Default.(func() time.Time)
+	// identityassignmentDescRoleID is the schema descriptor for role_id field.
+	identityassignmentDescRoleID := identityassignmentFields[0].Descriptor()
+	// identityassignment.RoleIDValidator is a validator for the "role_id" field. It is called by the builders before save.
+	identityassignment.RoleIDValidator = func() func(string) error {
+		validators := identityassignmentDescRoleID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(role string) error {
+			for _, fn := range fns {
+				if err := fn(role); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// identityassignmentDescPrincipalID is the schema descriptor for principal_id field.
+	identityassignmentDescPrincipalID := identityassignmentFields[2].Descriptor()
+	// identityassignment.PrincipalIDValidator is a validator for the "principal_id" field. It is called by the builders before save.
+	identityassignment.PrincipalIDValidator = func() func(string) error {
+		validators := identityassignmentDescPrincipalID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(principal_id string) error {
+			for _, fn := range fns {
+				if err := fn(principal_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// identityassignmentDescID is the schema descriptor for id field.
+	identityassignmentDescID := identityassignmentMixinFields0[0].Descriptor()
+	// identityassignment.DefaultID holds the default value on creation for the id field.
+	identityassignment.DefaultID = identityassignmentDescID.Default.(func() string)
+	// identityassignment.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	identityassignment.IDValidator = identityassignmentDescID.Validators[0].(func(string) error)
+	identitygroupMixin := schema.IdentityGroup{}.Mixin()
+	identitygroupMixinFields0 := identitygroupMixin[0].Fields()
+	_ = identitygroupMixinFields0
+	identitygroupFields := schema.IdentityGroup{}.Fields()
+	_ = identitygroupFields
+	// identitygroupDescCreatedAt is the schema descriptor for created_at field.
+	identitygroupDescCreatedAt := identitygroupMixinFields0[1].Descriptor()
+	// identitygroup.DefaultCreatedAt holds the default value on creation for the created_at field.
+	identitygroup.DefaultCreatedAt = identitygroupDescCreatedAt.Default.(func() time.Time)
+	// identitygroupDescName is the schema descriptor for name field.
+	identitygroupDescName := identitygroupFields[0].Descriptor()
+	// identitygroup.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	identitygroup.NameValidator = func() func(string) error {
+		validators := identitygroupDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// identitygroupDescDescription is the schema descriptor for description field.
+	identitygroupDescDescription := identitygroupFields[1].Descriptor()
+	// identitygroup.DefaultDescription holds the default value on creation for the description field.
+	identitygroup.DefaultDescription = identitygroupDescDescription.Default.(string)
+	// identitygroup.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
+	identitygroup.DescriptionValidator = identitygroupDescDescription.Validators[0].(func(string) error)
+	// identitygroupDescVersion is the schema descriptor for version field.
+	identitygroupDescVersion := identitygroupFields[2].Descriptor()
+	// identitygroup.DefaultVersion holds the default value on creation for the version field.
+	identitygroup.DefaultVersion = identitygroupDescVersion.Default.(int)
+	// identitygroup.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	identitygroup.VersionValidator = identitygroupDescVersion.Validators[0].(func(int) error)
+	// identitygroupDescID is the schema descriptor for id field.
+	identitygroupDescID := identitygroupMixinFields0[0].Descriptor()
+	// identitygroup.DefaultID holds the default value on creation for the id field.
+	identitygroup.DefaultID = identitygroupDescID.Default.(func() string)
+	// identitygroup.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	identitygroup.IDValidator = identitygroupDescID.Validators[0].(func(string) error)
+	identitymembershipMixin := schema.IdentityMembership{}.Mixin()
+	identitymembershipMixinFields0 := identitymembershipMixin[0].Fields()
+	_ = identitymembershipMixinFields0
+	identitymembershipFields := schema.IdentityMembership{}.Fields()
+	_ = identitymembershipFields
+	// identitymembershipDescCreatedAt is the schema descriptor for created_at field.
+	identitymembershipDescCreatedAt := identitymembershipMixinFields0[1].Descriptor()
+	// identitymembership.DefaultCreatedAt holds the default value on creation for the created_at field.
+	identitymembership.DefaultCreatedAt = identitymembershipDescCreatedAt.Default.(func() time.Time)
+	// identitymembershipDescGroupID is the schema descriptor for group_id field.
+	identitymembershipDescGroupID := identitymembershipFields[0].Descriptor()
+	// identitymembership.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
+	identitymembership.GroupIDValidator = func() func(string) error {
+		validators := identitymembershipDescGroupID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(group string) error {
+			for _, fn := range fns {
+				if err := fn(group); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// identitymembershipDescPrincipalID is the schema descriptor for principal_id field.
+	identitymembershipDescPrincipalID := identitymembershipFields[2].Descriptor()
+	// identitymembership.PrincipalIDValidator is a validator for the "principal_id" field. It is called by the builders before save.
+	identitymembership.PrincipalIDValidator = func() func(string) error {
+		validators := identitymembershipDescPrincipalID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(principal_id string) error {
+			for _, fn := range fns {
+				if err := fn(principal_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// identitymembershipDescID is the schema descriptor for id field.
+	identitymembershipDescID := identitymembershipMixinFields0[0].Descriptor()
+	// identitymembership.DefaultID holds the default value on creation for the id field.
+	identitymembership.DefaultID = identitymembershipDescID.Default.(func() string)
+	// identitymembership.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	identitymembership.IDValidator = identitymembershipDescID.Validators[0].(func(string) error)
+	identityroleMixin := schema.IdentityRole{}.Mixin()
+	identityroleMixinFields0 := identityroleMixin[0].Fields()
+	_ = identityroleMixinFields0
+	identityroleFields := schema.IdentityRole{}.Fields()
+	_ = identityroleFields
+	// identityroleDescCreatedAt is the schema descriptor for created_at field.
+	identityroleDescCreatedAt := identityroleMixinFields0[1].Descriptor()
+	// identityrole.DefaultCreatedAt holds the default value on creation for the created_at field.
+	identityrole.DefaultCreatedAt = identityroleDescCreatedAt.Default.(func() time.Time)
+	// identityroleDescName is the schema descriptor for name field.
+	identityroleDescName := identityroleFields[0].Descriptor()
+	// identityrole.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	identityrole.NameValidator = func() func(string) error {
+		validators := identityroleDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// identityroleDescDescription is the schema descriptor for description field.
+	identityroleDescDescription := identityroleFields[1].Descriptor()
+	// identityrole.DefaultDescription holds the default value on creation for the description field.
+	identityrole.DefaultDescription = identityroleDescDescription.Default.(string)
+	// identityrole.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
+	identityrole.DescriptionValidator = identityroleDescDescription.Validators[0].(func(string) error)
+	// identityroleDescScopes is the schema descriptor for scopes field.
+	identityroleDescScopes := identityroleFields[2].Descriptor()
+	// identityrole.DefaultScopes holds the default value on creation for the scopes field.
+	identityrole.DefaultScopes = identityroleDescScopes.Default.([]string)
+	// identityroleDescBuiltin is the schema descriptor for builtin field.
+	identityroleDescBuiltin := identityroleFields[3].Descriptor()
+	// identityrole.DefaultBuiltin holds the default value on creation for the builtin field.
+	identityrole.DefaultBuiltin = identityroleDescBuiltin.Default.(bool)
+	// identityroleDescVersion is the schema descriptor for version field.
+	identityroleDescVersion := identityroleFields[4].Descriptor()
+	// identityrole.DefaultVersion holds the default value on creation for the version field.
+	identityrole.DefaultVersion = identityroleDescVersion.Default.(int)
+	// identityrole.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	identityrole.VersionValidator = identityroleDescVersion.Validators[0].(func(int) error)
+	// identityroleDescID is the schema descriptor for id field.
+	identityroleDescID := identityroleMixinFields0[0].Descriptor()
+	// identityrole.DefaultID holds the default value on creation for the id field.
+	identityrole.DefaultID = identityroleDescID.Default.(func() string)
+	// identityrole.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	identityrole.IDValidator = identityroleDescID.Validators[0].(func(string) error)
+	identityuserFields := schema.IdentityUser{}.Fields()
+	_ = identityuserFields
+	// identityuserDescCreatedAt is the schema descriptor for created_at field.
+	identityuserDescCreatedAt := identityuserFields[1].Descriptor()
+	// identityuser.DefaultCreatedAt holds the default value on creation for the created_at field.
+	identityuser.DefaultCreatedAt = identityuserDescCreatedAt.Default.(func() time.Time)
+	// identityuserDescID is the schema descriptor for id field.
+	identityuserDescID := identityuserFields[0].Descriptor()
+	// identityuser.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	identityuser.IDValidator = func() func(string) error {
+		validators := identityuserDescID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(id string) error {
+			for _, fn := range fns {
+				if err := fn(id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	itemrevisionMixin := schema.ItemRevision{}.Mixin()
 	itemrevisionMixinFields0 := itemrevisionMixin[0].Fields()
 	_ = itemrevisionMixinFields0

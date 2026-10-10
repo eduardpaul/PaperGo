@@ -52,6 +52,9 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("initialize authentication: %w", err)
 	}
 	service := dms.NewService(db.SQL)
+	if err = service.Directory().Initialize(startup, c.AdminSubject); err != nil {
+		return fmt.Errorf("initialize organization directory: %w", err)
+	}
 	workflows := &workflow.Service{DMS: service}
 	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, NodeID: c.NodeID, Retention: c.RunRetention, Logger: log}, db.SQL, service, workflows)
 	if err != nil {

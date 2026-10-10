@@ -30,6 +30,21 @@ type FieldValue func(*sql.Selector)
 // Grant is the predicate function for grant builders.
 type Grant func(*sql.Selector)
 
+// IdentityAssignment is the predicate function for identityassignment builders.
+type IdentityAssignment func(*sql.Selector)
+
+// IdentityGroup is the predicate function for identitygroup builders.
+type IdentityGroup func(*sql.Selector)
+
+// IdentityMembership is the predicate function for identitymembership builders.
+type IdentityMembership func(*sql.Selector)
+
+// IdentityRole is the predicate function for identityrole builders.
+type IdentityRole func(*sql.Selector)
+
+// IdentityUser is the predicate function for identityuser builders.
+type IdentityUser func(*sql.Selector)
+
 // ItemRevision is the predicate function for itemrevision builders.
 type ItemRevision func(*sql.Selector)
 

@@ -325,6 +325,129 @@ var (
 			},
 		},
 	}
+	// IdentityAssignmentsColumns holds the columns for the "identity_assignments" table.
+	IdentityAssignmentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "principal_type", Type: field.TypeEnum, Enums: []string{"user", "group"}},
+		{Name: "principal_id", Type: field.TypeString, Size: 255},
+		{Name: "role_id", Type: field.TypeString, Size: 36},
+	}
+	// IdentityAssignmentsTable holds the schema information for the "identity_assignments" table.
+	IdentityAssignmentsTable = &schema.Table{
+		Name:       "identity_assignments",
+		Columns:    IdentityAssignmentsColumns,
+		PrimaryKey: []*schema.Column{IdentityAssignmentsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "identity_assignments_identity_roles_role",
+				Columns:    []*schema.Column{IdentityAssignmentsColumns[4]},
+				RefColumns: []*schema.Column{IdentityRolesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "identityassignment_role_id_principal_type_principal_id",
+				Unique:  true,
+				Columns: []*schema.Column{IdentityAssignmentsColumns[4], IdentityAssignmentsColumns[2], IdentityAssignmentsColumns[3]},
+			},
+			{
+				Name:    "identityassignment_principal_type_principal_id_role_id",
+				Unique:  false,
+				Columns: []*schema.Column{IdentityAssignmentsColumns[2], IdentityAssignmentsColumns[3], IdentityAssignmentsColumns[4]},
+			},
+		},
+	}
+	// IdentityGroupsColumns holds the columns for the "identity_groups" table.
+	IdentityGroupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString, Size: 200},
+		{Name: "description", Type: field.TypeString, Size: 2000, Default: ""},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+	}
+	// IdentityGroupsTable holds the schema information for the "identity_groups" table.
+	IdentityGroupsTable = &schema.Table{
+		Name:       "identity_groups",
+		Columns:    IdentityGroupsColumns,
+		PrimaryKey: []*schema.Column{IdentityGroupsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "identitygroup_name",
+				Unique:  true,
+				Columns: []*schema.Column{IdentityGroupsColumns[2]},
+			},
+		},
+	}
+	// IdentityMembershipsColumns holds the columns for the "identity_memberships" table.
+	IdentityMembershipsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "principal_type", Type: field.TypeEnum, Enums: []string{"user", "group"}},
+		{Name: "principal_id", Type: field.TypeString, Size: 255},
+		{Name: "group_id", Type: field.TypeString, Size: 36},
+	}
+	// IdentityMembershipsTable holds the schema information for the "identity_memberships" table.
+	IdentityMembershipsTable = &schema.Table{
+		Name:       "identity_memberships",
+		Columns:    IdentityMembershipsColumns,
+		PrimaryKey: []*schema.Column{IdentityMembershipsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "identity_memberships_identity_groups_group",
+				Columns:    []*schema.Column{IdentityMembershipsColumns[4]},
+				RefColumns: []*schema.Column{IdentityGroupsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "identitymembership_group_id_principal_type_principal_id",
+				Unique:  true,
+				Columns: []*schema.Column{IdentityMembershipsColumns[4], IdentityMembershipsColumns[2], IdentityMembershipsColumns[3]},
+			},
+			{
+				Name:    "identitymembership_principal_type_principal_id_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{IdentityMembershipsColumns[2], IdentityMembershipsColumns[3], IdentityMembershipsColumns[4]},
+			},
+		},
+	}
+	// IdentityRolesColumns holds the columns for the "identity_roles" table.
+	IdentityRolesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString, Size: 200},
+		{Name: "description", Type: field.TypeString, Size: 2000, Default: ""},
+		{Name: "scopes", Type: field.TypeJSON},
+		{Name: "builtin", Type: field.TypeBool, Default: false},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+	}
+	// IdentityRolesTable holds the schema information for the "identity_roles" table.
+	IdentityRolesTable = &schema.Table{
+		Name:       "identity_roles",
+		Columns:    IdentityRolesColumns,
+		PrimaryKey: []*schema.Column{IdentityRolesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "identityrole_name",
+				Unique:  true,
+				Columns: []*schema.Column{IdentityRolesColumns[2]},
+			},
+		},
+	}
+	// IdentityUsersColumns holds the columns for the "identity_users" table.
+	IdentityUsersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 255},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// IdentityUsersTable holds the schema information for the "identity_users" table.
+	IdentityUsersTable = &schema.Table{
+		Name:       "identity_users",
+		Columns:    IdentityUsersColumns,
+		PrimaryKey: []*schema.Column{IdentityUsersColumns[0]},
+	}
 	// ItemRevisionsColumns holds the columns for the "item_revisions" table.
 	ItemRevisionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1319,6 +1442,11 @@ var (
 		FieldDefinitionsTable,
 		FieldValuesTable,
 		GrantsTable,
+		IdentityAssignmentsTable,
+		IdentityGroupsTable,
+		IdentityMembershipsTable,
+		IdentityRolesTable,
+		IdentityUsersTable,
 		ItemRevisionsTable,
 		ItemSurfacesTable,
 		ListViewsTable,
@@ -1350,6 +1478,8 @@ func init() {
 	FieldDefinitionsTable.ForeignKeys[0].RefTable = ResourcesTable
 	FieldValuesTable.ForeignKeys[0].RefTable = ItemSurfacesTable
 	GrantsTable.ForeignKeys[0].RefTable = ResourcesTable
+	IdentityAssignmentsTable.ForeignKeys[0].RefTable = IdentityRolesTable
+	IdentityMembershipsTable.ForeignKeys[0].RefTable = IdentityGroupsTable
 	ItemRevisionsTable.ForeignKeys[0].RefTable = BlobsTable
 	ItemRevisionsTable.ForeignKeys[1].RefTable = ResourcesTable
 	ItemRevisionsTable.ForeignKeys[2].RefTable = SchemaRevisionsTable
