@@ -464,6 +464,11 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 				return nil, err
 			}
 			known := definitionMap(defs)
+			for key := range *in.Values {
+				if known[key] == nil {
+					return nil, invalid("unknown field for this content type: " + key)
+				}
+			}
 			current := map[string]any{}
 			for key, value := range r.Values {
 				if known[key] != nil {

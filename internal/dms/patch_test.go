@@ -30,6 +30,29 @@ func TestItemPatchRetainsOmittedFieldsAndRemovesNull(t *testing.T) {
 	}
 }
 
+func TestItemPatchRejectsUnknownAndRemovedKeysEvenWhenNull(t *testing.T) {
+	s, _, list := fixture(t)
+	field := fieldOK(t, s, list.ID, CreateField{Key: "removed", Label: "Removed", Type: "text"})
+	item := create(t, s, list.ID, "item", "Item", map[string]any{"removed": "historical"})
+	if err := s.DeleteField(testContext, "alice", list.ID, field.ID, latest(t, s, list.ID).Version); err != nil {
+		t.Fatal(err)
+	}
+	for _, values := range []map[string]any{{"unknown": nil}, {"removed": nil}, {"removed": "new"}} {
+		var validation *ValidationError
+		if _, err := s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Values: &values}); !errors.As(err, &validation) {
+			t.Fatal("unknown patch key accepted", values, err)
+		}
+		if latest(t, s, item.ID).Version != item.Version || revisionCount(t, s, item.ID) != 1 {
+			t.Fatal("invalid patch committed")
+		}
+	}
+	values := map[string]any{}
+	updated, err := s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Values: &values})
+	if err != nil || len(updated.Values) != 0 {
+		t.Fatal("carried removed fields not pruned", updated, err)
+	}
+}
+
 func TestRelationshipPatchRetainsRequiredFieldsAndRollsBackInvalidRemoval(t *testing.T) {
 	s, workspace, list := fixture(t)
 	a := create(t, s, list.ID, "item", "A", nil)
