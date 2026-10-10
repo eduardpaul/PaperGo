@@ -12105,6 +12105,155 @@
           }
         }
       }
+    },
+    "/v1/resources/{id}/recycle-bin": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listRecycleBin",
+        "summary": "List writable deleted items and folders",
+        "description": "Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted entries with deletion time and actor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecycleBinPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/resources/{id}/recycle-bin/{itemID}/restore": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "itemID",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "restoreDeletedResource",
+        "summary": "Restore a deleted item or folder",
+        "description": "Requires list.write and write access to the retained scope and destination. Returns to the active original folder, otherwise the collection root. Restores head/published content, history and indexes atomically. recursive=true restores folder descendants from the same deletion only. Name or business-key conflicts roll back the entire restore. Retained relationships become visible when both endpoints are active and readable. No If-Match is required.",
+        "parameters": [
+          {
+            "name": "recursive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored entry and current ETag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/resources/{id}/recycle-bin/{itemID}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "itemID",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "purgeDeletedResource",
+        "summary": "Permanently purge deleted content",
+        "description": "Requires list.write and manage access to every purged entry. recursive=true explicitly purges deleted folder descendants. Deletes retained revisions, publications, blob references and grants; audit/run records retain stable IDs. Object deletion is queued durably and retried after storage failures or restart. Only deleted entries in live collections can be purged. No If-Match is required.",
+        "parameters": [
+          {
+            "name": "recursive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Permanently purged; object cleanup queued"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -16771,6 +16920,46 @@
           },
           "active": {
             "type": "boolean"
+          }
+        }
+      },
+      "DeletedResource": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          },
+          {
+            "type": "object",
+            "required": [
+              "deleted_at",
+              "deleted_by"
+            ],
+            "properties": {
+              "deleted_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deleted_by": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "RecycleBinPage": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeletedResource"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
           }
         }
       }

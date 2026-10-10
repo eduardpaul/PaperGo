@@ -92,8 +92,8 @@ func TestCollectionDeletionRemovesLiveContentAndRetainsHistory(t *testing.T) {
 			t.Fatal("deleted resource visible", id, err)
 		}
 	}
-	if _, err = s.Client.Relationship.Get(testContext, edge.ID); err == nil {
-		t.Fatal("deleted edge survived")
+	if _, err = s.Client.Relationship.Get(testContext, edge.ID); err != nil {
+		t.Fatal("recovery edge lost", err)
 	}
 	if n, err := s.Client.ItemRevision.Query().Count(testContext); err != nil || n != 2 {
 		t.Fatal("revision history lost", n, err)

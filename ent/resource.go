@@ -76,6 +76,8 @@ type Resource struct {
 	NameKey *string `json:"-"`
 	// DeletedAt holds the value of the "deleted_at" field.
 	DeletedAt *time.Time `json:"-"`
+	// DeletedBy holds the value of the "deleted_by" field.
+	DeletedBy *string `json:"-"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ResourceQuery when eager-loading is set.
 	Edges        ResourceEdges `json:"edges"`
@@ -264,7 +266,7 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case resource.FieldVersion, resource.FieldNextRevisionNumber, resource.FieldMaxVersions:
 			values[i] = new(sql.NullInt64)
-		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey:
+		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey, resource.FieldDeletedBy:
 			values[i] = new(sql.NullString)
 		case resource.FieldCreatedAt, resource.FieldUpdatedAt, resource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -472,6 +474,13 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 				_m.DeletedAt = new(time.Time)
 				*_m.DeletedAt = value.Time
 			}
+		case resource.FieldDeletedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field deleted_by", values[i])
+			} else if value.Valid {
+				_m.DeletedBy = new(string)
+				*_m.DeletedBy = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -678,6 +687,11 @@ func (_m *Resource) String() string {
 	if v := _m.DeletedAt; v != nil {
 		builder.WriteString("deleted_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.DeletedBy; v != nil {
+		builder.WriteString("deleted_by=")
+		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')
 	return builder.String()

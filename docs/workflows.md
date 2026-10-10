@@ -43,6 +43,8 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | `item.published` | a revision is published, explicitly or automatically | the item |
 | `item.unpublished` | an item is unpublished | the item |
 | `item.deleted` | an item is deleted, alone or with its folder | none (`{trigger:resource_id}` names it) |
+| `item.restored` | a deleted item is restored from the recycle bin | the item |
+| `item.purged` | a deleted item is permanently purged | none (`{trigger:resource_id}` names it) |
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
 | `manual` | someone starts it through the API | each chosen item, the selection's primary item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |

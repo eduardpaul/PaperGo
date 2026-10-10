@@ -6,6 +6,7 @@ import (
 	"encoding/json/jsontext"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
+	"papergo/ent/blobdeletion"
 	"papergo/ent/businesskey"
 	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
@@ -183,6 +184,25 @@ func init() {
 	blob.DefaultID = blobDescID.Default.(func() string)
 	// blob.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	blob.IDValidator = blobDescID.Validators[0].(func(string) error)
+	blobdeletionMixin := schema.BlobDeletion{}.Mixin()
+	blobdeletionMixinFields0 := blobdeletionMixin[0].Fields()
+	_ = blobdeletionMixinFields0
+	blobdeletionFields := schema.BlobDeletion{}.Fields()
+	_ = blobdeletionFields
+	// blobdeletionDescCreatedAt is the schema descriptor for created_at field.
+	blobdeletionDescCreatedAt := blobdeletionMixinFields0[1].Descriptor()
+	// blobdeletion.DefaultCreatedAt holds the default value on creation for the created_at field.
+	blobdeletion.DefaultCreatedAt = blobdeletionDescCreatedAt.Default.(func() time.Time)
+	// blobdeletionDescObjectKey is the schema descriptor for object_key field.
+	blobdeletionDescObjectKey := blobdeletionFields[0].Descriptor()
+	// blobdeletion.ObjectKeyValidator is a validator for the "object_key" field. It is called by the builders before save.
+	blobdeletion.ObjectKeyValidator = blobdeletionDescObjectKey.Validators[0].(func(string) error)
+	// blobdeletionDescID is the schema descriptor for id field.
+	blobdeletionDescID := blobdeletionMixinFields0[0].Descriptor()
+	// blobdeletion.DefaultID holds the default value on creation for the id field.
+	blobdeletion.DefaultID = blobdeletionDescID.Default.(func() string)
+	// blobdeletion.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	blobdeletion.IDValidator = blobdeletionDescID.Validators[0].(func(string) error)
 	businesskeyMixin := schema.BusinessKey{}.Mixin()
 	businesskeyMixinFields0 := businesskeyMixin[0].Fields()
 	_ = businesskeyMixinFields0

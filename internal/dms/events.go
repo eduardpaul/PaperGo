@@ -17,6 +17,8 @@ const (
 	EventItemPublished   = "item.published"
 	EventItemUnpublished = "item.unpublished"
 	EventItemDeleted     = "item.deleted"
+	EventItemRestored    = "item.restored"
+	EventItemPurged      = "item.purged"
 )
 
 // Event is a domain event: something that happened in a committed write and

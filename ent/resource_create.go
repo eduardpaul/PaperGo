@@ -370,6 +370,20 @@ func (_c *ResourceCreate) SetNillableDeletedAt(v *time.Time) *ResourceCreate {
 	return _c
 }
 
+// SetDeletedBy sets the "deleted_by" field.
+func (_c *ResourceCreate) SetDeletedBy(v string) *ResourceCreate {
+	_c.mutation.SetDeletedBy(v)
+	return _c
+}
+
+// SetNillableDeletedBy sets the "deleted_by" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableDeletedBy(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetDeletedBy(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ResourceCreate) SetID(v string) *ResourceCreate {
 	_c.mutation.SetID(v)
@@ -904,6 +918,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(resource.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if value, ok := _c.mutation.DeletedBy(); ok {
+		_spec.SetField(resource.FieldDeletedBy, field.TypeString, value)
+		_node.DeletedBy = &value
 	}
 	if nodes := _c.mutation.ChildrenIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
+	"papergo/ent/blobdeletion"
 	"papergo/ent/businesskey"
 	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
@@ -63,6 +64,7 @@ const (
 	// Node types.
 	TypeAuditEvent         = "AuditEvent"
 	TypeBlob               = "Blob"
+	TypeBlobDeletion       = "BlobDeletion"
 	TypeBusinessKey        = "BusinessKey"
 	TypeCollectionType     = "CollectionType"
 	TypeContentType        = "ContentType"
@@ -1573,6 +1575,392 @@ func (m *BlobMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Blob edge %s", name)
+}
+
+// BlobDeletionMutation represents an operation that mutates the BlobDeletion nodes in the graph.
+type BlobDeletionMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *string
+	created_at    *time.Time
+	object_key    *string
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*BlobDeletion, error)
+	predicates    []predicate.BlobDeletion
+}
+
+var _ ent.Mutation = (*BlobDeletionMutation)(nil)
+
+// blobdeletionOption allows management of the mutation configuration using functional options.
+type blobdeletionOption func(*BlobDeletionMutation)
+
+// newBlobDeletionMutation creates new mutation for the BlobDeletion entity.
+func newBlobDeletionMutation(c config, op Op, opts ...blobdeletionOption) *BlobDeletionMutation {
+	m := &BlobDeletionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBlobDeletion,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBlobDeletionID sets the ID field of the mutation.
+func withBlobDeletionID(id string) blobdeletionOption {
+	return func(m *BlobDeletionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BlobDeletion
+		)
+		m.oldValue = func(ctx context.Context) (*BlobDeletion, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BlobDeletion.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBlobDeletion sets the old BlobDeletion of the mutation.
+func withBlobDeletion(node *BlobDeletion) blobdeletionOption {
+	return func(m *BlobDeletionMutation) {
+		m.oldValue = func(context.Context) (*BlobDeletion, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BlobDeletionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BlobDeletionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of BlobDeletion entities.
+func (m *BlobDeletionMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BlobDeletionMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BlobDeletionMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BlobDeletion.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BlobDeletionMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BlobDeletionMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BlobDeletion entity.
+// If the BlobDeletion object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobDeletionMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BlobDeletionMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetObjectKey sets the "object_key" field.
+func (m *BlobDeletionMutation) SetObjectKey(s string) {
+	m.object_key = &s
+}
+
+// ObjectKey returns the value of the "object_key" field in the mutation.
+func (m *BlobDeletionMutation) ObjectKey() (r string, exists bool) {
+	v := m.object_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectKey returns the old "object_key" field's value of the BlobDeletion entity.
+// If the BlobDeletion object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobDeletionMutation) OldObjectKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectKey: %w", err)
+	}
+	return oldValue.ObjectKey, nil
+}
+
+// ResetObjectKey resets all changes to the "object_key" field.
+func (m *BlobDeletionMutation) ResetObjectKey() {
+	m.object_key = nil
+}
+
+// Where appends a list predicates to the BlobDeletionMutation builder.
+func (m *BlobDeletionMutation) Where(ps ...predicate.BlobDeletion) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BlobDeletionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BlobDeletionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BlobDeletion, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BlobDeletionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BlobDeletionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BlobDeletion).
+func (m *BlobDeletionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BlobDeletionMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.created_at != nil {
+		fields = append(fields, blobdeletion.FieldCreatedAt)
+	}
+	if m.object_key != nil {
+		fields = append(fields, blobdeletion.FieldObjectKey)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BlobDeletionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case blobdeletion.FieldCreatedAt:
+		return m.CreatedAt()
+	case blobdeletion.FieldObjectKey:
+		return m.ObjectKey()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BlobDeletionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case blobdeletion.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case blobdeletion.FieldObjectKey:
+		return m.OldObjectKey(ctx)
+	}
+	return nil, fmt.Errorf("unknown BlobDeletion field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BlobDeletionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case blobdeletion.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case blobdeletion.FieldObjectKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectKey(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BlobDeletion field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BlobDeletionMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BlobDeletionMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BlobDeletionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown BlobDeletion numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BlobDeletionMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BlobDeletionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BlobDeletionMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown BlobDeletion nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BlobDeletionMutation) ResetField(name string) error {
+	switch name {
+	case blobdeletion.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case blobdeletion.FieldObjectKey:
+		m.ResetObjectKey()
+		return nil
+	}
+	return fmt.Errorf("unknown BlobDeletion field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BlobDeletionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BlobDeletionMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BlobDeletionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BlobDeletionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BlobDeletionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BlobDeletionMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BlobDeletionMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown BlobDeletion unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BlobDeletionMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown BlobDeletion edge %s", name)
 }
 
 // BusinessKeyMutation represents an operation that mutates the BusinessKey nodes in the graph.
@@ -18491,6 +18879,7 @@ type ResourceMutation struct {
 	scope_id                  *string
 	name_key                  *string
 	deleted_at                *time.Time
+	deleted_by                *string
 	clearedFields             map[string]struct{}
 	children                  map[string]struct{}
 	removedchildren           map[string]struct{}
@@ -19853,6 +20242,55 @@ func (m *ResourceMutation) ResetDeletedAt() {
 	delete(m.clearedFields, resource.FieldDeletedAt)
 }
 
+// SetDeletedBy sets the "deleted_by" field.
+func (m *ResourceMutation) SetDeletedBy(s string) {
+	m.deleted_by = &s
+}
+
+// DeletedBy returns the value of the "deleted_by" field in the mutation.
+func (m *ResourceMutation) DeletedBy() (r string, exists bool) {
+	v := m.deleted_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedBy returns the old "deleted_by" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldDeletedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedBy: %w", err)
+	}
+	return oldValue.DeletedBy, nil
+}
+
+// ClearDeletedBy clears the value of the "deleted_by" field.
+func (m *ResourceMutation) ClearDeletedBy() {
+	m.deleted_by = nil
+	m.clearedFields[resource.FieldDeletedBy] = struct{}{}
+}
+
+// DeletedByCleared returns if the "deleted_by" field was cleared in this mutation.
+func (m *ResourceMutation) DeletedByCleared() bool {
+	_, ok := m.clearedFields[resource.FieldDeletedBy]
+	return ok
+}
+
+// ResetDeletedBy resets all changes to the "deleted_by" field.
+func (m *ResourceMutation) ResetDeletedBy() {
+	m.deleted_by = nil
+	delete(m.clearedFields, resource.FieldDeletedBy)
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by ids.
 func (m *ResourceMutation) AddChildIDs(ids ...string) {
 	if m.children == nil {
@@ -20508,7 +20946,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 29)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -20593,6 +21031,9 @@ func (m *ResourceMutation) Fields() []string {
 	if m.deleted_at != nil {
 		fields = append(fields, resource.FieldDeletedAt)
 	}
+	if m.deleted_by != nil {
+		fields = append(fields, resource.FieldDeletedBy)
+	}
 	return fields
 }
 
@@ -20657,6 +21098,8 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.NameKey()
 	case resource.FieldDeletedAt:
 		return m.DeletedAt()
+	case resource.FieldDeletedBy:
+		return m.DeletedBy()
 	}
 	return nil, false
 }
@@ -20722,6 +21165,8 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldNameKey(ctx)
 	case resource.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
+	case resource.FieldDeletedBy:
+		return m.OldDeletedBy(ctx)
 	}
 	return nil, fmt.Errorf("unknown Resource field %s", name)
 }
@@ -20927,6 +21372,13 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDeletedAt(v)
 		return nil
+	case resource.FieldDeletedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedBy(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Resource field %s", name)
 }
@@ -21023,6 +21475,9 @@ func (m *ResourceMutation) ClearedFields() []string {
 	if m.FieldCleared(resource.FieldDeletedAt) {
 		fields = append(fields, resource.FieldDeletedAt)
 	}
+	if m.FieldCleared(resource.FieldDeletedBy) {
+		fields = append(fields, resource.FieldDeletedBy)
+	}
 	return fields
 }
 
@@ -21063,6 +21518,9 @@ func (m *ResourceMutation) ClearField(name string) error {
 		return nil
 	case resource.FieldDeletedAt:
 		m.ClearDeletedAt()
+		return nil
+	case resource.FieldDeletedBy:
+		m.ClearDeletedBy()
 		return nil
 	}
 	return fmt.Errorf("unknown Resource nullable field %s", name)
@@ -21155,6 +21613,9 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldDeletedAt:
 		m.ResetDeletedAt()
+		return nil
+	case resource.FieldDeletedBy:
+		m.ResetDeletedBy()
 		return nil
 	}
 	return fmt.Errorf("unknown Resource field %s", name)

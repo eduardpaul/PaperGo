@@ -386,6 +386,26 @@ func (_u *ResourceUpdate) ClearDeletedAt() *ResourceUpdate {
 	return _u
 }
 
+// SetDeletedBy sets the "deleted_by" field.
+func (_u *ResourceUpdate) SetDeletedBy(v string) *ResourceUpdate {
+	_u.mutation.SetDeletedBy(v)
+	return _u
+}
+
+// SetNillableDeletedBy sets the "deleted_by" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableDeletedBy(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetDeletedBy(*v)
+	}
+	return _u
+}
+
+// ClearDeletedBy clears the value of the "deleted_by" field.
+func (_u *ResourceUpdate) ClearDeletedBy() *ResourceUpdate {
+	_u.mutation.ClearDeletedBy()
+	return _u
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by IDs.
 func (_u *ResourceUpdate) AddChildIDs(ids ...string) *ResourceUpdate {
 	_u.mutation.AddChildIDs(ids...)
@@ -941,6 +961,12 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(resource.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DeletedBy(); ok {
+		_spec.SetField(resource.FieldDeletedBy, field.TypeString, value)
+	}
+	if _u.mutation.DeletedByCleared() {
+		_spec.ClearField(resource.FieldDeletedBy, field.TypeString)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1834,6 +1860,26 @@ func (_u *ResourceUpdateOne) ClearDeletedAt() *ResourceUpdateOne {
 	return _u
 }
 
+// SetDeletedBy sets the "deleted_by" field.
+func (_u *ResourceUpdateOne) SetDeletedBy(v string) *ResourceUpdateOne {
+	_u.mutation.SetDeletedBy(v)
+	return _u
+}
+
+// SetNillableDeletedBy sets the "deleted_by" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableDeletedBy(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetDeletedBy(*v)
+	}
+	return _u
+}
+
+// ClearDeletedBy clears the value of the "deleted_by" field.
+func (_u *ResourceUpdateOne) ClearDeletedBy() *ResourceUpdateOne {
+	_u.mutation.ClearDeletedBy()
+	return _u
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by IDs.
 func (_u *ResourceUpdateOne) AddChildIDs(ids ...string) *ResourceUpdateOne {
 	_u.mutation.AddChildIDs(ids...)
@@ -2419,6 +2465,12 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(resource.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DeletedBy(); ok {
+		_spec.SetField(resource.FieldDeletedBy, field.TypeString, value)
+	}
+	if _u.mutation.DeletedByCleared() {
+		_spec.ClearField(resource.FieldDeletedBy, field.TypeString)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{

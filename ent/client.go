@@ -13,6 +13,7 @@ import (
 
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
+	"papergo/ent/blobdeletion"
 	"papergo/ent/businesskey"
 	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
@@ -65,6 +66,8 @@ type Client struct {
 	AuditEvent *AuditEventClient
 	// Blob is the client for interacting with the Blob builders.
 	Blob *BlobClient
+	// BlobDeletion is the client for interacting with the BlobDeletion builders.
+	BlobDeletion *BlobDeletionClient
 	// BusinessKey is the client for interacting with the BusinessKey builders.
 	BusinessKey *BusinessKeyClient
 	// CollectionType is the client for interacting with the CollectionType builders.
@@ -146,6 +149,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AuditEvent = NewAuditEventClient(c.config)
 	c.Blob = NewBlobClient(c.config)
+	c.BlobDeletion = NewBlobDeletionClient(c.config)
 	c.BusinessKey = NewBusinessKeyClient(c.config)
 	c.CollectionType = NewCollectionTypeClient(c.config)
 	c.ContentType = NewContentTypeClient(c.config)
@@ -274,6 +278,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:             cfg,
 		AuditEvent:         NewAuditEventClient(cfg),
 		Blob:               NewBlobClient(cfg),
+		BlobDeletion:       NewBlobDeletionClient(cfg),
 		BusinessKey:        NewBusinessKeyClient(cfg),
 		CollectionType:     NewCollectionTypeClient(cfg),
 		ContentType:        NewContentTypeClient(cfg),
@@ -329,6 +334,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:             cfg,
 		AuditEvent:         NewAuditEventClient(cfg),
 		Blob:               NewBlobClient(cfg),
+		BlobDeletion:       NewBlobDeletionClient(cfg),
 		BusinessKey:        NewBusinessKeyClient(cfg),
 		CollectionType:     NewCollectionTypeClient(cfg),
 		ContentType:        NewContentTypeClient(cfg),
@@ -392,14 +398,14 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuditEvent, c.Blob, c.BusinessKey, c.CollectionType, c.ContentType,
-		c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
-		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
-		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView, c.Operation,
-		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
-		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
+		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
+		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership, c.IdentityRole,
+		c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView,
+		c.Operation, c.OperationItem, c.Publication, c.Relationship,
+		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
+		c.SmartFolder, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -409,14 +415,14 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuditEvent, c.Blob, c.BusinessKey, c.CollectionType, c.ContentType,
-		c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
-		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
-		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView, c.Operation,
-		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
-		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
+		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
+		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership, c.IdentityRole,
+		c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView,
+		c.Operation, c.OperationItem, c.Publication, c.Relationship,
+		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
+		c.SmartFolder, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -429,6 +435,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AuditEvent.mutate(ctx, m)
 	case *BlobMutation:
 		return c.Blob.mutate(ctx, m)
+	case *BlobDeletionMutation:
+		return c.BlobDeletion.mutate(ctx, m)
 	case *BusinessKeyMutation:
 		return c.BusinessKey.mutate(ctx, m)
 	case *CollectionTypeMutation:
@@ -781,6 +789,139 @@ func (c *BlobClient) mutate(ctx context.Context, m *BlobMutation) (Value, error)
 		return (&BlobDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Blob mutation op: %q", m.Op())
+	}
+}
+
+// BlobDeletionClient is a client for the BlobDeletion schema.
+type BlobDeletionClient struct {
+	config
+}
+
+// NewBlobDeletionClient returns a client for the BlobDeletion from the given config.
+func NewBlobDeletionClient(c config) *BlobDeletionClient {
+	return &BlobDeletionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `blobdeletion.Hooks(f(g(h())))`.
+func (c *BlobDeletionClient) Use(hooks ...Hook) {
+	c.hooks.BlobDeletion = append(c.hooks.BlobDeletion, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `blobdeletion.Intercept(f(g(h())))`.
+func (c *BlobDeletionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BlobDeletion = append(c.inters.BlobDeletion, interceptors...)
+}
+
+// Create returns a builder for creating a BlobDeletion entity.
+func (c *BlobDeletionClient) Create() *BlobDeletionCreate {
+	mutation := newBlobDeletionMutation(c.config, OpCreate)
+	return &BlobDeletionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BlobDeletion entities.
+func (c *BlobDeletionClient) CreateBulk(builders ...*BlobDeletionCreate) *BlobDeletionCreateBulk {
+	return &BlobDeletionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BlobDeletionClient) MapCreateBulk(slice any, setFunc func(*BlobDeletionCreate, int)) *BlobDeletionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BlobDeletionCreateBulk{err: fmt.Errorf("calling to BlobDeletionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BlobDeletionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BlobDeletionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BlobDeletion.
+func (c *BlobDeletionClient) Update() *BlobDeletionUpdate {
+	mutation := newBlobDeletionMutation(c.config, OpUpdate)
+	return &BlobDeletionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BlobDeletionClient) UpdateOne(_m *BlobDeletion) *BlobDeletionUpdateOne {
+	mutation := newBlobDeletionMutation(c.config, OpUpdateOne, withBlobDeletion(_m))
+	return &BlobDeletionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BlobDeletionClient) UpdateOneID(id string) *BlobDeletionUpdateOne {
+	mutation := newBlobDeletionMutation(c.config, OpUpdateOne, withBlobDeletionID(id))
+	return &BlobDeletionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BlobDeletion.
+func (c *BlobDeletionClient) Delete() *BlobDeletionDelete {
+	mutation := newBlobDeletionMutation(c.config, OpDelete)
+	return &BlobDeletionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BlobDeletionClient) DeleteOne(_m *BlobDeletion) *BlobDeletionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BlobDeletionClient) DeleteOneID(id string) *BlobDeletionDeleteOne {
+	builder := c.Delete().Where(blobdeletion.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BlobDeletionDeleteOne{builder}
+}
+
+// Query returns a query builder for BlobDeletion.
+func (c *BlobDeletionClient) Query() *BlobDeletionQuery {
+	return &BlobDeletionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBlobDeletion},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BlobDeletion entity by its id.
+func (c *BlobDeletionClient) Get(ctx context.Context, id string) (*BlobDeletion, error) {
+	return c.Query().Where(blobdeletion.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BlobDeletionClient) GetX(ctx context.Context, id string) *BlobDeletion {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BlobDeletionClient) Hooks() []Hook {
+	return c.hooks.BlobDeletion
+}
+
+// Interceptors returns the client interceptors.
+func (c *BlobDeletionClient) Interceptors() []Interceptor {
+	return c.inters.BlobDeletion
+}
+
+func (c *BlobDeletionClient) mutate(ctx context.Context, m *BlobDeletionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BlobDeletionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BlobDeletionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BlobDeletionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BlobDeletionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BlobDeletion mutation op: %q", m.Op())
 	}
 }
 
@@ -6125,22 +6266,22 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditEvent, Blob, BusinessKey, CollectionType, ContentType, DomainEvent,
-		FieldDefinition, FieldValue, Grant, IdentityAssignment, IdentityGroup,
-		IdentityMembership, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
-		ItemSurface, ListView, Operation, OperationItem, Publication, Relationship,
-		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
-		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
-		WorkflowTrigger, WorkflowVersion []ent.Hook
+		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
+		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
+		IdentityGroup, IdentityMembership, IdentityRole, IdentityUser, ItemHistory,
+		ItemRevision, ItemSurface, ListView, Operation, OperationItem, Publication,
+		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
+		SmartFolder, Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
+		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
-		AuditEvent, Blob, BusinessKey, CollectionType, ContentType, DomainEvent,
-		FieldDefinition, FieldValue, Grant, IdentityAssignment, IdentityGroup,
-		IdentityMembership, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
-		ItemSurface, ListView, Operation, OperationItem, Publication, Relationship,
-		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
-		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
-		WorkflowTrigger, WorkflowVersion []ent.Interceptor
+		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
+		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
+		IdentityGroup, IdentityMembership, IdentityRole, IdentityUser, ItemHistory,
+		ItemRevision, ItemSurface, ListView, Operation, OperationItem, Publication,
+		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
+		SmartFolder, Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
+		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Interceptor
 	}
 )
 

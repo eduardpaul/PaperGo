@@ -604,6 +604,17 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 		if e.Depth >= MaxDepth {
 			continue
 		}
+		// Purge removes revision payloads. Older queued content events must not
+		// block dispatch or start actions against an item that no longer exists.
+		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored) {
+			exists, err := t.Client.Resource.Query().Where(resource.IDEQ(e.ResourceID)).Exist(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if !exists {
+				continue
+			}
+		}
 		var candidates []*ent.Workflow
 		switch e.Type {
 		case TriggerManual, TriggerSchedule:
@@ -682,14 +693,14 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 				continue
 			}
 			c := t.Client.WorkflowRun.Create().SetID(runID).SetWorkflowID(w.ID).SetWorkflowVersion(m.v.Number).SetWorkspaceID(w.WorkspaceID).SetEventID(e.ID).SetEventType(e.Type).SetDepth(e.Depth).SetActor(e.Actor)
-			if e.ResourceID != "" && e.Type != dms.EventItemDeleted {
+			if e.ResourceID != "" && e.Type != dms.EventItemDeleted && e.Type != dms.EventItemPurged {
 				c.SetItemID(e.ResourceID)
 			}
 			if _, err = c.Save(ctx); err != nil {
 				return nil, err
 			}
 			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: e.ResourceID, Event: e, ConditionError: conditionErr}
-			if e.Type == dms.EventItemDeleted {
+			if e.Type == dms.EventItemDeleted || e.Type == dms.EventItemPurged {
 				in.ItemID = ""
 			}
 			if e.Type == TriggerManual {

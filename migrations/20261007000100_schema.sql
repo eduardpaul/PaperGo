@@ -9,10 +9,11 @@
 CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NULL, `resource_id` text NULL, `subject` text NOT NULL, `action` text NOT NULL, `details` json NOT NULL, PRIMARY KEY (`id`));
 CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL, `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT NULL, `key` text NOT NULL, `label` text NOT NULL, `type` text NOT NULL, `required` bool NOT NULL DEFAULT (false), `choices` json NOT NULL, indexed BOOLEAN NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), index_status TEXT NOT NULL DEFAULT 'ready' CHECK(index_status IN ('ready','building','failed')), scale INTEGER NOT NULL DEFAULT 0, options JSON NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object'), PRIMARY KEY (`id`));
+CREATE TABLE blob_deletions (id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, object_key TEXT NOT NULL UNIQUE);
 CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `principal_type` text NOT NULL CHECK(principal_type IN ('user','group','workspace_visitor','workspace_member','workspace_owner')), `principal_id` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT REFERENCES item_revisions(id), PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT NOT NULL REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind IN ('workspace','list','library') OR description='')), allow_folders BOOLEAN NOT NULL DEFAULT 1 CHECK(allow_folders IN (0,1) AND (kind IN ('list','library') OR allow_folders=1)), `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, versioning TEXT NOT NULL DEFAULT 'off' CHECK(versioning IN ('off','major') AND (kind IN ('list','library') OR versioning='off')), max_versions INTEGER NOT NULL DEFAULT 50 CHECK(max_versions BETWEEN 1 AND 500 AND (kind IN ('list','library') OR max_versions=50)), webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind='item')=(content_type_id IS NOT NULL)), FOREIGN KEY(container_id,content_type_id) REFERENCES collection_types(container_id,content_type_id));
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind IN ('workspace','list','library') OR description='')), allow_folders BOOLEAN NOT NULL DEFAULT 1 CHECK(allow_folders IN (0,1) AND (kind IN ('list','library') OR allow_folders=1)), `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, versioning TEXT NOT NULL DEFAULT 'off' CHECK(versioning IN ('off','major') AND (kind IN ('list','library') OR versioning='off')), max_versions INTEGER NOT NULL DEFAULT 50 CHECK(max_versions BETWEEN 1 AND 500 AND (kind IN ('list','library') OR max_versions=50)), webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, deleted_by TEXT NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind='item')=(content_type_id IS NOT NULL)), FOREIGN KEY(container_id,content_type_id) REFERENCES collection_types(container_id,content_type_id));
 CREATE TABLE resource_tags (
   resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
   tag TEXT NOT NULL,
@@ -176,12 +177,12 @@ CREATE TABLE workflow_triggers (
 CREATE TABLE workflow_runs (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, workflow_id TEXT NOT NULL REFERENCES workflows(id),
  workflow_version INTEGER NOT NULL CHECK(workflow_version>0), workspace_id TEXT NOT NULL REFERENCES resources(id),
- item_id TEXT REFERENCES resources(id), event_id TEXT NOT NULL, event_type TEXT NOT NULL,
+ item_id TEXT, event_id TEXT NOT NULL, event_type TEXT NOT NULL,
  depth INTEGER NOT NULL CHECK(depth>=0), actor TEXT NOT NULL, retry_of TEXT
 );
 CREATE TABLE workflow_run_items (
  id TEXT PRIMARY KEY NOT NULL, run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
- item_id TEXT NOT NULL REFERENCES resources(id), position INTEGER NOT NULL CHECK(position>=0)
+ item_id TEXT NOT NULL, position INTEGER NOT NULL CHECK(position>=0)
 );
 CREATE TABLE runner_step_results (
  run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL,
@@ -355,13 +356,20 @@ CREATE TRIGGER resource_validate_move BEFORE UPDATE OF parent_id ON resources WH
     SELECT new.parent_id UNION ALL SELECT r.parent_id FROM resources r JOIN up ON r.id=up.id WHERE r.parent_id IS NOT NULL
   ) SELECT 1 FROM up WHERE id=new.id) THEN RAISE(ABORT,'resource cannot move below itself') END;
 END;
--- Deletion is final and retains the row, its revisions and its audit trail.
-CREATE TRIGGER resource_tombstone BEFORE UPDATE ON resources WHEN old.deleted_at IS NOT NULL BEGIN
+-- Deleted content can be restored; tombstones otherwise reject content edits.
+CREATE TRIGGER resource_tombstone BEFORE UPDATE ON resources WHEN old.deleted_at IS NOT NULL AND new.deleted_at IS NOT NULL BEGIN
   SELECT CASE WHEN new.deleted_at IS NOT old.deleted_at OR new.parent_id IS NOT old.parent_id OR new.name IS NOT old.name OR new.description IS NOT old.description OR new.name_key IS NOT NULL
     THEN RAISE(ABORT,'deleted resources are retained') END;
 END;
 CREATE TRIGGER resource_delete_validate BEFORE UPDATE OF deleted_at ON resources WHEN old.deleted_at IS NULL AND new.deleted_at IS NOT NULL BEGIN
   SELECT CASE WHEN new.kind NOT IN ('workspace','list','library','folder','item') THEN RAISE(ABORT,'invalid deletion kind') END;
+END;
+CREATE TRIGGER resource_restore_validate BEFORE UPDATE OF deleted_at ON resources WHEN old.deleted_at IS NOT NULL AND new.deleted_at IS NULL BEGIN
+  SELECT CASE WHEN new.kind NOT IN ('folder','item') OR NOT EXISTS (
+    SELECT 1 FROM resources p JOIN resources c ON c.id=new.container_id JOIN resources w ON w.id=new.workspace_id
+    WHERE p.id=new.parent_id AND p.deleted_at IS NULL AND c.deleted_at IS NULL AND w.deleted_at IS NULL
+      AND p.workspace_id=new.workspace_id AND ((p.kind IN ('list','library') AND p.id=c.id) OR (p.kind='folder' AND p.container_id=c.id))
+  ) THEN RAISE(ABORT,'restore requires a live collection and parent') END;
 END;
 CREATE TRIGGER webdav_credential_immutable BEFORE UPDATE ON webdav_credentials BEGIN SELECT RAISE(ABORT,'credentials are immutable; revoke and create another'); END;
 CREATE TRIGGER smart_folder_workspace BEFORE INSERT ON smart_folders BEGIN
@@ -443,7 +451,7 @@ CREATE TRIGGER business_key_validate BEFORE INSERT ON business_keys BEGIN
 END;
 CREATE TRIGGER business_key_immutable BEFORE UPDATE ON business_keys BEGIN SELECT RAISE(ABORT,'business key claims are immutable'); END;
 CREATE TRIGGER item_revision_immutable BEFORE UPDATE ON item_revisions BEGIN SELECT RAISE(ABORT,'item revision is immutable'); END;
-CREATE TRIGGER item_revision_retained BEFORE DELETE ON item_revisions BEGIN SELECT RAISE(ABORT,'item revisions are retained'); END;
+CREATE TRIGGER item_revision_retained BEFORE DELETE ON item_revisions WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=old.item_id AND deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'live item revisions are retained'); END;
 CREATE TRIGGER resource_revision_pointers BEFORE UPDATE OF head_revision_id,published_revision_id,schema_head_id,publishing_enabled,webdav_enabled ON resources BEGIN
  SELECT CASE WHEN (new.head_revision_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.head_revision_id AND item_id=new.id))
  OR (new.published_revision_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.published_revision_id AND item_id=new.id))
@@ -455,7 +463,7 @@ CREATE TRIGGER publication_revision_validate BEFORE INSERT ON publications BEGIN
  SELECT CASE WHEN new.revision_id IS NULL OR new.action NOT IN ('publish','unpublish') OR NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.revision_id AND item_id=new.item_id)
  THEN RAISE(ABORT,'invalid publication revision') END;
 END;
-CREATE TRIGGER publication_retained BEFORE DELETE ON publications BEGIN SELECT RAISE(ABORT,'publication events are retained'); END;
+CREATE TRIGGER publication_retained BEFORE DELETE ON publications WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=old.item_id AND deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'live publication events are retained'); END;
 CREATE TRIGGER resource_revision_insert BEFORE INSERT ON resources BEGIN
  SELECT CASE WHEN new.head_revision_id IS NOT NULL OR new.published_revision_id IS NOT NULL OR new.schema_head_id IS NOT NULL
  OR (new.publishing_enabled AND new.kind NOT IN ('list','library')) OR (new.webdav_enabled AND new.kind<>'library')

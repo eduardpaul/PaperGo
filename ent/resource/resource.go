@@ -71,6 +71,8 @@ const (
 	FieldNameKey = "name_key"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// FieldDeletedBy holds the string denoting the deleted_by field in the database.
+	FieldDeletedBy = "deleted_by"
 	// EdgeChildren holds the string denoting the children edge name in mutations.
 	EdgeChildren = "children"
 	// EdgeParent holds the string denoting the parent edge name in mutations.
@@ -220,6 +222,7 @@ var Columns = []string{
 	FieldScopeID,
 	FieldNameKey,
 	FieldDeletedAt,
+	FieldDeletedBy,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -476,6 +479,11 @@ func ByNameKey(opts ...sql.OrderTermOption) OrderOption {
 // ByDeletedAt orders the results by the deleted_at field.
 func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
+}
+
+// ByDeletedBy orders the results by the deleted_by field.
+func ByDeletedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeletedBy, opts...).ToFunc()
 }
 
 // ByChildrenCount orders the results by children count.

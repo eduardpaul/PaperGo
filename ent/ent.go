@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
+	"papergo/ent/blobdeletion"
 	"papergo/ent/businesskey"
 	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
@@ -110,6 +111,7 @@ func checkColumn(t, c string) error {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			auditevent.Table:         auditevent.ValidColumn,
 			blob.Table:               blob.ValidColumn,
+			blobdeletion.Table:       blobdeletion.ValidColumn,
 			businesskey.Table:        businesskey.ValidColumn,
 			collectiontype.Table:     collectiontype.ValidColumn,
 			contenttype.Table:        contenttype.ValidColumn,

@@ -32,6 +32,18 @@ func (f BlobFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BlobMutation", m)
 }
 
+// The BlobDeletionFunc type is an adapter to allow the use of ordinary
+// function as BlobDeletion mutator.
+type BlobDeletionFunc func(context.Context, *ent.BlobDeletionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BlobDeletionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BlobDeletionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BlobDeletionMutation", m)
+}
+
 // The BusinessKeyFunc type is an adapter to allow the use of ordinary
 // function as BusinessKey mutator.
 type BusinessKeyFunc func(context.Context, *ent.BusinessKeyMutation) (ent.Value, error)

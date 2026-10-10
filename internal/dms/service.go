@@ -701,8 +701,8 @@ type DeleteOptions struct {
 
 // Delete removes an item or empty folder, or a folder tree when Recursive is
 // explicit. Workspace and collection management deletes their full trees.
-// Revisions, publications and audit history remain in retained tombstones;
-// derived read projections and live relationships are removed.
+// Revisions, publications and audit history remain for recycle-bin recovery;
+// derived read projections are removed and relationships are hidden until restore.
 func (s *Service) Delete(ctx context.Context, subject, id string, version int, options DeleteOptions) error {
 	return s.write(ctx, func(t *Service) error { return t.delete(ctx, subject, id, version, options.Recursive) })
 }
@@ -748,12 +748,8 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 			return err
 		}
 	}
-	unlinked, err := s.Client.ExecContext(ctx, `DELETE FROM relationships WHERE source_id IN (`+subtree+`) OR target_id IN (`+subtree+`)`, id, id)
-	if err != nil {
-		return err
-	}
-	links, err := unlinked.RowsAffected()
-	if err != nil {
+	var links int
+	if err = s.scan(ctx, []any{&links}, `SELECT count(*) FROM relationships WHERE source_id IN (`+subtree+`) OR target_id IN (`+subtree+`)`, id, id); err != nil {
 		return err
 	}
 	if s.pending != nil {
@@ -779,7 +775,7 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 			return err
 		}
 	}
-	if _, err = s.Client.ExecContext(ctx, `UPDATE resources SET deleted_at=?, name_key=NULL, version=version+1, updated_at=? WHERE id IN (`+subtree+`)`, now, now, id); err != nil {
+	if _, err = s.Client.ExecContext(ctx, `UPDATE resources SET deleted_at=?, deleted_by=?, name_key=NULL, version=version+1, updated_at=?, updated_by=? WHERE id IN (`+subtree+`)`, now, subject, now, subject, id); err != nil {
 		return err
 	}
 	return s.audit(ctx, subject, "resource.delete", r, map[string]any{"version": version + 1, "descendants": total - 1, "relationships": links})

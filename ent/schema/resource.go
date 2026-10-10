@@ -51,6 +51,7 @@ func (Resource) Fields() []ent.Field {
 		field.String("name_key").Optional().Nillable().MaxLen(1024).StructTag(`json:"-"`),
 		// Deleted resources are tombstones: hidden everywhere, their history retained.
 		field.Time("deleted_at").Optional().Nillable().StructTag(`json:"-"`),
+		field.String("deleted_by").Optional().Nillable().StructTag(`json:"-"`),
 	}
 }
 func (Resource) Edges() []ent.Edge {

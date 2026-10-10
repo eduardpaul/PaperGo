@@ -12,6 +12,9 @@ type AuditEvent func(*sql.Selector)
 // Blob is the predicate function for blob builders.
 type Blob func(*sql.Selector)
 
+// BlobDeletion is the predicate function for blobdeletion builders.
+type BlobDeletion func(*sql.Selector)
+
 // BusinessKey is the predicate function for businesskey builders.
 type BusinessKey func(*sql.Selector)
 

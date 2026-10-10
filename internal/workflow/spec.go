@@ -26,7 +26,7 @@ const (
 )
 
 // ItemTriggers are the trigger types raised by item writes.
-var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted}
+var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged}
 
 // Limits keep definitions and runs bounded.
 const (
@@ -210,7 +210,7 @@ func (d Definition) validate() error {
 			if t.Cron != "" || t.TimeZone != "" {
 				return dms.Invalid(at + "cron and time_zone belong to schedule triggers")
 			}
-			if t.Type == dms.EventItemDeleted && d.Condition != nil {
+			if (t.Type == dms.EventItemDeleted || t.Type == dms.EventItemPurged) && d.Condition != nil {
 				return dms.Invalid(at + "a condition cannot test deleted items")
 			}
 		case t.Type == TriggerSchedule:

@@ -109,7 +109,7 @@ func (r *Runner) dispatchBatch(ctx context.Context) (int, []string, error) {
 			return err
 		}
 		for _, e := range events {
-			if e.Type != dms.EventItemDeleted || e.ResourceID == "" {
+			if (e.Type != dms.EventItemDeleted && e.Type != dms.EventItemPurged) || e.ResourceID == "" {
 				continue
 			}
 			memberships, err := t.Client.WorkflowRunItem.Query().Where(workflowrunitem.ItemIDEQ(e.ResourceID)).All(ctx)

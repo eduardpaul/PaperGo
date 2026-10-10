@@ -151,7 +151,7 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 		}
 		counts[table] = n
 	}
-	// Fail after projections and relationships have been removed to exercise
+	// Fail after projections have been removed to exercise
 	// transaction rollback, including queued deletion events.
 	if _, err := s.Client.ExecContext(testContext, `CREATE TRIGGER reject_folder_tree_delete BEFORE UPDATE OF deleted_at ON resources WHEN NEW.kind='item' AND NEW.deleted_at IS NOT NULL BEGIN SELECT RAISE(ABORT, 'test delete failure'); END`); err != nil {
 		t.Fatal(err)
@@ -196,8 +196,11 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	if n := revisionCount(t, s, inner.ID); n != 1 {
 		t.Fatalf("revisions not retained: %d", n)
 	}
-	if n, err := s.Client.Relationship.Query().Where(relationship.TargetIDEQ(inner.ID)).Count(testContext); err != nil || n != 0 {
-		t.Fatalf("relationship to deleted item kept: %d %v", n, err)
+	if n, err := s.Client.Relationship.Query().Where(relationship.TargetIDEQ(inner.ID)).Count(testContext); err != nil || n != 1 {
+		t.Fatalf("relationship not retained for recovery: %d %v", n, err)
+	}
+	if links, err := s.Relationships(testContext, "alice", outside.ID, "outgoing", "", "", 50); err != nil || len(links.Data) != 0 {
+		t.Fatalf("deleted relationship exposed: %+v %v", links, err)
 	}
 	event, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(folder.ID), auditevent.ActionEQ("resource.delete")).Only(testContext)
 	if err != nil || event.Details["descendants"] != float64(2) && event.Details["descendants"] != 2 {
@@ -207,9 +210,9 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	if err := s.scan(testContext, []any{&deletedEvents}, `SELECT count(*) FROM domain_events WHERE type=? AND resource_id=?`, EventItemDeleted, inner.ID); err != nil || deletedEvents != 1 {
 		t.Fatalf("recursive item deletion event: %d %v", deletedEvents, err)
 	}
-	// Tombstones are final.
+	// Restoring below a deleted parent cannot bypass the restore transition.
 	if _, err = s.Client.Resource.UpdateOneID(inner.ID).ClearDeletedAt().Save(testContext); err == nil {
-		t.Fatal("tombstone restored")
+		t.Fatal("restored beneath a deleted parent")
 	}
 	if _, err = s.Create(testContext, "alice", folder.ID, CreateResource{Kind: "item", Name: "Late.txt"}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("created inside a deleted folder: %v", err)

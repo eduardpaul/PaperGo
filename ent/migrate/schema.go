@@ -70,6 +70,18 @@ var (
 			},
 		},
 	}
+	// BlobDeletionsColumns holds the columns for the "blob_deletions" table.
+	BlobDeletionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "object_key", Type: field.TypeString, Unique: true},
+	}
+	// BlobDeletionsTable holds the schema information for the "blob_deletions" table.
+	BlobDeletionsTable = &schema.Table{
+		Name:       "blob_deletions",
+		Columns:    BlobDeletionsColumns,
+		PrimaryKey: []*schema.Column{BlobDeletionsColumns[0]},
+	}
 	// BusinessKeysColumns holds the columns for the "business_keys" table.
 	BusinessKeysColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -896,6 +908,7 @@ var (
 		{Name: "scope_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "name_key", Type: field.TypeString, Nullable: true, Size: 1024},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "deleted_by", Type: field.TypeString, Nullable: true},
 		{Name: "parent_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "container_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "head_revision_id", Type: field.TypeString, Nullable: true, Size: 36},
@@ -910,31 +923,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[24]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[25]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_head_revision",
+				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[26]},
-				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_published_revision",
+				Symbol:     "resources_item_revisions_head_revision",
 				Columns:    []*schema.Column{ResourcesColumns[27]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_schema_revisions_schema_head",
+				Symbol:     "resources_item_revisions_published_revision",
 				Columns:    []*schema.Column{ResourcesColumns[28]},
+				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "resources_schema_revisions_schema_head",
+				Columns:    []*schema.Column{ResourcesColumns[29]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -958,27 +971,27 @@ var (
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[24], ResourcesColumns[0], ResourcesColumns[21]},
+				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[0], ResourcesColumns[21]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_content_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[3], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[3], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[21]},
+				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[21]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[24], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[22]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
 				},
@@ -1486,6 +1499,7 @@ var (
 	Tables = []*schema.Table{
 		AuditEventsTable,
 		BlobsTable,
+		BlobDeletionsTable,
 		BusinessKeysTable,
 		CollectionTypesTable,
 		ContentTypesTable,
