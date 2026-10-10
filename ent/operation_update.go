@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"papergo/ent/operation"
 	"papergo/ent/predicate"
+	"papergo/internal/model"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 )
 
@@ -88,6 +90,116 @@ func (_u *OperationUpdate) SetNillableProcessed(v *int) *OperationUpdate {
 // AddProcessed adds value to the "processed" field.
 func (_u *OperationUpdate) AddProcessed(v int) *OperationUpdate {
 	_u.mutation.AddProcessed(v)
+	return _u
+}
+
+// SetPrepared sets the "prepared" field.
+func (_u *OperationUpdate) SetPrepared(v bool) *OperationUpdate {
+	_u.mutation.SetPrepared(v)
+	return _u
+}
+
+// SetNillablePrepared sets the "prepared" field if the given value is not nil.
+func (_u *OperationUpdate) SetNillablePrepared(v *bool) *OperationUpdate {
+	if v != nil {
+		_u.SetPrepared(*v)
+	}
+	return _u
+}
+
+// SetMatched sets the "matched" field.
+func (_u *OperationUpdate) SetMatched(v int) *OperationUpdate {
+	_u.mutation.ResetMatched()
+	_u.mutation.SetMatched(v)
+	return _u
+}
+
+// SetNillableMatched sets the "matched" field if the given value is not nil.
+func (_u *OperationUpdate) SetNillableMatched(v *int) *OperationUpdate {
+	if v != nil {
+		_u.SetMatched(*v)
+	}
+	return _u
+}
+
+// AddMatched adds value to the "matched" field.
+func (_u *OperationUpdate) AddMatched(v int) *OperationUpdate {
+	_u.mutation.AddMatched(v)
+	return _u
+}
+
+// SetUpdated sets the "updated" field.
+func (_u *OperationUpdate) SetUpdated(v int) *OperationUpdate {
+	_u.mutation.ResetUpdated()
+	_u.mutation.SetUpdated(v)
+	return _u
+}
+
+// SetNillableUpdated sets the "updated" field if the given value is not nil.
+func (_u *OperationUpdate) SetNillableUpdated(v *int) *OperationUpdate {
+	if v != nil {
+		_u.SetUpdated(*v)
+	}
+	return _u
+}
+
+// AddUpdated adds value to the "updated" field.
+func (_u *OperationUpdate) AddUpdated(v int) *OperationUpdate {
+	_u.mutation.AddUpdated(v)
+	return _u
+}
+
+// SetFailed sets the "failed" field.
+func (_u *OperationUpdate) SetFailed(v int) *OperationUpdate {
+	_u.mutation.ResetFailed()
+	_u.mutation.SetFailed(v)
+	return _u
+}
+
+// SetNillableFailed sets the "failed" field if the given value is not nil.
+func (_u *OperationUpdate) SetNillableFailed(v *int) *OperationUpdate {
+	if v != nil {
+		_u.SetFailed(*v)
+	}
+	return _u
+}
+
+// AddFailed adds value to the "failed" field.
+func (_u *OperationUpdate) AddFailed(v int) *OperationUpdate {
+	_u.mutation.AddFailed(v)
+	return _u
+}
+
+// SetProgress sets the "progress" field.
+func (_u *OperationUpdate) SetProgress(v int) *OperationUpdate {
+	_u.mutation.ResetProgress()
+	_u.mutation.SetProgress(v)
+	return _u
+}
+
+// SetNillableProgress sets the "progress" field if the given value is not nil.
+func (_u *OperationUpdate) SetNillableProgress(v *int) *OperationUpdate {
+	if v != nil {
+		_u.SetProgress(*v)
+	}
+	return _u
+}
+
+// AddProgress adds value to the "progress" field.
+func (_u *OperationUpdate) AddProgress(v int) *OperationUpdate {
+	_u.mutation.AddProgress(v)
+	return _u
+}
+
+// SetFailures sets the "failures" field.
+func (_u *OperationUpdate) SetFailures(v []model.OperationFailure) *OperationUpdate {
+	_u.mutation.SetFailures(v)
+	return _u
+}
+
+// AppendFailures appends value to the "failures" field.
+func (_u *OperationUpdate) AppendFailures(v []model.OperationFailure) *OperationUpdate {
+	_u.mutation.AppendFailures(v)
 	return _u
 }
 
@@ -169,6 +281,26 @@ func (_u *OperationUpdate) check() error {
 			return &ValidationError{Name: "processed", err: fmt.Errorf(`ent: validator failed for field "Operation.processed": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Matched(); ok {
+		if err := operation.MatchedValidator(v); err != nil {
+			return &ValidationError{Name: "matched", err: fmt.Errorf(`ent: validator failed for field "Operation.matched": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Updated(); ok {
+		if err := operation.UpdatedValidator(v); err != nil {
+			return &ValidationError{Name: "updated", err: fmt.Errorf(`ent: validator failed for field "Operation.updated": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Failed(); ok {
+		if err := operation.FailedValidator(v); err != nil {
+			return &ValidationError{Name: "failed", err: fmt.Errorf(`ent: validator failed for field "Operation.failed": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Progress(); ok {
+		if err := operation.ProgressValidator(v); err != nil {
+			return &ValidationError{Name: "progress", err: fmt.Errorf(`ent: validator failed for field "Operation.progress": %w`, err)}
+		}
+	}
 	if _u.mutation.ContainerCleared() && len(_u.mutation.ContainerIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Operation.container"`)
 	}
@@ -201,6 +333,41 @@ func (_u *OperationUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedProcessed(); ok {
 		_spec.AddField(operation.FieldProcessed, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Prepared(); ok {
+		_spec.SetField(operation.FieldPrepared, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Matched(); ok {
+		_spec.SetField(operation.FieldMatched, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedMatched(); ok {
+		_spec.AddField(operation.FieldMatched, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Updated(); ok {
+		_spec.SetField(operation.FieldUpdated, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpdated(); ok {
+		_spec.AddField(operation.FieldUpdated, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Failed(); ok {
+		_spec.SetField(operation.FieldFailed, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedFailed(); ok {
+		_spec.AddField(operation.FieldFailed, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Progress(); ok {
+		_spec.SetField(operation.FieldProgress, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedProgress(); ok {
+		_spec.AddField(operation.FieldProgress, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Failures(); ok {
+		_spec.SetField(operation.FieldFailures, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedFailures(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, operation.FieldFailures, value)
+		})
 	}
 	if value, ok := _u.mutation.Error(); ok {
 		_spec.SetField(operation.FieldError, field.TypeString, value)
@@ -288,6 +455,116 @@ func (_u *OperationUpdateOne) SetNillableProcessed(v *int) *OperationUpdateOne {
 // AddProcessed adds value to the "processed" field.
 func (_u *OperationUpdateOne) AddProcessed(v int) *OperationUpdateOne {
 	_u.mutation.AddProcessed(v)
+	return _u
+}
+
+// SetPrepared sets the "prepared" field.
+func (_u *OperationUpdateOne) SetPrepared(v bool) *OperationUpdateOne {
+	_u.mutation.SetPrepared(v)
+	return _u
+}
+
+// SetNillablePrepared sets the "prepared" field if the given value is not nil.
+func (_u *OperationUpdateOne) SetNillablePrepared(v *bool) *OperationUpdateOne {
+	if v != nil {
+		_u.SetPrepared(*v)
+	}
+	return _u
+}
+
+// SetMatched sets the "matched" field.
+func (_u *OperationUpdateOne) SetMatched(v int) *OperationUpdateOne {
+	_u.mutation.ResetMatched()
+	_u.mutation.SetMatched(v)
+	return _u
+}
+
+// SetNillableMatched sets the "matched" field if the given value is not nil.
+func (_u *OperationUpdateOne) SetNillableMatched(v *int) *OperationUpdateOne {
+	if v != nil {
+		_u.SetMatched(*v)
+	}
+	return _u
+}
+
+// AddMatched adds value to the "matched" field.
+func (_u *OperationUpdateOne) AddMatched(v int) *OperationUpdateOne {
+	_u.mutation.AddMatched(v)
+	return _u
+}
+
+// SetUpdated sets the "updated" field.
+func (_u *OperationUpdateOne) SetUpdated(v int) *OperationUpdateOne {
+	_u.mutation.ResetUpdated()
+	_u.mutation.SetUpdated(v)
+	return _u
+}
+
+// SetNillableUpdated sets the "updated" field if the given value is not nil.
+func (_u *OperationUpdateOne) SetNillableUpdated(v *int) *OperationUpdateOne {
+	if v != nil {
+		_u.SetUpdated(*v)
+	}
+	return _u
+}
+
+// AddUpdated adds value to the "updated" field.
+func (_u *OperationUpdateOne) AddUpdated(v int) *OperationUpdateOne {
+	_u.mutation.AddUpdated(v)
+	return _u
+}
+
+// SetFailed sets the "failed" field.
+func (_u *OperationUpdateOne) SetFailed(v int) *OperationUpdateOne {
+	_u.mutation.ResetFailed()
+	_u.mutation.SetFailed(v)
+	return _u
+}
+
+// SetNillableFailed sets the "failed" field if the given value is not nil.
+func (_u *OperationUpdateOne) SetNillableFailed(v *int) *OperationUpdateOne {
+	if v != nil {
+		_u.SetFailed(*v)
+	}
+	return _u
+}
+
+// AddFailed adds value to the "failed" field.
+func (_u *OperationUpdateOne) AddFailed(v int) *OperationUpdateOne {
+	_u.mutation.AddFailed(v)
+	return _u
+}
+
+// SetProgress sets the "progress" field.
+func (_u *OperationUpdateOne) SetProgress(v int) *OperationUpdateOne {
+	_u.mutation.ResetProgress()
+	_u.mutation.SetProgress(v)
+	return _u
+}
+
+// SetNillableProgress sets the "progress" field if the given value is not nil.
+func (_u *OperationUpdateOne) SetNillableProgress(v *int) *OperationUpdateOne {
+	if v != nil {
+		_u.SetProgress(*v)
+	}
+	return _u
+}
+
+// AddProgress adds value to the "progress" field.
+func (_u *OperationUpdateOne) AddProgress(v int) *OperationUpdateOne {
+	_u.mutation.AddProgress(v)
+	return _u
+}
+
+// SetFailures sets the "failures" field.
+func (_u *OperationUpdateOne) SetFailures(v []model.OperationFailure) *OperationUpdateOne {
+	_u.mutation.SetFailures(v)
+	return _u
+}
+
+// AppendFailures appends value to the "failures" field.
+func (_u *OperationUpdateOne) AppendFailures(v []model.OperationFailure) *OperationUpdateOne {
+	_u.mutation.AppendFailures(v)
 	return _u
 }
 
@@ -382,6 +659,26 @@ func (_u *OperationUpdateOne) check() error {
 			return &ValidationError{Name: "processed", err: fmt.Errorf(`ent: validator failed for field "Operation.processed": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Matched(); ok {
+		if err := operation.MatchedValidator(v); err != nil {
+			return &ValidationError{Name: "matched", err: fmt.Errorf(`ent: validator failed for field "Operation.matched": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Updated(); ok {
+		if err := operation.UpdatedValidator(v); err != nil {
+			return &ValidationError{Name: "updated", err: fmt.Errorf(`ent: validator failed for field "Operation.updated": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Failed(); ok {
+		if err := operation.FailedValidator(v); err != nil {
+			return &ValidationError{Name: "failed", err: fmt.Errorf(`ent: validator failed for field "Operation.failed": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Progress(); ok {
+		if err := operation.ProgressValidator(v); err != nil {
+			return &ValidationError{Name: "progress", err: fmt.Errorf(`ent: validator failed for field "Operation.progress": %w`, err)}
+		}
+	}
 	if _u.mutation.ContainerCleared() && len(_u.mutation.ContainerIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Operation.container"`)
 	}
@@ -431,6 +728,41 @@ func (_u *OperationUpdateOne) sqlSave(ctx context.Context) (_node *Operation, er
 	}
 	if value, ok := _u.mutation.AddedProcessed(); ok {
 		_spec.AddField(operation.FieldProcessed, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Prepared(); ok {
+		_spec.SetField(operation.FieldPrepared, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Matched(); ok {
+		_spec.SetField(operation.FieldMatched, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedMatched(); ok {
+		_spec.AddField(operation.FieldMatched, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Updated(); ok {
+		_spec.SetField(operation.FieldUpdated, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpdated(); ok {
+		_spec.AddField(operation.FieldUpdated, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Failed(); ok {
+		_spec.SetField(operation.FieldFailed, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedFailed(); ok {
+		_spec.AddField(operation.FieldFailed, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Progress(); ok {
+		_spec.SetField(operation.FieldProgress, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedProgress(); ok {
+		_spec.AddField(operation.FieldProgress, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.Failures(); ok {
+		_spec.SetField(operation.FieldFailures, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedFailures(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, operation.FieldFailures, value)
+		})
 	}
 	if value, ok := _u.mutation.Error(); ok {
 		_spec.SetField(operation.FieldError, field.TypeString, value)

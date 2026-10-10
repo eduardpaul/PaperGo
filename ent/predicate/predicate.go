@@ -60,6 +60,9 @@ type ListView func(*sql.Selector)
 // Operation is the predicate function for operation builders.
 type Operation func(*sql.Selector)
 
+// OperationItem is the predicate function for operationitem builders.
+type OperationItem func(*sql.Selector)
+
 // Publication is the predicate function for publication builders.
 type Publication func(*sql.Selector)
 

@@ -150,6 +150,19 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 		return a.DMS.Operations(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	}))
 	m.HandleFunc("GET /v1/operations/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Operation(r.Context(), subject(r), r.PathValue("id")) }))
+	m.HandleFunc("POST /v1/resources/{id}/bulk-update", func(w http.ResponseWriter, r *http.Request) {
+		var in dms.FilteredBulkUpdate
+		if !a.decode(w, r, &in) {
+			return
+		}
+		op, e := a.DMS.StartBulkUpdate(r.Context(), subject(r), r.PathValue("id"), in)
+		if e != nil {
+			a.failure(w, r, e)
+			return
+		}
+		w.Header().Set("Location", "/v1/operations/"+op.ID)
+		respond(w, http.StatusAccepted, op)
+	})
 	m.HandleFunc("GET /v1/resources/{id}/views", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.Views(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	}))

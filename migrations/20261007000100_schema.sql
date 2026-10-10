@@ -106,11 +106,19 @@ CREATE TABLE list_views (
 );
 CREATE TABLE operations (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,container_id TEXT NOT NULL REFERENCES resources(id),
- field_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('field_index')),
+ field_id TEXT NOT NULL DEFAULT '',kind TEXT NOT NULL CHECK(kind IN ('field_index','bulk_update')),
  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','succeeded','failed','superseded')),
  surface TEXT NOT NULL DEFAULT 'head' CHECK(surface IN ('head','published')),after_item_id TEXT NOT NULL DEFAULT '',
- processed INTEGER NOT NULL DEFAULT 0 CHECK(processed>=0),error TEXT NOT NULL DEFAULT '',created_by TEXT NOT NULL
+ processed INTEGER NOT NULL DEFAULT 0 CHECK(processed>=0),error TEXT NOT NULL DEFAULT '',created_by TEXT NOT NULL,
+ payload JSON NOT NULL DEFAULT '{}' CHECK(json_valid(payload) AND json_type(payload)='object'),prepared BOOLEAN NOT NULL DEFAULT 0,
+ matched INTEGER NOT NULL DEFAULT 0 CHECK(matched>=0),updated INTEGER NOT NULL DEFAULT 0 CHECK(updated>=0),failed INTEGER NOT NULL DEFAULT 0 CHECK(failed>=0),
+ progress INTEGER NOT NULL DEFAULT 0 CHECK(progress BETWEEN 0 AND 100),failures JSON NOT NULL DEFAULT '[]' CHECK(json_valid(failures) AND json_type(failures)='array')
 );
+CREATE TABLE operation_items (
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,
+ operation_id TEXT NOT NULL REFERENCES operations(id) ON DELETE CASCADE,item_id TEXT NOT NULL REFERENCES resources(id)
+);
+CREATE UNIQUE INDEX operationitem_operation_id_item_id ON operation_items(operation_id,item_id);
 CREATE TABLE webdav_credentials (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,subject TEXT NOT NULL,label TEXT NOT NULL,
  secret_hash TEXT NOT NULL CHECK(length(secret_hash)=64),expires_at DATETIME

@@ -3,9 +3,12 @@
 package ent
 
 import (
+	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"papergo/ent/operation"
 	"papergo/ent/resource"
+	"papergo/internal/model"
 	"strings"
 	"time"
 
@@ -34,6 +37,20 @@ type Operation struct {
 	AfterItemID string `json:"-"`
 	// Processed holds the value of the "processed" field.
 	Processed int `json:"processed,omitempty"`
+	// Payload holds the value of the "payload" field.
+	Payload jsontext.Value `json:"-"`
+	// Prepared holds the value of the "prepared" field.
+	Prepared bool `json:"-"`
+	// Matched holds the value of the "matched" field.
+	Matched int `json:"matched,omitempty"`
+	// Updated holds the value of the "updated" field.
+	Updated int `json:"updated,omitempty"`
+	// Failed holds the value of the "failed" field.
+	Failed int `json:"failed,omitempty"`
+	// Progress holds the value of the "progress" field.
+	Progress int `json:"progress,omitempty"`
+	// Failures holds the value of the "failures" field.
+	Failures []model.OperationFailure `json:"failures,omitempty"`
 	// Error holds the value of the "error" field.
 	Error string `json:"error,omitempty"`
 	// CreatedBy holds the value of the "created_by" field.
@@ -71,7 +88,11 @@ func (*Operation) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case operation.FieldProcessed:
+		case operation.FieldPayload, operation.FieldFailures:
+			values[i] = new([]byte)
+		case operation.FieldPrepared:
+			values[i] = new(sql.NullBool)
+		case operation.FieldProcessed, operation.FieldMatched, operation.FieldUpdated, operation.FieldFailed, operation.FieldProgress:
 			values[i] = new(sql.NullInt64)
 		case operation.FieldID, operation.FieldContainerID, operation.FieldFieldID, operation.FieldKind, operation.FieldStatus, operation.FieldSurface, operation.FieldAfterItemID, operation.FieldError, operation.FieldCreatedBy:
 			values[i] = new(sql.NullString)
@@ -145,6 +166,52 @@ func (_m *Operation) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field processed", values[i])
 			} else if value.Valid {
 				_m.Processed = int(value.Int64)
+			}
+		case operation.FieldPayload:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field payload", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Payload); err != nil {
+					return fmt.Errorf("unmarshal field payload: %w", err)
+				}
+			}
+		case operation.FieldPrepared:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field prepared", values[i])
+			} else if value.Valid {
+				_m.Prepared = value.Bool
+			}
+		case operation.FieldMatched:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field matched", values[i])
+			} else if value.Valid {
+				_m.Matched = int(value.Int64)
+			}
+		case operation.FieldUpdated:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field updated", values[i])
+			} else if value.Valid {
+				_m.Updated = int(value.Int64)
+			}
+		case operation.FieldFailed:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field failed", values[i])
+			} else if value.Valid {
+				_m.Failed = int(value.Int64)
+			}
+		case operation.FieldProgress:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field progress", values[i])
+			} else if value.Valid {
+				_m.Progress = int(value.Int64)
+			}
+		case operation.FieldFailures:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field failures", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Failures); err != nil {
+					return fmt.Errorf("unmarshal field failures: %w", err)
+				}
 			}
 		case operation.FieldError:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -228,6 +295,27 @@ func (_m *Operation) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("processed=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Processed))
+	builder.WriteString(", ")
+	builder.WriteString("payload=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Payload))
+	builder.WriteString(", ")
+	builder.WriteString("prepared=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Prepared))
+	builder.WriteString(", ")
+	builder.WriteString("matched=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Matched))
+	builder.WriteString(", ")
+	builder.WriteString("updated=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Updated))
+	builder.WriteString(", ")
+	builder.WriteString("failed=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Failed))
+	builder.WriteString(", ")
+	builder.WriteString("progress=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Progress))
+	builder.WriteString(", ")
+	builder.WriteString("failures=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Failures))
 	builder.WriteString(", ")
 	builder.WriteString("error=")
 	builder.WriteString(_m.Error)

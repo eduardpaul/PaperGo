@@ -24,6 +24,7 @@ import (
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
 	"papergo/ent/operation"
+	"papergo/ent/operationitem"
 	"papergo/ent/publication"
 	"papergo/ent/relationship"
 	"papergo/ent/relationshiptype"
@@ -124,6 +125,7 @@ func checkColumn(t, c string) error {
 			itemsurface.Table:        itemsurface.ValidColumn,
 			listview.Table:           listview.ValidColumn,
 			operation.Table:          operation.ValidColumn,
+			operationitem.Table:      operationitem.ValidColumn,
 			publication.Table:        publication.ValidColumn,
 			relationship.Table:       relationship.ValidColumn,
 			relationshiptype.Table:   relationshiptype.ValidColumn,

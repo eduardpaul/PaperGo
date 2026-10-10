@@ -3,7 +3,9 @@
 package operation
 
 import (
+	"encoding/json/jsontext"
 	"fmt"
+	"papergo/internal/model"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -31,6 +33,20 @@ const (
 	FieldAfterItemID = "after_item_id"
 	// FieldProcessed holds the string denoting the processed field in the database.
 	FieldProcessed = "processed"
+	// FieldPayload holds the string denoting the payload field in the database.
+	FieldPayload = "payload"
+	// FieldPrepared holds the string denoting the prepared field in the database.
+	FieldPrepared = "prepared"
+	// FieldMatched holds the string denoting the matched field in the database.
+	FieldMatched = "matched"
+	// FieldUpdated holds the string denoting the updated field in the database.
+	FieldUpdated = "updated"
+	// FieldFailed holds the string denoting the failed field in the database.
+	FieldFailed = "failed"
+	// FieldProgress holds the string denoting the progress field in the database.
+	FieldProgress = "progress"
+	// FieldFailures holds the string denoting the failures field in the database.
+	FieldFailures = "failures"
 	// FieldError holds the string denoting the error field in the database.
 	FieldError = "error"
 	// FieldCreatedBy holds the string denoting the created_by field in the database.
@@ -61,6 +77,13 @@ var Columns = []string{
 	FieldSurface,
 	FieldAfterItemID,
 	FieldProcessed,
+	FieldPayload,
+	FieldPrepared,
+	FieldMatched,
+	FieldUpdated,
+	FieldFailed,
+	FieldProgress,
+	FieldFailures,
 	FieldError,
 	FieldCreatedBy,
 	FieldUpdatedAt,
@@ -79,12 +102,36 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultFieldID holds the default value on creation for the "field_id" field.
+	DefaultFieldID string
 	// DefaultAfterItemID holds the default value on creation for the "after_item_id" field.
 	DefaultAfterItemID string
 	// DefaultProcessed holds the default value on creation for the "processed" field.
 	DefaultProcessed int
 	// ProcessedValidator is a validator for the "processed" field. It is called by the builders before save.
 	ProcessedValidator func(int) error
+	// DefaultPayload holds the default value on creation for the "payload" field.
+	DefaultPayload jsontext.Value
+	// DefaultPrepared holds the default value on creation for the "prepared" field.
+	DefaultPrepared bool
+	// DefaultMatched holds the default value on creation for the "matched" field.
+	DefaultMatched int
+	// MatchedValidator is a validator for the "matched" field. It is called by the builders before save.
+	MatchedValidator func(int) error
+	// DefaultUpdated holds the default value on creation for the "updated" field.
+	DefaultUpdated int
+	// UpdatedValidator is a validator for the "updated" field. It is called by the builders before save.
+	UpdatedValidator func(int) error
+	// DefaultFailed holds the default value on creation for the "failed" field.
+	DefaultFailed int
+	// FailedValidator is a validator for the "failed" field. It is called by the builders before save.
+	FailedValidator func(int) error
+	// DefaultProgress holds the default value on creation for the "progress" field.
+	DefaultProgress int
+	// ProgressValidator is a validator for the "progress" field. It is called by the builders before save.
+	ProgressValidator func(int) error
+	// DefaultFailures holds the default value on creation for the "failures" field.
+	DefaultFailures []model.OperationFailure
 	// DefaultError holds the default value on creation for the "error" field.
 	DefaultError string
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -103,6 +150,7 @@ type Kind string
 // Kind values.
 const (
 	KindFieldIndex Kind = "field_index"
+	KindBulkUpdate Kind = "bulk_update"
 )
 
 func (k Kind) String() string {
@@ -112,7 +160,7 @@ func (k Kind) String() string {
 // KindValidator is a validator for the "kind" field enum values. It is called by the builders before save.
 func KindValidator(k Kind) error {
 	switch k {
-	case KindFieldIndex:
+	case KindFieldIndex, KindBulkUpdate:
 		return nil
 	default:
 		return fmt.Errorf("operation: invalid enum value for kind field: %q", k)
@@ -219,6 +267,31 @@ func ByAfterItemID(opts ...sql.OrderTermOption) OrderOption {
 // ByProcessed orders the results by the processed field.
 func ByProcessed(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProcessed, opts...).ToFunc()
+}
+
+// ByPrepared orders the results by the prepared field.
+func ByPrepared(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPrepared, opts...).ToFunc()
+}
+
+// ByMatched orders the results by the matched field.
+func ByMatched(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMatched, opts...).ToFunc()
+}
+
+// ByUpdated orders the results by the updated field.
+func ByUpdated(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpdated, opts...).ToFunc()
+}
+
+// ByFailed orders the results by the failed field.
+func ByFailed(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFailed, opts...).ToFunc()
+}
+
+// ByProgress orders the results by the progress field.
+func ByProgress(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProgress, opts...).ToFunc()
 }
 
 // ByError orders the results by the error field.

@@ -29,6 +29,7 @@ import (
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
 	"papergo/ent/operation"
+	"papergo/ent/operationitem"
 	"papergo/ent/publication"
 	"papergo/ent/relationship"
 	"papergo/ent/relationshiptype"
@@ -95,6 +96,8 @@ type Client struct {
 	ListView *ListViewClient
 	// Operation is the client for interacting with the Operation builders.
 	Operation *OperationClient
+	// OperationItem is the client for interacting with the OperationItem builders.
+	OperationItem *OperationItemClient
 	// Publication is the client for interacting with the Publication builders.
 	Publication *PublicationClient
 	// Relationship is the client for interacting with the Relationship builders.
@@ -156,6 +159,7 @@ func (c *Client) init() {
 	c.ItemSurface = NewItemSurfaceClient(c.config)
 	c.ListView = NewListViewClient(c.config)
 	c.Operation = NewOperationClient(c.config)
+	c.OperationItem = NewOperationItemClient(c.config)
 	c.Publication = NewPublicationClient(c.config)
 	c.Relationship = NewRelationshipClient(c.config)
 	c.RelationshipType = NewRelationshipTypeClient(c.config)
@@ -282,6 +286,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ItemSurface:        NewItemSurfaceClient(cfg),
 		ListView:           NewListViewClient(cfg),
 		Operation:          NewOperationClient(cfg),
+		OperationItem:      NewOperationItemClient(cfg),
 		Publication:        NewPublicationClient(cfg),
 		Relationship:       NewRelationshipClient(cfg),
 		RelationshipType:   NewRelationshipTypeClient(cfg),
@@ -335,6 +340,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ItemSurface:        NewItemSurfaceClient(cfg),
 		ListView:           NewListViewClient(cfg),
 		Operation:          NewOperationClient(cfg),
+		OperationItem:      NewOperationItemClient(cfg),
 		Publication:        NewPublicationClient(cfg),
 		Relationship:       NewRelationshipClient(cfg),
 		RelationshipType:   NewRelationshipTypeClient(cfg),
@@ -383,10 +389,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuditEvent, c.Blob, c.BusinessKey, c.CollectionType, c.ContentType,
 		c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
 		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
-		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.Publication,
-		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup, c.TermSet,
-		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.OperationItem,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
 		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
@@ -400,10 +406,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuditEvent, c.Blob, c.BusinessKey, c.CollectionType, c.ContentType,
 		c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
 		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
-		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.Publication,
-		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup, c.TermSet,
-		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.OperationItem,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
 		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
@@ -449,6 +455,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ListView.mutate(ctx, m)
 	case *OperationMutation:
 		return c.Operation.mutate(ctx, m)
+	case *OperationItemMutation:
+		return c.OperationItem.mutate(ctx, m)
 	case *PublicationMutation:
 		return c.Publication.mutate(ctx, m)
 	case *RelationshipMutation:
@@ -3136,6 +3144,171 @@ func (c *OperationClient) mutate(ctx context.Context, m *OperationMutation) (Val
 	}
 }
 
+// OperationItemClient is a client for the OperationItem schema.
+type OperationItemClient struct {
+	config
+}
+
+// NewOperationItemClient returns a client for the OperationItem from the given config.
+func NewOperationItemClient(c config) *OperationItemClient {
+	return &OperationItemClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `operationitem.Hooks(f(g(h())))`.
+func (c *OperationItemClient) Use(hooks ...Hook) {
+	c.hooks.OperationItem = append(c.hooks.OperationItem, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `operationitem.Intercept(f(g(h())))`.
+func (c *OperationItemClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OperationItem = append(c.inters.OperationItem, interceptors...)
+}
+
+// Create returns a builder for creating a OperationItem entity.
+func (c *OperationItemClient) Create() *OperationItemCreate {
+	mutation := newOperationItemMutation(c.config, OpCreate)
+	return &OperationItemCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OperationItem entities.
+func (c *OperationItemClient) CreateBulk(builders ...*OperationItemCreate) *OperationItemCreateBulk {
+	return &OperationItemCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OperationItemClient) MapCreateBulk(slice any, setFunc func(*OperationItemCreate, int)) *OperationItemCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OperationItemCreateBulk{err: fmt.Errorf("calling to OperationItemClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OperationItemCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OperationItemCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OperationItem.
+func (c *OperationItemClient) Update() *OperationItemUpdate {
+	mutation := newOperationItemMutation(c.config, OpUpdate)
+	return &OperationItemUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OperationItemClient) UpdateOne(_m *OperationItem) *OperationItemUpdateOne {
+	mutation := newOperationItemMutation(c.config, OpUpdateOne, withOperationItem(_m))
+	return &OperationItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OperationItemClient) UpdateOneID(id string) *OperationItemUpdateOne {
+	mutation := newOperationItemMutation(c.config, OpUpdateOne, withOperationItemID(id))
+	return &OperationItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OperationItem.
+func (c *OperationItemClient) Delete() *OperationItemDelete {
+	mutation := newOperationItemMutation(c.config, OpDelete)
+	return &OperationItemDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OperationItemClient) DeleteOne(_m *OperationItem) *OperationItemDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OperationItemClient) DeleteOneID(id string) *OperationItemDeleteOne {
+	builder := c.Delete().Where(operationitem.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OperationItemDeleteOne{builder}
+}
+
+// Query returns a query builder for OperationItem.
+func (c *OperationItemClient) Query() *OperationItemQuery {
+	return &OperationItemQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOperationItem},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OperationItem entity by its id.
+func (c *OperationItemClient) Get(ctx context.Context, id string) (*OperationItem, error) {
+	return c.Query().Where(operationitem.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OperationItemClient) GetX(ctx context.Context, id string) *OperationItem {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryOperation queries the operation edge of a OperationItem.
+func (c *OperationItemClient) QueryOperation(_m *OperationItem) *OperationQuery {
+	query := (&OperationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(operationitem.Table, operationitem.FieldID, id),
+			sqlgraph.To(operation.Table, operation.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, operationitem.OperationTable, operationitem.OperationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryItem queries the item edge of a OperationItem.
+func (c *OperationItemClient) QueryItem(_m *OperationItem) *ResourceQuery {
+	query := (&ResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(operationitem.Table, operationitem.FieldID, id),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, operationitem.ItemTable, operationitem.ItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OperationItemClient) Hooks() []Hook {
+	return c.hooks.OperationItem
+}
+
+// Interceptors returns the client interceptors.
+func (c *OperationItemClient) Interceptors() []Interceptor {
+	return c.inters.OperationItem
+}
+
+func (c *OperationItemClient) mutate(ctx context.Context, m *OperationItemMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OperationItemCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OperationItemUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OperationItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OperationItemDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OperationItem mutation op: %q", m.Op())
+	}
+}
+
 // PublicationClient is a client for the Publication schema.
 type PublicationClient struct {
 	config
@@ -5798,19 +5971,19 @@ type (
 		AuditEvent, Blob, BusinessKey, CollectionType, ContentType, DomainEvent,
 		FieldDefinition, FieldValue, Grant, IdentityAssignment, IdentityGroup,
 		IdentityMembership, IdentityRole, IdentityUser, ItemRevision, ItemSurface,
-		ListView, Operation, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup, TermSet,
-		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
-		WorkflowVersion []ent.Hook
+		ListView, Operation, OperationItem, Publication, Relationship,
+		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
+		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BusinessKey, CollectionType, ContentType, DomainEvent,
 		FieldDefinition, FieldValue, Grant, IdentityAssignment, IdentityGroup,
 		IdentityMembership, IdentityRole, IdentityUser, ItemRevision, ItemSurface,
-		ListView, Operation, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup, TermSet,
-		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
-		WorkflowVersion []ent.Interceptor
+		ListView, Operation, OperationItem, Publication, Relationship,
+		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
+		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		WorkflowTrigger, WorkflowVersion []ent.Interceptor
 	}
 )
 

@@ -197,3 +197,13 @@ The [runner plan](docs/plans/runner.md) describes the embedded runner and the ne
 To scale later, retain the service and API boundaries, introduce a PostgreSQL connection adapter, regenerate/review database-specific Atlas migrations, replace FTS5 and tag SQL, and use a shared object-store implementation of the storage port. A database migration is required; changing the connection string alone is insufficient.
 
 Relevant upstream references: [Ent versioned migrations](https://entgo.io/docs/versioned-migrations/), [Atlas](https://atlasgo.io/getting-started), [SQLite FTS5](https://www.sqlite.org/fts5.html).
+
+### Filtered bulk edits
+
+POST `/v1/resources/{collectionID}/bulk-update` queues a durable operation. Its `query` uses the same typed `QuerySpec` as collection queries, on readable head content; omit it to select all readable head items. A patch may set `name`, `tags` or `values`. For example:
+
+```json
+{"query":{"filter":{"field":"status","value":"todo"}},"values":{"status":"done"}}
+```
+
+The response is 202 with a `Location` pointing to `/v1/operations/{id}`. Poll that URL for `matched`, `processed`, `updated`, `failed`, `progress` and `failures`. The runner freezes selection when it starts and commits each item independently through normal permissions, validation, history, uniqueness and event handling. Values merge; null removes a field. Selection uses head content and does not publish changes. Successful edits survive other items' failures. `succeeded` means execution finished, even when some items failed; `failed` means the operation stopped. Counts include every failure, with at most 50 reported reasons. Results require the starter and current collection read access. Pending work resumes after restart. `/bulk` provides a separate atomic batch of explicit actions.

@@ -3003,7 +3003,7 @@
     "/v1/resources/{id}/operations": {
       "get": {
         "summary": "Operations",
-        "description": "Background operations of a collection, such as field index builds.",
+        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access.",
         "operationId": "operations",
         "parameters": [
           {
@@ -3251,7 +3251,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access."
       }
     },
     "/v1/resources/{id}/views": {
@@ -12047,6 +12048,88 @@
           "contentType.manage"
         ]
       }
+    },
+    "/v1/resources/{id}/bulk-update": {
+      "post": {
+        "tags": [
+          "Lists"
+        ],
+        "operationId": "startFilteredBulkUpdate",
+        "summary": "Bulk edit matching items with durable progress",
+        "description": "Starts a durable filtered edit of current head content. Requires list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items, including nested folders' items. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/tags can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access/schema failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.",
+        "x-required-scopes": [
+          "list.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilteredBulkUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Queued operation. Follow Location for progress.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "500": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13684,7 +13767,7 @@
       },
       "Operation": {
         "type": "object",
-        "description": "Tracked background operation. A field_index operation converges one field's index rows in short batches, so it never holds the database writer for a whole collection. A later change to the same field supersedes it.",
+        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access.",
         "properties": {
           "id": {
             "type": "string"
@@ -13701,12 +13784,14 @@
             "type": "string"
           },
           "field_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Catalog field ID for field_index; empty for bulk_update."
           },
           "kind": {
             "type": "string",
             "enum": [
-              "field_index"
+              "field_index",
+              "bulk_update"
             ]
           },
           "status": {
@@ -13720,13 +13805,41 @@
           },
           "processed": {
             "type": "integer",
-            "description": "Item surfaces processed so far."
+            "description": "Surfaces processed for field_index; items completed (updated + failed) for bulk_update."
           },
           "error": {
             "type": "string"
           },
           "created_by": {
             "type": "string"
+          },
+          "matched": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Frozen number of selected items; populated when execution begins."
+          },
+          "updated": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Successfully committed items."
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "All per-item failures, including failures beyond the reported detail limit."
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Completed items as an integer percentage; reaches 100 on completion, including zero matches.",
+            "maximum": 100
+          },
+          "failures": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/OperationFailure"
+            }
           }
         },
         "required": [
@@ -16479,6 +16592,45 @@
           "type"
         ],
         "additionalProperties": false
+      },
+      "FilteredBulkUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "At least one of name, tags or non-empty values is required. Query is optional and uses head content.",
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/QuerySpec"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Field patch: omitted fields remain unchanged, null removes a field. Each item is validated against its own current content type."
+          }
+        }
+      },
+      "OperationFailure": {
+        "type": "object",
+        "required": [
+          "item_id",
+          "reason"
+        ],
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
       }
     }
   }

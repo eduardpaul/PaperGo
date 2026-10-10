@@ -50,6 +50,8 @@ type Tx struct {
 	ListView *ListViewClient
 	// Operation is the client for interacting with the Operation builders.
 	Operation *OperationClient
+	// OperationItem is the client for interacting with the OperationItem builders.
+	OperationItem *OperationItemClient
 	// Publication is the client for interacting with the Publication builders.
 	Publication *PublicationClient
 	// Relationship is the client for interacting with the Relationship builders.
@@ -231,6 +233,7 @@ func (tx *Tx) init() {
 	tx.ItemSurface = NewItemSurfaceClient(tx.config)
 	tx.ListView = NewListViewClient(tx.config)
 	tx.Operation = NewOperationClient(tx.config)
+	tx.OperationItem = NewOperationItemClient(tx.config)
 	tx.Publication = NewPublicationClient(tx.config)
 	tx.Relationship = NewRelationshipClient(tx.config)
 	tx.RelationshipType = NewRelationshipTypeClient(tx.config)

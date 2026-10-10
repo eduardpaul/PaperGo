@@ -4,10 +4,12 @@ package ent
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"papergo/ent/operation"
 	"papergo/ent/resource"
+	"papergo/internal/model"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -44,6 +46,14 @@ func (_c *OperationCreate) SetContainerID(v string) *OperationCreate {
 // SetFieldID sets the "field_id" field.
 func (_c *OperationCreate) SetFieldID(v string) *OperationCreate {
 	_c.mutation.SetFieldID(v)
+	return _c
+}
+
+// SetNillableFieldID sets the "field_id" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableFieldID(v *string) *OperationCreate {
+	if v != nil {
+		_c.SetFieldID(*v)
+	}
 	return _c
 }
 
@@ -106,6 +116,88 @@ func (_c *OperationCreate) SetNillableProcessed(v *int) *OperationCreate {
 	if v != nil {
 		_c.SetProcessed(*v)
 	}
+	return _c
+}
+
+// SetPayload sets the "payload" field.
+func (_c *OperationCreate) SetPayload(v jsontext.Value) *OperationCreate {
+	_c.mutation.SetPayload(v)
+	return _c
+}
+
+// SetPrepared sets the "prepared" field.
+func (_c *OperationCreate) SetPrepared(v bool) *OperationCreate {
+	_c.mutation.SetPrepared(v)
+	return _c
+}
+
+// SetNillablePrepared sets the "prepared" field if the given value is not nil.
+func (_c *OperationCreate) SetNillablePrepared(v *bool) *OperationCreate {
+	if v != nil {
+		_c.SetPrepared(*v)
+	}
+	return _c
+}
+
+// SetMatched sets the "matched" field.
+func (_c *OperationCreate) SetMatched(v int) *OperationCreate {
+	_c.mutation.SetMatched(v)
+	return _c
+}
+
+// SetNillableMatched sets the "matched" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableMatched(v *int) *OperationCreate {
+	if v != nil {
+		_c.SetMatched(*v)
+	}
+	return _c
+}
+
+// SetUpdated sets the "updated" field.
+func (_c *OperationCreate) SetUpdated(v int) *OperationCreate {
+	_c.mutation.SetUpdated(v)
+	return _c
+}
+
+// SetNillableUpdated sets the "updated" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableUpdated(v *int) *OperationCreate {
+	if v != nil {
+		_c.SetUpdated(*v)
+	}
+	return _c
+}
+
+// SetFailed sets the "failed" field.
+func (_c *OperationCreate) SetFailed(v int) *OperationCreate {
+	_c.mutation.SetFailed(v)
+	return _c
+}
+
+// SetNillableFailed sets the "failed" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableFailed(v *int) *OperationCreate {
+	if v != nil {
+		_c.SetFailed(*v)
+	}
+	return _c
+}
+
+// SetProgress sets the "progress" field.
+func (_c *OperationCreate) SetProgress(v int) *OperationCreate {
+	_c.mutation.SetProgress(v)
+	return _c
+}
+
+// SetNillableProgress sets the "progress" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableProgress(v *int) *OperationCreate {
+	if v != nil {
+		_c.SetProgress(*v)
+	}
+	return _c
+}
+
+// SetFailures sets the "failures" field.
+func (_c *OperationCreate) SetFailures(v []model.OperationFailure) *OperationCreate {
+	_c.mutation.SetFailures(v)
 	return _c
 }
 
@@ -201,6 +293,10 @@ func (_c *OperationCreate) defaults() {
 		v := operation.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.FieldID(); !ok {
+		v := operation.DefaultFieldID
+		_c.mutation.SetFieldID(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := operation.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -216,6 +312,34 @@ func (_c *OperationCreate) defaults() {
 	if _, ok := _c.mutation.Processed(); !ok {
 		v := operation.DefaultProcessed
 		_c.mutation.SetProcessed(v)
+	}
+	if _, ok := _c.mutation.Payload(); !ok {
+		v := operation.DefaultPayload
+		_c.mutation.SetPayload(v)
+	}
+	if _, ok := _c.mutation.Prepared(); !ok {
+		v := operation.DefaultPrepared
+		_c.mutation.SetPrepared(v)
+	}
+	if _, ok := _c.mutation.Matched(); !ok {
+		v := operation.DefaultMatched
+		_c.mutation.SetMatched(v)
+	}
+	if _, ok := _c.mutation.Updated(); !ok {
+		v := operation.DefaultUpdated
+		_c.mutation.SetUpdated(v)
+	}
+	if _, ok := _c.mutation.Failed(); !ok {
+		v := operation.DefaultFailed
+		_c.mutation.SetFailed(v)
+	}
+	if _, ok := _c.mutation.Progress(); !ok {
+		v := operation.DefaultProgress
+		_c.mutation.SetProgress(v)
+	}
+	if _, ok := _c.mutation.Failures(); !ok {
+		v := operation.DefaultFailures
+		_c.mutation.SetFailures(v)
 	}
 	if _, ok := _c.mutation.Error(); !ok {
 		v := operation.DefaultError
@@ -276,6 +400,47 @@ func (_c *OperationCreate) check() error {
 		if err := operation.ProcessedValidator(v); err != nil {
 			return &ValidationError{Name: "processed", err: fmt.Errorf(`ent: validator failed for field "Operation.processed": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.Payload(); !ok {
+		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "Operation.payload"`)}
+	}
+	if _, ok := _c.mutation.Prepared(); !ok {
+		return &ValidationError{Name: "prepared", err: errors.New(`ent: missing required field "Operation.prepared"`)}
+	}
+	if _, ok := _c.mutation.Matched(); !ok {
+		return &ValidationError{Name: "matched", err: errors.New(`ent: missing required field "Operation.matched"`)}
+	}
+	if v, ok := _c.mutation.Matched(); ok {
+		if err := operation.MatchedValidator(v); err != nil {
+			return &ValidationError{Name: "matched", err: fmt.Errorf(`ent: validator failed for field "Operation.matched": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Updated(); !ok {
+		return &ValidationError{Name: "updated", err: errors.New(`ent: missing required field "Operation.updated"`)}
+	}
+	if v, ok := _c.mutation.Updated(); ok {
+		if err := operation.UpdatedValidator(v); err != nil {
+			return &ValidationError{Name: "updated", err: fmt.Errorf(`ent: validator failed for field "Operation.updated": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Failed(); !ok {
+		return &ValidationError{Name: "failed", err: errors.New(`ent: missing required field "Operation.failed"`)}
+	}
+	if v, ok := _c.mutation.Failed(); ok {
+		if err := operation.FailedValidator(v); err != nil {
+			return &ValidationError{Name: "failed", err: fmt.Errorf(`ent: validator failed for field "Operation.failed": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Progress(); !ok {
+		return &ValidationError{Name: "progress", err: errors.New(`ent: missing required field "Operation.progress"`)}
+	}
+	if v, ok := _c.mutation.Progress(); ok {
+		if err := operation.ProgressValidator(v); err != nil {
+			return &ValidationError{Name: "progress", err: fmt.Errorf(`ent: validator failed for field "Operation.progress": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Failures(); !ok {
+		return &ValidationError{Name: "failures", err: errors.New(`ent: missing required field "Operation.failures"`)}
 	}
 	if _, ok := _c.mutation.Error(); !ok {
 		return &ValidationError{Name: "error", err: errors.New(`ent: missing required field "Operation.error"`)}
@@ -356,6 +521,34 @@ func (_c *OperationCreate) createSpec() (*Operation, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Processed(); ok {
 		_spec.SetField(operation.FieldProcessed, field.TypeInt, value)
 		_node.Processed = value
+	}
+	if value, ok := _c.mutation.Payload(); ok {
+		_spec.SetField(operation.FieldPayload, field.TypeJSON, value)
+		_node.Payload = value
+	}
+	if value, ok := _c.mutation.Prepared(); ok {
+		_spec.SetField(operation.FieldPrepared, field.TypeBool, value)
+		_node.Prepared = value
+	}
+	if value, ok := _c.mutation.Matched(); ok {
+		_spec.SetField(operation.FieldMatched, field.TypeInt, value)
+		_node.Matched = value
+	}
+	if value, ok := _c.mutation.Updated(); ok {
+		_spec.SetField(operation.FieldUpdated, field.TypeInt, value)
+		_node.Updated = value
+	}
+	if value, ok := _c.mutation.Failed(); ok {
+		_spec.SetField(operation.FieldFailed, field.TypeInt, value)
+		_node.Failed = value
+	}
+	if value, ok := _c.mutation.Progress(); ok {
+		_spec.SetField(operation.FieldProgress, field.TypeInt, value)
+		_node.Progress = value
+	}
+	if value, ok := _c.mutation.Failures(); ok {
+		_spec.SetField(operation.FieldFailures, field.TypeJSON, value)
+		_node.Failures = value
 	}
 	if value, ok := _c.mutation.Error(); ok {
 		_spec.SetField(operation.FieldError, field.TypeString, value)

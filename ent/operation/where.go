@@ -85,6 +85,31 @@ func Processed(v int) predicate.Operation {
 	return predicate.Operation(sql.FieldEQ(FieldProcessed, v))
 }
 
+// Prepared applies equality check predicate on the "prepared" field. It's identical to PreparedEQ.
+func Prepared(v bool) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldPrepared, v))
+}
+
+// Matched applies equality check predicate on the "matched" field. It's identical to MatchedEQ.
+func Matched(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldMatched, v))
+}
+
+// Updated applies equality check predicate on the "updated" field. It's identical to UpdatedEQ.
+func Updated(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldUpdated, v))
+}
+
+// Failed applies equality check predicate on the "failed" field. It's identical to FailedEQ.
+func Failed(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldFailed, v))
+}
+
+// Progress applies equality check predicate on the "progress" field. It's identical to ProgressEQ.
+func Progress(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldProgress, v))
+}
+
 // Error applies equality check predicate on the "error" field. It's identical to ErrorEQ.
 func Error(v string) predicate.Operation {
 	return predicate.Operation(sql.FieldEQ(FieldError, v))
@@ -433,6 +458,176 @@ func ProcessedLT(v int) predicate.Operation {
 // ProcessedLTE applies the LTE predicate on the "processed" field.
 func ProcessedLTE(v int) predicate.Operation {
 	return predicate.Operation(sql.FieldLTE(FieldProcessed, v))
+}
+
+// PreparedEQ applies the EQ predicate on the "prepared" field.
+func PreparedEQ(v bool) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldPrepared, v))
+}
+
+// PreparedNEQ applies the NEQ predicate on the "prepared" field.
+func PreparedNEQ(v bool) predicate.Operation {
+	return predicate.Operation(sql.FieldNEQ(FieldPrepared, v))
+}
+
+// MatchedEQ applies the EQ predicate on the "matched" field.
+func MatchedEQ(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldMatched, v))
+}
+
+// MatchedNEQ applies the NEQ predicate on the "matched" field.
+func MatchedNEQ(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldNEQ(FieldMatched, v))
+}
+
+// MatchedIn applies the In predicate on the "matched" field.
+func MatchedIn(vs ...int) predicate.Operation {
+	return predicate.Operation(sql.FieldIn(FieldMatched, vs...))
+}
+
+// MatchedNotIn applies the NotIn predicate on the "matched" field.
+func MatchedNotIn(vs ...int) predicate.Operation {
+	return predicate.Operation(sql.FieldNotIn(FieldMatched, vs...))
+}
+
+// MatchedGT applies the GT predicate on the "matched" field.
+func MatchedGT(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldGT(FieldMatched, v))
+}
+
+// MatchedGTE applies the GTE predicate on the "matched" field.
+func MatchedGTE(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldGTE(FieldMatched, v))
+}
+
+// MatchedLT applies the LT predicate on the "matched" field.
+func MatchedLT(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldLT(FieldMatched, v))
+}
+
+// MatchedLTE applies the LTE predicate on the "matched" field.
+func MatchedLTE(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldLTE(FieldMatched, v))
+}
+
+// UpdatedEQ applies the EQ predicate on the "updated" field.
+func UpdatedEQ(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldUpdated, v))
+}
+
+// UpdatedNEQ applies the NEQ predicate on the "updated" field.
+func UpdatedNEQ(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldNEQ(FieldUpdated, v))
+}
+
+// UpdatedIn applies the In predicate on the "updated" field.
+func UpdatedIn(vs ...int) predicate.Operation {
+	return predicate.Operation(sql.FieldIn(FieldUpdated, vs...))
+}
+
+// UpdatedNotIn applies the NotIn predicate on the "updated" field.
+func UpdatedNotIn(vs ...int) predicate.Operation {
+	return predicate.Operation(sql.FieldNotIn(FieldUpdated, vs...))
+}
+
+// UpdatedGT applies the GT predicate on the "updated" field.
+func UpdatedGT(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldGT(FieldUpdated, v))
+}
+
+// UpdatedGTE applies the GTE predicate on the "updated" field.
+func UpdatedGTE(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldGTE(FieldUpdated, v))
+}
+
+// UpdatedLT applies the LT predicate on the "updated" field.
+func UpdatedLT(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldLT(FieldUpdated, v))
+}
+
+// UpdatedLTE applies the LTE predicate on the "updated" field.
+func UpdatedLTE(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldLTE(FieldUpdated, v))
+}
+
+// FailedEQ applies the EQ predicate on the "failed" field.
+func FailedEQ(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldFailed, v))
+}
+
+// FailedNEQ applies the NEQ predicate on the "failed" field.
+func FailedNEQ(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldNEQ(FieldFailed, v))
+}
+
+// FailedIn applies the In predicate on the "failed" field.
+func FailedIn(vs ...int) predicate.Operation {
+	return predicate.Operation(sql.FieldIn(FieldFailed, vs...))
+}
+
+// FailedNotIn applies the NotIn predicate on the "failed" field.
+func FailedNotIn(vs ...int) predicate.Operation {
+	return predicate.Operation(sql.FieldNotIn(FieldFailed, vs...))
+}
+
+// FailedGT applies the GT predicate on the "failed" field.
+func FailedGT(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldGT(FieldFailed, v))
+}
+
+// FailedGTE applies the GTE predicate on the "failed" field.
+func FailedGTE(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldGTE(FieldFailed, v))
+}
+
+// FailedLT applies the LT predicate on the "failed" field.
+func FailedLT(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldLT(FieldFailed, v))
+}
+
+// FailedLTE applies the LTE predicate on the "failed" field.
+func FailedLTE(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldLTE(FieldFailed, v))
+}
+
+// ProgressEQ applies the EQ predicate on the "progress" field.
+func ProgressEQ(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldProgress, v))
+}
+
+// ProgressNEQ applies the NEQ predicate on the "progress" field.
+func ProgressNEQ(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldNEQ(FieldProgress, v))
+}
+
+// ProgressIn applies the In predicate on the "progress" field.
+func ProgressIn(vs ...int) predicate.Operation {
+	return predicate.Operation(sql.FieldIn(FieldProgress, vs...))
+}
+
+// ProgressNotIn applies the NotIn predicate on the "progress" field.
+func ProgressNotIn(vs ...int) predicate.Operation {
+	return predicate.Operation(sql.FieldNotIn(FieldProgress, vs...))
+}
+
+// ProgressGT applies the GT predicate on the "progress" field.
+func ProgressGT(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldGT(FieldProgress, v))
+}
+
+// ProgressGTE applies the GTE predicate on the "progress" field.
+func ProgressGTE(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldGTE(FieldProgress, v))
+}
+
+// ProgressLT applies the LT predicate on the "progress" field.
+func ProgressLT(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldLT(FieldProgress, v))
+}
+
+// ProgressLTE applies the LTE predicate on the "progress" field.
+func ProgressLTE(v int) predicate.Operation {
+	return predicate.Operation(sql.FieldLTE(FieldProgress, v))
 }
 
 // ErrorEQ applies the EQ predicate on the "error" field.

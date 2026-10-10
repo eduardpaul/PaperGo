@@ -224,6 +224,18 @@ func (f OperationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OperationMutation", m)
 }
 
+// The OperationItemFunc type is an adapter to allow the use of ordinary
+// function as OperationItem mutator.
+type OperationItemFunc func(context.Context, *ent.OperationItemMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OperationItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OperationItemMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OperationItemMutation", m)
+}
+
 // The PublicationFunc type is an adapter to allow the use of ordinary
 // function as Publication mutator.
 type PublicationFunc func(context.Context, *ent.PublicationMutation) (ent.Value, error)

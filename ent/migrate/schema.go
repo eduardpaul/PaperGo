@@ -642,12 +642,19 @@ var (
 	OperationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "field_id", Type: field.TypeString},
-		{Name: "kind", Type: field.TypeEnum, Enums: []string{"field_index"}},
+		{Name: "field_id", Type: field.TypeString, Default: ""},
+		{Name: "kind", Type: field.TypeEnum, Enums: []string{"field_index", "bulk_update"}},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "succeeded", "failed", "superseded"}, Default: "pending"},
 		{Name: "surface", Type: field.TypeEnum, Enums: []string{"head", "published"}, Default: "head"},
 		{Name: "after_item_id", Type: field.TypeString, Default: ""},
 		{Name: "processed", Type: field.TypeInt, Default: 0},
+		{Name: "payload", Type: field.TypeJSON},
+		{Name: "prepared", Type: field.TypeBool, Default: false},
+		{Name: "matched", Type: field.TypeInt, Default: 0},
+		{Name: "updated", Type: field.TypeInt, Default: 0},
+		{Name: "failed", Type: field.TypeInt, Default: 0},
+		{Name: "progress", Type: field.TypeInt, Default: 0},
+		{Name: "failures", Type: field.TypeJSON},
 		{Name: "error", Type: field.TypeString, Default: ""},
 		{Name: "created_by", Type: field.TypeString},
 		{Name: "updated_at", Type: field.TypeTime},
@@ -661,7 +668,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "operations_resources_container",
-				Columns:    []*schema.Column{OperationsColumns[11]},
+				Columns:    []*schema.Column{OperationsColumns[18]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -675,7 +682,41 @@ var (
 			{
 				Name:    "operation_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{OperationsColumns[11], OperationsColumns[0]},
+				Columns: []*schema.Column{OperationsColumns[18], OperationsColumns[0]},
+			},
+		},
+	}
+	// OperationItemsColumns holds the columns for the "operation_items" table.
+	OperationItemsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "operation_id", Type: field.TypeString, Size: 36},
+		{Name: "item_id", Type: field.TypeString, Size: 36},
+	}
+	// OperationItemsTable holds the schema information for the "operation_items" table.
+	OperationItemsTable = &schema.Table{
+		Name:       "operation_items",
+		Columns:    OperationItemsColumns,
+		PrimaryKey: []*schema.Column{OperationItemsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "operation_items_operations_operation",
+				Columns:    []*schema.Column{OperationItemsColumns[2]},
+				RefColumns: []*schema.Column{OperationsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "operation_items_resources_item",
+				Columns:    []*schema.Column{OperationItemsColumns[3]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "operationitem_operation_id_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{OperationItemsColumns[2], OperationItemsColumns[3]},
 			},
 		},
 	}
@@ -1454,6 +1495,7 @@ var (
 		ItemSurfacesTable,
 		ListViewsTable,
 		OperationsTable,
+		OperationItemsTable,
 		PublicationsTable,
 		RelationshipsTable,
 		RelationshipTypesTable,
@@ -1490,6 +1532,8 @@ func init() {
 	ItemSurfacesTable.ForeignKeys[1].RefTable = ItemRevisionsTable
 	ListViewsTable.ForeignKeys[0].RefTable = ResourcesTable
 	OperationsTable.ForeignKeys[0].RefTable = ResourcesTable
+	OperationItemsTable.ForeignKeys[0].RefTable = OperationsTable
+	OperationItemsTable.ForeignKeys[1].RefTable = ResourcesTable
 	PublicationsTable.ForeignKeys[0].RefTable = ItemRevisionsTable
 	PublicationsTable.ForeignKeys[1].RefTable = ResourcesTable
 	RelationshipsTable.ForeignKeys[0].RefTable = RelationshipTypesTable

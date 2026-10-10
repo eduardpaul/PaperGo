@@ -2,12 +2,14 @@ package dms
 
 import (
 	"context"
+	"entgo.io/ent/dialect/sql"
 	"errors"
 	"log/slog"
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/itemsurface"
 	"papergo/ent/operation"
+	"papergo/ent/operationitem"
 	"time"
 )
 
@@ -111,6 +113,9 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 		if e != nil {
 			return e
 		}
+		if op.Kind == operation.KindBulkUpdate {
+			return t.bulkUpdateStep(ctx, op)
+		}
 		return t.fieldIndexBatch(ctx, op)
 	})
 	if op == nil || err == nil || ctx.Err() != nil {
@@ -118,6 +123,10 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 	}
 	failed := s.write(ctx, func(t *Service) error {
 		if e := t.Client.Operation.UpdateOneID(op.ID).Where(operation.StatusEQ(operation.StatusPending)).SetStatus(operation.StatusFailed).SetError(err.Error()).Exec(ctx); e != nil {
+			return e
+		}
+		if op.Kind == operation.KindBulkUpdate {
+			_, e := t.Client.OperationItem.Delete().Where(operationitem.OperationIDEQ(op.ID)).Exec(ctx)
 			return e
 		}
 		e := t.Client.FieldDefinition.UpdateOneID(op.FieldID).SetIndexStatus(fielddefinition.IndexStatusFailed).Exec(ctx)
@@ -180,7 +189,9 @@ func (s *Service) Operations(ctx context.Context, subject, containerID, after st
 		if _, e := t.authorize(ctx, subject, containerID, "read"); e != nil {
 			return Page[*ent.Operation]{}, e
 		}
-		rows, e := t.Client.Operation.Query().Where(operation.ContainerIDEQ(containerID), operation.IDGT(after)).Order(ent.Asc(operation.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
+		rows, e := t.Client.Operation.Query().Where(operation.ContainerIDEQ(containerID), operation.IDGT(after), func(q *sql.Selector) {
+			q.Where(sql.Or(sql.NEQ(q.C(operation.FieldKind), "bulk_update"), sql.EQ(q.C(operation.FieldCreatedBy), subject)))
+		}).Order(ent.Asc(operation.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
 		return entityPage(rows, limit, func(v *ent.Operation) string { return v.ID }), e
 	})
 }
@@ -194,6 +205,9 @@ func (s *Service) Operation(ctx context.Context, subject, id string) (*ent.Opera
 		}
 		if e != nil {
 			return nil, e
+		}
+		if op.Kind == operation.KindBulkUpdate && op.CreatedBy != subject {
+			return nil, ErrNotFound
 		}
 		if _, e = t.authorize(ctx, subject, op.ContainerID, "read"); e != nil {
 			return nil, e
