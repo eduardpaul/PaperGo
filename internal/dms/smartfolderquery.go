@@ -292,7 +292,7 @@ func appendSmartPath(q *compiledQuery, compiler *queryCompiler, d SmartFolderDef
 // smartTermField reports whether fd can hold root: a term field of root's
 // set, or a keywords field when root is a keyword.
 func smartTermField(fd *ent.FieldDefinition, root *ent.Term) bool {
-	if !fd.Indexed {
+	if !queryable(fd) {
 		return false
 	}
 	if fd.Type == "term" {
@@ -326,7 +326,7 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 			continue
 		}
 		fields := "fd.type='term' AND json_extract(fd.options,'$.term_set_id')=?"
-		if smartTermField(&ent.FieldDefinition{Type: "keywords", Indexed: true}, root) {
+		if smartTermField(&ent.FieldDefinition{Type: "keywords", Indexed: true, IndexStatus: fielddefinition.IndexStatusReady}, root) {
 			fields = "(fd.type='keywords' OR " + fields + ")"
 		}
 		parts = append(parts, `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.container_id=f.container_id AND fd.key=f.field_key JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.indexed=1 AND `+fields+` AND st.root=?)`)

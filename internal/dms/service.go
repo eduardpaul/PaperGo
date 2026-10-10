@@ -21,14 +21,16 @@ type Service struct {
 	db          *sql.DB
 	writeMu     chan struct{}
 	transaction bool
-	onCommit    func()
-	tx          *sql.Tx
-	pending     *[]Event
+	// operations wakes RunOperations when work is queued.
+	operations chan struct{}
+	onCommit   func()
+	tx         *sql.Tx
+	pending    *[]Event
 }
 
 // NewService serves the PaperGo database db.
 func NewService(db *sql.DB) *Service {
-	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1)}
+	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1)}
 }
 
 // OnCommit calls f after each committed write that recorded domain events,
@@ -84,7 +86,7 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 // writes. It returns how many events it recorded.
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
 	var pending []Event
-	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, tx: tx, pending: &pending}
+	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending}
 	if err := fn(t); err != nil {
 		return 0, err
 	}
@@ -109,7 +111,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, tx: tx})
+	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx})
 	if err != nil {
 		return out, err
 	}

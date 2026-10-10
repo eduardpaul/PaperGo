@@ -39,6 +39,9 @@ type ItemSurface func(*sql.Selector)
 // ListView is the predicate function for listview builders.
 type ListView func(*sql.Selector)
 
+// Operation is the predicate function for operation builders.
+type Operation func(*sql.Selector)
+
 // Publication is the predicate function for publication builders.
 type Publication func(*sql.Selector)
 

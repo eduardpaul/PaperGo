@@ -134,7 +134,7 @@ func (s *Service) PopularKeywords(ctx context.Context, subject, workspaceID stri
 FROM field_definitions fd JOIN resources c ON c.id=fd.container_id AND c.workspace_id=? AND c.deleted_at IS NULL
 JOIN field_values f ON f.container_id=fd.container_id AND f.surface='head' AND f.field_key=fd.key
 JOIN terms t ON t.id=f.value_text AND t.deprecated=0 AND (t.term_set_id=? OR t.available_as_keyword)
-WHERE fd.indexed AND (fd.type='keywords' OR fd.type='term' AND json_extract(fd.options,'$.term_set_id')=?)
+WHERE fd.indexed AND fd.index_status='ready' AND (fd.type='keywords' OR fd.type='term' AND json_extract(fd.options,'$.term_set_id')=?)
 GROUP BY f.value_text ORDER BY n DESC,f.value_text LIMIT ?`, workspaceID, set.ID, set.ID, top)
 		if e != nil {
 			return nil, e

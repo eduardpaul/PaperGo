@@ -486,6 +486,9 @@ func TestExpandedFieldIndexesSurviveIndexRebuild(t *testing.T) {
 		if _, e = s.UpdateField(testContext, "alice", l.ID, d.ID, latest(t, s, l.ID).Version, UpdateField{Indexed: &flag}); e != nil {
 			t.Fatal(e)
 		}
+		if e = s.runOperations(testContext); e != nil {
+			t.Fatal(e)
+		}
 		n, e = s.Client.FieldValue.Query().Where(fieldvalue.ItemIDEQ(r.ID)).Count(testContext)
 		if e != nil {
 			t.Fatal(e)

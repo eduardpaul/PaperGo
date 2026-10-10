@@ -14,7 +14,7 @@ Deleting a folder or item sets `deleted_at` on it and its live descendants in on
 
 The item schema endpoint follows the same visibility rules as content and returns its paired immutable schema. Draft-reader revision history includes schema snapshots, so consumers can interpret historical field labels and options without access to collection management.
 
-`item_surfaces` projects the head and published revisions. FTS5, normalized tag tables, and typed `field_values` are derived from these surfaces. A reader with ordinary read permission uses published; draft readers/editors use head by default. Index configuration can change independently of the immutable content. Projections retain historical field types/scales and use current index flags only when compatible. Optional null values have no index row.
+`item_surfaces` projects the head and published revisions. FTS5, normalized tag tables, and typed `field_values` are derived from these surfaces. A reader with ordinary read permission uses published; draft readers/editors use head by default. Index configuration can change independently of the immutable content. Projections retain historical field types/scales and use current index flags only when compatible. Index changes are tracked `operations` that rebuild one field's rows a batch per write transaction, never holding the single SQLite writer for a whole collection; a field is queryable only once its `index_status` is `ready`. Optional null values have no index row.
 
 Indexes are opt-in to bound write amplification. Typed equality/range queries are scoped to a collection and fixed operators; neither arbitrary SQL nor JSON paths are accepted. Integer values and scaled decimal units use signed 64-bit storage. Decimal content is represented as a canonical string, so its precision survives HTTP serialization and history reads.
 
@@ -52,7 +52,7 @@ When scale warrants PostgreSQL, replace SQLite-specific authorization/search ada
 
 The complete schema is one Atlas migration file, edited in place until the first release; there are no upgrade paths or compatibility layers (see [AGENTS.md](../AGENTS.md)). Each resource stores its nearest exclusive permission scope (`scope_id`), maintained by triggers, so authorization is an indexed lookup rather than a hierarchy walk.
 
-Tests apply that schema file. Coverage includes ownership and move constraints, permission-scope maintenance, deletion tombstones, WebDAV protocol behavior and locking, exact values through REST, head/published search and blobs, typed index rebuilds, schema/history immutability, authorized pagination, and concurrent optimistic updates. Representative load benchmarks, restoration exercises, group provisioning, approval and task activities, quotas, malware scanning, idempotency keys and observability exports remain deployment/application work.
+Tests apply that schema file. Coverage includes ownership and move constraints, permission-scope maintenance, deletion tombstones, WebDAV protocol behavior and locking, exact values through REST, head/published search and blobs, typed index rebuilds, schema/history immutability, authorized pagination, and concurrent optimistic updates. Concurrent-client load testing, restoration exercises, group provisioning, approval and task activities, quotas, malware scanning, idempotency keys and observability exports remain deployment/application work.
 
 ## Application configuration
 

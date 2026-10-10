@@ -88,6 +88,20 @@ func (_c *FieldDefinitionCreate) SetNillableIndexed(v *bool) *FieldDefinitionCre
 	return _c
 }
 
+// SetIndexStatus sets the "index_status" field.
+func (_c *FieldDefinitionCreate) SetIndexStatus(v fielddefinition.IndexStatus) *FieldDefinitionCreate {
+	_c.mutation.SetIndexStatus(v)
+	return _c
+}
+
+// SetNillableIndexStatus sets the "index_status" field if the given value is not nil.
+func (_c *FieldDefinitionCreate) SetNillableIndexStatus(v *fielddefinition.IndexStatus) *FieldDefinitionCreate {
+	if v != nil {
+		_c.SetIndexStatus(*v)
+	}
+	return _c
+}
+
 // SetScale sets the "scale" field.
 func (_c *FieldDefinitionCreate) SetScale(v int) *FieldDefinitionCreate {
 	_c.mutation.SetScale(v)
@@ -188,6 +202,10 @@ func (_c *FieldDefinitionCreate) defaults() {
 		v := fielddefinition.DefaultIndexed
 		_c.mutation.SetIndexed(v)
 	}
+	if _, ok := _c.mutation.IndexStatus(); !ok {
+		v := fielddefinition.DefaultIndexStatus
+		_c.mutation.SetIndexStatus(v)
+	}
 	if _, ok := _c.mutation.Scale(); !ok {
 		v := fielddefinition.DefaultScale
 		_c.mutation.SetScale(v)
@@ -248,6 +266,14 @@ func (_c *FieldDefinitionCreate) check() error {
 	}
 	if _, ok := _c.mutation.Indexed(); !ok {
 		return &ValidationError{Name: "indexed", err: errors.New(`ent: missing required field "FieldDefinition.indexed"`)}
+	}
+	if _, ok := _c.mutation.IndexStatus(); !ok {
+		return &ValidationError{Name: "index_status", err: errors.New(`ent: missing required field "FieldDefinition.index_status"`)}
+	}
+	if v, ok := _c.mutation.IndexStatus(); ok {
+		if err := fielddefinition.IndexStatusValidator(v); err != nil {
+			return &ValidationError{Name: "index_status", err: fmt.Errorf(`ent: validator failed for field "FieldDefinition.index_status": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Scale(); !ok {
 		return &ValidationError{Name: "scale", err: errors.New(`ent: missing required field "FieldDefinition.scale"`)}
@@ -329,6 +355,10 @@ func (_c *FieldDefinitionCreate) createSpec() (*FieldDefinition, *sqlgraph.Creat
 	if value, ok := _c.mutation.Indexed(); ok {
 		_spec.SetField(fielddefinition.FieldIndexed, field.TypeBool, value)
 		_node.Indexed = value
+	}
+	if value, ok := _c.mutation.IndexStatus(); ok {
+		_spec.SetField(fielddefinition.FieldIndexStatus, field.TypeEnum, value)
+		_node.IndexStatus = value
 	}
 	if value, ok := _c.mutation.Scale(); ok {
 		_spec.SetField(fielddefinition.FieldScale, field.TypeInt, value)

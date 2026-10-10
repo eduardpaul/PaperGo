@@ -14,6 +14,7 @@ import (
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
+	"papergo/ent/operation"
 	"papergo/ent/publication"
 	"papergo/ent/relationship"
 	"papergo/ent/relationshiptype"
@@ -343,7 +344,7 @@ func init() {
 	// fielddefinition.DefaultIndexed holds the default value on creation for the indexed field.
 	fielddefinition.DefaultIndexed = fielddefinitionDescIndexed.Default.(bool)
 	// fielddefinitionDescScale is the schema descriptor for scale field.
-	fielddefinitionDescScale := fielddefinitionFields[6].Descriptor()
+	fielddefinitionDescScale := fielddefinitionFields[7].Descriptor()
 	// fielddefinition.DefaultScale holds the default value on creation for the scale field.
 	fielddefinition.DefaultScale = fielddefinitionDescScale.Default.(int)
 	// fielddefinition.ScaleValidator is a validator for the "scale" field. It is called by the builders before save.
@@ -363,11 +364,11 @@ func init() {
 		}
 	}()
 	// fielddefinitionDescRequired is the schema descriptor for required field.
-	fielddefinitionDescRequired := fielddefinitionFields[7].Descriptor()
+	fielddefinitionDescRequired := fielddefinitionFields[8].Descriptor()
 	// fielddefinition.DefaultRequired holds the default value on creation for the required field.
 	fielddefinition.DefaultRequired = fielddefinitionDescRequired.Default.(bool)
 	// fielddefinitionDescChoices is the schema descriptor for choices field.
-	fielddefinitionDescChoices := fielddefinitionFields[8].Descriptor()
+	fielddefinitionDescChoices := fielddefinitionFields[9].Descriptor()
 	// fielddefinition.DefaultChoices holds the default value on creation for the choices field.
 	fielddefinition.DefaultChoices = fielddefinitionDescChoices.Default.([]string)
 	// fielddefinitionDescID is the schema descriptor for id field.
@@ -551,6 +552,41 @@ func init() {
 	listview.DefaultID = listviewDescID.Default.(func() string)
 	// listview.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	listview.IDValidator = listviewDescID.Validators[0].(func(string) error)
+	operationMixin := schema.Operation{}.Mixin()
+	operationMixinFields0 := operationMixin[0].Fields()
+	_ = operationMixinFields0
+	operationFields := schema.Operation{}.Fields()
+	_ = operationFields
+	// operationDescCreatedAt is the schema descriptor for created_at field.
+	operationDescCreatedAt := operationMixinFields0[1].Descriptor()
+	// operation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	operation.DefaultCreatedAt = operationDescCreatedAt.Default.(func() time.Time)
+	// operationDescAfterItemID is the schema descriptor for after_item_id field.
+	operationDescAfterItemID := operationFields[5].Descriptor()
+	// operation.DefaultAfterItemID holds the default value on creation for the after_item_id field.
+	operation.DefaultAfterItemID = operationDescAfterItemID.Default.(string)
+	// operationDescProcessed is the schema descriptor for processed field.
+	operationDescProcessed := operationFields[6].Descriptor()
+	// operation.DefaultProcessed holds the default value on creation for the processed field.
+	operation.DefaultProcessed = operationDescProcessed.Default.(int)
+	// operation.ProcessedValidator is a validator for the "processed" field. It is called by the builders before save.
+	operation.ProcessedValidator = operationDescProcessed.Validators[0].(func(int) error)
+	// operationDescError is the schema descriptor for error field.
+	operationDescError := operationFields[7].Descriptor()
+	// operation.DefaultError holds the default value on creation for the error field.
+	operation.DefaultError = operationDescError.Default.(string)
+	// operationDescUpdatedAt is the schema descriptor for updated_at field.
+	operationDescUpdatedAt := operationFields[9].Descriptor()
+	// operation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	operation.DefaultUpdatedAt = operationDescUpdatedAt.Default.(func() time.Time)
+	// operation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	operation.UpdateDefaultUpdatedAt = operationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// operationDescID is the schema descriptor for id field.
+	operationDescID := operationMixinFields0[0].Descriptor()
+	// operation.DefaultID holds the default value on creation for the id field.
+	operation.DefaultID = operationDescID.Default.(func() string)
+	// operation.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	operation.IDValidator = operationDescID.Validators[0].(func(string) error)
 	publicationMixin := schema.Publication{}.Mixin()
 	publicationMixinFields0 := publicationMixin[0].Fields()
 	_ = publicationMixinFields0

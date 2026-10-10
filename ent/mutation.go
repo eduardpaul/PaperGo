@@ -18,6 +18,7 @@ import (
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
+	"papergo/ent/operation"
 	"papergo/ent/predicate"
 	"papergo/ent/publication"
 	"papergo/ent/relationship"
@@ -63,6 +64,7 @@ const (
 	TypeItemRevision     = "ItemRevision"
 	TypeItemSurface      = "ItemSurface"
 	TypeListView         = "ListView"
+	TypeOperation        = "Operation"
 	TypePublication      = "Publication"
 	TypeRelationship     = "Relationship"
 	TypeRelationshipType = "RelationshipType"
@@ -3995,6 +3997,7 @@ type FieldDefinitionMutation struct {
 	_type            *fielddefinition.Type
 	options          *model.FieldOptions
 	indexed          *bool
+	index_status     *fielddefinition.IndexStatus
 	scale            *int
 	addscale         *int
 	required         *bool
@@ -4364,6 +4367,42 @@ func (m *FieldDefinitionMutation) ResetIndexed() {
 	m.indexed = nil
 }
 
+// SetIndexStatus sets the "index_status" field.
+func (m *FieldDefinitionMutation) SetIndexStatus(fs fielddefinition.IndexStatus) {
+	m.index_status = &fs
+}
+
+// IndexStatus returns the value of the "index_status" field in the mutation.
+func (m *FieldDefinitionMutation) IndexStatus() (r fielddefinition.IndexStatus, exists bool) {
+	v := m.index_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIndexStatus returns the old "index_status" field's value of the FieldDefinition entity.
+// If the FieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FieldDefinitionMutation) OldIndexStatus(ctx context.Context) (v fielddefinition.IndexStatus, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIndexStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIndexStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIndexStatus: %w", err)
+	}
+	return oldValue.IndexStatus, nil
+}
+
+// ResetIndexStatus resets all changes to the "index_status" field.
+func (m *FieldDefinitionMutation) ResetIndexStatus() {
+	m.index_status = nil
+}
+
 // SetScale sets the "scale" field.
 func (m *FieldDefinitionMutation) SetScale(i int) {
 	m.scale = &i
@@ -4568,7 +4607,7 @@ func (m *FieldDefinitionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *FieldDefinitionMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.created_at != nil {
 		fields = append(fields, fielddefinition.FieldCreatedAt)
 	}
@@ -4589,6 +4628,9 @@ func (m *FieldDefinitionMutation) Fields() []string {
 	}
 	if m.indexed != nil {
 		fields = append(fields, fielddefinition.FieldIndexed)
+	}
+	if m.index_status != nil {
+		fields = append(fields, fielddefinition.FieldIndexStatus)
 	}
 	if m.scale != nil {
 		fields = append(fields, fielddefinition.FieldScale)
@@ -4621,6 +4663,8 @@ func (m *FieldDefinitionMutation) Field(name string) (ent.Value, bool) {
 		return m.Options()
 	case fielddefinition.FieldIndexed:
 		return m.Indexed()
+	case fielddefinition.FieldIndexStatus:
+		return m.IndexStatus()
 	case fielddefinition.FieldScale:
 		return m.Scale()
 	case fielddefinition.FieldRequired:
@@ -4650,6 +4694,8 @@ func (m *FieldDefinitionMutation) OldField(ctx context.Context, name string) (en
 		return m.OldOptions(ctx)
 	case fielddefinition.FieldIndexed:
 		return m.OldIndexed(ctx)
+	case fielddefinition.FieldIndexStatus:
+		return m.OldIndexStatus(ctx)
 	case fielddefinition.FieldScale:
 		return m.OldScale(ctx)
 	case fielddefinition.FieldRequired:
@@ -4713,6 +4759,13 @@ func (m *FieldDefinitionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIndexed(v)
+		return nil
+	case fielddefinition.FieldIndexStatus:
+		v, ok := value.(fielddefinition.IndexStatus)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIndexStatus(v)
 		return nil
 	case fielddefinition.FieldScale:
 		v, ok := value.(int)
@@ -4819,6 +4872,9 @@ func (m *FieldDefinitionMutation) ResetField(name string) error {
 		return nil
 	case fielddefinition.FieldIndexed:
 		m.ResetIndexed()
+		return nil
+	case fielddefinition.FieldIndexStatus:
+		m.ResetIndexStatus()
 		return nil
 	case fielddefinition.FieldScale:
 		m.ResetScale()
@@ -9930,6 +9986,968 @@ func (m *ListViewMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown ListView edge %s", name)
+}
+
+// OperationMutation represents an operation that mutates the Operation nodes in the graph.
+type OperationMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	created_at       *time.Time
+	field_id         *string
+	kind             *operation.Kind
+	status           *operation.Status
+	surface          *operation.Surface
+	after_item_id    *string
+	processed        *int
+	addprocessed     *int
+	error            *string
+	created_by       *string
+	updated_at       *time.Time
+	clearedFields    map[string]struct{}
+	container        *string
+	clearedcontainer bool
+	done             bool
+	oldValue         func(context.Context) (*Operation, error)
+	predicates       []predicate.Operation
+}
+
+var _ ent.Mutation = (*OperationMutation)(nil)
+
+// operationOption allows management of the mutation configuration using functional options.
+type operationOption func(*OperationMutation)
+
+// newOperationMutation creates new mutation for the Operation entity.
+func newOperationMutation(c config, op Op, opts ...operationOption) *OperationMutation {
+	m := &OperationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeOperation,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withOperationID sets the ID field of the mutation.
+func withOperationID(id string) operationOption {
+	return func(m *OperationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Operation
+		)
+		m.oldValue = func(ctx context.Context) (*Operation, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Operation.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withOperation sets the old Operation of the mutation.
+func withOperation(node *Operation) operationOption {
+	return func(m *OperationMutation) {
+		m.oldValue = func(context.Context) (*Operation, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m OperationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m OperationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Operation entities.
+func (m *OperationMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *OperationMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *OperationMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Operation.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *OperationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *OperationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *OperationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetContainerID sets the "container_id" field.
+func (m *OperationMutation) SetContainerID(s string) {
+	m.container = &s
+}
+
+// ContainerID returns the value of the "container_id" field in the mutation.
+func (m *OperationMutation) ContainerID() (r string, exists bool) {
+	v := m.container
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContainerID returns the old "container_id" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldContainerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContainerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContainerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContainerID: %w", err)
+	}
+	return oldValue.ContainerID, nil
+}
+
+// ResetContainerID resets all changes to the "container_id" field.
+func (m *OperationMutation) ResetContainerID() {
+	m.container = nil
+}
+
+// SetFieldID sets the "field_id" field.
+func (m *OperationMutation) SetFieldID(s string) {
+	m.field_id = &s
+}
+
+// FieldID returns the value of the "field_id" field in the mutation.
+func (m *OperationMutation) FieldID() (r string, exists bool) {
+	v := m.field_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFieldID returns the old "field_id" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldFieldID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFieldID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFieldID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFieldID: %w", err)
+	}
+	return oldValue.FieldID, nil
+}
+
+// ResetFieldID resets all changes to the "field_id" field.
+func (m *OperationMutation) ResetFieldID() {
+	m.field_id = nil
+}
+
+// SetKind sets the "kind" field.
+func (m *OperationMutation) SetKind(o operation.Kind) {
+	m.kind = &o
+}
+
+// Kind returns the value of the "kind" field in the mutation.
+func (m *OperationMutation) Kind() (r operation.Kind, exists bool) {
+	v := m.kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKind returns the old "kind" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldKind(ctx context.Context) (v operation.Kind, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKind: %w", err)
+	}
+	return oldValue.Kind, nil
+}
+
+// ResetKind resets all changes to the "kind" field.
+func (m *OperationMutation) ResetKind() {
+	m.kind = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *OperationMutation) SetStatus(o operation.Status) {
+	m.status = &o
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *OperationMutation) Status() (r operation.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldStatus(ctx context.Context) (v operation.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *OperationMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetSurface sets the "surface" field.
+func (m *OperationMutation) SetSurface(o operation.Surface) {
+	m.surface = &o
+}
+
+// Surface returns the value of the "surface" field in the mutation.
+func (m *OperationMutation) Surface() (r operation.Surface, exists bool) {
+	v := m.surface
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSurface returns the old "surface" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldSurface(ctx context.Context) (v operation.Surface, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSurface is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSurface requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSurface: %w", err)
+	}
+	return oldValue.Surface, nil
+}
+
+// ResetSurface resets all changes to the "surface" field.
+func (m *OperationMutation) ResetSurface() {
+	m.surface = nil
+}
+
+// SetAfterItemID sets the "after_item_id" field.
+func (m *OperationMutation) SetAfterItemID(s string) {
+	m.after_item_id = &s
+}
+
+// AfterItemID returns the value of the "after_item_id" field in the mutation.
+func (m *OperationMutation) AfterItemID() (r string, exists bool) {
+	v := m.after_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfterItemID returns the old "after_item_id" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldAfterItemID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfterItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfterItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfterItemID: %w", err)
+	}
+	return oldValue.AfterItemID, nil
+}
+
+// ResetAfterItemID resets all changes to the "after_item_id" field.
+func (m *OperationMutation) ResetAfterItemID() {
+	m.after_item_id = nil
+}
+
+// SetProcessed sets the "processed" field.
+func (m *OperationMutation) SetProcessed(i int) {
+	m.processed = &i
+	m.addprocessed = nil
+}
+
+// Processed returns the value of the "processed" field in the mutation.
+func (m *OperationMutation) Processed() (r int, exists bool) {
+	v := m.processed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessed returns the old "processed" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldProcessed(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessed: %w", err)
+	}
+	return oldValue.Processed, nil
+}
+
+// AddProcessed adds i to the "processed" field.
+func (m *OperationMutation) AddProcessed(i int) {
+	if m.addprocessed != nil {
+		*m.addprocessed += i
+	} else {
+		m.addprocessed = &i
+	}
+}
+
+// AddedProcessed returns the value that was added to the "processed" field in this mutation.
+func (m *OperationMutation) AddedProcessed() (r int, exists bool) {
+	v := m.addprocessed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetProcessed resets all changes to the "processed" field.
+func (m *OperationMutation) ResetProcessed() {
+	m.processed = nil
+	m.addprocessed = nil
+}
+
+// SetError sets the "error" field.
+func (m *OperationMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *OperationMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *OperationMutation) ResetError() {
+	m.error = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *OperationMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *OperationMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *OperationMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *OperationMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *OperationMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *OperationMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearContainer clears the "container" edge to the Resource entity.
+func (m *OperationMutation) ClearContainer() {
+	m.clearedcontainer = true
+	m.clearedFields[operation.FieldContainerID] = struct{}{}
+}
+
+// ContainerCleared reports if the "container" edge to the Resource entity was cleared.
+func (m *OperationMutation) ContainerCleared() bool {
+	return m.clearedcontainer
+}
+
+// ContainerIDs returns the "container" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ContainerID instead. It exists only for internal usage by the builders.
+func (m *OperationMutation) ContainerIDs() (ids []string) {
+	if id := m.container; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetContainer resets all changes to the "container" edge.
+func (m *OperationMutation) ResetContainer() {
+	m.container = nil
+	m.clearedcontainer = false
+}
+
+// Where appends a list predicates to the OperationMutation builder.
+func (m *OperationMutation) Where(ps ...predicate.Operation) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the OperationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *OperationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Operation, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *OperationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *OperationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Operation).
+func (m *OperationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *OperationMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.created_at != nil {
+		fields = append(fields, operation.FieldCreatedAt)
+	}
+	if m.container != nil {
+		fields = append(fields, operation.FieldContainerID)
+	}
+	if m.field_id != nil {
+		fields = append(fields, operation.FieldFieldID)
+	}
+	if m.kind != nil {
+		fields = append(fields, operation.FieldKind)
+	}
+	if m.status != nil {
+		fields = append(fields, operation.FieldStatus)
+	}
+	if m.surface != nil {
+		fields = append(fields, operation.FieldSurface)
+	}
+	if m.after_item_id != nil {
+		fields = append(fields, operation.FieldAfterItemID)
+	}
+	if m.processed != nil {
+		fields = append(fields, operation.FieldProcessed)
+	}
+	if m.error != nil {
+		fields = append(fields, operation.FieldError)
+	}
+	if m.created_by != nil {
+		fields = append(fields, operation.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, operation.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *OperationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case operation.FieldCreatedAt:
+		return m.CreatedAt()
+	case operation.FieldContainerID:
+		return m.ContainerID()
+	case operation.FieldFieldID:
+		return m.FieldID()
+	case operation.FieldKind:
+		return m.Kind()
+	case operation.FieldStatus:
+		return m.Status()
+	case operation.FieldSurface:
+		return m.Surface()
+	case operation.FieldAfterItemID:
+		return m.AfterItemID()
+	case operation.FieldProcessed:
+		return m.Processed()
+	case operation.FieldError:
+		return m.Error()
+	case operation.FieldCreatedBy:
+		return m.CreatedBy()
+	case operation.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *OperationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case operation.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case operation.FieldContainerID:
+		return m.OldContainerID(ctx)
+	case operation.FieldFieldID:
+		return m.OldFieldID(ctx)
+	case operation.FieldKind:
+		return m.OldKind(ctx)
+	case operation.FieldStatus:
+		return m.OldStatus(ctx)
+	case operation.FieldSurface:
+		return m.OldSurface(ctx)
+	case operation.FieldAfterItemID:
+		return m.OldAfterItemID(ctx)
+	case operation.FieldProcessed:
+		return m.OldProcessed(ctx)
+	case operation.FieldError:
+		return m.OldError(ctx)
+	case operation.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case operation.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown Operation field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *OperationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case operation.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case operation.FieldContainerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContainerID(v)
+		return nil
+	case operation.FieldFieldID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFieldID(v)
+		return nil
+	case operation.FieldKind:
+		v, ok := value.(operation.Kind)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKind(v)
+		return nil
+	case operation.FieldStatus:
+		v, ok := value.(operation.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case operation.FieldSurface:
+		v, ok := value.(operation.Surface)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSurface(v)
+		return nil
+	case operation.FieldAfterItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfterItemID(v)
+		return nil
+	case operation.FieldProcessed:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessed(v)
+		return nil
+	case operation.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
+	case operation.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case operation.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Operation field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *OperationMutation) AddedFields() []string {
+	var fields []string
+	if m.addprocessed != nil {
+		fields = append(fields, operation.FieldProcessed)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *OperationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case operation.FieldProcessed:
+		return m.AddedProcessed()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *OperationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case operation.FieldProcessed:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProcessed(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Operation numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *OperationMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *OperationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *OperationMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown Operation nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *OperationMutation) ResetField(name string) error {
+	switch name {
+	case operation.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case operation.FieldContainerID:
+		m.ResetContainerID()
+		return nil
+	case operation.FieldFieldID:
+		m.ResetFieldID()
+		return nil
+	case operation.FieldKind:
+		m.ResetKind()
+		return nil
+	case operation.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case operation.FieldSurface:
+		m.ResetSurface()
+		return nil
+	case operation.FieldAfterItemID:
+		m.ResetAfterItemID()
+		return nil
+	case operation.FieldProcessed:
+		m.ResetProcessed()
+		return nil
+	case operation.FieldError:
+		m.ResetError()
+		return nil
+	case operation.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case operation.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown Operation field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *OperationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.container != nil {
+		edges = append(edges, operation.EdgeContainer)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *OperationMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case operation.EdgeContainer:
+		if id := m.container; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *OperationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *OperationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *OperationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedcontainer {
+		edges = append(edges, operation.EdgeContainer)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *OperationMutation) EdgeCleared(name string) bool {
+	switch name {
+	case operation.EdgeContainer:
+		return m.clearedcontainer
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *OperationMutation) ClearEdge(name string) error {
+	switch name {
+	case operation.EdgeContainer:
+		m.ClearContainer()
+		return nil
+	}
+	return fmt.Errorf("unknown Operation unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *OperationMutation) ResetEdge(name string) error {
+	switch name {
+	case operation.EdgeContainer:
+		m.ResetContainer()
+		return nil
+	}
+	return fmt.Errorf("unknown Operation edge %s", name)
 }
 
 // PublicationMutation represents an operation that mutates the Publication nodes in the graph.

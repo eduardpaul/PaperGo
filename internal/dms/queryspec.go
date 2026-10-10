@@ -98,8 +98,8 @@ func (q *queryCompiler) column(field string) (string, []any, string, error) {
 		return column, nil, "text", nil
 	}
 	d := q.defs[field]
-	if d == nil || !d.Indexed {
-		return "", nil, "", invalid("query fields must exist and be indexed: " + field)
+	if d == nil || !queryable(d) {
+		return "", nil, "", unqueryable(field, d)
 	}
 	if d.Options.Multiple {
 		return "", nil, "", invalid("sorting and grouping require a scalar field")
@@ -221,8 +221,8 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 		return text, []any{tag}, nil
 	} else {
 		d = q.defs[f.Field]
-		if d == nil || !d.Indexed {
-			return "", nil, invalid("query fields must exist and be indexed: " + f.Field)
+		if d == nil || !queryable(d) {
+			return "", nil, unqueryable(f.Field, d)
 		}
 	}
 	prefix := ""

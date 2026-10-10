@@ -192,6 +192,12 @@ func TestExactFieldsFrozenSchemasAndIndexRebuild(t *testing.T) {
 	if _, err = s.UpdateField(testContext, "alice", list.ID, amount.ID, list.Version, UpdateField{Label: &label, Indexed: &enabled}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = s.Browse(testContext, "reader", filter); !isValidation(err) || !strings.Contains(err.Error(), "building") {
+		t.Fatal("query used an index still building", err)
+	}
+	if err = s.runOperations(testContext); err != nil {
+		t.Fatal(err)
+	}
 	p, err = s.Browse(testContext, "reader", filter)
 	if err != nil || len(p.Data) != 1 {
 		t.Fatalf("index backfill: %+v %v", p, err)

@@ -101,4 +101,24 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	if !strings.Contains(string(acl), l.ID) || !strings.Contains(string(acl), "effective_grants") {
 		t.Fatal("effective ACL contract", string(acl))
 	}
+	// Indexing a populated field queues a tracked background build.
+	var fields struct{ Data []ent.FieldDefinition }
+	json.Unmarshal(send("GET", "/v1/resources/"+l.ID+"/fields", "", "", 200), &fields)
+	var collection ent.Resource
+	json.Unmarshal(send("GET", "/v1/resources/"+l.ID, "", "", 200), &collection)
+	for _, f := range fields.Data {
+		if f.Key == "topic" {
+			patched := send("PATCH", "/v1/resources/"+l.ID+"/fields/"+f.ID, `{"indexed":true}`, fmt.Sprintf(`"%d"`, collection.Version), 200)
+			if !strings.Contains(string(patched), `"index_status":"building"`) {
+				t.Fatal("index build not reported", string(patched))
+			}
+		}
+	}
+	var operations struct{ Data []ent.Operation }
+	json.Unmarshal(send("GET", "/v1/resources/"+l.ID+"/operations", "", "", 200), &operations)
+	if len(operations.Data) != 1 || operations.Data[0].Status != "pending" {
+		t.Fatal("operations", operations)
+	}
+	send("GET", "/v1/operations/"+operations.Data[0].ID, "", "", 200)
+	send("GET", "/v1/operations/missing", "", "", 404)
 }

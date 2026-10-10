@@ -29,8 +29,8 @@ func (s *Service) fieldFilter(ctx context.Context, subject string, in Browse) (f
 	if err != nil {
 		return nil, candidateSet{}, invalid("field filter references an unknown field")
 	}
-	if !d.Indexed {
-		return nil, candidateSet{}, invalid("field is not configured for indexed queries")
+	if !queryable(d) {
+		return nil, candidateSet{}, unqueryable(d.Key, d)
 	}
 	op := "="
 	switch in.FilterOp {

@@ -19,6 +19,9 @@ func (FieldDefinition) Fields() []ent.Field {
 		field.Enum("type").Values("text", "number", "integer", "decimal", "boolean", "datetime", "choice", "note", "email", "url", "date", "lookup", "term", "keywords"),
 		field.JSON("options", model.FieldOptions{}).Default(model.FieldOptions{}),
 		field.Bool("indexed").Default(false),
+		// index_status is building while an operation converges the field's index
+		// rows to indexed; queries use the field only when indexed and ready.
+		field.Enum("index_status").Values("ready", "building", "failed").Default("ready"),
 		field.Int("scale").Default(0).Min(0).Max(9),
 		field.Bool("required").Default(false),
 		field.JSON("choices", []string{}).Default([]string{}),

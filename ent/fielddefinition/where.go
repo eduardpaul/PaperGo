@@ -360,6 +360,26 @@ func IndexedNEQ(v bool) predicate.FieldDefinition {
 	return predicate.FieldDefinition(sql.FieldNEQ(FieldIndexed, v))
 }
 
+// IndexStatusEQ applies the EQ predicate on the "index_status" field.
+func IndexStatusEQ(v IndexStatus) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldEQ(FieldIndexStatus, v))
+}
+
+// IndexStatusNEQ applies the NEQ predicate on the "index_status" field.
+func IndexStatusNEQ(v IndexStatus) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldNEQ(FieldIndexStatus, v))
+}
+
+// IndexStatusIn applies the In predicate on the "index_status" field.
+func IndexStatusIn(vs ...IndexStatus) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldIn(FieldIndexStatus, vs...))
+}
+
+// IndexStatusNotIn applies the NotIn predicate on the "index_status" field.
+func IndexStatusNotIn(vs ...IndexStatus) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldNotIn(FieldIndexStatus, vs...))
+}
+
 // ScaleEQ applies the EQ predicate on the "scale" field.
 func ScaleEQ(v int) predicate.FieldDefinition {
 	return predicate.FieldDefinition(sql.FieldEQ(FieldScale, v))

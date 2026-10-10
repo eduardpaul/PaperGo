@@ -113,6 +113,10 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 	m.HandleFunc("POST /v1/resources/{id}/query/groups", foundationMutation(a, 200, false, func(r *http.Request, in dms.QueryRequest, v int) (any, error) {
 		return a.DMS.QueryGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
+	m.HandleFunc("GET /v1/resources/{id}/operations", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.Operations(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
+	}))
+	m.HandleFunc("GET /v1/operations/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Operation(r.Context(), subject(r), r.PathValue("id")) }))
 	m.HandleFunc("GET /v1/resources/{id}/views", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.Views(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
 	}))

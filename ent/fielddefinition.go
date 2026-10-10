@@ -34,6 +34,8 @@ type FieldDefinition struct {
 	Options model.FieldOptions `json:"options,omitempty"`
 	// Indexed holds the value of the "indexed" field.
 	Indexed bool `json:"indexed,omitempty"`
+	// IndexStatus holds the value of the "index_status" field.
+	IndexStatus fielddefinition.IndexStatus `json:"index_status,omitempty"`
 	// Scale holds the value of the "scale" field.
 	Scale int `json:"scale,omitempty"`
 	// Required holds the value of the "required" field.
@@ -77,7 +79,7 @@ func (*FieldDefinition) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case fielddefinition.FieldScale:
 			values[i] = new(sql.NullInt64)
-		case fielddefinition.FieldID, fielddefinition.FieldContainerID, fielddefinition.FieldKey, fielddefinition.FieldLabel, fielddefinition.FieldType:
+		case fielddefinition.FieldID, fielddefinition.FieldContainerID, fielddefinition.FieldKey, fielddefinition.FieldLabel, fielddefinition.FieldType, fielddefinition.FieldIndexStatus:
 			values[i] = new(sql.NullString)
 		case fielddefinition.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -145,6 +147,12 @@ func (_m *FieldDefinition) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field indexed", values[i])
 			} else if value.Valid {
 				_m.Indexed = value.Bool
+			}
+		case fielddefinition.FieldIndexStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field index_status", values[i])
+			} else if value.Valid {
+				_m.IndexStatus = fielddefinition.IndexStatus(value.String)
 			}
 		case fielddefinition.FieldScale:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -227,6 +235,9 @@ func (_m *FieldDefinition) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("indexed=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Indexed))
+	builder.WriteString(", ")
+	builder.WriteString("index_status=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IndexStatus))
 	builder.WriteString(", ")
 	builder.WriteString("scale=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Scale))
