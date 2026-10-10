@@ -23,7 +23,7 @@ func latest(t *testing.T, s *Service, id string) *ent.Resource {
 }
 func grantReader(t *testing.T, s *Service, w *ent.Resource) {
 	t.Helper()
-	_, e := s.SetPermissions(testContext, "alice", w.ID, latest(t, s, w.ID).Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"reader", "read", "allow"}}})
+	e := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -183,7 +183,7 @@ func TestTaxonomyAndLookupPreserveIDsAndValidateNewAssignments(t *testing.T) {
 	if _, e = s.CreateTerm(testContext, "alice", another.ID, TermInput{Name: "Bad parent", ParentID: &root.ID}); e == nil {
 		t.Fatal("cross-set parent")
 	}
-	if _, e = s.CreateTermSet(testContext, "reader", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
+	if _, e = s.CreateTermSet(testContext, "reader", w.ID, TermSetInput{GroupID: testTermGroup(s, w.ID), Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrNotFound) {
 		t.Fatal("taxonomy management authorization", e)
 	}
 }
@@ -347,7 +347,7 @@ func TestExclusiveScopesInheritanceCopyAndReset(t *testing.T) {
 	if e != nil || permissions.ScopeID != folder.ID || len(permissions.EffectiveGrants) != 2 {
 		t.Fatal("copy inherited scope", permissions, e)
 	}
-	_, e = s.SetPermissions(testContext, "alice", w.ID, latest(t, s, w.ID).Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}})
+	e = s.RemoveWorkspaceMember(testContext, "alice", w.ID, "reader")
 	if e != nil {
 		t.Fatal(e)
 	}

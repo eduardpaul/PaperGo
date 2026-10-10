@@ -37,20 +37,18 @@ func permissionSQL(idColumn, subject, action string) (string, []any) {
 	}
 	// scope_id, maintained by triggers, is the nearest exclusive ancestor-or-self.
 	query := `EXISTS (SELECT 1 FROM resources acl JOIN grants g ON g.resource_id=acl.scope_id
- WHERE acl.id=` + idColumn + ` AND g.subject=? AND g.effect='allow' AND g.action IN (` + strings.Join(marks, ",") + `))`
+ WHERE acl.id=` + idColumn + ` AND acl.deleted_at IS NULL AND g.subject=? AND g.effect='allow' AND g.action IN (` + strings.Join(marks, ",") + `))
+ OR EXISTS (SELECT 1 FROM resources owned JOIN grants owner ON owner.resource_id=owned.workspace_id
+ JOIN resources workspace ON workspace.id=owner.resource_id AND workspace.deleted_at IS NULL
+ WHERE owned.id=` + idColumn + ` AND owned.deleted_at IS NULL AND owner.subject=? AND owner.action='manage' AND owner.effect='allow')`
+	args = append(args, subject)
+	query = "(" + query + ")"
 	return query, args
 }
 
 // scopeGrantSQL tests a grant on an ACL scope ID column directly.
 func scopeGrantSQL(scopeColumn, subject, action string) (string, []any) {
-	actions := impliedActions(action)
-	args := []any{subject}
-	marks := make([]string, len(actions))
-	for i, a := range actions {
-		marks[i] = "?"
-		args = append(args, a)
-	}
-	return `EXISTS (SELECT 1 FROM grants g WHERE g.resource_id=` + scopeColumn + ` AND g.subject=? AND g.effect='allow' AND g.action IN (` + strings.Join(marks, ",") + `))`, args
+	return permissionSQL(scopeColumn, subject, action)
 }
 
 // permissionPredicate filters resources rows by their own scope_id, which the
@@ -64,7 +62,8 @@ func permissionPredicate(subject, action string) func(*entsql.Selector) {
 			marks[i] = "?"
 			args = append(args, a)
 		}
-		sel.Where(entsql.ExprP(sel.C(resource.FieldScopeID)+` IN (SELECT resource_id FROM grants WHERE subject=? AND effect='allow' AND action IN (`+strings.Join(marks, ",")+`))`, args...))
+		args = append(args, subject)
+		sel.Where(entsql.ExprP("("+sel.C(resource.FieldScopeID)+` IN (SELECT resource_id FROM grants WHERE subject=? AND effect='allow' AND action IN (`+strings.Join(marks, ",")+`)) OR `+sel.C(resource.FieldWorkspaceID)+` IN (SELECT g.resource_id FROM grants g JOIN resources w ON w.id=g.resource_id WHERE g.subject=? AND g.effect='allow' AND g.action='manage' AND w.kind='workspace' AND w.deleted_at IS NULL))`, args...))
 	}
 }
 func (s *Service) allowedMany(ctx context.Context, subject, action string, roots []*ent.Resource) (map[string]bool, error) {
@@ -98,6 +97,9 @@ func (s *Service) authorize(ctx context.Context, subject, id, action string) (*e
 		return nil, err
 	}
 	if !allowed[id] {
+		if r.Kind == resource.KindWorkspace {
+			return nil, ErrNotFound
+		}
 		return nil, ErrForbidden
 	}
 	return r, nil

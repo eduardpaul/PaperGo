@@ -15,6 +15,15 @@ import (
 
 var testContext = context.Background()
 
+func setWorkspaceMembers(ctx context.Context, s *Service, actor, workspaceID string, members ...WorkspaceMember) error {
+	for _, member := range members {
+		if err := s.SetWorkspaceMember(ctx, actor, workspaceID, member); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func fixture(t *testing.T) (*Service, *ent.Resource, *ent.Resource) {
 	t.Helper()
 	s := NewService(testutil.Database(t).SQL)
@@ -87,7 +96,7 @@ func TestFieldsSearchPublishingAndOwnership(t *testing.T) {
 func TestAdditivePermissionsInheritanceAndRollback(t *testing.T) {
 	s, w, list := fixture(t)
 	item := create(t, s, list.ID, "item", "Secret", nil)
-	_, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"bob", "read_draft", "allow"}}})
+	err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +123,7 @@ func TestAdditivePermissionsInheritanceAndRollback(t *testing.T) {
 			t.Fatal("search leaked private resource")
 		}
 	}
-	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"alice", "manage", "allow"}, {"carol", "read_draft", "allow"}}})
+	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"alice", "manage", "allow"}, {"carol", "read_draft", "allow"}, {"delegate", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +133,7 @@ func TestAdditivePermissionsInheritanceAndRollback(t *testing.T) {
 	if _, err = s.Get(testContext, "bob", item.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatal("inheritance not broken")
 	}
-	if _, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false}); err == nil {
+	if _, err = s.SetPermissions(testContext, "delegate", item.ID, item.Version, Permissions{Inherit: false}); err == nil {
 		t.Fatal("lockout accepted")
 	}
 	still, err := s.Get(testContext, "alice", item.ID)
@@ -151,7 +160,7 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("duplicate relationship accepted: %v", err)
 	}
-	_, err = s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"bob", "read_draft", "allow"}}})
+	err = setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}

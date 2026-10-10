@@ -6,6 +6,7 @@ var (
 	ErrForbidden = errors.New("access denied")
 	ErrNotFound  = errors.New("resource not found")
 	ErrConflict  = errors.New("version conflict or duplicate")
+	ErrLastOwner = errors.New("a workspace needs at least one owner")
 	// Library file paths distinguish a missing parent folder from a missing
 	// entry, an occupied name, and a failed conditional request.
 	ErrMissingParent      = errors.New("parent folder not found")

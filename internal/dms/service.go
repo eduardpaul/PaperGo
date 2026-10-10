@@ -130,6 +130,7 @@ type CreateResource struct {
 	ContentTypeID     string         `json:"content_type_id,omitempty"`
 	Kind              string         `json:"kind"`
 	Name              string         `json:"name"`
+	Description       string         `json:"description,omitempty"`
 	Tags              []string       `json:"tags"`
 	Values            map[string]any `json:"values"`
 	PublishingEnabled bool           `json:"publishing_enabled"`
@@ -148,6 +149,14 @@ func (s *Service) Create(ctx context.Context, subject, parentID string, in Creat
 // create inserts a resource inside a write transaction. A library item may be
 // created with its first blob, so its first revision already carries content.
 func (s *Service) create(ctx context.Context, subject, parentID string, in CreateResource, content *BlobInput) (*ent.Resource, error) {
+	if in.Kind == "workspace" {
+		in.Name = strings.TrimSpace(in.Name)
+		if e := validateWorkspace(in.Name, in.Description); e != nil {
+			return nil, e
+		}
+	} else if in.Description != "" {
+		return nil, invalid("description belongs to workspaces")
+	}
 	if err := validateName(in.Name); err != nil {
 		return nil, err
 	}
@@ -235,6 +244,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	}
 	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetTags(in.Tags).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
 	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
+	builder.SetDescription(in.Description)
 	builder.SetNillableContentTypeID(typeID)
 	if parent != nil {
 		builder.SetParentID(parent.ID)
@@ -306,6 +316,7 @@ func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
 
 type UpdateResource struct {
 	Name              *string         `json:"name,omitempty"`
+	Description       *string         `json:"description,omitempty"`
 	Tags              *[]string       `json:"tags,omitempty"`
 	Values            *map[string]any `json:"values,omitempty"`
 	PublishingEnabled *bool           `json:"publishing_enabled,omitempty"`
@@ -323,7 +334,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 	return
 }
 func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*ent.Resource, error) {
-	content := in.Name != nil || in.Tags != nil || in.Values != nil
+	content := in.Name != nil || in.Description != nil || in.Tags != nil || in.Values != nil
 	if !content && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.ParentID == nil {
 		return nil, invalid("at least one change is required")
 	}
@@ -340,6 +351,24 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	r, e := s.authorize(ctx, subject, id, "write")
 	if e != nil {
 		return nil, e
+	}
+	if r.Kind == resource.KindWorkspace {
+		if _, e = s.authorize(ctx, subject, id, "manage"); e != nil {
+			return nil, e
+		}
+		name, description := r.Name, r.Description
+		if in.Name != nil {
+			name = strings.TrimSpace(*in.Name)
+			in.Name = &name
+		}
+		if in.Description != nil {
+			description = *in.Description
+		}
+		if e = validateWorkspace(name, description); e != nil {
+			return nil, e
+		}
+	} else if in.Description != nil {
+		return nil, invalid("description belongs to workspaces")
 	}
 	if r.Version != version {
 		return nil, ErrConflict
@@ -366,6 +395,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	moved := in.ParentID != nil && (r.ParentID == nil || *in.ParentID != *r.ParentID)
 	b := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC())
 	b.SetUpdatedBy(subject)
+	if in.Description != nil {
+		b.SetDescription(*in.Description)
+	}
 	if moved {
 		if e = s.checkMove(ctx, subject, r, *in.ParentID); e != nil {
 			return nil, e
@@ -503,7 +535,7 @@ func (s *Service) scan(ctx context.Context, dest []any, query string, args ...an
 	return rows.Close()
 }
 
-// Delete turns a folder or item, with everything below it, into retained
+// Delete turns a workspace, folder or item, with everything below it, into retained
 // tombstones. Their revisions, publications and audit history stay; derived
 // read projections and live relationships go, so they vanish from every read.
 func (s *Service) Delete(ctx context.Context, subject, id string, version int) error {
@@ -514,11 +546,16 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int) e
 	if err != nil {
 		return err
 	}
+	if r.Kind != resource.KindWorkspace && r.Kind != resource.KindFolder && r.Kind != resource.KindItem {
+		return invalid("only workspaces, folders and items can be deleted")
+	}
+	if r.Kind == resource.KindWorkspace {
+		if _, err = s.authorize(ctx, subject, id, "manage"); err != nil {
+			return err
+		}
+	}
 	if r.Version != version {
 		return ErrConflict
-	}
-	if r.Kind != resource.KindFolder && r.Kind != resource.KindItem {
-		return invalid("only folders and items can be deleted")
 	}
 	subtree := `WITH RECURSIVE sub(id) AS (SELECT ? UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL) SELECT id FROM sub`
 	writable, args := permissionSQL("r.id", subject, "write")
@@ -559,6 +596,12 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int) e
 		}
 	}
 	now := time.Now().UTC()
+	if r.Kind == resource.KindWorkspace {
+		// Schedules and event dispatch only select enabled, live workflows.
+		if _, err = s.Client.ExecContext(ctx, `UPDATE workflows SET enabled=0, deleted_at=?, updated_at=?, updated_by=?, version=version+1 WHERE workspace_id=? AND deleted_at IS NULL`, now, now, subject, id); err != nil {
+			return err
+		}
+	}
 	if _, err = s.Client.ExecContext(ctx, `UPDATE resources SET deleted_at=?, name_key=NULL, version=version+1, updated_at=? WHERE id IN (`+subtree+`)`, now, now, id); err != nil {
 		return err
 	}
@@ -728,8 +771,8 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 		if r.Version != version {
 			return ErrConflict
 		}
-		if r.ParentID == nil && in.Inherit {
-			return invalid("workspace cannot inherit permissions")
+		if r.Kind == resource.KindWorkspace {
+			return invalid("workspace access is managed through members")
 		}
 		if in.CopyInherited {
 			if !r.InheritPermissions {

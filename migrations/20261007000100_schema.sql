@@ -12,7 +12,7 @@ CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT 
 CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `subject` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT REFERENCES item_revisions(id), PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `name` text NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT NOT NULL REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind='item')=(content_type_id IS NOT NULL)), FOREIGN KEY(container_id,content_type_id) REFERENCES content_types(container_id,id));
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind='workspace' OR description='')), `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, webdav_enabled BOOLEAN NOT NULL DEFAULT 0, name_key TEXT NULL, deleted_at DATETIME NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind='item')=(content_type_id IS NOT NULL)), FOREIGN KEY(container_id,content_type_id) REFERENCES content_types(container_id,id));
 CREATE TABLE resource_tags (
   resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
   tag TEXT NOT NULL,
@@ -337,11 +337,11 @@ CREATE TRIGGER resource_validate_move BEFORE UPDATE OF parent_id ON resources WH
 END;
 -- Deletion is final and retains the row, its revisions and its audit trail.
 CREATE TRIGGER resource_tombstone BEFORE UPDATE ON resources WHEN old.deleted_at IS NOT NULL BEGIN
-  SELECT CASE WHEN new.deleted_at IS NOT old.deleted_at OR new.parent_id IS NOT old.parent_id OR new.name IS NOT old.name OR new.name_key IS NOT NULL
+  SELECT CASE WHEN new.deleted_at IS NOT old.deleted_at OR new.parent_id IS NOT old.parent_id OR new.name IS NOT old.name OR new.description IS NOT old.description OR new.name_key IS NOT NULL
     THEN RAISE(ABORT,'deleted resources are retained') END;
 END;
 CREATE TRIGGER resource_delete_validate BEFORE UPDATE OF deleted_at ON resources WHEN old.deleted_at IS NULL AND new.deleted_at IS NOT NULL BEGIN
-  SELECT CASE WHEN new.kind NOT IN ('folder','item') THEN RAISE(ABORT,'only folders and items can be deleted') END;
+  SELECT CASE WHEN new.kind NOT IN ('workspace','list','library','folder','item') THEN RAISE(ABORT,'invalid deletion kind') END;
 END;
 CREATE TRIGGER webdav_credential_immutable BEFORE UPDATE ON webdav_credentials BEGIN SELECT RAISE(ABORT,'credentials are immutable; revoke and create another'); END;
 CREATE TRIGGER smart_folder_workspace BEFORE INSERT ON smart_folders BEGIN
@@ -563,3 +563,26 @@ CREATE TRIGGER workflow_version_immutable BEFORE UPDATE ON workflow_versions BEG
 CREATE TRIGGER workflow_version_retained BEFORE DELETE ON workflow_versions BEGIN SELECT RAISE(ABORT,'workflow versions are retained'); END;
 CREATE TRIGGER workflow_run_immutable BEFORE UPDATE ON workflow_runs BEGIN SELECT RAISE(ABORT,'workflow runs are immutable'); END;
 CREATE TRIGGER workflow_run_item_immutable BEFORE UPDATE ON workflow_run_items BEGIN SELECT RAISE(ABORT,'run membership is immutable'); END;
+
+-- Workspace members are canonical root grants: one role per authenticated subject.
+-- Role capabilities: owner=manage, member=write, visitor=read.
+CREATE TRIGGER workspace_member_insert BEFORE INSERT ON grants
+WHEN EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND kind='workspace') BEGIN
+ SELECT CASE WHEN new.action NOT IN ('manage','write','read') OR length(trim(new.subject))=0 OR new.subject<>trim(new.subject)
+ OR EXISTS(SELECT 1 FROM grants WHERE resource_id=new.resource_id AND subject=new.subject)
+ THEN RAISE(ABORT,'invalid workspace membership') END;
+END;
+CREATE TRIGGER workspace_member_update BEFORE UPDATE ON grants
+WHEN EXISTS(SELECT 1 FROM resources WHERE id IN (old.resource_id,new.resource_id) AND kind='workspace') BEGIN
+ SELECT CASE WHEN new.resource_id IS NOT old.resource_id OR new.subject IS NOT old.subject OR new.action NOT IN ('manage','write','read')
+ THEN RAISE(ABORT,'invalid workspace membership') END;
+ SELECT CASE WHEN old.action='manage' AND new.action<>'manage'
+ AND EXISTS(SELECT 1 FROM resources WHERE id=old.resource_id AND deleted_at IS NULL)
+ AND NOT EXISTS(SELECT 1 FROM grants WHERE resource_id=old.resource_id AND subject<>old.subject AND action='manage')
+ THEN RAISE(ABORT,'a workspace needs at least one owner') END;
+END;
+CREATE TRIGGER workspace_last_owner_delete BEFORE DELETE ON grants
+WHEN old.action='manage' AND EXISTS(SELECT 1 FROM resources WHERE id=old.resource_id AND kind='workspace' AND deleted_at IS NULL) BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM grants WHERE resource_id=old.resource_id AND subject<>old.subject AND action='manage')
+ THEN RAISE(ABORT,'a workspace needs at least one owner') END;
+END;

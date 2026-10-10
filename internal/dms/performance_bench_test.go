@@ -29,7 +29,7 @@ func benchCollection(b *testing.B) (*Service, *database.Database, string, string
 	if err != nil {
 		b.Fatal(err)
 	}
-	if _, err = s.SetPermissions(ctx, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"reader", "read", "allow"}}}); err != nil {
+	if err = setWorkspaceMembers(ctx, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
 		b.Fatal(err)
 	}
 	l, err := s.Create(ctx, "alice", w.ID, CreateResource{Kind: "list", Name: "Records", PublishingEnabled: true})

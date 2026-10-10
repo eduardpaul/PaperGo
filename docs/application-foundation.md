@@ -4,11 +4,11 @@ PaperGo 0.3 adds rich fields, reusable schema templates, saved views, controlled
 
 ## Permission scopes
 
-New lists, libraries, folders, and items inherit their parent's effective permissions. The workspace is the initial exclusive scope. Authorization follows ancestors until the nearest resource with `inherit_permissions=false`; only that scope's grants apply. Grants within a scope are additive, and denies are rejected.
+New lists, libraries, folders, and items inherit their parent's effective permissions. [Workspace memberships](workspaces.md) provide the initial exclusive scope. Authorization follows ancestors until the nearest resource with `inherit_permissions=false`; its grants apply, and workspace owners retain control of every descendant. Grants within a scope are additive, and denies are rejected.
 
 An exclusive folder scope affects its inherited descendants immediately. A descendant with its own exclusive scope remains independent. Scope changes and authorization reads use transactions; no background permission propagation is involved.
 
-Use PUT `/v1/resources/{id}/permissions` with the resource's quoted numeric If-Match:
+Use PUT `/v1/resources/{id}/permissions` for collections and content with the resource's quoted numeric If-Match. Workspace roots use the membership API:
 
 - Create or replace an exclusive scope: `{"inherit":false,"grants":[{"subject":"admin","action":"manage"},{"subject":"reader","action":"read"}]}`.
 - Break inheritance and copy effective parent permissions: `{"inherit":false,"copy_inherited":true}`. Additional grants can be included. Copies become independent of later parent changes.

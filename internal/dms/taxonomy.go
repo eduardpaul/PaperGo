@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"papergo/ent"
-	"papergo/ent/resource"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
@@ -31,16 +30,6 @@ const (
 
 var termColor = regexp.MustCompile(`^#[0-9a-f]{6}$`)
 
-func (s *Service) workspace(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
-	w, e := s.authorize(ctx, subject, id, action)
-	if e != nil {
-		return nil, e
-	}
-	if w.Kind != resource.KindWorkspace {
-		return nil, invalid("workspace_id must identify a workspace")
-	}
-	return w, nil
-}
 func validateDescription(s string) error {
 	if !utf8.ValidString(s) || len(s) > 4096 {
 		return invalid("description exceeds 4096 bytes")

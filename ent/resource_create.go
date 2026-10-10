@@ -101,6 +101,20 @@ func (_c *ResourceCreate) SetName(v string) *ResourceCreate {
 	return _c
 }
 
+// SetDescription sets the "description" field.
+func (_c *ResourceCreate) SetDescription(v string) *ResourceCreate {
+	_c.mutation.SetDescription(v)
+	return _c
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableDescription(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetDescription(*v)
+	}
+	return _c
+}
+
 // SetTags sets the "tags" field.
 func (_c *ResourceCreate) SetTags(v []string) *ResourceCreate {
 	_c.mutation.SetTags(v)
@@ -543,6 +557,10 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.Description(); !ok {
+		v := resource.DefaultDescription
+		_c.mutation.SetDescription(v)
+	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		v := resource.DefaultTags
 		_c.mutation.SetTags(v)
@@ -635,6 +653,14 @@ func (_c *ResourceCreate) check() error {
 	if v, ok := _c.mutation.Name(); ok {
 		if err := resource.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Resource.name": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Description(); !ok {
+		return &ValidationError{Name: "description", err: errors.New(`ent: missing required field "Resource.description"`)}
+	}
+	if v, ok := _c.mutation.Description(); ok {
+		if err := resource.DescriptionValidator(v); err != nil {
+			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Resource.description": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Tags(); !ok {
@@ -749,6 +775,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(resource.FieldName, field.TypeString, value)
 		_node.Name = value
+	}
+	if value, ok := _c.mutation.Description(); ok {
+		_spec.SetField(resource.FieldDescription, field.TypeString, value)
+		_node.Description = value
 	}
 	if value, ok := _c.mutation.Tags(); ok {
 		_spec.SetField(resource.FieldTags, field.TypeJSON, value)

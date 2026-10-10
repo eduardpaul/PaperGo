@@ -85,8 +85,7 @@ func TestSmartFolderActionsRollBackAndRequireItemPermissions(t *testing.T) {
 	if !errors.Is(err, ErrConflict) {
 		t.Fatal(err)
 	}
-	current, _ := s.Client.Resource.Get(testContext, w.ID)
-	_, err = s.SetPermissions(testContext, "alice", w.ID, current.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "reader", Action: "read"}}})
+	err = setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"})
 	if err != nil {
 		t.Fatal(err)
 	}

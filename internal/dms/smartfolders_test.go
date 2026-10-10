@@ -54,7 +54,7 @@ func TestSmartFolderPhysicalFoldersAndExactTimes(t *testing.T) {
 
 func TestSmartFolderOwnershipConcurrencyAndDefinitions(t *testing.T) {
 	s, w, l := fixture(t)
-	_, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "reader", Action: "read"}}})
+	err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,13 +75,13 @@ func TestSmartFolderOwnershipConcurrencyAndDefinitions(t *testing.T) {
 	if err != nil || len(page.Data) != 1 || page.NextCursor == "" {
 		t.Fatal(page, err)
 	}
-	if _, err = s.CreateSmartFolder(testContext, "reader", SmartFolderInput{Name: "Forbidden", WorkspaceID: &w.ID}); !errors.Is(err, ErrForbidden) {
+	if _, err = s.CreateSmartFolder(testContext, "reader", SmartFolderInput{Name: "Forbidden", WorkspaceID: &w.ID}); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 	if _, err = s.CreateSmartFolder(testContext, "reader", SmartFolderInput{Name: "Mine", WorkspaceID: &w.ID, Personal: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.DeleteSmartFolder(testContext, "reader", shared.ID, shared.Version); !errors.Is(err, ErrForbidden) {
+	if err = s.DeleteSmartFolder(testContext, "reader", shared.ID, shared.Version); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 	if _, err = s.UpdateSmartFolder(testContext, "alice", shared.ID, 99, SmartFolderInput{Name: "Bad", WorkspaceID: &w.ID}); !errors.Is(err, ErrConflict) {
@@ -93,7 +93,7 @@ func TestSmartFolderOwnershipConcurrencyAndDefinitions(t *testing.T) {
 	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "No scope"}); !isValidation(err) {
 		t.Fatal(err)
 	}
-	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "Wrong scope", WorkspaceID: &l.ID}); !isValidation(err) {
+	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "Wrong scope", WorkspaceID: &l.ID}); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "Invalid", Personal: true, Definition: SmartFolderDefinition{Filter: &FilterExpr{Field: "status", Op: "execute", Value: json.RawMessage(`"a"`)}}}); !isValidation(err) {
@@ -150,7 +150,7 @@ func TestRelativeFiltersAreTypedAndBounded(t *testing.T) {
 
 func TestSmartFoldersTermsSurfacesNavigationAndGlobalPaging(t *testing.T) {
 	s, w, a := fixture(t)
-	_, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "reader", Action: "read"}}})
+	err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"})
 	if err != nil {
 		t.Fatal(err)
 	}

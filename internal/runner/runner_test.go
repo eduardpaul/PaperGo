@@ -77,7 +77,7 @@ func setup(t testing.TB) *fixture {
 		t.Fatal(err)
 	}
 	// bob may write content but does not manage the workspace.
-	if f.ws, err = f.dms.SetPermissions(ctx, "alice", f.ws.ID, f.ws.Version, dms.Permissions{Grants: []dms.Permission{{Subject: "alice", Action: "manage", Effect: "allow"}, {Subject: "bob", Action: "write", Effect: "allow"}}}); err != nil {
+	if err = f.dms.SetWorkspaceMember(ctx, "alice", f.ws.ID, dms.WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, field := range []dms.CreateField{
@@ -200,7 +200,7 @@ func TestItemTriggerConditionAndChainedWorkflow(t *testing.T) {
 		t.Fatalf("rolled back write logged %d undispatched events: %v", n, err)
 	}
 	// Runs are for workspace managers.
-	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{}); !errors.Is(err, dms.ErrForbidden) {
+	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{}); !errors.Is(err, dms.ErrNotFound) {
 		t.Fatalf("bob listed runs: %v", err)
 	}
 }
@@ -324,24 +324,30 @@ func TestLoopsStopAtMaxDepth(t *testing.T) {
 
 func TestFailedRunRetriesFromFailedStep(t *testing.T) {
 	f := setup(t)
-	w := f.workflow(t, "Stamp", `{
+	if err := f.dms.SetWorkspaceMember(ctx, "alice", f.ws.ID, dms.WorkspaceMember{Subject: "bob", Role: "owner"}); err != nil {
+		t.Fatal(err)
+	}
+	w, err := f.wf.Create(ctx, "bob", f.ws.ID, workflow.Save{Name: "Stamp", Definition: json.RawMessage(strings.ReplaceAll(`{
 		"triggers": [{"type": "item.created", "collection_id": "$LIST"}],
 		"flow": {"start": "read", "nodes": {
 			"read": {"activity": "item.get", "next": {"done": "stamp"}},
 			"stamp": {"activity": "item.update", "inputs": {"values": {"note": "stamped {step:read.name}"}}}
-		}}}`)
-	// bob manages the workspace and takes the list away from alice, the author.
-	if _, err := f.dms.SetPermissions(ctx, "alice", f.ws.ID, f.ws.Version, dms.Permissions{Grants: []dms.Permission{{Subject: "alice", Action: "manage", Effect: "allow"}, {Subject: "bob", Action: "manage", Effect: "allow"}}}); err != nil {
-		t.Fatal(err)
-	}
-	list, err := f.dms.Get(ctx, "bob", f.list.ID)
+		}}}`, "$LIST", f.list.ID))})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if list, err = f.dms.SetPermissions(ctx, "bob", f.list.ID, list.Version, dms.Permissions{Grants: []dms.Permission{{Subject: "bob", Action: "manage", Effect: "allow"}}}); err != nil {
+	// The author loses ownership and cannot access this exclusive collection.
+	if err := f.dms.SetWorkspaceMember(ctx, "alice", f.ws.ID, dms.WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
 		t.Fatal(err)
 	}
-	it := f.item(t, "bob", "Lease", nil)
+	list, err := f.dms.Get(ctx, "alice", f.list.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list, err = f.dms.SetPermissions(ctx, "alice", f.list.ID, list.Version, dms.Permissions{Grants: []dms.Permission{{Subject: "alice", Action: "manage", Effect: "allow"}}}); err != nil {
+		t.Fatal(err)
+	}
+	it := f.item(t, "alice", "Lease", nil)
 	runs := f.runs(t, w.ID, 1)
 	if runs[0].Status != "failed" || !strings.Contains(runs[0].Error, "read") {
 		t.Fatalf("run without access: %+v", runs[0])
@@ -349,7 +355,7 @@ func TestFailedRunRetriesFromFailedStep(t *testing.T) {
 	if _, err = f.r.Retry(ctx, "alice", runs[0].ID); err == nil {
 		t.Log("retry before access returns a new failing run")
 	}
-	if _, err = f.dms.SetPermissions(ctx, "bob", f.list.ID, list.Version, dms.Permissions{Inherit: true, Grants: []dms.Permission{}}); err != nil {
+	if _, err = f.dms.SetPermissions(ctx, "alice", f.list.ID, list.Version, dms.Permissions{Inherit: true, Grants: []dms.Permission{}}); err != nil {
 		t.Fatal(err)
 	}
 	retried, err := f.r.Retry(ctx, "alice", runs[0].ID)

@@ -47,6 +47,9 @@ func (a *API) Handler() http.Handler {
 	a.registerWorkflows(api)
 	api.HandleFunc("GET /v1/workspaces", a.browse)
 	api.HandleFunc("POST /v1/workspaces", a.workspace)
+	api.HandleFunc("GET /v1/workspaces/{id}/members", a.workspaceMembers)
+	api.HandleFunc("POST /v1/workspaces/{id}/members", a.setWorkspaceMember)
+	api.HandleFunc("DELETE /v1/workspaces/{id}/members/{member}", a.removeWorkspaceMember)
 	api.HandleFunc("GET /v1/resources", a.browse)
 	api.HandleFunc("GET /v1/resources/{id}", a.get)
 	api.HandleFunc("PATCH /v1/resources/{id}", a.update)
@@ -220,6 +223,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(404, "not_found", "resource not found")
 	case errors.Is(err, dms.ErrForbidden):
 		problem(403, "forbidden", "access denied")
+	case errors.Is(err, dms.ErrLastOwner):
+		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrConflict):
 		problem(409, "conflict", "version conflict or duplicate")
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &max):
@@ -284,13 +289,14 @@ func queryInt(r *http.Request, key string) int {
 }
 func (a *API) workspace(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Name string   `json:"name"`
-		Tags []string `json:"tags"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Tags        []string `json:"tags"`
 	}
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.DMS.Create(r.Context(), subject(r), "", dms.CreateResource{Kind: "workspace", Name: in.Name, Tags: in.Tags})
+	out, err := a.DMS.Create(r.Context(), subject(r), "", dms.CreateResource{Kind: "workspace", Name: in.Name, Description: in.Description, Tags: in.Tags})
 	if err != nil {
 		a.failure(w, r, err)
 		return

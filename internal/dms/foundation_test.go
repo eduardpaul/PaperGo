@@ -14,7 +14,7 @@ import (
 
 func readers(t *testing.T, s *Service, w *ent.Resource) {
 	t.Helper()
-	_, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"reader", "read", "allow"}, {"editor", "write", "allow"}}})
+	err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}, WorkspaceMember{Subject: "editor", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}

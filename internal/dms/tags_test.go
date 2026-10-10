@@ -8,7 +8,7 @@ import (
 func TestTagVocabularyFollowsAccessAndSurfaces(t *testing.T) {
 	s, w, list := fixture(t)
 	other := create(t, s, w.ID, "list", "Other", nil)
-	if _, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage", Effect: "allow"}, {Subject: "rita", Action: "read", Effect: "allow"}}}); err != nil {
+	if err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "rita", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
 	tagged := func(parent, kind, name string, tags ...string) {

@@ -21,7 +21,9 @@ func (Resource) Fields() []ent.Field {
 		field.String("container_id").Optional().Nillable().Immutable().MaxLen(36),
 		field.String("content_type_id").Optional().Nillable().Immutable().MaxLen(36),
 		field.Enum("kind").Values("workspace", "list", "library", "folder", "item").Immutable(),
-		field.String("name").NotEmpty().MaxLen(255),
+		field.String("name").NotEmpty().MaxRuneLen(255),
+		// Descriptive metadata of a workspace; other resource kinds leave it empty.
+		field.String("description").Default("").MaxRuneLen(2000),
 		field.JSON("tags", []string{}).Default([]string{}),
 		// Keys of schema templates explicitly adopted into a collection.
 		field.JSON("template_keys", []string{}).Default([]string{}),

@@ -161,7 +161,7 @@
                   "name": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 255
+                    "maxLength": 200
                   },
                   "tags": {
                     "type": "array",
@@ -172,6 +172,12 @@
                       "minLength": 1,
                       "maxLength": 64
                     }
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "description": "Workspace description. Only workspaces accept this property; an empty string clears it.",
+                    "default": ""
                   }
                 },
                 "required": [
@@ -181,7 +187,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Creates a workspace with the authenticated subject as its first owner. Name is trimmed (1..200 characters); description is at most 2000 characters."
       }
     },
     "/v1/resources": {
@@ -413,11 +420,12 @@
               }
             }
           }
-        }
+        },
+        "description": "Workspace metadata changes require owner access. Other resources require write; collection policy changes require manage. If-Match is required."
       },
       "delete": {
         "summary": "Delete a folder or item with everything below it (write required on all of it)",
-        "description": "Deleted resources become retained tombstones: they disappear from every read, search, query and relationship, their names become free, and their revisions, publications and audit events are kept. Deletion cannot be undone.",
+        "description": "Workspace owners can delete the workspace and all descendants, including exclusive scopes, and disable/tombstone its workflows. Folder/item deletion requires write on every live descendant. Deletion is final; immutable history is retained. Collections cannot be deleted individually.",
         "responses": {
           "204": {
             "description": "Deleted"
@@ -831,7 +839,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Changes collection/folder/item permission inheritance and grants. Workspace access is managed through members; permission replacement is rejected for workspaces. Workspace owners retain management even in exclusive scopes."
       }
     },
     "/v1/items/{id}/relationships": {
@@ -10486,6 +10495,115 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{id}/members": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listWorkspaceMembers",
+        "summary": "List workspace members",
+        "description": "Workspace read access is required. Subjects are sorted ascending. Invisible workspaces return 404.",
+        "responses": {
+          "200": {
+            "description": "Members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkspaceMember"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "setWorkspaceMember",
+        "summary": "Add a workspace member or change their role",
+        "description": "Owner access is required. Repeating the same subject/role is a no-op. The last owner cannot be demoted. Membership changes do not consume the workspace metadata ETag. Subject registration/active-user validation belongs to the external identity provider.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetWorkspaceMember"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Membership set"
+          },
+          "409": {
+            "description": "last_owner: assign another owner before demoting the last owner."
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/members/{member}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "member",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "URL-encoded authenticated subject."
+        }
+      ],
+      "delete": {
+        "operationId": "removeWorkspaceMember",
+        "summary": "Remove a workspace member",
+        "description": "Owner access is required. The last owner cannot be removed. No If-Match is needed. A missing member or inaccessible workspace returns 404.",
+        "responses": {
+          "204": {
+            "description": "Membership removed"
+          },
+          "409": {
+            "description": "last_owner: assign another owner before removing the last owner."
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10665,6 +10783,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Workspace description. Only workspaces accept this property; an empty string clears it."
           }
         },
         "required": [
@@ -10720,6 +10843,12 @@
             "type": "string",
             "format": "uuid",
             "description": "Collection content type ID. Omission selects the collection default."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Workspace description. Only workspaces accept this property; an empty string clears it.",
+            "default": ""
           }
         },
         "required": [
@@ -10763,6 +10892,11 @@
             "description": "Moves a folder or item below another folder of the same list or library, or to its top level. Requires write access to the new parent. A move alone creates no content revision; inheriting resources take the new parent's permission scope.",
             "type": "string",
             "format": "uuid"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Workspace description. Only workspaces accept this property; an empty string clears it."
           }
         },
         "required": [],
@@ -14538,6 +14672,56 @@
           "terms_created"
         ],
         "additionalProperties": false
+      },
+      "WorkspaceMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subject",
+          "role"
+        ],
+        "properties": {
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Authenticated principal subject, without surrounding whitespace. PaperGo uses external identity subjects."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member",
+              "visitor"
+            ],
+            "description": "Owner manages the workspace and all descendants; member contributes; visitor reads published content."
+          }
+        }
+      },
+      "SetWorkspaceMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subject"
+        ],
+        "properties": {
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Authenticated principal subject, without surrounding whitespace. PaperGo uses external identity subjects."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member",
+              "visitor"
+            ],
+            "description": "Owner manages the workspace and all descendants; member contributes; visitor reads published content.",
+            "default": "member"
+          }
+        }
       }
     }
   }

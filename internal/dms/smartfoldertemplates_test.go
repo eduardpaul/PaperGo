@@ -65,14 +65,14 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 	if !errors.Is(err, ErrConflict) {
 		t.Fatal(err)
 	}
-	if _, err = s.SetPermissions(testContext, "alice", target.ID, replaced.WorkspaceVersion, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "reader", Action: "read"}}}); err != nil {
+	if err = s.SetWorkspaceMember(testContext, "alice", target.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = s.ExportSmartFolders(testContext, "reader", target.ID); !errors.Is(err, ErrForbidden) {
+	if _, _, err = s.ExportSmartFolders(testContext, "reader", target.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 	targetCurrent, _ := s.Client.Resource.Get(testContext, target.ID)
-	if _, err = s.ImportSmartFolders(testContext, "reader", target.ID, targetCurrent.Version, pkg); !errors.Is(err, ErrForbidden) {
+	if _, err = s.ImportSmartFolders(testContext, "reader", target.ID, targetCurrent.Version, pkg); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 }

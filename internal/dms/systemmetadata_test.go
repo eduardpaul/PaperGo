@@ -12,7 +12,7 @@ func TestSystemMetadataUsesSelectedRevisionAndIndexes(t *testing.T) {
 	if _, err := s.Publish(testContext, "alice", item.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	_, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "editor", Action: "write"}, {Subject: "reader", Action: "read"}}})
+	err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "editor", Role: "member"}, WorkspaceMember{Subject: "reader", Role: "visitor"})
 	if err != nil {
 		t.Fatal(err)
 	}

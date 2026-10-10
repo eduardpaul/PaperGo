@@ -64,7 +64,7 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.SetPermissions(ctx, "alice", w.ID, w.Version, dms.Permissions{Grants: []dms.Permission{{Subject: "alice", Action: "manage"}, {Subject: "bob", Action: "read"}}}); err != nil {
+	if err = s.SetWorkspaceMember(ctx, "alice", w.ID, dms.WorkspaceMember{Subject: "bob", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
 	lib, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "library", Name: "Shared", WebDAVEnabled: true})
