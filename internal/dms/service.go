@@ -138,6 +138,8 @@ type CreateResource struct {
 	AllowFolders      *bool          `json:"allow_folders,omitempty"`
 	Tags              []string       `json:"tags"`
 	Values            map[string]any `json:"values"`
+	Versioning        *string        `json:"versioning,omitempty"`
+	MaxVersions       *int           `json:"max_versions,omitempty"`
 	PublishingEnabled bool           `json:"publishing_enabled"`
 	WebDAVEnabled     bool           `json:"webdav_enabled"`
 }
@@ -168,9 +170,25 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		}
 		template = &tpl
 		in.Kind, in.AllowFolders = tpl.Kind, &tpl.AllowFolders
+		if in.Versioning == nil {
+			in.Versioning = &tpl.Versioning
+		}
+		if in.MaxVersions == nil {
+			in.MaxVersions = &tpl.MaxVersions
+		}
 		in.PublishingEnabled, in.WebDAVEnabled = tpl.PublishingEnabled, tpl.WebDAVEnabled
 	}
 	collection := in.Kind == "list" || in.Kind == "library"
+	if err := validateHistorySettings(collection, in.Versioning, in.MaxVersions); err != nil {
+		return nil, err
+	}
+	versioning := "off"
+	if in.Kind == "library" {
+		versioning = "major"
+	}
+	if in.Versioning != nil {
+		versioning = *in.Versioning
+	}
 	scope := "list.write"
 	if in.Kind == "workspace" {
 		scope = "workspace.create"
@@ -308,6 +326,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		builder.SetTemplateKeys([]string{template.Key})
 	}
 	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
+	builder.SetVersioning(resource.Versioning(versioning)).SetNillableMaxVersions(in.MaxVersions)
 	builder.SetDescription(in.Description)
 	if in.AllowFolders != nil {
 		builder.SetAllowFolders(*in.AllowFolders)
@@ -408,6 +427,8 @@ type UpdateResource struct {
 	AllowFolders      *bool           `json:"allow_folders,omitempty"`
 	Tags              *[]string       `json:"tags,omitempty"`
 	Values            *map[string]any `json:"values,omitempty"`
+	Versioning        *string         `json:"versioning,omitempty"`
+	MaxVersions       *int            `json:"max_versions,omitempty"`
 	PublishingEnabled *bool           `json:"publishing_enabled,omitempty"`
 	WebDAVEnabled     *bool           `json:"webdav_enabled,omitempty"`
 	// ParentID moves a folder or item to another folder of the same collection.
@@ -424,7 +445,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 }
 func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*ent.Resource, error) {
 	content := in.Name != nil || in.Description != nil || in.Tags != nil || in.Values != nil
-	if !content && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil {
+	if !content && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
 		return nil, invalid("at least one change is required")
 	}
 	if in.Name != nil {
@@ -442,6 +463,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		return nil, e
 	}
 	collection := r.Kind == resource.KindList || r.Kind == resource.KindLibrary
+	if err := validateHistorySettings(collection, in.Versioning, in.MaxVersions); err != nil {
+		return nil, err
+	}
 	if r.Kind == resource.KindWorkspace || collection {
 		if _, e = s.authorize(ctx, subject, id, "manage"); e != nil {
 			return nil, e
@@ -556,6 +580,12 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	}
 	if in.Tags != nil {
 		b.SetTags(*in.Tags)
+	}
+	if in.Versioning != nil {
+		b.SetVersioning(resource.Versioning(*in.Versioning))
+	}
+	if in.MaxVersions != nil {
+		b.SetMaxVersions(*in.MaxVersions)
 	}
 	if in.PublishingEnabled != nil {
 		b.SetPublishingEnabled(*in.PublishingEnabled)

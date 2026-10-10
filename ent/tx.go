@@ -42,6 +42,8 @@ type Tx struct {
 	IdentityRole *IdentityRoleClient
 	// IdentityUser is the client for interacting with the IdentityUser builders.
 	IdentityUser *IdentityUserClient
+	// ItemHistory is the client for interacting with the ItemHistory builders.
+	ItemHistory *ItemHistoryClient
 	// ItemRevision is the client for interacting with the ItemRevision builders.
 	ItemRevision *ItemRevisionClient
 	// ItemSurface is the client for interacting with the ItemSurface builders.
@@ -229,6 +231,7 @@ func (tx *Tx) init() {
 	tx.IdentityMembership = NewIdentityMembershipClient(tx.config)
 	tx.IdentityRole = NewIdentityRoleClient(tx.config)
 	tx.IdentityUser = NewIdentityUserClient(tx.config)
+	tx.ItemHistory = NewItemHistoryClient(tx.config)
 	tx.ItemRevision = NewItemRevisionClient(tx.config)
 	tx.ItemSurface = NewItemSurfaceClient(tx.config)
 	tx.ListView = NewListViewClient(tx.config)

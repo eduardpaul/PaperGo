@@ -461,6 +461,34 @@ var (
 		Columns:    IdentityUsersColumns,
 		PrimaryKey: []*schema.Column{IdentityUsersColumns[0]},
 	}
+	// ItemHistoriesColumns holds the columns for the "item_histories" table.
+	ItemHistoriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "changed_fields", Type: field.TypeJSON},
+		{Name: "revision_id", Type: field.TypeString, Unique: true, Size: 36},
+	}
+	// ItemHistoriesTable holds the schema information for the "item_histories" table.
+	ItemHistoriesTable = &schema.Table{
+		Name:       "item_histories",
+		Columns:    ItemHistoriesColumns,
+		PrimaryKey: []*schema.Column{ItemHistoriesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "item_histories_item_revisions_history",
+				Columns:    []*schema.Column{ItemHistoriesColumns[3]},
+				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "itemhistory_revision_id",
+				Unique:  true,
+				Columns: []*schema.Column{ItemHistoriesColumns[3]},
+			},
+		},
+	}
 	// ItemRevisionsColumns holds the columns for the "item_revisions" table.
 	ItemRevisionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -858,6 +886,8 @@ var (
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "next_revision_number", Type: field.TypeInt, Default: 1},
 		{Name: "publishing_enabled", Type: field.TypeBool, Default: false},
+		{Name: "versioning", Type: field.TypeEnum, Enums: []string{"off", "major"}, Default: "off"},
+		{Name: "max_versions", Type: field.TypeInt, Default: 50},
 		{Name: "webdav_enabled", Type: field.TypeBool, Default: false},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "created_by", Type: field.TypeString, Default: ""},
@@ -879,31 +909,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[22]},
+				Columns:    []*schema.Column{ResourcesColumns[24]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_resources_contained_items",
-				Columns:    []*schema.Column{ResourcesColumns[23]},
+				Columns:    []*schema.Column{ResourcesColumns[25]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_item_revisions_head_revision",
-				Columns:    []*schema.Column{ResourcesColumns[24]},
+				Columns:    []*schema.Column{ResourcesColumns[26]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_item_revisions_published_revision",
-				Columns:    []*schema.Column{ResourcesColumns[25]},
+				Columns:    []*schema.Column{ResourcesColumns[27]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_schema_revisions_schema_head",
-				Columns:    []*schema.Column{ResourcesColumns[26]},
+				Columns:    []*schema.Column{ResourcesColumns[28]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -917,37 +947,37 @@ var (
 			{
 				Name:    "resource_kind_id_workspace_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[4], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[19]},
+				Columns: []*schema.Column{ResourcesColumns[4], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[21]},
 			},
 			{
 				Name:    "resource_workspace_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[19]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[21]},
 			},
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[22], ResourcesColumns[0], ResourcesColumns[19]},
+				Columns: []*schema.Column{ResourcesColumns[24], ResourcesColumns[0], ResourcesColumns[21]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[23], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_content_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[23], ResourcesColumns[3], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[3], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[23], ResourcesColumns[19]},
+				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[21]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[22], ResourcesColumns[20]},
+				Columns: []*schema.Column{ResourcesColumns[24], ResourcesColumns[22]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
 				},
@@ -1467,6 +1497,7 @@ var (
 		IdentityMembershipsTable,
 		IdentityRolesTable,
 		IdentityUsersTable,
+		ItemHistoriesTable,
 		ItemRevisionsTable,
 		ItemSurfacesTable,
 		ListViewsTable,
@@ -1501,6 +1532,7 @@ func init() {
 	GrantsTable.ForeignKeys[0].RefTable = ResourcesTable
 	IdentityAssignmentsTable.ForeignKeys[0].RefTable = IdentityRolesTable
 	IdentityMembershipsTable.ForeignKeys[0].RefTable = IdentityGroupsTable
+	ItemHistoriesTable.ForeignKeys[0].RefTable = ItemRevisionsTable
 	ItemRevisionsTable.ForeignKeys[0].RefTable = BlobsTable
 	ItemRevisionsTable.ForeignKeys[1].RefTable = ResourcesTable
 	ItemRevisionsTable.ForeignKeys[2].RefTable = SchemaRevisionsTable

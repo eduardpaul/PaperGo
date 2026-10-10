@@ -140,6 +140,11 @@ func PublishingEnabled(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldPublishingEnabled, v))
 }
 
+// MaxVersions applies equality check predicate on the "max_versions" field. It's identical to MaxVersionsEQ.
+func MaxVersions(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldMaxVersions, v))
+}
+
 // WebdavEnabled applies equality check predicate on the "webdav_enabled" field. It's identical to WebdavEnabledEQ.
 func WebdavEnabled(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldWebdavEnabled, v))
@@ -988,6 +993,66 @@ func PublishingEnabledEQ(v bool) predicate.Resource {
 // PublishingEnabledNEQ applies the NEQ predicate on the "publishing_enabled" field.
 func PublishingEnabledNEQ(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldNEQ(FieldPublishingEnabled, v))
+}
+
+// VersioningEQ applies the EQ predicate on the "versioning" field.
+func VersioningEQ(v Versioning) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldVersioning, v))
+}
+
+// VersioningNEQ applies the NEQ predicate on the "versioning" field.
+func VersioningNEQ(v Versioning) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldVersioning, v))
+}
+
+// VersioningIn applies the In predicate on the "versioning" field.
+func VersioningIn(vs ...Versioning) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldVersioning, vs...))
+}
+
+// VersioningNotIn applies the NotIn predicate on the "versioning" field.
+func VersioningNotIn(vs ...Versioning) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldVersioning, vs...))
+}
+
+// MaxVersionsEQ applies the EQ predicate on the "max_versions" field.
+func MaxVersionsEQ(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldMaxVersions, v))
+}
+
+// MaxVersionsNEQ applies the NEQ predicate on the "max_versions" field.
+func MaxVersionsNEQ(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldMaxVersions, v))
+}
+
+// MaxVersionsIn applies the In predicate on the "max_versions" field.
+func MaxVersionsIn(vs ...int) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldMaxVersions, vs...))
+}
+
+// MaxVersionsNotIn applies the NotIn predicate on the "max_versions" field.
+func MaxVersionsNotIn(vs ...int) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldMaxVersions, vs...))
+}
+
+// MaxVersionsGT applies the GT predicate on the "max_versions" field.
+func MaxVersionsGT(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldMaxVersions, v))
+}
+
+// MaxVersionsGTE applies the GTE predicate on the "max_versions" field.
+func MaxVersionsGTE(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldMaxVersions, v))
+}
+
+// MaxVersionsLT applies the LT predicate on the "max_versions" field.
+func MaxVersionsLT(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldMaxVersions, v))
+}
+
+// MaxVersionsLTE applies the LTE predicate on the "max_versions" field.
+func MaxVersionsLTE(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldMaxVersions, v))
 }
 
 // WebdavEnabledEQ applies the EQ predicate on the "webdav_enabled" field.

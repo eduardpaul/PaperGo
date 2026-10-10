@@ -33,7 +33,12 @@ func fixture(t *testing.T) (*Service, *ent.Resource, *ent.Resource) {
 }
 func create(t *testing.T, s *Service, parent, kind, name string, values map[string]any) *ent.Resource {
 	t.Helper()
-	r, err := s.Create(testContext, "alice", parent, CreateResource{Kind: kind, Name: name, Values: values, PublishingEnabled: kind == "list" || kind == "library"})
+	var versioning *string
+	if kind == "list" || kind == "library" {
+		value := "major"
+		versioning = &value
+	}
+	r, err := s.Create(testContext, "alice", parent, CreateResource{Versioning: versioning, Kind: kind, Name: name, Values: values, PublishingEnabled: kind == "list" || kind == "library"})
 	if err != nil {
 		t.Fatal(err)
 	}

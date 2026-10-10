@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"papergo/ent/blob"
+	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/resource"
 	"papergo/ent/schemarevision"
@@ -128,6 +129,25 @@ func (_c *ItemRevisionCreate) SetItem(v *Resource) *ItemRevisionCreate {
 // SetSchemaRevision sets the "schema_revision" edge to the SchemaRevision entity.
 func (_c *ItemRevisionCreate) SetSchemaRevision(v *SchemaRevision) *ItemRevisionCreate {
 	return _c.SetSchemaRevisionID(v.ID)
+}
+
+// SetHistoryID sets the "history" edge to the ItemHistory entity by ID.
+func (_c *ItemRevisionCreate) SetHistoryID(id string) *ItemRevisionCreate {
+	_c.mutation.SetHistoryID(id)
+	return _c
+}
+
+// SetNillableHistoryID sets the "history" edge to the ItemHistory entity by ID if the given value is not nil.
+func (_c *ItemRevisionCreate) SetNillableHistoryID(id *string) *ItemRevisionCreate {
+	if id != nil {
+		_c = _c.SetHistoryID(*id)
+	}
+	return _c
+}
+
+// SetHistory sets the "history" edge to the ItemHistory entity.
+func (_c *ItemRevisionCreate) SetHistory(v *ItemHistory) *ItemRevisionCreate {
+	return _c.SetHistoryID(v.ID)
 }
 
 // SetBlob sets the "blob" edge to the Blob entity.
@@ -337,6 +357,22 @@ func (_c *ItemRevisionCreate) createSpec() (*ItemRevision, *sqlgraph.CreateSpec)
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.SchemaRevisionID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.HistoryIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   itemrevision.HistoryTable,
+			Columns: []string{itemrevision.HistoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(itemhistory.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.BlobIDs(); len(nodes) > 0 {

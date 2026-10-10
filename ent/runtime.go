@@ -18,6 +18,7 @@ import (
 	"papergo/ent/identitymembership"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
+	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
@@ -692,6 +693,21 @@ func init() {
 			return nil
 		}
 	}()
+	itemhistoryMixin := schema.ItemHistory{}.Mixin()
+	itemhistoryMixinFields0 := itemhistoryMixin[0].Fields()
+	_ = itemhistoryMixinFields0
+	itemhistoryFields := schema.ItemHistory{}.Fields()
+	_ = itemhistoryFields
+	// itemhistoryDescCreatedAt is the schema descriptor for created_at field.
+	itemhistoryDescCreatedAt := itemhistoryMixinFields0[1].Descriptor()
+	// itemhistory.DefaultCreatedAt holds the default value on creation for the created_at field.
+	itemhistory.DefaultCreatedAt = itemhistoryDescCreatedAt.Default.(func() time.Time)
+	// itemhistoryDescID is the schema descriptor for id field.
+	itemhistoryDescID := itemhistoryMixinFields0[0].Descriptor()
+	// itemhistory.DefaultID holds the default value on creation for the id field.
+	itemhistory.DefaultID = itemhistoryDescID.Default.(func() string)
+	// itemhistory.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	itemhistory.IDValidator = itemhistoryDescID.Validators[0].(func(string) error)
 	itemrevisionMixin := schema.ItemRevision{}.Mixin()
 	itemrevisionMixinFields0 := itemrevisionMixin[0].Fields()
 	_ = itemrevisionMixinFields0
@@ -1179,30 +1195,50 @@ func init() {
 	resourceDescPublishingEnabled := resourceFields[17].Descriptor()
 	// resource.DefaultPublishingEnabled holds the default value on creation for the publishing_enabled field.
 	resource.DefaultPublishingEnabled = resourceDescPublishingEnabled.Default.(bool)
+	// resourceDescMaxVersions is the schema descriptor for max_versions field.
+	resourceDescMaxVersions := resourceFields[19].Descriptor()
+	// resource.DefaultMaxVersions holds the default value on creation for the max_versions field.
+	resource.DefaultMaxVersions = resourceDescMaxVersions.Default.(int)
+	// resource.MaxVersionsValidator is a validator for the "max_versions" field. It is called by the builders before save.
+	resource.MaxVersionsValidator = func() func(int) error {
+		validators := resourceDescMaxVersions.Validators
+		fns := [...]func(int) error{
+			validators[0].(func(int) error),
+			validators[1].(func(int) error),
+		}
+		return func(max_versions int) error {
+			for _, fn := range fns {
+				if err := fn(max_versions); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	// resourceDescWebdavEnabled is the schema descriptor for webdav_enabled field.
-	resourceDescWebdavEnabled := resourceFields[18].Descriptor()
+	resourceDescWebdavEnabled := resourceFields[20].Descriptor()
 	// resource.DefaultWebdavEnabled holds the default value on creation for the webdav_enabled field.
 	resource.DefaultWebdavEnabled = resourceDescWebdavEnabled.Default.(bool)
 	// resourceDescUpdatedAt is the schema descriptor for updated_at field.
-	resourceDescUpdatedAt := resourceFields[19].Descriptor()
+	resourceDescUpdatedAt := resourceFields[21].Descriptor()
 	// resource.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	resource.DefaultUpdatedAt = resourceDescUpdatedAt.Default.(func() time.Time)
 	// resource.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	resource.UpdateDefaultUpdatedAt = resourceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// resourceDescCreatedBy is the schema descriptor for created_by field.
-	resourceDescCreatedBy := resourceFields[20].Descriptor()
+	resourceDescCreatedBy := resourceFields[22].Descriptor()
 	// resource.DefaultCreatedBy holds the default value on creation for the created_by field.
 	resource.DefaultCreatedBy = resourceDescCreatedBy.Default.(string)
 	// resourceDescUpdatedBy is the schema descriptor for updated_by field.
-	resourceDescUpdatedBy := resourceFields[21].Descriptor()
+	resourceDescUpdatedBy := resourceFields[23].Descriptor()
 	// resource.DefaultUpdatedBy holds the default value on creation for the updated_by field.
 	resource.DefaultUpdatedBy = resourceDescUpdatedBy.Default.(string)
 	// resourceDescScopeID is the schema descriptor for scope_id field.
-	resourceDescScopeID := resourceFields[22].Descriptor()
+	resourceDescScopeID := resourceFields[24].Descriptor()
 	// resource.ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
 	resource.ScopeIDValidator = resourceDescScopeID.Validators[0].(func(string) error)
 	// resourceDescNameKey is the schema descriptor for name_key field.
-	resourceDescNameKey := resourceFields[23].Descriptor()
+	resourceDescNameKey := resourceFields[25].Descriptor()
 	// resource.NameKeyValidator is a validator for the "name_key" field. It is called by the builders before save.
 	resource.NameKeyValidator = resourceDescNameKey.Validators[0].(func(string) error)
 	// resourceDescID is the schema descriptor for id field.

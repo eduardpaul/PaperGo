@@ -7,6 +7,7 @@ import (
 	"encoding/json/jsontext"
 	"fmt"
 	"papergo/ent/blob"
+	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/resource"
 	"papergo/ent/schemarevision"
@@ -56,11 +57,13 @@ type ItemRevisionEdges struct {
 	Item *Resource `json:"item,omitempty"`
 	// SchemaRevision holds the value of the schema_revision edge.
 	SchemaRevision *SchemaRevision `json:"schema_revision,omitempty"`
+	// History holds the value of the history edge.
+	History *ItemHistory `json:"history,omitempty"`
 	// Blob holds the value of the blob edge.
 	Blob *Blob `json:"blob,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [4]bool
 }
 
 // ItemOrErr returns the Item value or an error if the edge
@@ -85,12 +88,23 @@ func (e ItemRevisionEdges) SchemaRevisionOrErr() (*SchemaRevision, error) {
 	return nil, &NotLoadedError{edge: "schema_revision"}
 }
 
+// HistoryOrErr returns the History value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ItemRevisionEdges) HistoryOrErr() (*ItemHistory, error) {
+	if e.History != nil {
+		return e.History, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: itemhistory.Label}
+	}
+	return nil, &NotLoadedError{edge: "history"}
+}
+
 // BlobOrErr returns the Blob value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
 func (e ItemRevisionEdges) BlobOrErr() (*Blob, error) {
 	if e.Blob != nil {
 		return e.Blob, nil
-	} else if e.loadedTypes[2] {
+	} else if e.loadedTypes[3] {
 		return nil, &NotFoundError{label: blob.Label}
 	}
 	return nil, &NotLoadedError{edge: "blob"}
@@ -222,6 +236,11 @@ func (_m *ItemRevision) QueryItem() *ResourceQuery {
 // QuerySchemaRevision queries the "schema_revision" edge of the ItemRevision entity.
 func (_m *ItemRevision) QuerySchemaRevision() *SchemaRevisionQuery {
 	return NewItemRevisionClient(_m.config).QuerySchemaRevision(_m)
+}
+
+// QueryHistory queries the "history" edge of the ItemRevision entity.
+func (_m *ItemRevision) QueryHistory() *ItemHistoryQuery {
+	return NewItemRevisionClient(_m.config).QueryHistory(_m)
 }
 
 // QueryBlob queries the "blob" edge of the ItemRevision entity.

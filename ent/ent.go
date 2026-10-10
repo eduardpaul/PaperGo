@@ -20,6 +20,7 @@ import (
 	"papergo/ent/identitymembership"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
+	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
@@ -121,6 +122,7 @@ func checkColumn(t, c string) error {
 			identitymembership.Table: identitymembership.ValidColumn,
 			identityrole.Table:       identityrole.ValidColumn,
 			identityuser.Table:       identityuser.ValidColumn,
+			itemhistory.Table:        itemhistory.ValidColumn,
 			itemrevision.Table:       itemrevision.ValidColumn,
 			itemsurface.Table:        itemsurface.ValidColumn,
 			listview.Table:           listview.ValidColumn,

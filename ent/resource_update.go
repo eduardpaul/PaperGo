@@ -257,6 +257,41 @@ func (_u *ResourceUpdate) SetNillablePublishingEnabled(v *bool) *ResourceUpdate 
 	return _u
 }
 
+// SetVersioning sets the "versioning" field.
+func (_u *ResourceUpdate) SetVersioning(v resource.Versioning) *ResourceUpdate {
+	_u.mutation.SetVersioning(v)
+	return _u
+}
+
+// SetNillableVersioning sets the "versioning" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableVersioning(v *resource.Versioning) *ResourceUpdate {
+	if v != nil {
+		_u.SetVersioning(*v)
+	}
+	return _u
+}
+
+// SetMaxVersions sets the "max_versions" field.
+func (_u *ResourceUpdate) SetMaxVersions(v int) *ResourceUpdate {
+	_u.mutation.ResetMaxVersions()
+	_u.mutation.SetMaxVersions(v)
+	return _u
+}
+
+// SetNillableMaxVersions sets the "max_versions" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableMaxVersions(v *int) *ResourceUpdate {
+	if v != nil {
+		_u.SetMaxVersions(*v)
+	}
+	return _u
+}
+
+// AddMaxVersions adds value to the "max_versions" field.
+func (_u *ResourceUpdate) AddMaxVersions(v int) *ResourceUpdate {
+	_u.mutation.AddMaxVersions(v)
+	return _u
+}
+
 // SetWebdavEnabled sets the "webdav_enabled" field.
 func (_u *ResourceUpdate) SetWebdavEnabled(v bool) *ResourceUpdate {
 	_u.mutation.SetWebdavEnabled(v)
@@ -787,6 +822,16 @@ func (_u *ResourceUpdate) check() error {
 			return &ValidationError{Name: "next_revision_number", err: fmt.Errorf(`ent: validator failed for field "Resource.next_revision_number": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Versioning(); ok {
+		if err := resource.VersioningValidator(v); err != nil {
+			return &ValidationError{Name: "versioning", err: fmt.Errorf(`ent: validator failed for field "Resource.versioning": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.MaxVersions(); ok {
+		if err := resource.MaxVersionsValidator(v); err != nil {
+			return &ValidationError{Name: "max_versions", err: fmt.Errorf(`ent: validator failed for field "Resource.max_versions": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ScopeID(); ok {
 		if err := resource.ScopeIDValidator(v); err != nil {
 			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
@@ -860,6 +905,15 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.PublishingEnabled(); ok {
 		_spec.SetField(resource.FieldPublishingEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Versioning(); ok {
+		_spec.SetField(resource.FieldVersioning, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.MaxVersions(); ok {
+		_spec.SetField(resource.FieldMaxVersions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedMaxVersions(); ok {
+		_spec.AddField(resource.FieldMaxVersions, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.WebdavEnabled(); ok {
 		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
@@ -1651,6 +1705,41 @@ func (_u *ResourceUpdateOne) SetNillablePublishingEnabled(v *bool) *ResourceUpda
 	return _u
 }
 
+// SetVersioning sets the "versioning" field.
+func (_u *ResourceUpdateOne) SetVersioning(v resource.Versioning) *ResourceUpdateOne {
+	_u.mutation.SetVersioning(v)
+	return _u
+}
+
+// SetNillableVersioning sets the "versioning" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableVersioning(v *resource.Versioning) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetVersioning(*v)
+	}
+	return _u
+}
+
+// SetMaxVersions sets the "max_versions" field.
+func (_u *ResourceUpdateOne) SetMaxVersions(v int) *ResourceUpdateOne {
+	_u.mutation.ResetMaxVersions()
+	_u.mutation.SetMaxVersions(v)
+	return _u
+}
+
+// SetNillableMaxVersions sets the "max_versions" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableMaxVersions(v *int) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetMaxVersions(*v)
+	}
+	return _u
+}
+
+// AddMaxVersions adds value to the "max_versions" field.
+func (_u *ResourceUpdateOne) AddMaxVersions(v int) *ResourceUpdateOne {
+	_u.mutation.AddMaxVersions(v)
+	return _u
+}
+
 // SetWebdavEnabled sets the "webdav_enabled" field.
 func (_u *ResourceUpdateOne) SetWebdavEnabled(v bool) *ResourceUpdateOne {
 	_u.mutation.SetWebdavEnabled(v)
@@ -2194,6 +2283,16 @@ func (_u *ResourceUpdateOne) check() error {
 			return &ValidationError{Name: "next_revision_number", err: fmt.Errorf(`ent: validator failed for field "Resource.next_revision_number": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Versioning(); ok {
+		if err := resource.VersioningValidator(v); err != nil {
+			return &ValidationError{Name: "versioning", err: fmt.Errorf(`ent: validator failed for field "Resource.versioning": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.MaxVersions(); ok {
+		if err := resource.MaxVersionsValidator(v); err != nil {
+			return &ValidationError{Name: "max_versions", err: fmt.Errorf(`ent: validator failed for field "Resource.max_versions": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ScopeID(); ok {
 		if err := resource.ScopeIDValidator(v); err != nil {
 			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
@@ -2284,6 +2383,15 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if value, ok := _u.mutation.PublishingEnabled(); ok {
 		_spec.SetField(resource.FieldPublishingEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Versioning(); ok {
+		_spec.SetField(resource.FieldVersioning, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.MaxVersions(); ok {
+		_spec.SetField(resource.FieldMaxVersions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedMaxVersions(); ok {
+		_spec.AddField(resource.FieldMaxVersions, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.WebdavEnabled(); ok {
 		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)

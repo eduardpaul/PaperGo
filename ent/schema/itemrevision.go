@@ -29,6 +29,7 @@ func (ItemRevision) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.From("item", Resource.Type).Ref("revisions").Field("item_id").Unique().Required().Immutable(),
 		edge.From("schema_revision", SchemaRevision.Type).Ref("items").Field("schema_revision_id").Unique().Required().Immutable(),
+		edge.To("history", ItemHistory.Type).Unique(),
 		edge.To("blob", Blob.Type).Field("blob_id").Unique().Immutable(),
 	}
 }

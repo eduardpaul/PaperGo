@@ -51,14 +51,6 @@ func revisionChanges(current, previous *ent.ItemRevision) ([]string, error) {
 	return changed, nil
 }
 
-func (s *Service) previousRevision(ctx context.Context, id string, number int) (*ent.ItemRevision, error) {
-	v, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberLT(number)).Order(ent.Desc(itemrevision.FieldRevisionNumber)).First(ctx)
-	if ent.IsNotFound(err) {
-		return nil, nil
-	}
-	return v, err
-}
-
 func (s *Service) RevisionHistory(ctx context.Context, subject, id string, after, limit int) ([]RevisionView, error) {
 	return read(ctx, s, func(t *Service) ([]RevisionView, error) {
 		rows, err := t.Revisions(ctx, subject, id, after, limit)
@@ -70,19 +62,13 @@ func (s *Service) RevisionHistory(ctx context.Context, subject, id string, after
 			return nil, err
 		}
 		out := make([]RevisionView, 0, len(rows))
-		var previous *ent.ItemRevision
-		if len(rows) > 0 {
-			if previous, err = t.previousRevision(ctx, id, rows[0].RevisionNumber); err != nil {
-				return nil, err
-			}
-		}
 		for _, revision := range rows {
-			changed, err := revisionChanges(revision, previous)
+			entry, err := revision.Edges.HistoryOrErr()
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, RevisionView{revision, item.HeadRevisionID != nil && *item.HeadRevisionID == revision.ID, changed})
-			previous = revision
+			revision.Edges.History = nil
+			out = append(out, RevisionView{revision, item.HeadRevisionID != nil && *item.HeadRevisionID == revision.ID, entry.ChangedFields})
 		}
 		return out, nil
 	})
@@ -97,19 +83,19 @@ func (s *Service) Revision(ctx context.Context, subject, id string, number int) 
 		if item.Kind != resource.KindItem || number < 1 {
 			return RevisionView{}, ErrNotFound
 		}
-		v, err := t.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberEQ(number)).WithSchemaRevision().Only(ctx)
+		v, err := t.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberEQ(number), itemrevision.HasHistory()).WithSchemaRevision().WithHistory().Only(ctx)
 		if ent.IsNotFound(err) {
 			return RevisionView{}, ErrNotFound
 		}
 		if err != nil {
 			return RevisionView{}, err
 		}
-		previous, err := t.previousRevision(ctx, id, number)
+		entry, err := v.Edges.HistoryOrErr()
 		if err != nil {
 			return RevisionView{}, err
 		}
-		changed, err := revisionChanges(v, previous)
-		return RevisionView{v, item.HeadRevisionID != nil && *item.HeadRevisionID == v.ID, changed}, err
+		v.Edges.History = nil
+		return RevisionView{v, item.HeadRevisionID != nil && *item.HeadRevisionID == v.ID, entry.ChangedFields}, nil
 	})
 }
 
@@ -127,7 +113,7 @@ func (s *Service) RestoreRevision(ctx context.Context, subject, id string, numbe
 		if item.Version != version {
 			return ErrConflict
 		}
-		old, err := t.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberEQ(number)).Only(ctx)
+		old, err := t.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberEQ(number), itemrevision.HasHistory()).Only(ctx)
 		if ent.IsNotFound(err) {
 			return ErrNotFound
 		}

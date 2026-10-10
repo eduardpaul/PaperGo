@@ -12174,6 +12174,20 @@
             "type": "boolean",
             "description": "Lists and libraries only: permits creating physical folders. Disabling retains existing folders. Changes require manage access.",
             "default": true
+          },
+          "versioning": {
+            "type": "string",
+            "enum": [
+              "off",
+              "major"
+            ],
+            "description": "Collections only. Lists default to off and libraries to major. Off stops recording new history; retained entries remain available."
+          },
+          "max_versions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "History entries kept per item, trimmed on each new recorded version. Defaults to 50."
           }
         },
         "required": [
@@ -12254,6 +12268,20 @@
           "template_key": {
             "type": "string",
             "description": "Registered collection template key; provisions settings, shared content types and saved views atomically. Mutually exclusive with content_type_ids. Template settings determine kind and folder, publishing and WebDAV policies."
+          },
+          "versioning": {
+            "type": "string",
+            "enum": [
+              "off",
+              "major"
+            ],
+            "description": "Collections only. Lists default to off and libraries to major. Off stops recording new history; retained entries remain available."
+          },
+          "max_versions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "History entries kept per item, trimmed on each new recorded version. Defaults to 50."
           }
         },
         "required": [
@@ -12307,6 +12335,20 @@
           "allow_folders": {
             "type": "boolean",
             "description": "Lists and libraries only: permits creating physical folders. Disabling retains existing folders. Changes require manage access."
+          },
+          "versioning": {
+            "type": "string",
+            "enum": [
+              "off",
+              "major"
+            ],
+            "description": "Collections only. Lists default to off and libraries to major. Off stops recording new history; retained entries remain available."
+          },
+          "max_versions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "History entries kept per item, trimmed on each new recorded version. Defaults to 50."
           }
         },
         "required": [],
@@ -16574,6 +16616,20 @@
             "items": {
               "$ref": "#/components/schemas/ViewInput"
             }
+          },
+          "versioning": {
+            "type": "string",
+            "enum": [
+              "off",
+              "major"
+            ],
+            "description": "Collections only. Lists default to off and libraries to major. Off stops recording new history; retained entries remain available."
+          },
+          "max_versions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "History entries kept per item, trimmed on each new recorded version. Defaults to 50."
           }
         }
       }

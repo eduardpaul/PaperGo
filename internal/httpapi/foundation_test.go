@@ -17,7 +17,7 @@ func TestRESTExactValuesAndSchemaRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "Records"})
+	l, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Versioning: historyMode("major"), Kind: "list", Name: "Records"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestRESTLifecycleETags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "Pages", PublishingEnabled: true})
+	l, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Versioning: historyMode("major"), Kind: "list", Name: "Pages", PublishingEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}

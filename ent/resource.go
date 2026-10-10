@@ -58,6 +58,10 @@ type Resource struct {
 	NextRevisionNumber int `json:"next_revision_number,omitempty"`
 	// PublishingEnabled holds the value of the "publishing_enabled" field.
 	PublishingEnabled bool `json:"publishing_enabled,omitempty"`
+	// Versioning holds the value of the "versioning" field.
+	Versioning resource.Versioning `json:"versioning,omitempty"`
+	// MaxVersions holds the value of the "max_versions" field.
+	MaxVersions int `json:"max_versions,omitempty"`
 	// WebdavEnabled holds the value of the "webdav_enabled" field.
 	WebdavEnabled bool `json:"webdav_enabled,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -258,9 +262,9 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case resource.FieldAllowFolders, resource.FieldInheritPermissions, resource.FieldPublishingEnabled, resource.FieldWebdavEnabled:
 			values[i] = new(sql.NullBool)
-		case resource.FieldVersion, resource.FieldNextRevisionNumber:
+		case resource.FieldVersion, resource.FieldNextRevisionNumber, resource.FieldMaxVersions:
 			values[i] = new(sql.NullInt64)
-		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey:
+		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey:
 			values[i] = new(sql.NullString)
 		case resource.FieldCreatedAt, resource.FieldUpdatedAt, resource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -410,6 +414,18 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field publishing_enabled", values[i])
 			} else if value.Valid {
 				_m.PublishingEnabled = value.Bool
+			}
+		case resource.FieldVersioning:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field versioning", values[i])
+			} else if value.Valid {
+				_m.Versioning = resource.Versioning(value.String)
+			}
+		case resource.FieldMaxVersions:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field max_versions", values[i])
+			} else if value.Valid {
+				_m.MaxVersions = int(value.Int64)
 			}
 		case resource.FieldWebdavEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -630,6 +646,12 @@ func (_m *Resource) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("publishing_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.PublishingEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("versioning=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Versioning))
+	builder.WriteString(", ")
+	builder.WriteString("max_versions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.MaxVersions))
 	builder.WriteString(", ")
 	builder.WriteString("webdav_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WebdavEnabled))

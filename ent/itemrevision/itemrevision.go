@@ -40,6 +40,8 @@ const (
 	EdgeItem = "item"
 	// EdgeSchemaRevision holds the string denoting the schema_revision edge name in mutations.
 	EdgeSchemaRevision = "schema_revision"
+	// EdgeHistory holds the string denoting the history edge name in mutations.
+	EdgeHistory = "history"
 	// EdgeBlob holds the string denoting the blob edge name in mutations.
 	EdgeBlob = "blob"
 	// Table holds the table name of the itemrevision in the database.
@@ -58,6 +60,13 @@ const (
 	SchemaRevisionInverseTable = "schema_revisions"
 	// SchemaRevisionColumn is the table column denoting the schema_revision relation/edge.
 	SchemaRevisionColumn = "schema_revision_id"
+	// HistoryTable is the table that holds the history relation/edge.
+	HistoryTable = "item_histories"
+	// HistoryInverseTable is the table name for the ItemHistory entity.
+	// It exists in this package in order to avoid circular dependency with the "itemhistory" package.
+	HistoryInverseTable = "item_histories"
+	// HistoryColumn is the table column denoting the history relation/edge.
+	HistoryColumn = "revision_id"
 	// BlobTable is the table that holds the blob relation/edge.
 	BlobTable = "item_revisions"
 	// BlobInverseTable is the table name for the Blob entity.
@@ -175,6 +184,13 @@ func BySchemaRevisionField(field string, opts ...sql.OrderTermOption) OrderOptio
 	}
 }
 
+// ByHistoryField orders the results by history field.
+func ByHistoryField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newHistoryStep(), sql.OrderByField(field, opts...))
+	}
+}
+
 // ByBlobField orders the results by blob field.
 func ByBlobField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -193,6 +209,13 @@ func newSchemaRevisionStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SchemaRevisionInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, SchemaRevisionTable, SchemaRevisionColumn),
+	)
+}
+func newHistoryStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(HistoryInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, HistoryTable, HistoryColumn),
 	)
 }
 func newBlobStep() *sqlgraph.Step {

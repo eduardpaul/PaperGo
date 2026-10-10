@@ -244,6 +244,34 @@ func (_c *ResourceCreate) SetNillablePublishingEnabled(v *bool) *ResourceCreate 
 	return _c
 }
 
+// SetVersioning sets the "versioning" field.
+func (_c *ResourceCreate) SetVersioning(v resource.Versioning) *ResourceCreate {
+	_c.mutation.SetVersioning(v)
+	return _c
+}
+
+// SetNillableVersioning sets the "versioning" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableVersioning(v *resource.Versioning) *ResourceCreate {
+	if v != nil {
+		_c.SetVersioning(*v)
+	}
+	return _c
+}
+
+// SetMaxVersions sets the "max_versions" field.
+func (_c *ResourceCreate) SetMaxVersions(v int) *ResourceCreate {
+	_c.mutation.SetMaxVersions(v)
+	return _c
+}
+
+// SetNillableMaxVersions sets the "max_versions" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableMaxVersions(v *int) *ResourceCreate {
+	if v != nil {
+		_c.SetMaxVersions(*v)
+	}
+	return _c
+}
+
 // SetWebdavEnabled sets the "webdav_enabled" field.
 func (_c *ResourceCreate) SetWebdavEnabled(v bool) *ResourceCreate {
 	_c.mutation.SetWebdavEnabled(v)
@@ -591,6 +619,14 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultPublishingEnabled
 		_c.mutation.SetPublishingEnabled(v)
 	}
+	if _, ok := _c.mutation.Versioning(); !ok {
+		v := resource.DefaultVersioning
+		_c.mutation.SetVersioning(v)
+	}
+	if _, ok := _c.mutation.MaxVersions(); !ok {
+		v := resource.DefaultMaxVersions
+		_c.mutation.SetMaxVersions(v)
+	}
 	if _, ok := _c.mutation.WebdavEnabled(); !ok {
 		v := resource.DefaultWebdavEnabled
 		_c.mutation.SetWebdavEnabled(v)
@@ -698,6 +734,22 @@ func (_c *ResourceCreate) check() error {
 	}
 	if _, ok := _c.mutation.PublishingEnabled(); !ok {
 		return &ValidationError{Name: "publishing_enabled", err: errors.New(`ent: missing required field "Resource.publishing_enabled"`)}
+	}
+	if _, ok := _c.mutation.Versioning(); !ok {
+		return &ValidationError{Name: "versioning", err: errors.New(`ent: missing required field "Resource.versioning"`)}
+	}
+	if v, ok := _c.mutation.Versioning(); ok {
+		if err := resource.VersioningValidator(v); err != nil {
+			return &ValidationError{Name: "versioning", err: fmt.Errorf(`ent: validator failed for field "Resource.versioning": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.MaxVersions(); !ok {
+		return &ValidationError{Name: "max_versions", err: errors.New(`ent: missing required field "Resource.max_versions"`)}
+	}
+	if v, ok := _c.mutation.MaxVersions(); ok {
+		if err := resource.MaxVersionsValidator(v); err != nil {
+			return &ValidationError{Name: "max_versions", err: fmt.Errorf(`ent: validator failed for field "Resource.max_versions": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.WebdavEnabled(); !ok {
 		return &ValidationError{Name: "webdav_enabled", err: errors.New(`ent: missing required field "Resource.webdav_enabled"`)}
@@ -816,6 +868,14 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.PublishingEnabled(); ok {
 		_spec.SetField(resource.FieldPublishingEnabled, field.TypeBool, value)
 		_node.PublishingEnabled = value
+	}
+	if value, ok := _c.mutation.Versioning(); ok {
+		_spec.SetField(resource.FieldVersioning, field.TypeEnum, value)
+		_node.Versioning = value
+	}
+	if value, ok := _c.mutation.MaxVersions(); ok {
+		_spec.SetField(resource.FieldMaxVersions, field.TypeInt, value)
+		_node.MaxVersions = value
 	}
 	if value, ok := _c.mutation.WebdavEnabled(); ok {
 		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)

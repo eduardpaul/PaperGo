@@ -17,7 +17,7 @@ func TestNumberedRevisionReadAndRestoreAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, err := s.Create(t.Context(), "alice", w.ID, dms.CreateResource{Kind: "list", Name: "Records"})
+	list, err := s.Create(t.Context(), "alice", w.ID, dms.CreateResource{Versioning: historyMode("major"), Kind: "list", Name: "Records"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestOrdinaryReaderHistoryAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "Records", PublishingEnabled: true})
+	l, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Versioning: historyMode("major"), Kind: "list", Name: "Records", PublishingEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}

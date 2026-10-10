@@ -176,6 +176,18 @@ func (f IdentityUserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityUserMutation", m)
 }
 
+// The ItemHistoryFunc type is an adapter to allow the use of ordinary
+// function as ItemHistory mutator.
+type ItemHistoryFunc func(context.Context, *ent.ItemHistoryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ItemHistoryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ItemHistoryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ItemHistoryMutation", m)
+}
+
 // The ItemRevisionFunc type is an adapter to allow the use of ordinary
 // function as ItemRevision mutator.
 type ItemRevisionFunc func(context.Context, *ent.ItemRevisionMutation) (ent.Value, error)

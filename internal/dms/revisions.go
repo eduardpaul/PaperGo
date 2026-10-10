@@ -155,12 +155,14 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 		r.Values = values
 	}
 	var previous map[string]any
+	var previousRevision *ent.ItemRevision
 	blobID := newBlobID
 	if r.HeadRevisionID != nil {
 		old, e := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
 		if e != nil {
 			return nil, e
 		}
+		previousRevision = old
 		previous, e = decodeValues(old.Payload)
 		if e != nil {
 			return nil, e
@@ -204,6 +206,9 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 		if _, err = s.publishRevision(ctx, actor, r, rev, false, nil); err != nil {
 			return nil, err
 		}
+	}
+	if err = s.retainHistory(ctx, c, rev, previousRevision); err != nil {
+		return nil, err
 	}
 	return rev, nil
 }
@@ -423,7 +428,7 @@ func (s *Service) Revisions(ctx context.Context, subject, id string, after, limi
 	if r.Kind != resource.KindItem {
 		return nil, invalid("revisions belong to items")
 	}
-	return s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberGT(after)).WithSchemaRevision().Order(ent.Asc(itemrevision.FieldRevisionNumber)).Limit(pageSize(limit)).All(ctx)
+	return s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberGT(after), itemrevision.HasHistory()).WithSchemaRevision().WithHistory().Order(ent.Asc(itemrevision.FieldRevisionNumber)).Limit(pageSize(limit)).All(ctx)
 }
 
 // ItemSchema exposes only the schema belonging to the caller's visible revision.

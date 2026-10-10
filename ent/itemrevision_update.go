@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/predicate"
 
@@ -27,9 +28,34 @@ func (_u *ItemRevisionUpdate) Where(ps ...predicate.ItemRevision) *ItemRevisionU
 	return _u
 }
 
+// SetHistoryID sets the "history" edge to the ItemHistory entity by ID.
+func (_u *ItemRevisionUpdate) SetHistoryID(id string) *ItemRevisionUpdate {
+	_u.mutation.SetHistoryID(id)
+	return _u
+}
+
+// SetNillableHistoryID sets the "history" edge to the ItemHistory entity by ID if the given value is not nil.
+func (_u *ItemRevisionUpdate) SetNillableHistoryID(id *string) *ItemRevisionUpdate {
+	if id != nil {
+		_u = _u.SetHistoryID(*id)
+	}
+	return _u
+}
+
+// SetHistory sets the "history" edge to the ItemHistory entity.
+func (_u *ItemRevisionUpdate) SetHistory(v *ItemHistory) *ItemRevisionUpdate {
+	return _u.SetHistoryID(v.ID)
+}
+
 // Mutation returns the ItemRevisionMutation object of the builder.
 func (_u *ItemRevisionUpdate) Mutation() *ItemRevisionMutation {
 	return _u.mutation
+}
+
+// ClearHistory clears the "history" edge to the ItemHistory entity.
+func (_u *ItemRevisionUpdate) ClearHistory() *ItemRevisionUpdate {
+	_u.mutation.ClearHistory()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -82,6 +108,35 @@ func (_u *ItemRevisionUpdate) sqlSave(ctx context.Context) (_node int, err error
 			}
 		}
 	}
+	if _u.mutation.HistoryCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   itemrevision.HistoryTable,
+			Columns: []string{itemrevision.HistoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(itemhistory.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.HistoryIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   itemrevision.HistoryTable,
+			Columns: []string{itemrevision.HistoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(itemhistory.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{itemrevision.Label}
@@ -102,9 +157,34 @@ type ItemRevisionUpdateOne struct {
 	mutation *ItemRevisionMutation
 }
 
+// SetHistoryID sets the "history" edge to the ItemHistory entity by ID.
+func (_u *ItemRevisionUpdateOne) SetHistoryID(id string) *ItemRevisionUpdateOne {
+	_u.mutation.SetHistoryID(id)
+	return _u
+}
+
+// SetNillableHistoryID sets the "history" edge to the ItemHistory entity by ID if the given value is not nil.
+func (_u *ItemRevisionUpdateOne) SetNillableHistoryID(id *string) *ItemRevisionUpdateOne {
+	if id != nil {
+		_u = _u.SetHistoryID(*id)
+	}
+	return _u
+}
+
+// SetHistory sets the "history" edge to the ItemHistory entity.
+func (_u *ItemRevisionUpdateOne) SetHistory(v *ItemHistory) *ItemRevisionUpdateOne {
+	return _u.SetHistoryID(v.ID)
+}
+
 // Mutation returns the ItemRevisionMutation object of the builder.
 func (_u *ItemRevisionUpdateOne) Mutation() *ItemRevisionMutation {
 	return _u.mutation
+}
+
+// ClearHistory clears the "history" edge to the ItemHistory entity.
+func (_u *ItemRevisionUpdateOne) ClearHistory() *ItemRevisionUpdateOne {
+	_u.mutation.ClearHistory()
+	return _u
 }
 
 // Where appends a list predicates to the ItemRevisionUpdate builder.
@@ -186,6 +266,35 @@ func (_u *ItemRevisionUpdateOne) sqlSave(ctx context.Context) (_node *ItemRevisi
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.HistoryCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   itemrevision.HistoryTable,
+			Columns: []string{itemrevision.HistoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(itemhistory.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.HistoryIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   itemrevision.HistoryTable,
+			Columns: []string{itemrevision.HistoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(itemhistory.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &ItemRevision{config: _u.config}
 	_spec.Assign = _node.assignValues

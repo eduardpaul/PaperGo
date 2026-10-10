@@ -25,6 +25,7 @@ import (
 	"papergo/ent/identitymembership"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
+	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
@@ -88,6 +89,8 @@ type Client struct {
 	IdentityRole *IdentityRoleClient
 	// IdentityUser is the client for interacting with the IdentityUser builders.
 	IdentityUser *IdentityUserClient
+	// ItemHistory is the client for interacting with the ItemHistory builders.
+	ItemHistory *ItemHistoryClient
 	// ItemRevision is the client for interacting with the ItemRevision builders.
 	ItemRevision *ItemRevisionClient
 	// ItemSurface is the client for interacting with the ItemSurface builders.
@@ -155,6 +158,7 @@ func (c *Client) init() {
 	c.IdentityMembership = NewIdentityMembershipClient(c.config)
 	c.IdentityRole = NewIdentityRoleClient(c.config)
 	c.IdentityUser = NewIdentityUserClient(c.config)
+	c.ItemHistory = NewItemHistoryClient(c.config)
 	c.ItemRevision = NewItemRevisionClient(c.config)
 	c.ItemSurface = NewItemSurfaceClient(c.config)
 	c.ListView = NewListViewClient(c.config)
@@ -282,6 +286,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IdentityMembership: NewIdentityMembershipClient(cfg),
 		IdentityRole:       NewIdentityRoleClient(cfg),
 		IdentityUser:       NewIdentityUserClient(cfg),
+		ItemHistory:        NewItemHistoryClient(cfg),
 		ItemRevision:       NewItemRevisionClient(cfg),
 		ItemSurface:        NewItemSurfaceClient(cfg),
 		ListView:           NewListViewClient(cfg),
@@ -336,6 +341,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IdentityMembership: NewIdentityMembershipClient(cfg),
 		IdentityRole:       NewIdentityRoleClient(cfg),
 		IdentityUser:       NewIdentityUserClient(cfg),
+		ItemHistory:        NewItemHistoryClient(cfg),
 		ItemRevision:       NewItemRevisionClient(cfg),
 		ItemSurface:        NewItemSurfaceClient(cfg),
 		ListView:           NewListViewClient(cfg),
@@ -389,8 +395,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuditEvent, c.Blob, c.BusinessKey, c.CollectionType, c.ContentType,
 		c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
 		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
-		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.OperationItem,
-		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView, c.Operation,
+		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
 		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
 		c.WorkflowTrigger, c.WorkflowVersion,
@@ -406,8 +412,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuditEvent, c.Blob, c.BusinessKey, c.CollectionType, c.ContentType,
 		c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant, c.IdentityAssignment,
 		c.IdentityGroup, c.IdentityMembership, c.IdentityRole, c.IdentityUser,
-		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.OperationItem,
-		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView, c.Operation,
+		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
 		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
 		c.WorkflowTrigger, c.WorkflowVersion,
@@ -447,6 +453,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdentityRole.mutate(ctx, m)
 	case *IdentityUserMutation:
 		return c.IdentityUser.mutate(ctx, m)
+	case *ItemHistoryMutation:
+		return c.ItemHistory.mutate(ctx, m)
 	case *ItemRevisionMutation:
 		return c.ItemRevision.mutate(ctx, m)
 	case *ItemSurfaceMutation:
@@ -2500,6 +2508,155 @@ func (c *IdentityUserClient) mutate(ctx context.Context, m *IdentityUserMutation
 	}
 }
 
+// ItemHistoryClient is a client for the ItemHistory schema.
+type ItemHistoryClient struct {
+	config
+}
+
+// NewItemHistoryClient returns a client for the ItemHistory from the given config.
+func NewItemHistoryClient(c config) *ItemHistoryClient {
+	return &ItemHistoryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `itemhistory.Hooks(f(g(h())))`.
+func (c *ItemHistoryClient) Use(hooks ...Hook) {
+	c.hooks.ItemHistory = append(c.hooks.ItemHistory, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `itemhistory.Intercept(f(g(h())))`.
+func (c *ItemHistoryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ItemHistory = append(c.inters.ItemHistory, interceptors...)
+}
+
+// Create returns a builder for creating a ItemHistory entity.
+func (c *ItemHistoryClient) Create() *ItemHistoryCreate {
+	mutation := newItemHistoryMutation(c.config, OpCreate)
+	return &ItemHistoryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ItemHistory entities.
+func (c *ItemHistoryClient) CreateBulk(builders ...*ItemHistoryCreate) *ItemHistoryCreateBulk {
+	return &ItemHistoryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ItemHistoryClient) MapCreateBulk(slice any, setFunc func(*ItemHistoryCreate, int)) *ItemHistoryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ItemHistoryCreateBulk{err: fmt.Errorf("calling to ItemHistoryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ItemHistoryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ItemHistoryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ItemHistory.
+func (c *ItemHistoryClient) Update() *ItemHistoryUpdate {
+	mutation := newItemHistoryMutation(c.config, OpUpdate)
+	return &ItemHistoryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ItemHistoryClient) UpdateOne(_m *ItemHistory) *ItemHistoryUpdateOne {
+	mutation := newItemHistoryMutation(c.config, OpUpdateOne, withItemHistory(_m))
+	return &ItemHistoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ItemHistoryClient) UpdateOneID(id string) *ItemHistoryUpdateOne {
+	mutation := newItemHistoryMutation(c.config, OpUpdateOne, withItemHistoryID(id))
+	return &ItemHistoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ItemHistory.
+func (c *ItemHistoryClient) Delete() *ItemHistoryDelete {
+	mutation := newItemHistoryMutation(c.config, OpDelete)
+	return &ItemHistoryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ItemHistoryClient) DeleteOne(_m *ItemHistory) *ItemHistoryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ItemHistoryClient) DeleteOneID(id string) *ItemHistoryDeleteOne {
+	builder := c.Delete().Where(itemhistory.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ItemHistoryDeleteOne{builder}
+}
+
+// Query returns a query builder for ItemHistory.
+func (c *ItemHistoryClient) Query() *ItemHistoryQuery {
+	return &ItemHistoryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeItemHistory},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ItemHistory entity by its id.
+func (c *ItemHistoryClient) Get(ctx context.Context, id string) (*ItemHistory, error) {
+	return c.Query().Where(itemhistory.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ItemHistoryClient) GetX(ctx context.Context, id string) *ItemHistory {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryRevision queries the revision edge of a ItemHistory.
+func (c *ItemHistoryClient) QueryRevision(_m *ItemHistory) *ItemRevisionQuery {
+	query := (&ItemRevisionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(itemhistory.Table, itemhistory.FieldID, id),
+			sqlgraph.To(itemrevision.Table, itemrevision.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, itemhistory.RevisionTable, itemhistory.RevisionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ItemHistoryClient) Hooks() []Hook {
+	return c.hooks.ItemHistory
+}
+
+// Interceptors returns the client interceptors.
+func (c *ItemHistoryClient) Interceptors() []Interceptor {
+	return c.inters.ItemHistory
+}
+
+func (c *ItemHistoryClient) mutate(ctx context.Context, m *ItemHistoryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ItemHistoryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ItemHistoryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ItemHistoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ItemHistoryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ItemHistory mutation op: %q", m.Op())
+	}
+}
+
 // ItemRevisionClient is a client for the ItemRevision schema.
 type ItemRevisionClient struct {
 	config
@@ -2633,6 +2790,22 @@ func (c *ItemRevisionClient) QuerySchemaRevision(_m *ItemRevision) *SchemaRevisi
 			sqlgraph.From(itemrevision.Table, itemrevision.FieldID, id),
 			sqlgraph.To(schemarevision.Table, schemarevision.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, itemrevision.SchemaRevisionTable, itemrevision.SchemaRevisionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryHistory queries the history edge of a ItemRevision.
+func (c *ItemRevisionClient) QueryHistory(_m *ItemRevision) *ItemHistoryQuery {
+	query := (&ItemHistoryClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(itemrevision.Table, itemrevision.FieldID, id),
+			sqlgraph.To(itemhistory.Table, itemhistory.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, itemrevision.HistoryTable, itemrevision.HistoryColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -5954,8 +6127,8 @@ type (
 	hooks struct {
 		AuditEvent, Blob, BusinessKey, CollectionType, ContentType, DomainEvent,
 		FieldDefinition, FieldValue, Grant, IdentityAssignment, IdentityGroup,
-		IdentityMembership, IdentityRole, IdentityUser, ItemRevision, ItemSurface,
-		ListView, Operation, OperationItem, Publication, Relationship,
+		IdentityMembership, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
+		ItemSurface, ListView, Operation, OperationItem, Publication, Relationship,
 		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
 		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
 		WorkflowTrigger, WorkflowVersion []ent.Hook
@@ -5963,8 +6136,8 @@ type (
 	inters struct {
 		AuditEvent, Blob, BusinessKey, CollectionType, ContentType, DomainEvent,
 		FieldDefinition, FieldValue, Grant, IdentityAssignment, IdentityGroup,
-		IdentityMembership, IdentityRole, IdentityUser, ItemRevision, ItemSurface,
-		ListView, Operation, OperationItem, Publication, Relationship,
+		IdentityMembership, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
+		ItemSurface, ListView, Operation, OperationItem, Publication, Relationship,
 		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
 		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
 		WorkflowTrigger, WorkflowVersion []ent.Interceptor

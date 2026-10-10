@@ -21,6 +21,7 @@ import (
 	"papergo/ent/identitymembership"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
+	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
@@ -74,6 +75,7 @@ const (
 	TypeIdentityMembership = "IdentityMembership"
 	TypeIdentityRole       = "IdentityRole"
 	TypeIdentityUser       = "IdentityUser"
+	TypeItemHistory        = "ItemHistory"
 	TypeItemRevision       = "ItemRevision"
 	TypeItemSurface        = "ItemSurface"
 	TypeListView           = "ListView"
@@ -9929,6 +9931,516 @@ func (m *IdentityUserMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown IdentityUser edge %s", name)
 }
 
+// ItemHistoryMutation represents an operation that mutates the ItemHistory nodes in the graph.
+type ItemHistoryMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *string
+	created_at           *time.Time
+	changed_fields       *[]string
+	appendchanged_fields []string
+	clearedFields        map[string]struct{}
+	revision             *string
+	clearedrevision      bool
+	done                 bool
+	oldValue             func(context.Context) (*ItemHistory, error)
+	predicates           []predicate.ItemHistory
+}
+
+var _ ent.Mutation = (*ItemHistoryMutation)(nil)
+
+// itemhistoryOption allows management of the mutation configuration using functional options.
+type itemhistoryOption func(*ItemHistoryMutation)
+
+// newItemHistoryMutation creates new mutation for the ItemHistory entity.
+func newItemHistoryMutation(c config, op Op, opts ...itemhistoryOption) *ItemHistoryMutation {
+	m := &ItemHistoryMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeItemHistory,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withItemHistoryID sets the ID field of the mutation.
+func withItemHistoryID(id string) itemhistoryOption {
+	return func(m *ItemHistoryMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ItemHistory
+		)
+		m.oldValue = func(ctx context.Context) (*ItemHistory, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ItemHistory.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withItemHistory sets the old ItemHistory of the mutation.
+func withItemHistory(node *ItemHistory) itemhistoryOption {
+	return func(m *ItemHistoryMutation) {
+		m.oldValue = func(context.Context) (*ItemHistory, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ItemHistoryMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ItemHistoryMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ItemHistory entities.
+func (m *ItemHistoryMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ItemHistoryMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ItemHistoryMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ItemHistory.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ItemHistoryMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ItemHistoryMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ItemHistory entity.
+// If the ItemHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemHistoryMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ItemHistoryMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetRevisionID sets the "revision_id" field.
+func (m *ItemHistoryMutation) SetRevisionID(s string) {
+	m.revision = &s
+}
+
+// RevisionID returns the value of the "revision_id" field in the mutation.
+func (m *ItemHistoryMutation) RevisionID() (r string, exists bool) {
+	v := m.revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevisionID returns the old "revision_id" field's value of the ItemHistory entity.
+// If the ItemHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemHistoryMutation) OldRevisionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevisionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevisionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevisionID: %w", err)
+	}
+	return oldValue.RevisionID, nil
+}
+
+// ResetRevisionID resets all changes to the "revision_id" field.
+func (m *ItemHistoryMutation) ResetRevisionID() {
+	m.revision = nil
+}
+
+// SetChangedFields sets the "changed_fields" field.
+func (m *ItemHistoryMutation) SetChangedFields(s []string) {
+	m.changed_fields = &s
+	m.appendchanged_fields = nil
+}
+
+// ChangedFields returns the value of the "changed_fields" field in the mutation.
+func (m *ItemHistoryMutation) ChangedFields() (r []string, exists bool) {
+	v := m.changed_fields
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChangedFields returns the old "changed_fields" field's value of the ItemHistory entity.
+// If the ItemHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemHistoryMutation) OldChangedFields(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChangedFields is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChangedFields requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChangedFields: %w", err)
+	}
+	return oldValue.ChangedFields, nil
+}
+
+// AppendChangedFields adds s to the "changed_fields" field.
+func (m *ItemHistoryMutation) AppendChangedFields(s []string) {
+	m.appendchanged_fields = append(m.appendchanged_fields, s...)
+}
+
+// AppendedChangedFields returns the list of values that were appended to the "changed_fields" field in this mutation.
+func (m *ItemHistoryMutation) AppendedChangedFields() ([]string, bool) {
+	if len(m.appendchanged_fields) == 0 {
+		return nil, false
+	}
+	return m.appendchanged_fields, true
+}
+
+// ResetChangedFields resets all changes to the "changed_fields" field.
+func (m *ItemHistoryMutation) ResetChangedFields() {
+	m.changed_fields = nil
+	m.appendchanged_fields = nil
+}
+
+// ClearRevision clears the "revision" edge to the ItemRevision entity.
+func (m *ItemHistoryMutation) ClearRevision() {
+	m.clearedrevision = true
+	m.clearedFields[itemhistory.FieldRevisionID] = struct{}{}
+}
+
+// RevisionCleared reports if the "revision" edge to the ItemRevision entity was cleared.
+func (m *ItemHistoryMutation) RevisionCleared() bool {
+	return m.clearedrevision
+}
+
+// RevisionIDs returns the "revision" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RevisionID instead. It exists only for internal usage by the builders.
+func (m *ItemHistoryMutation) RevisionIDs() (ids []string) {
+	if id := m.revision; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetRevision resets all changes to the "revision" edge.
+func (m *ItemHistoryMutation) ResetRevision() {
+	m.revision = nil
+	m.clearedrevision = false
+}
+
+// Where appends a list predicates to the ItemHistoryMutation builder.
+func (m *ItemHistoryMutation) Where(ps ...predicate.ItemHistory) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ItemHistoryMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ItemHistoryMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ItemHistory, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ItemHistoryMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ItemHistoryMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ItemHistory).
+func (m *ItemHistoryMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ItemHistoryMutation) Fields() []string {
+	fields := make([]string, 0, 3)
+	if m.created_at != nil {
+		fields = append(fields, itemhistory.FieldCreatedAt)
+	}
+	if m.revision != nil {
+		fields = append(fields, itemhistory.FieldRevisionID)
+	}
+	if m.changed_fields != nil {
+		fields = append(fields, itemhistory.FieldChangedFields)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ItemHistoryMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case itemhistory.FieldCreatedAt:
+		return m.CreatedAt()
+	case itemhistory.FieldRevisionID:
+		return m.RevisionID()
+	case itemhistory.FieldChangedFields:
+		return m.ChangedFields()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ItemHistoryMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case itemhistory.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case itemhistory.FieldRevisionID:
+		return m.OldRevisionID(ctx)
+	case itemhistory.FieldChangedFields:
+		return m.OldChangedFields(ctx)
+	}
+	return nil, fmt.Errorf("unknown ItemHistory field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ItemHistoryMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case itemhistory.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case itemhistory.FieldRevisionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevisionID(v)
+		return nil
+	case itemhistory.FieldChangedFields:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChangedFields(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ItemHistory field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ItemHistoryMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ItemHistoryMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ItemHistoryMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ItemHistory numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ItemHistoryMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ItemHistoryMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ItemHistoryMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ItemHistory nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ItemHistoryMutation) ResetField(name string) error {
+	switch name {
+	case itemhistory.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case itemhistory.FieldRevisionID:
+		m.ResetRevisionID()
+		return nil
+	case itemhistory.FieldChangedFields:
+		m.ResetChangedFields()
+		return nil
+	}
+	return fmt.Errorf("unknown ItemHistory field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ItemHistoryMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.revision != nil {
+		edges = append(edges, itemhistory.EdgeRevision)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ItemHistoryMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case itemhistory.EdgeRevision:
+		if id := m.revision; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ItemHistoryMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ItemHistoryMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ItemHistoryMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedrevision {
+		edges = append(edges, itemhistory.EdgeRevision)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ItemHistoryMutation) EdgeCleared(name string) bool {
+	switch name {
+	case itemhistory.EdgeRevision:
+		return m.clearedrevision
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ItemHistoryMutation) ClearEdge(name string) error {
+	switch name {
+	case itemhistory.EdgeRevision:
+		m.ClearRevision()
+		return nil
+	}
+	return fmt.Errorf("unknown ItemHistory unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ItemHistoryMutation) ResetEdge(name string) error {
+	switch name {
+	case itemhistory.EdgeRevision:
+		m.ResetRevision()
+		return nil
+	}
+	return fmt.Errorf("unknown ItemHistory edge %s", name)
+}
+
 // ItemRevisionMutation represents an operation that mutates the ItemRevision nodes in the graph.
 type ItemRevisionMutation struct {
 	config
@@ -9951,6 +10463,8 @@ type ItemRevisionMutation struct {
 	cleareditem            bool
 	schema_revision        *string
 	clearedschema_revision bool
+	history                *string
+	clearedhistory         bool
 	blob                   *string
 	clearedblob            bool
 	done                   bool
@@ -10575,6 +11089,45 @@ func (m *ItemRevisionMutation) ResetSchemaRevision() {
 	m.clearedschema_revision = false
 }
 
+// SetHistoryID sets the "history" edge to the ItemHistory entity by id.
+func (m *ItemRevisionMutation) SetHistoryID(id string) {
+	m.history = &id
+}
+
+// ClearHistory clears the "history" edge to the ItemHistory entity.
+func (m *ItemRevisionMutation) ClearHistory() {
+	m.clearedhistory = true
+}
+
+// HistoryCleared reports if the "history" edge to the ItemHistory entity was cleared.
+func (m *ItemRevisionMutation) HistoryCleared() bool {
+	return m.clearedhistory
+}
+
+// HistoryID returns the "history" edge ID in the mutation.
+func (m *ItemRevisionMutation) HistoryID() (id string, exists bool) {
+	if m.history != nil {
+		return *m.history, true
+	}
+	return
+}
+
+// HistoryIDs returns the "history" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// HistoryID instead. It exists only for internal usage by the builders.
+func (m *ItemRevisionMutation) HistoryIDs() (ids []string) {
+	if id := m.history; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetHistory resets all changes to the "history" edge.
+func (m *ItemRevisionMutation) ResetHistory() {
+	m.history = nil
+	m.clearedhistory = false
+}
+
 // ClearBlob clears the "blob" edge to the Blob entity.
 func (m *ItemRevisionMutation) ClearBlob() {
 	m.clearedblob = true
@@ -10929,12 +11482,15 @@ func (m *ItemRevisionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ItemRevisionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.item != nil {
 		edges = append(edges, itemrevision.EdgeItem)
 	}
 	if m.schema_revision != nil {
 		edges = append(edges, itemrevision.EdgeSchemaRevision)
+	}
+	if m.history != nil {
+		edges = append(edges, itemrevision.EdgeHistory)
 	}
 	if m.blob != nil {
 		edges = append(edges, itemrevision.EdgeBlob)
@@ -10954,6 +11510,10 @@ func (m *ItemRevisionMutation) AddedIDs(name string) []ent.Value {
 		if id := m.schema_revision; id != nil {
 			return []ent.Value{*id}
 		}
+	case itemrevision.EdgeHistory:
+		if id := m.history; id != nil {
+			return []ent.Value{*id}
+		}
 	case itemrevision.EdgeBlob:
 		if id := m.blob; id != nil {
 			return []ent.Value{*id}
@@ -10964,7 +11524,7 @@ func (m *ItemRevisionMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ItemRevisionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	return edges
 }
 
@@ -10976,12 +11536,15 @@ func (m *ItemRevisionMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ItemRevisionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.cleareditem {
 		edges = append(edges, itemrevision.EdgeItem)
 	}
 	if m.clearedschema_revision {
 		edges = append(edges, itemrevision.EdgeSchemaRevision)
+	}
+	if m.clearedhistory {
+		edges = append(edges, itemrevision.EdgeHistory)
 	}
 	if m.clearedblob {
 		edges = append(edges, itemrevision.EdgeBlob)
@@ -10997,6 +11560,8 @@ func (m *ItemRevisionMutation) EdgeCleared(name string) bool {
 		return m.cleareditem
 	case itemrevision.EdgeSchemaRevision:
 		return m.clearedschema_revision
+	case itemrevision.EdgeHistory:
+		return m.clearedhistory
 	case itemrevision.EdgeBlob:
 		return m.clearedblob
 	}
@@ -11012,6 +11577,9 @@ func (m *ItemRevisionMutation) ClearEdge(name string) error {
 		return nil
 	case itemrevision.EdgeSchemaRevision:
 		m.ClearSchemaRevision()
+		return nil
+	case itemrevision.EdgeHistory:
+		m.ClearHistory()
 		return nil
 	case itemrevision.EdgeBlob:
 		m.ClearBlob()
@@ -11029,6 +11597,9 @@ func (m *ItemRevisionMutation) ResetEdge(name string) error {
 		return nil
 	case itemrevision.EdgeSchemaRevision:
 		m.ResetSchemaRevision()
+		return nil
+	case itemrevision.EdgeHistory:
+		m.ResetHistory()
 		return nil
 	case itemrevision.EdgeBlob:
 		m.ResetBlob()
@@ -17856,6 +18427,9 @@ type ResourceMutation struct {
 	next_revision_number      *int
 	addnext_revision_number   *int
 	publishing_enabled        *bool
+	versioning                *resource.Versioning
+	max_versions              *int
+	addmax_versions           *int
 	webdav_enabled            *bool
 	updated_at                *time.Time
 	created_by                *string
@@ -18842,6 +19416,98 @@ func (m *ResourceMutation) ResetPublishingEnabled() {
 	m.publishing_enabled = nil
 }
 
+// SetVersioning sets the "versioning" field.
+func (m *ResourceMutation) SetVersioning(r resource.Versioning) {
+	m.versioning = &r
+}
+
+// Versioning returns the value of the "versioning" field in the mutation.
+func (m *ResourceMutation) Versioning() (r resource.Versioning, exists bool) {
+	v := m.versioning
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersioning returns the old "versioning" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldVersioning(ctx context.Context) (v resource.Versioning, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersioning is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersioning requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersioning: %w", err)
+	}
+	return oldValue.Versioning, nil
+}
+
+// ResetVersioning resets all changes to the "versioning" field.
+func (m *ResourceMutation) ResetVersioning() {
+	m.versioning = nil
+}
+
+// SetMaxVersions sets the "max_versions" field.
+func (m *ResourceMutation) SetMaxVersions(i int) {
+	m.max_versions = &i
+	m.addmax_versions = nil
+}
+
+// MaxVersions returns the value of the "max_versions" field in the mutation.
+func (m *ResourceMutation) MaxVersions() (r int, exists bool) {
+	v := m.max_versions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMaxVersions returns the old "max_versions" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldMaxVersions(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMaxVersions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMaxVersions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaxVersions: %w", err)
+	}
+	return oldValue.MaxVersions, nil
+}
+
+// AddMaxVersions adds i to the "max_versions" field.
+func (m *ResourceMutation) AddMaxVersions(i int) {
+	if m.addmax_versions != nil {
+		*m.addmax_versions += i
+	} else {
+		m.addmax_versions = &i
+	}
+}
+
+// AddedMaxVersions returns the value that was added to the "max_versions" field in this mutation.
+func (m *ResourceMutation) AddedMaxVersions() (r int, exists bool) {
+	v := m.addmax_versions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMaxVersions resets all changes to the "max_versions" field.
+func (m *ResourceMutation) ResetMaxVersions() {
+	m.max_versions = nil
+	m.addmax_versions = nil
+}
+
 // SetWebdavEnabled sets the "webdav_enabled" field.
 func (m *ResourceMutation) SetWebdavEnabled(b bool) {
 	m.webdav_enabled = &b
@@ -19788,7 +20454,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 28)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -19845,6 +20511,12 @@ func (m *ResourceMutation) Fields() []string {
 	}
 	if m.publishing_enabled != nil {
 		fields = append(fields, resource.FieldPublishingEnabled)
+	}
+	if m.versioning != nil {
+		fields = append(fields, resource.FieldVersioning)
+	}
+	if m.max_versions != nil {
+		fields = append(fields, resource.FieldMaxVersions)
 	}
 	if m.webdav_enabled != nil {
 		fields = append(fields, resource.FieldWebdavEnabled)
@@ -19913,6 +20585,10 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.NextRevisionNumber()
 	case resource.FieldPublishingEnabled:
 		return m.PublishingEnabled()
+	case resource.FieldVersioning:
+		return m.Versioning()
+	case resource.FieldMaxVersions:
+		return m.MaxVersions()
 	case resource.FieldWebdavEnabled:
 		return m.WebdavEnabled()
 	case resource.FieldUpdatedAt:
@@ -19974,6 +20650,10 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldNextRevisionNumber(ctx)
 	case resource.FieldPublishingEnabled:
 		return m.OldPublishingEnabled(ctx)
+	case resource.FieldVersioning:
+		return m.OldVersioning(ctx)
+	case resource.FieldMaxVersions:
+		return m.OldMaxVersions(ctx)
 	case resource.FieldWebdavEnabled:
 		return m.OldWebdavEnabled(ctx)
 	case resource.FieldUpdatedAt:
@@ -20130,6 +20810,20 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPublishingEnabled(v)
 		return nil
+	case resource.FieldVersioning:
+		v, ok := value.(resource.Versioning)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersioning(v)
+		return nil
+	case resource.FieldMaxVersions:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMaxVersions(v)
+		return nil
 	case resource.FieldWebdavEnabled:
 		v, ok := value.(bool)
 		if !ok {
@@ -20193,6 +20887,9 @@ func (m *ResourceMutation) AddedFields() []string {
 	if m.addnext_revision_number != nil {
 		fields = append(fields, resource.FieldNextRevisionNumber)
 	}
+	if m.addmax_versions != nil {
+		fields = append(fields, resource.FieldMaxVersions)
+	}
 	return fields
 }
 
@@ -20205,6 +20902,8 @@ func (m *ResourceMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedVersion()
 	case resource.FieldNextRevisionNumber:
 		return m.AddedNextRevisionNumber()
+	case resource.FieldMaxVersions:
+		return m.AddedMaxVersions()
 	}
 	return nil, false
 }
@@ -20227,6 +20926,13 @@ func (m *ResourceMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddNextRevisionNumber(v)
+		return nil
+	case resource.FieldMaxVersions:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMaxVersions(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Resource numeric field %s", name)
@@ -20368,6 +21074,12 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldPublishingEnabled:
 		m.ResetPublishingEnabled()
+		return nil
+	case resource.FieldVersioning:
+		m.ResetVersioning()
+		return nil
+	case resource.FieldMaxVersions:
+		m.ResetMaxVersions()
 		return nil
 	case resource.FieldWebdavEnabled:
 		m.ResetWebdavEnabled()

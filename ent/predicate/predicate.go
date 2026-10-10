@@ -48,6 +48,9 @@ type IdentityRole func(*sql.Selector)
 // IdentityUser is the predicate function for identityuser builders.
 type IdentityUser func(*sql.Selector)
 
+// ItemHistory is the predicate function for itemhistory builders.
+type ItemHistory func(*sql.Selector)
+
 // ItemRevision is the predicate function for itemrevision builders.
 type ItemRevision func(*sql.Selector)
 

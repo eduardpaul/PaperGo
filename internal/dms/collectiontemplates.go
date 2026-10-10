@@ -18,6 +18,8 @@ type CollectionTemplate struct {
 	Description       string          `json:"description"`
 	Kind              string          `json:"kind"`
 	AllowFolders      bool            `json:"allow_folders"`
+	Versioning        string          `json:"versioning"`
+	MaxVersions       int             `json:"max_versions"`
 	PublishingEnabled bool            `json:"publishing_enabled"`
 	WebDAVEnabled     bool            `json:"webdav_enabled"`
 	ContentTypes      []TemplateInput `json:"content_types"`
@@ -26,12 +28,12 @@ type CollectionTemplate struct {
 
 func builtInCollectionTemplates() map[string]CollectionTemplate {
 	return map[string]CollectionTemplate{
-		"documents": {Key: "documents", Name: "Documents", Description: "Document library with descriptions and keywords", Kind: "library", AllowFolders: true,
+		"documents": {Key: "documents", Name: "Documents", Description: "Document library with descriptions and keywords", Kind: "library", AllowFolders: true, Versioning: "major", MaxVersions: 50,
 			ContentTypes: []TemplateInput{{Key: "document", Name: "Document", Fields: []CreateField{
 				{Key: "description", Label: "Description", Type: "note"},
 				{Key: "keywords", Label: "Keywords", Type: "keywords", Indexed: true, Options: model.FieldOptions{Multiple: true}},
 			}}}, Views: []ViewInput{{Name: "All documents", Columns: []string{"$name", "description", "keywords"}, Layout: "table", IsDefault: true}}},
-		"contacts": {Key: "contacts", Name: "Contacts", Description: "Contact list", Kind: "list", AllowFolders: true,
+		"contacts": {Key: "contacts", Name: "Contacts", Description: "Contact list", Kind: "list", AllowFolders: true, Versioning: "off", MaxVersions: 50,
 			ContentTypes: []TemplateInput{{Key: "contact", Name: "Contact", Fields: []CreateField{
 				{Key: "email", Label: "Email", Type: "email"}, {Key: "phone", Label: "Phone", Type: "text"},
 				{Key: "company", Label: "Company", Type: "text"}, {Key: "job_title", Label: "Job title", Type: "text"}, {Key: "notes", Label: "Notes", Type: "note"},
@@ -52,6 +54,18 @@ func (s *Service) RegisterCollectionTemplate(in CollectionTemplate) error {
 	}
 	if in.Kind != "list" && in.Kind != "library" {
 		return invalid("collection template kind must be list or library")
+	}
+	if in.Versioning == "" {
+		in.Versioning = "off"
+		if in.Kind == "library" {
+			in.Versioning = "major"
+		}
+	}
+	if in.MaxVersions == 0 {
+		in.MaxVersions = 50
+	}
+	if err := validateHistorySettings(true, &in.Versioning, &in.MaxVersions); err != nil {
+		return err
 	}
 	if in.WebDAVEnabled && in.Kind != "library" {
 		return invalid("WebDAV requires a library")

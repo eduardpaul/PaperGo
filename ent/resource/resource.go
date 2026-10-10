@@ -53,6 +53,10 @@ const (
 	FieldNextRevisionNumber = "next_revision_number"
 	// FieldPublishingEnabled holds the string denoting the publishing_enabled field in the database.
 	FieldPublishingEnabled = "publishing_enabled"
+	// FieldVersioning holds the string denoting the versioning field in the database.
+	FieldVersioning = "versioning"
+	// FieldMaxVersions holds the string denoting the max_versions field in the database.
+	FieldMaxVersions = "max_versions"
 	// FieldWebdavEnabled holds the string denoting the webdav_enabled field in the database.
 	FieldWebdavEnabled = "webdav_enabled"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -207,6 +211,8 @@ var Columns = []string{
 	FieldSchemaHeadID,
 	FieldNextRevisionNumber,
 	FieldPublishingEnabled,
+	FieldVersioning,
+	FieldMaxVersions,
 	FieldWebdavEnabled,
 	FieldUpdatedAt,
 	FieldCreatedBy,
@@ -263,6 +269,10 @@ var (
 	NextRevisionNumberValidator func(int) error
 	// DefaultPublishingEnabled holds the default value on creation for the "publishing_enabled" field.
 	DefaultPublishingEnabled bool
+	// DefaultMaxVersions holds the default value on creation for the "max_versions" field.
+	DefaultMaxVersions int
+	// MaxVersionsValidator is a validator for the "max_versions" field. It is called by the builders before save.
+	MaxVersionsValidator func(int) error
 	// DefaultWebdavEnabled holds the default value on creation for the "webdav_enabled" field.
 	DefaultWebdavEnabled bool
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -306,6 +316,32 @@ func KindValidator(k Kind) error {
 		return nil
 	default:
 		return fmt.Errorf("resource: invalid enum value for kind field: %q", k)
+	}
+}
+
+// Versioning defines the type for the "versioning" enum field.
+type Versioning string
+
+// VersioningOff is the default value of the Versioning enum.
+const DefaultVersioning = VersioningOff
+
+// Versioning values.
+const (
+	VersioningOff   Versioning = "off"
+	VersioningMajor Versioning = "major"
+)
+
+func (v Versioning) String() string {
+	return string(v)
+}
+
+// VersioningValidator is a validator for the "versioning" field enum values. It is called by the builders before save.
+func VersioningValidator(v Versioning) error {
+	switch v {
+	case VersioningOff, VersioningMajor:
+		return nil
+	default:
+		return fmt.Errorf("resource: invalid enum value for versioning field: %q", v)
 	}
 }
 
@@ -395,6 +431,16 @@ func ByNextRevisionNumber(opts ...sql.OrderTermOption) OrderOption {
 // ByPublishingEnabled orders the results by the publishing_enabled field.
 func ByPublishingEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPublishingEnabled, opts...).ToFunc()
+}
+
+// ByVersioning orders the results by the versioning field.
+func ByVersioning(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVersioning, opts...).ToFunc()
+}
+
+// ByMaxVersions orders the results by the max_versions field.
+func ByMaxVersions(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaxVersions, opts...).ToFunc()
 }
 
 // ByWebdavEnabled orders the results by the webdav_enabled field.

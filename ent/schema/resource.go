@@ -37,6 +37,8 @@ func (Resource) Fields() []ent.Field {
 		field.String("schema_head_id").Optional().Nillable(),
 		field.Int("next_revision_number").Default(1).Positive(),
 		field.Bool("publishing_enabled").Default(false),
+		field.Enum("versioning").Values("off", "major").Default("off"),
+		field.Int("max_versions").Default(50).Min(1).Max(500),
 		// Libraries only: exposes the library's folders and files over WebDAV.
 		field.Bool("webdav_enabled").Default(false),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),

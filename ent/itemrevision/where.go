@@ -701,6 +701,29 @@ func HasSchemaRevisionWith(preds ...predicate.SchemaRevision) predicate.ItemRevi
 	})
 }
 
+// HasHistory applies the HasEdge predicate on the "history" edge.
+func HasHistory() predicate.ItemRevision {
+	return predicate.ItemRevision(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, HistoryTable, HistoryColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasHistoryWith applies the HasEdge predicate on the "history" edge with a given conditions (other predicates).
+func HasHistoryWith(preds ...predicate.ItemHistory) predicate.ItemRevision {
+	return predicate.ItemRevision(func(s *sql.Selector) {
+		step := newHistoryStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasBlob applies the HasEdge predicate on the "blob" edge.
 func HasBlob() predicate.ItemRevision {
 	return predicate.ItemRevision(func(s *sql.Selector) {
