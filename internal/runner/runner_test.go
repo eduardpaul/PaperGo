@@ -414,7 +414,8 @@ func TestCrashRecovery(t *testing.T) {
 	if f.ws, err = f.dms.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Docs"}); err != nil {
 		t.Fatal(err)
 	}
-	if f.list, err = f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "list", Name: "Contracts"}); err != nil {
+	versioning := "major"
+	if f.list, err = f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "list", Name: "Contracts", Versioning: &versioning}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.dms.CreateField(ctx, "alice", f.list.ID, dms.CreateField{Key: "note", Label: "Note", Type: "text"}); err != nil {
