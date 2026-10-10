@@ -71,8 +71,8 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 	if err != nil || len(events) != 1 || events[0].ID != pub.ID {
 		t.Fatalf("events: %v %v", events, err)
 	}
-	if _, err = s.Revisions(testContext, "reader", item.ID, 0, 100); !errors.Is(err, ErrForbidden) {
-		t.Fatal("reader saw revisions", err)
+	if history, e := s.Revisions(testContext, "reader", item.ID, 0, 100); e != nil || len(history) != 2 || history[0].Name != "Hiddenword" || history[1].Name != name || history[1].Edges.SchemaRevision == nil {
+		t.Fatal("ordinary reader lost metadata history", history, e)
 	}
 	item, err = s.Unpublish(testContext, "alice", item.ID, item.Version)
 	if err != nil {
@@ -80,6 +80,9 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 	}
 	if _, err = s.Get(testContext, "reader", item.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("unpublish ineffective", err)
+	}
+	if history, e := s.Revisions(testContext, "reader", item.ID, 0, 100); e != nil || len(history) != 2 {
+		t.Fatal("unpublishing changed metadata history access", history, e)
 	}
 	if _, err = s.Publish(testContext, "alice", item.ID, item.Version-1); !errors.Is(err, ErrConflict) {
 		t.Fatal("stale publish accepted", err)
