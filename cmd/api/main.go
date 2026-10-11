@@ -13,8 +13,10 @@ import (
 	"papergo/internal/database"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
+	"papergo/internal/runner"
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
+	"papergo/internal/workflow"
 	"syscall"
 	"time"
 )
@@ -33,6 +35,16 @@ func run(log *slog.Logger) error {
 	}
 	startup, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	dataLease, err := database.AcquireLease(c.DatabasePath, false)
+	if err != nil {
+		return err
+	}
+	defer dataLease.Close()
+	blobLease, err := database.AcquireLease(c.BlobPath, false)
+	if err != nil {
+		return err
+	}
+	defer blobLease.Close()
 	db, err := database.Open(startup, c.DatabasePath)
 	if err != nil {
 		return err
@@ -49,9 +61,29 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("initialize authentication: %w", err)
 	}
-	service := dms.NewService(db.Client)
-	a := &httpapi.API{DMS: service, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
+	service := dms.NewService(db.SQL)
+	if err = service.Directory().Initialize(startup, c.AdminSubject); err != nil {
+		return fmt.Errorf("initialize organization directory: %w", err)
+	}
+	workflows := &workflow.Service{DMS: service}
+	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, NodeID: c.NodeID, Retention: c.RunRetention, Logger: log}, db.SQL, service, workflows)
+	if err != nil {
+		return err
+	}
+	if err = run.Launch(startup); err != nil {
+		return err
+	}
+	// The runner stops after the server, so requests in flight can still start runs.
+	defer func() {
+		if err := run.Shutdown(10 * time.Second); err != nil {
+			log.Error("runner shutdown", "error", err)
+		}
+	}()
+	a := &httpapi.API{DMS: service, Workflows: workflows, Runner: run, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
+			return err
+		}
+		if err := run.Ready(ctx); err != nil {
 			return err
 		}
 		return db.CheckSchema(ctx)
@@ -60,6 +92,9 @@ func run(log *slog.Logger) error {
 	server := &http.Server{Addr: c.Address, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Background operations (index builds) resume from their persisted progress.
+	go service.RunOperations(ctx, log)
+	go service.RunBlobCleanup(ctx, store, log)
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
 	log.Info("api listening", "address", c.Address, "environment", c.Env)

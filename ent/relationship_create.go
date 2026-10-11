@@ -54,12 +54,6 @@ func (_c *RelationshipCreate) SetTargetID(v string) *RelationshipCreate {
 	return _c
 }
 
-// SetName sets the "name" field.
-func (_c *RelationshipCreate) SetName(v string) *RelationshipCreate {
-	_c.mutation.SetName(v)
-	return _c
-}
-
 // SetTypeID sets the "type_id" field.
 func (_c *RelationshipCreate) SetTypeID(v string) *RelationshipCreate {
 	_c.mutation.SetTypeID(v)
@@ -221,14 +215,6 @@ func (_c *RelationshipCreate) check() error {
 			return &ValidationError{Name: "target_id", err: fmt.Errorf(`ent: validator failed for field "Relationship.target_id": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.Name(); !ok {
-		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Relationship.name"`)}
-	}
-	if v, ok := _c.mutation.Name(); ok {
-		if err := relationship.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Relationship.name": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.TypeID(); !ok {
 		return &ValidationError{Name: "type_id", err: errors.New(`ent: missing required field "Relationship.type_id"`)}
 	}
@@ -307,10 +293,6 @@ func (_c *RelationshipCreate) createSpec() (*Relationship, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.WorkspaceID(); ok {
 		_spec.SetField(relationship.FieldWorkspaceID, field.TypeString, value)
 		_node.WorkspaceID = value
-	}
-	if value, ok := _c.mutation.Name(); ok {
-		_spec.SetField(relationship.FieldName, field.TypeString, value)
-		_node.Name = value
 	}
 	if value, ok := _c.mutation.Directed(); ok {
 		_spec.SetField(relationship.FieldDirected, field.TypeBool, value)

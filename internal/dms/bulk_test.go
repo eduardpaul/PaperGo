@@ -68,8 +68,8 @@ func TestBulkItemLifecycle(t *testing.T) {
 		t.Fatalf("draft leaked: %+v %v", page, err)
 	}
 	bulkOK(t, s, "alice", list.ID, BulkOperation{Action: "publish", ID: item.ID, Version: 2})
-	query, err := s.Query(testContext, "alice", list.ID, QueryRequest{Surface: "published", Query: QuerySpec{Filter: &FilterExpr{Field: "amount", Op: "eq", Value: json.RawMessage("9007199254740994")}}})
-	if err != nil || query.Total != 1 || query.Data[0].ID != item.ID {
+	query, err := s.Query(testContext, "alice", list.ID, QueryRequest{IncludeTotal: true, Surface: "published", Query: QuerySpec{Filter: &FilterExpr{Field: "amount", Op: "eq", Value: json.RawMessage("9007199254740994")}}})
+	if err != nil || counted(query.Total) != 1 || query.Data[0].ID != item.ID {
 		t.Fatalf("projection: %+v %v", query, err)
 	}
 	bulkOK(t, s, "alice", list.ID,
@@ -95,7 +95,7 @@ func TestBulkRollbackEveryDerivedEffect(t *testing.T) {
 	beforeAudit, _ := s.Client.AuditEvent.Query().Count(testContext)
 	beforeRevisions, _ := s.Client.ItemRevision.Query().Count(testContext)
 	name := "Rolled back"
-	bulkFails(t, s, "alice", list.ID, 2, ErrConflict,
+	bulkFails(t, s, "alice", list.ID, 2, ErrPreconditionFailed,
 		BulkOperation{Action: "update", ID: first.ID, Version: 1, Update: &BulkUpdate{Name: &name}},
 		BulkOperation{Action: "create", Create: &BulkCreate{Name: "Also rolled back"}},
 		BulkOperation{Action: "publish", ID: second.ID, Version: 99},
@@ -110,7 +110,7 @@ func TestBulkRollbackEveryDerivedEffect(t *testing.T) {
 	if count != 2 || audit != beforeAudit || revisions != beforeRevisions {
 		t.Fatal("transaction effects survived", count, audit, revisions)
 	}
-	bulkFails(t, s, "alice", list.ID, 1, ErrConflict,
+	bulkFails(t, s, "alice", list.ID, 1, ErrPreconditionFailed,
 		BulkOperation{Action: "publish", ID: first.ID, Version: 1},
 		BulkOperation{Action: "delete", ID: second.ID, Version: 99},
 	)
@@ -125,11 +125,11 @@ func TestBulkPermissionsAndCollectionBoundary(t *testing.T) {
 	s, w, list := fixture(t)
 	first := create(t, s, list.ID, "item", "Allowed", nil)
 	blocked := create(t, s, list.ID, "item", "Blocked", nil)
-	_, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "bob", Action: "write"}}})
+	err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	blocked, err = s.SetPermissions(testContext, "alice", blocked.ID, blocked.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}}})
+	blocked, err = s.SetPermissions(testContext, "alice", blocked.ID, blocked.Version, Permissions{Grants: []Permission{{PrincipalType: "user", PrincipalID: "alice", Action: "manage"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,8 @@ func TestBulkBoundsShapesAndDuplicateTargets(t *testing.T) {
 		t.Fatal("duplicate target mutated", item, err)
 	}
 	folder := create(t, s, list.ID, "folder", "Folder", nil)
-	bulkFails(t, s, "alice", list.ID, 0, nil, BulkOperation{Action: "delete", ID: folder.ID, Version: 1})
+	bulkFails(t, s, "alice", list.ID, 0, nil, BulkOperation{Action: "publish", ID: folder.ID, Version: 1})
+	bulkOK(t, s, "alice", list.ID, BulkOperation{Action: "delete", ID: folder.ID, Version: 1})
 }
 
 func TestBulkLibraryConflictsAndPublication(t *testing.T) {
@@ -257,16 +258,16 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 		BulkOperation{Action: "publish", ID: first.ID, Version: 1},
 		BulkOperation{Action: "publish", ID: second.ID, Version: 1},
 	)
-	typ, err := s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "related", Label: "Related", Directed: true})
+	typ, err := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Related", Directed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	link, err := s.Link(testContext, "alice", first.ID, CreateRelationship{TypeID: typ.ID, TargetID: second.ID})
+	link, err := s.Link(testContext, "alice", first.ID, CreateRelationship{Type: typ.ID, TargetID: second.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, action := range []string{"delete", "unpublish"} {
-		bulkFails(t, s, "alice", list.ID, 1, ErrConflict,
+		bulkFails(t, s, "alice", list.ID, 1, ErrPreconditionFailed,
 			BulkOperation{Action: action, ID: first.ID, Version: 2},
 			BulkOperation{Action: "delete", ID: second.ID, Version: 99},
 		)
@@ -285,7 +286,7 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 	links, _ := s.Client.Relationship.Query().Count(testContext)
 	surfaces, _ := s.Client.ItemSurface.Query().Count(testContext)
 	revisions, _ := s.Client.ItemRevision.Query().Count(testContext)
-	if links != 0 || surfaces != 0 || revisions != 2 {
+	if links != 1 || surfaces != 0 || revisions != 2 {
 		t.Fatal("delete effects", links, surfaces, revisions)
 	}
 }
@@ -318,7 +319,7 @@ func TestConcurrentBulkUpdatesHaveOneWholeBatchWinner(t *testing.T) {
 				t.Fatal("both batches won")
 			}
 			winner = i
-		} else if !errors.Is(err, ErrConflict) {
+		} else if !errors.Is(err, ErrPreconditionFailed) {
 			t.Fatal(err)
 		}
 	}
@@ -334,9 +335,9 @@ func TestConcurrentBulkUpdatesHaveOneWholeBatchWinner(t *testing.T) {
 }
 
 func TestBulkPublisherAndCancelledWriter(t *testing.T) {
-	s, w, list := fixture(t)
+	s, _, list := fixture(t)
 	item := create(t, s, list.ID, "item", "Draft", nil)
-	_, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "publisher", Action: "publish"}}})
+	_, err := s.SetPermissions(testContext, "alice", list.ID, list.Version, Permissions{Grants: []Permission{{PrincipalType: "user", PrincipalID: "alice", Action: "manage"}, {PrincipalType: "user", PrincipalID: "publisher", Action: "publish"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

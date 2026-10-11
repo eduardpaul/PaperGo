@@ -65,6 +65,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.status(w, http.StatusUnauthorized, "valid credentials are required")
 		return
 	}
+	scope := "list.write"
+	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == "PROPFIND" {
+		scope = "list.read"
+	}
+	if err = h.DMS.RequireScope(r.Context(), subject, scope); err != nil {
+		h.fail(w, r, err)
+		return
+	}
 	library, path, ok := parsePath(r.URL.EscapedPath())
 	if !ok {
 		h.status(w, http.StatusBadRequest, "invalid path")
@@ -119,6 +127,9 @@ func (h *Handler) authenticate(r *http.Request) (string, error) {
 		subject, err := auth.Authenticate(r, h.Auth)
 		if err != nil {
 			return "", dms.ErrForbidden
+		}
+		if err = h.DMS.Directory().EnsureUser(r.Context(), subject); err != nil {
+			return "", err
 		}
 		return subject, nil
 	case strings.EqualFold(scheme, "Basic"):
@@ -184,6 +195,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		h.status(w, http.StatusForbidden, "access denied")
 	case errors.Is(err, dms.ErrMissingParent):
 		h.status(w, http.StatusConflict, "parent folder not found")
+	case errors.Is(err, dms.ErrFolderNotEmpty):
+		h.status(w, http.StatusConflict, "the folder is not empty")
 	case errors.Is(err, dms.ErrConflict):
 		h.status(w, http.StatusConflict, "conflicts with the current state of the library")
 	case errors.Is(err, dms.ErrExists):

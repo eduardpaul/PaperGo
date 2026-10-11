@@ -15,16 +15,30 @@ import (
 
 var testContext = context.Background()
 
+func setWorkspaceMembers(ctx context.Context, s *Service, actor, workspaceID string, members ...WorkspaceMember) error {
+	for _, member := range members {
+		if err := s.SetWorkspaceMember(ctx, actor, workspaceID, member); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func fixture(t *testing.T) (*Service, *ent.Resource, *ent.Resource) {
 	t.Helper()
-	s := NewService(testutil.Database(t).Client)
+	s := NewService(testutil.Database(t).SQL)
 	w := create(t, s, "", "workspace", "Finance", nil)
 	list := create(t, s, w.ID, "list", "Invoices", nil)
 	return s, w, list
 }
 func create(t *testing.T, s *Service, parent, kind, name string, values map[string]any) *ent.Resource {
 	t.Helper()
-	r, err := s.Create(testContext, "alice", parent, CreateResource{Kind: kind, Name: name, Values: values, PublishingEnabled: kind == "list" || kind == "library"})
+	var versioning *string
+	if kind == "list" || kind == "library" {
+		value := "major"
+		versioning = &value
+	}
+	r, err := s.Create(testContext, "alice", parent, CreateResource{Versioning: versioning, Kind: kind, Name: name, Values: values, PublishingEnabled: kind == "list" || kind == "library"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +88,7 @@ func TestFieldsSearchPublishingAndOwnership(t *testing.T) {
 	if err != nil || len(page.Data) != 0 {
 		t.Fatalf("stale search index: %+v %v", page, err)
 	}
-	if _, err = s.Publish(testContext, "alice", item.ID, 1); !errors.Is(err, ErrConflict) {
+	if _, err = s.Publish(testContext, "alice", item.ID, 1); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatalf("stale publish accepted: %v", err)
 	}
 	if _, err = s.Publications(testContext, "bob", item.ID, 0, 10); !errors.Is(err, ErrForbidden) {
@@ -87,18 +101,18 @@ func TestFieldsSearchPublishingAndOwnership(t *testing.T) {
 func TestAdditivePermissionsInheritanceAndRollback(t *testing.T) {
 	s, w, list := fixture(t)
 	item := create(t, s, list.ID, "item", "Secret", nil)
-	_, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"bob", "read_draft", "allow"}}})
+	err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Get(testContext, "bob", item.ID); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: true, Grants: []Permission{{"bob", "read", "deny"}}})
+	_, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: true, Grants: []Permission{{"user", "bob", "read", "deny"}}})
 	if err == nil {
 		t.Fatal("deny grant accepted")
 	}
-	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"alice", "manage", "allow"}}})
+	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +128,7 @@ func TestAdditivePermissionsInheritanceAndRollback(t *testing.T) {
 			t.Fatal("search leaked private resource")
 		}
 	}
-	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"alice", "manage", "allow"}, {"carol", "read_draft", "allow"}}})
+	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}, {"user", "carol", "read_draft", "allow"}, {"user", "delegate", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +138,7 @@ func TestAdditivePermissionsInheritanceAndRollback(t *testing.T) {
 	if _, err = s.Get(testContext, "bob", item.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatal("inheritance not broken")
 	}
-	if _, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false}); err == nil {
+	if _, err = s.SetPermissions(testContext, "delegate", item.ID, item.Version, Permissions{Inherit: false}); err == nil {
 		t.Fatal("lockout accepted")
 	}
 	still, err := s.Get(testContext, "alice", item.ID)
@@ -140,7 +154,7 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	source := create(t, s, list.ID, "item", "Source", nil)
 	target := create(t, s, list.ID, "item", "Target", nil)
 	typ := referencesType(t, s, w.ID)
-	link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID})
+	link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: target.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,14 +162,14 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	if err != nil || len(incoming.Data) != 1 || incoming.Data[0].ID != link.ID {
 		t.Fatalf("incoming relationship: %+v %v", incoming, err)
 	}
-	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: target.ID}); !errors.Is(err, ErrConflict) {
-		t.Fatalf("duplicate relationship accepted: %v", err)
+	if again, e := s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: target.ID}); e != nil || again.ID != link.ID || again.Version != link.Version {
+		t.Fatalf("retry did not return the same relationship: %v %v", again, e)
 	}
-	_, err = s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"bob", "read_draft", "allow"}}})
+	err = setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Inherit: false, Grants: []Permission{{"alice", "manage", "allow"}}})
+	_, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +180,7 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	w2 := create(t, s, "", "workspace", "Other", nil)
 	l2 := create(t, s, w2.ID, "list", "Other list", nil)
 	i2 := create(t, s, l2.ID, "item", "Other item", nil)
-	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: i2.ID}); err == nil {
+	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: i2.ID}); err == nil {
 		t.Fatal("cross-workspace link accepted")
 	}
 	var validation *ValidationError
@@ -187,7 +201,7 @@ func TestConcurrentUpdatesHaveOneWinner(t *testing.T) {
 			_, err := s.Update(testContext, "alice", item.ID, 1, UpdateResource{Name: &name})
 			if err == nil {
 				winners.Add(1)
-			} else if !errors.Is(err, ErrConflict) {
+			} else if !errors.Is(err, ErrPreconditionFailed) {
 				t.Errorf("unexpected write failure: %v", err)
 			}
 		}()
@@ -217,9 +231,9 @@ func TestLibraryRequiresBlobForPublishing(t *testing.T) {
 		t.Fatal("library item published without content")
 	}
 }
-func referencesType(t *testing.T, s *Service, workspaceID string) *ent.RelationshipType {
+func referencesType(t *testing.T, s *Service, workspaceID string) RelationshipTypeView {
 	t.Helper()
-	typ, err := s.CreateRelationshipType(testContext, "alice", workspaceID, RelationshipTypeInput{Key: "references", Label: "References", InverseLabel: "Referenced by", Directed: true})
+	typ, err := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "References", InverseLabel: "Referenced by", Directed: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"papergo/internal/dms"
 	"testing"
 )
@@ -43,6 +44,22 @@ func TestDeleteMoveAndWebDAVSettings(t *testing.T) {
 		t.Fatal(response.Code)
 	}
 	response = request(h, "DELETE", "/v1/resources/"+folder.ID, "", testToken, `"1"`, "")
+	var conflict struct {
+		Code string `json:"code"`
+	}
+	if err = json.Unmarshal(response.Body.Bytes(), &conflict); response.Code != 409 || err != nil || conflict.Code != "folder_not_empty" {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	for _, id := range []string{folder.ID, item.ID} {
+		if response = request(h, "GET", "/v1/resources/"+id, "", testToken, "", ""); response.Code != 200 {
+			t.Fatal("rejected deletion changed resource", response.Code)
+		}
+	}
+	response = request(h, "DELETE", "/v1/resources/"+item.ID, "", testToken, `"2"`, "")
+	if response.Code != 204 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	response = request(h, "DELETE", "/v1/resources/"+folder.ID, "", testToken, `"1"`, "")
 	if response.Code != 204 {
 		t.Fatal(response.Code, response.Body.String())
 	}
@@ -52,8 +69,39 @@ func TestDeleteMoveAndWebDAVSettings(t *testing.T) {
 		}
 	}
 	response = request(h, "DELETE", "/v1/resources/"+lib.ID, "", testToken, `"1"`, "")
-	if response.Code != 422 {
-		t.Fatal("library deleted", response.Code)
+	if response.Code != 204 {
+		t.Fatal("library deletion failed", response.Code)
+	}
+}
+
+func TestDeleteListFolderWithNestedFolder(t *testing.T) {
+	h, s, _ := setup(t)
+	ctx := t.Context()
+	w, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Demo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "list", Name: "Records"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder, err := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "folder", Name: "Parent"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := s.Create(ctx, "alice", folder.ID, dms.CreateResource{Kind: "folder", Name: "Child"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := request(h, "DELETE", "/v1/resources/"+folder.ID, "", testToken, fmt.Sprintf(`"%d"`, folder.Version), "")
+	if response.Code != 409 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	if response = request(h, "DELETE", "/v1/resources/"+child.ID, "", testToken, fmt.Sprintf(`"%d"`, child.Version), ""); response.Code != 204 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	if response = request(h, "DELETE", "/v1/resources/"+folder.ID, "", testToken, fmt.Sprintf(`"%d"`, folder.Version), ""); response.Code != 204 {
+		t.Fatal(response.Code, response.Body.String())
 	}
 }
 
@@ -70,7 +118,7 @@ func TestWebDAVCredentialEndpoints(t *testing.T) {
 	}
 	response = request(h, "GET", "/v1/webdav-credentials", "", testToken, "", "")
 	var list struct {
-		Data []map[string]any `json:"data"`
+		Data []map[string]any `json:"value"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &list); err != nil || len(list.Data) != 1 || list.Data[0]["password"] != nil || list.Data[0]["label"] != "Laptop" {
 		t.Fatal(response.Body.String())

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -18,8 +17,6 @@ const (
 	FieldID = "id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
-	// FieldContainerID holds the string denoting the container_id field in the database.
-	FieldContainerID = "container_id"
 	// FieldKey holds the string denoting the key field in the database.
 	FieldKey = "key"
 	// FieldLabel holds the string denoting the label field in the database.
@@ -30,35 +27,31 @@ const (
 	FieldOptions = "options"
 	// FieldIndexed holds the string denoting the indexed field in the database.
 	FieldIndexed = "indexed"
+	// FieldVersion holds the string denoting the version field in the database.
+	FieldVersion = "version"
+	// FieldIndexStatus holds the string denoting the index_status field in the database.
+	FieldIndexStatus = "index_status"
 	// FieldScale holds the string denoting the scale field in the database.
 	FieldScale = "scale"
 	// FieldRequired holds the string denoting the required field in the database.
 	FieldRequired = "required"
 	// FieldChoices holds the string denoting the choices field in the database.
 	FieldChoices = "choices"
-	// EdgeContainer holds the string denoting the container edge name in mutations.
-	EdgeContainer = "container"
 	// Table holds the table name of the fielddefinition in the database.
 	Table = "field_definitions"
-	// ContainerTable is the table that holds the container relation/edge.
-	ContainerTable = "field_definitions"
-	// ContainerInverseTable is the table name for the Resource entity.
-	// It exists in this package in order to avoid circular dependency with the "resource" package.
-	ContainerInverseTable = "resources"
-	// ContainerColumn is the table column denoting the container relation/edge.
-	ContainerColumn = "container_id"
 )
 
 // Columns holds all SQL columns for fielddefinition fields.
 var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
-	FieldContainerID,
 	FieldKey,
 	FieldLabel,
 	FieldType,
 	FieldOptions,
 	FieldIndexed,
+	FieldVersion,
+	FieldIndexStatus,
 	FieldScale,
 	FieldRequired,
 	FieldChoices,
@@ -77,8 +70,6 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
-	// ContainerIDValidator is a validator for the "container_id" field. It is called by the builders before save.
-	ContainerIDValidator func(string) error
 	// KeyValidator is a validator for the "key" field. It is called by the builders before save.
 	KeyValidator func(string) error
 	// LabelValidator is a validator for the "label" field. It is called by the builders before save.
@@ -87,6 +78,10 @@ var (
 	DefaultOptions model.FieldOptions
 	// DefaultIndexed holds the default value on creation for the "indexed" field.
 	DefaultIndexed bool
+	// DefaultVersion holds the default value on creation for the "version" field.
+	DefaultVersion int
+	// VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	VersionValidator func(int) error
 	// DefaultScale holds the default value on creation for the "scale" field.
 	DefaultScale int
 	// ScaleValidator is a validator for the "scale" field. It is called by the builders before save.
@@ -108,6 +103,7 @@ type Type string
 const (
 	TypeText     Type = "text"
 	TypeNumber   Type = "number"
+	TypeCurrency Type = "currency"
 	TypeInteger  Type = "integer"
 	TypeDecimal  Type = "decimal"
 	TypeBoolean  Type = "boolean"
@@ -118,7 +114,9 @@ const (
 	TypeURL      Type = "url"
 	TypeDate     Type = "date"
 	TypeLookup   Type = "lookup"
+	TypePerson   Type = "person"
 	TypeTerm     Type = "term"
+	TypeKeywords Type = "keywords"
 )
 
 func (_type Type) String() string {
@@ -128,10 +126,37 @@ func (_type Type) String() string {
 // TypeValidator is a validator for the "type" field enum values. It is called by the builders before save.
 func TypeValidator(_type Type) error {
 	switch _type {
-	case TypeText, TypeNumber, TypeInteger, TypeDecimal, TypeBoolean, TypeDatetime, TypeChoice, TypeNote, TypeEmail, TypeURL, TypeDate, TypeLookup, TypeTerm:
+	case TypeText, TypeNumber, TypeCurrency, TypeInteger, TypeDecimal, TypeBoolean, TypeDatetime, TypeChoice, TypeNote, TypeEmail, TypeURL, TypeDate, TypeLookup, TypePerson, TypeTerm, TypeKeywords:
 		return nil
 	default:
 		return fmt.Errorf("fielddefinition: invalid enum value for type field: %q", _type)
+	}
+}
+
+// IndexStatus defines the type for the "index_status" enum field.
+type IndexStatus string
+
+// IndexStatusReady is the default value of the IndexStatus enum.
+const DefaultIndexStatus = IndexStatusReady
+
+// IndexStatus values.
+const (
+	IndexStatusReady    IndexStatus = "ready"
+	IndexStatusBuilding IndexStatus = "building"
+	IndexStatusFailed   IndexStatus = "failed"
+)
+
+func (is IndexStatus) String() string {
+	return string(is)
+}
+
+// IndexStatusValidator is a validator for the "index_status" field enum values. It is called by the builders before save.
+func IndexStatusValidator(is IndexStatus) error {
+	switch is {
+	case IndexStatusReady, IndexStatusBuilding, IndexStatusFailed:
+		return nil
+	default:
+		return fmt.Errorf("fielddefinition: invalid enum value for index_status field: %q", is)
 	}
 }
 
@@ -146,11 +171,6 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
-}
-
-// ByContainerID orders the results by the container_id field.
-func ByContainerID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldContainerID, opts...).ToFunc()
 }
 
 // ByKey orders the results by the key field.
@@ -173,6 +193,16 @@ func ByIndexed(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIndexed, opts...).ToFunc()
 }
 
+// ByVersion orders the results by the version field.
+func ByVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVersion, opts...).ToFunc()
+}
+
+// ByIndexStatus orders the results by the index_status field.
+func ByIndexStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIndexStatus, opts...).ToFunc()
+}
+
 // ByScale orders the results by the scale field.
 func ByScale(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldScale, opts...).ToFunc()
@@ -181,18 +211,4 @@ func ByScale(opts ...sql.OrderTermOption) OrderOption {
 // ByRequired orders the results by the required field.
 func ByRequired(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRequired, opts...).ToFunc()
-}
-
-// ByContainerField orders the results by container field.
-func ByContainerField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newContainerStep(), sql.OrderByField(field, opts...))
-	}
-}
-func newContainerStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ContainerInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, ContainerTable, ContainerColumn),
-	)
 }

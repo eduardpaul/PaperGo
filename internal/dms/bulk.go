@@ -10,41 +10,42 @@ import (
 const MaxBulkOperations = 100
 
 type BulkCreate struct {
-	ContentTypeID string         `json:"content_type_id,omitempty" format:"uuid" doc:"Collection content type ID. Omission selects the collection default."`
-	Name          string         `json:"name" minLength:"1" maxLength:"255"`
-	Tags          []string       `json:"tags,omitempty" maxItems:"50" uniqueItems:"true"`
+	ContentTypeID string         `json:"content_type_id,omitempty"`
+	Name          string         `json:"name"`
+	Tags          []string       `json:"tags,omitempty"`
 	Values        map[string]any `json:"values,omitempty"`
 }
 
 type BulkUpdate struct {
-	Name     *string         `json:"name,omitempty" minLength:"1" maxLength:"255"`
-	Tags     *[]string       `json:"tags,omitempty" maxItems:"50" uniqueItems:"true"`
-	Values   *map[string]any `json:"values,omitempty"`
-	ParentID *string         `json:"parent_id,omitempty" minLength:"1" doc:"Destination collection or folder in the same collection."`
+	ContentTypeID *string         `json:"content_type_id,omitempty"`
+	Name          *string         `json:"name,omitempty"`
+	Tags          *[]string       `json:"tags,omitempty"`
+	Values        *map[string]any `json:"values,omitempty"`
+	ParentID      *string         `json:"parent_id,omitempty"`
 }
 
 type BulkOperation struct {
-	Action   string      `json:"action" enum:"create,update,publish,unpublish,delete"`
-	ID       string      `json:"id,omitempty" minLength:"1" doc:"Existing item in this collection (all actions but create). Each existing item may occur only once."`
-	Version  int         `json:"version,omitempty" minimum:"1" doc:"Current resource lock version (all actions but create); stale versions roll back the entire batch."`
-	ParentID string      `json:"parent_id,omitempty" doc:"Create only: existing folder in this collection. Defaults to the collection."`
-	Create   *BulkCreate `json:"create,omitempty" doc:"Required for create."`
-	Update   *BulkUpdate `json:"update,omitempty" doc:"Required for update."`
+	Action   string      `json:"action"`
+	ID       string      `json:"id,omitempty"`
+	Version  int         `json:"version,omitempty"`
+	ParentID string      `json:"parent_id,omitempty"`
+	Create   *BulkCreate `json:"create,omitempty"`
+	Update   *BulkUpdate `json:"update,omitempty"`
 }
 
 type BulkRequest struct {
-	Operations []BulkOperation `json:"operations" minItems:"1" maxItems:"100"`
+	Operations []BulkOperation `json:"operations"`
 }
 
 // Results are ordered like the request and deliberately omit full content.
 type BulkResult struct {
-	Action  string `json:"action" enum:"create,update,publish,unpublish,delete"`
-	ID      string `json:"id" format:"uuid"`
-	Version int    `json:"version" minimum:"1" doc:"Committed resource lock version, including the tombstone version for deletes."`
+	Action  string `json:"action"`
+	ID      string `json:"id"`
+	Version int    `json:"version"`
 }
 
 type BulkResponse struct {
-	Data []BulkResult `json:"data" doc:"Results in request order."`
+	Data []BulkResult `json:"data"`
 }
 
 // BulkError retains the underlying error classification without returning
@@ -154,18 +155,18 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 	if err != nil {
 		return result, err
 	}
-	if r.Kind != resource.KindItem || r.ContainerID == nil || *r.ContainerID != collectionID {
-		return result, invalid("bulk targets must be items in this collection")
+	if !contentKind(r.Kind) || r.ContainerID == nil || *r.ContainerID != collectionID {
+		return result, invalid("bulk targets must be items or folders in this collection")
 	}
 	switch op.Action {
 	case "update":
-		_, err = s.update(ctx, subject, op.ID, op.Version, UpdateResource{Name: op.Update.Name, Tags: op.Update.Tags, Values: op.Update.Values, ParentID: op.Update.ParentID})
+		_, err = s.update(ctx, subject, op.ID, op.Version, UpdateResource{Name: op.Update.Name, Tags: op.Update.Tags, Values: op.Update.Values, ParentID: op.Update.ParentID, ContentTypeID: op.Update.ContentTypeID})
 	case "publish":
 		_, err = s.publish(ctx, subject, op.ID, op.Version)
 	case "unpublish":
 		_, err = s.unpublish(ctx, subject, op.ID, op.Version)
 	case "delete":
-		err = s.delete(ctx, subject, op.ID, op.Version)
+		err = s.delete(ctx, subject, op.ID, op.Version, false)
 	}
 	return result, err
 }

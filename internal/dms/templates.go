@@ -49,11 +49,11 @@ func (s *Service) templateDefinition(ctx context.Context, subject, workspaceID s
 		if e := validateFieldDefinition(d); e != nil {
 			return nil, e
 		}
-		if e := s.validateReferenceScopes(ctx, subject, workspaceID, d); e != nil {
+		if e := s.validateReferenceScopes(ctx, subject, d); e != nil {
 			return nil, e
 		}
 		if len(d.Options.DefaultValue) > 0 {
-			if e := s.normalizeItemValues(ctx, subject, workspaceID, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
+			if e := s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil, true); e != nil {
 				return nil, e
 			}
 		}
@@ -75,7 +75,7 @@ func (s *Service) templateDefinition(ctx context.Context, subject, workspaceID s
 }
 func (s *Service) CreateTemplate(ctx context.Context, subject, workspaceID string, in TemplateInput) (out *ent.SchemaTemplate, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		w, e := t.workspace(ctx, subject, workspaceID, "manage")
+		w, e := t.schemaWorkspace(ctx, subject, workspaceID, "manage")
 		if e != nil {
 			return e
 		}
@@ -100,12 +100,12 @@ func (s *Service) UpdateTemplate(ctx context.Context, subject, id string, versio
 		if e != nil {
 			return e
 		}
-		w, e := t.workspace(ctx, subject, old.WorkspaceID, "manage")
+		w, e := t.schemaWorkspace(ctx, subject, old.WorkspaceID, "manage")
 		if e != nil {
 			return e
 		}
 		if old.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if in.Key == "" {
 			in.Key = old.Key
@@ -127,7 +127,7 @@ func (s *Service) UpdateTemplate(ctx context.Context, subject, id string, versio
 }
 func (s *Service) Templates(ctx context.Context, subject, workspaceID, after string, limit int) (Page[*ent.SchemaTemplate], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.SchemaTemplate], error) {
-		if _, e := t.workspace(ctx, subject, workspaceID, "read"); e != nil {
+		if _, e := t.schemaWorkspace(ctx, subject, workspaceID, "read"); e != nil {
 			return Page[*ent.SchemaTemplate]{}, e
 		}
 		rows, e := t.Client.SchemaTemplate.Query().Where(schematemplate.WorkspaceIDEQ(workspaceID), schematemplate.IDGT(after)).Order(ent.Asc(schematemplate.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
@@ -142,7 +142,7 @@ type ApplyTemplateInput struct {
 
 func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templateID string, version, templateVersion int, typeID string) (out *ent.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		c, e := t.authorize(ctx, subject, containerID, "manage")
+		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
 		if e != nil {
 			return e
 		}
@@ -150,7 +150,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			return invalid("templates apply to collections")
 		}
 		if c.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		typ, e := t.contentType(ctx, c.ID, typeID)
 		if e != nil {
@@ -167,7 +167,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			return invalid("template belongs to a different workspace")
 		}
 		if tpl.Version != templateVersion {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		defs, e := definitions(tpl.Definition)
 		if e != nil {
@@ -178,20 +178,20 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			return e
 		}
 		required := []string{}
-		reindex := false
+		reindex := []*ent.FieldDefinition{}
 		for _, d := range defs {
 			if e = validateFieldDefinition(d); e != nil {
 				return e
 			}
-			if e = t.validateReferenceScopes(ctx, subject, c.WorkspaceID, d); e != nil {
+			if e = t.validateReferenceScopes(ctx, subject, d); e != nil {
 				return e
 			}
 			if len(d.Options.DefaultValue) > 0 {
-				if e = t.normalizeItemValues(ctx, subject, c.WorkspaceID, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
+				if e = t.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil, true); e != nil {
 					return e
 				}
 			}
-			old, e := t.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
+			old, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
 			if ent.IsNotFound(e) {
 				_, e = t.createField(ctx, subject, c, CreateField{ContentTypeID: typ.ID, Key: d.Key, Label: d.Label, Type: string(d.Type), Required: d.Required, Choices: d.Choices, Indexed: d.Indexed, Scale: d.Scale, Options: d.Options})
 				if e != nil {
@@ -208,9 +208,12 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			if newlyRequired(old, d) {
 				required = append(required, d.Key)
 			}
-			reindex = reindex || old.Indexed != d.Indexed
-			if _, e = t.Client.FieldDefinition.UpdateOne(old).SetLabel(d.Label).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetOptions(d.Options).Save(ctx); e != nil {
+			updated, e := t.Client.FieldDefinition.UpdateOne(old).AddVersion(1).SetLabel(d.Label).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetOptions(d.Options).Save(ctx)
+			if e != nil {
 				return e
+			}
+			if old.Indexed != d.Indexed {
+				reindex = append(reindex, updated)
 			}
 		}
 		if e = t.checkRequiredFilled(ctx, c.ID, required); e != nil {
@@ -220,10 +223,14 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 		if e != nil {
 			return e
 		}
-		keys := slices.Clone(typ.FieldKeys)
+		ids := slices.Clone(typ.FieldIds)
 		for _, d := range defs {
-			if !slices.Contains(keys, d.Key) {
-				keys = append(keys, d.Key)
+			live, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
+			if e != nil {
+				return e
+			}
+			if !slices.Contains(ids, live.ID) {
+				ids = append(ids, live.ID)
 			}
 		}
 		rules := slices.Clone(typ.Rules)
@@ -235,21 +242,48 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 				rules[i] = rule
 			}
 		}
-		candidate := ContentTypeInput{Key: typ.Key, Name: typ.Name, FieldKeys: keys, Rules: rules, IsDefault: typ.IsDefault}
-		if e = t.validateContentType(ctx, c.ID, &candidate); e != nil {
+		candidate := ContentTypeInput{Key: typ.Key, Name: typ.Name, FieldIds: ids, Rules: rules}
+		if e = t.validateContentType(ctx, &candidate); e != nil {
 			return e
 		}
-		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, keys, rules); e != nil {
+		if e = t.checkTypeHeads(ctx, subject, c, typ.ID, fieldKeys(defs), rules); e != nil {
 			return e
 		}
-		if _, e = t.Client.ContentType.Update().Where(contenttype.IDEQ(typ.ID)).SetFieldKeys(keys).SetRules(candidate.Rules).AddVersion(1).Save(ctx); e != nil {
+		if _, e = t.Client.ContentType.Update().Where(contenttype.IDEQ(typ.ID)).SetFieldIds(ids).SetRules(candidate.Rules).AddVersion(1).Save(ctx); e != nil {
 			return e
 		}
-		if e = t.recordSchema(ctx, subject, c); e != nil {
+		affected, e := t.attachedCollections(ctx, []string{typ.ID})
+		if e != nil {
 			return e
 		}
-		if reindex {
-			if e = t.rebuildSurfaces(ctx, c.ID); e != nil {
+		seen := map[string]bool{}
+		for _, a := range affected {
+			seen[a.ID] = true
+		}
+		for _, d := range defs {
+			live, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.KeyEQ(d.Key)).Only(ctx)
+			if e != nil {
+				return e
+			}
+			if e = t.bumpFieldTypes(ctx, live.ID); e != nil {
+				return e
+			}
+			all, e := t.fieldCollections(ctx, live.ID)
+			if e != nil {
+				return e
+			}
+			for _, a := range all {
+				if !seen[a.ID] {
+					seen[a.ID] = true
+					affected = append(affected, a)
+				}
+			}
+		}
+		if e = t.refreshCollections(ctx, subject, affected); e != nil {
+			return e
+		}
+		for _, d := range reindex {
+			if e = t.enqueueFieldIndex(ctx, subject, d); e != nil {
 				return e
 			}
 		}

@@ -75,9 +75,9 @@ func ResourceID(v string) predicate.Grant {
 	return predicate.Grant(sql.FieldEQ(FieldResourceID, v))
 }
 
-// Subject applies equality check predicate on the "subject" field. It's identical to SubjectEQ.
-func Subject(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldEQ(FieldSubject, v))
+// PrincipalID applies equality check predicate on the "principal_id" field. It's identical to PrincipalIDEQ.
+func PrincipalID(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldEQ(FieldPrincipalID, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -185,69 +185,89 @@ func ResourceIDContainsFold(v string) predicate.Grant {
 	return predicate.Grant(sql.FieldContainsFold(FieldResourceID, v))
 }
 
-// SubjectEQ applies the EQ predicate on the "subject" field.
-func SubjectEQ(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldEQ(FieldSubject, v))
+// PrincipalTypeEQ applies the EQ predicate on the "principal_type" field.
+func PrincipalTypeEQ(v PrincipalType) predicate.Grant {
+	return predicate.Grant(sql.FieldEQ(FieldPrincipalType, v))
 }
 
-// SubjectNEQ applies the NEQ predicate on the "subject" field.
-func SubjectNEQ(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldNEQ(FieldSubject, v))
+// PrincipalTypeNEQ applies the NEQ predicate on the "principal_type" field.
+func PrincipalTypeNEQ(v PrincipalType) predicate.Grant {
+	return predicate.Grant(sql.FieldNEQ(FieldPrincipalType, v))
 }
 
-// SubjectIn applies the In predicate on the "subject" field.
-func SubjectIn(vs ...string) predicate.Grant {
-	return predicate.Grant(sql.FieldIn(FieldSubject, vs...))
+// PrincipalTypeIn applies the In predicate on the "principal_type" field.
+func PrincipalTypeIn(vs ...PrincipalType) predicate.Grant {
+	return predicate.Grant(sql.FieldIn(FieldPrincipalType, vs...))
 }
 
-// SubjectNotIn applies the NotIn predicate on the "subject" field.
-func SubjectNotIn(vs ...string) predicate.Grant {
-	return predicate.Grant(sql.FieldNotIn(FieldSubject, vs...))
+// PrincipalTypeNotIn applies the NotIn predicate on the "principal_type" field.
+func PrincipalTypeNotIn(vs ...PrincipalType) predicate.Grant {
+	return predicate.Grant(sql.FieldNotIn(FieldPrincipalType, vs...))
 }
 
-// SubjectGT applies the GT predicate on the "subject" field.
-func SubjectGT(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldGT(FieldSubject, v))
+// PrincipalIDEQ applies the EQ predicate on the "principal_id" field.
+func PrincipalIDEQ(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldEQ(FieldPrincipalID, v))
 }
 
-// SubjectGTE applies the GTE predicate on the "subject" field.
-func SubjectGTE(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldGTE(FieldSubject, v))
+// PrincipalIDNEQ applies the NEQ predicate on the "principal_id" field.
+func PrincipalIDNEQ(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldNEQ(FieldPrincipalID, v))
 }
 
-// SubjectLT applies the LT predicate on the "subject" field.
-func SubjectLT(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldLT(FieldSubject, v))
+// PrincipalIDIn applies the In predicate on the "principal_id" field.
+func PrincipalIDIn(vs ...string) predicate.Grant {
+	return predicate.Grant(sql.FieldIn(FieldPrincipalID, vs...))
 }
 
-// SubjectLTE applies the LTE predicate on the "subject" field.
-func SubjectLTE(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldLTE(FieldSubject, v))
+// PrincipalIDNotIn applies the NotIn predicate on the "principal_id" field.
+func PrincipalIDNotIn(vs ...string) predicate.Grant {
+	return predicate.Grant(sql.FieldNotIn(FieldPrincipalID, vs...))
 }
 
-// SubjectContains applies the Contains predicate on the "subject" field.
-func SubjectContains(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldContains(FieldSubject, v))
+// PrincipalIDGT applies the GT predicate on the "principal_id" field.
+func PrincipalIDGT(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldGT(FieldPrincipalID, v))
 }
 
-// SubjectHasPrefix applies the HasPrefix predicate on the "subject" field.
-func SubjectHasPrefix(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldHasPrefix(FieldSubject, v))
+// PrincipalIDGTE applies the GTE predicate on the "principal_id" field.
+func PrincipalIDGTE(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldGTE(FieldPrincipalID, v))
 }
 
-// SubjectHasSuffix applies the HasSuffix predicate on the "subject" field.
-func SubjectHasSuffix(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldHasSuffix(FieldSubject, v))
+// PrincipalIDLT applies the LT predicate on the "principal_id" field.
+func PrincipalIDLT(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldLT(FieldPrincipalID, v))
 }
 
-// SubjectEqualFold applies the EqualFold predicate on the "subject" field.
-func SubjectEqualFold(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldEqualFold(FieldSubject, v))
+// PrincipalIDLTE applies the LTE predicate on the "principal_id" field.
+func PrincipalIDLTE(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldLTE(FieldPrincipalID, v))
 }
 
-// SubjectContainsFold applies the ContainsFold predicate on the "subject" field.
-func SubjectContainsFold(v string) predicate.Grant {
-	return predicate.Grant(sql.FieldContainsFold(FieldSubject, v))
+// PrincipalIDContains applies the Contains predicate on the "principal_id" field.
+func PrincipalIDContains(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldContains(FieldPrincipalID, v))
+}
+
+// PrincipalIDHasPrefix applies the HasPrefix predicate on the "principal_id" field.
+func PrincipalIDHasPrefix(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldHasPrefix(FieldPrincipalID, v))
+}
+
+// PrincipalIDHasSuffix applies the HasSuffix predicate on the "principal_id" field.
+func PrincipalIDHasSuffix(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldHasSuffix(FieldPrincipalID, v))
+}
+
+// PrincipalIDEqualFold applies the EqualFold predicate on the "principal_id" field.
+func PrincipalIDEqualFold(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldEqualFold(FieldPrincipalID, v))
+}
+
+// PrincipalIDContainsFold applies the ContainsFold predicate on the "principal_id" field.
+func PrincipalIDContainsFold(v string) predicate.Grant {
+	return predicate.Grant(sql.FieldContainsFold(FieldPrincipalID, v))
 }
 
 // ActionEQ applies the EQ predicate on the "action" field.

@@ -4,16 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"papergo/ent"
-	"papergo/ent/fielddefinition"
 	"papergo/ent/listview"
 )
 
 type ViewInput struct {
-	Name      string    `json:"name" minLength:"1" maxLength:"255"`
-	Columns   []string  `json:"columns" required:"false" maxItems:"50" doc:"Field keys and $id/$name/$tags; empty columns default to $name."`
-	Query     QuerySpec `json:"query" required:"false"`
-	Layout    string    `json:"layout" required:"false" enum:"table,board,calendar,gallery" doc:"Client layout hint; defaults to table."`
-	IsDefault bool      `json:"is_default" required:"false"`
+	Name      string    `json:"name"`
+	Columns   []string  `json:"columns"`
+	Query     QuerySpec `json:"query"`
+	Layout    string    `json:"layout"`
+	IsDefault bool      `json:"is_default"`
 }
 
 func (s *Service) validateView(ctx context.Context, subject, containerID string, in *ViewInput) error {
@@ -32,7 +31,7 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 	if len(in.Columns) == 0 {
 		in.Columns = []string{"$name"}
 	}
-	defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(containerID)).All(ctx)
+	defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(containerID)).All(ctx)
 	if e != nil {
 		return e
 	}
@@ -111,7 +110,7 @@ func (s *Service) UpdateView(ctx context.Context, subject, id string, version in
 			return e
 		}
 		if v.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if e = t.validateView(ctx, subject, v.ContainerID, &in); e != nil {
 			return e
@@ -144,7 +143,7 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 			return e
 		}
 		if v.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if e = t.Client.ListView.DeleteOne(v).Exec(ctx); e != nil {
 			return e
@@ -154,9 +153,11 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 }
 
 type ViewQueryRequest struct {
-	Surface string `json:"surface,omitempty" enum:"auto,head,published" doc:"Defaults to auto: head for draft readers and published for ordinary readers. Head requires draft access."`
-	After   string `json:"after,omitempty" doc:"Opaque cursor from next_cursor."`
-	Limit   int    `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"Maximum results; defaults to 50."`
+	Select       []string `json:"select,omitempty"`
+	Surface      string   `json:"surface,omitempty"`
+	After        string   `json:"-"`
+	Limit        int      `json:"-"`
+	IncludeTotal bool     `json:"include_total,omitempty"`
 }
 
 func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQueryRequest) (QueryResult, error) {
@@ -169,23 +170,25 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 		if e = json.Unmarshal(v.Query, &spec); e != nil {
 			return QueryResult{}, e
 		}
-		out, e := t.Query(ctx, subject, v.ContainerID, QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit})
+		selection := in.Select
+		if selection == nil {
+			selection = v.Columns
+		}
+		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, Select: selection}
+		if request.Surface == "" {
+			request.Surface = "auto"
+		}
+		q, e := t.compileQuery(ctx, subject, v.ContainerID, request, false)
+		if e != nil {
+			return QueryResult{}, e
+		}
+		// Rows carry only the view's columns; detail reads return full content.
+		out, e := t.queryCompiled(ctx, subject, request, q, q.projection)
 		if e != nil {
 			return out, e
 		}
-		selected := map[string]bool{}
-		for _, column := range v.Columns {
-			selected[column] = true
-		}
-		for _, r := range out.Data {
-			values := map[string]any{}
-			for k, x := range r.Values {
-				if selected[k] {
-					values[k] = x
-				}
-			}
-			r.Values = values
-			if !selected["$tags"] {
+		if !q.includeTags {
+			for _, r := range out.Data {
 				r.Tags = []string{}
 			}
 		}
@@ -202,6 +205,6 @@ func (s *Service) QueryViewGroups(ctx context.Context, subject, id string, in Vi
 		if e = json.Unmarshal(v.Query, &spec); e != nil {
 			return Page[QueryGroup]{}, e
 		}
-		return t.QueryGroups(ctx, subject, v.ContainerID, QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit})
+		return t.QueryGroups(ctx, subject, v.ContainerID, QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, Select: in.Select})
 	})
 }

@@ -13,9 +13,9 @@ import (
 )
 
 func TestCollectionPassesSpanBatches(t *testing.T) {
-	previous := surfaceBatch
-	surfaceBatch = 3
-	t.Cleanup(func() { surfaceBatch = previous })
+	previousSurface, previousOperation := surfaceBatch, operationBatch
+	surfaceBatch, operationBatch = 3, 3
+	t.Cleanup(func() { surfaceBatch, operationBatch = previousSurface, previousOperation })
 	s, _, list := fixture(t)
 	n, err := s.CreateField(testContext, "alice", list.ID, CreateField{Key: "n", Label: "N", Type: "integer"})
 	if err != nil {
@@ -47,6 +47,9 @@ func TestCollectionPassesSpanBatches(t *testing.T) {
 	if _, err = s.UpdateField(testContext, "alice", list.ID, n.ID, latest(t, s, list.ID).Version, UpdateField{Indexed: &indexed}); err != nil {
 		t.Fatal(err)
 	}
+	if err = s.runOperations(testContext); err != nil {
+		t.Fatal(err)
+	}
 	if rows, err := s.Client.FieldValue.Query().Count(testContext); err != nil || rows != surfaces {
 		t.Fatalf("rebuild indexed %d of %d surfaces: %v", rows, surfaces, err)
 	}
@@ -58,12 +61,28 @@ func TestCollectionPassesSpanBatches(t *testing.T) {
 	if _, err = s.UpdateField(testContext, "alice", list.ID, n.ID, latest(t, s, list.ID).Version, UpdateField{Indexed: &indexed}); err != nil {
 		t.Fatal(err)
 	}
+	if err = s.runOperations(testContext); err != nil {
+		t.Fatal(err)
+	}
 	if rows, err := s.Client.FieldValue.Query().Count(testContext); err != nil || rows != 0 {
 		t.Fatalf("rows left after unindexing: %d %v", rows, err)
 	}
 	required := true
 	if _, err = s.UpdateField(testContext, "alice", list.ID, owner.ID, latest(t, s, list.ID).Version, UpdateField{Required: &required}); err == nil {
 		t.Fatal("required check missed an item outside the first batch")
+	}
+	automatic := false
+	if _, err = s.Update(testContext, "alice", list.ID, latest(t, s, list.ID).Version, UpdateResource{PublishingEnabled: &automatic}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range items {
+		r := current(t, s, id)
+		if r.PublishedRevisionID == nil || *r.PublishedRevisionID != *r.HeadRevisionID {
+			t.Fatalf("automatic publishing skipped %s", id)
+		}
+	}
+	if published, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(list.ID), itemsurface.SurfaceEQ(itemsurface.SurfacePublished)).Count(testContext); err != nil || published != len(items) {
+		t.Fatalf("published surfaces: %d %v", published, err)
 	}
 }
 

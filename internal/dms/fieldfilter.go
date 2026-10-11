@@ -25,12 +25,12 @@ func (s *Service) fieldFilter(ctx context.Context, subject string, in Browse) (f
 	} else if parent.Kind != resource.KindList && parent.Kind != resource.KindLibrary {
 		return nil, candidateSet{}, invalid("field filters require a collection scope")
 	}
-	d, err := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(container), fielddefinition.KeyEQ(in.FilterField)).Only(ctx)
+	d, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(container), fielddefinition.KeyEQ(in.FilterField)).Only(ctx)
 	if err != nil {
 		return nil, candidateSet{}, invalid("field filter references an unknown field")
 	}
-	if !d.Indexed {
-		return nil, candidateSet{}, invalid("field is not configured for indexed queries")
+	if !queryable(d) {
+		return nil, candidateSet{}, unqueryable(d.Key, d)
 	}
 	op := "="
 	switch in.FilterOp {
@@ -55,9 +55,8 @@ func (s *Service) fieldFilter(ctx context.Context, subject string, in Browse) (f
 	case "decimal":
 		column = "value_integer"
 		_, value, err = decimal(in.FilterValue, d.Scale)
-	case "number":
-		column = "value_number"
-		value, err = number(json.Number(in.FilterValue))
+	case "number", "currency":
+		value, err = numberKey(json.Number(in.FilterValue))
 	case "boolean":
 		if op != "=" {
 			return nil, candidateSet{}, invalid("boolean filters only support eq")

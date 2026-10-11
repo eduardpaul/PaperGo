@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"math"
 	"math/big"
 	"net/mail"
 	"net/url"
@@ -14,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf16"
 	"unicode/utf8"
 )
 
@@ -24,8 +24,8 @@ type fieldNormalizer func(*ent.FieldDefinition, any) (any, error)
 var fieldTypes = map[string]fieldNormalizer{
 	"text": normalizeString, "note": normalizeString, "choice": normalizeChoice,
 	"email": normalizeEmail, "url": normalizeURL, "date": normalizeDate,
-	"datetime": normalizeDateTime, "lookup": normalizeIdentifier, "term": normalizeIdentifier,
-	"integer": normalizeInteger, "decimal": normalizeDecimal, "number": normalizeNumber, "boolean": normalizeBoolean,
+	"datetime": normalizeDateTime, "person": normalizePersonRef, "lookup": normalizeIdentifier, "term": normalizeTermRef, "keywords": normalizeTermRef,
+	"integer": normalizeInteger, "decimal": normalizeDecimal, "number": normalizeNumber, "currency": normalizeNumber, "boolean": normalizeBoolean,
 }
 
 func FieldTypes() []string {
@@ -41,10 +41,35 @@ func normalizeString(d *ent.FieldDefinition, v any) (any, error) {
 	if !ok || !utf8.ValidString(x) {
 		return nil, invalid("expected text")
 	}
-	if d.Options.MaxLength != nil && utf8.RuneCountInString(x) > *d.Options.MaxLength {
+	limit, _ := stringLimits(string(d.Type))
+	if d.Options.MaxLength != nil {
+		limit = *d.Options.MaxLength
+	}
+	if limit > 0 && utf16Length(x) > limit {
 		return nil, invalid("text exceeds maximum length")
 	}
 	return x, nil
+}
+
+func utf16Length(text string) int {
+	length := 0
+	for _, r := range text {
+		length += utf16.RuneLen(r)
+	}
+	return length
+}
+
+func stringLimits(typ string) (defaultLimit, ceiling int) {
+	switch typ {
+	case "text", "email":
+		return 255, 4000
+	case "url":
+		return 2048, 4000
+	case "note":
+		return 100000, 1000000
+	default:
+		return 0, 0
+	}
 }
 func normalizeChoice(d *ent.FieldDefinition, v any) (any, error) {
 	x, e := normalizeString(d, v)
@@ -75,7 +100,7 @@ func normalizeURL(d *ent.FieldDefinition, v any) (any, error) {
 		return nil, e
 	}
 	u, e := url.Parse(x.(string))
-	if e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
+	if e != nil || u.Host == "" || (!strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https")) {
 		return nil, invalid("expected absolute HTTP(S) URL")
 	}
 	return x, nil
@@ -109,6 +134,19 @@ func normalizeIdentifier(d *ent.FieldDefinition, v any) (any, error) {
 	}
 	return x, nil
 }
+
+// normalizeTermRef accepts a term ID or a term label; normalizeItemValues
+// resolves labels to IDs.
+func normalizeTermRef(d *ent.FieldDefinition, v any) (any, error) {
+	x, ok := v.(string)
+	if ok {
+		x = strings.TrimSpace(x)
+	}
+	if !ok || !utf8.ValidString(x) || x == "" || utf8.RuneCountInString(x) > 255 {
+		return nil, invalid("expected a term ID or label")
+	}
+	return x, nil
+}
 func normalizeInteger(d *ent.FieldDefinition, v any) (any, error) {
 	i, e := integer(v)
 	if e != nil {
@@ -121,11 +159,7 @@ func normalizeDecimal(d *ent.FieldDefinition, v any) (any, error) {
 	return c, e
 }
 func normalizeNumber(d *ent.FieldDefinition, v any) (any, error) {
-	n, e := number(v)
-	if e != nil || math.IsNaN(n) || math.IsInf(n, 0) {
-		return nil, invalid("expected finite number")
-	}
-	return v, nil
+	return number(v)
 }
 func normalizeBoolean(d *ent.FieldDefinition, v any) (any, error) {
 	x, ok := v.(bool)
@@ -159,24 +193,17 @@ func scalarValue(d *ent.FieldDefinition, v any) (any, error) {
 	return out, nil
 }
 func compareNumeric(d *ent.FieldDefinition, value any, bound string) (int, error) {
-	// Approximate numbers use float comparisons. Expanding arbitrary scientific
-	// exponents into rationals could allocate unbounded memory on schema input.
-	if d.Type == "number" {
+	if d.Type == "number" || d.Type == "currency" {
 		a, e := number(value)
 		if e != nil {
 			return 0, e
 		}
-		b, e := number(json.Number(bound))
-		if e != nil || math.IsInf(b, 0) || math.IsNaN(b) {
+		value = a
+		n, e := number(json.Number(bound))
+		if e != nil {
 			return 0, invalid("invalid numeric bound")
 		}
-		if a < b {
-			return -1, nil
-		}
-		if a > b {
-			return 1, nil
-		}
-		return 0, nil
+		bound = n.String()
 	}
 	a, ok := new(big.Rat).SetString(numericString(value))
 	if !ok {
@@ -275,25 +302,36 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 		return invalid("choices belong to choice fields")
 	}
 	o := d.Options
-	if o.Unique && (!d.Indexed || o.Multiple || typ == "number") {
+	if o.Unique && (!d.Indexed || o.Multiple) {
 		return invalid("unique business keys require an indexed scalar field with an exact type")
 	}
 	if len(o.Description) > 4096 {
 		return invalid("description exceeds 4096 bytes")
 	}
+	if typ == "currency" {
+		if len(o.CurrencyCode) != 3 || strings.IndexFunc(o.CurrencyCode, func(r rune) bool { return r < 'A' || r > 'Z' }) >= 0 {
+			return invalid("currency_code requires three uppercase letters")
+		}
+	} else if o.CurrencyCode != "" {
+		return invalid("currency_code belongs to currency fields")
+	}
 	if o.MaxLength != nil {
-		if *o.MaxLength < 1 || *o.MaxLength > 65536 || !(typ == "text" || typ == "note" || typ == "email" || typ == "url" || typ == "choice") {
-			return invalid("max_length requires a text field and must be 1..65536")
+		_, ceiling := stringLimits(typ)
+		if *o.MaxLength < 1 || *o.MaxLength > ceiling {
+			return invalid("max_length exceeds the field type's UTF-16 length range")
 		}
 	}
-	if o.Multiple && !(typ == "choice" || typ == "term" || typ == "lookup" || typ == "text" || typ == "email" || typ == "url") {
-		return invalid("multiple requires a text, choice or reference field")
+	if o.Multiple && !(typ == "choice" || typ == "term" || typ == "keywords" || typ == "lookup" || typ == "person") {
+		return invalid("multiple requires choice, person, lookup, term or keywords")
 	}
 	if (typ == "lookup") != (o.LookupContainerID != "") || (typ == "term") != (o.TermSetID != "") {
 		return invalid("reference fields require their matching reference scope")
 	}
+	if typ == "keywords" && !d.Indexed {
+		return invalid("keywords fields must be indexed")
+	}
 	if o.Minimum != nil || o.Maximum != nil {
-		if typ != "number" && typ != "integer" && typ != "decimal" {
+		if typ != "number" && typ != "currency" && typ != "integer" && typ != "decimal" {
 			return invalid("numeric bounds require a numeric field")
 		}
 		clone := *d
@@ -346,39 +384,39 @@ func optionsIdentityEqual(a, b model.FieldOptions) bool {
 	return a.Multiple == b.Multiple && a.LookupContainerID == b.LookupContainerID && a.TermSetID == b.TermSetID
 }
 
-func (s *Service) validateReferenceScopes(ctx context.Context, subject string, workspaceID string, d *ent.FieldDefinition) error {
+func (s *Service) validateReferenceScopes(ctx context.Context, subject string, d *ent.FieldDefinition) error {
 	if d.Type == "lookup" {
-		r, e := s.authorize(ctx, subject, d.Options.LookupContainerID, "read")
+		r, e := s.Client.Resource.Get(ctx, d.Options.LookupContainerID)
+		if ent.IsNotFound(e) {
+			return invalid("unknown lookup collection")
+		}
 		if e != nil {
 			return e
 		}
-		if (r.Kind != "list" && r.Kind != "library") || r.WorkspaceID != workspaceID {
-			return invalid("lookup must target a collection in this workspace")
+		if (r.Kind != "list" && r.Kind != "library") || r.DeletedAt != nil {
+			return invalid("lookup must target a live collection")
 		}
 	}
 	if d.Type == "term" {
-		set, e := s.Client.TermSet.Get(ctx, d.Options.TermSetID)
+		_, e := s.Client.TermSet.Get(ctx, d.Options.TermSetID)
 		if ent.IsNotFound(e) {
 			return invalid("unknown term set")
 		}
 		if e != nil {
 			return e
 		}
-		if set.WorkspaceID != workspaceID {
-			return invalid("term set must belong to this workspace")
-		}
-		if _, e = s.authorize(ctx, subject, set.WorkspaceID, "read"); e != nil {
+		if e = s.requireTaxonomy(ctx, subject, "read"); e != nil {
 			return e
 		}
 	}
 	return nil
 }
-func (s *Service) normalizeItemValues(ctx context.Context, subject, workspaceID string, defs []*ent.FieldDefinition, values, previous map[string]any) error {
-	if e := normalizeRevisionValues(defs, values, previous); e != nil {
+func (s *Service) normalizeItemValues(ctx context.Context, subject string, defs []*ent.FieldDefinition, values, previous map[string]any, applyDefaults bool) error {
+	if e := normalizeRevisionValues(defs, values, previous, applyDefaults); e != nil {
 		return e
 	}
 	for _, d := range defs {
-		if d.Type != "term" && d.Type != "lookup" {
+		if d.Type != "term" && d.Type != "keywords" && d.Type != "lookup" && d.Type != "person" {
 			continue
 		}
 		if values[d.Key] == nil {
@@ -402,30 +440,39 @@ func (s *Service) normalizeItemValues(ctx context.Context, subject, workspaceID 
 				}
 			}
 		}
+		if d.Type == "person" {
+			if e := s.validatePersonValues(ctx, current, old); e != nil {
+				return e
+			}
+			continue
+		}
+		if d.Type != "lookup" {
+			resolved, e := s.resolveTermValues(ctx, subject, d, current, old)
+			if e != nil {
+				return e
+			}
+			if d.Options.Multiple {
+				values[d.Key] = resolved
+			} else {
+				values[d.Key] = resolved[0]
+			}
+			continue
+		}
 		for _, v := range current {
 			id := v.(string)
-			if d.Type == "term" {
-				t, e := s.Client.Term.Get(ctx, id)
-				if ent.IsNotFound(e) {
-					return invalid("unknown term for field: " + d.Key)
-				}
-				if e != nil {
-					return e
-				}
-				if t.TermSetID != d.Options.TermSetID || (t.Deprecated && !old[id]) {
-					return invalid("term must be active and belong to the configured term set")
-				}
-			} else {
-				if old[id] {
-					continue
-				}
-				r, e := s.Get(ctx, subject, id)
-				if e != nil {
-					return e
-				}
-				if r.Kind != "item" || r.ContainerID == nil || *r.ContainerID != d.Options.LookupContainerID || r.WorkspaceID != workspaceID {
-					return invalid("lookup target belongs to a different collection")
-				}
+			if old[id] {
+				continue
+			}
+			// Reference validation does not grant read access to the target.
+			r, e := s.Client.Resource.Get(ctx, id)
+			if ent.IsNotFound(e) {
+				return invalid("unknown lookup item")
+			}
+			if e != nil {
+				return e
+			}
+			if r.Kind != "item" || r.DeletedAt != nil || r.ContainerID == nil || *r.ContainerID != d.Options.LookupContainerID {
+				return invalid("lookup target belongs to a different collection")
 			}
 		}
 	}

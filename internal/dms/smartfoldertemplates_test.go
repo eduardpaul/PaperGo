@@ -3,15 +3,14 @@ package dms
 import (
 	"encoding/json"
 	"errors"
-	"papergo/ent"
 	"strings"
 	"testing"
 )
 
 func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 	s, w, l := fixture(t)
-	makeTerms := func(workspace string) (*ent.Term, *ent.Term) {
-		set, e := s.CreateTermSet(testContext, "alice", workspace, TermSetInput{Key: "projects", Name: "Projects"})
+	makeTerms := func() (TermView, TermView) {
+		set, e := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "projects", Name: "Projects"})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -25,7 +24,7 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 		}
 		return root, child
 	}
-	_, child := makeTerms(w.ID)
+	_, child := makeTerms()
 	original := smartOK(t, s, SmartFolderInput{Name: "Project files", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Collections: []string{l.Name}, Terms: []string{child.ID}, GroupBy: []SmartFolderGroupBy{{Field: "$modified_at", By: "year"}}}})
 	smartOK(t, s, SmartFolderInput{Name: "Private", WorkspaceID: &w.ID, Personal: true})
 	pkg, sourceVersion, err := s.ExportSmartFolders(testContext, "alice", w.ID)
@@ -41,7 +40,7 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 		t.Fatal(current.Version, sourceVersion)
 	}
 	target := create(t, s, "", "workspace", "Target", nil)
-	_, targetChild := makeTerms(target.ID)
+	targetChild := child
 	result, err := s.ImportSmartFolders(testContext, "alice", target.ID, target.Version, pkg)
 	if err != nil || result.Created != 1 || result.Updated != 0 || result.WorkspaceVersion != target.Version+1 {
 		t.Fatal(result, err)
@@ -63,17 +62,17 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 		t.Fatal(replaced, err)
 	}
 	_, err = s.ImportSmartFolders(testContext, "alice", target.ID, again.WorkspaceVersion, pkg)
-	if !errors.Is(err, ErrConflict) {
+	if !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal(err)
 	}
-	if _, err = s.SetPermissions(testContext, "alice", target.ID, replaced.WorkspaceVersion, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "reader", Action: "read"}}}); err != nil {
+	if err = s.SetWorkspaceMember(testContext, "alice", target.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = s.ExportSmartFolders(testContext, "reader", target.ID); !errors.Is(err, ErrForbidden) {
+	if _, _, err = s.ExportSmartFolders(testContext, "reader", target.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 	targetCurrent, _ := s.Client.Resource.Get(testContext, target.ID)
-	if _, err = s.ImportSmartFolders(testContext, "reader", target.ID, targetCurrent.Version, pkg); !errors.Is(err, ErrForbidden) {
+	if _, err = s.ImportSmartFolders(testContext, "reader", target.ID, targetCurrent.Version, pkg); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 }

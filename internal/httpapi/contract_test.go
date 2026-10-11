@@ -151,27 +151,27 @@ func TestRESTCatalogMatchesContract(t *testing.T) {
 	b := id(send("POST", "/v1/resources/"+list+"/children", `{"kind":"item","name":"B"}`, "", 201))
 	send("GET", "/v1/resources?workspace_id="+ws, "", "", 200)
 	send("GET", "/v1/resources?parent_id="+list+"&filter_field=status&filter_value=open", "", "", 200)
-	send("GET", "/v1/resources?parent_id="+list+"&limit=0", "", "", 422)
+	send("GET", "/v1/resources?parent_id="+list+"&$top=1", "", "", 200)
 	send("GET", "/v1/resources/"+ws+"/missing", "", "", 404)
 
 	tpl := id(send("POST", "/v1/workspaces/"+ws+"/templates", `{"key":"record","name":"Record","fields":[{"key":"serial","label":"Serial","type":"integer"}]}`, "", 201))
 	send("GET", "/v1/workspaces/"+ws+"/templates", "", "", 200)
 	send("PUT", "/v1/templates/"+tpl, `{"key":"record","name":"Record v2","fields":[{"key":"serial","label":"Serial","type":"integer"}]}`, `"1"`, 200)
 
-	set := id(send("POST", "/v1/workspaces/"+ws+"/term-sets", `{"key":"topics","name":"Topics"}`, "", 201))
+	group := id(send("POST", "/v1/term-groups", `{"name":"Subjects"}`, "", 201))
+	set := id(send("POST", "/v1/term-sets", `{"group_id":"`+group+`","key":"topics","name":"Topics"}`, "", 201))
 	send("GET", "/v1/term-sets/"+set, "", "", 200)
-	send("PUT", "/v1/term-sets/"+set, `{"key":"topics","name":"Topics v2"}`, `"1"`, 200)
+	send("PUT", "/v1/term-sets/"+set, `{"name":"Topics v2"}`, `"1"`, 200)
 	send("POST", "/v1/term-sets/"+set+"/terms", `{"name":"Finance","synonyms":["Money"]}`, "", 201)
-	if terms := send("GET", "/v1/term-sets/"+set+"/terms?q=money", "", "", 200); len(terms["data"].([]any)) != 1 {
+	if terms := send("GET", "/v1/term-sets/"+set+"/terms?q=money", "", "", 200); len(terms["value"].([]any)) != 1 {
 		t.Fatal("term search", terms)
 	}
 
-	typ := id(send("POST", "/v1/workspaces/"+ws+"/relationship-types", `{"key":"blocks","label":"Blocks","directed":true}`, "", 201))
+	typ := id(send("POST", "/v1/relationship-types", `{"name":"Blocks","inverse_label":"Blocked by","directed":true}`, "", 201))
 	send("GET", "/v1/relationship-types/"+typ, "", "", 200)
-	send("PUT", "/v1/relationship-types/"+typ, `{"key":"blocks","label":"Blocks work","inverse_label":"Blocked by","directed":true}`, `"1"`, 200)
-	send("POST", "/v1/items/"+a+"/relationships", `{"type_id":"`+typ+`","target_id":"`+b+`"}`, "", 201)
+	send("POST", "/v1/items/"+a+"/relationships", `{"type":"`+typ+`","target_id":"`+b+`"}`, "", 201)
 	send("GET", "/v1/items/"+a+"/relationships", "", "", 200)
-	if in := send("GET", "/v1/items/"+b+"/relationships?direction=incoming&name=blocks", "", "", 200); len(in["data"].([]any)) != 1 {
+	if in := send("GET", "/v1/items/"+b+"/relationships?direction=incoming&type="+typ, "", "", 200); len(in["value"].([]any)) != 1 {
 		t.Fatal("incoming relationships", in)
 	}
 
@@ -179,5 +179,5 @@ func TestRESTCatalogMatchesContract(t *testing.T) {
 	send("GET", "/v1/resources/"+list+"/views", "", "", 200)
 	send("GET", "/v1/views/"+view, "", "", 200)
 	send("POST", "/v1/views/"+view+"/query/groups", `{}`, "", 200)
-	send("GET", "/v1/workspaces/"+ws+"/audit?limit=5", "", "", 200)
+	send("GET", "/v1/workspaces/"+ws+"/audit?$top=5", "", "", 200)
 }

@@ -17,10 +17,13 @@ func isValidation(err error) bool {
 	return errors.As(err, &v)
 }
 
-func typeOK(t *testing.T, s *Service, collection string, in ContentTypeInput) *ent.ContentType {
+func typeOK(t *testing.T, s *Service, collection string, in ContentTypeInput, defaults ...bool) *ent.ContentType {
 	t.Helper()
-	typ, err := s.CreateContentType(testContext, "alice", collection, latest(t, s, collection).Version, in)
+	typ, err := s.CreateContentType(testContext, "alice", in)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.AttachContentType(testContext, "alice", collection, latest(t, s, collection).Version, AttachContentTypeInput{ContentTypeID: typ.ID, IsDefault: len(defaults) > 0 && defaults[0]}); err != nil {
 		t.Fatal(err)
 	}
 	return typ
@@ -38,7 +41,7 @@ func fieldOK(t *testing.T, s *Service, collection string, in CreateField) *ent.F
 func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	s, _, l := fixture(t)
 	fieldOK(t, s, l.ID, CreateField{Key: "title", Label: "Title", Type: "text", Required: true})
-	typ := typeOK(t, s, l.ID, ContentTypeInput{Key: "invoice", Name: "Invoice", IsDefault: true, FieldKeys: []string{"title"}})
+	typ := typeOK(t, s, l.ID, ContentTypeInput{Key: "invoice", Name: "Invoice", FieldIds: fixtureFieldIds(t, s, l.ID, []string{"title"})}, true)
 	for _, key := range []string{"subtotal", "total"} {
 		fieldOK(t, s, l.ID, CreateField{ContentTypeID: typ.ID, Key: key, Label: key, Type: "decimal", Scale: 2, Indexed: true, Required: true})
 	}
@@ -47,15 +50,15 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	rules := []model.ValidationRule{{Key: "sum", Field: "total", Op: "gte", OtherField: "subtotal", Message: "Total must cover subtotal"}}
-	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldKeys: typ.FieldKeys, IsDefault: true, Rules: rules})
+	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: rules})
 	if err != nil {
 		t.Fatal(err)
 	}
 	good := &BulkCreate{Name: "Invoice", Values: map[string]any{"title": "One", "subtotal": "90071992547409.92", "total": "90071992547409.93"}}
 	bad := &BulkCreate{Name: "Bad", Values: map[string]any{"title": "Bad", "subtotal": "90071992547409.94", "total": "90071992547409.93"}}
 	bulkFails(t, s, "alice", l.ID, 1, nil, BulkOperation{Action: "create", Create: good}, BulkOperation{Action: "create", Create: bad})
-	query, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: typ.ID}})
-	if err != nil || query.Total != 0 {
+	query, err := s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{ContentTypeID: typ.ID}})
+	if err != nil || counted(query.Total) != 0 {
 		t.Fatal("rule failure did not roll back", query, err)
 	}
 	results := bulkOK(t, s, "alice", l.ID, BulkOperation{Action: "create", Create: good})
@@ -87,16 +90,16 @@ func TestBulkContentTypesAndFrozenRules(t *testing.T) {
 	}
 	bulkFails(t, s, "alice", l.ID, 0, nil, BulkOperation{Action: "create", Create: &BulkCreate{Name: "Simple", ContentTypeID: simple.ID, Values: good.Values}})
 	plain := bulkOK(t, s, "alice", l.ID, BulkOperation{Action: "create", Create: &BulkCreate{Name: "Simple", ContentTypeID: simple.ID, Values: map[string]any{"title": "Plain"}}})
-	query, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: typ.ID}})
-	if err != nil || query.Total != 1 || query.Data[0].ID != item.ID {
+	query, err = s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{ContentTypeID: typ.ID}})
+	if err != nil || counted(query.Total) != 1 || query.Data[0].ID != item.ID {
 		t.Fatal(query, err)
 	}
-	if _, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: simple.ID, Sort: SortSpec{Field: "total"}}}); !isValidation(err) {
+	if _, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{ContentTypeID: simple.ID, Sort: []SortSpec{{Field: "total"}}}}); !isValidation(err) {
 		t.Fatal(err)
 	}
 	strict := []model.ValidationRule{{Key: "sum", Field: "total", Op: "lt", OtherField: "subtotal", Message: "Too high"}}
 	version := latest(t, s, l.ID).Version
-	if _, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldKeys: typ.FieldKeys, IsDefault: true, Rules: strict}); !isValidation(err) {
+	if _, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: strict}); !isValidation(err) {
 		t.Fatal(err)
 	}
 	if latest(t, s, l.ID).Version != version {
@@ -136,7 +139,7 @@ func TestUniqueKeysReserveBothSurfacesAndRollbackBulk(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := create(t, s, l.ID, "item", "Freed", map[string]any{"code": json.Number("9007199254740993")})
-	if err = s.Delete(testContext, "alice", second.ID, second.Version); err != nil {
+	if err = s.Delete(testContext, "alice", second.ID, second.Version, DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	create(t, s, l.ID, "item", "Reused", map[string]any{"code": json.Number("9007199254740993")})
@@ -159,7 +162,7 @@ func TestEnablingUniqueRejectsExistingDuplicatesAtomically(t *testing.T) {
 	if err != nil || got.Options.Unique || latest(t, s, l.ID).Version != version {
 		t.Fatal("partial schema", got, err)
 	}
-	for _, in := range []CreateField{{Key: "num", Label: "Num", Type: "number", Indexed: true, Options: options}, {Key: "multi", Label: "Multi", Type: "text", Indexed: true, Options: model.FieldOptions{Unique: true, Multiple: true}}, {Key: "unindexed", Label: "Unindexed", Type: "text", Options: options}} {
+	for _, in := range []CreateField{{Key: "multi", Label: "Multi", Type: "text", Indexed: true, Options: model.FieldOptions{Unique: true, Multiple: true}}, {Key: "unindexed", Label: "Unindexed", Type: "text", Options: options}} {
 		if _, err = s.CreateField(testContext, "alice", l.ID, in); !isValidation(err) {
 			t.Fatal(in, err)
 		}
@@ -176,7 +179,7 @@ func TestRequiredIfAndRemovalKeepHistory(t *testing.T) {
 	}
 	typ := types[0]
 	rules := []model.ValidationRule{{Key: "approval_code", Field: "code", Op: "required_if", WhenField: "approved", WhenValue: json.RawMessage("true"), Message: "Approved items need a code"}}
-	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, IsDefault: true, FieldKeys: typ.FieldKeys, Rules: rules})
+	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds, Rules: rules})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +189,7 @@ func TestRequiredIfAndRemovalKeepHistory(t *testing.T) {
 	if err = s.DeleteField(testContext, "alice", l.ID, d.ID, latest(t, s, l.ID).Version); !isValidation(err) {
 		t.Fatal("dependent rule", err)
 	}
-	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, IsDefault: true, FieldKeys: typ.FieldKeys})
+	typ, err = s.UpdateContentType(testContext, "alice", typ.ID, typ.Version, ContentTypeInput{Name: typ.Name, FieldIds: typ.FieldIds})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,8 +295,8 @@ func TestConcurrentBulkUniqueKeysHaveOneWholeBatchWinner(t *testing.T) {
 	if err != nil || count != 2 || winners != 1 {
 		t.Fatal("partial batch claims", count, winners, err)
 	}
-	got, err := s.Query(testContext, "alice", l.ID, QueryRequest{})
-	if err != nil || got.Total != 2 {
+	got, err := s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true})
+	if err != nil || counted(got.Total) != 2 {
 		t.Fatal(got, err)
 	}
 }
@@ -339,4 +342,21 @@ func TestUniqueKeyRebuildAcrossBatchesAndInsertChunks(t *testing.T) {
 	if err != nil || count != 500 {
 		t.Fatal("cleared claim policy", count, err)
 	}
+}
+
+func fixtureFieldIds(t *testing.T, s *Service, collection string, keys []string) []string {
+	t.Helper()
+	defs, err := s.Fields(testContext, "alice", collection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := []string{}
+	for _, key := range keys {
+		d := definitionMap(defs)[key]
+		if d == nil {
+			t.Fatal("missing fixture field", key)
+		}
+		out = append(out, d.ID)
+	}
+	return out
 }

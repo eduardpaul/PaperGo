@@ -12,6 +12,7 @@ import (
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
 	"path"
+	"slices"
 	"strings"
 )
 
@@ -284,7 +285,15 @@ func (h *Handler) copyTree(r *request, f *dms.File, from, to []string, infinite 
 			return err
 		}
 		values := map[string]any{}
-		for _, key := range typ.FieldKeys {
+		defs, err := h.DMS.Fields(r.Context(), r.subject, r.library)
+		if err != nil {
+			return err
+		}
+		for _, d := range defs {
+			if !slices.Contains(typ.FieldIds, d.ID) {
+				continue
+			}
+			key := d.Key
 			if value, ok := f.Values[key]; ok {
 				values[key] = value
 			}

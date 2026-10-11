@@ -15,8 +15,6 @@ func (Relationship) Fields() []ent.Field {
 		field.String("workspace_id").NotEmpty().Immutable().MaxLen(36),
 		field.String("source_id").NotEmpty().Immutable().MaxLen(36),
 		field.String("target_id").NotEmpty().Immutable().MaxLen(36),
-		// name is the relationship type key, denormalized for name-filtered traversal.
-		field.String("name").NotEmpty().MaxLen(64),
 		field.String("type_id").NotEmpty().Immutable(),
 		field.Bool("directed").Default(true).Immutable(),
 		field.Int("version").Default(1).Positive(),
@@ -34,9 +32,9 @@ func (Relationship) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("type_id", "source_id", "target_id").Unique(),
 		index.Fields("type_id", "target_id"),
-		index.Fields("source_id", "name", "id"),
+		index.Fields("source_id", "type_id", "id"),
 		index.Fields("source_id", "id"),
-		index.Fields("target_id", "name", "id"),
+		index.Fields("target_id", "type_id", "id"),
 		index.Fields("target_id", "id"),
 	}
 }

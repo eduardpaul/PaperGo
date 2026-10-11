@@ -110,11 +110,6 @@ func ValueInteger(v int64) predicate.FieldValue {
 	return predicate.FieldValue(sql.FieldEQ(FieldValueInteger, v))
 }
 
-// ValueNumber applies equality check predicate on the "value_number" field. It's identical to ValueNumberEQ.
-func ValueNumber(v float64) predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldEQ(FieldValueNumber, v))
-}
-
 // ValueBoolean applies equality check predicate on the "value_boolean" field. It's identical to ValueBooleanEQ.
 func ValueBoolean(v bool) predicate.FieldValue {
 	return predicate.FieldValue(sql.FieldEQ(FieldValueBoolean, v))
@@ -663,56 +658,6 @@ func ValueIntegerIsNil() predicate.FieldValue {
 // ValueIntegerNotNil applies the NotNil predicate on the "value_integer" field.
 func ValueIntegerNotNil() predicate.FieldValue {
 	return predicate.FieldValue(sql.FieldNotNull(FieldValueInteger))
-}
-
-// ValueNumberEQ applies the EQ predicate on the "value_number" field.
-func ValueNumberEQ(v float64) predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldEQ(FieldValueNumber, v))
-}
-
-// ValueNumberNEQ applies the NEQ predicate on the "value_number" field.
-func ValueNumberNEQ(v float64) predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldNEQ(FieldValueNumber, v))
-}
-
-// ValueNumberIn applies the In predicate on the "value_number" field.
-func ValueNumberIn(vs ...float64) predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldIn(FieldValueNumber, vs...))
-}
-
-// ValueNumberNotIn applies the NotIn predicate on the "value_number" field.
-func ValueNumberNotIn(vs ...float64) predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldNotIn(FieldValueNumber, vs...))
-}
-
-// ValueNumberGT applies the GT predicate on the "value_number" field.
-func ValueNumberGT(v float64) predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldGT(FieldValueNumber, v))
-}
-
-// ValueNumberGTE applies the GTE predicate on the "value_number" field.
-func ValueNumberGTE(v float64) predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldGTE(FieldValueNumber, v))
-}
-
-// ValueNumberLT applies the LT predicate on the "value_number" field.
-func ValueNumberLT(v float64) predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldLT(FieldValueNumber, v))
-}
-
-// ValueNumberLTE applies the LTE predicate on the "value_number" field.
-func ValueNumberLTE(v float64) predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldLTE(FieldValueNumber, v))
-}
-
-// ValueNumberIsNil applies the IsNil predicate on the "value_number" field.
-func ValueNumberIsNil() predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldIsNull(FieldValueNumber))
-}
-
-// ValueNumberNotNil applies the NotNil predicate on the "value_number" field.
-func ValueNumberNotNil() predicate.FieldValue {
-	return predicate.FieldValue(sql.FieldNotNull(FieldValueNumber))
 }
 
 // ValueBooleanEQ applies the EQ predicate on the "value_boolean" field.

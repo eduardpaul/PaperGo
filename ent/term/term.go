@@ -24,10 +24,22 @@ const (
 	FieldName = "name"
 	// FieldNormalizedName holds the string denoting the normalized_name field in the database.
 	FieldNormalizedName = "normalized_name"
+	// FieldDescription holds the string denoting the description field in the database.
+	FieldDescription = "description"
+	// FieldColor holds the string denoting the color field in the database.
+	FieldColor = "color"
+	// FieldSortOrder holds the string denoting the sort_order field in the database.
+	FieldSortOrder = "sort_order"
+	// FieldPath holds the string denoting the path field in the database.
+	FieldPath = "path"
 	// FieldLabels holds the string denoting the labels field in the database.
 	FieldLabels = "labels"
 	// FieldSynonyms holds the string denoting the synonyms field in the database.
 	FieldSynonyms = "synonyms"
+	// FieldMergedIntoID holds the string denoting the merged_into_id field in the database.
+	FieldMergedIntoID = "merged_into_id"
+	// FieldAvailableAsKeyword holds the string denoting the available_as_keyword field in the database.
+	FieldAvailableAsKeyword = "available_as_keyword"
 	// FieldDeprecated holds the string denoting the deprecated field in the database.
 	FieldDeprecated = "deprecated"
 	// FieldVersion holds the string denoting the version field in the database.
@@ -40,6 +52,10 @@ const (
 	EdgeChildren = "children"
 	// EdgeParent holds the string denoting the parent edge name in mutations.
 	EdgeParent = "parent"
+	// EdgeMerged holds the string denoting the merged edge name in mutations.
+	EdgeMerged = "merged"
+	// EdgeMergedInto holds the string denoting the merged_into edge name in mutations.
+	EdgeMergedInto = "merged_into"
 	// Table holds the table name of the term in the database.
 	Table = "terms"
 	// TermSetTable is the table that holds the term_set relation/edge.
@@ -57,6 +73,14 @@ const (
 	ParentTable = "terms"
 	// ParentColumn is the table column denoting the parent relation/edge.
 	ParentColumn = "parent_id"
+	// MergedTable is the table that holds the merged relation/edge.
+	MergedTable = "terms"
+	// MergedColumn is the table column denoting the merged relation/edge.
+	MergedColumn = "merged_into_id"
+	// MergedIntoTable is the table that holds the merged_into relation/edge.
+	MergedIntoTable = "terms"
+	// MergedIntoColumn is the table column denoting the merged_into relation/edge.
+	MergedIntoColumn = "merged_into_id"
 )
 
 // Columns holds all SQL columns for term fields.
@@ -67,8 +91,14 @@ var Columns = []string{
 	FieldParentID,
 	FieldName,
 	FieldNormalizedName,
+	FieldDescription,
+	FieldColor,
+	FieldSortOrder,
+	FieldPath,
 	FieldLabels,
 	FieldSynonyms,
+	FieldMergedIntoID,
+	FieldAvailableAsKeyword,
 	FieldDeprecated,
 	FieldVersion,
 	FieldUpdatedAt,
@@ -87,10 +117,16 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultDescription holds the default value on creation for the "description" field.
+	DefaultDescription string
+	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
+	DefaultSortOrder int
 	// DefaultLabels holds the default value on creation for the "labels" field.
 	DefaultLabels map[string]string
 	// DefaultSynonyms holds the default value on creation for the "synonyms" field.
 	DefaultSynonyms []string
+	// DefaultAvailableAsKeyword holds the default value on creation for the "available_as_keyword" field.
+	DefaultAvailableAsKeyword bool
 	// DefaultDeprecated holds the default value on creation for the "deprecated" field.
 	DefaultDeprecated bool
 	// DefaultVersion holds the default value on creation for the "version" field.
@@ -140,6 +176,36 @@ func ByNormalizedName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNormalizedName, opts...).ToFunc()
 }
 
+// ByDescription orders the results by the description field.
+func ByDescription(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByColor orders the results by the color field.
+func ByColor(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldColor, opts...).ToFunc()
+}
+
+// BySortOrder orders the results by the sort_order field.
+func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSortOrder, opts...).ToFunc()
+}
+
+// ByPath orders the results by the path field.
+func ByPath(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPath, opts...).ToFunc()
+}
+
+// ByMergedIntoID orders the results by the merged_into_id field.
+func ByMergedIntoID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMergedIntoID, opts...).ToFunc()
+}
+
+// ByAvailableAsKeyword orders the results by the available_as_keyword field.
+func ByAvailableAsKeyword(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAvailableAsKeyword, opts...).ToFunc()
+}
+
 // ByDeprecated orders the results by the deprecated field.
 func ByDeprecated(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeprecated, opts...).ToFunc()
@@ -182,6 +248,27 @@ func ByParentField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newParentStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByMergedCount orders the results by merged count.
+func ByMergedCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newMergedStep(), opts...)
+	}
+}
+
+// ByMerged orders the results by merged terms.
+func ByMerged(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newMergedStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByMergedIntoField orders the results by merged_into field.
+func ByMergedIntoField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newMergedIntoStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newTermSetStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -201,5 +288,19 @@ func newParentStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(Table, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, ParentTable, ParentColumn),
+	)
+}
+func newMergedStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, MergedTable, MergedColumn),
+	)
+}
+func newMergedIntoStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, MergedIntoTable, MergedIntoColumn),
 	)
 }

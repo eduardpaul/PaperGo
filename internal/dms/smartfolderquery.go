@@ -7,13 +7,10 @@ import (
 	"encoding/json"
 	entsql "entgo.io/ent/dialect/sql"
 	"errors"
-	"fmt"
 	"papergo/ent"
-	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/resource"
 	"papergo/ent/term"
-	"papergo/ent/termset"
 	"strconv"
 	"strings"
 	"time"
@@ -69,9 +66,9 @@ type SmartFolderEntry struct {
 	Item           *ent.Resource `json:"item"`
 }
 type SmartFolderResult struct {
-	Data       []SmartFolderEntry `json:"data"`
-	NextCursor string             `json:"next_cursor,omitempty"`
-	Total      int                `json:"total"`
+	Data       []SmartFolderEntry `json:"value"`
+	NextCursor string             `json:"-"`
+	Total      *int               `json:"total,omitempty"`
 }
 type SmartFolderGroup struct {
 	Value any    `json:"value"`
@@ -79,8 +76,8 @@ type SmartFolderGroup struct {
 	Count int    `json:"count"`
 }
 type SmartFolderGroupsResult struct {
-	Data       []SmartFolderGroup `json:"data"`
-	NextCursor string             `json:"next_cursor,omitempty"`
+	Data       []SmartFolderGroup `json:"value"`
+	NextCursor string             `json:"-"`
 	Field      string             `json:"field,omitempty"`
 	By         string             `json:"by,omitempty"`
 }
@@ -114,7 +111,7 @@ func (s *Service) smartCandidates(ctx context.Context, subject string, f *ent.Sm
 		key, keyArgs := namedSelector(d.ContentTypes, "ct.key")
 		name, nameArgs := namedSelector(d.ContentTypes, "ct.name")
 		q.Where(func(sel *entsql.Selector) {
-			sel.Where(entsql.ExprP("EXISTS(SELECT 1 FROM content_types ct WHERE ct.container_id="+sel.C(resource.FieldID)+" AND ("+key+" OR "+name+"))", append(keyArgs, nameArgs...)...))
+			sel.Where(entsql.ExprP("EXISTS(SELECT 1 FROM collection_types ca JOIN content_types ct ON ct.id=ca.content_type_id WHERE ca.container_id="+sel.C(resource.FieldID)+" AND ("+key+" OR "+name+"))", append(keyArgs, nameArgs...)...))
 		})
 	}
 	collections, err := q.Order(ent.Asc(resource.FieldID)).Limit(MaxSmartCollections + 1).All(ctx)
@@ -127,34 +124,30 @@ func (s *Service) smartCandidates(ctx context.Context, subject string, f *ent.Sm
 	if len(collections) == 0 {
 		return []smartCandidate{}, nil
 	}
-	ids := make([]string, len(collections))
-	for i, c := range collections {
-		ids[i] = c.ID
-	}
-	defs, err := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDIn(ids...)).All(ctx)
-	if err != nil {
-		return nil, err
-	}
-	types, err := s.Client.ContentType.Query().Where(contenttype.ContainerIDIn(ids...)).Order(ent.Asc(contenttype.FieldKey)).All(ctx)
-	if err != nil {
-		return nil, err
-	}
 	fields := map[string][]*ent.FieldDefinition{}
-	for _, fd := range defs {
-		fields[fd.ContainerID] = append(fields[fd.ContainerID], fd)
-	}
 	byCollection := map[string][]*ent.ContentType{}
-	for _, typ := range types {
-		if len(d.ContentTypes) > 0 {
-			match := false
-			for _, key := range d.ContentTypes {
-				match = match || strings.EqualFold(key, typ.Key) || strings.EqualFold(key, typ.Name)
-			}
-			if !match {
-				continue
-			}
+	for _, c := range collections {
+		defs, e := s.collectionFields(ctx, c.ID)
+		if e != nil {
+			return nil, e
 		}
-		byCollection[typ.ContainerID] = append(byCollection[typ.ContainerID], typ)
+		fields[c.ID] = defs
+		types, e := s.collectionTypes(ctx, c.ID)
+		if e != nil {
+			return nil, e
+		}
+		for _, typ := range types {
+			if len(d.ContentTypes) > 0 {
+				match := false
+				for _, key := range d.ContentTypes {
+					match = match || strings.EqualFold(key, typ.Key) || strings.EqualFold(key, typ.Name)
+				}
+				if !match {
+					continue
+				}
+			}
+			byCollection[c.ID] = append(byCollection[c.ID], typ)
+		}
 	}
 	out := []smartCandidate{}
 	for _, c := range collections {
@@ -166,29 +159,26 @@ func (s *Service) smartCandidates(ctx context.Context, subject string, f *ent.Sm
 	return out, nil
 }
 
+// smartTerms loads a definition's terms; a merged term stands for the term
+// it was merged into.
 func (s *Service) smartTerms(ctx context.Context, subject string, ids []string) ([]*ent.Term, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	terms, err := s.Client.Term.Query().Where(term.IDIn(ids...)).WithTermSet().Order(ent.Asc(term.FieldID)).All(ctx)
+	terms, err := s.Client.Term.Query().Where(term.IDIn(ids...)).WithTermSet().WithMergedInto(func(q *ent.TermQuery) { q.WithTermSet() }).Order(ent.Asc(term.FieldID)).All(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if len(terms) != len(ids) {
 		return nil, ErrNotFound
 	}
-	checked := map[string]bool{}
-	for _, t := range terms {
-		set, err := t.Edges.TermSetOrErr()
-		if err != nil {
-			return nil, err
+	for i, t := range terms {
+		if t.Edges.MergedInto != nil {
+			terms[i] = t.Edges.MergedInto
 		}
-		if !checked[set.WorkspaceID] {
-			if _, err = s.workspace(ctx, subject, set.WorkspaceID, "read"); err != nil {
-				return nil, err
-			}
-			checked[set.WorkspaceID] = true
-		}
+	}
+	if err := s.requireTaxonomy(ctx, subject, "read"); err != nil {
+		return nil, err
 	}
 	return terms, nil
 }
@@ -249,7 +239,7 @@ func smartGroupValue(g SmartFolderGroupBy, d *ent.FieldDefinition, value string)
 	}
 	var v any = value
 	switch d.Type {
-	case "integer", "number":
+	case "integer", "number", "currency":
 		v = json.Number(value)
 	case "boolean":
 		b, err := strconv.ParseBool(value)
@@ -283,8 +273,22 @@ func appendSmartPath(q *compiledQuery, compiler *queryCompiler, d SmartFolderDef
 	return nil
 }
 
-// Terms are matched through indexed surface values and one recursive CTE shared
-// by every collection branch. Descendants are never expanded into parameter lists.
+// smartTermField reports whether fd can hold root: a term field of root's
+// set, or a keywords field when root is a keyword.
+func smartTermField(fd *ent.FieldDefinition, root *ent.Term) bool {
+	if !queryable(fd) {
+		return false
+	}
+	if fd.Type == "term" {
+		return fd.Options.TermSetID == root.TermSetID
+	}
+	return fd.Type == "keywords" && (root.AvailableAsKeyword || root.Edges.TermSet != nil && root.Edges.TermSet.IsKeywords)
+}
+
+// Terms are matched through indexed surface values and one CTE of the
+// selected terms' subtrees (path ranges) and the terms merged into them,
+// shared by every collection branch. Descendants are never expanded into
+// parameter lists.
 func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinition, roots []*ent.Term) bool {
 	if len(roots) == 0 {
 		return true
@@ -294,7 +298,7 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 	for _, root := range roots {
 		eligible := false
 		for _, fd := range c.defs {
-			if fd.Type == "term" && fd.Indexed && fd.Options.TermSetID == root.TermSetID {
+			if smartTermField(fd, root) {
 				eligible = true
 				break
 			}
@@ -305,7 +309,11 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 			}
 			continue
 		}
-		parts = append(parts, `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.container_id=f.container_id AND fd.key=f.field_key JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.type='term' AND fd.indexed=1 AND json_extract(fd.options,'$.term_set_id')=? AND st.root=?)`)
+		fields := "fd.type='term' AND json_extract(fd.options,'$.term_set_id')=?"
+		if smartTermField(&ent.FieldDefinition{Type: "keywords", Indexed: true, IndexStatus: fielddefinition.IndexStatusReady}, root) {
+			fields = "(fd.type='keywords' OR " + fields + ")"
+		}
+		parts = append(parts, `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.key=f.field_key JOIN collection_types ca ON ca.container_id=f.container_id JOIN content_types ct ON ct.id=ca.content_type_id AND EXISTS(SELECT 1 FROM json_each(ct.field_ids) WHERE value=fd.id) JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.indexed=1 AND `+fields+` AND st.root=?)`)
 		args = append(args, root.TermSetID, root.ID)
 	}
 	if len(parts) == 0 {
@@ -318,28 +326,6 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 	q.sql += " AND (" + strings.Join(parts, operator) + ")"
 	q.args = append(q.args, args...)
 	return true
-}
-
-// Physical folders have system metadata but no item values or publication
-// surfaces. Reuse the item predicate with a system-metadata projection; indexed
-// custom-value predicates naturally see no values for these resource IDs.
-func (s *Service) smartPhysicalQuery(subject string, c smartCandidate, item compiledQuery, surface string) (compiledQuery, error) {
-	marker := " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface="
-	start := strings.Index(item.sql, marker)
-	where := strings.Index(item.sql, " WHERE r.container_id=? AND r.kind='item'")
-	if start < 0 || where < 0 {
-		return compiledQuery{}, fmt.Errorf("invalid compiled item query")
-	}
-	_, surfaceArgs := surfaceSQL("r.id", subject, surface)
-	// Rank arguments precede the surface selector. The rest of the predicate
-	// has the same argument order after replacing the JOIN.
-	rankArgs := strings.Count(item.sql[:start], "?")
-	args := append([]any{}, item.args[:rankArgs]...)
-	args = append(args, item.args[rankArgs+len(surfaceArgs):]...)
-	projection := ` FROM resources r JOIN (SELECT id,item_created_at,item_created_by,modified_at,modified_by,name,tags FROM (SELECT id,papergo_time(created_at) item_created_at,created_by item_created_by,papergo_time(updated_at) modified_at,updated_by modified_by,name,tags FROM resources WHERE kind='folder')) p ON p.id=r.id`
-	text := item.sql[:start] + projection + strings.Replace(item.sql[where:], "r.kind='item'", "r.kind='folder' AND r.deleted_at IS NULL", 1)
-	text = strings.ReplaceAll(text, "FROM item_surface_tags", "FROM (SELECT f.id surface_id,j.value tag FROM resources f,json_each(f.tags) j WHERE f.kind='folder')")
-	return compiledQuery{sql: text, args: args}, nil
 }
 
 func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent.SmartFolder, d SmartFolderDefinition, in SmartFolderQueryRequest, grouped bool) (compiledQuery, []smartCandidate, error) {
@@ -370,7 +356,7 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 	rankIdentity := ""
 	usable := []smartCandidate{}
 	for _, c := range candidates {
-		spec := QuerySpec{Filter: d.Filter, Sort: SortSpec{Field: "$modified_at", Direction: "desc"}}
+		spec := QuerySpec{Filter: d.Filter, Sort: []SortSpec{{Field: "$modified_at", Direction: "desc"}}}
 		q, err := s.compileCollectionQuery(ctx, subject, c.collection, c.defs, QueryRequest{Query: spec, Surface: in.Surface}, false)
 		if err != nil {
 			var validation *ValidationError
@@ -381,6 +367,9 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 				continue
 			}
 			return compiledQuery{}, nil, err
+		}
+		if !d.IncludeFolders {
+			q.sql += " AND r.kind='item'"
 		}
 		compiler := queryCompiler{defs: definitionMap(c.defs)}
 		if len(d.ContentTypes) > 0 {
@@ -426,13 +415,6 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 		}
 		rankArgumentCount := strings.Count(q.sql[:strings.Index(q.sql, " FROM resources r")], "?")
 		addSmartBranch(&branches, byShape, q, rankArgumentCount+len(surfaceArgs))
-		if d.IncludeFolders && len(roots) == 0 && len(d.ContentTypes) == 0 {
-			folderQuery, err := s.smartPhysicalQuery(subject, c, q, in.Surface)
-			if err != nil {
-				return compiledQuery{}, nil, err
-			}
-			addSmartBranch(&branches, byShape, folderQuery, rankArgumentCount)
-		}
 		schemas = append(schemas, *c.collection.SchemaHeadID)
 		usable = append(usable, c)
 	}
@@ -457,7 +439,8 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 			marks = append(marks, "?")
 			rootArgs = append(rootArgs, root.ID)
 		}
-		text = "WITH RECURSIVE smart_terms(root,id) AS (SELECT id,id FROM terms WHERE id IN (" + strings.Join(marks, ",") + ") UNION ALL SELECT st.root,t.id FROM terms t JOIN smart_terms st ON t.parent_id=st.id) " + text
+		subtrees := "SELECT r.id root,t.id FROM terms r JOIN terms t ON t.path>=r.path AND t.path<substr(r.path,1,length(r.path)-1)||'0' WHERE r.id IN (" + strings.Join(marks, ",") + ")"
+		text = "WITH smart_subtrees(root,id) AS (" + subtrees + "),smart_terms(root,id) AS (SELECT root,id FROM smart_subtrees UNION ALL SELECT s.root,m.id FROM smart_subtrees s JOIN terms m ON m.merged_into_id=s.id) " + text
 		args = append(rootArgs, args...)
 	}
 	if len(args) > 30000 {
@@ -473,7 +456,7 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 		Args                     []any
 	}{f.ID, subject, in.Surface, f.Version, in.Path, grouped, schemas, text, args})
 	sum := sha256.Sum256(fingerprint)
-	return compiledQuery{text, args, hex.EncodeToString(sum[:]), !grouped, kind, rankDef}, usable, nil
+	return compiledQuery{sql: text, args: args, fingerprint: hex.EncodeToString(sum[:]), descending: !grouped, kind: kind, rankDef: rankDef, orders: []queryOrder{{kind: kind, descending: !grouped}}}, usable, nil
 }
 
 func (s *Service) QuerySmartFolder(ctx context.Context, subject, id string, in SmartFolderQueryRequest) (SmartFolderResult, error) {
@@ -493,7 +476,7 @@ func (s *Service) QuerySmartFolder(ctx context.Context, subject, id string, in S
 		if in.Surface == "" {
 			in.Surface = "auto"
 		}
-		out, err := t.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit}, q)
+		out, err := t.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal}, q, nil)
 		if err != nil {
 			return SmartFolderResult{}, err
 		}
@@ -552,34 +535,20 @@ func (s *Service) SmartFolderGroups(ctx context.Context, subject, id string, in 
 			}
 			out.Data = append(out.Data, SmartFolderGroup{g.Value, label, g.Count})
 		}
-		if q.rankDef != nil && q.rankDef.Type == "term" {
-			set, err := t.Client.TermSet.Query().Where(termset.IDEQ(q.rankDef.Options.TermSetID)).Only(ctx)
-			if err != nil {
-				return SmartFolderGroupsResult{}, err
-			}
-			if _, err = t.workspace(ctx, subject, set.WorkspaceID, "read"); err != nil {
-				if errors.Is(err, ErrForbidden) {
-					return out, nil
-				}
-				return SmartFolderGroupsResult{}, err
-			}
+		if q.rankDef != nil && (q.rankDef.Type == "term" || q.rankDef.Type == "keywords") {
 			ids := []string{}
 			for _, g := range out.Data {
 				if id, ok := g.Value.(string); ok {
 					ids = append(ids, id)
 				}
 			}
-			names, err := t.Client.Term.Query().Where(term.IDIn(ids...), term.TermSetIDEQ(set.ID)).All(ctx)
+			names, err := t.termNames(ctx, subject, ids)
 			if err != nil {
 				return SmartFolderGroupsResult{}, err
 			}
-			byID := map[string]string{}
-			for _, term := range names {
-				byID[term.ID] = term.Name
-			}
 			for i := range out.Data {
-				if id, ok := out.Data[i].Value.(string); ok && byID[id] != "" {
-					out.Data[i].Label = byID[id]
+				if id, ok := out.Data[i].Value.(string); ok && names[id] != "" {
+					out.Data[i].Label = names[id]
 				}
 			}
 		}

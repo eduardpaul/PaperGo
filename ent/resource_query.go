@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"papergo/ent/blob"
-	"papergo/ent/fielddefinition"
 	"papergo/ent/grant"
 	"papergo/ent/itemrevision"
 	"papergo/ent/predicate"
@@ -34,7 +33,6 @@ type ResourceQuery struct {
 	withParent            *ResourceQuery
 	withContainedItems    *ResourceQuery
 	withContainer         *ResourceQuery
-	withDefinitions       *FieldDefinitionQuery
 	withGrants            *GrantQuery
 	withOutgoing          *RelationshipQuery
 	withIncoming          *RelationshipQuery
@@ -162,28 +160,6 @@ func (_q *ResourceQuery) QueryContainer() *ResourceQuery {
 			sqlgraph.From(resource.Table, resource.FieldID, selector),
 			sqlgraph.To(resource.Table, resource.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, resource.ContainerTable, resource.ContainerColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryDefinitions chains the current query on the "definitions" edge.
-func (_q *ResourceQuery) QueryDefinitions() *FieldDefinitionQuery {
-	query := (&FieldDefinitionClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(resource.Table, resource.FieldID, selector),
-			sqlgraph.To(fielddefinition.Table, fielddefinition.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, resource.DefinitionsTable, resource.DefinitionsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -607,7 +583,6 @@ func (_q *ResourceQuery) Clone() *ResourceQuery {
 		withParent:            _q.withParent.Clone(),
 		withContainedItems:    _q.withContainedItems.Clone(),
 		withContainer:         _q.withContainer.Clone(),
-		withDefinitions:       _q.withDefinitions.Clone(),
 		withGrants:            _q.withGrants.Clone(),
 		withOutgoing:          _q.withOutgoing.Clone(),
 		withIncoming:          _q.withIncoming.Clone(),
@@ -665,17 +640,6 @@ func (_q *ResourceQuery) WithContainer(opts ...func(*ResourceQuery)) *ResourceQu
 		opt(query)
 	}
 	_q.withContainer = query
-	return _q
-}
-
-// WithDefinitions tells the query-builder to eager-load the nodes that are connected to
-// the "definitions" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *ResourceQuery) WithDefinitions(opts ...func(*FieldDefinitionQuery)) *ResourceQuery {
-	query := (&FieldDefinitionClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withDefinitions = query
 	return _q
 }
 
@@ -867,12 +831,11 @@ func (_q *ResourceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Res
 	var (
 		nodes       = []*Resource{}
 		_spec       = _q.querySpec()
-		loadedTypes = [15]bool{
+		loadedTypes = [14]bool{
 			_q.withChildren != nil,
 			_q.withParent != nil,
 			_q.withContainedItems != nil,
 			_q.withContainer != nil,
-			_q.withDefinitions != nil,
 			_q.withGrants != nil,
 			_q.withOutgoing != nil,
 			_q.withIncoming != nil,
@@ -926,13 +889,6 @@ func (_q *ResourceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Res
 	if query := _q.withContainer; query != nil {
 		if err := _q.loadContainer(ctx, query, nodes, nil,
 			func(n *Resource, e *Resource) { n.Edges.Container = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := _q.withDefinitions; query != nil {
-		if err := _q.loadDefinitions(ctx, query, nodes,
-			func(n *Resource) { n.Edges.Definitions = []*FieldDefinition{} },
-			func(n *Resource, e *FieldDefinition) { n.Edges.Definitions = append(n.Edges.Definitions, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -1133,36 +1089,6 @@ func (_q *ResourceQuery) loadContainer(ctx context.Context, query *ResourceQuery
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
-	}
-	return nil
-}
-func (_q *ResourceQuery) loadDefinitions(ctx context.Context, query *FieldDefinitionQuery, nodes []*Resource, init func(*Resource), assign func(*Resource, *FieldDefinition)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*Resource)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(fielddefinition.FieldContainerID)
-	}
-	query.Where(predicate.FieldDefinition(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(resource.DefinitionsColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.ContainerID
-		node, ok := nodeids[fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "container_id" returned %v for node %v`, fk, n.ID)
-		}
-		assign(node, n)
 	}
 	return nil
 }

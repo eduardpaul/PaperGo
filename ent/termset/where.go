@@ -70,9 +70,9 @@ func CreatedAt(v time.Time) predicate.TermSet {
 	return predicate.TermSet(sql.FieldEQ(FieldCreatedAt, v))
 }
 
-// WorkspaceID applies equality check predicate on the "workspace_id" field. It's identical to WorkspaceIDEQ.
-func WorkspaceID(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldEQ(FieldWorkspaceID, v))
+// GroupID applies equality check predicate on the "group_id" field. It's identical to GroupIDEQ.
+func GroupID(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldEQ(FieldGroupID, v))
 }
 
 // Key applies equality check predicate on the "key" field. It's identical to KeyEQ.
@@ -88,6 +88,16 @@ func Name(v string) predicate.TermSet {
 // Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
 func Description(v string) predicate.TermSet {
 	return predicate.TermSet(sql.FieldEQ(FieldDescription, v))
+}
+
+// IsOpen applies equality check predicate on the "is_open" field. It's identical to IsOpenEQ.
+func IsOpen(v bool) predicate.TermSet {
+	return predicate.TermSet(sql.FieldEQ(FieldIsOpen, v))
+}
+
+// IsKeywords applies equality check predicate on the "is_keywords" field. It's identical to IsKeywordsEQ.
+func IsKeywords(v bool) predicate.TermSet {
+	return predicate.TermSet(sql.FieldEQ(FieldIsKeywords, v))
 }
 
 // Version applies equality check predicate on the "version" field. It's identical to VersionEQ.
@@ -140,69 +150,69 @@ func CreatedAtLTE(v time.Time) predicate.TermSet {
 	return predicate.TermSet(sql.FieldLTE(FieldCreatedAt, v))
 }
 
-// WorkspaceIDEQ applies the EQ predicate on the "workspace_id" field.
-func WorkspaceIDEQ(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldEQ(FieldWorkspaceID, v))
+// GroupIDEQ applies the EQ predicate on the "group_id" field.
+func GroupIDEQ(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldEQ(FieldGroupID, v))
 }
 
-// WorkspaceIDNEQ applies the NEQ predicate on the "workspace_id" field.
-func WorkspaceIDNEQ(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldNEQ(FieldWorkspaceID, v))
+// GroupIDNEQ applies the NEQ predicate on the "group_id" field.
+func GroupIDNEQ(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldNEQ(FieldGroupID, v))
 }
 
-// WorkspaceIDIn applies the In predicate on the "workspace_id" field.
-func WorkspaceIDIn(vs ...string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldIn(FieldWorkspaceID, vs...))
+// GroupIDIn applies the In predicate on the "group_id" field.
+func GroupIDIn(vs ...string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldIn(FieldGroupID, vs...))
 }
 
-// WorkspaceIDNotIn applies the NotIn predicate on the "workspace_id" field.
-func WorkspaceIDNotIn(vs ...string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldNotIn(FieldWorkspaceID, vs...))
+// GroupIDNotIn applies the NotIn predicate on the "group_id" field.
+func GroupIDNotIn(vs ...string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldNotIn(FieldGroupID, vs...))
 }
 
-// WorkspaceIDGT applies the GT predicate on the "workspace_id" field.
-func WorkspaceIDGT(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldGT(FieldWorkspaceID, v))
+// GroupIDGT applies the GT predicate on the "group_id" field.
+func GroupIDGT(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldGT(FieldGroupID, v))
 }
 
-// WorkspaceIDGTE applies the GTE predicate on the "workspace_id" field.
-func WorkspaceIDGTE(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldGTE(FieldWorkspaceID, v))
+// GroupIDGTE applies the GTE predicate on the "group_id" field.
+func GroupIDGTE(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldGTE(FieldGroupID, v))
 }
 
-// WorkspaceIDLT applies the LT predicate on the "workspace_id" field.
-func WorkspaceIDLT(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldLT(FieldWorkspaceID, v))
+// GroupIDLT applies the LT predicate on the "group_id" field.
+func GroupIDLT(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldLT(FieldGroupID, v))
 }
 
-// WorkspaceIDLTE applies the LTE predicate on the "workspace_id" field.
-func WorkspaceIDLTE(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldLTE(FieldWorkspaceID, v))
+// GroupIDLTE applies the LTE predicate on the "group_id" field.
+func GroupIDLTE(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldLTE(FieldGroupID, v))
 }
 
-// WorkspaceIDContains applies the Contains predicate on the "workspace_id" field.
-func WorkspaceIDContains(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldContains(FieldWorkspaceID, v))
+// GroupIDContains applies the Contains predicate on the "group_id" field.
+func GroupIDContains(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldContains(FieldGroupID, v))
 }
 
-// WorkspaceIDHasPrefix applies the HasPrefix predicate on the "workspace_id" field.
-func WorkspaceIDHasPrefix(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldHasPrefix(FieldWorkspaceID, v))
+// GroupIDHasPrefix applies the HasPrefix predicate on the "group_id" field.
+func GroupIDHasPrefix(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldHasPrefix(FieldGroupID, v))
 }
 
-// WorkspaceIDHasSuffix applies the HasSuffix predicate on the "workspace_id" field.
-func WorkspaceIDHasSuffix(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldHasSuffix(FieldWorkspaceID, v))
+// GroupIDHasSuffix applies the HasSuffix predicate on the "group_id" field.
+func GroupIDHasSuffix(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldHasSuffix(FieldGroupID, v))
 }
 
-// WorkspaceIDEqualFold applies the EqualFold predicate on the "workspace_id" field.
-func WorkspaceIDEqualFold(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldEqualFold(FieldWorkspaceID, v))
+// GroupIDEqualFold applies the EqualFold predicate on the "group_id" field.
+func GroupIDEqualFold(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldEqualFold(FieldGroupID, v))
 }
 
-// WorkspaceIDContainsFold applies the ContainsFold predicate on the "workspace_id" field.
-func WorkspaceIDContainsFold(v string) predicate.TermSet {
-	return predicate.TermSet(sql.FieldContainsFold(FieldWorkspaceID, v))
+// GroupIDContainsFold applies the ContainsFold predicate on the "group_id" field.
+func GroupIDContainsFold(v string) predicate.TermSet {
+	return predicate.TermSet(sql.FieldContainsFold(FieldGroupID, v))
 }
 
 // KeyEQ applies the EQ predicate on the "key" field.
@@ -400,6 +410,26 @@ func DescriptionContainsFold(v string) predicate.TermSet {
 	return predicate.TermSet(sql.FieldContainsFold(FieldDescription, v))
 }
 
+// IsOpenEQ applies the EQ predicate on the "is_open" field.
+func IsOpenEQ(v bool) predicate.TermSet {
+	return predicate.TermSet(sql.FieldEQ(FieldIsOpen, v))
+}
+
+// IsOpenNEQ applies the NEQ predicate on the "is_open" field.
+func IsOpenNEQ(v bool) predicate.TermSet {
+	return predicate.TermSet(sql.FieldNEQ(FieldIsOpen, v))
+}
+
+// IsKeywordsEQ applies the EQ predicate on the "is_keywords" field.
+func IsKeywordsEQ(v bool) predicate.TermSet {
+	return predicate.TermSet(sql.FieldEQ(FieldIsKeywords, v))
+}
+
+// IsKeywordsNEQ applies the NEQ predicate on the "is_keywords" field.
+func IsKeywordsNEQ(v bool) predicate.TermSet {
+	return predicate.TermSet(sql.FieldNEQ(FieldIsKeywords, v))
+}
+
 // VersionEQ applies the EQ predicate on the "version" field.
 func VersionEQ(v int) predicate.TermSet {
 	return predicate.TermSet(sql.FieldEQ(FieldVersion, v))
@@ -480,21 +510,21 @@ func UpdatedAtLTE(v time.Time) predicate.TermSet {
 	return predicate.TermSet(sql.FieldLTE(FieldUpdatedAt, v))
 }
 
-// HasWorkspace applies the HasEdge predicate on the "workspace" edge.
-func HasWorkspace() predicate.TermSet {
+// HasGroup applies the HasEdge predicate on the "group" edge.
+func HasGroup() predicate.TermSet {
 	return predicate.TermSet(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, WorkspaceTable, WorkspaceColumn),
+			sqlgraph.Edge(sqlgraph.M2O, true, GroupTable, GroupColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasWorkspaceWith applies the HasEdge predicate on the "workspace" edge with a given conditions (other predicates).
-func HasWorkspaceWith(preds ...predicate.Resource) predicate.TermSet {
+// HasGroupWith applies the HasEdge predicate on the "group" edge with a given conditions (other predicates).
+func HasGroupWith(preds ...predicate.TermGroup) predicate.TermSet {
 	return predicate.TermSet(func(s *sql.Selector) {
-		step := newWorkspaceStep()
+		step := newGroupStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

@@ -66,7 +66,11 @@ func run(migrations, token string) error {
 	if err != nil {
 		return err
 	}
-	a := &httpapi.API{DMS: dms.NewService(db.Client), Auth: auth.Development{Token: token, Subject: "sdk"}, Storage: store, Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), MaxUpload: 1 << 20, MaxInFlight: 32, RequestTimeout: 30 * time.Second, Ready: db.SQL.PingContext}
+	service := dms.NewService(db.SQL)
+	if err = service.Directory().Initialize(ctx, "sdk"); err != nil {
+		return err
+	}
+	a := &httpapi.API{DMS: service, Auth: auth.Development{Token: token, Subject: "sdk"}, Storage: store, Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), MaxUpload: 1 << 20, MaxInFlight: 32, RequestTimeout: 30 * time.Second, Ready: db.SQL.PingContext}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return err

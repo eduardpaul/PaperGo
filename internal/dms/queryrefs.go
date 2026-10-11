@@ -71,7 +71,7 @@ func resolveFilter(f *FilterExpr, subject string, now time.Time, defs map[string
 			}
 		}
 		switch f.Op {
-		case "", "eq", "ne", "gt", "gte", "lt", "lte", "in", "contains":
+		case "", "eq", "ne", "gt", "gte", "lt", "lte", "in", "contains", "under":
 		case "missing", "present":
 			if len(f.Value) > 0 || f.ValueRef != "" {
 				return nil, invalid("missing/present do not accept a value")

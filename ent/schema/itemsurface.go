@@ -22,6 +22,9 @@ func (ItemSurface) Fields() []ent.Field {
 		field.String("name"),
 		field.JSON("tags", []string{}),
 		field.JSON("payload", json.RawMessage{}),
+		// TermText holds the names, labels and synonyms of the payload's
+		// terms when the surface was written, for full-text search.
+		field.String("term_text").Default(""),
 		// Fixed UTC strings retain nanoseconds and compare chronologically in SQL.
 		field.String("item_created_at"),
 		field.String("item_created_by"),
@@ -33,5 +36,5 @@ func (ItemSurface) Edges() []ent.Edge {
 	return []ent.Edge{edge.To("item", Resource.Type).Field("item_id").Unique().Required().Immutable(), edge.To("revision", ItemRevision.Type).Field("revision_id").Unique().Required()}
 }
 func (ItemSurface) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("item_id", "surface").Unique(), index.Fields("workspace_id", "surface", "item_id"), index.Fields("container_id", "surface", "item_id"), index.Fields("container_id", "surface", "modified_at", "item_id"), index.Fields("container_id", "surface", "modified_by", "item_id"), index.Fields("container_id", "surface", "item_created_at", "item_id"), index.Fields("container_id", "surface", "item_created_by", "item_id")}
+	return []ent.Index{index.Fields("item_id", "surface").Unique(), index.Fields("workspace_id", "surface", "item_id"), index.Fields("container_id", "surface", "item_id"), index.Fields("container_id", "surface", "modified_at", "item_id"), index.Fields("container_id", "surface", "modified_by", "item_id"), index.Fields("container_id", "surface", "item_created_at", "item_id"), index.Fields("container_id", "surface", "item_created_by", "item_id"), index.Fields("container_id", "surface", "name", "item_id")}
 }

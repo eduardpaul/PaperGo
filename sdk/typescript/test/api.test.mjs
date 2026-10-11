@@ -9,6 +9,14 @@ import { createInterface } from 'node:readline';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import {
+  isUntypedArray,
+  isUntypedBoolean,
+  isUntypedNull,
+  isUntypedNumber,
+  isUntypedObject,
+  isUntypedString,
+} from '@microsoft/kiota-abstractions';
 import { createClient, ifMatch, isProblem } from '../dist/index.js';
 
 const token = randomBytes(16).toString('hex');
@@ -17,6 +25,34 @@ let baseUrl;
 let bin;
 let server;
 let api;
+
+// Request models are open objects. Kiota sends their additionalData as JSON.
+function body(value) {
+  return { additionalData: value };
+}
+
+function jsonValue(node) {
+  if (node == null) {
+    return node;
+  }
+  if (isUntypedNull(node)) {
+    return null;
+  }
+  if (isUntypedString(node) || isUntypedNumber(node) || isUntypedBoolean(node)) {
+    return node.getValue();
+  }
+  if (isUntypedArray(node)) {
+    return node.getValue().map(jsonValue);
+  }
+  if (isUntypedObject(node)) {
+    const out = {};
+    for (const [key, child] of Object.entries(node.getValue())) {
+      out[key] = jsonValue(child);
+    }
+    return out;
+  }
+  throw new TypeError('response was not an untyped JSON node');
+}
 
 before(async () => {
   bin = await mkdtemp(join(tmpdir(), 'papergo-sdk-test-'));
@@ -35,50 +71,64 @@ after(async () => {
 
 test('health is public', async () => {
   const anonymous = createClient({ baseUrl, token: '' });
-  assert.equal((await anonymous.health.ready.get())?.status, 'ok');
+  assert.equal(jsonValue(await anonymous.health.ready.get())?.status, 'ok');
   await assert.rejects(anonymous.v1.workspaces.get(), (error) => isProblem(error, 'unauthorized') && error.responseStatusCode === 401);
 });
 
 test('resources, fields, values and preconditions', async () => {
-  const workspace = await api.v1.workspaces.post({ name: 'SDK', tags: ['sdk'] });
+  const workspace = jsonValue(await api.v1.workspaces.post(body({ name: 'SDK', tags: ['sdk'] })));
   assert.ok(workspace?.id);
-  const page = await api.v1.workspaces.get({ queryParameters: { limit: 10 } });
-  assert.ok(page?.data?.some((w) => w.id === workspace.id));
+  const page = jsonValue(await api.v1.workspaces.get());
+  assert.ok(page?.value?.some((item) => item.id === workspace.id));
 
-  const list = await api.v1.resources.byId(workspace.id).children.post({ kind: 'list', name: 'Invoices' });
-  await api.v1.resources.byId(list.id).fields.post({ key: 'status', label: 'Status', type: 'choice', choices: ['open', 'paid'], indexed: true });
-  await api.v1.resources.byId(list.id).fields.post({ key: 'amount', label: 'Amount', type: 'decimal', scale: 2 });
-  const item = await api.v1.resources.byId(list.id).children.post({ kind: 'item', name: 'INV-1', values: { additionalData: { status: 'open', amount: '12.50' } } });
-  assert.deepEqual(item?.values?.additionalData, { status: 'open', amount: '12.50' });
+  const list = jsonValue(await api.v1.resources.byId(workspace.id).children.post(body({ kind: 'list', name: 'Invoices' })));
+  await api.v1.resources.byId(list.id).fields.post(body({ key: 'status', label: 'Status', type: 'choice', choices: ['open', 'paid'], indexed: true }));
+  await api.v1.resources.byId(list.id).fields.post(body({ key: 'amount', label: 'Amount', type: 'decimal', scale: 2 }));
+  const item = jsonValue(await api.v1.resources.byId(list.id).children.post(body({ kind: 'item', name: 'INV-1', values: { status: 'open', amount: '12.50' } })));
+  assert.deepEqual(item?.values, { status: 'open', amount: '12.50' });
+  await api.v1.resources.byId(list.id).children.post(body({ kind: 'item', name: 'INV-2', values: { status: 'paid', amount: '1.00' } }));
 
-  const renamed = await api.v1.resources.byId(item.id).patch({ name: 'INV-001' }, ifMatch(item.version));
+  const renamed = jsonValue(await api.v1.resources.byId(item.id).patch(body({ name: 'INV-001' }), ifMatch(item.version)));
   assert.equal(renamed?.name, 'INV-001');
   assert.equal(renamed?.version, item.version + 1);
-  await assert.rejects(api.v1.resources.byId(item.id).patch({ name: 'stale' }, ifMatch(item.version)), (error) => isProblem(error, 'conflict') && error.responseStatusCode === 409);
-  await assert.rejects(api.v1.resources.byId(item.id).patch({ name: 'unconditional' }), (error) => isProblem(error, 'precondition_required'));
-  await assert.rejects(api.v1.resources.byId(list.id).children.post({ kind: 'item', name: 'INV-2', values: { additionalData: { status: 'void' } } }), (error) => isProblem(error, 'validation_failed') && error.responseStatusCode === 422);
+  await assert.rejects(api.v1.resources.byId(item.id).patch(body({ name: 'stale' }), ifMatch(item.version)), (error) => isProblem(error, 'precondition_failed') && error.responseStatusCode === 412);
+  await assert.rejects(api.v1.resources.byId(item.id).patch(body({ name: 'unconditional' })), (error) => isProblem(error, 'precondition_required'));
+  await assert.rejects(api.v1.resources.byId(list.id).children.post(body({ kind: 'item', name: 'INV-3', values: { status: 'void' } })), (error) => isProblem(error, 'validation_failed') && error.responseStatusCode === 422);
   await assert.rejects(api.v1.resources.byId('00000000-0000-7000-8000-000000000000').get(), (error) => isProblem(error, 'not_found'));
 
-  const result = await api.v1.resources.byId(list.id).query.post({ filter: { field: 'status', op: 'eq', value: 'open' } });
-  assert.deepEqual(result?.data?.map((r) => r.id), [item.id]);
+  const result = jsonValue(await api.v1.resources.byId(list.id).query.post(body({ query: { filter: { field: 'status', op: 'eq', value: 'open' } } })));
+  assert.deepEqual(result?.value?.map((resource) => resource.id), [item.id]);
 });
 
 test('bulk operations report the failing index', async () => {
-  const workspace = await api.v1.workspaces.post({ name: 'Bulk' });
-  const list = await api.v1.resources.byId(workspace.id).children.post({ kind: 'list', name: 'Tasks' });
-  const created = await api.v1.resources.byId(list.id).bulk.post({ operations: [{ action: 'create', create: { name: 'A' } }, { action: 'create', create: { name: 'B' } }] });
-  assert.deepEqual(created?.data?.map((r) => r.action), ['create', 'create']);
-  await assert.rejects(api.v1.resources.byId(list.id).bulk.post({ operations: [{ action: 'create', create: { name: 'C' } }, { action: 'delete', id: created.data[0].id, version: 99 }] }), (error) => isProblem(error, 'conflict') && error.operationIndex === 1);
+  const workspace = jsonValue(await api.v1.workspaces.post(body({ name: 'Bulk' })));
+  const list = jsonValue(await api.v1.resources.byId(workspace.id).children.post(body({ kind: 'list', name: 'Tasks' })));
+  const created = jsonValue(await api.v1.resources.byId(list.id).bulk.post({
+    operations: [
+      { action: 'create', create: { additionalData: { name: 'A' } } },
+      { action: 'create', create: { additionalData: { name: 'B' } } },
+    ],
+  }));
+  assert.deepEqual(created?.data?.map((row) => row.action), ['create', 'create']);
+  await assert.rejects(
+    api.v1.resources.byId(list.id).bulk.post({
+      operations: [
+        { action: 'create', create: { additionalData: { name: 'C' } } },
+        { action: 'delete', id: created.data[0].id, version: 99 },
+      ],
+    }),
+    (error) => isProblem(error, 'precondition_failed') && error.responseStatusCode === 412 && error.operationIndex === 1,
+  );
 });
 
 test('content uploads and downloads bytes', async () => {
-  const workspace = await api.v1.workspaces.post({ name: 'Files' });
-  const library = await api.v1.resources.byId(workspace.id).children.post({ kind: 'library', name: 'Contracts' });
-  const item = await api.v1.resources.byId(library.id).children.post({ kind: 'item', name: 'contract.txt' });
+  const workspace = jsonValue(await api.v1.workspaces.post(body({ name: 'Files' })));
+  const library = jsonValue(await api.v1.resources.byId(workspace.id).children.post(body({ kind: 'library', name: 'Contracts' })));
+  const item = jsonValue(await api.v1.resources.byId(library.id).children.post(body({ kind: 'item', name: 'contract.txt' })));
   const bytes = new TextEncoder().encode('signed contract');
-  const blob = await api.v1.items.byId(item.id).content.put(bytes.buffer, 'text/plain', { headers: { ...ifMatch(item.version).headers, 'X-Filename': 'contract.txt' } });
+  const blob = jsonValue(await api.v1.items.byId(item.id).content.put(bytes.buffer, { headers: { ...ifMatch(item.version).headers, 'Content-Type': 'text/plain', 'X-Filename': 'contract.txt' } }));
   assert.equal(blob?.size, bytes.length);
-  assert.equal(blob?.contentType, 'text/plain');
+  assert.equal(blob?.content_type, 'text/plain');
   const downloaded = await api.v1.items.byId(item.id).content.get();
   assert.equal(new TextDecoder().decode(downloaded), 'signed contract');
 });

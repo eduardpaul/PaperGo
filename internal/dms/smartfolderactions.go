@@ -105,7 +105,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 			return e
 		}
 		if f.Version != in.FolderVersion {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		d, e := smartDefinition(f)
 		if e != nil {
@@ -139,7 +139,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 				return invalid("item must belong to the selected collection")
 			}
 			if item.Version != in.Version {
-				return ErrConflict
+				return ErrPreconditionFailed
 			}
 			if e = t.overlayHead(ctx, item); e != nil {
 				return e
@@ -155,7 +155,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		if !slices.ContainsFunc(c.types, func(v *ent.ContentType) bool { return v.ID == typ.ID }) {
 			return invalid("content type is outside the smart folder selectors")
 		}
-		defs := selectDefinitions(c.defs, typ.FieldKeys)
+		defs := selectTypeDefinitions(c.defs, typ)
 		known := definitionMap(defs)
 		if item != nil {
 			for key, v := range item.Values {
@@ -237,7 +237,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		for _, root := range roots {
 			var target *ent.FieldDefinition
 			for _, fd := range defs {
-				if fd.Type == "term" && fd.Indexed && fd.Options.TermSetID == root.TermSetID {
+				if smartTermField(fd, root) {
 					target = fd
 					break
 				}
@@ -331,15 +331,16 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 	return
 }
 
-// Fetch only descendant IDs present on this item's active term fields. Large
-// taxonomies do not turn into large SQL parameter lists or response payloads.
+// Fetch only the IDs on this item's term and keywords fields that are in the
+// selected terms' subtrees or merged into them. Large taxonomies do not turn
+// into large SQL parameter lists or response payloads.
 func (s *Service) smartRemoveTerms(ctx context.Context, roots []string, values map[string]any, defs []*ent.FieldDefinition) error {
 	if len(roots) == 0 {
 		return nil
 	}
 	ids := []any{}
 	for _, fd := range defs {
-		if fd.Type == "term" {
+		if fd.Type == "term" || fd.Type == "keywords" {
 			if fd.Options.Multiple {
 				ids = append(ids, smartArray(values[fd.Key])...)
 			} else if v := values[fd.Key]; v != nil {
@@ -349,7 +350,8 @@ func (s *Service) smartRemoveTerms(ctx context.Context, roots []string, values m
 	}
 	rootJSON, _ := json.Marshal(roots)
 	idsJSON, _ := json.Marshal(ids)
-	rows, err := s.Client.QueryContext(ctx, `WITH RECURSIVE descendants(id) AS (SELECT value FROM json_each(?) UNION SELECT t.id FROM terms t JOIN descendants d ON t.parent_id=d.id) SELECT id FROM descendants WHERE id IN (SELECT value FROM json_each(?))`, string(rootJSON), string(idsJSON))
+	rows, err := s.Client.QueryContext(ctx, `WITH sub AS (SELECT t.id FROM json_each(?) j JOIN terms r ON r.id=coalesce((SELECT merged_into_id FROM terms WHERE id=j.value),j.value) JOIN terms t ON t.path>=r.path AND t.path<substr(r.path,1,length(r.path)-1)||'0')
+SELECT id FROM sub WHERE id IN (SELECT value FROM json_each(?)) UNION SELECT m.id FROM sub JOIN terms m ON m.merged_into_id=sub.id WHERE m.id IN (SELECT value FROM json_each(?))`, string(rootJSON), string(idsJSON), string(idsJSON))
 	if err != nil {
 		return err
 	}
@@ -368,7 +370,7 @@ func (s *Service) smartRemoveTerms(ctx context.Context, roots []string, values m
 		return err
 	}
 	for _, fd := range defs {
-		if fd.Type != "term" {
+		if fd.Type != "term" && fd.Type != "keywords" {
 			continue
 		}
 		if values[fd.Key] == nil {
@@ -377,7 +379,7 @@ func (s *Service) smartRemoveTerms(ctx context.Context, roots []string, values m
 		if fd.Options.Multiple {
 			values[fd.Key] = slices.DeleteFunc(smartArray(values[fd.Key]), func(v any) bool { id, ok := v.(string); return ok && removed[id] })
 		} else if id, ok := values[fd.Key].(string); ok && removed[id] {
-			delete(values, fd.Key)
+			values[fd.Key] = nil
 		}
 	}
 	return nil
@@ -393,7 +395,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 			return e
 		}
 		if f.Version != folderVersion {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		d, e := smartDefinition(f)
 		if e != nil {
@@ -407,7 +409,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 			return invalid("only items can be unclassified")
 		}
 		if item.Version != itemVersion {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		c, e := t.smartActionCandidate(ctx, subject, f, d, *item.ContainerID)
 		if e != nil {
@@ -427,7 +429,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 		if e != nil {
 			return e
 		}
-		defs := selectDefinitions(c.defs, typ.FieldKeys)
+		defs := selectTypeDefinitions(c.defs, typ)
 		known := definitionMap(defs)
 		values := map[string]any{}
 		for key, v := range item.Values {
@@ -460,7 +462,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 			if fd.Options.Multiple {
 				values[fd.Key] = slices.DeleteFunc(smartArray(values[fd.Key]), func(x any) bool { return smartEqual(x, v) })
 			} else if smartEqual(values[fd.Key], v) {
-				delete(values, fd.Key)
+				values[fd.Key] = nil
 			}
 		}
 		if e = t.smartRemoveTerms(ctx, d.Terms, values, defs); e != nil {

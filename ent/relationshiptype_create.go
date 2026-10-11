@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"papergo/ent/relationship"
 	"papergo/ent/relationshiptype"
-	"papergo/ent/resource"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -34,24 +33,6 @@ func (_c *RelationshipTypeCreate) SetNillableCreatedAt(v *time.Time) *Relationsh
 	if v != nil {
 		_c.SetCreatedAt(*v)
 	}
-	return _c
-}
-
-// SetWorkspaceID sets the "workspace_id" field.
-func (_c *RelationshipTypeCreate) SetWorkspaceID(v string) *RelationshipTypeCreate {
-	_c.mutation.SetWorkspaceID(v)
-	return _c
-}
-
-// SetKey sets the "key" field.
-func (_c *RelationshipTypeCreate) SetKey(v string) *RelationshipTypeCreate {
-	_c.mutation.SetKey(v)
-	return _c
-}
-
-// SetLabel sets the "label" field.
-func (_c *RelationshipTypeCreate) SetLabel(v string) *RelationshipTypeCreate {
-	_c.mutation.SetLabel(v)
 	return _c
 }
 
@@ -159,11 +140,6 @@ func (_c *RelationshipTypeCreate) SetNillableID(v *string) *RelationshipTypeCrea
 	return _c
 }
 
-// SetWorkspace sets the "workspace" edge to the Resource entity.
-func (_c *RelationshipTypeCreate) SetWorkspace(v *Resource) *RelationshipTypeCreate {
-	return _c.SetWorkspaceID(v.ID)
-}
-
 // AddRelationshipIDs adds the "relationships" edge to the Relationship entity by IDs.
 func (_c *RelationshipTypeCreate) AddRelationshipIDs(ids ...string) *RelationshipTypeCreate {
 	_c.mutation.AddRelationshipIDs(ids...)
@@ -245,15 +221,6 @@ func (_c *RelationshipTypeCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "RelationshipType.created_at"`)}
 	}
-	if _, ok := _c.mutation.WorkspaceID(); !ok {
-		return &ValidationError{Name: "workspace_id", err: errors.New(`ent: missing required field "RelationshipType.workspace_id"`)}
-	}
-	if _, ok := _c.mutation.Key(); !ok {
-		return &ValidationError{Name: "key", err: errors.New(`ent: missing required field "RelationshipType.key"`)}
-	}
-	if _, ok := _c.mutation.Label(); !ok {
-		return &ValidationError{Name: "label", err: errors.New(`ent: missing required field "RelationshipType.label"`)}
-	}
 	if _, ok := _c.mutation.InverseLabel(); !ok {
 		return &ValidationError{Name: "inverse_label", err: errors.New(`ent: missing required field "RelationshipType.inverse_label"`)}
 	}
@@ -288,9 +255,6 @@ func (_c *RelationshipTypeCreate) check() error {
 		if err := relationshiptype.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "RelationshipType.id": %w`, err)}
 		}
-	}
-	if len(_c.mutation.WorkspaceIDs()) == 0 {
-		return &ValidationError{Name: "workspace", err: errors.New(`ent: missing required edge "RelationshipType.workspace"`)}
 	}
 	return nil
 }
@@ -331,14 +295,6 @@ func (_c *RelationshipTypeCreate) createSpec() (*RelationshipType, *sqlgraph.Cre
 		_spec.SetField(relationshiptype.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := _c.mutation.Key(); ok {
-		_spec.SetField(relationshiptype.FieldKey, field.TypeString, value)
-		_node.Key = value
-	}
-	if value, ok := _c.mutation.Label(); ok {
-		_spec.SetField(relationshiptype.FieldLabel, field.TypeString, value)
-		_node.Label = value
-	}
 	if value, ok := _c.mutation.InverseLabel(); ok {
 		_spec.SetField(relationshiptype.FieldInverseLabel, field.TypeString, value)
 		_node.InverseLabel = value
@@ -366,23 +322,6 @@ func (_c *RelationshipTypeCreate) createSpec() (*RelationshipType, *sqlgraph.Cre
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(relationshiptype.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
-	}
-	if nodes := _c.mutation.WorkspaceIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   relationshiptype.WorkspaceTable,
-			Columns: []string{relationshiptype.WorkspaceColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.WorkspaceID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.RelationshipsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

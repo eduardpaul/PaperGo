@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"papergo/ent/blob"
-	"papergo/ent/fielddefinition"
 	"papergo/ent/grant"
 	"papergo/ent/itemrevision"
 	"papergo/ent/publication"
@@ -98,6 +97,34 @@ func (_c *ResourceCreate) SetKind(v resource.Kind) *ResourceCreate {
 // SetName sets the "name" field.
 func (_c *ResourceCreate) SetName(v string) *ResourceCreate {
 	_c.mutation.SetName(v)
+	return _c
+}
+
+// SetDescription sets the "description" field.
+func (_c *ResourceCreate) SetDescription(v string) *ResourceCreate {
+	_c.mutation.SetDescription(v)
+	return _c
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableDescription(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetDescription(*v)
+	}
+	return _c
+}
+
+// SetAllowFolders sets the "allow_folders" field.
+func (_c *ResourceCreate) SetAllowFolders(v bool) *ResourceCreate {
+	_c.mutation.SetAllowFolders(v)
+	return _c
+}
+
+// SetNillableAllowFolders sets the "allow_folders" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableAllowFolders(v *bool) *ResourceCreate {
+	if v != nil {
+		_c.SetAllowFolders(*v)
+	}
 	return _c
 }
 
@@ -217,6 +244,34 @@ func (_c *ResourceCreate) SetNillablePublishingEnabled(v *bool) *ResourceCreate 
 	return _c
 }
 
+// SetVersioning sets the "versioning" field.
+func (_c *ResourceCreate) SetVersioning(v resource.Versioning) *ResourceCreate {
+	_c.mutation.SetVersioning(v)
+	return _c
+}
+
+// SetNillableVersioning sets the "versioning" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableVersioning(v *resource.Versioning) *ResourceCreate {
+	if v != nil {
+		_c.SetVersioning(*v)
+	}
+	return _c
+}
+
+// SetMaxVersions sets the "max_versions" field.
+func (_c *ResourceCreate) SetMaxVersions(v int) *ResourceCreate {
+	_c.mutation.SetMaxVersions(v)
+	return _c
+}
+
+// SetNillableMaxVersions sets the "max_versions" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableMaxVersions(v *int) *ResourceCreate {
+	if v != nil {
+		_c.SetMaxVersions(*v)
+	}
+	return _c
+}
+
 // SetWebdavEnabled sets the "webdav_enabled" field.
 func (_c *ResourceCreate) SetWebdavEnabled(v bool) *ResourceCreate {
 	_c.mutation.SetWebdavEnabled(v)
@@ -227,6 +282,20 @@ func (_c *ResourceCreate) SetWebdavEnabled(v bool) *ResourceCreate {
 func (_c *ResourceCreate) SetNillableWebdavEnabled(v *bool) *ResourceCreate {
 	if v != nil {
 		_c.SetWebdavEnabled(*v)
+	}
+	return _c
+}
+
+// SetDuplicatePolicy sets the "duplicate_policy" field.
+func (_c *ResourceCreate) SetDuplicatePolicy(v resource.DuplicatePolicy) *ResourceCreate {
+	_c.mutation.SetDuplicatePolicy(v)
+	return _c
+}
+
+// SetNillableDuplicatePolicy sets the "duplicate_policy" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableDuplicatePolicy(v *resource.DuplicatePolicy) *ResourceCreate {
+	if v != nil {
+		_c.SetDuplicatePolicy(*v)
 	}
 	return _c
 }
@@ -315,6 +384,20 @@ func (_c *ResourceCreate) SetNillableDeletedAt(v *time.Time) *ResourceCreate {
 	return _c
 }
 
+// SetDeletedBy sets the "deleted_by" field.
+func (_c *ResourceCreate) SetDeletedBy(v string) *ResourceCreate {
+	_c.mutation.SetDeletedBy(v)
+	return _c
+}
+
+// SetNillableDeletedBy sets the "deleted_by" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableDeletedBy(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetDeletedBy(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ResourceCreate) SetID(v string) *ResourceCreate {
 	_c.mutation.SetID(v)
@@ -367,21 +450,6 @@ func (_c *ResourceCreate) AddContainedItems(v ...*Resource) *ResourceCreate {
 // SetContainer sets the "container" edge to the Resource entity.
 func (_c *ResourceCreate) SetContainer(v *Resource) *ResourceCreate {
 	return _c.SetContainerID(v.ID)
-}
-
-// AddDefinitionIDs adds the "definitions" edge to the FieldDefinition entity by IDs.
-func (_c *ResourceCreate) AddDefinitionIDs(ids ...string) *ResourceCreate {
-	_c.mutation.AddDefinitionIDs(ids...)
-	return _c
-}
-
-// AddDefinitions adds the "definitions" edges to the FieldDefinition entity.
-func (_c *ResourceCreate) AddDefinitions(v ...*FieldDefinition) *ResourceCreate {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddDefinitionIDs(ids...)
 }
 
 // AddGrantIDs adds the "grants" edge to the Grant entity by IDs.
@@ -543,6 +611,14 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.Description(); !ok {
+		v := resource.DefaultDescription
+		_c.mutation.SetDescription(v)
+	}
+	if _, ok := _c.mutation.AllowFolders(); !ok {
+		v := resource.DefaultAllowFolders
+		_c.mutation.SetAllowFolders(v)
+	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		v := resource.DefaultTags
 		_c.mutation.SetTags(v)
@@ -571,9 +647,21 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultPublishingEnabled
 		_c.mutation.SetPublishingEnabled(v)
 	}
+	if _, ok := _c.mutation.Versioning(); !ok {
+		v := resource.DefaultVersioning
+		_c.mutation.SetVersioning(v)
+	}
+	if _, ok := _c.mutation.MaxVersions(); !ok {
+		v := resource.DefaultMaxVersions
+		_c.mutation.SetMaxVersions(v)
+	}
 	if _, ok := _c.mutation.WebdavEnabled(); !ok {
 		v := resource.DefaultWebdavEnabled
 		_c.mutation.SetWebdavEnabled(v)
+	}
+	if _, ok := _c.mutation.DuplicatePolicy(); !ok {
+		v := resource.DefaultDuplicatePolicy
+		_c.mutation.SetDuplicatePolicy(v)
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := resource.DefaultUpdatedAt()
@@ -637,6 +725,17 @@ func (_c *ResourceCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Resource.name": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.Description(); !ok {
+		return &ValidationError{Name: "description", err: errors.New(`ent: missing required field "Resource.description"`)}
+	}
+	if v, ok := _c.mutation.Description(); ok {
+		if err := resource.DescriptionValidator(v); err != nil {
+			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Resource.description": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.AllowFolders(); !ok {
+		return &ValidationError{Name: "allow_folders", err: errors.New(`ent: missing required field "Resource.allow_folders"`)}
+	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		return &ValidationError{Name: "tags", err: errors.New(`ent: missing required field "Resource.tags"`)}
 	}
@@ -668,8 +767,32 @@ func (_c *ResourceCreate) check() error {
 	if _, ok := _c.mutation.PublishingEnabled(); !ok {
 		return &ValidationError{Name: "publishing_enabled", err: errors.New(`ent: missing required field "Resource.publishing_enabled"`)}
 	}
+	if _, ok := _c.mutation.Versioning(); !ok {
+		return &ValidationError{Name: "versioning", err: errors.New(`ent: missing required field "Resource.versioning"`)}
+	}
+	if v, ok := _c.mutation.Versioning(); ok {
+		if err := resource.VersioningValidator(v); err != nil {
+			return &ValidationError{Name: "versioning", err: fmt.Errorf(`ent: validator failed for field "Resource.versioning": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.MaxVersions(); !ok {
+		return &ValidationError{Name: "max_versions", err: errors.New(`ent: missing required field "Resource.max_versions"`)}
+	}
+	if v, ok := _c.mutation.MaxVersions(); ok {
+		if err := resource.MaxVersionsValidator(v); err != nil {
+			return &ValidationError{Name: "max_versions", err: fmt.Errorf(`ent: validator failed for field "Resource.max_versions": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.WebdavEnabled(); !ok {
 		return &ValidationError{Name: "webdav_enabled", err: errors.New(`ent: missing required field "Resource.webdav_enabled"`)}
+	}
+	if _, ok := _c.mutation.DuplicatePolicy(); !ok {
+		return &ValidationError{Name: "duplicate_policy", err: errors.New(`ent: missing required field "Resource.duplicate_policy"`)}
+	}
+	if v, ok := _c.mutation.DuplicatePolicy(); ok {
+		if err := resource.DuplicatePolicyValidator(v); err != nil {
+			return &ValidationError{Name: "duplicate_policy", err: fmt.Errorf(`ent: validator failed for field "Resource.duplicate_policy": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Resource.updated_at"`)}
@@ -750,6 +873,14 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 		_spec.SetField(resource.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
+	if value, ok := _c.mutation.Description(); ok {
+		_spec.SetField(resource.FieldDescription, field.TypeString, value)
+		_node.Description = value
+	}
+	if value, ok := _c.mutation.AllowFolders(); ok {
+		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
+		_node.AllowFolders = value
+	}
 	if value, ok := _c.mutation.Tags(); ok {
 		_spec.SetField(resource.FieldTags, field.TypeJSON, value)
 		_node.Tags = value
@@ -778,9 +909,21 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 		_spec.SetField(resource.FieldPublishingEnabled, field.TypeBool, value)
 		_node.PublishingEnabled = value
 	}
+	if value, ok := _c.mutation.Versioning(); ok {
+		_spec.SetField(resource.FieldVersioning, field.TypeEnum, value)
+		_node.Versioning = value
+	}
+	if value, ok := _c.mutation.MaxVersions(); ok {
+		_spec.SetField(resource.FieldMaxVersions, field.TypeInt, value)
+		_node.MaxVersions = value
+	}
 	if value, ok := _c.mutation.WebdavEnabled(); ok {
 		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
 		_node.WebdavEnabled = value
+	}
+	if value, ok := _c.mutation.DuplicatePolicy(); ok {
+		_spec.SetField(resource.FieldDuplicatePolicy, field.TypeEnum, value)
+		_node.DuplicatePolicy = value
 	}
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
@@ -805,6 +948,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(resource.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if value, ok := _c.mutation.DeletedBy(); ok {
+		_spec.SetField(resource.FieldDeletedBy, field.TypeString, value)
+		_node.DeletedBy = &value
 	}
 	if nodes := _c.mutation.ChildrenIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -870,22 +1017,6 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.ContainerID = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.DefinitionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.GrantsIDs(); len(nodes) > 0 {

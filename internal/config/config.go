@@ -16,6 +16,7 @@ type Config struct {
 	AuthMode     string
 	DevToken     string
 	DevSubject   string
+	AdminSubject string
 	Issuer       string
 	Audience     string
 	MaxUpload    int64
@@ -23,10 +24,16 @@ type Config struct {
 	MaxInFlight int
 	// RequestTimeout cancels API reads that outlive it; mutations and blob transfers are exempt.
 	RequestTimeout time.Duration
+	// NodeID identifies this process to the workflow runner; a restarted
+	// node recovers the runs it was executing.
+	NodeID string
+	// RunRetention is how long finished workflow runs are kept.
+	RunRetention time.Duration
 }
 
 func Load() (Config, error) {
-	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "oidc"), DevToken: os.Getenv("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: os.Getenv("OIDC_ISSUER"), Audience: os.Getenv("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second}
+	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "oidc"), DevToken: os.Getenv("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: os.Getenv("OIDC_ISSUER"), Audience: os.Getenv("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour}
+	c.AdminSubject = os.Getenv("ADMIN_SUBJECT")
 	if v := os.Getenv("MAX_UPLOAD_BYTES"); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || n < 1 || n > 1024*1024*1024 {
@@ -48,11 +55,24 @@ func Load() (Config, error) {
 		}
 		c.RequestTimeout = d
 	}
+	if v := os.Getenv("RUN_RETENTION"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Hour || d > 10*365*24*time.Hour {
+			return c, fmt.Errorf("RUN_RETENTION must be a duration between 1h and 87600h")
+		}
+		c.RunRetention = d
+	}
+	if strings.TrimSpace(c.NodeID) == "" || len(c.NodeID) > 100 {
+		return c, fmt.Errorf("NODE_ID needs 1 to 100 characters")
+	}
 	if c.Env != "development" && c.Env != "test" && c.Env != "production" {
 		return c, fmt.Errorf("invalid APP_ENV")
 	}
 	switch c.AuthMode {
 	case "development":
+		if c.AdminSubject == "" {
+			c.AdminSubject = c.DevSubject
+		}
 		if c.Env == "production" {
 			return c, fmt.Errorf("production requires OIDC authentication")
 		}
@@ -71,6 +91,9 @@ func Load() (Config, error) {
 		}
 	default:
 		return c, fmt.Errorf("AUTH_MODE must be development or oidc")
+	}
+	if c.AdminSubject == "" || c.AdminSubject != strings.TrimSpace(c.AdminSubject) || len(c.AdminSubject) > 255 {
+		return c, fmt.Errorf("ADMIN_SUBJECT must identify the first organization administrator")
 	}
 	return c, nil
 }

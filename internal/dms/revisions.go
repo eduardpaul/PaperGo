@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	entsql "entgo.io/ent/dialect/sql"
 	"papergo/ent"
+	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
@@ -18,14 +20,15 @@ import (
 )
 
 type SchemaField struct {
-	Options  model.FieldOptions `json:"options,omitempty"`
-	ID       string             `json:"id" doc:"Immutable field key."`
-	Label    string             `json:"label"`
-	Type     string             `json:"type" enum:"text,note,email,url,date,datetime,choice,integer,decimal,number,boolean,lookup,term"`
-	Required bool               `json:"required"`
-	Choices  []string           `json:"choices"`
-	Indexed  bool               `json:"indexed"`
-	Scale    int                `json:"scale" minimum:"0" maximum:"9"`
+	DefinitionID string             `json:"definition_id,omitempty"`
+	Options      model.FieldOptions `json:"options,omitempty"`
+	ID           string             `json:"id"`
+	Label        string             `json:"label"`
+	Type         string             `json:"type"`
+	Required     bool               `json:"required"`
+	Choices      []string           `json:"choices"`
+	Indexed      bool               `json:"indexed"`
+	Scale        int                `json:"scale"`
 }
 type SchemaDefinition struct {
 	Fields       []SchemaField          `json:"fields"`
@@ -44,7 +47,7 @@ func decodeValues(raw json.RawMessage) (map[string]any, error) {
 	return values, err
 }
 func (s *Service) recordSchema(ctx context.Context, actor string, c *ent.Resource) error {
-	defs, err := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
+	defs, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -52,13 +55,17 @@ func (s *Service) recordSchema(ctx context.Context, actor string, c *ent.Resourc
 	for _, d := range defs {
 		definition.Fields = append(definition.Fields, schemaField(d))
 	}
-	types, err := s.Client.ContentType.Query().Where(contenttype.ContainerIDEQ(c.ID)).Order(ent.Asc(contenttype.FieldKey)).All(ctx)
+	types, err := s.Client.ContentType.Query().Where(collectionTypePredicate(c.ID)).Order(ent.Asc(contenttype.FieldKey)).All(ctx)
 	if err != nil {
 		return err
 	}
 	definition.ContentTypes = []SchemaContentType{}
+	a, err := s.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(c.ID), collectiontype.IsDefaultEQ(true)).Only(ctx)
+	if err != nil {
+		return err
+	}
 	for _, typ := range types {
-		definition.ContentTypes = append(definition.ContentTypes, SchemaContentType{ID: typ.ID, Key: typ.Key, Name: typ.Name, FieldKeys: typ.FieldKeys, Rules: typ.Rules, IsDefault: typ.IsDefault})
+		definition.ContentTypes = append(definition.ContentTypes, SchemaContentType{ID: typ.ID, Key: typ.Key, Name: typ.Name, FieldKeys: fieldKeys(selectTypeDefinitions(defs, typ)), Rules: typ.Rules, IsDefault: typ.ID == a.ContentTypeID})
 	}
 	number := 1
 	if c.SchemaHeadID != nil {
@@ -111,6 +118,7 @@ func overlayRevision(r *ent.Resource, rev *ent.ItemRevision) error {
 	r.Name = rev.Name
 	r.Tags = append([]string{}, rev.Tags...)
 	r.Values = values
+	r.ContentTypeID = &rev.ContentTypeID
 	r.UpdatedAt = rev.CreatedAt
 	r.UpdatedBy = rev.CreatedBy
 	return nil
@@ -148,12 +156,14 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 		r.Values = values
 	}
 	var previous map[string]any
+	var previousRevision *ent.ItemRevision
 	blobID := newBlobID
 	if r.HeadRevisionID != nil {
 		old, e := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
 		if e != nil {
 			return nil, e
 		}
+		previousRevision = old
 		previous, e = decodeValues(old.Payload)
 		if e != nil {
 			return nil, e
@@ -162,7 +172,18 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 			blobID = old.BlobID
 		}
 	}
-	if err = s.normalizeItemValues(ctx, actor, r.WorkspaceID, defs, r.Values, previous); err != nil {
+	applyDefaults := previous == nil
+	if previousRevision != nil && previousRevision.ContentTypeID != *r.ContentTypeID {
+		// Reclassification enforces the destination type and required fields;
+		// creation defaults are not implicitly applied by an update.
+		previous = nil
+		applyDefaults = false
+	}
+	defs, rules = resourceDefinitions(r.Kind, defs, rules)
+	if r.Kind == resource.KindFolder {
+		applyDefaults = false
+	}
+	if err = s.normalizeItemValues(ctx, actor, defs, r.Values, previous, applyDefaults); err != nil {
 		return nil, err
 	}
 	if err = evaluateRules(defs, rules, r.Values); err != nil {
@@ -184,24 +205,49 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfaceHead, defs); err != nil {
 		return nil, err
 	}
-	if !c.PublishingEnabled {
-		if _, err = s.publishRevision(ctx, actor, r, rev, false); err != nil {
+	if r.Kind == resource.KindFolder {
+		// Folder metadata is immediately visible. Internal schema snapshots keep
+		// its projections consistent without creating publications or history.
+		if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfacePublished, defs); err != nil {
 			return nil, err
 		}
+		err = s.Client.Resource.UpdateOneID(r.ID).SetPublishedRevisionID(rev.ID).Exec(ctx)
+		return rev, err
+	}
+	typ := EventItemUpdated
+	if rev.RevisionNumber == 1 {
+		typ = EventItemCreated
+	}
+	data := map[string]any{"revision_id": rev.ID, "revision_number": rev.RevisionNumber, "content_type_id": rev.ContentTypeID}
+	if rev.BlobID != nil {
+		data["blob_id"] = *rev.BlobID
+	}
+	s.emit(ctx, typ, actor, r.WorkspaceID, r.ContainerID, r.ID, data)
+	if !c.PublishingEnabled {
+		if _, err = s.publishRevision(ctx, actor, r, rev, false, nil); err != nil {
+			return nil, err
+		}
+	}
+	if err = s.retainHistory(ctx, c, rev, previousRevision); err != nil {
+		return nil, err
 	}
 	return rev, nil
 }
 func (s *Service) replaceSurface(ctx context.Context, r *ent.Resource, rev *ent.ItemRevision, surface itemsurface.Surface, defs []*ent.FieldDefinition) error {
-	current, err := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(*r.ContainerID)).All(ctx)
+	current, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(*r.ContainerID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	terms, err := s.termText(ctx, rev.Payload, defs)
 	if err != nil {
 		return err
 	}
 	existing, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(r.ID), itemsurface.SurfaceEQ(surface)).Only(ctx)
 	var projection *ent.ItemSurface
 	if ent.IsNotFound(err) {
-		projection, err = s.Client.ItemSurface.Create().SetItemID(r.ID).SetContainerID(*r.ContainerID).SetWorkspaceID(r.WorkspaceID).SetSurface(surface).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetItemCreatedAt(queryTime(r.CreatedAt)).SetItemCreatedBy(r.CreatedBy).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
+		projection, err = s.Client.ItemSurface.Create().SetItemID(r.ID).SetContainerID(*r.ContainerID).SetWorkspaceID(r.WorkspaceID).SetSurface(surface).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetTermText(terms).SetItemCreatedAt(queryTime(r.CreatedAt)).SetItemCreatedBy(r.CreatedBy).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
 	} else if err == nil {
-		projection, err = s.Client.ItemSurface.UpdateOne(existing).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
+		projection, err = s.Client.ItemSurface.UpdateOne(existing).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetTermText(terms).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
 	}
 	if err != nil {
 		return err
@@ -260,7 +306,7 @@ func (s *Service) fieldValueRows(projection *ent.ItemSurface, defs []*ent.FieldD
 		for ordinal, v := range list {
 			b := s.Client.FieldValue.Create().SetOrdinal(ordinal).SetSurfaceID(projection.ID).SetContainerID(projection.ContainerID).SetItemID(projection.ItemID).SetSurface(fieldvalue.Surface(projection.Surface)).SetFieldKey(d.Key).SetFieldType(fieldvalue.FieldType(d.Type)).SetScale(d.Scale)
 			switch string(d.Type) {
-			case "text", "note", "email", "url", "date", "lookup", "term", "choice":
+			case "text", "note", "email", "url", "date", "lookup", "person", "term", "keywords", "choice":
 				b.SetValueText(v.(string))
 			case "datetime":
 				date, err := time.Parse(time.RFC3339, v.(string))
@@ -280,12 +326,12 @@ func (s *Service) fieldValueRows(projection *ent.ItemSurface, defs []*ent.FieldD
 					return nil, err
 				}
 				b.SetValueInteger(n)
-			case "number":
-				n, err := number(v)
+			case "number", "currency":
+				n, err := numberKey(v)
 				if err != nil {
 					return nil, err
 				}
-				b.SetValueNumber(n)
+				b.SetValueText(n)
 			case "boolean":
 				b.SetValueBoolean(v.(bool))
 			}
@@ -306,13 +352,22 @@ func (s *Service) insertFieldValues(ctx context.Context, rows []*ent.FieldValueC
 	}
 	return nil
 }
-func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Resource, rev *ent.ItemRevision, explicit bool) (*ent.Publication, error) {
+
+// publishRevision reuses schema revisions from schemas, which may be nil, and
+// adds the ones it loads.
+func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Resource, rev *ent.ItemRevision, explicit bool, schemas map[string]*ent.SchemaRevision) (*ent.Publication, error) {
 	if explicit && r.PublishedRevisionID != nil && *r.PublishedRevisionID == rev.ID {
 		return nil, ErrConflict
 	}
-	schema, err := s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID)
-	if err != nil {
-		return nil, err
+	schema := schemas[rev.SchemaRevisionID]
+	if schema == nil {
+		var err error
+		if schema, err = s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID); err != nil {
+			return nil, err
+		}
+		if schemas != nil {
+			schemas[schema.ID] = schema
+		}
 	}
 	defs, _, err := typedDefinitions(schema.Definition, rev.ContentTypeID)
 	if err != nil {
@@ -341,45 +396,68 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 		return nil, err
 	}
 	r.PublishedRevisionID = &rev.ID
+	s.emit(ctx, EventItemPublished, actor, r.WorkspaceID, r.ContainerID, r.ID, map[string]any{"revision_id": rev.ID, "revision_number": rev.RevisionNumber, "publication_id": event.ID})
 	return event, nil
 }
+
+// publishAllHeads publishes every unpublished head in surfaceBatch pages, so
+// memory stays flat and head revisions and schemas load once per batch.
 func (s *Service) publishAllHeads(ctx context.Context, actor string, c *ent.Resource) error {
-	rows, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil()).All(ctx)
-	if err != nil {
-		return err
+	unpublished := func(sel *entsql.Selector) {
+		sel.Where(entsql.ExprP("(" + sel.C(resource.FieldPublishedRevisionID) + " IS NULL OR " + sel.C(resource.FieldHeadRevisionID) + " IS NULL OR " + sel.C(resource.FieldPublishedRevisionID) + "<>" + sel.C(resource.FieldHeadRevisionID) + ")"))
 	}
-	for _, r := range rows {
-		if r.HeadRevisionID == nil {
-			return invalid("item has no head revision")
-		}
-		if r.PublishedRevisionID != nil && *r.PublishedRevisionID == *r.HeadRevisionID {
-			continue
-		}
-		rev, err := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
+	schemas := map[string]*ent.SchemaRevision{}
+	for after := ""; ; {
+		rows, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil(), resource.IDGT(after), unpublished).Order(ent.Asc(resource.FieldID)).Limit(surfaceBatch).All(ctx)
 		if err != nil {
 			return err
 		}
-		if _, err = s.publishRevision(ctx, actor, r, rev, true); err != nil {
+		heads := make([]string, 0, len(rows))
+		for _, r := range rows {
+			if r.HeadRevisionID == nil {
+				return invalid("item has no head revision")
+			}
+			heads = append(heads, *r.HeadRevisionID)
+		}
+		revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.IDIn(heads...)).All(ctx)
+		if err != nil {
 			return err
 		}
+		byID := make(map[string]*ent.ItemRevision, len(revisions))
+		for _, rev := range revisions {
+			byID[rev.ID] = rev
+		}
+		for _, r := range rows {
+			if _, err = s.publishRevision(ctx, actor, r, byID[*r.HeadRevisionID], true, schemas); err != nil {
+				return err
+			}
+		}
+		if len(rows) < surfaceBatch {
+			return nil
+		}
+		after = rows[len(rows)-1].ID
 	}
-	return nil
 }
-func (s *Service) Revisions(ctx context.Context, subject, id string, after, limit int) ([]*ent.ItemRevision, error) {
+func (s *Service) Revisions(ctx context.Context, subject, id string, after, limit int) (Page[*ent.ItemRevision], error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) ([]*ent.ItemRevision, error) { return t.Revisions(ctx, subject, id, after, limit) })
+		return read(ctx, s, func(t *Service) (Page[*ent.ItemRevision], error) { return t.Revisions(ctx, subject, id, after, limit) })
 	}
-	r, err := s.authorize(ctx, subject, id, "read_draft")
+	r, err := s.authorize(ctx, subject, id, "read")
 	if err != nil {
-		return nil, err
+		return Page[*ent.ItemRevision]{}, err
 	}
 	if r.Kind != resource.KindItem {
-		return nil, invalid("revisions belong to items")
+		return Page[*ent.ItemRevision]{}, invalid("revisions belong to items")
 	}
-	return s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberGT(after)).WithSchemaRevision().Order(ent.Asc(itemrevision.FieldRevisionNumber)).Limit(pageSize(limit)).All(ctx)
+	rows, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberGT(after), itemrevision.HasHistory()).WithSchemaRevision().WithHistory().Order(ent.Asc(itemrevision.FieldRevisionNumber)).Limit(pageSize(limit) + 1).All(ctx)
+	if err != nil {
+		return Page[*ent.ItemRevision]{}, err
+	}
+	return numberedPage(rows, limit, func(v *ent.ItemRevision) int { return v.RevisionNumber }), nil
 }
 
 // ItemSchema exposes only the schema belonging to the caller's visible revision.
+
 func (s *Service) ItemSchema(ctx context.Context, subject, id, surface string) (*ent.SchemaRevision, error) {
 	if !s.transaction {
 		return read(ctx, s, func(t *Service) (*ent.SchemaRevision, error) { return t.ItemSchema(ctx, subject, id, surface) })
@@ -388,8 +466,8 @@ func (s *Service) ItemSchema(ctx context.Context, subject, id, surface string) (
 	if err != nil {
 		return nil, err
 	}
-	if r.Kind != resource.KindItem {
-		return nil, invalid("item schema belongs to an item")
+	if !contentKind(r.Kind) {
+		return nil, invalid("content schema belongs to an item or folder")
 	}
 	selected := r.HeadRevisionID
 	if selected == nil {
@@ -405,20 +483,24 @@ func (s *Service) ItemSchema(ctx context.Context, subject, id, surface string) (
 	return s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID)
 }
 
-func (s *Service) Schemas(ctx context.Context, subject, id string, after, limit int) ([]*ent.SchemaRevision, error) {
+func (s *Service) Schemas(ctx context.Context, subject, id string, after, limit int) (Page[*ent.SchemaRevision], error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) ([]*ent.SchemaRevision, error) { return t.Schemas(ctx, subject, id, after, limit) })
+		return read(ctx, s, func(t *Service) (Page[*ent.SchemaRevision], error) { return t.Schemas(ctx, subject, id, after, limit) })
 	}
 	r, err := s.authorize(ctx, subject, id, "manage")
 	if err != nil {
-		return nil, err
+		return Page[*ent.SchemaRevision]{}, err
 	}
 	if r.Kind != resource.KindList && r.Kind != resource.KindLibrary {
-		return nil, invalid("schema revisions belong to collections")
+		return Page[*ent.SchemaRevision]{}, invalid("schema revisions belong to collections")
 	}
-	return s.Client.SchemaRevision.Query().Where(schemarevision.ContainerIDEQ(id), schemarevision.RevisionNumberGT(after)).Order(ent.Asc(schemarevision.FieldRevisionNumber)).Limit(pageSize(limit)).All(ctx)
+	rows, err := s.Client.SchemaRevision.Query().Where(schemarevision.ContainerIDEQ(id), schemarevision.RevisionNumberGT(after)).Order(ent.Asc(schemarevision.FieldRevisionNumber)).Limit(pageSize(limit) + 1).All(ctx)
+	if err != nil {
+		return Page[*ent.SchemaRevision]{}, err
+	}
+	return numberedPage(rows, limit, func(v *ent.SchemaRevision) int { return v.RevisionNumber }), nil
 }
 
 func schemaField(d *ent.FieldDefinition) SchemaField {
-	return SchemaField{ID: d.Key, Label: d.Label, Type: string(d.Type), Required: d.Required, Choices: d.Choices, Indexed: d.Indexed, Scale: d.Scale, Options: d.Options}
+	return SchemaField{DefinitionID: d.ID, ID: d.Key, Label: d.Label, Type: string(d.Type), Required: d.Required, Choices: d.Choices, Indexed: d.Indexed, Scale: d.Scale, Options: d.Options}
 }

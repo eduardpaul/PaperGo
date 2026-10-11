@@ -22,19 +22,23 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := "/v1/resources/" + l.ID + "/content-types"
-	body := `{"key":"invoice","name":"Invoice","field_keys":[],"is_default":false}`
+	res := request(h, "POST", "/v1/content-types", `{"key":"invoice","name":"Invoice","field_ids":[]}`, testToken, "", "application/json")
+	var typ ent.ContentType
+	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &typ) != nil || res.Header().Get("ETag") != `"1"` {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	body := fmt.Sprintf(`{"content_type_id":%q}`, typ.ID)
 	for _, test := range []struct {
 		etag string
 		code int
-	}{{"", 428}, {`"9"`, 409}} {
-		res := request(h, "POST", path, body, testToken, test.etag, "application/json")
+	}{{"", 428}, {`"9"`, 412}} {
+		res = request(h, "POST", path, body, testToken, test.etag, "application/json")
 		if res.Code != test.code {
 			t.Fatal(res.Code, res.Body.String())
 		}
 	}
-	res := request(h, "POST", path, body, testToken, `"1"`, "application/json")
-	var typ ent.ContentType
-	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &typ) != nil || res.Header().Get("ETag") != `"1"` {
+	res = request(h, "POST", path, body, testToken, `"1"`, "application/json")
+	if res.Code != 201 {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	res = request(h, "GET", path, "", testToken, "", "")
@@ -51,7 +55,7 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &typ) != nil || res.Header().Get("ETag") != `"2"` {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	update := `{"name":"Invoice","field_keys":["code"],"rules":[{"key":"code_required","field":"code","op":"required_if","when_field":"code","when_value":"A","message":"Code required"}]}`
+	update := fmt.Sprintf(`{"name":"Invoice","field_ids":[%q],"rules":[{"key":"code_required","field":"code","op":"required_if","when_field":"code","when_value":"A","message":"Code required"}]}`, field.ID)
 	res = request(h, "PUT", "/v1/content-types/"+typ.ID, update, testToken, `"2"`, "application/json")
 	if res.Code != 200 || res.Header().Get("ETag") != `"3"` {
 		t.Fatal(res.Code, res.Body.String())
@@ -62,8 +66,8 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 	if res.Code != 409 || !strings.Contains(res.Body.String(), `"operation_index":1`) {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	got, err := s.Query(ctx, "alice", l.ID, dms.QueryRequest{})
-	if err != nil || got.Total != 0 {
+	got, err := s.Query(ctx, "alice", l.ID, dms.QueryRequest{IncludeTotal: true})
+	if err != nil || got.Total == nil || *got.Total != 0 {
 		t.Fatal(got, err)
 	}
 	// A rule dependency rejects deletion without changing the collection ETag.
@@ -76,7 +80,7 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 	if res.Code != 422 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	res = request(h, "PUT", "/v1/content-types/"+typ.ID, `{"name":"Invoice","field_keys":["code"]}`, testToken, `"3"`, "application/json")
+	res = request(h, "PUT", "/v1/content-types/"+typ.ID, fmt.Sprintf(`{"name":"Invoice","field_ids":[%q]}`, field.ID), testToken, `"3"`, "application/json")
 	if res.Code != 200 {
 		t.Fatal(res.Code, res.Body.String())
 	}

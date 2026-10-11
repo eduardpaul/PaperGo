@@ -4,9 +4,11 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 	"papergo/ent/blob"
+	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/predicate"
 	"papergo/ent/resource"
@@ -27,6 +29,7 @@ type ItemRevisionQuery struct {
 	predicates         []predicate.ItemRevision
 	withItem           *ResourceQuery
 	withSchemaRevision *SchemaRevisionQuery
+	withHistory        *ItemHistoryQuery
 	withBlob           *BlobQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -101,6 +104,28 @@ func (_q *ItemRevisionQuery) QuerySchemaRevision() *SchemaRevisionQuery {
 			sqlgraph.From(itemrevision.Table, itemrevision.FieldID, selector),
 			sqlgraph.To(schemarevision.Table, schemarevision.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, itemrevision.SchemaRevisionTable, itemrevision.SchemaRevisionColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryHistory chains the current query on the "history" edge.
+func (_q *ItemRevisionQuery) QueryHistory() *ItemHistoryQuery {
+	query := (&ItemHistoryClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(itemrevision.Table, itemrevision.FieldID, selector),
+			sqlgraph.To(itemhistory.Table, itemhistory.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, itemrevision.HistoryTable, itemrevision.HistoryColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -324,6 +349,7 @@ func (_q *ItemRevisionQuery) Clone() *ItemRevisionQuery {
 		predicates:         append([]predicate.ItemRevision{}, _q.predicates...),
 		withItem:           _q.withItem.Clone(),
 		withSchemaRevision: _q.withSchemaRevision.Clone(),
+		withHistory:        _q.withHistory.Clone(),
 		withBlob:           _q.withBlob.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
@@ -350,6 +376,17 @@ func (_q *ItemRevisionQuery) WithSchemaRevision(opts ...func(*SchemaRevisionQuer
 		opt(query)
 	}
 	_q.withSchemaRevision = query
+	return _q
+}
+
+// WithHistory tells the query-builder to eager-load the nodes that are connected to
+// the "history" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ItemRevisionQuery) WithHistory(opts ...func(*ItemHistoryQuery)) *ItemRevisionQuery {
+	query := (&ItemHistoryClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withHistory = query
 	return _q
 }
 
@@ -442,9 +479,10 @@ func (_q *ItemRevisionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	var (
 		nodes       = []*ItemRevision{}
 		_spec       = _q.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [4]bool{
 			_q.withItem != nil,
 			_q.withSchemaRevision != nil,
+			_q.withHistory != nil,
 			_q.withBlob != nil,
 		}
 	)
@@ -475,6 +513,12 @@ func (_q *ItemRevisionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	if query := _q.withSchemaRevision; query != nil {
 		if err := _q.loadSchemaRevision(ctx, query, nodes, nil,
 			func(n *ItemRevision, e *SchemaRevision) { n.Edges.SchemaRevision = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withHistory; query != nil {
+		if err := _q.loadHistory(ctx, query, nodes, nil,
+			func(n *ItemRevision, e *ItemHistory) { n.Edges.History = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -542,6 +586,33 @@ func (_q *ItemRevisionQuery) loadSchemaRevision(ctx context.Context, query *Sche
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (_q *ItemRevisionQuery) loadHistory(ctx context.Context, query *ItemHistoryQuery, nodes []*ItemRevision, init func(*ItemRevision), assign func(*ItemRevision, *ItemHistory)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*ItemRevision)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(itemhistory.FieldRevisionID)
+	}
+	query.Where(predicate.ItemHistory(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(itemrevision.HistoryColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.RevisionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "revision_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }

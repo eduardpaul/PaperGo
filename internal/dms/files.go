@@ -189,7 +189,8 @@ func (s *Service) MakeFolder(ctx context.Context, subject, libraryID string, pat
 	return
 }
 
-// DeleteFile deletes the entry at path, with everything below it.
+// DeleteFile deletes a file or folder tree at path, requiring write access to
+// every live descendant.
 func (s *Service) DeleteFile(ctx context.Context, subject, libraryID string, path []string, cond FileConditions) error {
 	if len(path) == 0 {
 		return ErrForbidden
@@ -202,7 +203,7 @@ func (s *Service) DeleteFile(ctx context.Context, subject, libraryID string, pat
 		if e = cond.check(f); e != nil {
 			return e
 		}
-		return t.delete(ctx, subject, f.ID, f.Version)
+		return t.delete(ctx, subject, f.ID, f.Version, true)
 	})
 }
 
@@ -235,7 +236,7 @@ func (s *Service) MoveFile(ctx context.Context, subject, libraryID string, from,
 			if !overwrite {
 				return ErrPreconditionFailed
 			}
-			if e = t.delete(ctx, subject, existing.ID, existing.Version); e != nil {
+			if e = t.delete(ctx, subject, existing.ID, existing.Version, true); e != nil {
 				return e
 			}
 		}
@@ -360,7 +361,7 @@ func (s *Service) visibleFiles(ctx context.Context, subject string, q *ent.Resou
 	if len(rows) > MaxFolderEntries {
 		return nil, invalid("folders with more than " + strconv.Itoa(MaxFolderEntries) + " entries cannot be listed as files")
 	}
-	revisions, err := s.overlayPage(ctx, subject, "auto", rows)
+	revisions, err := s.overlayPage(ctx, subject, "auto", rows, nil)
 	if err != nil {
 		return nil, err
 	}

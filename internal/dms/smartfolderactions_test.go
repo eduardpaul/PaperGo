@@ -9,7 +9,7 @@ import (
 
 func TestSmartFolderClassificationAndUnclassification(t *testing.T) {
 	s, w, l := fixture(t)
-	set, err := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "projects", Name: "Projects"})
+	set, err := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "projects", Name: "Projects"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestSmartFolderClassificationAndUnclassification(t *testing.T) {
 	if err != nil || !created || item.Values["owner"] != "alice" || *item.ParentID != physical.ID {
 		t.Fatal(item, created, err)
 	}
-	if _, _, err = s.ClassifySmartFolder(testContext, "alice", f.ID, SmartFolderDrop{FolderVersion: f.Version + 1, CollectionID: l.ID, ItemID: item.ID, Version: item.Version}); !errors.Is(err, ErrConflict) {
+	if _, _, err = s.ClassifySmartFolder(testContext, "alice", f.ID, SmartFolderDrop{FolderVersion: f.Version + 1, CollectionID: l.ID, ItemID: item.ID, Version: item.Version}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal(err)
 	}
 	values := item.Values
@@ -52,8 +52,8 @@ func TestSmartFolderClassificationAndUnclassification(t *testing.T) {
 	if string(raw) != `["`+other.ID+`"]` {
 		t.Fatal(string(raw))
 	}
-	rows, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
-	if err != nil || rows.Total != 0 {
+	rows, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
+	if err != nil || counted(rows.Total) != 0 {
 		t.Fatal(rows, err)
 	}
 	out, created, err = s.ClassifySmartFolder(testContext, "alice", f.ID, SmartFolderDrop{FolderVersion: f.Version, CollectionID: l.ID, ItemID: out.ID, Version: out.Version, Path: []*string{&year}})
@@ -85,8 +85,7 @@ func TestSmartFolderActionsRollBackAndRequireItemPermissions(t *testing.T) {
 	if !errors.Is(err, ErrConflict) {
 		t.Fatal(err)
 	}
-	current, _ := s.Client.Resource.Get(testContext, w.ID)
-	_, err = s.SetPermissions(testContext, "alice", w.ID, current.Version, Permissions{Grants: []Permission{{Subject: "alice", Action: "manage"}, {Subject: "reader", Action: "read"}}})
+	err = setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"})
 	if err != nil {
 		t.Fatal(err)
 	}

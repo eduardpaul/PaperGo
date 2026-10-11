@@ -29,10 +29,22 @@ type Term struct {
 	Name string `json:"name,omitempty"`
 	// NormalizedName holds the value of the "normalized_name" field.
 	NormalizedName string `json:"normalized_name,omitempty"`
+	// Description holds the value of the "description" field.
+	Description string `json:"description,omitempty"`
+	// Color holds the value of the "color" field.
+	Color *string `json:"color,omitempty"`
+	// SortOrder holds the value of the "sort_order" field.
+	SortOrder int `json:"sort_order,omitempty"`
+	// Path holds the value of the "path" field.
+	Path string `json:"path,omitempty"`
 	// Labels holds the value of the "labels" field.
 	Labels map[string]string `json:"labels,omitempty"`
 	// Synonyms holds the value of the "synonyms" field.
 	Synonyms []string `json:"synonyms,omitempty"`
+	// MergedIntoID holds the value of the "merged_into_id" field.
+	MergedIntoID *string `json:"merged_into_id,omitempty"`
+	// AvailableAsKeyword holds the value of the "available_as_keyword" field.
+	AvailableAsKeyword bool `json:"available_as_keyword,omitempty"`
 	// Deprecated holds the value of the "deprecated" field.
 	Deprecated bool `json:"deprecated,omitempty"`
 	// Version holds the value of the "version" field.
@@ -53,9 +65,13 @@ type TermEdges struct {
 	Children []*Term `json:"children,omitempty"`
 	// Parent holds the value of the parent edge.
 	Parent *Term `json:"parent,omitempty"`
+	// Merged holds the value of the merged edge.
+	Merged []*Term `json:"merged,omitempty"`
+	// MergedInto holds the value of the merged_into edge.
+	MergedInto *Term `json:"merged_into,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [5]bool
 }
 
 // TermSetOrErr returns the TermSet value or an error if the edge
@@ -89,6 +105,26 @@ func (e TermEdges) ParentOrErr() (*Term, error) {
 	return nil, &NotLoadedError{edge: "parent"}
 }
 
+// MergedOrErr returns the Merged value or an error if the edge
+// was not loaded in eager-loading.
+func (e TermEdges) MergedOrErr() ([]*Term, error) {
+	if e.loadedTypes[3] {
+		return e.Merged, nil
+	}
+	return nil, &NotLoadedError{edge: "merged"}
+}
+
+// MergedIntoOrErr returns the MergedInto value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e TermEdges) MergedIntoOrErr() (*Term, error) {
+	if e.MergedInto != nil {
+		return e.MergedInto, nil
+	} else if e.loadedTypes[4] {
+		return nil, &NotFoundError{label: term.Label}
+	}
+	return nil, &NotLoadedError{edge: "merged_into"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Term) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -96,11 +132,11 @@ func (*Term) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case term.FieldLabels, term.FieldSynonyms:
 			values[i] = new([]byte)
-		case term.FieldDeprecated:
+		case term.FieldAvailableAsKeyword, term.FieldDeprecated:
 			values[i] = new(sql.NullBool)
-		case term.FieldVersion:
+		case term.FieldSortOrder, term.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case term.FieldID, term.FieldTermSetID, term.FieldParentID, term.FieldName, term.FieldNormalizedName:
+		case term.FieldID, term.FieldTermSetID, term.FieldParentID, term.FieldName, term.FieldNormalizedName, term.FieldDescription, term.FieldColor, term.FieldPath, term.FieldMergedIntoID:
 			values[i] = new(sql.NullString)
 		case term.FieldCreatedAt, term.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -156,6 +192,31 @@ func (_m *Term) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.NormalizedName = value.String
 			}
+		case term.FieldDescription:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field description", values[i])
+			} else if value.Valid {
+				_m.Description = value.String
+			}
+		case term.FieldColor:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field color", values[i])
+			} else if value.Valid {
+				_m.Color = new(string)
+				*_m.Color = value.String
+			}
+		case term.FieldSortOrder:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sort_order", values[i])
+			} else if value.Valid {
+				_m.SortOrder = int(value.Int64)
+			}
+		case term.FieldPath:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field path", values[i])
+			} else if value.Valid {
+				_m.Path = value.String
+			}
 		case term.FieldLabels:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field labels", values[i])
@@ -171,6 +232,19 @@ func (_m *Term) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.Synonyms); err != nil {
 					return fmt.Errorf("unmarshal field synonyms: %w", err)
 				}
+			}
+		case term.FieldMergedIntoID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field merged_into_id", values[i])
+			} else if value.Valid {
+				_m.MergedIntoID = new(string)
+				*_m.MergedIntoID = value.String
+			}
+		case term.FieldAvailableAsKeyword:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field available_as_keyword", values[i])
+			} else if value.Valid {
+				_m.AvailableAsKeyword = value.Bool
 			}
 		case term.FieldDeprecated:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -218,6 +292,16 @@ func (_m *Term) QueryParent() *TermQuery {
 	return NewTermClient(_m.config).QueryParent(_m)
 }
 
+// QueryMerged queries the "merged" edge of the Term entity.
+func (_m *Term) QueryMerged() *TermQuery {
+	return NewTermClient(_m.config).QueryMerged(_m)
+}
+
+// QueryMergedInto queries the "merged_into" edge of the Term entity.
+func (_m *Term) QueryMergedInto() *TermQuery {
+	return NewTermClient(_m.config).QueryMergedInto(_m)
+}
+
 // Update returns a builder for updating this Term.
 // Note that you need to call Term.Unwrap() before calling this method if this Term
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -258,11 +342,33 @@ func (_m *Term) String() string {
 	builder.WriteString("normalized_name=")
 	builder.WriteString(_m.NormalizedName)
 	builder.WriteString(", ")
+	builder.WriteString("description=")
+	builder.WriteString(_m.Description)
+	builder.WriteString(", ")
+	if v := _m.Color; v != nil {
+		builder.WriteString("color=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("sort_order=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SortOrder))
+	builder.WriteString(", ")
+	builder.WriteString("path=")
+	builder.WriteString(_m.Path)
+	builder.WriteString(", ")
 	builder.WriteString("labels=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Labels))
 	builder.WriteString(", ")
 	builder.WriteString("synonyms=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Synonyms))
+	builder.WriteString(", ")
+	if v := _m.MergedIntoID; v != nil {
+		builder.WriteString("merged_into_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("available_as_keyword=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AvailableAsKeyword))
 	builder.WriteString(", ")
 	builder.WriteString("deprecated=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Deprecated))

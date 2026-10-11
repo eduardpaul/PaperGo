@@ -61,7 +61,8 @@ var problemResponses = map[int]string{
 	401: "Missing or invalid bearer token (unauthorized).",
 	403: "The caller lacks the required permission (forbidden).",
 	404: "The entity does not exist or is not visible to the caller (not_found).",
-	409: "Stale If-Match version, duplicate name or key, or business key collision (conflict).",
+	409: "Duplicate name or key, or another state constraint (conflict).",
+	412: "Stale If-Match version (precondition_failed).",
 	413: "Request body exceeds the size limit (payload_too_large).",
 	415: "Request body is not JSON (unsupported_media_type).",
 	422: "Request failed schema or business validation (validation_failed); errors lists schema failures.",
@@ -229,7 +230,7 @@ func ifMatch(ctx context.Context, raw string) (int, *Problem) {
 	return version, nil
 }
 
-var ifMatchParam = &huma.Param{Name: "If-Match", In: "header", Required: true, Description: "Current quoted numeric ETag of the entity being changed, e.g. \"1\". Missing returns 428, stale returns 409.", Schema: &huma.Schema{Type: huma.TypeString, Pattern: `^"[1-9][0-9]*"$`}}
+var ifMatchParam = &huma.Param{Name: "If-Match", In: "header", Required: true, Description: "Current quoted numeric ETag of the entity being changed, e.g. \"1\" or W/\"1\". Missing returns 428, stale returns 412.", Schema: &huma.Schema{Type: huma.TypeString, Pattern: `^(W/)?"[0-9]+"$`}}
 
 // register adds one operation. Handler errors become problems, and the
 // documented error responses follow from what the operation accepts.

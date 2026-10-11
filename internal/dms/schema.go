@@ -3,7 +3,6 @@ package dms
 import (
 	"context"
 	"papergo/ent"
-	"papergo/ent/contenttype"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/itemrevision"
@@ -24,6 +23,47 @@ type UpdateField struct {
 }
 
 func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID string, version int, in UpdateField) (out *ent.FieldDefinition, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
+		if e != nil {
+			return e
+		}
+		if c.Version != version {
+			return ErrPreconditionFailed
+		}
+		d, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.IDEQ(fieldID)).Only(ctx)
+		if ent.IsNotFound(e) {
+			return ErrNotFound
+		}
+		if e != nil {
+			return e
+		}
+		out, e = t.updateCatalogField(ctx, subject, d, in)
+		return e
+	})
+	return
+}
+func (s *Service) UpdateCatalogField(ctx context.Context, subject, id string, version int, in UpdateField) (out *ent.FieldDefinition, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
+			return e
+		}
+		d, e := t.Client.FieldDefinition.Get(ctx, id)
+		if ent.IsNotFound(e) {
+			return ErrNotFound
+		}
+		if e != nil {
+			return e
+		}
+		if d.Version != version {
+			return ErrPreconditionFailed
+		}
+		out, e = t.updateCatalogField(ctx, subject, d, in)
+		return e
+	})
+	return
+}
+func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent.FieldDefinition, in UpdateField) (out *ent.FieldDefinition, err error) {
 	if in.Label == nil && in.Required == nil && in.Choices == nil && in.Indexed == nil && in.Options == nil {
 		return nil, invalid("at least one field change is required")
 	}
@@ -40,95 +80,90 @@ func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID
 			return
 		}
 	}
-	err = s.write(ctx, func(t *Service) error {
-		c, e := t.authorize(ctx, subject, containerID, "manage")
+
+	var e error
+	if in.Choices != nil && d.Type != fielddefinition.TypeChoice {
+		return nil, invalid("choices belong to choice fields")
+	}
+	candidate := *d
+	if in.Label != nil {
+		candidate.Label = *in.Label
+	}
+	if in.Required != nil {
+		candidate.Required = *in.Required
+	}
+	if in.Indexed != nil {
+		candidate.Indexed = *in.Indexed
+	}
+	if in.Choices != nil {
+		candidate.Choices = *in.Choices
+	}
+	if in.Options != nil {
+		candidate.Options = *in.Options
+	}
+	if !optionsIdentityEqual(d.Options, candidate.Options) {
+		return nil, invalid("cardinality and reference scope are immutable")
+	}
+	if e = validateFieldDefinition(&candidate); e != nil {
+		return nil, e
+	}
+	if e = s.validateReferenceScopes(ctx, subject, &candidate); e != nil {
+		return nil, e
+	}
+	if len(candidate.Options.DefaultValue) > 0 {
+		if e = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{&candidate}, map[string]any{}, nil, true); e != nil {
+			return nil, e
+		}
+	}
+	if newlyRequired(d, &candidate) {
+		collections, e := s.fieldCollections(ctx, d.ID)
 		if e != nil {
-			return e
+			return nil, e
 		}
-		if c.Version != version {
-			return ErrConflict
-		}
-		d, e := t.Client.FieldDefinition.Get(ctx, fieldID)
-		if ent.IsNotFound(e) {
-			return ErrNotFound
-		}
-		if e != nil {
-			return e
-		}
-		if d.ContainerID != containerID {
-			return ErrNotFound
-		}
-		if in.Choices != nil && d.Type != fielddefinition.TypeChoice {
-			return invalid("choices belong to choice fields")
-		}
-		candidate := *d
-		if in.Label != nil {
-			candidate.Label = *in.Label
-		}
-		if in.Required != nil {
-			candidate.Required = *in.Required
-		}
-		if in.Indexed != nil {
-			candidate.Indexed = *in.Indexed
-		}
-		if in.Choices != nil {
-			candidate.Choices = *in.Choices
-		}
-		if in.Options != nil {
-			candidate.Options = *in.Options
-		}
-		if !optionsIdentityEqual(d.Options, candidate.Options) {
-			return invalid("cardinality and reference scope are immutable")
-		}
-		if e = validateFieldDefinition(&candidate); e != nil {
-			return e
-		}
-		if e = t.validateReferenceScopes(ctx, subject, c.WorkspaceID, &candidate); e != nil {
-			return e
-		}
-		if len(candidate.Options.DefaultValue) > 0 {
-			if e = t.normalizeItemValues(ctx, subject, c.WorkspaceID, []*ent.FieldDefinition{&candidate}, map[string]any{}, nil); e != nil {
-				return e
+		for _, c := range collections {
+			if e = s.checkRequiredFilled(ctx, c.ID, []string{d.Key}); e != nil {
+				return nil, e
 			}
 		}
-		if newlyRequired(d, &candidate) {
-			if e = t.checkRequiredFilled(ctx, containerID, []string{d.Key}); e != nil {
-				return e
-			}
+	}
+	reindex := in.Indexed != nil && *in.Indexed != d.Indexed
+	b := s.Client.FieldDefinition.UpdateOne(d).AddVersion(1).SetOptions(candidate.Options)
+	if in.Label != nil {
+		b.SetLabel(*in.Label)
+	}
+	if in.Required != nil {
+		b.SetRequired(*in.Required)
+	}
+	if in.Choices != nil {
+		b.SetChoices(*in.Choices)
+	}
+	if in.Indexed != nil {
+		b.SetIndexed(*in.Indexed)
+	}
+	out, e = b.Save(ctx)
+	if e != nil {
+		return nil, e
+	}
+	if e = s.bumpFieldTypes(ctx, d.ID); e != nil {
+		return nil, e
+	}
+	collections, e := s.fieldCollections(ctx, d.ID)
+	if e != nil {
+		return nil, e
+	}
+	if e = s.refreshCollections(ctx, subject, collections); e != nil {
+		return nil, e
+	}
+	if reindex {
+		if e = s.enqueueFieldIndex(ctx, subject, out); e != nil {
+			return nil, e
 		}
-		reindex := in.Indexed != nil && *in.Indexed != d.Indexed
-		b := t.Client.FieldDefinition.UpdateOne(d).SetOptions(candidate.Options)
-		if in.Label != nil {
-			b.SetLabel(*in.Label)
+		if out, e = s.Client.FieldDefinition.Get(ctx, d.ID); e != nil {
+			return nil, e
 		}
-		if in.Required != nil {
-			b.SetRequired(*in.Required)
-		}
-		if in.Choices != nil {
-			b.SetChoices(*in.Choices)
-		}
-		if in.Indexed != nil {
-			b.SetIndexed(*in.Indexed)
-		}
-		out, e = b.Save(ctx)
-		if e != nil {
-			return e
-		}
-		if e = t.recordSchema(ctx, subject, c); e != nil {
-			return e
-		}
-		if reindex {
-			if e = t.rebuildSurfaces(ctx, containerID); e != nil {
-				return e
-			}
-		}
-		if d.Options.Unique != candidate.Options.Unique {
-			if e = t.rebuildBusinessKeys(ctx, containerID); e != nil {
-				return e
-			}
-		}
-		return t.audit(ctx, subject, "field.update", c, map[string]any{"field_id": fieldID, "key": d.Key})
-	})
+	}
+
+	err = s.auditCatalog(ctx, subject, "field.update", map[string]any{"field_id": d.ID, "key": d.Key, "version": out.Version})
 	return
 }
 
@@ -143,14 +178,18 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	if len(keys) == 0 {
 		return nil
 	}
-	types, err := s.Client.ContentType.Query().Where(contenttype.ContainerIDEQ(containerID)).All(ctx)
+	types, err := s.Client.ContentType.Query().Where(collectionTypePredicate(containerID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	defs, err := s.collectionFields(ctx, containerID)
 	if err != nil {
 		return err
 	}
 	membership := map[string]map[string]bool{}
 	for _, typ := range types {
 		membership[typ.ID] = map[string]bool{}
-		for _, key := range typ.FieldKeys {
+		for _, key := range fieldKeys(selectTypeDefinitions(defs, typ)) {
 			membership[typ.ID][key] = true
 		}
 	}
@@ -194,44 +233,15 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	}
 }
 
-// surfaceBatch bounds whole-collection passes: memory stays flat and IN lists
+// surfaceBatch bounds whole-collection passes: memory stays flat, IN lists
 // stay far below SQLite's bound-variable limit (32766) however large the collection.
 var surfaceBatch = 500
 
-// rebuildSurfaces re-derives the field_values index of every surface in the
-// collection. Only index membership changes need it; surface rows are untouched.
-func (s *Service) rebuildSurfaces(ctx context.Context, containerID string) error {
-	current, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(containerID)).All(ctx)
-	if e != nil {
-		return e
-	}
-	// Collections share few schema revisions, so their definitions are cached across batches.
-	indexed := map[string][]*ent.FieldDefinition{}
-	// Paging each surface by item_id walks the (container_id, surface, item_id)
-	// index; any other order makes every batch rescan the whole collection.
-	for _, surface := range []itemsurface.Surface{itemsurface.SurfaceHead, itemsurface.SurfacePublished} {
-		for after := ""; ; {
-			projections, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID), itemsurface.SurfaceEQ(surface), itemsurface.ItemIDGT(after)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(surfaceBatch).All(ctx)
-			if e != nil {
-				return e
-			}
-			if len(projections) > 0 {
-				if e = s.reindexBatch(ctx, projections, current, indexed); e != nil {
-					return e
-				}
-			}
-			if len(projections) < surfaceBatch {
-				break
-			}
-			after = projections[len(projections)-1].ItemID
-		}
-	}
-	return nil
-}
-
-// reindexBatch replaces the field_values of a batch of surfaces with one delete
-// and a few bulk inserts, rather than two statements per surface.
-func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurface, current []*ent.FieldDefinition, indexed map[string][]*ent.FieldDefinition) error {
+// reindexBatch replaces field d's field_values on a batch of surfaces with one
+// delete and a few bulk inserts; an unindexed d just loses its rows. indexed
+// caches d's per-schema-revision definitions across the batch.
+func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurface, d *ent.FieldDefinition, indexed map[string][]*ent.FieldDefinition) error {
+	current := []*ent.FieldDefinition{d}
 	revisionIDs := make([]string, 0, len(projections))
 	for _, p := range projections {
 		revisionIDs = append(revisionIDs, p.RevisionID)
@@ -279,7 +289,7 @@ func (s *Service) reindexBatch(ctx context.Context, projections []*ent.ItemSurfa
 		surfaceIDs = append(surfaceIDs, p.ID)
 		rows = append(rows, built...)
 	}
-	if _, e = s.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDIn(surfaceIDs...)).Exec(ctx); e != nil {
+	if _, e = s.Client.FieldValue.Delete().Where(fieldvalue.SurfaceIDIn(surfaceIDs...), fieldvalue.FieldKeyEQ(d.Key)).Exec(ctx); e != nil {
 		return e
 	}
 	return s.insertFieldValues(ctx, rows)

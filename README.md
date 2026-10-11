@@ -1,6 +1,6 @@
 # PaperGo
 
-Go foundation for headless DMS and CMS applications. Uses **SQLite**, **Ent** for data access, and **Atlas** for reviewed, versioned migrations. One organization per deployment, with multiple workspaces. The API is a modular monolith with immutable content/schema revisions, derived read projections, and local immutable blob storage. [Architecture decisions](docs/architecture.md) explain the extension boundaries. [Application foundation](docs/application-foundation.md) documents rich fields, templates, views, taxonomy, typed relationships, and exclusive permission scopes.
+Go foundation for headless DMS and CMS applications. Uses **SQLite**, **Ent** for data access, and **Atlas** for reviewed, versioned migrations. One organization per deployment, with multiple workspaces. The API is a modular monolith with immutable content/schema revisions, derived read projections, and local immutable blob storage. [Architecture decisions](docs/architecture.md) explain the extension boundaries. [Application foundation](docs/application-foundation.md) documents rich fields, templates, views, taxonomy, typed relationships, and exclusive permission scopes. [Workflows](docs/workflows.md) are how anything happens after a change or on a schedule: triggers, conditions and flows of activities that people can change, including the built-in processes PaperGo ships, run durably by an embedded runner.
 
 ## Run locally
 
@@ -25,34 +25,41 @@ With globally installed tools, replace `.tools/atlas.exe` with `atlas`; run `go 
 
 Tests use temporary SQLite files and apply the actual versioned migrations, including FTS5, triggers, foreign keys, and Atlas checksum validation. CI also runs the Go race detector and verifies regenerated Ent code.
 
-The machine-readable REST contract is [`api/openapi.json`](api/openapi.json) (OpenAPI 3.1), also served at `GET /openapi.json`. It is generated from the handlers in `internal/httpapi` with [Huma](https://huma.rocks): operations, parameters and response models are Go types, so the document cannot drift from the code. After changing the API, run `go generate ./internal/httpapi`; tests fail when the committed document is stale or when any test response deviates from it.
+The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
-The JavaScript/TypeScript SDK [`@papergo/client`](sdk/typescript) is generated from that document with [Kiota](https://learn.microsoft.com/openapi/kiota/) by the same `go generate ./internal/httpapi`, which needs the .NET SDK for the pinned Kiota tool (`.config/dotnet-tools.json`). CI regenerates both, fails when either committed copy is stale, and runs the SDK's end-to-end tests against the API.
+[Organization groups and roles](docs/identity.md) are managed under `/v1/identity`. OIDC deployments require `ADMIN_SUBJECT` for the first administrator; development defaults to `DEV_SUBJECT`. Verified subjects enroll with the Member role on first authentication. Module scopes and resource ACLs apply independently, including to owners and workflow item actions.
 
 ## Data model and requirements
 
 | Requirement | Implementation |
 | --- | --- |
-| Workspaces, lists, libraries, folders and items | One typed resource hierarchy. A workspace contains lists/libraries; those contain folders/items. Items have one immutable list/library container, including when nested under folders; folders and items move freely within it. Library folders and items carry file names, unique among siblings ignoring case. |
-| Delete folders and items | Deleting a folder or item removes it and everything below it from every read, search, query and relationship, and frees its name. The rows remain as final tombstones, so revisions, publications and audit history are retained. |
+| Workspaces, lists, libraries, folders and items | One typed resource hierarchy. A workspace contains lists/libraries; those contain folders/items. Items have one current list/library container and can move across compatible collections/workspaces through REST; folders move within their collection. Library folders and items carry file names, unique among siblings ignoring case. |
+| Delete folders and items | Delete an item or empty folder, or explicitly delete a folder and its contents with `recursive=true`. Recursive deletion requires write access to the whole tree and commits atomically. Tombstones retain revisions, publications and audit history. |
 | WebDAV access to libraries | Optional per library (`webdav_enabled`). Windows Explorer, macOS Finder and Office can browse, open, create, overwrite, rename, move, copy, lock and delete files and folders, with the same permissions, publishing and history as the REST API. |
-| Flexible SharePoint-style fields | Per-container typed fields and immutable schema revisions. Types: text/note/email/url/date/datetime, choice, number/integer/decimal, boolean, lookup and term; defaults, bounds, length limits, and indexed multi-values. Unknown fields, wrong types and missing required values are rejected. |
+| Flexible SharePoint-style fields | Per-container typed fields and immutable schema revisions. Types: text/note/email/url/date/datetime, choice, number/integer/decimal, boolean, lookup, term and keywords (by term ID or label); defaults, bounds, length limits, and indexed multi-values. Unknown fields, wrong types and missing required values are rejected. |
 | Library as blob plus list item | A library item has the same metadata and permission behavior as a list item, plus immutable blob revisions stored outside SQLite. |
+| Create a document in one upload | Streaming multipart REST creation accepts a file and metadata, including type, folder, values, tags and language hints, and commits the first revision with content atomically. |
+| Control duplicate uploads | Libraries configure Allow/Warn/Block policies based on file hashes and current documents visible to the caller across workspaces. |
+| Restore an earlier file | Restore retained bytes and filename as a new file version while retaining current metadata and following publication settings. |
 | Unique permissions at every level | SharePoint-style inheritance: only the nearest exclusive scope supplies additive read/read_draft/write/publish/manage grants. Break, copy, or reset inheritance explicitly. Manage implies all actions; write/publish imply draft and published read. Denies are rejected. |
-| Typed item relationships | Every link has a workspace relationship type supplying its key, directed/symmetric policy, validated attributes, cardinality limits, and edge ETags. Indexed incoming/outgoing queries require visible, authorized endpoints before pagination. Cross-workspace links are rejected. |
+| Typed item relationships | Every link has a workspace relationship type supplying its key, directed/symmetric policy, validated attributes, cardinality limits, and edge ETags. Indexed incoming/outgoing queries require visible, authorized endpoints before pagination. New cross-workspace links are rejected; item moves preserve existing links, which require readable live endpoints. |
 | Publish any list/library item | Publishing disabled by default: new items, edits and uploads are automatically published. With publishing enabled, changes create drafts and explicit publish/unpublish controls the published pointer. Ordinary readers see published revisions only. Library revisions pin their blob. |
 | Preserve content history | Every item create, metadata edit and upload stores an immutable revision tied to its schema revision. Head and published surfaces are independent. Lifecycle/ACL changes advance the lock version without creating content revisions. |
-| Tags on all content | Built-in tags on every resource, with a normalized indexed projection maintained by database triggers. |
+| Tags on all content | Built-in tags on every resource, with a normalized indexed projection maintained by database triggers. The workspace tag vocabulary lists tags in use with counts of what the caller can read. |
 | Read-heavy browsing and search | Keyset pagination and permission filtering before LIMIT; FTS5 and tags on the selected head/published surface; optional typed field indexes for exact filters and ranges. Multi-step reads use a consistent database snapshot. |
 | Enterprise backend foundation | Fail-closed bearer authentication, production OIDC, transactional audit events, optimistic concurrency, strict JSON, upload limits, structured logs, health probes, graceful shutdown and non-root container build. |
-| Reusable application schemas | Shared field catalogs, multiple collection content types, cross-field rules, active-field removal and templates with version-checked adoption; immutable effective schemas. |
+| Reusable application schemas | Organization content-type and field catalogs, live collection attachments, independent defaults, cross-field rules and templates; shared updates advance immutable effective schemas atomically. |
 | Business keys | Indexed scalar uniqueness across head and published values, enforced transactionally for single and bulk writes. |
-| Saved views and controlled taxonomy | Bounded typed queries, sorting, pagination, authorized totals/grouping; stable hierarchical terms with localized labels, synonyms, and deprecation. |
+| Saved views and controlled taxonomy | Bounded typed queries, sorting, pagination, opt-in authorized totals, grouping; an organization-wide governed taxonomy of term groups, sets and hierarchical terms (labels, synonyms, colors, order, deprecation, move, merge, SharePoint CSV import, portable packages) and keywords people add, which managers promote into managed sets. Workflows can react to terms gained or lost. |
 | Smart folders | Private or shared live queries across collections, descendant-term matching, metadata navigation, UTC-relative filters and physical folder inclusion. See [smart folders](docs/smart-folders.md). |
+| Customizable automation | Workflows react to item changes, schedules, manual starts and each other's events, with conditions in the query filter language and flows of activity nodes. Versions are immutable; runs are durable, exactly once per step, act with their author's permissions, and start from a durable event log written with the change that triggers them, so any server can run them. Built-in workflows ship core processes that people configure, turn off or copy. See [workflows](docs/workflows.md). |
 
 ## API
 
-Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints and `/openapi.json` are public. IDs are UUID strings. Lists of resources and relationships return `{ "data": [...], "next_cursor": "..." }`; pass `after` to continue. Default page size is 50, maximum 100.
+Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints are public. IDs are UUID strings. Lists of resources and relationships return `{ "value": [...], "@odata.nextLink": "..." }`; follow `@odata.nextLink` to continue; it is null on the final page. Use `$top` to select a page size (default 50, clamped to 1–500); links contain opaque `$skiptoken` continuations. POST query continuations use the same method and body.
+
+`POST /v1/$batch` executes 1–20 independent HTTP calls in order. Send `{"requests":[{"id":"list","method":"GET","url":"workspaces"}]}`. Each `responses` entry contains its ID, status, headers and optional body. Calls inherit authentication and may override request headers. `dependsOn` names earlier calls; failures skip dependents with 424. Successful writes persist independently. Relative API URLs only; nested batches and path traversal are rejected. Non-JSON string bodies become raw text; binary responses become base64 strings, with a 16 MiB limit per result.
+
 
 | Method | Route | Purpose |
 | --- | --- | --- |
@@ -60,6 +67,7 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | GET / PATCH / DELETE | `/v1/resources/{id}` | Read / update names, tags, item values, `parent_id` (move) and collection settings / delete a folder or item |
 | POST / GET | `/v1/resources/{id}/children` | Create / browse children |
 | POST | `/v1/resources/{id}/bulk` | Atomically create, update/move, publish, unpublish or delete up to 100 items in one list/library |
+| GET | `/v1/workspaces/{id}/tags` | The tag vocabulary with counts of readable resources; `collection_id`, `prefix`, `$skiptoken`, `$top` |
 | POST / GET | `/v1/smart-folders` | Create / browse personal and shared query definitions |
 | GET / PUT / DELETE | `/v1/smart-folders/{id}` | Read / replace / delete a definition with its own ETag |
 | POST | `/v1/smart-folders/{id}/query`, `/query/groups` | Query live membership / navigate metadata groups with authorized counts |
@@ -69,30 +77,30 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | GET | `/v1/resources?workspace_id=...&q=...&tag=...` | Workspace search and tag filtering; optional `parent_id` narrows to direct children |
 | POST / GET | `/v1/resources/{id}/fields` | Add / read list or library field definitions |
 | PATCH | `/v1/resources/{id}/fields/{fieldID}` | Evolve label, choices, required or indexed; uses the container ETag |
-| GET | `/v1/resources/{id}/schemas` | Manager-only schema history; paginate with `after_revision` |
+| GET | `/v1/resources/{id}/schemas` | Manager-only schema history; paginate with `$skiptoken` |
 | PUT / GET | `/v1/resources/{id}/permissions` | Replace / read explicit ACLs and inheritance setting |
 | POST / GET | `/v1/items/{id}/relationships` | Create / query named edges; filter by `direction=incoming` or `outgoing` and `name` |
 | DELETE | `/v1/items/{id}/relationships/{linkID}` | Remove an outgoing relationship |
-| POST / GET | `/v1/items/{id}/publications` | Publish / read immutable snapshots; paginate with `after_version` |
+| POST / GET | `/v1/items/{id}/publications` | Publish / read immutable snapshots; paginate with `$skiptoken` |
 | POST | `/v1/items/{id}/unpublish` | Remove the published surface while retaining history |
-| GET | `/v1/items/{id}/revisions` | Draft-reader content history; paginate with `after_revision` |
+| GET | `/v1/items/{id}/revisions` | Retained content history for item readers; paginate with `$skiptoken` |
 | GET | `/v1/items/{id}/schema?surface=auto` | Immutable schema of the caller's visible content revision |
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |
+| POST | `/v1/resources/{id}/documents` | Create a library document using multipart `file` and optional `metadata` JSON; see [documents](docs/documents.md) |
+| POST | `/v1/items/{id}/content/versions/{number}/restore` | Restore an earlier file as a new version; requires current numeric `If-Match` |
 | GET | `/v1/workspaces/{id}/audit` | Workspace manager audit feed |
 | POST / GET | `/v1/webdav-credentials` | Issue / list the caller's WebDAV app passwords |
 | DELETE | `/v1/webdav-credentials/{id}` | Revoke one of the caller's WebDAV app passwords |
 | WebDAV | `/webdav/{libraryID}/...` | A WebDAV-enabled library as a network drive; see [WebDAV](#webdav) |
 | GET | `/health/live`, `/health/ready` | Process liveness / database and migration readiness |
 
-Errors are RFC 9457 problems (`application/problem+json`) with a stable `code` and the `request_id` that is also returned as `X-Request-ID`. Request bodies must be one JSON object: malformed JSON returns 400 `invalid_json`, other media types 415, and unknown fields, wrong types or values outside the documented bounds return 422 `validation_failed`, with each failing field located in `errors` (for example `body.name` or `query.limit`).
-
-Read/update responses carry a quoted numeric `ETag`. PATCH, resource DELETE, catalog PUT, view/relationship DELETE, template application, ACL replacement, blob upload, publish and unpublish require `If-Match: "<current version>"`. Missing preconditions return 428; stale versions return 409. These mutations consume a lock version; publishing an already published head returns 409. Content `revision_number`, blob `version`, and resource lock `version` are independent counters. Upload returns `resource_version` and an ETag for the resource. Publication event `version` records the lock version consumed by the transition. PATCH `values` replaces the whole custom-value object.
+Read/update responses carry a quoted numeric `ETag`. PATCH, resource DELETE, catalog PUT, view/relationship DELETE, template application, ACL replacement, blob upload, publish and unpublish require `If-Match: "<current version>"`. Missing preconditions return 428; stale versions return 412. These mutations consume a lock version; publishing an already published head returns 409. Content `revision_number`, blob `version`, and resource lock `version` are independent counters. Upload returns `resource_version` and an ETag for the resource. Publication event `version` records the lock version consumed by the transition. PATCH `values` replaces the whole custom-value object.
 
 GET resources and browsing support `surface=auto|head|published`. Auto chooses head for draft readers and published for ordinary readers. An unpublished item returns 404 to a reader; explicit head requests require draft access. Names, tags, values, search matches, field filters and downloads all use the chosen surface. Readers cannot download draft or arbitrary historical blobs. A published resource's lock version may advance when editors save drafts; its `updated_at` describes the selected content revision.
 
-Fields use stable immutable keys, types, decimal scales, multiplicity, and reference scopes. Labels, choices, required and indexed flags can evolve; existing revisions retain their original schema. Adding a required field to a populated collection requires a valid default; setting an existing field required affects future edits. Set `indexed:true` to enable typed queries. Changing this flag rebuilds both surfaces atomically. For example, `GET /v1/resources/{listID}/children?filter_field=amount&filter_op=gte&filter_value=125.00`. Operators: `eq`, `gt`, `gte`, `lt`, `lte`; boolean supports only `eq`. Filters require a list/library/folder scope and apply to direct children.
+Fields use stable immutable keys, types, decimal scales, multiplicity, and reference scopes. Multiple values are supported only by choice, person, lookup, term and keywords. Person values store active enrolled OIDC subjects; GET `/v1/people` lists eligible IDs with `list.read`. Labels, choices, required and indexed flags can evolve; existing revisions retain their original schema. Adding a required field to a populated collection requires a valid default; setting an existing field required affects future edits. Set `indexed:true` to enable typed queries. Changing this flag queues a background index build; the field is queryable once its `index_status` is `ready`. For example, `GET /v1/resources/{listID}/children?filter_field=amount&filter_op=gte&filter_value=125.00`. Operators: `eq`, `gt`, `gte`, `lt`, `lte`; boolean supports only `eq`. Filters require a list/library/folder scope and apply to direct children.
 
-Read an item's `/schema` for the schema paired with its selected revision. Revision history includes each immutable schema in `schema_revision`, allowing draft readers to interpret historical values without collection management access. The collection `/fields` endpoint describes current configuration.
+Read an item's `/schema` for the schema paired with its selected revision. Revision history includes each immutable schema in `edges.schema_revision`, allowing item readers to interpret historical values without collection management access. The collection `/fields` endpoint describes current configuration. Collections accept `versioning:"off"|"major"` and `max_versions` (1–500, default 50) on creation and PATCH with manage access and `If-Match`. Lists default to history off; libraries default to major versions. Turning history off stops new entries while preserving retained history. Each recorded change trims that item to its configured limit. Trimmed snapshots cannot be read or restored through history; immutable content snapshots remain for durable events, publishing and audit, independently of the history limit. Revision numbers identify content changes and can have gaps when history is off.
 
 `integer` accepts exact JSON integers within signed 64 bits. `decimal` accepts a decimal string or exact JSON number, with fixed `scale` from 0 to 9; it stores a canonical string in content and a signed 64-bit scaled integer in indexes. Excess fractional digits and overflow are rejected without rounding. Use strings for decimals and an exact-number parser in clients; JavaScript clients should avoid unsafe numeric literals above 2^53. `number` is an approximate floating-point query type. Optional null values produce no field-index row.
 
@@ -127,10 +135,10 @@ When publishing is disabled, library metadata is visible immediately, including 
 Break item permission inheritance using PUT `/permissions` and its current `If-Match`:
 
 ```json
-{"inherit":false,"grants":[{"subject":"local-admin","action":"manage","effect":"allow"},{"subject":"reviewer-subject","action":"read","effect":"allow"}]}
+{"inherit":false,"grants":[{"principal_type":"user","principal_id":"local-admin","action":"manage","effect":"allow"},{"principal_type":"user","principal_id":"reviewer-subject","action":"read","effect":"allow"}]}
 ```
 
-Reset with `{"inherit":true,"grants":[]}`, or break and copy with `{"inherit":false,"copy_inherited":true}`. Inherited resources cannot carry local grants. GET permissions identifies the effective scope and grants. An ACL replacement that removes the caller's manage access is rolled back. A workspace creator receives manage access atomically. Every authenticated principal can create its own workspace. Subject values are exact OIDC `sub` claims; groups and organization provisioning are not implemented.
+Reset with `{"inherit":true,"grants":[]}`, or break and copy with `{"inherit":false,"copy_inherited":true}`. Inherited resources cannot carry local grants. GET permissions identifies the effective scope and grants. An ACL replacement that removes the caller's manage access is rolled back. A workspace creator receives manage access atomically and needs `workspace.create`. User principals identify enrolled OIDC subjects; group principals identify organization groups, including nested members. Persisted module roles apply independently of content ACLs. The shared organization term store uses `taxonomy.read` for reads/open contributions and `taxonomy.manage` for curation, without requiring workspace membership.
 
 Create a relationship type in the workspace (`POST /v1/workspaces/{id}/relationship-types`), then link items with it:
 
@@ -142,7 +150,7 @@ The link takes its name, direction, attribute schema and cardinality from the ty
 
 ACL and publication visibility filtering happen before LIMIT, so hidden rows neither shorten pages nor supply cursors. Search treats input as a literal FTS phrase, uses Unicode tokenization, and returns stable ID order, not relevance order. FTS indexes metadata text but does not extract PDF/Office document contents. Browsing a scope requires read access to that scope; explicitly granted items remain accessible directly by ID. Relationships are live, separately audited edges; publication does not freeze a relationship graph.
 
-Move a folder or item with PATCH `{"parent_id":"<folder or collection id>"}`: the target must be in the same list or library, not below the moved folder, and writable by the caller. A move consumes a lock version but creates no content revision; inheriting resources take the new location's permission scope. DELETE `/v1/resources/{id}` with `If-Match` deletes a folder or item and everything below it; it requires write access to all of it, removes relationships to the deleted items, and records one `resource.delete` audit event. Workspaces, lists and libraries cannot be deleted. Deletion is final, but the tombstones keep every revision, publication and audit event.
+Move a folder or item with PATCH `{"parent_id":"<folder or collection id>"}`: the target must be in the same list or library, not below the moved folder, and writable by the caller. A move consumes a lock version but creates no content revision; inheriting resources take the new location's permission scope. DELETE `/v1/resources/{id}` with `If-Match` deletes an item or empty folder with write access. Use DELETE `/v1/resources/{id}?recursive=true` to delete a folder and all its contents in one transaction; the caller needs write access to every live descendant. A permission failure or stale version leaves the whole tree unchanged. Without `recursive=true`, any live child, including an unreadable item or nested folder, prevents folder deletion with `409 folder_not_empty`. Deleted children do not prevent ordinary deletion. Workspace owners and collection managers can delete their respective resource trees. Deletion removes search projections, hides relationships, emits an `item.deleted` event for each deleted item and records a `resource.delete` audit event. [Recycle bins](docs/recycle-bin.md) restore deleted items/folders and support manager purge with durable file cleanup. [Cross-collection moves](docs/item-moves.md) preserve item identity, content and history while inheriting destination access. Items can change attached content types through PATCH; unused types can be detached with collection management access. Caller-ID item/folder creates return 201 initially and 200 unchanged on a readable same-collection retry.
 
 ## WebDAV
 
@@ -160,7 +168,7 @@ To connect from Windows, choose **Map network drive** in Explorer and enter `htt
 | MKCOL | Create a folder. |
 | MOVE | Rename or move within the library in one transaction, replacing the destination unless `Overwrite: F`. Destinations in other libraries return 502, so clients copy and delete instead. |
 | COPY | Create new items carrying the source's bytes, tags and field values; copying onto an existing file adds a content revision. COPY and MOVE refuse (403) a destination that is the source itself, contains it, or lies inside it. |
-| DELETE | Delete the folder or file and everything below it, as the REST API does. |
+| DELETE | Delete a file or a folder and its contents atomically, requiring write access to every descendant. |
 | LOCK / UNLOCK | Exclusive or shared write locks of at most one hour, refreshable, held in memory and released on restart. |
 | PROPPATCH | Live DAV properties are refused; others, such as Windows timestamps, are acknowledged but not stored. |
 
@@ -184,14 +192,43 @@ atlas migrate apply --env local
 
 ## Deployment and scaling
 
-Use one API process with a local persistent disk. SQLite runs WAL mode, foreign-key enforcement, a 5-second busy timeout and FULL synchronous durability. An in-process mutex serializes application writes, and WebDAV locks live in the same process; readers use a bounded connection pool. Do not run multiple API replicas against a shared network filesystem. See [SQLite's WAL documentation](https://www.sqlite.org/wal.html).
+Use one API process with a local persistent disk. SQLite runs WAL mode, foreign-key enforcement and FULL synchronous durability. Write transactions take the write lock when they begin and wait up to 30 seconds for it, so API requests and workflow steps share the single writer; an in-process mutex keeps request writes in order, and WebDAV locks live in the same process; readers use a bounded connection pool. The workflow runner runs inside the API process and keeps its tables in the same database file; `NODE_ID` names the process (default `local`) and `RUN_RETENTION` sets how long finished runs are kept (default `720h`). Do not run multiple API replicas against a shared network filesystem. See [SQLite's WAL documentation](https://www.sqlite.org/wal.html).
 
 For production, set `APP_ENV=production`, `AUTH_MODE=oidc`, an HTTPS `OIDC_ISSUER`, and the API audience in `OIDC_AUDIENCE`. The provider must issue signed JWT bearer tokens with issuer, audience, subject and expiry claims; opaque tokens require a separate introspection adapter. The audience must be registered for this API. Development authentication is rejected in production. Terminate TLS at the ingress, enforce deployment request/rate limits there, and apply migrations before starting the API. The Docker image runs as UID 65532 and needs a writable persistent `/data` volume. Docker is not installed in the current workspace, so image verification requires CI or another host.
 
-Back up SQLite with its online backup API or `VACUUM INTO` and back up the referenced blob files consistently; copying only the `.db` file while WAL is active is not a valid backup. Blobs are created before their metadata transaction; ordinary failed writes clean up the object, while a process crash between those steps can leave an unreferenced file. A deployment should reconcile such orphan files after a grace period. Deleted resources keep their blobs, because their revisions are retained; purging tombstones and pruning old revisions need explicit retention rules first.
+Back up SQLite with its online backup API or `VACUUM INTO` and back up the referenced blob files consistently; copying only the `.db` file while WAL is active is not a valid backup. Blobs are created before their metadata transaction; ordinary failed writes clean up the object, while a process crash between those steps can leave an unreferenced file. A deployment should reconcile such orphan files after a grace period. Deleted resources retain blobs for recovery. Permanent recycle-bin purge removes retained content and queues storage cleanup durably; failures retry after restart. Audit and workflow run records retain IDs. History retention removes user-visible history entries without deleting snapshots needed by live/publication/event processing.
 
-This is an initial backend foundation, not a completed enterprise certification or deployment. Group ACLs, S3 storage, antivirus scanning, quotas, workflow approval, idempotency keys, document text extraction, tracing/metrics export and restore tooling remain future extensions. Performance has functional coverage; representative load benchmarks and SLOs still need a target workload.
+This is an initial backend foundation, not a completed enterprise certification or deployment. Group ACLs, S3 storage, antivirus scanning, quotas, approval and task activities, notifications, idempotency keys, document text extraction, tracing/metrics export and restore tooling remain future extensions. Benchmarks cover query latency and allocations, writer wait during index builds and WAL growth on configurable collection sizes; concurrent upload throughput, multi-client load and SLOs still need a target workload.
+
+The [runner plan](docs/plans/runner.md) describes the embedded runner and the next workflow phases; notifications and tasks build on workflows as activities and built-in workflows.
 
 To scale later, retain the service and API boundaries, introduce a PostgreSQL connection adapter, regenerate/review database-specific Atlas migrations, replace FTS5 and tag SQL, and use a shared object-store implementation of the storage port. A database migration is required; changing the connection string alone is insufficient.
 
 Relevant upstream references: [Ent versioned migrations](https://entgo.io/docs/versioned-migrations/), [Atlas](https://atlasgo.io/getting-started), [SQLite FTS5](https://www.sqlite.org/fts5.html).
+
+### Filtered bulk edits
+
+POST `/v1/resources/{collectionID}/bulk-update` queues a durable operation with list.read, list.write and collection write access. Its `query` uses the same typed `QuerySpec` as collection queries, on readable head content; omit it to select all readable head items. A patch may set `content_type_id`, `name`, `tags` or `values`. For example:
+
+```json
+{"query":{"filter":{"field":"status","value":"todo"}},"values":{"status":"done"}}
+```
+
+The response is 202 with a `Location` pointing to `/v1/operations/{id}`. Poll that URL for `matched`, `processed`, `updated`, `failed`, `progress` and `failures`. The runner freezes selection when it starts and commits each item independently through normal permissions, validation, history, uniqueness and event handling. Values merge; null removes a field. Selection uses head content and does not publish changes. Successful edits survive other items' failures. `succeeded` means execution finished, even when some items failed; `failed` means the operation stopped because collection access, schema or infrastructure failed; earlier successful edits remain committed. Counts include every failure, with at most 50 reported reasons. Results require the starter and current collection read access. Pending work resumes after restart. `/bulk` provides a separate atomic batch of explicit actions.
+
+Lookup fields may target any live collection in the organization, across workspace boundaries. Explicit assignments and defaults validate that every target is a live item of that collection, without requiring target read access or publication. Repeating a stored ID explicitly revalidates it; omitted lookup values survive unrelated edits. A lookup reference does not grant access to the target content.
+
+## Administrative backup and restore
+
+Build the administrative CLI with `go build -o papergo-admin ./cmd/admin`:
+
+```sh
+papergo-admin backup --file backup.tar.gz
+papergo-admin restore --file backup.tar.gz
+```
+
+`--database` and `--blobs` select paths; defaults use `DATABASE_PATH` and `BLOB_PATH`, then `data/papergo.db` and `data/blobs`. These commands need filesystem access and do not initialize HTTP authentication. Backup can run while the API is serving: it pauses database writes while snapshotting and copying referenced immutable files; reads continue. The gzip tar archive includes the complete SQLite database (including workflow runner state), referenced file bytes and a checksum manifest. Existing backup archives are never overwritten. The manifest is limited to 16 MiB.
+
+Stop the API before restoring. Restore rejects active API leases and existing destinations unless `--force` is supplied. It validates the complete archive, current build's schema hash, SQLite integrity/foreign keys, file references, sizes and SHA-256 checksums before replacing the database and blob directory. Invalid archives leave existing data intact. Installation failures restore the saved destinations. Symlinks, unsafe paths, duplicate entries and appended archives are rejected. Restore accepts archives matching this build's complete schema; it does not perform schema upgrades. Persistent `.lease` files coordinate the API and CLI through operating-system locks.
+
+Conditional writes accept quoted numeric ETags, including `W/"n"`. Stale versions return HTTP 412 with a `precondition_failed` problem; duplicate names, keys and cardinality conflicts return 409. Missing required `If-Match` returns 428. Paged REST responses expose `value` and `@odata.nextLink`; query selection and filtering use the native typed request contract.

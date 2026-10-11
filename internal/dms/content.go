@@ -31,7 +31,7 @@ func (s *Service) publish(ctx context.Context, subject, id string, version int) 
 		return nil, invalid("only items can be published")
 	}
 	if r.Version != version {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	c, e := s.Client.Resource.Get(ctx, *r.ContainerID)
 	if e != nil {
@@ -47,7 +47,7 @@ func (s *Service) publish(ctx context.Context, subject, id string, version int) 
 	if c.Kind == resource.KindLibrary && rev.BlobID == nil {
 		return nil, invalid("library items need a blob before explicit publishing")
 	}
-	out, e := s.publishRevision(ctx, subject, r, rev, true)
+	out, e := s.publishRevision(ctx, subject, r, rev, true, nil)
 	if e != nil {
 		return nil, e
 	}
@@ -72,7 +72,7 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 		return nil, invalid("only items can be unpublished")
 	}
 	if r.Version != version {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	if r.PublishedRevisionID == nil {
 		return nil, ErrConflict
@@ -110,7 +110,7 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 		return nil, e
 	}
 	if n != 1 {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	out, e := s.Client.Resource.Get(ctx, id)
 	if e != nil {
@@ -122,28 +122,35 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 	if e = s.syncBusinessKeys(ctx, out); e != nil {
 		return nil, e
 	}
+	s.emit(ctx, EventItemUnpublished, subject, out.WorkspaceID, out.ContainerID, out.ID, map[string]any{"revision_id": rev.ID})
 	return out, s.audit(ctx, subject, "item.unpublish", out, map[string]any{"revision_id": rev.ID})
 }
-func (s *Service) Publications(ctx context.Context, subject, id string, after, limit int) ([]*ent.Publication, error) {
+func (s *Service) Publications(ctx context.Context, subject, id string, after, limit int) (Page[*ent.Publication], error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) ([]*ent.Publication, error) { return t.Publications(ctx, subject, id, after, limit) })
+		return read(ctx, s, func(t *Service) (Page[*ent.Publication], error) {
+			return t.Publications(ctx, subject, id, after, limit)
+		})
 	}
 	r, err := s.Get(ctx, subject, id)
 	if err != nil {
-		return nil, err
+		return Page[*ent.Publication]{}, err
 	}
 	q := s.Client.Publication.Query().Where(publication.ItemIDEQ(id), publication.VersionGT(after))
 	draft, err := s.allowedMany(ctx, subject, "read_draft", []*ent.Resource{r})
 	if err != nil {
-		return nil, err
+		return Page[*ent.Publication]{}, err
 	}
 	if !draft[id] {
 		if r.PublishedRevisionID == nil {
-			return []*ent.Publication{}, nil
+			return Page[*ent.Publication]{Data: []*ent.Publication{}}, nil
 		}
 		q.Where(publication.RevisionIDEQ(*r.PublishedRevisionID), publication.ActionEQ(publication.ActionPublish))
 	}
-	return q.Order(ent.Asc(publication.FieldVersion)).Limit(pageSize(limit)).All(ctx)
+	rows, err := q.Order(ent.Asc(publication.FieldVersion)).Limit(pageSize(limit) + 1).All(ctx)
+	if err != nil {
+		return Page[*ent.Publication]{}, err
+	}
+	return numberedPage(rows, limit, func(v *ent.Publication) int { return v.Version }), nil
 }
 
 type BlobInput struct {
@@ -152,6 +159,7 @@ type BlobInput struct {
 	ContentType string
 	Size        int64
 	SHA256      string
+	Languages   string
 }
 
 func (s *Service) CanUpload(ctx context.Context, subject, id string, version int) error {
@@ -160,7 +168,7 @@ func (s *Service) CanUpload(ctx context.Context, subject, id string, version int
 		return err
 	}
 	if r.Version != version {
-		return ErrConflict
+		return ErrPreconditionFailed
 	}
 	if r.Kind != resource.KindItem || r.ContainerID == nil {
 		return invalid("blob must belong to a library item")
@@ -174,10 +182,14 @@ func (s *Service) CanUpload(ctx context.Context, subject, id string, version int
 	}
 	return nil
 }
-func (s *Service) AttachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (out *ent.Blob, err error) {
+func (s *Service) AttachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (out *BlobUpload, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		var e error
-		out, e = t.attachBlob(ctx, subject, id, version, in)
+		b, e := t.attachBlob(ctx, subject, id, version, in)
+		if e != nil {
+			return e
+		}
+		matches, e := t.checkDuplicatePolicy(ctx, subject, id, in.SHA256)
+		out = &BlobUpload{b, matches}
 		return e
 	})
 	return
@@ -185,6 +197,10 @@ func (s *Service) AttachBlob(ctx context.Context, subject, id string, version in
 
 // attachBlob records a new content revision pinning the blob, inside a write transaction.
 func (s *Service) attachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (*ent.Blob, error) {
+	return s.writeBlob(ctx, subject, id, version, in, "blob.attach", nil)
+}
+
+func (s *Service) writeBlob(ctx context.Context, subject, id string, version int, in BlobInput, action string, sourceVersion *int) (*ent.Blob, error) {
 	if e := s.CanUpload(ctx, subject, id, version); e != nil {
 		return nil, e
 	}
@@ -200,23 +216,55 @@ func (s *Service) attachBlob(ctx context.Context, subject, id string, version in
 		return nil, e
 	}
 	if n != 1 {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	r.Version++
-	out, e := s.createBlob(ctx, id, in)
+	out, e := s.createBlob(ctx, subject, id, in, sourceVersion == nil)
 	if e != nil {
 		return nil, e
 	}
 	if _, e = s.recordRevision(ctx, subject, r, &out.ID, true); e != nil {
 		return nil, e
 	}
-	return out, s.audit(ctx, subject, "blob.attach", r, map[string]any{"blob_id": out.ID, "size": in.Size, "sha256": in.SHA256})
+	details := map[string]any{"blob_id": out.ID, "size": in.Size, "sha256": in.SHA256}
+	if sourceVersion != nil {
+		details["source_version"] = *sourceVersion
+	}
+	return out, s.audit(ctx, subject, action, r, details)
+}
+
+// RestoreBlob creates a new file version from immutable earlier content, keeping
+// the current metadata and applying the collection's publication rules.
+func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, version int) (out *ent.Blob, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		if e := t.CanUpload(ctx, subject, id, version); e != nil {
+			return e
+		}
+		source, e := t.Client.Blob.Query().Where(blob.ItemIDEQ(id), blob.VersionEQ(number)).Only(ctx)
+		if ent.IsNotFound(e) {
+			return ErrNotFound
+		}
+		if e != nil {
+			return e
+		}
+		out, e = t.writeBlob(ctx, subject, id, version, BlobInput{ObjectKey: source.ObjectKey, Filename: source.Filename, ContentType: source.ContentType, Size: source.Size, SHA256: source.Sha256}, "blob.restore", &number)
+		return e
+	})
+	return
 }
 
 // createBlob stores the metadata of the item's next blob version.
-func (s *Service) createBlob(ctx context.Context, itemID string, in BlobInput) (*ent.Blob, error) {
+func (s *Service) createBlob(ctx context.Context, subject, itemID string, in BlobInput, checkDuplicates bool) (*ent.Blob, error) {
+	if err := ValidateDocumentLanguages(in.Languages); err != nil {
+		return nil, err
+	}
 	if !filenameValid(in.Filename) || in.Size < 0 || len(in.SHA256) != 64 || len(in.ContentType) > 255 || in.ContentType == "" || in.ObjectKey == "" {
 		return nil, invalid("invalid blob metadata")
+	}
+	if checkDuplicates {
+		if _, err := s.checkDuplicatePolicy(ctx, subject, itemID, in.SHA256); err != nil {
+			return nil, err
+		}
 	}
 	version := 1
 	last, err := s.Client.Blob.Query().Where(blob.ItemIDEQ(itemID)).Order(ent.Desc(blob.FieldVersion)).First(ctx)
@@ -225,7 +273,7 @@ func (s *Service) createBlob(ctx context.Context, itemID string, in BlobInput) (
 	} else if !ent.IsNotFound(err) {
 		return nil, err
 	}
-	return s.Client.Blob.Create().SetItemID(itemID).SetVersion(version).SetObjectKey(in.ObjectKey).SetFilename(in.Filename).SetContentType(in.ContentType).SetSize(in.Size).SetSha256(in.SHA256).Save(ctx)
+	return s.Client.Blob.Create().SetItemID(itemID).SetVersion(version).SetObjectKey(in.ObjectKey).SetFilename(in.Filename).SetContentType(in.ContentType).SetLanguages(in.Languages).SetSize(in.Size).SetSha256(in.SHA256).Save(ctx)
 }
 func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent.Blob, error) {
 	if !s.transaction {

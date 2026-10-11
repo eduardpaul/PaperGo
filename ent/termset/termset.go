@@ -16,31 +16,35 @@ const (
 	FieldID = "id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
-	// FieldWorkspaceID holds the string denoting the workspace_id field in the database.
-	FieldWorkspaceID = "workspace_id"
+	// FieldGroupID holds the string denoting the group_id field in the database.
+	FieldGroupID = "group_id"
 	// FieldKey holds the string denoting the key field in the database.
 	FieldKey = "key"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
+	// FieldIsOpen holds the string denoting the is_open field in the database.
+	FieldIsOpen = "is_open"
+	// FieldIsKeywords holds the string denoting the is_keywords field in the database.
+	FieldIsKeywords = "is_keywords"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
-	// EdgeWorkspace holds the string denoting the workspace edge name in mutations.
-	EdgeWorkspace = "workspace"
+	// EdgeGroup holds the string denoting the group edge name in mutations.
+	EdgeGroup = "group"
 	// EdgeTerms holds the string denoting the terms edge name in mutations.
 	EdgeTerms = "terms"
 	// Table holds the table name of the termset in the database.
 	Table = "term_sets"
-	// WorkspaceTable is the table that holds the workspace relation/edge.
-	WorkspaceTable = "term_sets"
-	// WorkspaceInverseTable is the table name for the Resource entity.
-	// It exists in this package in order to avoid circular dependency with the "resource" package.
-	WorkspaceInverseTable = "resources"
-	// WorkspaceColumn is the table column denoting the workspace relation/edge.
-	WorkspaceColumn = "workspace_id"
+	// GroupTable is the table that holds the group relation/edge.
+	GroupTable = "term_sets"
+	// GroupInverseTable is the table name for the TermGroup entity.
+	// It exists in this package in order to avoid circular dependency with the "termgroup" package.
+	GroupInverseTable = "term_groups"
+	// GroupColumn is the table column denoting the group relation/edge.
+	GroupColumn = "group_id"
 	// TermsTable is the table that holds the terms relation/edge.
 	TermsTable = "terms"
 	// TermsInverseTable is the table name for the Term entity.
@@ -54,10 +58,12 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
-	FieldWorkspaceID,
+	FieldGroupID,
 	FieldKey,
 	FieldName,
 	FieldDescription,
+	FieldIsOpen,
+	FieldIsKeywords,
 	FieldVersion,
 	FieldUpdatedAt,
 }
@@ -77,6 +83,10 @@ var (
 	DefaultCreatedAt func() time.Time
 	// DefaultDescription holds the default value on creation for the "description" field.
 	DefaultDescription string
+	// DefaultIsOpen holds the default value on creation for the "is_open" field.
+	DefaultIsOpen bool
+	// DefaultIsKeywords holds the default value on creation for the "is_keywords" field.
+	DefaultIsKeywords bool
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
 	// VersionValidator is a validator for the "version" field. It is called by the builders before save.
@@ -104,9 +114,9 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
-// ByWorkspaceID orders the results by the workspace_id field.
-func ByWorkspaceID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWorkspaceID, opts...).ToFunc()
+// ByGroupID orders the results by the group_id field.
+func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
 }
 
 // ByKey orders the results by the key field.
@@ -124,6 +134,16 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
 }
 
+// ByIsOpen orders the results by the is_open field.
+func ByIsOpen(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsOpen, opts...).ToFunc()
+}
+
+// ByIsKeywords orders the results by the is_keywords field.
+func ByIsKeywords(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsKeywords, opts...).ToFunc()
+}
+
 // ByVersion orders the results by the version field.
 func ByVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVersion, opts...).ToFunc()
@@ -134,10 +154,10 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
-// ByWorkspaceField orders the results by workspace field.
-func ByWorkspaceField(field string, opts ...sql.OrderTermOption) OrderOption {
+// ByGroupField orders the results by group field.
+func ByGroupField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newWorkspaceStep(), sql.OrderByField(field, opts...))
+		sqlgraph.OrderByNeighborTerms(s, newGroupStep(), sql.OrderByField(field, opts...))
 	}
 }
 
@@ -154,11 +174,11 @@ func ByTerms(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newTermsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-func newWorkspaceStep() *sqlgraph.Step {
+func newGroupStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(WorkspaceInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, WorkspaceTable, WorkspaceColumn),
+		sqlgraph.To(GroupInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, GroupTable, GroupColumn),
 	)
 }
 func newTermsStep() *sqlgraph.Step {

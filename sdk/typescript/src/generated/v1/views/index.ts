@@ -12,7 +12,7 @@ import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type 
 export interface ViewsRequestBuilder extends BaseRequestBuilder<ViewsRequestBuilder> {
     /**
      * Gets an item from the papergo.v1.views.item collection
-     * @param id Entity ID.
+     * @param id Unique identifier of the item
      * @returns {ViewsItemRequestBuilder}
      */
      byId(id: string) : ViewsItemRequestBuilder;

@@ -56,7 +56,7 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := dms.NewService(db.Client)
+	s := dms.NewService(db.SQL)
 	verifier := principals{"alice-token": "alice", "bob-token": "bob"}
 	logger := slog.New(slog.NewJSONHandler(testLog{t}, nil))
 	a := &httpapi.API{DMS: s, Auth: verifier, Storage: store, Logger: logger, Ready: db.SQL.PingContext, MaxUpload: 64, MaxInFlight: 4, WebDAV: webdav.New(s, verifier, store, logger, 64)}
@@ -64,7 +64,7 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.SetPermissions(ctx, "alice", w.ID, w.Version, dms.Permissions{Grants: []dms.Permission{{Subject: "alice", Action: "manage"}, {Subject: "bob", Action: "read"}}}); err != nil {
+	if err = s.SetWorkspaceMember(ctx, "alice", w.ID, dms.WorkspaceMember{Subject: "bob", Role: "visitor"}); err != nil {
 		t.Fatal(err)
 	}
 	lib, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "library", Name: "Shared", WebDAVEnabled: true})
@@ -225,11 +225,67 @@ func TestFileLifecycle(t *testing.T) {
 
 	e.expect(e.do("DELETE", e.root+"/", alice, ""), 403)
 	e.expect(e.do("DELETE", e.root+"/Docs", alice, ""), 204)
+	e.expect(e.do("GET", e.root+"/Docs/hi%20THERE.txt", alice, ""), 404)
+	e.expect(e.do("PROPFIND", e.root+"/Docs/Copy/", alice, "", "Depth", "0"), 404)
 	e.expect(e.do("PROPFIND", e.root+"/Docs/", alice, "", "Depth", "0"), 404)
 	w = e.expect(e.do("PROPFIND", e.root+"/", alice, "", "Depth", "1"), 207)
 	if strings.Count(w.Body.String(), "<D:response>") != 1 || strings.Contains(w.Body.String(), "404 Not Found") {
 		t.Fatal("deleted folder still listed", w.Body.String())
 	}
+}
+
+func TestCopyMoveCanOverwriteWritableFolderTree(t *testing.T) {
+	for _, method := range []string{"COPY", "MOVE"} {
+		t.Run(method, func(t *testing.T) {
+			e := setup(t)
+			alice := "alice-token"
+			e.expect(e.do("MKCOL", e.root+"/Source", alice, ""), 201)
+			e.expect(e.do("MKCOL", e.root+"/Target", alice, ""), 201)
+			e.expect(e.do("PUT", e.root+"/Target/keep.txt", alice, "keep"), 201)
+			e.expect(e.do(method, e.root+"/Source", alice, "", "Destination", e.root+"/Target", "Overwrite", "F"), 412)
+			w := e.expect(e.do("GET", e.root+"/Target/keep.txt", alice, ""), 200)
+			if w.Body.String() != "keep" {
+				t.Fatal("rejected overwrite changed destination content", w.Body.String())
+			}
+			e.expect(e.do(method, e.root+"/Source", alice, "", "Destination", e.root+"/Target", "Overwrite", "T"), 204)
+			e.expect(e.do("GET", e.root+"/Target/keep.txt", alice, ""), 404)
+			e.expect(e.do("PROPFIND", e.root+"/Target/", alice, "", "Depth", "0"), 207)
+			if method == "MOVE" {
+				e.expect(e.do("PROPFIND", e.root+"/Source/", alice, "", "Depth", "0"), 404)
+			} else {
+				e.expect(e.do("PROPFIND", e.root+"/Source/", alice, "", "Depth", "0"), 207)
+			}
+		})
+	}
+}
+
+func TestRecursiveDeleteRejectsProtectedDescendant(t *testing.T) {
+	e := setup(t)
+	lib, err := e.s.Get(ctx, "alice", e.library)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.SetWorkspaceMember(ctx, "alice", lib.WorkspaceID, dms.WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
+		t.Fatal(err)
+	}
+	e.expect(e.do("MKCOL", e.root+"/Tree", "alice-token", ""), 201)
+	e.expect(e.do("PUT", e.root+"/Tree/visible.txt", "alice-token", "visible"), 201)
+	e.expect(e.do("PUT", e.root+"/Tree/private.txt", "alice-token", "private"), 201)
+	private, err := e.s.LibraryFile(ctx, "alice", e.library, []string{"Tree", "private.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.s.SetPermissions(ctx, "alice", private.ID, private.Version, dms.Permissions{Grants: []dms.Permission{{PrincipalType: "user", PrincipalID: "alice", Action: "manage", Effect: "allow"}}}); err != nil {
+		t.Fatal(err)
+	}
+	e.expect(e.do("DELETE", e.root+"/Tree", "bob-token", ""), 403)
+	for _, name := range []string{"visible", "private"} {
+		w := e.expect(e.do("GET", e.root+"/Tree/"+name+".txt", "alice-token", ""), 200)
+		if w.Body.String() != name {
+			t.Fatal("rejected recursive deletion changed content", w.Body.String())
+		}
+	}
+	e.expect(e.do("DELETE", e.root+"/Tree", "alice-token", ""), 204)
 }
 
 func TestLocking(t *testing.T) {
@@ -268,7 +324,9 @@ func TestLocking(t *testing.T) {
 	e.expect(e.do("PUT", e.root+"/Team/a.txt", alice, "a"), 423)
 	e.expect(e.do("PUT", e.root+"/Team/a.txt", alice, "a", "If", "("+folderToken+")"), 201)
 	e.expect(e.do("MOVE", e.root+"/report.docx", alice, "", "Destination", e.root+"/Team/report.docx"), 423)
+	e.expect(e.do("DELETE", e.root+"/Team", alice, ""), 423)
 	e.expect(e.do("DELETE", e.root+"/Team", alice, "", "If", "("+folderToken+")"), 204)
+	e.expect(e.do("GET", e.root+"/Team/a.txt", alice, ""), 404)
 	// Deleting the folder released its lock.
 	e.expect(e.do("MKCOL", e.root+"/Team", alice, ""), 201)
 }

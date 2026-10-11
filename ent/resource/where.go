@@ -95,6 +95,16 @@ func Name(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldName, v))
 }
 
+// Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
+func Description(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDescription, v))
+}
+
+// AllowFolders applies equality check predicate on the "allow_folders" field. It's identical to AllowFoldersEQ.
+func AllowFolders(v bool) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldAllowFolders, v))
+}
+
 // InheritPermissions applies equality check predicate on the "inherit_permissions" field. It's identical to InheritPermissionsEQ.
 func InheritPermissions(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldInheritPermissions, v))
@@ -130,6 +140,11 @@ func PublishingEnabled(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldPublishingEnabled, v))
 }
 
+// MaxVersions applies equality check predicate on the "max_versions" field. It's identical to MaxVersionsEQ.
+func MaxVersions(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldMaxVersions, v))
+}
+
 // WebdavEnabled applies equality check predicate on the "webdav_enabled" field. It's identical to WebdavEnabledEQ.
 func WebdavEnabled(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldWebdavEnabled, v))
@@ -163,6 +178,11 @@ func NameKey(v string) predicate.Resource {
 // DeletedAt applies equality check predicate on the "deleted_at" field. It's identical to DeletedAtEQ.
 func DeletedAt(v time.Time) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldDeletedAt, v))
+}
+
+// DeletedBy applies equality check predicate on the "deleted_by" field. It's identical to DeletedByEQ.
+func DeletedBy(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDeletedBy, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -580,6 +600,81 @@ func NameContainsFold(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldContainsFold(FieldName, v))
 }
 
+// DescriptionEQ applies the EQ predicate on the "description" field.
+func DescriptionEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDescription, v))
+}
+
+// DescriptionNEQ applies the NEQ predicate on the "description" field.
+func DescriptionNEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldDescription, v))
+}
+
+// DescriptionIn applies the In predicate on the "description" field.
+func DescriptionIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldDescription, vs...))
+}
+
+// DescriptionNotIn applies the NotIn predicate on the "description" field.
+func DescriptionNotIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldDescription, vs...))
+}
+
+// DescriptionGT applies the GT predicate on the "description" field.
+func DescriptionGT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldDescription, v))
+}
+
+// DescriptionGTE applies the GTE predicate on the "description" field.
+func DescriptionGTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldDescription, v))
+}
+
+// DescriptionLT applies the LT predicate on the "description" field.
+func DescriptionLT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldDescription, v))
+}
+
+// DescriptionLTE applies the LTE predicate on the "description" field.
+func DescriptionLTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldDescription, v))
+}
+
+// DescriptionContains applies the Contains predicate on the "description" field.
+func DescriptionContains(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContains(FieldDescription, v))
+}
+
+// DescriptionHasPrefix applies the HasPrefix predicate on the "description" field.
+func DescriptionHasPrefix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasPrefix(FieldDescription, v))
+}
+
+// DescriptionHasSuffix applies the HasSuffix predicate on the "description" field.
+func DescriptionHasSuffix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasSuffix(FieldDescription, v))
+}
+
+// DescriptionEqualFold applies the EqualFold predicate on the "description" field.
+func DescriptionEqualFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEqualFold(FieldDescription, v))
+}
+
+// DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
+func DescriptionContainsFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContainsFold(FieldDescription, v))
+}
+
+// AllowFoldersEQ applies the EQ predicate on the "allow_folders" field.
+func AllowFoldersEQ(v bool) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldAllowFolders, v))
+}
+
+// AllowFoldersNEQ applies the NEQ predicate on the "allow_folders" field.
+func AllowFoldersNEQ(v bool) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldAllowFolders, v))
+}
+
 // InheritPermissionsEQ applies the EQ predicate on the "inherit_permissions" field.
 func InheritPermissionsEQ(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldInheritPermissions, v))
@@ -905,6 +1000,66 @@ func PublishingEnabledNEQ(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldNEQ(FieldPublishingEnabled, v))
 }
 
+// VersioningEQ applies the EQ predicate on the "versioning" field.
+func VersioningEQ(v Versioning) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldVersioning, v))
+}
+
+// VersioningNEQ applies the NEQ predicate on the "versioning" field.
+func VersioningNEQ(v Versioning) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldVersioning, v))
+}
+
+// VersioningIn applies the In predicate on the "versioning" field.
+func VersioningIn(vs ...Versioning) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldVersioning, vs...))
+}
+
+// VersioningNotIn applies the NotIn predicate on the "versioning" field.
+func VersioningNotIn(vs ...Versioning) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldVersioning, vs...))
+}
+
+// MaxVersionsEQ applies the EQ predicate on the "max_versions" field.
+func MaxVersionsEQ(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldMaxVersions, v))
+}
+
+// MaxVersionsNEQ applies the NEQ predicate on the "max_versions" field.
+func MaxVersionsNEQ(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldMaxVersions, v))
+}
+
+// MaxVersionsIn applies the In predicate on the "max_versions" field.
+func MaxVersionsIn(vs ...int) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldMaxVersions, vs...))
+}
+
+// MaxVersionsNotIn applies the NotIn predicate on the "max_versions" field.
+func MaxVersionsNotIn(vs ...int) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldMaxVersions, vs...))
+}
+
+// MaxVersionsGT applies the GT predicate on the "max_versions" field.
+func MaxVersionsGT(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldMaxVersions, v))
+}
+
+// MaxVersionsGTE applies the GTE predicate on the "max_versions" field.
+func MaxVersionsGTE(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldMaxVersions, v))
+}
+
+// MaxVersionsLT applies the LT predicate on the "max_versions" field.
+func MaxVersionsLT(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldMaxVersions, v))
+}
+
+// MaxVersionsLTE applies the LTE predicate on the "max_versions" field.
+func MaxVersionsLTE(v int) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldMaxVersions, v))
+}
+
 // WebdavEnabledEQ applies the EQ predicate on the "webdav_enabled" field.
 func WebdavEnabledEQ(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldWebdavEnabled, v))
@@ -913,6 +1068,26 @@ func WebdavEnabledEQ(v bool) predicate.Resource {
 // WebdavEnabledNEQ applies the NEQ predicate on the "webdav_enabled" field.
 func WebdavEnabledNEQ(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldNEQ(FieldWebdavEnabled, v))
+}
+
+// DuplicatePolicyEQ applies the EQ predicate on the "duplicate_policy" field.
+func DuplicatePolicyEQ(v DuplicatePolicy) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDuplicatePolicy, v))
+}
+
+// DuplicatePolicyNEQ applies the NEQ predicate on the "duplicate_policy" field.
+func DuplicatePolicyNEQ(v DuplicatePolicy) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldDuplicatePolicy, v))
+}
+
+// DuplicatePolicyIn applies the In predicate on the "duplicate_policy" field.
+func DuplicatePolicyIn(vs ...DuplicatePolicy) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldDuplicatePolicy, vs...))
+}
+
+// DuplicatePolicyNotIn applies the NotIn predicate on the "duplicate_policy" field.
+func DuplicatePolicyNotIn(vs ...DuplicatePolicy) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldDuplicatePolicy, vs...))
 }
 
 // UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
@@ -1285,6 +1460,81 @@ func DeletedAtNotNil() predicate.Resource {
 	return predicate.Resource(sql.FieldNotNull(FieldDeletedAt))
 }
 
+// DeletedByEQ applies the EQ predicate on the "deleted_by" field.
+func DeletedByEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDeletedBy, v))
+}
+
+// DeletedByNEQ applies the NEQ predicate on the "deleted_by" field.
+func DeletedByNEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldDeletedBy, v))
+}
+
+// DeletedByIn applies the In predicate on the "deleted_by" field.
+func DeletedByIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldDeletedBy, vs...))
+}
+
+// DeletedByNotIn applies the NotIn predicate on the "deleted_by" field.
+func DeletedByNotIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldDeletedBy, vs...))
+}
+
+// DeletedByGT applies the GT predicate on the "deleted_by" field.
+func DeletedByGT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldDeletedBy, v))
+}
+
+// DeletedByGTE applies the GTE predicate on the "deleted_by" field.
+func DeletedByGTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldDeletedBy, v))
+}
+
+// DeletedByLT applies the LT predicate on the "deleted_by" field.
+func DeletedByLT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldDeletedBy, v))
+}
+
+// DeletedByLTE applies the LTE predicate on the "deleted_by" field.
+func DeletedByLTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldDeletedBy, v))
+}
+
+// DeletedByContains applies the Contains predicate on the "deleted_by" field.
+func DeletedByContains(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContains(FieldDeletedBy, v))
+}
+
+// DeletedByHasPrefix applies the HasPrefix predicate on the "deleted_by" field.
+func DeletedByHasPrefix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasPrefix(FieldDeletedBy, v))
+}
+
+// DeletedByHasSuffix applies the HasSuffix predicate on the "deleted_by" field.
+func DeletedByHasSuffix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasSuffix(FieldDeletedBy, v))
+}
+
+// DeletedByIsNil applies the IsNil predicate on the "deleted_by" field.
+func DeletedByIsNil() predicate.Resource {
+	return predicate.Resource(sql.FieldIsNull(FieldDeletedBy))
+}
+
+// DeletedByNotNil applies the NotNil predicate on the "deleted_by" field.
+func DeletedByNotNil() predicate.Resource {
+	return predicate.Resource(sql.FieldNotNull(FieldDeletedBy))
+}
+
+// DeletedByEqualFold applies the EqualFold predicate on the "deleted_by" field.
+func DeletedByEqualFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEqualFold(FieldDeletedBy, v))
+}
+
+// DeletedByContainsFold applies the ContainsFold predicate on the "deleted_by" field.
+func DeletedByContainsFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContainsFold(FieldDeletedBy, v))
+}
+
 // HasChildren applies the HasEdge predicate on the "children" edge.
 func HasChildren() predicate.Resource {
 	return predicate.Resource(func(s *sql.Selector) {
@@ -1369,29 +1619,6 @@ func HasContainer() predicate.Resource {
 func HasContainerWith(preds ...predicate.Resource) predicate.Resource {
 	return predicate.Resource(func(s *sql.Selector) {
 		step := newContainerStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasDefinitions applies the HasEdge predicate on the "definitions" edge.
-func HasDefinitions() predicate.Resource {
-	return predicate.Resource(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, DefinitionsTable, DefinitionsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasDefinitionsWith applies the HasEdge predicate on the "definitions" edge with a given conditions (other predicates).
-func HasDefinitionsWith(preds ...predicate.FieldDefinition) predicate.Resource {
-	return predicate.Resource(func(s *sql.Selector) {
-		step := newDefinitionsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

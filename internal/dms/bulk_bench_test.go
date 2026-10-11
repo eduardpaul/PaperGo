@@ -20,7 +20,7 @@ func BenchmarkItemUpdates(b *testing.B) {
 			}
 			b.Run(fmt.Sprintf("%s/%d", mode, size), func(b *testing.B) {
 				ctx := context.Background()
-				s := NewService(testutil.Database(b).Client)
+				s := NewService(testutil.Database(b).SQL)
 				w, err := s.Create(ctx, "writer", "", CreateResource{Kind: "workspace", Name: "Benchmark"})
 				if err != nil {
 					b.Fatal(err)

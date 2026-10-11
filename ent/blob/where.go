@@ -95,6 +95,11 @@ func ContentType(v string) predicate.Blob {
 	return predicate.Blob(sql.FieldEQ(FieldContentType, v))
 }
 
+// Languages applies equality check predicate on the "languages" field. It's identical to LanguagesEQ.
+func Languages(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldEQ(FieldLanguages, v))
+}
+
 // Size applies equality check predicate on the "size" field. It's identical to SizeEQ.
 func Size(v int64) predicate.Blob {
 	return predicate.Blob(sql.FieldEQ(FieldSize, v))
@@ -443,6 +448,71 @@ func ContentTypeEqualFold(v string) predicate.Blob {
 // ContentTypeContainsFold applies the ContainsFold predicate on the "content_type" field.
 func ContentTypeContainsFold(v string) predicate.Blob {
 	return predicate.Blob(sql.FieldContainsFold(FieldContentType, v))
+}
+
+// LanguagesEQ applies the EQ predicate on the "languages" field.
+func LanguagesEQ(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldEQ(FieldLanguages, v))
+}
+
+// LanguagesNEQ applies the NEQ predicate on the "languages" field.
+func LanguagesNEQ(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldNEQ(FieldLanguages, v))
+}
+
+// LanguagesIn applies the In predicate on the "languages" field.
+func LanguagesIn(vs ...string) predicate.Blob {
+	return predicate.Blob(sql.FieldIn(FieldLanguages, vs...))
+}
+
+// LanguagesNotIn applies the NotIn predicate on the "languages" field.
+func LanguagesNotIn(vs ...string) predicate.Blob {
+	return predicate.Blob(sql.FieldNotIn(FieldLanguages, vs...))
+}
+
+// LanguagesGT applies the GT predicate on the "languages" field.
+func LanguagesGT(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldGT(FieldLanguages, v))
+}
+
+// LanguagesGTE applies the GTE predicate on the "languages" field.
+func LanguagesGTE(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldGTE(FieldLanguages, v))
+}
+
+// LanguagesLT applies the LT predicate on the "languages" field.
+func LanguagesLT(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldLT(FieldLanguages, v))
+}
+
+// LanguagesLTE applies the LTE predicate on the "languages" field.
+func LanguagesLTE(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldLTE(FieldLanguages, v))
+}
+
+// LanguagesContains applies the Contains predicate on the "languages" field.
+func LanguagesContains(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldContains(FieldLanguages, v))
+}
+
+// LanguagesHasPrefix applies the HasPrefix predicate on the "languages" field.
+func LanguagesHasPrefix(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldHasPrefix(FieldLanguages, v))
+}
+
+// LanguagesHasSuffix applies the HasSuffix predicate on the "languages" field.
+func LanguagesHasSuffix(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldHasSuffix(FieldLanguages, v))
+}
+
+// LanguagesEqualFold applies the EqualFold predicate on the "languages" field.
+func LanguagesEqualFold(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldEqualFold(FieldLanguages, v))
+}
+
+// LanguagesContainsFold applies the ContainsFold predicate on the "languages" field.
+func LanguagesContainsFold(v string) predicate.Blob {
+	return predicate.Blob(sql.FieldContainsFold(FieldLanguages, v))
 }
 
 // SizeEQ applies the EQ predicate on the "size" field.

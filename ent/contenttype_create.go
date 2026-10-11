@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"papergo/ent/contenttype"
-	"papergo/ent/resource"
 	"papergo/internal/model"
 	"time"
 
@@ -36,12 +35,6 @@ func (_c *ContentTypeCreate) SetNillableCreatedAt(v *time.Time) *ContentTypeCrea
 	return _c
 }
 
-// SetContainerID sets the "container_id" field.
-func (_c *ContentTypeCreate) SetContainerID(v string) *ContentTypeCreate {
-	_c.mutation.SetContainerID(v)
-	return _c
-}
-
 // SetKey sets the "key" field.
 func (_c *ContentTypeCreate) SetKey(v string) *ContentTypeCreate {
 	_c.mutation.SetKey(v)
@@ -54,29 +47,29 @@ func (_c *ContentTypeCreate) SetName(v string) *ContentTypeCreate {
 	return _c
 }
 
-// SetFieldKeys sets the "field_keys" field.
-func (_c *ContentTypeCreate) SetFieldKeys(v []string) *ContentTypeCreate {
-	_c.mutation.SetFieldKeys(v)
+// SetTemplateKey sets the "template_key" field.
+func (_c *ContentTypeCreate) SetTemplateKey(v string) *ContentTypeCreate {
+	_c.mutation.SetTemplateKey(v)
+	return _c
+}
+
+// SetNillableTemplateKey sets the "template_key" field if the given value is not nil.
+func (_c *ContentTypeCreate) SetNillableTemplateKey(v *string) *ContentTypeCreate {
+	if v != nil {
+		_c.SetTemplateKey(*v)
+	}
+	return _c
+}
+
+// SetFieldIds sets the "field_ids" field.
+func (_c *ContentTypeCreate) SetFieldIds(v []string) *ContentTypeCreate {
+	_c.mutation.SetFieldIds(v)
 	return _c
 }
 
 // SetRules sets the "rules" field.
 func (_c *ContentTypeCreate) SetRules(v []model.ValidationRule) *ContentTypeCreate {
 	_c.mutation.SetRules(v)
-	return _c
-}
-
-// SetIsDefault sets the "is_default" field.
-func (_c *ContentTypeCreate) SetIsDefault(v bool) *ContentTypeCreate {
-	_c.mutation.SetIsDefault(v)
-	return _c
-}
-
-// SetNillableIsDefault sets the "is_default" field if the given value is not nil.
-func (_c *ContentTypeCreate) SetNillableIsDefault(v *bool) *ContentTypeCreate {
-	if v != nil {
-		_c.SetIsDefault(*v)
-	}
 	return _c
 }
 
@@ -122,11 +115,6 @@ func (_c *ContentTypeCreate) SetNillableID(v *string) *ContentTypeCreate {
 	return _c
 }
 
-// SetContainer sets the "container" edge to the Resource entity.
-func (_c *ContentTypeCreate) SetContainer(v *Resource) *ContentTypeCreate {
-	return _c.SetContainerID(v.ID)
-}
-
 // Mutation returns the ContentTypeMutation object of the builder.
 func (_c *ContentTypeCreate) Mutation() *ContentTypeMutation {
 	return _c.mutation
@@ -166,17 +154,13 @@ func (_c *ContentTypeCreate) defaults() {
 		v := contenttype.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.FieldKeys(); !ok {
-		v := contenttype.DefaultFieldKeys
-		_c.mutation.SetFieldKeys(v)
+	if _, ok := _c.mutation.FieldIds(); !ok {
+		v := contenttype.DefaultFieldIds
+		_c.mutation.SetFieldIds(v)
 	}
 	if _, ok := _c.mutation.Rules(); !ok {
 		v := contenttype.DefaultRules
 		_c.mutation.SetRules(v)
-	}
-	if _, ok := _c.mutation.IsDefault(); !ok {
-		v := contenttype.DefaultIsDefault
-		_c.mutation.SetIsDefault(v)
 	}
 	if _, ok := _c.mutation.Version(); !ok {
 		v := contenttype.DefaultVersion
@@ -197,9 +181,6 @@ func (_c *ContentTypeCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ContentType.created_at"`)}
 	}
-	if _, ok := _c.mutation.ContainerID(); !ok {
-		return &ValidationError{Name: "container_id", err: errors.New(`ent: missing required field "ContentType.container_id"`)}
-	}
 	if _, ok := _c.mutation.Key(); !ok {
 		return &ValidationError{Name: "key", err: errors.New(`ent: missing required field "ContentType.key"`)}
 	}
@@ -216,14 +197,16 @@ func (_c *ContentTypeCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "ContentType.name": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.FieldKeys(); !ok {
-		return &ValidationError{Name: "field_keys", err: errors.New(`ent: missing required field "ContentType.field_keys"`)}
+	if v, ok := _c.mutation.TemplateKey(); ok {
+		if err := contenttype.TemplateKeyValidator(v); err != nil {
+			return &ValidationError{Name: "template_key", err: fmt.Errorf(`ent: validator failed for field "ContentType.template_key": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.FieldIds(); !ok {
+		return &ValidationError{Name: "field_ids", err: errors.New(`ent: missing required field "ContentType.field_ids"`)}
 	}
 	if _, ok := _c.mutation.Rules(); !ok {
 		return &ValidationError{Name: "rules", err: errors.New(`ent: missing required field "ContentType.rules"`)}
-	}
-	if _, ok := _c.mutation.IsDefault(); !ok {
-		return &ValidationError{Name: "is_default", err: errors.New(`ent: missing required field "ContentType.is_default"`)}
 	}
 	if _, ok := _c.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "ContentType.version"`)}
@@ -240,9 +223,6 @@ func (_c *ContentTypeCreate) check() error {
 		if err := contenttype.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "ContentType.id": %w`, err)}
 		}
-	}
-	if len(_c.mutation.ContainerIDs()) == 0 {
-		return &ValidationError{Name: "container", err: errors.New(`ent: missing required edge "ContentType.container"`)}
 	}
 	return nil
 }
@@ -291,17 +271,17 @@ func (_c *ContentTypeCreate) createSpec() (*ContentType, *sqlgraph.CreateSpec) {
 		_spec.SetField(contenttype.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := _c.mutation.FieldKeys(); ok {
-		_spec.SetField(contenttype.FieldFieldKeys, field.TypeJSON, value)
-		_node.FieldKeys = value
+	if value, ok := _c.mutation.TemplateKey(); ok {
+		_spec.SetField(contenttype.FieldTemplateKey, field.TypeString, value)
+		_node.TemplateKey = &value
+	}
+	if value, ok := _c.mutation.FieldIds(); ok {
+		_spec.SetField(contenttype.FieldFieldIds, field.TypeJSON, value)
+		_node.FieldIds = value
 	}
 	if value, ok := _c.mutation.Rules(); ok {
 		_spec.SetField(contenttype.FieldRules, field.TypeJSON, value)
 		_node.Rules = value
-	}
-	if value, ok := _c.mutation.IsDefault(); ok {
-		_spec.SetField(contenttype.FieldIsDefault, field.TypeBool, value)
-		_node.IsDefault = value
 	}
 	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(contenttype.FieldVersion, field.TypeInt, value)
@@ -310,23 +290,6 @@ func (_c *ContentTypeCreate) createSpec() (*ContentType, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(contenttype.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
-	}
-	if nodes := _c.mutation.ContainerIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   contenttype.ContainerTable,
-			Columns: []string{contenttype.ContainerColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.ContainerID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

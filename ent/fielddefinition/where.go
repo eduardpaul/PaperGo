@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // ID filters vertices based on their ID field.
@@ -70,11 +69,6 @@ func CreatedAt(v time.Time) predicate.FieldDefinition {
 	return predicate.FieldDefinition(sql.FieldEQ(FieldCreatedAt, v))
 }
 
-// ContainerID applies equality check predicate on the "container_id" field. It's identical to ContainerIDEQ.
-func ContainerID(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldEQ(FieldContainerID, v))
-}
-
 // Key applies equality check predicate on the "key" field. It's identical to KeyEQ.
 func Key(v string) predicate.FieldDefinition {
 	return predicate.FieldDefinition(sql.FieldEQ(FieldKey, v))
@@ -83,6 +77,11 @@ func Key(v string) predicate.FieldDefinition {
 // Indexed applies equality check predicate on the "indexed" field. It's identical to IndexedEQ.
 func Indexed(v bool) predicate.FieldDefinition {
 	return predicate.FieldDefinition(sql.FieldEQ(FieldIndexed, v))
+}
+
+// Version applies equality check predicate on the "version" field. It's identical to VersionEQ.
+func Version(v int) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldEQ(FieldVersion, v))
 }
 
 // Scale applies equality check predicate on the "scale" field. It's identical to ScaleEQ.
@@ -133,71 +132,6 @@ func CreatedAtLT(v time.Time) predicate.FieldDefinition {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.FieldDefinition {
 	return predicate.FieldDefinition(sql.FieldLTE(FieldCreatedAt, v))
-}
-
-// ContainerIDEQ applies the EQ predicate on the "container_id" field.
-func ContainerIDEQ(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldEQ(FieldContainerID, v))
-}
-
-// ContainerIDNEQ applies the NEQ predicate on the "container_id" field.
-func ContainerIDNEQ(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldNEQ(FieldContainerID, v))
-}
-
-// ContainerIDIn applies the In predicate on the "container_id" field.
-func ContainerIDIn(vs ...string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldIn(FieldContainerID, vs...))
-}
-
-// ContainerIDNotIn applies the NotIn predicate on the "container_id" field.
-func ContainerIDNotIn(vs ...string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldNotIn(FieldContainerID, vs...))
-}
-
-// ContainerIDGT applies the GT predicate on the "container_id" field.
-func ContainerIDGT(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldGT(FieldContainerID, v))
-}
-
-// ContainerIDGTE applies the GTE predicate on the "container_id" field.
-func ContainerIDGTE(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldGTE(FieldContainerID, v))
-}
-
-// ContainerIDLT applies the LT predicate on the "container_id" field.
-func ContainerIDLT(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldLT(FieldContainerID, v))
-}
-
-// ContainerIDLTE applies the LTE predicate on the "container_id" field.
-func ContainerIDLTE(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldLTE(FieldContainerID, v))
-}
-
-// ContainerIDContains applies the Contains predicate on the "container_id" field.
-func ContainerIDContains(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldContains(FieldContainerID, v))
-}
-
-// ContainerIDHasPrefix applies the HasPrefix predicate on the "container_id" field.
-func ContainerIDHasPrefix(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldHasPrefix(FieldContainerID, v))
-}
-
-// ContainerIDHasSuffix applies the HasSuffix predicate on the "container_id" field.
-func ContainerIDHasSuffix(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldHasSuffix(FieldContainerID, v))
-}
-
-// ContainerIDEqualFold applies the EqualFold predicate on the "container_id" field.
-func ContainerIDEqualFold(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldEqualFold(FieldContainerID, v))
-}
-
-// ContainerIDContainsFold applies the ContainsFold predicate on the "container_id" field.
-func ContainerIDContainsFold(v string) predicate.FieldDefinition {
-	return predicate.FieldDefinition(sql.FieldContainsFold(FieldContainerID, v))
 }
 
 // KeyEQ applies the EQ predicate on the "key" field.
@@ -360,6 +294,66 @@ func IndexedNEQ(v bool) predicate.FieldDefinition {
 	return predicate.FieldDefinition(sql.FieldNEQ(FieldIndexed, v))
 }
 
+// VersionEQ applies the EQ predicate on the "version" field.
+func VersionEQ(v int) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldEQ(FieldVersion, v))
+}
+
+// VersionNEQ applies the NEQ predicate on the "version" field.
+func VersionNEQ(v int) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldNEQ(FieldVersion, v))
+}
+
+// VersionIn applies the In predicate on the "version" field.
+func VersionIn(vs ...int) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldIn(FieldVersion, vs...))
+}
+
+// VersionNotIn applies the NotIn predicate on the "version" field.
+func VersionNotIn(vs ...int) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldNotIn(FieldVersion, vs...))
+}
+
+// VersionGT applies the GT predicate on the "version" field.
+func VersionGT(v int) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldGT(FieldVersion, v))
+}
+
+// VersionGTE applies the GTE predicate on the "version" field.
+func VersionGTE(v int) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldGTE(FieldVersion, v))
+}
+
+// VersionLT applies the LT predicate on the "version" field.
+func VersionLT(v int) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldLT(FieldVersion, v))
+}
+
+// VersionLTE applies the LTE predicate on the "version" field.
+func VersionLTE(v int) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldLTE(FieldVersion, v))
+}
+
+// IndexStatusEQ applies the EQ predicate on the "index_status" field.
+func IndexStatusEQ(v IndexStatus) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldEQ(FieldIndexStatus, v))
+}
+
+// IndexStatusNEQ applies the NEQ predicate on the "index_status" field.
+func IndexStatusNEQ(v IndexStatus) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldNEQ(FieldIndexStatus, v))
+}
+
+// IndexStatusIn applies the In predicate on the "index_status" field.
+func IndexStatusIn(vs ...IndexStatus) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldIn(FieldIndexStatus, vs...))
+}
+
+// IndexStatusNotIn applies the NotIn predicate on the "index_status" field.
+func IndexStatusNotIn(vs ...IndexStatus) predicate.FieldDefinition {
+	return predicate.FieldDefinition(sql.FieldNotIn(FieldIndexStatus, vs...))
+}
+
 // ScaleEQ applies the EQ predicate on the "scale" field.
 func ScaleEQ(v int) predicate.FieldDefinition {
 	return predicate.FieldDefinition(sql.FieldEQ(FieldScale, v))
@@ -408,29 +402,6 @@ func RequiredEQ(v bool) predicate.FieldDefinition {
 // RequiredNEQ applies the NEQ predicate on the "required" field.
 func RequiredNEQ(v bool) predicate.FieldDefinition {
 	return predicate.FieldDefinition(sql.FieldNEQ(FieldRequired, v))
-}
-
-// HasContainer applies the HasEdge predicate on the "container" edge.
-func HasContainer() predicate.FieldDefinition {
-	return predicate.FieldDefinition(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, ContainerTable, ContainerColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasContainerWith applies the HasEdge predicate on the "container" edge with a given conditions (other predicates).
-func HasContainerWith(preds ...predicate.Resource) predicate.FieldDefinition {
-	return predicate.FieldDefinition(func(s *sql.Selector) {
-		step := newContainerStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
 }
 
 // And groups predicates with the AND operator between them.

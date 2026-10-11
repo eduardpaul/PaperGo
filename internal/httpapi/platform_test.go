@@ -31,7 +31,10 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	var l ent.Resource
 	json.Unmarshal(lbody, &l)
 	base := "/v1/workspaces/" + w.ID
-	setBody := send("POST", base+"/term-sets", `{"key":"topics","name":"Topics"}`, "", 201)
+	groupBody := send("POST", "/v1/term-groups", `{"name":"Subjects"}`, "", 201)
+	var group ent.TermGroup
+	json.Unmarshal(groupBody, &group)
+	setBody := send("POST", "/v1/term-sets", fmt.Sprintf(`{"group_id":%q,"key":"topics","name":"Topics"}`, group.ID), "", 201)
 	var set ent.TermSet
 	json.Unmarshal(setBody, &set)
 	termBody := send("POST", "/v1/term-sets/"+set.ID+"/terms", `{"name":"Finance","labels":{"es":"Finanzas"},"synonyms":["Money"]}`, "", 201)
@@ -55,12 +58,16 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	otherBody := send("POST", "/v1/resources/"+l.ID+"/children", `{"kind":"item","name":"B"}`, "", 201)
 	var other ent.Resource
 	json.Unmarshal(otherBody, &other)
-	query := `{"query":{"filter":{"field":"serial","op":"eq","value":9007199254740993},"sort":{"field":"serial"},"group_by":"serial"},"limit":1}`
-	first := send("POST", "/v1/resources/"+l.ID+"/query", query, "", 200)
-	if !strings.Contains(string(first), "9007199254740993") || !strings.Contains(string(first), `"total":2`) {
+	query := `{"query":{"filter":{"field":"serial","op":"eq","value":9007199254740993},"sort":[{"field":"serial"}],"group_by":"serial"}}`
+	first := send("POST", "/v1/resources/"+l.ID+"/query?$top=1", query, "", 200)
+	if !strings.Contains(string(first), "9007199254740993") || strings.Contains(string(first), `"total"`) {
 		t.Fatal("query contract", string(first))
 	}
-	groups := send("POST", "/v1/resources/"+l.ID+"/query/groups", query, "", 200)
+	counted := send("POST", "/v1/resources/"+l.ID+"/query?$top=1", strings.Replace(query, `"query":`, `"include_total":true,"query":`, 1), "", 200)
+	if !strings.Contains(string(counted), `"total":2`) {
+		t.Fatal("requested total", string(counted))
+	}
+	groups := send("POST", "/v1/resources/"+l.ID+"/query/groups?$top=1", query, "", 200)
 	if !strings.Contains(string(groups), `"value":"9007199254740993"`) {
 		t.Fatal("group precision", string(groups))
 	}
@@ -69,29 +76,56 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	json.Unmarshal(viewBody, &view)
 	send("POST", "/v1/views/"+view.ID+"/query", `{}`, "", 200)
 	send("PUT", "/v1/views/"+view.ID, `{"name":"All v2","columns":["serial"],"query":{}}`, `"1"`, 200)
-	send("PUT", "/v1/views/"+view.ID, `{"name":"Stale","query":{}}`, `"1"`, 409)
-	send("DELETE", "/v1/views/"+view.ID, "", `"1"`, 409)
+	send("PUT", "/v1/views/"+view.ID, `{"name":"Stale","query":{}}`, `"1"`, 412)
+	send("DELETE", "/v1/views/"+view.ID, "", `"1"`, 412)
 	send("DELETE", "/v1/views/"+view.ID, "", `"2"`, 204)
-	typeBody := send("POST", base+"/relationship-types", `{"key":"links","label":"Links","directed":true,"max_outgoing":1,"attributes":[{"key":"note","label":"Note","type":"text","options":{"max_length":20}}]}`, "", 201)
+	typeBody := send("POST", "/v1/relationship-types", `{"name":"Links","directed":true,"max_outgoing":1,"attributes":[{"key":"note","label":"Note","type":"text","options":{"max_length":20}}]}`, "", 201)
 	var typ ent.RelationshipType
 	json.Unmarshal(typeBody, &typ)
-	linkBody := send("POST", "/v1/items/"+item.ID+"/relationships", fmt.Sprintf(`{"type_id":%q,"target_id":%q,"metadata":{"note":"Original"}}`, typ.ID, other.ID), "", 201)
+	linkBody := send("POST", "/v1/items/"+item.ID+"/relationships", fmt.Sprintf(`{"type":%q,"target_id":%q,"metadata":{"note":"Original"}}`, typ.ID, other.ID), "", 201)
 	var edge ent.Relationship
 	json.Unmarshal(linkBody, &edge)
 	path := "/v1/items/" + item.ID + "/relationships/" + edge.ID
 	send("PATCH", path, `{"metadata":{"note":"Changed"}}`, "", 428)
 	send("PATCH", path, `{"metadata":{"note":"Changed"}}`, `"1"`, 200)
-	send("DELETE", path, "", `"1"`, 409)
+	send("DELETE", path, "", `"1"`, 412)
 	send("DELETE", path, "", `"2"`, 204)
 	send("PUT", "/v1/terms/"+term.ID, `{"name":"Renamed","deprecated":true}`, `"1"`, 200)
 	send("GET", "/v1/terms/"+term.ID, "", "", 200)
-	send("GET", base+"/term-sets", "", "", 200)
-	send("GET", base+"/relationship-types", "", "", 200)
-	send("POST", "/v1/resources/"+l.ID+"/query", `{"query":{"unknown":"bad"}}`, "", 422)
-	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":true,"grants":[{"subject":"alice","action":"manage"}]}`, `"2"`, 422)
+	send("GET", "/v1/term-sets", "", "", 200)
+	send("GET", "/v1/relationship-types", "", "", 200)
+	unknown := send("POST", "/v1/resources/"+l.ID+"/query", `{"query":{"unknown":"bad"}}`, "", 422)
+	if !strings.Contains(string(unknown), `"location":"body.unknown"`) {
+		t.Fatal("unknown query field", string(unknown))
+	}
+	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":true,"grants":[{"principal_type":"user","principal_id":"alice","action":"manage"}]}`, `"2"`, 422)
 	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":false,"copy_inherited":true,"grants":[]}`, `"2"`, 200)
 	acl := send("GET", "/v1/resources/"+item.ID+"/permissions", "", "", 200)
 	if !strings.Contains(string(acl), l.ID) || !strings.Contains(string(acl), "effective_grants") {
 		t.Fatal("effective ACL contract", string(acl))
 	}
+	// Indexing a populated field queues a tracked background build.
+	var fields struct {
+		Data []ent.FieldDefinition `json:"value"`
+	}
+	json.Unmarshal(send("GET", "/v1/resources/"+l.ID+"/fields", "", "", 200), &fields)
+	var collection ent.Resource
+	json.Unmarshal(send("GET", "/v1/resources/"+l.ID, "", "", 200), &collection)
+	for _, f := range fields.Data {
+		if f.Key == "topic" {
+			patched := send("PATCH", "/v1/resources/"+l.ID+"/fields/"+f.ID, `{"indexed":true}`, fmt.Sprintf(`"%d"`, collection.Version), 200)
+			if !strings.Contains(string(patched), `"index_status":"building"`) {
+				t.Fatal("index build not reported", string(patched))
+			}
+		}
+	}
+	var operations struct {
+		Data []ent.Operation `json:"value"`
+	}
+	json.Unmarshal(send("GET", "/v1/resources/"+l.ID+"/operations", "", "", 200), &operations)
+	if len(operations.Data) != 1 || operations.Data[0].Status != "pending" {
+		t.Fatal("operations", operations)
+	}
+	send("GET", "/v1/operations/"+operations.Data[0].ID, "", "", 200)
+	send("GET", "/v1/operations/missing", "", "", 404)
 }

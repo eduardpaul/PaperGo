@@ -14,6 +14,9 @@ import (
 var fieldKey = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 var decimalPattern = regexp.MustCompile(`^-?[0-9]+(\.[0-9]+)?$`)
 
+// Allows a full million-unit note even when JSON escaping expands its bytes.
+const MaxItemValuesBytes = 8 * 1024 * 1024
+
 func validateName(name string) error {
 	if strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 255 {
 		return invalid("name must contain 1 to 255 characters")
@@ -32,16 +35,6 @@ func validateTags(tags []string) error {
 		seen[tag] = true
 	}
 	return nil
-}
-func number(v any) (float64, error) {
-	switch n := v.(type) {
-	case json.Number:
-		return n.Float64()
-	case float64:
-		return n, nil
-	default:
-		return 0, invalid("expected JSON number")
-	}
 }
 func integer(v any) (int64, error) {
 	n, ok := v.(json.Number)
@@ -106,13 +99,13 @@ func decimal(v any, scale int) (string, int64, error) {
 	return canonical, n.Int64(), nil
 }
 func normalizeValues(defs []*ent.FieldDefinition, values map[string]any) error {
-	return normalizeRevisionValues(defs, values, nil)
+	return normalizeRevisionValues(defs, values, nil, true)
 }
 
 // normalizeRevisionValues validates values for a new revision. Values carried over
 // unchanged from previous were valid under the schema they were written with, so
 // later tightening (fewer choices, new bounds, required) never blocks other edits.
-func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[string]any) error {
+func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[string]any, applyDefaults bool) error {
 	known := make(map[string]*ent.FieldDefinition, len(defs))
 	for _, d := range defs {
 		known[d.Key] = d
@@ -126,7 +119,7 @@ func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[s
 		v, exists := values[d.Key]
 		old, existed := previous[d.Key]
 		kept := previous != nil && exists == existed && (!exists || sameJSON(v, old))
-		if !exists && len(d.Options.DefaultValue) > 0 {
+		if !exists && applyDefaults && len(d.Options.DefaultValue) > 0 {
 			var e error
 			v, e = decodeValue(d.Options.DefaultValue)
 			if e != nil {
@@ -153,8 +146,8 @@ func normalizeRevisionValues(defs []*ent.FieldDefinition, values, previous map[s
 		}
 	}
 	encoded, e := json.Marshal(values)
-	if e != nil || len(encoded) > 64*1024 {
-		return invalid("field values must be valid JSON of at most 64 KiB")
+	if e != nil || len(encoded) > MaxItemValuesBytes {
+		return invalid("field values must be valid JSON of at most 8 MiB")
 	}
 	return nil
 }

@@ -17,34 +17,35 @@ const MaxSmartGroupLevels = 3
 const MaxSharedSmartFolders = 100
 
 type SmartFolderGroupBy struct {
-	Field string `json:"field" doc:"Indexed scalar field key or system field."`
-	By    string `json:"by,omitempty" enum:"year,month" doc:"Date bucket for date/datetime fields."`
+	Field string `json:"field"`
+	By    string `json:"by,omitempty"`
 }
 
 type SmartFolderDefinition struct {
-	Collections    []string             `json:"collections,omitempty" maxItems:"100" uniqueItems:"true" doc:"Collection names, ignoring case."`
-	Templates      []string             `json:"templates,omitempty" maxItems:"100" uniqueItems:"true" doc:"Adopted template keys, ignoring case."`
-	ContentTypes   []string             `json:"content_types,omitempty" maxItems:"100" uniqueItems:"true" doc:"Content type keys or names, ignoring case."`
-	Terms          []string             `json:"terms,omitempty" maxItems:"20" uniqueItems:"true" doc:"Term IDs; descendants match too."`
-	TermMatch      string               `json:"term_match,omitempty" enum:"all,any" doc:"Defaults to all."`
+	Collections    []string             `json:"collections,omitempty"`
+	Templates      []string             `json:"templates,omitempty"`
+	ContentTypes   []string             `json:"content_types,omitempty"`
+	Terms          []string             `json:"terms,omitempty"`
+	TermMatch      string               `json:"term_match,omitempty"`
 	Filter         *FilterExpr          `json:"filter,omitempty"`
-	GroupBy        []SmartFolderGroupBy `json:"group_by,omitempty" maxItems:"3" doc:"Navigation levels."`
+	GroupBy        []SmartFolderGroupBy `json:"group_by,omitempty"`
 	IncludeFolders bool                 `json:"include_folders,omitempty"`
 }
 
 type SmartFolderInput struct {
-	Name        string                `json:"name" minLength:"1" maxLength:"255"`
-	Description string                `json:"description,omitempty" maxLength:"4096"`
-	WorkspaceID *string               `json:"workspace_id,omitempty" format:"uuid" doc:"Required for shared folders."`
+	Name        string                `json:"name"`
+	Description string                `json:"description,omitempty"`
+	WorkspaceID *string               `json:"workspace_id,omitempty"`
 	Personal    bool                  `json:"personal"`
 	Definition  SmartFolderDefinition `json:"definition"`
 }
 
 type SmartFolderQueryRequest struct {
-	Path    []*string `json:"path,omitempty" maxItems:"3" doc:"One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped."`
-	Surface string    `json:"surface,omitempty" enum:"auto,head,published" doc:"Defaults to auto."`
-	After   string    `json:"after,omitempty" doc:"Opaque cursor from next_cursor."`
-	Limit   int       `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"Maximum results; defaults to 50."`
+	Path         []*string `json:"path,omitempty"`
+	Surface      string    `json:"surface,omitempty"`
+	After        string    `json:"-"`
+	Limit        int       `json:"-"`
+	IncludeTotal bool      `json:"include_total,omitempty"`
 }
 
 func smartDefinition(f *ent.SmartFolder) (SmartFolderDefinition, error) {
@@ -106,24 +107,8 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 		if len(terms) != len(d.Terms) {
 			return invalid("unknown smart folder term")
 		}
-		checked := map[string]bool{}
-		if in.WorkspaceID != nil {
-			checked[*in.WorkspaceID] = true
-		}
-		for _, t := range terms {
-			set, err := t.Edges.TermSetOrErr()
-			if err != nil {
-				return err
-			}
-			if in.WorkspaceID != nil && set.WorkspaceID != *in.WorkspaceID {
-				return invalid("smart folder terms must belong to its workspace")
-			}
-			if !checked[set.WorkspaceID] {
-				if _, err = s.workspace(ctx, subject, set.WorkspaceID, "read"); err != nil {
-					return err
-				}
-				checked[set.WorkspaceID] = true
-			}
+		if err := s.requireTaxonomy(ctx, subject, "read"); err != nil {
+			return err
 		}
 	}
 	if _, err := resolveFilter(d.Filter, subject, time.Now().UTC(), nil); err != nil {
@@ -151,6 +136,13 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 }
 
 func (s *Service) smartFolder(ctx context.Context, subject, id string, manage bool) (*ent.SmartFolder, error) {
+	scope := "list.read"
+	if manage {
+		scope = "list.write"
+	}
+	if err := s.RequireScope(ctx, subject, scope); err != nil {
+		return nil, err
+	}
 	f, err := s.Client.SmartFolder.Get(ctx, id)
 	if ent.IsNotFound(err) {
 		return nil, ErrNotFound
@@ -188,6 +180,9 @@ func (s *Service) auditSmartFolder(ctx context.Context, subject, action string, 
 }
 
 func (s *Service) createSmartFolder(ctx context.Context, subject string, in SmartFolderInput) (*ent.SmartFolder, error) {
+	if err := s.RequireScope(ctx, subject, "list.write"); err != nil {
+		return nil, err
+	}
 	if subject == "" {
 		return nil, ErrForbidden
 	}
@@ -232,6 +227,9 @@ func (s *Service) SmartFolder(ctx context.Context, subject, id string) (*ent.Sma
 
 func (s *Service) SmartFolders(ctx context.Context, subject, workspace, after string, limit int) (Page[*ent.SmartFolder], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.SmartFolder], error) {
+		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
+			return Page[*ent.SmartFolder]{}, err
+		}
 		acl, args := permissionSQL("smart_folders.workspace_id", subject, "read")
 		q := t.Client.SmartFolder.Query().Where(smartfolder.IDGT(after), func(sel *entsql.Selector) {
 			sel.Where(entsql.ExprP("(owner_id=? OR (owner_id IS NULL AND "+acl+"))", append([]any{subject}, args...)...))
@@ -251,7 +249,7 @@ func (s *Service) UpdateSmartFolder(ctx context.Context, subject, id string, ver
 			return e
 		}
 		if old.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		out, e = t.updateSmartFolder(ctx, subject, old, in)
 		return e
@@ -284,7 +282,7 @@ func (s *Service) DeleteSmartFolder(ctx context.Context, subject, id string, ver
 			return err
 		}
 		if f.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if err = t.Client.SmartFolder.DeleteOne(f).Exec(ctx); err != nil {
 			return err

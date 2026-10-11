@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestApproximateNumericBoundsDoNotExpandScientificExponents(t *testing.T) {
+func TestExactNumericBoundsDoNotExpandScientificExponents(t *testing.T) {
 	d := &ent.FieldDefinition{Key: "estimate", Label: "Estimate", Type: fielddefinition.TypeNumber, Options: model.FieldOptions{Minimum: ptr("1e-999999999"), Maximum: ptr("1")}}
 	if e := validateFieldDefinition(d); e != nil {
 		t.Fatal(e)
@@ -26,7 +26,7 @@ func TestApproximateNumericBoundsDoNotExpandScientificExponents(t *testing.T) {
 }
 func TestTemplateAdoptionRevalidatesReferenceDefaults(t *testing.T) {
 	s, w, l := fixture(t)
-	set, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "topics", Name: "Topics"})
+	set, e := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "topics", Name: "Topics"})
 	if e != nil {
 		t.Fatal(e)
 	}

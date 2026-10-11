@@ -4,13 +4,19 @@
 // @ts-ignore
 import { AuditRequestBuilderRequestsMetadata, type AuditRequestBuilder } from './audit/index.js';
 // @ts-ignore
-import { RelationshipTypesRequestBuilderRequestsMetadata, type RelationshipTypesRequestBuilder } from './relationshipTypes/index.js';
+import { MembersRequestBuilderNavigationMetadata, MembersRequestBuilderRequestsMetadata, type MembersRequestBuilder } from './members/index.js';
 // @ts-ignore
 import { SmartFoldersRequestBuilderNavigationMetadata, type SmartFoldersRequestBuilder } from './smartFolders/index.js';
 // @ts-ignore
+import { TagsRequestBuilderRequestsMetadata, type TagsRequestBuilder } from './tags/index.js';
+// @ts-ignore
 import { TemplatesRequestBuilderRequestsMetadata, type TemplatesRequestBuilder } from './templates/index.js';
 // @ts-ignore
-import { TermSetsRequestBuilderRequestsMetadata, type TermSetsRequestBuilder } from './termSets/index.js';
+import { type WorkflowBuiltinsRequestBuilder, WorkflowBuiltinsRequestBuilderNavigationMetadata, WorkflowBuiltinsRequestBuilderRequestsMetadata } from './workflowBuiltins/index.js';
+// @ts-ignore
+import { type WorkflowRunsRequestBuilder, WorkflowRunsRequestBuilderRequestsMetadata } from './workflowRuns/index.js';
+// @ts-ignore
+import { type WorkflowsRequestBuilder, WorkflowsRequestBuilderRequestsMetadata } from './workflows/index.js';
 // @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata } from '@microsoft/kiota-abstractions';
 
@@ -23,21 +29,33 @@ export interface WorkspacesItemRequestBuilder extends BaseRequestBuilder<Workspa
      */
     get audit(): AuditRequestBuilder;
     /**
-     * The relationshipTypes property
+     * The members property
      */
-    get relationshipTypes(): RelationshipTypesRequestBuilder;
+    get members(): MembersRequestBuilder;
     /**
      * The smartFolders property
      */
     get smartFolders(): SmartFoldersRequestBuilder;
     /**
+     * The tags property
+     */
+    get tags(): TagsRequestBuilder;
+    /**
      * The templates property
      */
     get templates(): TemplatesRequestBuilder;
     /**
-     * The termSets property
+     * The workflowBuiltins property
      */
-    get termSets(): TermSetsRequestBuilder;
+    get workflowBuiltins(): WorkflowBuiltinsRequestBuilder;
+    /**
+     * The workflowRuns property
+     */
+    get workflowRuns(): WorkflowRunsRequestBuilder;
+    /**
+     * The workflows property
+     */
+    get workflows(): WorkflowsRequestBuilder;
 }
 /**
  * Uri template for the request builder.
@@ -50,17 +68,28 @@ export const WorkspacesItemRequestBuilderNavigationMetadata: Record<Exclude<keyo
     audit: {
         requestsMetadata: AuditRequestBuilderRequestsMetadata,
     },
-    relationshipTypes: {
-        requestsMetadata: RelationshipTypesRequestBuilderRequestsMetadata,
+    members: {
+        requestsMetadata: MembersRequestBuilderRequestsMetadata,
+        navigationMetadata: MembersRequestBuilderNavigationMetadata,
     },
     smartFolders: {
         navigationMetadata: SmartFoldersRequestBuilderNavigationMetadata,
     },
+    tags: {
+        requestsMetadata: TagsRequestBuilderRequestsMetadata,
+    },
     templates: {
         requestsMetadata: TemplatesRequestBuilderRequestsMetadata,
     },
-    termSets: {
-        requestsMetadata: TermSetsRequestBuilderRequestsMetadata,
+    workflowBuiltins: {
+        requestsMetadata: WorkflowBuiltinsRequestBuilderRequestsMetadata,
+        navigationMetadata: WorkflowBuiltinsRequestBuilderNavigationMetadata,
+    },
+    workflowRuns: {
+        requestsMetadata: WorkflowRunsRequestBuilderRequestsMetadata,
+    },
+    workflows: {
+        requestsMetadata: WorkflowsRequestBuilderRequestsMetadata,
     },
 };
 /* tslint:enable */

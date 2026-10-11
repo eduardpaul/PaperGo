@@ -3,12 +3,15 @@ package dms
 import (
 	"context"
 	"database/sql"
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"fmt"
 	"github.com/google/uuid"
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/grant"
 	"papergo/ent/resource"
+	"papergo/internal/identity"
 	"papergo/internal/model"
 	"strings"
 	"time"
@@ -16,30 +19,56 @@ import (
 
 type Service struct {
 	Client      *ent.Client
+	db          *sql.DB
 	writeMu     chan struct{}
 	transaction bool
+	// operations wakes RunOperations when work is queued.
+	operations          chan struct{}
+	onCommit            func()
+	tx                  *sql.Tx
+	pending             *[]Event
+	collectionTemplates map[string]CollectionTemplate
 }
 
-func NewService(client *ent.Client) *Service {
-	return &Service{Client: client, writeMu: make(chan struct{}, 1)}
+// NewService serves the PaperGo database db.
+func NewService(db *sql.DB) *Service {
+	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates()}
 }
 
-// Mutations include authorization, version checks and audit records in one
-// transaction. SQLite WAL allows concurrent readers; one writer per process
-// avoids deferred-transaction upgrades racing with another application writer.
+// OnCommit calls f after each committed write that recorded domain events,
+// so a dispatcher can pick them up at once. Call it before the service is used.
+func (s *Service) OnCommit(f func()) { s.onCommit = f }
+
+// txDriver runs Ent on a transaction the service does not own. Ent opens its
+// own transaction for multi-statement saves; here those join tx instead.
+type txDriver struct{ *entsql.Driver }
+
+func (d txDriver) Tx(context.Context) (dialect.Tx, error) { return dialect.NopTx(d.Driver), nil }
+
+func entClient(tx *sql.Tx) *ent.Client {
+	return ent.NewClient(ent.Driver(txDriver{entsql.NewDriver(dialect.SQLite, entsql.Conn{ExecQuerier: tx})}))
+}
+
+// Mutations include authorization, version checks, audit records and the
+// domain event log in one transaction. SQLite WAL allows concurrent readers; one writer
+// per process keeps PaperGo writes in order, and immediate transactions make
+// other writers (the runner) wait for the lock instead of failing.
 // Waiting for the writer slot honors ctx, so a timed-out request leaves the queue.
 func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
+	if s.transaction {
+		return fn(s)
+	}
 	select {
 	case s.writeMu <- struct{}{}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 	defer func() { <-s.writeMu }()
-	tx, err := s.Client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return err
 	}
-	err = fn(&Service{Client: tx.Client(), writeMu: s.writeMu, transaction: true})
+	recorded, err := s.inTx(ctx, tx, fn)
 	if err != nil {
 		_ = tx.Rollback()
 	} else {
@@ -48,6 +77,29 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 	if ent.IsConstraintError(err) {
 		return ErrConflict
 	}
+	if err == nil && recorded > 0 && s.onCommit != nil {
+		s.onCommit()
+	}
+	return err
+}
+
+// inTx runs fn on a service bound to tx and then records the events fn
+// raised in the domain event log, so they commit or roll back with its
+// writes. It returns how many events it recorded.
+func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
+	var pending []Event
+	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates}
+	if err := fn(t); err != nil {
+		return 0, err
+	}
+	return len(pending), recordEvents(ctx, tx, pending)
+}
+
+// WriteTx runs fn as one write inside tx, which the caller owns and commits.
+// The runner uses it so a workflow step's writes, their events and the step's
+// completion marker commit together; it wakes the dispatcher itself.
+func (s *Service) WriteTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) error {
+	_, err := s.inTx(ctx, tx, fn)
 	return err
 }
 
@@ -56,12 +108,12 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 	if s.transaction {
 		return fn(s)
 	}
-	tx, err := s.Client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: true})
 	if err != nil {
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: tx.Client(), writeMu: s.writeMu, transaction: true})
+	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates})
 	if err != nil {
 		return out, err
 	}
@@ -77,27 +129,90 @@ func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, e
 }
 
 type CreateResource struct {
-	ContentTypeID     string         `json:"content_type_id,omitempty" format:"uuid" doc:"Item content type in the collection. Omission selects the collection default."`
-	Kind              string         `json:"kind" enum:"list,library,folder,item" doc:"Workspaces are created at POST /v1/workspaces."`
-	Name              string         `json:"name" minLength:"1" maxLength:"255" doc:"Library folders and items are file names: unique among live siblings ignoring case, without / \\ or control characters."`
-	Tags              []string       `json:"tags" required:"false" maxItems:"50" uniqueItems:"true" doc:"Unique, nonempty, trimmed tags of at most 64 characters."`
-	Values            map[string]any `json:"values" required:"false" doc:"Item field values validated by the collection schema. Integers are exact; decimals may be numbers or canonical strings."`
-	PublishingEnabled bool           `json:"publishing_enabled" required:"false" doc:"Lists/libraries only. False publishes content changes immediately; true keeps a separate published revision."`
-	WebDAVEnabled     bool           `json:"webdav_enabled" required:"false" doc:"Libraries only. Serves the library's folders and files at /webdav/{id}/."`
+	DuplicatePolicy   *string        `json:"duplicate_policy,omitempty"`
+	ID                *string        `json:"id,omitempty"`
+	TemplateKey       string         `json:"template_key,omitempty"`
+	ContentTypeID     string         `json:"content_type_id,omitempty"`
+	ContentTypeIDs    []string       `json:"content_type_ids,omitempty"`
+	Kind              string         `json:"kind"`
+	Name              string         `json:"name"`
+	Description       string         `json:"description,omitempty"`
+	AllowFolders      *bool          `json:"allow_folders,omitempty"`
+	Tags              []string       `json:"tags"`
+	Values            map[string]any `json:"values"`
+	Versioning        *string        `json:"versioning,omitempty"`
+	MaxVersions       *int           `json:"max_versions,omitempty"`
+	PublishingEnabled bool           `json:"publishing_enabled"`
+	WebDAVEnabled     bool           `json:"webdav_enabled"`
 }
 
 func (s *Service) Create(ctx context.Context, subject, parentID string, in CreateResource) (out *ent.Resource, err error) {
-	err = s.write(ctx, func(t *Service) error {
-		var e error
-		out, e = t.create(ctx, subject, parentID, in, nil)
-		return e
-	})
+	out, _, err = s.CreateWithStatus(ctx, subject, parentID, in)
 	return
 }
 
 // create inserts a resource inside a write transaction. A library item may be
 // created with its first blob, so its first revision already carries content.
 func (s *Service) create(ctx context.Context, subject, parentID string, in CreateResource, content *BlobInput) (*ent.Resource, error) {
+	var template *CollectionTemplate
+	if in.TemplateKey != "" {
+		tpl, ok := s.collectionTemplates[in.TemplateKey]
+		if !ok {
+			return nil, invalid("unknown collection template")
+		}
+		if in.Kind != "" && in.Kind != "list" && in.Kind != "library" {
+			return nil, invalid("template_key belongs to collections")
+		}
+		if len(in.ContentTypeIDs) > 0 {
+			return nil, invalid("template_key and content_type_ids are mutually exclusive")
+		}
+		template = &tpl
+		in.Kind, in.AllowFolders = tpl.Kind, &tpl.AllowFolders
+		if in.Versioning == nil {
+			in.Versioning = &tpl.Versioning
+		}
+		if in.MaxVersions == nil {
+			in.MaxVersions = &tpl.MaxVersions
+		}
+		in.PublishingEnabled, in.WebDAVEnabled = tpl.PublishingEnabled, tpl.WebDAVEnabled
+		if in.DuplicatePolicy == nil && tpl.DuplicatePolicy != "" {
+			in.DuplicatePolicy = &tpl.DuplicatePolicy
+		}
+	}
+	if err := validateDuplicatePolicy(in.Kind, in.DuplicatePolicy); err != nil {
+		return nil, err
+	}
+	collection := in.Kind == "list" || in.Kind == "library"
+	if err := validateHistorySettings(collection, in.Versioning, in.MaxVersions); err != nil {
+		return nil, err
+	}
+	versioning := "off"
+	if in.Kind == "library" {
+		versioning = "major"
+	}
+	if in.Versioning != nil {
+		versioning = *in.Versioning
+	}
+	scope := "list.write"
+	if in.Kind == "workspace" {
+		scope = "workspace.create"
+	} else if collection {
+		scope = "list.read"
+	}
+	if err := s.RequireScope(ctx, subject, scope); err != nil {
+		return nil, err
+	}
+	if in.Kind == "workspace" || collection {
+		in.Name = strings.TrimSpace(in.Name)
+		if e := validateContainerMetadata(in.Name, in.Description); e != nil {
+			return nil, e
+		}
+	} else if in.Description != "" {
+		return nil, invalid("description belongs to workspaces, lists and libraries")
+	}
+	if in.AllowFolders != nil && !collection {
+		return nil, invalid("allow_folders belongs to lists and libraries")
+	}
 	if err := validateName(in.Name); err != nil {
 		return nil, err
 	}
@@ -122,10 +237,19 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if content != nil && in.Kind != "item" {
 		return nil, invalid("only items have content")
 	}
-	if in.ContentTypeID != "" && in.Kind != "item" {
-		return nil, invalid("content_type_id belongs to items")
+	if in.ContentTypeID != "" && in.Kind != "item" && in.Kind != "folder" {
+		return nil, invalid("content_type_id belongs to items and folders")
+	}
+	if len(in.ContentTypeIDs) > 0 && !collection {
+		return nil, invalid("content_type_ids belongs to collections")
+	}
+	if len(in.ContentTypeIDs) > 32 {
+		return nil, invalid("at most 32 content types per collection")
 	}
 	id := uuid.NewString()
+	if in.ID != nil {
+		id = *in.ID
+	}
 	workspaceID := id
 	var parent *ent.Resource
 	var containerID *string
@@ -140,6 +264,11 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		switch string(parent.Kind) {
 		case "workspace":
 			valid = in.Kind == "list" || in.Kind == "library"
+			if valid {
+				if _, e = s.authorize(ctx, subject, parentID, "manage"); e != nil {
+					return nil, e
+				}
+			}
 		case "list", "library":
 			valid = in.Kind == "folder" || in.Kind == "item"
 			v := parent.ID
@@ -159,16 +288,25 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, invalid("maximum hierarchy depth reached")
 		}
 	}
+	if in.Kind == "folder" && containerID != nil {
+		c, err := s.Client.Resource.Get(ctx, *containerID)
+		if err != nil {
+			return nil, err
+		}
+		if !c.AllowFolders {
+			return nil, invalid("this collection does not allow new folders")
+		}
+	}
 	key, e := s.fileNameKey(ctx, resource.Kind(in.Kind), containerID, in.Name)
 	if e != nil {
 		return nil, e
 	}
 	var typeID *string
-	if in.Kind == "item" {
+	if in.Kind == "item" || in.Kind == "folder" {
 		if containerID == nil {
 			return nil, invalid("item must belong to a list or library")
 		}
-		defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(*containerID)).All(ctx)
+		defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(*containerID)).All(ctx)
 		if e != nil {
 			return nil, e
 		}
@@ -177,14 +315,33 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, e
 		}
 		typeID = &typ.ID
-		if e = normalizeValues(selectDefinitions(defs, typ.FieldKeys), in.Values); e != nil {
+		selected, _ := resourceDefinitions(resource.Kind(in.Kind), selectTypeDefinitions(defs, typ), nil)
+		if e = normalizeRevisionValues(selected, in.Values, nil, in.Kind == "item"); e != nil {
 			return nil, e
 		}
 	} else if len(in.Values) > 0 {
-		return nil, invalid("custom values are supported on items only")
+		return nil, invalid("custom values are supported on items and folders only")
 	}
 	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetTags(in.Tags).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
+	if template != nil {
+		if e = s.RequireScope(ctx, subject, "contentType.read"); e != nil {
+			return nil, e
+		}
+		in.ContentTypeIDs, e = s.provisionCollectionTypes(ctx, subject, *template)
+		if e != nil {
+			return nil, e
+		}
+		builder.SetTemplateKeys([]string{template.Key})
+	}
 	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
+	builder.SetVersioning(resource.Versioning(versioning)).SetNillableMaxVersions(in.MaxVersions)
+	if in.DuplicatePolicy != nil {
+		builder.SetDuplicatePolicy(resource.DuplicatePolicy(*in.DuplicatePolicy))
+	}
+	builder.SetDescription(in.Description)
+	if in.AllowFolders != nil {
+		builder.SetAllowFolders(*in.AllowFolders)
+	}
 	builder.SetNillableContentTypeID(typeID)
 	if parent != nil {
 		builder.SetParentID(parent.ID)
@@ -196,24 +353,48 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		return nil, e
 	}
 	if parent == nil {
-		_, e = s.Client.Grant.Create().SetResourceID(out.ID).SetSubject(subject).SetAction(grant.ActionManage).SetEffect(grant.EffectAllow).Save(ctx)
+		_, e = s.Client.Grant.Create().SetResourceID(out.ID).SetPrincipalType(grant.PrincipalTypeUser).SetPrincipalID(subject).SetAction(grant.ActionManage).SetEffect(grant.EffectAllow).Save(ctx)
 		if e != nil {
 			return nil, e
 		}
 	}
 	if out.Kind == resource.KindList || out.Kind == resource.KindLibrary {
-		if _, e = s.Client.ContentType.Create().SetContainerID(out.ID).SetKey("item").SetName("Item").SetIsDefault(true).Save(ctx); e != nil {
+		ids := in.ContentTypeIDs
+		if len(ids) == 0 {
+			typ, e := s.Client.ContentType.Create().SetKey("item").SetName("Item").Save(ctx)
+			if e != nil {
+				return nil, e
+			}
+			ids = []string{typ.ID}
+		} else if e = s.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
 		}
-		if e = s.recordSchema(ctx, subject, out); e != nil {
+		for i, id := range ids {
+			if _, e = s.Client.ContentType.Get(ctx, id); ent.IsNotFound(e) {
+				return nil, ErrNotFound
+			} else if e != nil {
+				return nil, e
+			}
+			if e = s.Client.CollectionType.Create().SetContainerID(out.ID).SetContentTypeID(id).SetIsDefault(i == 0).Exec(ctx); e != nil {
+				return nil, e
+			}
+		}
+		if e = s.refreshCollections(ctx, subject, []*ent.Resource{out}); e != nil {
 			return nil, e
 		}
 	}
+	if template != nil {
+		for _, view := range template.Views {
+			if _, e = s.CreateView(ctx, subject, out.ID, view); e != nil {
+				return nil, e
+			}
+		}
+	}
 	details := map[string]any{"kind": in.Kind}
-	if out.Kind == resource.KindItem {
+	if contentKind(out.Kind) {
 		var blobID *string
 		if content != nil {
-			b, e := s.createBlob(ctx, out.ID, *content)
+			b, e := s.createBlob(ctx, subject, out.ID, *content, true)
 			if e != nil {
 				return nil, e
 			}
@@ -228,7 +409,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if e != nil {
 		return nil, e
 	}
-	if out.Kind == resource.KindItem {
+	if contentKind(out.Kind) {
 		if e = s.overlayHead(ctx, out); e != nil {
 			return nil, e
 		}
@@ -252,13 +433,19 @@ func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
 }
 
 type UpdateResource struct {
-	Name              *string         `json:"name,omitempty" minLength:"1" maxLength:"255"`
-	Tags              *[]string       `json:"tags,omitempty" maxItems:"50" uniqueItems:"true" doc:"Replaces all tags."`
-	Values            *map[string]any `json:"values,omitempty" doc:"Replaces the whole custom-value object."`
-	PublishingEnabled *bool           `json:"publishing_enabled,omitempty" doc:"Lists/libraries only. Changing policy requires manage access; disabling publishes all current heads atomically."`
-	WebDAVEnabled     *bool           `json:"webdav_enabled,omitempty" doc:"Libraries only; changing it requires manage access."`
+	DuplicatePolicy   *string         `json:"duplicate_policy,omitempty"`
+	Name              *string         `json:"name,omitempty"`
+	Description       *string         `json:"description,omitempty"`
+	AllowFolders      *bool           `json:"allow_folders,omitempty"`
+	Tags              *[]string       `json:"tags,omitempty"`
+	Values            *map[string]any `json:"values,omitempty"`
+	ContentTypeID     *string         `json:"content_type_id,omitempty"`
+	Versioning        *string         `json:"versioning,omitempty"`
+	MaxVersions       *int            `json:"max_versions,omitempty"`
+	PublishingEnabled *bool           `json:"publishing_enabled,omitempty"`
+	WebDAVEnabled     *bool           `json:"webdav_enabled,omitempty"`
 	// ParentID moves a folder or item to another folder of the same collection.
-	ParentID *string `json:"parent_id,omitempty" format:"uuid" doc:"Moves a folder or item below another folder of the same list or library, or to its top level. Requires write access to the new parent. A move alone creates no content revision; inheriting resources take the new parent's permission scope."`
+	ParentID *string `json:"parent_id,omitempty"`
 }
 
 func (s *Service) Update(ctx context.Context, subject, id string, version int, in UpdateResource) (out *ent.Resource, err error) {
@@ -270,8 +457,8 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 	return
 }
 func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*ent.Resource, error) {
-	content := in.Name != nil || in.Tags != nil || in.Values != nil
-	if !content && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.ParentID == nil {
+	content := in.Name != nil || in.Description != nil || in.Tags != nil || in.Values != nil || in.ContentTypeID != nil
+	if !content && in.DuplicatePolicy == nil && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
 		return nil, invalid("at least one change is required")
 	}
 	if in.Name != nil {
@@ -288,8 +475,36 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	if e != nil {
 		return nil, e
 	}
+	if err := validateDuplicatePolicy(string(r.Kind), in.DuplicatePolicy); err != nil {
+		return nil, err
+	}
+	collection := r.Kind == resource.KindList || r.Kind == resource.KindLibrary
+	if err := validateHistorySettings(collection, in.Versioning, in.MaxVersions); err != nil {
+		return nil, err
+	}
+	if r.Kind == resource.KindWorkspace || collection {
+		if _, e = s.authorize(ctx, subject, id, "manage"); e != nil {
+			return nil, e
+		}
+		name, description := r.Name, r.Description
+		if in.Name != nil {
+			name = strings.TrimSpace(*in.Name)
+			in.Name = &name
+		}
+		if in.Description != nil {
+			description = *in.Description
+		}
+		if e = validateContainerMetadata(name, description); e != nil {
+			return nil, e
+		}
+	} else if in.Description != nil {
+		return nil, invalid("description belongs to workspaces, lists and libraries")
+	}
+	if in.AllowFolders != nil && !collection {
+		return nil, invalid("allow_folders belongs to lists and libraries")
+	}
 	if r.Version != version {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	if in.PublishingEnabled != nil || in.WebDAVEnabled != nil {
 		if in.PublishingEnabled != nil && r.Kind != resource.KindList && r.Kind != resource.KindLibrary {
@@ -302,17 +517,26 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 			return nil, e
 		}
 	}
-	if r.Kind == resource.KindItem {
+	if contentKind(r.Kind) {
 		if e = s.overlayHead(ctx, r); e != nil {
 			return nil, e
 		}
 	}
-	if in.Values != nil && (r.Kind != resource.KindItem || r.ContainerID == nil) {
-		return nil, invalid("only items support custom values")
+	if in.Values != nil && (!contentKind(r.Kind) || r.ContainerID == nil) {
+		return nil, invalid("only items and folders support custom values")
+	}
+	if in.ContentTypeID != nil && (!contentKind(r.Kind) || *in.ContentTypeID == "") {
+		return nil, invalid("content_type_id requires an attached content type")
 	}
 	moved := in.ParentID != nil && (r.ParentID == nil || *in.ParentID != *r.ParentID)
 	b := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC())
 	b.SetUpdatedBy(subject)
+	if in.Description != nil {
+		b.SetDescription(*in.Description)
+	}
+	if in.AllowFolders != nil {
+		b.SetAllowFolders(*in.AllowFolders)
+	}
 	if moved {
 		if e = s.checkMove(ctx, subject, r, *in.ParentID); e != nil {
 			return nil, e
@@ -327,7 +551,29 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		b.SetName(*in.Name).SetNillableNameKey(key)
 	}
 	// Item values are validated and normalized once, by recordRevision below.
-	if r.Kind == resource.KindItem {
+	if contentKind(r.Kind) {
+		if in.ContentTypeID != nil && *in.ContentTypeID != *r.ContentTypeID {
+			c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
+			if err != nil {
+				return nil, err
+			}
+			schema, err := s.Client.SchemaRevision.Get(ctx, *c.SchemaHeadID)
+			if err != nil {
+				return nil, err
+			}
+			defs, _, err := typedDefinitions(schema.Definition, *in.ContentTypeID)
+			if err != nil {
+				return nil, err
+			}
+			known := definitionMap(defs)
+			for key := range r.Values {
+				if known[key] == nil {
+					delete(r.Values, key)
+				}
+			}
+			r.ContentTypeID = in.ContentTypeID
+			b.SetContentTypeID(*in.ContentTypeID)
+		}
 		if in.Name != nil {
 			r.Name = *in.Name
 		}
@@ -335,12 +581,55 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 			r.Tags = *in.Tags
 		}
 		if in.Values != nil {
-			r.Values = *in.Values
+			// Prune fields removed from the live schema before applying this patch.
+			c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
+			if err != nil {
+				return nil, err
+			}
+			schema, err := s.Client.SchemaRevision.Get(ctx, *c.SchemaHeadID)
+			if err != nil {
+				return nil, err
+			}
+			defs, _, err := typedDefinitions(schema.Definition, *r.ContentTypeID)
+			if err != nil {
+				return nil, err
+			}
+			known := definitionMap(defs)
+			for key := range *in.Values {
+				if known[key] == nil {
+					return nil, invalid("unknown field for this content type: " + key)
+				}
+				// An explicit lookup/person assignment validates every supplied target,
+				// even a retained ID. Omitted references survive unrelated edits.
+				if d := known[key]; (d.Type == fielddefinition.TypeLookup || d.Type == fielddefinition.TypePerson) && (*in.Values)[key] != nil {
+					assigned := map[string]any{key: (*in.Values)[key]}
+					if err = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, assigned, nil, true); err != nil {
+						return nil, err
+					}
+					(*in.Values)[key] = assigned[key]
+				}
+			}
+			current := map[string]any{}
+			for key, value := range r.Values {
+				if known[key] != nil {
+					current[key] = value
+				}
+			}
+			r.Values = patchValues(current, *in.Values)
 		}
 		b.SetValues(r.Values)
 	}
 	if in.Tags != nil {
 		b.SetTags(*in.Tags)
+	}
+	if in.Versioning != nil {
+		b.SetVersioning(resource.Versioning(*in.Versioning))
+	}
+	if in.DuplicatePolicy != nil {
+		b.SetDuplicatePolicy(resource.DuplicatePolicy(*in.DuplicatePolicy))
+	}
+	if in.MaxVersions != nil {
+		b.SetMaxVersions(*in.MaxVersions)
 	}
 	if in.PublishingEnabled != nil {
 		b.SetPublishingEnabled(*in.PublishingEnabled)
@@ -353,13 +642,13 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		return nil, e
 	}
 	if n != 1 {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	out, e := s.Client.Resource.Get(ctx, id)
 	if e != nil {
 		return nil, e
 	}
-	if out.Kind == resource.KindItem {
+	if contentKind(out.Kind) {
 		// A move alone changes location, not content, so it records no revision.
 		if content {
 			out.Values = r.Values
@@ -450,22 +739,39 @@ func (s *Service) scan(ctx context.Context, dest []any, query string, args ...an
 	return rows.Close()
 }
 
-// Delete turns a folder or item, with everything below it, into retained
-// tombstones. Their revisions, publications and audit history stay; derived
-// read projections and live relationships go, so they vanish from every read.
-func (s *Service) Delete(ctx context.Context, subject, id string, version int) error {
-	return s.write(ctx, func(t *Service) error { return t.delete(ctx, subject, id, version) })
+type DeleteOptions struct {
+	Recursive bool
 }
-func (s *Service) delete(ctx context.Context, subject, id string, version int) error {
+
+// Delete removes an item or empty folder, or a folder tree when Recursive is
+// explicit. Workspace and collection management deletes their full trees.
+// Revisions, publications and audit history remain for recycle-bin recovery;
+// derived read projections are removed and relationships are hidden until restore.
+func (s *Service) Delete(ctx context.Context, subject, id string, version int, options DeleteOptions) error {
+	return s.write(ctx, func(t *Service) error { return t.delete(ctx, subject, id, version, options.Recursive) })
+}
+func (s *Service) delete(ctx context.Context, subject, id string, version int, recursive bool) error {
 	r, err := s.authorize(ctx, subject, id, "write")
 	if err != nil {
 		return err
 	}
-	if r.Version != version {
-		return ErrConflict
+	collection := r.Kind == resource.KindList || r.Kind == resource.KindLibrary
+	if r.Kind == resource.KindWorkspace || collection {
+		if _, err = s.authorize(ctx, subject, id, "manage"); err != nil {
+			return err
+		}
 	}
-	if r.Kind != resource.KindFolder && r.Kind != resource.KindItem {
-		return invalid("only folders and items can be deleted")
+	if r.Version != version {
+		return ErrPreconditionFailed
+	}
+	if r.Kind == resource.KindFolder && !recursive {
+		populated, err := s.Client.Resource.Query().Where(resource.ParentIDEQ(id), resource.DeletedAtIsNil()).Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if populated {
+			return ErrFolderNotEmpty
+		}
 	}
 	subtree := `WITH RECURSIVE sub(id) AS (SELECT ? UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL) SELECT id FROM sub`
 	writable, args := permissionSQL("r.id", subject, "write")
@@ -473,8 +779,8 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int) e
 	if err = s.scan(ctx, []any{&total, &allowed}, `SELECT count(*), coalesce(sum(CASE WHEN `+writable+` THEN 1 ELSE 0 END),0) FROM resources r WHERE r.id IN (`+subtree+`)`, append(args, id)...); err != nil {
 		return err
 	}
-	// Removing a folder removes content the caller may not otherwise change.
-	if allowed != total {
+	// Explicit recursion authorizes every descendant before removing any content.
+	if !collection && allowed != total {
 		return ErrForbidden
 	}
 	for _, statement := range []string{
@@ -486,16 +792,34 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int) e
 			return err
 		}
 	}
-	unlinked, err := s.Client.ExecContext(ctx, `DELETE FROM relationships WHERE source_id IN (`+subtree+`) OR target_id IN (`+subtree+`)`, id, id)
-	if err != nil {
+	var links int
+	if err = s.scan(ctx, []any{&links}, `SELECT count(*) FROM relationships WHERE source_id IN (`+subtree+`) OR target_id IN (`+subtree+`)`, id, id); err != nil {
 		return err
 	}
-	links, err := unlinked.RowsAffected()
-	if err != nil {
-		return err
+	if s.pending != nil {
+		items, err := s.Client.Resource.Query().Where(resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil(), func(sel *entsql.Selector) {
+			sel.Where(entsql.ExprP(sel.C(resource.FieldID)+" IN ("+subtree+")", id))
+		}).Select(resource.FieldID, resource.FieldWorkspaceID, resource.FieldContainerID).All(ctx)
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			s.emit(ctx, EventItemDeleted, subject, item.WorkspaceID, item.ContainerID, item.ID, nil)
+		}
 	}
 	now := time.Now().UTC()
-	if _, err = s.Client.ExecContext(ctx, `UPDATE resources SET deleted_at=?, name_key=NULL, version=version+1, updated_at=? WHERE id IN (`+subtree+`)`, now, now, id); err != nil {
+	if r.Kind == resource.KindWorkspace {
+		// Schedules and event dispatch only select enabled, live workflows.
+		if _, err = s.Client.ExecContext(ctx, `UPDATE workflows SET enabled=0, deleted_at=?, updated_at=?, updated_by=?, version=version+1 WHERE workspace_id=? AND deleted_at IS NULL`, now, now, subject, id); err != nil {
+			return err
+		}
+	}
+	if collection {
+		if _, err = s.Client.ExecContext(ctx, `UPDATE workflows SET enabled=0, deleted_at=?, updated_at=?, updated_by=?, version=version+1 WHERE deleted_at IS NULL AND (collection_id=? OR id IN (SELECT workflow_id FROM workflow_triggers WHERE collection_id=?))`, now, now, subject, id, id); err != nil {
+			return err
+		}
+	}
+	if _, err = s.Client.ExecContext(ctx, `UPDATE resources SET deleted_at=?, deleted_by=?, name_key=NULL, version=version+1, updated_at=?, updated_by=? WHERE id IN (`+subtree+`)`, now, subject, now, subject, id); err != nil {
 		return err
 	}
 	return s.audit(ctx, subject, "resource.delete", r, map[string]any{"version": version + 1, "descendants": total - 1, "relationships": links})
@@ -526,20 +850,20 @@ func (s *Service) fileNameKey(ctx context.Context, kind resource.Kind, container
 func nameKey(name string) string { return strings.ToLower(name) }
 
 type CreateField struct {
-	ContentTypeID string             `json:"content_type_id,omitempty" format:"uuid" doc:"Content type that receives the field. Omission selects the collection default."`
+	ContentTypeID string             `json:"content_type_id,omitempty"`
 	Options       model.FieldOptions `json:"options,omitempty"`
-	Key           string             `json:"key" pattern:"^[a-z][a-z0-9_]{0,63}$" doc:"Immutable field key."`
-	Label         string             `json:"label" minLength:"1" maxLength:"255"`
-	Type          string             `json:"type" enum:"text,note,email,url,date,datetime,choice,integer,decimal,number,boolean,lookup,term" doc:"Immutable field type."`
-	Required      bool               `json:"required" required:"false"`
-	Choices       []string           `json:"choices" required:"false" doc:"Allowed values of choice fields."`
-	Indexed       bool               `json:"indexed" required:"false" doc:"Opt-in typed query projection. Changes rebuild both surfaces atomically."`
-	Scale         int                `json:"scale" required:"false" minimum:"0" maximum:"9" doc:"Immutable decimal scale; zero for all other field types. Scaled units must fit signed 64 bits."`
+	Key           string             `json:"key"`
+	Label         string             `json:"label"`
+	Type          string             `json:"type"`
+	Required      bool               `json:"required"`
+	Choices       []string           `json:"choices"`
+	Indexed       bool               `json:"indexed"`
+	Scale         int                `json:"scale"`
 }
 
 func (s *Service) CreateField(ctx context.Context, subject, containerID string, in CreateField) (out *ent.FieldDefinition, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		c, e := t.authorize(ctx, subject, containerID, "manage")
+		c, e := t.contentTypeResource(ctx, subject, containerID, "manage")
 		if e != nil {
 			return e
 		}
@@ -547,7 +871,11 @@ func (s *Service) CreateField(ctx context.Context, subject, containerID string, 
 		if e != nil {
 			return e
 		}
-		if e = t.recordSchema(ctx, subject, c); e != nil {
+		collections, e := t.fieldCollections(ctx, out.ID)
+		if e != nil {
+			return e
+		}
+		if e = t.refreshCollections(ctx, subject, collections); e != nil {
 			return e
 		}
 		return t.audit(ctx, subject, "field.create", c, map[string]any{"key": in.Key})
@@ -576,15 +904,15 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 	if e := validateFieldDefinition(d); e != nil {
 		return nil, e
 	}
-	if e := s.validateReferenceScopes(ctx, subject, c.WorkspaceID, d); e != nil {
+	if e := s.validateReferenceScopes(ctx, subject, d); e != nil {
 		return nil, e
 	}
 	if len(d.Options.DefaultValue) > 0 {
-		if e := s.normalizeItemValues(ctx, subject, c.WorkspaceID, []*ent.FieldDefinition{d}, map[string]any{}, nil); e != nil {
+		if e := s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil, true); e != nil {
 			return nil, e
 		}
 	}
-	n, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID)).Count(ctx)
+	n, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID)).Count(ctx)
 	if e != nil {
 		return nil, e
 	}
@@ -600,11 +928,11 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 			return nil, invalid("required fields on populated collections need a default")
 		}
 	}
-	out, e := s.Client.FieldDefinition.Create().SetContainerID(c.ID).SetKey(d.Key).SetLabel(d.Label).SetType(d.Type).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetScale(d.Scale).SetOptions(d.Options).Save(ctx)
+	out, e := s.Client.FieldDefinition.Create().SetKey(d.Key).SetLabel(d.Label).SetType(d.Type).SetRequired(d.Required).SetChoices(d.Choices).SetIndexed(d.Indexed).SetScale(d.Scale).SetOptions(d.Options).Save(ctx)
 	if e != nil {
 		return nil, e
 	}
-	if e = s.Client.ContentType.UpdateOne(typ).SetFieldKeys(append(append([]string{}, typ.FieldKeys...), d.Key)).AddVersion(1).Exec(ctx); e != nil {
+	if e = s.Client.ContentType.UpdateOne(typ).SetFieldIds(append(append([]string{}, typ.FieldIds...), out.ID)).AddVersion(1).Exec(ctx); e != nil {
 		return nil, e
 	}
 	return out, nil
@@ -616,20 +944,21 @@ func (s *Service) Fields(ctx context.Context, subject, id string) ([]*ent.FieldD
 	if _, err := s.authorize(ctx, subject, id, "read"); err != nil {
 		return nil, err
 	}
-	return s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(id)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
+	return s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(id)).Order(ent.Asc(fielddefinition.FieldKey)).All(ctx)
 }
 
 type Permission struct {
-	Subject string `json:"subject" minLength:"1" maxLength:"255" doc:"OIDC subject of the principal."`
-	Action  string `json:"action" enum:"read,read_draft,write,publish,manage"`
-	Effect  string `json:"effect" required:"false" enum:"allow" doc:"Only allow grants exist; denies are rejected."`
+	PrincipalType string `json:"principal_type"`
+	PrincipalID   string `json:"principal_id"`
+	Action        string `json:"action"`
+	Effect        string `json:"effect"`
 }
 type Permissions struct {
-	CopyInherited   bool         `json:"copy_inherited,omitempty" doc:"Break inheritance and copy the effective inherited grants. Requires inherit=false."`
-	ScopeID         string       `json:"scope_id,omitempty" readOnly:"true" doc:"Nearest exclusive scope that supplies permissions."`
-	EffectiveGrants []Permission `json:"effective_grants,omitempty" readOnly:"true" doc:"Grants that apply, from this resource or its nearest exclusive ancestor."`
+	CopyInherited   bool         `json:"copy_inherited,omitempty"`
+	ScopeID         string       `json:"scope_id,omitempty"`
+	EffectiveGrants []Permission `json:"effective_grants,omitempty"`
 	Inherit         bool         `json:"inherit"`
-	Grants          []Permission `json:"grants" required:"false" maxItems:"200" doc:"Local grants; empty while inheriting."`
+	Grants          []Permission `json:"grants"`
 }
 
 func (s *Service) SetPermissions(ctx context.Context, subject, id string, version int, in Permissions) (out *ent.Resource, err error) {
@@ -641,8 +970,8 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 	}
 	seen := map[string]bool{}
 	for _, g := range in.Grants {
-		if strings.TrimSpace(g.Subject) == "" || len(g.Subject) > 255 {
-			return nil, invalid("invalid permission subject")
+		if e := identity.ValidateSubject(g.PrincipalID); e != nil {
+			return nil, invalid(e.Error())
 		}
 		if g.Action != "read" && g.Action != "read_draft" && g.Action != "write" && g.Action != "publish" && g.Action != "manage" {
 			return nil, invalid("invalid permission action")
@@ -650,7 +979,7 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 		if g.Effect != "" && g.Effect != "allow" {
 			return nil, invalid("only additive allow grants are supported")
 		}
-		key := g.Subject + "\x00" + g.Action
+		key := g.PrincipalType + "\x00" + g.PrincipalID + "\x00" + g.Action
 		if seen[key] {
 			return nil, invalid("duplicate permission")
 		}
@@ -662,10 +991,27 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 			return e
 		}
 		if r.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
-		if r.ParentID == nil && in.Inherit {
-			return invalid("workspace cannot inherit permissions")
+		if r.Kind == resource.KindWorkspace {
+			return invalid("workspace access is managed through members")
+		}
+		for _, g := range in.Grants {
+			switch g.PrincipalType {
+			case "user", "group":
+				if e = identity.ValidatePrincipal(ctx, t.tx, identity.Principal{Type: g.PrincipalType, ID: g.PrincipalID}); e != nil {
+					return invalid(e.Error())
+				}
+			case "workspace_visitor", "workspace_member", "workspace_owner":
+				if g.PrincipalID != r.WorkspaceID {
+					return invalid("workspace role principals must identify this resource's workspace")
+				}
+				if g.PrincipalType == "workspace_owner" && g.Action != "manage" {
+					return invalid("workspace owners retain manage access")
+				}
+			default:
+				return invalid("invalid permission principal_type")
+			}
 		}
 		if in.CopyInherited {
 			if !r.InheritPermissions {
@@ -677,10 +1023,10 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 			}
 			merged := map[string]bool{}
 			for _, g := range in.Grants {
-				merged[g.Subject+"\x00"+g.Action] = true
+				merged[g.PrincipalType+"\x00"+g.PrincipalID+"\x00"+g.Action] = true
 			}
 			for _, g := range copied {
-				key := g.Subject + "\x00" + g.Action
+				key := g.PrincipalType + "\x00" + g.PrincipalID + "\x00" + g.Action
 				if !merged[key] {
 					in.Grants = append(in.Grants, g)
 					merged[key] = true
@@ -698,10 +1044,10 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 			return e
 		}
 		if n != 1 {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		for _, g := range in.Grants {
-			if _, e = t.Client.Grant.Create().SetResourceID(id).SetSubject(g.Subject).SetAction(grant.Action(g.Action)).SetEffect(grant.EffectAllow).Save(ctx); e != nil {
+			if _, e = t.Client.Grant.Create().SetResourceID(id).SetPrincipalType(grant.PrincipalType(g.PrincipalType)).SetPrincipalID(g.PrincipalID).SetAction(grant.Action(g.Action)).SetEffect(grant.EffectAllow).Save(ctx); e != nil {
 				return e
 			}
 		}
@@ -712,7 +1058,7 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 		if _, e = t.authorize(ctx, subject, id, "manage"); e != nil {
 			return invalid("permission change would remove your manage access")
 		}
-		if out.Kind == resource.KindItem {
+		if contentKind(out.Kind) {
 			if e = t.overlayHead(ctx, out); e != nil {
 				return e
 			}
@@ -750,13 +1096,16 @@ func (s *Service) effectivePermissions(ctx context.Context, r *ent.Resource) (st
 		}
 		r = parent
 	}
-	rows, e := s.Client.Grant.Query().Where(grant.ResourceIDEQ(r.ID)).Order(ent.Asc(grant.FieldSubject, grant.FieldAction)).All(ctx)
+	if r.Kind == resource.KindWorkspace {
+		return r.ID, []Permission{{"workspace_visitor", r.ID, "read", "allow"}, {"workspace_member", r.ID, "write", "allow"}, {"workspace_owner", r.ID, "manage", "allow"}}, nil
+	}
+	rows, e := s.Client.Grant.Query().Where(grant.ResourceIDEQ(r.ID)).Order(ent.Asc(grant.FieldPrincipalType, grant.FieldPrincipalID, grant.FieldAction)).All(ctx)
 	if e != nil {
 		return "", nil, e
 	}
 	permissions := []Permission{}
 	for _, g := range rows {
-		permissions = append(permissions, Permission{g.Subject, string(g.Action), string(g.Effect)})
+		permissions = append(permissions, Permission{string(g.PrincipalType), g.PrincipalID, string(g.Action), string(g.Effect)})
 	}
 	return r.ID, permissions, nil
 }

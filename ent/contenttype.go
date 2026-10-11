@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"papergo/ent/contenttype"
-	"papergo/ent/resource"
 	"papergo/internal/model"
 	"strings"
 	"time"
@@ -22,46 +21,21 @@ type ContentType struct {
 	ID string `json:"id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
-	// ContainerID holds the value of the "container_id" field.
-	ContainerID string `json:"container_id,omitempty"`
 	// Key holds the value of the "key" field.
 	Key string `json:"key,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
-	// FieldKeys holds the value of the "field_keys" field.
-	FieldKeys []string `json:"field_keys,omitempty"`
+	// TemplateKey holds the value of the "template_key" field.
+	TemplateKey *string `json:"template_key,omitempty"`
+	// FieldIds holds the value of the "field_ids" field.
+	FieldIds []string `json:"field_ids,omitempty"`
 	// Rules holds the value of the "rules" field.
 	Rules []model.ValidationRule `json:"rules,omitempty"`
-	// IsDefault holds the value of the "is_default" field.
-	IsDefault bool `json:"is_default,omitempty"`
 	// Version holds the value of the "version" field.
 	Version int `json:"version,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the ContentTypeQuery when eager-loading is set.
-	Edges        ContentTypeEdges `json:"edges"`
+	UpdatedAt    time.Time `json:"updated_at,omitempty"`
 	selectValues sql.SelectValues
-}
-
-// ContentTypeEdges holds the relations/edges for other nodes in the graph.
-type ContentTypeEdges struct {
-	// Container holds the value of the container edge.
-	Container *Resource `json:"container,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
-}
-
-// ContainerOrErr returns the Container value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e ContentTypeEdges) ContainerOrErr() (*Resource, error) {
-	if e.Container != nil {
-		return e.Container, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: resource.Label}
-	}
-	return nil, &NotLoadedError{edge: "container"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -69,13 +43,11 @@ func (*ContentType) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case contenttype.FieldFieldKeys, contenttype.FieldRules:
+		case contenttype.FieldFieldIds, contenttype.FieldRules:
 			values[i] = new([]byte)
-		case contenttype.FieldIsDefault:
-			values[i] = new(sql.NullBool)
 		case contenttype.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case contenttype.FieldID, contenttype.FieldContainerID, contenttype.FieldKey, contenttype.FieldName:
+		case contenttype.FieldID, contenttype.FieldKey, contenttype.FieldName, contenttype.FieldTemplateKey:
 			values[i] = new(sql.NullString)
 		case contenttype.FieldCreatedAt, contenttype.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -106,12 +78,6 @@ func (_m *ContentType) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
 			}
-		case contenttype.FieldContainerID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field container_id", values[i])
-			} else if value.Valid {
-				_m.ContainerID = value.String
-			}
 		case contenttype.FieldKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field key", values[i])
@@ -124,12 +90,19 @@ func (_m *ContentType) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Name = value.String
 			}
-		case contenttype.FieldFieldKeys:
+		case contenttype.FieldTemplateKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field template_key", values[i])
+			} else if value.Valid {
+				_m.TemplateKey = new(string)
+				*_m.TemplateKey = value.String
+			}
+		case contenttype.FieldFieldIds:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field field_keys", values[i])
+				return fmt.Errorf("unexpected type %T for field field_ids", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.FieldKeys); err != nil {
-					return fmt.Errorf("unmarshal field field_keys: %w", err)
+				if err := json.Unmarshal(*value, &_m.FieldIds); err != nil {
+					return fmt.Errorf("unmarshal field field_ids: %w", err)
 				}
 			}
 		case contenttype.FieldRules:
@@ -139,12 +112,6 @@ func (_m *ContentType) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.Rules); err != nil {
 					return fmt.Errorf("unmarshal field rules: %w", err)
 				}
-			}
-		case contenttype.FieldIsDefault:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field is_default", values[i])
-			} else if value.Valid {
-				_m.IsDefault = value.Bool
 			}
 		case contenttype.FieldVersion:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -169,11 +136,6 @@ func (_m *ContentType) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *ContentType) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
-}
-
-// QueryContainer queries the "container" edge of the ContentType entity.
-func (_m *ContentType) QueryContainer() *ResourceQuery {
-	return NewContentTypeClient(_m.config).QueryContainer(_m)
 }
 
 // Update returns a builder for updating this ContentType.
@@ -202,23 +164,22 @@ func (_m *ContentType) String() string {
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("container_id=")
-	builder.WriteString(_m.ContainerID)
-	builder.WriteString(", ")
 	builder.WriteString("key=")
 	builder.WriteString(_m.Key)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	builder.WriteString("field_keys=")
-	builder.WriteString(fmt.Sprintf("%v", _m.FieldKeys))
+	if v := _m.TemplateKey; v != nil {
+		builder.WriteString("template_key=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("field_ids=")
+	builder.WriteString(fmt.Sprintf("%v", _m.FieldIds))
 	builder.WriteString(", ")
 	builder.WriteString("rules=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Rules))
-	builder.WriteString(", ")
-	builder.WriteString("is_default=")
-	builder.WriteString(fmt.Sprintf("%v", _m.IsDefault))
 	builder.WriteString(", ")
 	builder.WriteString("version=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Version))

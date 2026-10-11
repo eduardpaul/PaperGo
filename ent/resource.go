@@ -34,6 +34,10 @@ type Resource struct {
 	Kind resource.Kind `json:"kind,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
+	// Description holds the value of the "description" field.
+	Description string `json:"description,omitempty"`
+	// AllowFolders holds the value of the "allow_folders" field.
+	AllowFolders bool `json:"allow_folders,omitempty"`
 	// Tags holds the value of the "tags" field.
 	Tags []string `json:"tags,omitempty"`
 	// TemplateKeys holds the value of the "template_keys" field.
@@ -54,8 +58,14 @@ type Resource struct {
 	NextRevisionNumber int `json:"next_revision_number,omitempty"`
 	// PublishingEnabled holds the value of the "publishing_enabled" field.
 	PublishingEnabled bool `json:"publishing_enabled,omitempty"`
+	// Versioning holds the value of the "versioning" field.
+	Versioning resource.Versioning `json:"versioning,omitempty"`
+	// MaxVersions holds the value of the "max_versions" field.
+	MaxVersions int `json:"max_versions,omitempty"`
 	// WebdavEnabled holds the value of the "webdav_enabled" field.
 	WebdavEnabled bool `json:"webdav_enabled,omitempty"`
+	// DuplicatePolicy holds the value of the "duplicate_policy" field.
+	DuplicatePolicy resource.DuplicatePolicy `json:"duplicate_policy,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// CreatedBy holds the value of the "created_by" field.
@@ -68,6 +78,8 @@ type Resource struct {
 	NameKey *string `json:"-"`
 	// DeletedAt holds the value of the "deleted_at" field.
 	DeletedAt *time.Time `json:"-"`
+	// DeletedBy holds the value of the "deleted_by" field.
+	DeletedBy *string `json:"-"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ResourceQuery when eager-loading is set.
 	Edges        ResourceEdges `json:"edges"`
@@ -84,8 +96,6 @@ type ResourceEdges struct {
 	ContainedItems []*Resource `json:"contained_items,omitempty"`
 	// Container holds the value of the container edge.
 	Container *Resource `json:"container,omitempty"`
-	// Definitions holds the value of the definitions edge.
-	Definitions []*FieldDefinition `json:"definitions,omitempty"`
 	// Grants holds the value of the grants edge.
 	Grants []*Grant `json:"grants,omitempty"`
 	// Outgoing holds the value of the outgoing edge.
@@ -108,7 +118,7 @@ type ResourceEdges struct {
 	SchemaHead *SchemaRevision `json:"schema_head,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [15]bool
+	loadedTypes [14]bool
 }
 
 // ChildrenOrErr returns the Children value or an error if the edge
@@ -151,19 +161,10 @@ func (e ResourceEdges) ContainerOrErr() (*Resource, error) {
 	return nil, &NotLoadedError{edge: "container"}
 }
 
-// DefinitionsOrErr returns the Definitions value or an error if the edge
-// was not loaded in eager-loading.
-func (e ResourceEdges) DefinitionsOrErr() ([]*FieldDefinition, error) {
-	if e.loadedTypes[4] {
-		return e.Definitions, nil
-	}
-	return nil, &NotLoadedError{edge: "definitions"}
-}
-
 // GrantsOrErr returns the Grants value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) GrantsOrErr() ([]*Grant, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[4] {
 		return e.Grants, nil
 	}
 	return nil, &NotLoadedError{edge: "grants"}
@@ -172,7 +173,7 @@ func (e ResourceEdges) GrantsOrErr() ([]*Grant, error) {
 // OutgoingOrErr returns the Outgoing value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) OutgoingOrErr() ([]*Relationship, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[5] {
 		return e.Outgoing, nil
 	}
 	return nil, &NotLoadedError{edge: "outgoing"}
@@ -181,7 +182,7 @@ func (e ResourceEdges) OutgoingOrErr() ([]*Relationship, error) {
 // IncomingOrErr returns the Incoming value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) IncomingOrErr() ([]*Relationship, error) {
-	if e.loadedTypes[7] {
+	if e.loadedTypes[6] {
 		return e.Incoming, nil
 	}
 	return nil, &NotLoadedError{edge: "incoming"}
@@ -190,7 +191,7 @@ func (e ResourceEdges) IncomingOrErr() ([]*Relationship, error) {
 // PublicationsOrErr returns the Publications value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) PublicationsOrErr() ([]*Publication, error) {
-	if e.loadedTypes[8] {
+	if e.loadedTypes[7] {
 		return e.Publications, nil
 	}
 	return nil, &NotLoadedError{edge: "publications"}
@@ -199,7 +200,7 @@ func (e ResourceEdges) PublicationsOrErr() ([]*Publication, error) {
 // BlobsOrErr returns the Blobs value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) BlobsOrErr() ([]*Blob, error) {
-	if e.loadedTypes[9] {
+	if e.loadedTypes[8] {
 		return e.Blobs, nil
 	}
 	return nil, &NotLoadedError{edge: "blobs"}
@@ -208,7 +209,7 @@ func (e ResourceEdges) BlobsOrErr() ([]*Blob, error) {
 // RevisionsOrErr returns the Revisions value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) RevisionsOrErr() ([]*ItemRevision, error) {
-	if e.loadedTypes[10] {
+	if e.loadedTypes[9] {
 		return e.Revisions, nil
 	}
 	return nil, &NotLoadedError{edge: "revisions"}
@@ -217,7 +218,7 @@ func (e ResourceEdges) RevisionsOrErr() ([]*ItemRevision, error) {
 // SchemaRevisionsOrErr returns the SchemaRevisions value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) SchemaRevisionsOrErr() ([]*SchemaRevision, error) {
-	if e.loadedTypes[11] {
+	if e.loadedTypes[10] {
 		return e.SchemaRevisions, nil
 	}
 	return nil, &NotLoadedError{edge: "schema_revisions"}
@@ -228,7 +229,7 @@ func (e ResourceEdges) SchemaRevisionsOrErr() ([]*SchemaRevision, error) {
 func (e ResourceEdges) HeadRevisionOrErr() (*ItemRevision, error) {
 	if e.HeadRevision != nil {
 		return e.HeadRevision, nil
-	} else if e.loadedTypes[12] {
+	} else if e.loadedTypes[11] {
 		return nil, &NotFoundError{label: itemrevision.Label}
 	}
 	return nil, &NotLoadedError{edge: "head_revision"}
@@ -239,7 +240,7 @@ func (e ResourceEdges) HeadRevisionOrErr() (*ItemRevision, error) {
 func (e ResourceEdges) PublishedRevisionOrErr() (*ItemRevision, error) {
 	if e.PublishedRevision != nil {
 		return e.PublishedRevision, nil
-	} else if e.loadedTypes[13] {
+	} else if e.loadedTypes[12] {
 		return nil, &NotFoundError{label: itemrevision.Label}
 	}
 	return nil, &NotLoadedError{edge: "published_revision"}
@@ -250,7 +251,7 @@ func (e ResourceEdges) PublishedRevisionOrErr() (*ItemRevision, error) {
 func (e ResourceEdges) SchemaHeadOrErr() (*SchemaRevision, error) {
 	if e.SchemaHead != nil {
 		return e.SchemaHead, nil
-	} else if e.loadedTypes[14] {
+	} else if e.loadedTypes[13] {
 		return nil, &NotFoundError{label: schemarevision.Label}
 	}
 	return nil, &NotLoadedError{edge: "schema_head"}
@@ -263,11 +264,11 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case resource.FieldTags, resource.FieldTemplateKeys, resource.FieldValues:
 			values[i] = new([]byte)
-		case resource.FieldInheritPermissions, resource.FieldPublishingEnabled, resource.FieldWebdavEnabled:
+		case resource.FieldAllowFolders, resource.FieldInheritPermissions, resource.FieldPublishingEnabled, resource.FieldWebdavEnabled:
 			values[i] = new(sql.NullBool)
-		case resource.FieldVersion, resource.FieldNextRevisionNumber:
+		case resource.FieldVersion, resource.FieldNextRevisionNumber, resource.FieldMaxVersions:
 			values[i] = new(sql.NullInt64)
-		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey:
+		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldDuplicatePolicy, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey, resource.FieldDeletedBy:
 			values[i] = new(sql.NullString)
 		case resource.FieldCreatedAt, resource.FieldUpdatedAt, resource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -336,6 +337,18 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
 				_m.Name = value.String
+			}
+		case resource.FieldDescription:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field description", values[i])
+			} else if value.Valid {
+				_m.Description = value.String
+			}
+		case resource.FieldAllowFolders:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field allow_folders", values[i])
+			} else if value.Valid {
+				_m.AllowFolders = value.Bool
 			}
 		case resource.FieldTags:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -406,11 +419,29 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.PublishingEnabled = value.Bool
 			}
+		case resource.FieldVersioning:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field versioning", values[i])
+			} else if value.Valid {
+				_m.Versioning = resource.Versioning(value.String)
+			}
+		case resource.FieldMaxVersions:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field max_versions", values[i])
+			} else if value.Valid {
+				_m.MaxVersions = int(value.Int64)
+			}
 		case resource.FieldWebdavEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field webdav_enabled", values[i])
 			} else if value.Valid {
 				_m.WebdavEnabled = value.Bool
+			}
+		case resource.FieldDuplicatePolicy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field duplicate_policy", values[i])
+			} else if value.Valid {
+				_m.DuplicatePolicy = resource.DuplicatePolicy(value.String)
 			}
 		case resource.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -451,6 +482,13 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 				_m.DeletedAt = new(time.Time)
 				*_m.DeletedAt = value.Time
 			}
+		case resource.FieldDeletedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field deleted_by", values[i])
+			} else if value.Valid {
+				_m.DeletedBy = new(string)
+				*_m.DeletedBy = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -482,11 +520,6 @@ func (_m *Resource) QueryContainedItems() *ResourceQuery {
 // QueryContainer queries the "container" edge of the Resource entity.
 func (_m *Resource) QueryContainer() *ResourceQuery {
 	return NewResourceClient(_m.config).QueryContainer(_m)
-}
-
-// QueryDefinitions queries the "definitions" edge of the Resource entity.
-func (_m *Resource) QueryDefinitions() *FieldDefinitionQuery {
-	return NewResourceClient(_m.config).QueryDefinitions(_m)
 }
 
 // QueryGrants queries the "grants" edge of the Resource entity.
@@ -589,6 +622,12 @@ func (_m *Resource) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
+	builder.WriteString("description=")
+	builder.WriteString(_m.Description)
+	builder.WriteString(", ")
+	builder.WriteString("allow_folders=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllowFolders))
+	builder.WriteString(", ")
 	builder.WriteString("tags=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Tags))
 	builder.WriteString(", ")
@@ -625,8 +664,17 @@ func (_m *Resource) String() string {
 	builder.WriteString("publishing_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.PublishingEnabled))
 	builder.WriteString(", ")
+	builder.WriteString("versioning=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Versioning))
+	builder.WriteString(", ")
+	builder.WriteString("max_versions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.MaxVersions))
+	builder.WriteString(", ")
 	builder.WriteString("webdav_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WebdavEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("duplicate_policy=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DuplicatePolicy))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
@@ -650,6 +698,11 @@ func (_m *Resource) String() string {
 	if v := _m.DeletedAt; v != nil {
 		builder.WriteString("deleted_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.DeletedBy; v != nil {
+		builder.WriteString("deleted_by=")
+		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')
 	return builder.String()

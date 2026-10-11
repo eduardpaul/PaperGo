@@ -29,6 +29,10 @@ const (
 	FieldKind = "kind"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// FieldDescription holds the string denoting the description field in the database.
+	FieldDescription = "description"
+	// FieldAllowFolders holds the string denoting the allow_folders field in the database.
+	FieldAllowFolders = "allow_folders"
 	// FieldTags holds the string denoting the tags field in the database.
 	FieldTags = "tags"
 	// FieldTemplateKeys holds the string denoting the template_keys field in the database.
@@ -49,8 +53,14 @@ const (
 	FieldNextRevisionNumber = "next_revision_number"
 	// FieldPublishingEnabled holds the string denoting the publishing_enabled field in the database.
 	FieldPublishingEnabled = "publishing_enabled"
+	// FieldVersioning holds the string denoting the versioning field in the database.
+	FieldVersioning = "versioning"
+	// FieldMaxVersions holds the string denoting the max_versions field in the database.
+	FieldMaxVersions = "max_versions"
 	// FieldWebdavEnabled holds the string denoting the webdav_enabled field in the database.
 	FieldWebdavEnabled = "webdav_enabled"
+	// FieldDuplicatePolicy holds the string denoting the duplicate_policy field in the database.
+	FieldDuplicatePolicy = "duplicate_policy"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
 	// FieldCreatedBy holds the string denoting the created_by field in the database.
@@ -63,6 +73,8 @@ const (
 	FieldNameKey = "name_key"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// FieldDeletedBy holds the string denoting the deleted_by field in the database.
+	FieldDeletedBy = "deleted_by"
 	// EdgeChildren holds the string denoting the children edge name in mutations.
 	EdgeChildren = "children"
 	// EdgeParent holds the string denoting the parent edge name in mutations.
@@ -71,8 +83,6 @@ const (
 	EdgeContainedItems = "contained_items"
 	// EdgeContainer holds the string denoting the container edge name in mutations.
 	EdgeContainer = "container"
-	// EdgeDefinitions holds the string denoting the definitions edge name in mutations.
-	EdgeDefinitions = "definitions"
 	// EdgeGrants holds the string denoting the grants edge name in mutations.
 	EdgeGrants = "grants"
 	// EdgeOutgoing holds the string denoting the outgoing edge name in mutations.
@@ -111,13 +121,6 @@ const (
 	ContainerTable = "resources"
 	// ContainerColumn is the table column denoting the container relation/edge.
 	ContainerColumn = "container_id"
-	// DefinitionsTable is the table that holds the definitions relation/edge.
-	DefinitionsTable = "field_definitions"
-	// DefinitionsInverseTable is the table name for the FieldDefinition entity.
-	// It exists in this package in order to avoid circular dependency with the "fielddefinition" package.
-	DefinitionsInverseTable = "field_definitions"
-	// DefinitionsColumn is the table column denoting the definitions relation/edge.
-	DefinitionsColumn = "container_id"
 	// GrantsTable is the table that holds the grants relation/edge.
 	GrantsTable = "grants"
 	// GrantsInverseTable is the table name for the Grant entity.
@@ -200,6 +203,8 @@ var Columns = []string{
 	FieldContentTypeID,
 	FieldKind,
 	FieldName,
+	FieldDescription,
+	FieldAllowFolders,
 	FieldTags,
 	FieldTemplateKeys,
 	FieldValues,
@@ -210,13 +215,17 @@ var Columns = []string{
 	FieldSchemaHeadID,
 	FieldNextRevisionNumber,
 	FieldPublishingEnabled,
+	FieldVersioning,
+	FieldMaxVersions,
 	FieldWebdavEnabled,
+	FieldDuplicatePolicy,
 	FieldUpdatedAt,
 	FieldCreatedBy,
 	FieldUpdatedBy,
 	FieldScopeID,
 	FieldNameKey,
 	FieldDeletedAt,
+	FieldDeletedBy,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -242,6 +251,12 @@ var (
 	ContentTypeIDValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultDescription holds the default value on creation for the "description" field.
+	DefaultDescription string
+	// DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
+	DescriptionValidator func(string) error
+	// DefaultAllowFolders holds the default value on creation for the "allow_folders" field.
+	DefaultAllowFolders bool
 	// DefaultTags holds the default value on creation for the "tags" field.
 	DefaultTags []string
 	// DefaultTemplateKeys holds the default value on creation for the "template_keys" field.
@@ -260,6 +275,10 @@ var (
 	NextRevisionNumberValidator func(int) error
 	// DefaultPublishingEnabled holds the default value on creation for the "publishing_enabled" field.
 	DefaultPublishingEnabled bool
+	// DefaultMaxVersions holds the default value on creation for the "max_versions" field.
+	DefaultMaxVersions int
+	// MaxVersionsValidator is a validator for the "max_versions" field. It is called by the builders before save.
+	MaxVersionsValidator func(int) error
 	// DefaultWebdavEnabled holds the default value on creation for the "webdav_enabled" field.
 	DefaultWebdavEnabled bool
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -306,6 +325,59 @@ func KindValidator(k Kind) error {
 	}
 }
 
+// Versioning defines the type for the "versioning" enum field.
+type Versioning string
+
+// VersioningOff is the default value of the Versioning enum.
+const DefaultVersioning = VersioningOff
+
+// Versioning values.
+const (
+	VersioningOff   Versioning = "off"
+	VersioningMajor Versioning = "major"
+)
+
+func (v Versioning) String() string {
+	return string(v)
+}
+
+// VersioningValidator is a validator for the "versioning" field enum values. It is called by the builders before save.
+func VersioningValidator(v Versioning) error {
+	switch v {
+	case VersioningOff, VersioningMajor:
+		return nil
+	default:
+		return fmt.Errorf("resource: invalid enum value for versioning field: %q", v)
+	}
+}
+
+// DuplicatePolicy defines the type for the "duplicate_policy" enum field.
+type DuplicatePolicy string
+
+// DuplicatePolicyWarn is the default value of the DuplicatePolicy enum.
+const DefaultDuplicatePolicy = DuplicatePolicyWarn
+
+// DuplicatePolicy values.
+const (
+	DuplicatePolicyAllow DuplicatePolicy = "allow"
+	DuplicatePolicyWarn  DuplicatePolicy = "warn"
+	DuplicatePolicyBlock DuplicatePolicy = "block"
+)
+
+func (dp DuplicatePolicy) String() string {
+	return string(dp)
+}
+
+// DuplicatePolicyValidator is a validator for the "duplicate_policy" field enum values. It is called by the builders before save.
+func DuplicatePolicyValidator(dp DuplicatePolicy) error {
+	switch dp {
+	case DuplicatePolicyAllow, DuplicatePolicyWarn, DuplicatePolicyBlock:
+		return nil
+	default:
+		return fmt.Errorf("resource: invalid enum value for duplicate_policy field: %q", dp)
+	}
+}
+
 // OrderOption defines the ordering options for the Resource queries.
 type OrderOption func(*sql.Selector)
 
@@ -349,6 +421,16 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
 }
 
+// ByDescription orders the results by the description field.
+func ByDescription(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByAllowFolders orders the results by the allow_folders field.
+func ByAllowFolders(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllowFolders, opts...).ToFunc()
+}
+
 // ByInheritPermissions orders the results by the inherit_permissions field.
 func ByInheritPermissions(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInheritPermissions, opts...).ToFunc()
@@ -384,9 +466,24 @@ func ByPublishingEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPublishingEnabled, opts...).ToFunc()
 }
 
+// ByVersioning orders the results by the versioning field.
+func ByVersioning(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVersioning, opts...).ToFunc()
+}
+
+// ByMaxVersions orders the results by the max_versions field.
+func ByMaxVersions(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaxVersions, opts...).ToFunc()
+}
+
 // ByWebdavEnabled orders the results by the webdav_enabled field.
 func ByWebdavEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWebdavEnabled, opts...).ToFunc()
+}
+
+// ByDuplicatePolicy orders the results by the duplicate_policy field.
+func ByDuplicatePolicy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDuplicatePolicy, opts...).ToFunc()
 }
 
 // ByUpdatedAt orders the results by the updated_at field.
@@ -417,6 +514,11 @@ func ByNameKey(opts ...sql.OrderTermOption) OrderOption {
 // ByDeletedAt orders the results by the deleted_at field.
 func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
+}
+
+// ByDeletedBy orders the results by the deleted_by field.
+func ByDeletedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeletedBy, opts...).ToFunc()
 }
 
 // ByChildrenCount orders the results by children count.
@@ -458,20 +560,6 @@ func ByContainedItems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 func ByContainerField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newContainerStep(), sql.OrderByField(field, opts...))
-	}
-}
-
-// ByDefinitionsCount orders the results by definitions count.
-func ByDefinitionsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newDefinitionsStep(), opts...)
-	}
-}
-
-// ByDefinitions orders the results by definitions terms.
-func ByDefinitions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newDefinitionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
@@ -619,13 +707,6 @@ func newContainerStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(Table, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, ContainerTable, ContainerColumn),
-	)
-}
-func newDefinitionsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(DefinitionsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, DefinitionsTable, DefinitionsColumn),
 	)
 }
 func newGrantsStep() *sqlgraph.Step {

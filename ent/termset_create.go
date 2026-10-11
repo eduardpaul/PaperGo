@@ -6,8 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"papergo/ent/resource"
 	"papergo/ent/term"
+	"papergo/ent/termgroup"
 	"papergo/ent/termset"
 	"time"
 
@@ -36,9 +36,9 @@ func (_c *TermSetCreate) SetNillableCreatedAt(v *time.Time) *TermSetCreate {
 	return _c
 }
 
-// SetWorkspaceID sets the "workspace_id" field.
-func (_c *TermSetCreate) SetWorkspaceID(v string) *TermSetCreate {
-	_c.mutation.SetWorkspaceID(v)
+// SetGroupID sets the "group_id" field.
+func (_c *TermSetCreate) SetGroupID(v string) *TermSetCreate {
+	_c.mutation.SetGroupID(v)
 	return _c
 }
 
@@ -64,6 +64,34 @@ func (_c *TermSetCreate) SetDescription(v string) *TermSetCreate {
 func (_c *TermSetCreate) SetNillableDescription(v *string) *TermSetCreate {
 	if v != nil {
 		_c.SetDescription(*v)
+	}
+	return _c
+}
+
+// SetIsOpen sets the "is_open" field.
+func (_c *TermSetCreate) SetIsOpen(v bool) *TermSetCreate {
+	_c.mutation.SetIsOpen(v)
+	return _c
+}
+
+// SetNillableIsOpen sets the "is_open" field if the given value is not nil.
+func (_c *TermSetCreate) SetNillableIsOpen(v *bool) *TermSetCreate {
+	if v != nil {
+		_c.SetIsOpen(*v)
+	}
+	return _c
+}
+
+// SetIsKeywords sets the "is_keywords" field.
+func (_c *TermSetCreate) SetIsKeywords(v bool) *TermSetCreate {
+	_c.mutation.SetIsKeywords(v)
+	return _c
+}
+
+// SetNillableIsKeywords sets the "is_keywords" field if the given value is not nil.
+func (_c *TermSetCreate) SetNillableIsKeywords(v *bool) *TermSetCreate {
+	if v != nil {
+		_c.SetIsKeywords(*v)
 	}
 	return _c
 }
@@ -110,9 +138,9 @@ func (_c *TermSetCreate) SetNillableID(v *string) *TermSetCreate {
 	return _c
 }
 
-// SetWorkspace sets the "workspace" edge to the Resource entity.
-func (_c *TermSetCreate) SetWorkspace(v *Resource) *TermSetCreate {
-	return _c.SetWorkspaceID(v.ID)
+// SetGroup sets the "group" edge to the TermGroup entity.
+func (_c *TermSetCreate) SetGroup(v *TermGroup) *TermSetCreate {
+	return _c.SetGroupID(v.ID)
 }
 
 // AddTermIDs adds the "terms" edge to the Term entity by IDs.
@@ -173,6 +201,14 @@ func (_c *TermSetCreate) defaults() {
 		v := termset.DefaultDescription
 		_c.mutation.SetDescription(v)
 	}
+	if _, ok := _c.mutation.IsOpen(); !ok {
+		v := termset.DefaultIsOpen
+		_c.mutation.SetIsOpen(v)
+	}
+	if _, ok := _c.mutation.IsKeywords(); !ok {
+		v := termset.DefaultIsKeywords
+		_c.mutation.SetIsKeywords(v)
+	}
 	if _, ok := _c.mutation.Version(); !ok {
 		v := termset.DefaultVersion
 		_c.mutation.SetVersion(v)
@@ -192,8 +228,8 @@ func (_c *TermSetCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "TermSet.created_at"`)}
 	}
-	if _, ok := _c.mutation.WorkspaceID(); !ok {
-		return &ValidationError{Name: "workspace_id", err: errors.New(`ent: missing required field "TermSet.workspace_id"`)}
+	if _, ok := _c.mutation.GroupID(); !ok {
+		return &ValidationError{Name: "group_id", err: errors.New(`ent: missing required field "TermSet.group_id"`)}
 	}
 	if _, ok := _c.mutation.Key(); !ok {
 		return &ValidationError{Name: "key", err: errors.New(`ent: missing required field "TermSet.key"`)}
@@ -203,6 +239,12 @@ func (_c *TermSetCreate) check() error {
 	}
 	if _, ok := _c.mutation.Description(); !ok {
 		return &ValidationError{Name: "description", err: errors.New(`ent: missing required field "TermSet.description"`)}
+	}
+	if _, ok := _c.mutation.IsOpen(); !ok {
+		return &ValidationError{Name: "is_open", err: errors.New(`ent: missing required field "TermSet.is_open"`)}
+	}
+	if _, ok := _c.mutation.IsKeywords(); !ok {
+		return &ValidationError{Name: "is_keywords", err: errors.New(`ent: missing required field "TermSet.is_keywords"`)}
 	}
 	if _, ok := _c.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "TermSet.version"`)}
@@ -220,8 +262,8 @@ func (_c *TermSetCreate) check() error {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "TermSet.id": %w`, err)}
 		}
 	}
-	if len(_c.mutation.WorkspaceIDs()) == 0 {
-		return &ValidationError{Name: "workspace", err: errors.New(`ent: missing required edge "TermSet.workspace"`)}
+	if len(_c.mutation.GroupIDs()) == 0 {
+		return &ValidationError{Name: "group", err: errors.New(`ent: missing required edge "TermSet.group"`)}
 	}
 	return nil
 }
@@ -274,6 +316,14 @@ func (_c *TermSetCreate) createSpec() (*TermSet, *sqlgraph.CreateSpec) {
 		_spec.SetField(termset.FieldDescription, field.TypeString, value)
 		_node.Description = value
 	}
+	if value, ok := _c.mutation.IsOpen(); ok {
+		_spec.SetField(termset.FieldIsOpen, field.TypeBool, value)
+		_node.IsOpen = value
+	}
+	if value, ok := _c.mutation.IsKeywords(); ok {
+		_spec.SetField(termset.FieldIsKeywords, field.TypeBool, value)
+		_node.IsKeywords = value
+	}
 	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(termset.FieldVersion, field.TypeInt, value)
 		_node.Version = value
@@ -282,21 +332,21 @@ func (_c *TermSetCreate) createSpec() (*TermSet, *sqlgraph.CreateSpec) {
 		_spec.SetField(termset.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if nodes := _c.mutation.WorkspaceIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.GroupIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   termset.WorkspaceTable,
-			Columns: []string{termset.WorkspaceColumn},
+			Inverse: true,
+			Table:   termset.GroupTable,
+			Columns: []string{termset.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(termgroup.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.WorkspaceID = nodes[0]
+		_node.GroupID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.TermsIDs(); len(nodes) > 0 {

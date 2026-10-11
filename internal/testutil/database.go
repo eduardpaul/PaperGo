@@ -4,6 +4,7 @@ import (
 	"ariga.io/atlas/sql/migrate"
 	"context"
 	"papergo/internal/database"
+	"papergo/internal/identity"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -11,7 +12,13 @@ import (
 
 func Database(t testing.TB) *database.Database {
 	t.Helper()
-	db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+	return DatabaseAt(t, filepath.Join(t.TempDir(), "test.db"))
+}
+
+// DatabaseAt opens the database file at path and applies the schema to it.
+func DatabaseAt(t testing.TB, path string) *database.Database {
+	t.Helper()
+	db, err := database.Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,6 +32,24 @@ func Database(t testing.TB) *database.Database {
 	var foreignKeys int
 	if err = db.SQL.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys); err != nil || foreignKeys != 1 {
 		t.Fatalf("foreign keys disabled: %d %v", foreignKeys, err)
+	}
+	directory := identity.Directory{DB: db.SQL}
+	if err = directory.Initialize(context.Background(), "organization-admin"); err != nil {
+		t.Fatal(err)
+	}
+	// Content fixtures exercise ACL ownership independently of organization-wide
+	// administration. Alice can curate schemas/taxonomy but has no workspace.manage.
+	for _, subject := range []string{"alice", "bob", "carol", "dave", "mallory", "writer", "reader", "visitor", "member", "owner", "other", "eve", "admin", "local-admin", "delegate", "editor", "outsider", "stranger", "publisher", "rita"} {
+		if err = directory.EnsureUser(context.Background(), subject); err != nil {
+			t.Fatal(err)
+		}
+	}
+	role, err := directory.SaveRole(context.Background(), "organization-admin", "", 0, identity.RoleInput{Name: "Fixture curator", Scopes: []string{"contentType.manage", "taxonomy.manage", "identity.read", "identity.manage"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = directory.SetAssignment(context.Background(), "organization-admin", role.ID, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+		t.Fatal(err)
 	}
 	return db
 }

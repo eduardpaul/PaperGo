@@ -27,20 +27,6 @@ func (_u *RelationshipUpdate) Where(ps ...predicate.Relationship) *RelationshipU
 	return _u
 }
 
-// SetName sets the "name" field.
-func (_u *RelationshipUpdate) SetName(v string) *RelationshipUpdate {
-	_u.mutation.SetName(v)
-	return _u
-}
-
-// SetNillableName sets the "name" field if the given value is not nil.
-func (_u *RelationshipUpdate) SetNillableName(v *string) *RelationshipUpdate {
-	if v != nil {
-		_u.SetName(*v)
-	}
-	return _u
-}
-
 // SetVersion sets the "version" field.
 func (_u *RelationshipUpdate) SetVersion(v int) *RelationshipUpdate {
 	_u.mutation.ResetVersion()
@@ -102,11 +88,6 @@ func (_u *RelationshipUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *RelationshipUpdate) check() error {
-	if v, ok := _u.mutation.Name(); ok {
-		if err := relationship.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Relationship.name": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := relationship.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Relationship.version": %w`, err)}
@@ -136,9 +117,6 @@ func (_u *RelationshipUpdate) sqlSave(ctx context.Context) (_node int, err error
 			}
 		}
 	}
-	if value, ok := _u.mutation.Name(); ok {
-		_spec.SetField(relationship.FieldName, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(relationship.FieldVersion, field.TypeInt, value)
 	}
@@ -166,20 +144,6 @@ type RelationshipUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *RelationshipMutation
-}
-
-// SetName sets the "name" field.
-func (_u *RelationshipUpdateOne) SetName(v string) *RelationshipUpdateOne {
-	_u.mutation.SetName(v)
-	return _u
-}
-
-// SetNillableName sets the "name" field if the given value is not nil.
-func (_u *RelationshipUpdateOne) SetNillableName(v *string) *RelationshipUpdateOne {
-	if v != nil {
-		_u.SetName(*v)
-	}
-	return _u
 }
 
 // SetVersion sets the "version" field.
@@ -256,11 +220,6 @@ func (_u *RelationshipUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *RelationshipUpdateOne) check() error {
-	if v, ok := _u.mutation.Name(); ok {
-		if err := relationship.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Relationship.name": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := relationship.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Relationship.version": %w`, err)}
@@ -306,9 +265,6 @@ func (_u *RelationshipUpdateOne) sqlSave(ctx context.Context) (_node *Relationsh
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.Name(); ok {
-		_spec.SetField(relationship.FieldName, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(relationship.FieldVersion, field.TypeInt, value)

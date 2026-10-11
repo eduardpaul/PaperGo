@@ -14,7 +14,7 @@ import (
 
 func readers(t *testing.T, s *Service, w *ent.Resource) {
 	t.Helper()
-	_, err := s.SetPermissions(testContext, "alice", w.ID, w.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"reader", "read", "allow"}, {"editor", "write", "allow"}}})
+	err := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}, WorkspaceMember{Subject: "editor", Role: "member"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,11 +68,11 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 		t.Fatalf("published search lost: %+v %v", p, err)
 	}
 	events, err := s.Publications(testContext, "reader", item.ID, 0, 100)
-	if err != nil || len(events) != 1 || events[0].ID != pub.ID {
+	if err != nil || len(events.Data) != 1 || events.Data[0].ID != pub.ID {
 		t.Fatalf("events: %v %v", events, err)
 	}
-	if _, err = s.Revisions(testContext, "reader", item.ID, 0, 100); !errors.Is(err, ErrForbidden) {
-		t.Fatal("reader saw revisions", err)
+	if history, e := s.Revisions(testContext, "reader", item.ID, 0, 100); e != nil || len(history.Data) != 2 || history.Data[0].Name != "Hiddenword" || history.Data[1].Name != name || history.Data[1].Edges.SchemaRevision == nil {
+		t.Fatal("ordinary reader lost metadata history", history, e)
 	}
 	item, err = s.Unpublish(testContext, "alice", item.ID, item.Version)
 	if err != nil {
@@ -81,7 +81,10 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 	if _, err = s.Get(testContext, "reader", item.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("unpublish ineffective", err)
 	}
-	if _, err = s.Publish(testContext, "alice", item.ID, item.Version-1); !errors.Is(err, ErrConflict) {
+	if history, e := s.Revisions(testContext, "reader", item.ID, 0, 100); e != nil || len(history.Data) != 2 {
+		t.Fatal("unpublishing changed metadata history access", history, e)
+	}
+	if _, err = s.Publish(testContext, "alice", item.ID, item.Version-1); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal("stale publish accepted", err)
 	}
 	if _, err = s.Publish(testContext, "alice", item.ID, item.Version); err != nil {
@@ -92,7 +95,7 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 		t.Fatal("republish failed", err)
 	}
 	revs, err := s.Revisions(testContext, "alice", item.ID, 0, 100)
-	if err != nil || len(revs) != 2 || revs[0].Name != "Hiddenword" {
+	if err != nil || len(revs.Data) != 2 || revs.Data[0].Name != "Hiddenword" {
 		t.Fatal("revision history changed", err)
 	}
 	// Lifecycle transitions consume lock versions but do not manufacture revisions.
@@ -103,7 +106,7 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 
 func TestAutomaticPublishingAndPolicyChange(t *testing.T) {
 	db := testutil.Database(t)
-	s := NewService(db.Client)
+	s := NewService(db.SQL)
 	w := create(t, s, "", "workspace", "Organization", nil)
 	readers(t, s, w)
 	list, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Auto"})
@@ -192,6 +195,12 @@ func TestExactFieldsFrozenSchemasAndIndexRebuild(t *testing.T) {
 	if _, err = s.UpdateField(testContext, "alice", list.ID, amount.ID, list.Version, UpdateField{Label: &label, Indexed: &enabled}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = s.Browse(testContext, "reader", filter); !isValidation(err) || !strings.Contains(err.Error(), "building") {
+		t.Fatal("query used an index still building", err)
+	}
+	if err = s.runOperations(testContext); err != nil {
+		t.Fatal(err)
+	}
 	p, err = s.Browse(testContext, "reader", filter)
 	if err != nil || len(p.Data) != 1 {
 		t.Fatalf("index backfill: %+v %v", p, err)
@@ -206,10 +215,10 @@ func TestExactFieldsFrozenSchemasAndIndexRebuild(t *testing.T) {
 		t.Fatal("head decimal index missing", err)
 	}
 	revs, err := s.Revisions(testContext, "alice", item.ID, 0, 100)
-	if err != nil || len(revs) != 2 {
+	if err != nil || len(revs.Data) != 2 {
 		t.Fatal(err)
 	}
-	defs, err := s.Client.SchemaRevision.Get(testContext, revs[0].SchemaRevisionID)
+	defs, err := s.Client.SchemaRevision.Get(testContext, revs.Data[0].SchemaRevisionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,10 +226,10 @@ func TestExactFieldsFrozenSchemasAndIndexRebuild(t *testing.T) {
 		t.Fatal("schema history changed")
 	}
 	paired, err := s.ItemSchema(testContext, "reader", item.ID, "auto")
-	if err != nil || paired.ID != revs[0].SchemaRevisionID || strings.Contains(string(paired.Definition), "Total") {
+	if err != nil || paired.ID != revs.Data[0].SchemaRevisionID || strings.Contains(string(paired.Definition), "Total") {
 		t.Fatal("reader schema not paired with published revision", err)
 	}
-	if revs[0].Edges.SchemaRevision == nil || revs[0].Edges.SchemaRevision.ID != paired.ID {
+	if revs.Data[0].Edges.SchemaRevision == nil || revs.Data[0].Edges.SchemaRevision.ID != paired.ID {
 		t.Fatal("history lacks its immutable schema")
 	}
 	for _, v := range []any{"1.234", "92233720368547758.08", float64(1.2)} {
@@ -250,7 +259,7 @@ func TestBlobSelectionFollowsPublishedRevision(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return b
+		return b.Blob
 	}
 	old := attach("old")
 	item = current(t, s, item.ID)
@@ -289,7 +298,7 @@ func TestAuthorizedPaginationAndRelationships(t *testing.T) {
 			}
 			visible[r.ID] = true
 		}
-		link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{TypeID: typ.ID, TargetID: r.ID})
+		link, err := s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: r.ID})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -349,7 +358,7 @@ func TestAuthorizedPaginationAndRelationships(t *testing.T) {
 
 func TestRevisionOwnershipAndTransactionRollback(t *testing.T) {
 	db := testutil.Database(t)
-	s := NewService(db.Client)
+	s := NewService(db.SQL)
 	w := create(t, s, "", "workspace", "Org", nil)
 	list := create(t, s, w.ID, "list", "Records", nil)
 	a := create(t, s, list.ID, "item", "A", nil)
@@ -385,4 +394,30 @@ func TestRevisionOwnershipAndTransactionRollback(t *testing.T) {
 	if rows.Next() {
 		t.Fatal("foreign key violation")
 	}
+}
+
+// counted reads an optional query total; -1 means the response had none.
+func counted(total *int) int {
+	if total == nil {
+		return -1
+	}
+	return *total
+}
+
+// testTermGroup returns the id of a "Test" organization term group.
+func testTermGroup(s *Service) string {
+	page, err := s.TermGroups(testContext, "alice", "", 100)
+	if err != nil {
+		panic(err)
+	}
+	for _, g := range page.Data {
+		if g.Name == "Test" {
+			return g.ID
+		}
+	}
+	g, err := s.CreateTermGroup(testContext, "alice", TermGroupInput{Name: "Test"})
+	if err != nil {
+		panic(err)
+	}
+	return g.ID
 }

@@ -10,7 +10,7 @@ import (
 
 func TestIntegrityAndReadPlans(t *testing.T) {
 	db := testutil.Database(t)
-	s := dms.NewService(db.Client)
+	s := dms.NewService(db.SQL)
 	ctx := context.Background()
 	w, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Demo"})
 	if err != nil {

@@ -41,9 +41,15 @@ func (_c *GrantCreate) SetResourceID(v string) *GrantCreate {
 	return _c
 }
 
-// SetSubject sets the "subject" field.
-func (_c *GrantCreate) SetSubject(v string) *GrantCreate {
-	_c.mutation.SetSubject(v)
+// SetPrincipalType sets the "principal_type" field.
+func (_c *GrantCreate) SetPrincipalType(v grant.PrincipalType) *GrantCreate {
+	_c.mutation.SetPrincipalType(v)
+	return _c
+}
+
+// SetPrincipalID sets the "principal_id" field.
+func (_c *GrantCreate) SetPrincipalID(v string) *GrantCreate {
+	_c.mutation.SetPrincipalID(v)
 	return _c
 }
 
@@ -148,12 +154,20 @@ func (_c *GrantCreate) check() error {
 			return &ValidationError{Name: "resource_id", err: fmt.Errorf(`ent: validator failed for field "Grant.resource_id": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.Subject(); !ok {
-		return &ValidationError{Name: "subject", err: errors.New(`ent: missing required field "Grant.subject"`)}
+	if _, ok := _c.mutation.PrincipalType(); !ok {
+		return &ValidationError{Name: "principal_type", err: errors.New(`ent: missing required field "Grant.principal_type"`)}
 	}
-	if v, ok := _c.mutation.Subject(); ok {
-		if err := grant.SubjectValidator(v); err != nil {
-			return &ValidationError{Name: "subject", err: fmt.Errorf(`ent: validator failed for field "Grant.subject": %w`, err)}
+	if v, ok := _c.mutation.PrincipalType(); ok {
+		if err := grant.PrincipalTypeValidator(v); err != nil {
+			return &ValidationError{Name: "principal_type", err: fmt.Errorf(`ent: validator failed for field "Grant.principal_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PrincipalID(); !ok {
+		return &ValidationError{Name: "principal_id", err: errors.New(`ent: missing required field "Grant.principal_id"`)}
+	}
+	if v, ok := _c.mutation.PrincipalID(); ok {
+		if err := grant.PrincipalIDValidator(v); err != nil {
+			return &ValidationError{Name: "principal_id", err: fmt.Errorf(`ent: validator failed for field "Grant.principal_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Action(); !ok {
@@ -219,9 +233,13 @@ func (_c *GrantCreate) createSpec() (*Grant, *sqlgraph.CreateSpec) {
 		_spec.SetField(grant.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := _c.mutation.Subject(); ok {
-		_spec.SetField(grant.FieldSubject, field.TypeString, value)
-		_node.Subject = value
+	if value, ok := _c.mutation.PrincipalType(); ok {
+		_spec.SetField(grant.FieldPrincipalType, field.TypeEnum, value)
+		_node.PrincipalType = value
+	}
+	if value, ok := _c.mutation.PrincipalID(); ok {
+		_spec.SetField(grant.FieldPrincipalID, field.TypeString, value)
+		_node.PrincipalID = value
 	}
 	if value, ok := _c.mutation.Action(); ok {
 		_spec.SetField(grant.FieldAction, field.TypeEnum, value)

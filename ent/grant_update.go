@@ -27,16 +27,30 @@ func (_u *GrantUpdate) Where(ps ...predicate.Grant) *GrantUpdate {
 	return _u
 }
 
-// SetSubject sets the "subject" field.
-func (_u *GrantUpdate) SetSubject(v string) *GrantUpdate {
-	_u.mutation.SetSubject(v)
+// SetPrincipalType sets the "principal_type" field.
+func (_u *GrantUpdate) SetPrincipalType(v grant.PrincipalType) *GrantUpdate {
+	_u.mutation.SetPrincipalType(v)
 	return _u
 }
 
-// SetNillableSubject sets the "subject" field if the given value is not nil.
-func (_u *GrantUpdate) SetNillableSubject(v *string) *GrantUpdate {
+// SetNillablePrincipalType sets the "principal_type" field if the given value is not nil.
+func (_u *GrantUpdate) SetNillablePrincipalType(v *grant.PrincipalType) *GrantUpdate {
 	if v != nil {
-		_u.SetSubject(*v)
+		_u.SetPrincipalType(*v)
+	}
+	return _u
+}
+
+// SetPrincipalID sets the "principal_id" field.
+func (_u *GrantUpdate) SetPrincipalID(v string) *GrantUpdate {
+	_u.mutation.SetPrincipalID(v)
+	return _u
+}
+
+// SetNillablePrincipalID sets the "principal_id" field if the given value is not nil.
+func (_u *GrantUpdate) SetNillablePrincipalID(v *string) *GrantUpdate {
+	if v != nil {
+		_u.SetPrincipalID(*v)
 	}
 	return _u
 }
@@ -103,9 +117,14 @@ func (_u *GrantUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *GrantUpdate) check() error {
-	if v, ok := _u.mutation.Subject(); ok {
-		if err := grant.SubjectValidator(v); err != nil {
-			return &ValidationError{Name: "subject", err: fmt.Errorf(`ent: validator failed for field "Grant.subject": %w`, err)}
+	if v, ok := _u.mutation.PrincipalType(); ok {
+		if err := grant.PrincipalTypeValidator(v); err != nil {
+			return &ValidationError{Name: "principal_type", err: fmt.Errorf(`ent: validator failed for field "Grant.principal_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PrincipalID(); ok {
+		if err := grant.PrincipalIDValidator(v); err != nil {
+			return &ValidationError{Name: "principal_id", err: fmt.Errorf(`ent: validator failed for field "Grant.principal_id": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Action(); ok {
@@ -136,8 +155,11 @@ func (_u *GrantUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
-	if value, ok := _u.mutation.Subject(); ok {
-		_spec.SetField(grant.FieldSubject, field.TypeString, value)
+	if value, ok := _u.mutation.PrincipalType(); ok {
+		_spec.SetField(grant.FieldPrincipalType, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.PrincipalID(); ok {
+		_spec.SetField(grant.FieldPrincipalID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Action(); ok {
 		_spec.SetField(grant.FieldAction, field.TypeEnum, value)
@@ -165,16 +187,30 @@ type GrantUpdateOne struct {
 	mutation *GrantMutation
 }
 
-// SetSubject sets the "subject" field.
-func (_u *GrantUpdateOne) SetSubject(v string) *GrantUpdateOne {
-	_u.mutation.SetSubject(v)
+// SetPrincipalType sets the "principal_type" field.
+func (_u *GrantUpdateOne) SetPrincipalType(v grant.PrincipalType) *GrantUpdateOne {
+	_u.mutation.SetPrincipalType(v)
 	return _u
 }
 
-// SetNillableSubject sets the "subject" field if the given value is not nil.
-func (_u *GrantUpdateOne) SetNillableSubject(v *string) *GrantUpdateOne {
+// SetNillablePrincipalType sets the "principal_type" field if the given value is not nil.
+func (_u *GrantUpdateOne) SetNillablePrincipalType(v *grant.PrincipalType) *GrantUpdateOne {
 	if v != nil {
-		_u.SetSubject(*v)
+		_u.SetPrincipalType(*v)
+	}
+	return _u
+}
+
+// SetPrincipalID sets the "principal_id" field.
+func (_u *GrantUpdateOne) SetPrincipalID(v string) *GrantUpdateOne {
+	_u.mutation.SetPrincipalID(v)
+	return _u
+}
+
+// SetNillablePrincipalID sets the "principal_id" field if the given value is not nil.
+func (_u *GrantUpdateOne) SetNillablePrincipalID(v *string) *GrantUpdateOne {
+	if v != nil {
+		_u.SetPrincipalID(*v)
 	}
 	return _u
 }
@@ -254,9 +290,14 @@ func (_u *GrantUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *GrantUpdateOne) check() error {
-	if v, ok := _u.mutation.Subject(); ok {
-		if err := grant.SubjectValidator(v); err != nil {
-			return &ValidationError{Name: "subject", err: fmt.Errorf(`ent: validator failed for field "Grant.subject": %w`, err)}
+	if v, ok := _u.mutation.PrincipalType(); ok {
+		if err := grant.PrincipalTypeValidator(v); err != nil {
+			return &ValidationError{Name: "principal_type", err: fmt.Errorf(`ent: validator failed for field "Grant.principal_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PrincipalID(); ok {
+		if err := grant.PrincipalIDValidator(v); err != nil {
+			return &ValidationError{Name: "principal_id", err: fmt.Errorf(`ent: validator failed for field "Grant.principal_id": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Action(); ok {
@@ -304,8 +345,11 @@ func (_u *GrantUpdateOne) sqlSave(ctx context.Context) (_node *Grant, err error)
 			}
 		}
 	}
-	if value, ok := _u.mutation.Subject(); ok {
-		_spec.SetField(grant.FieldSubject, field.TypeString, value)
+	if value, ok := _u.mutation.PrincipalType(); ok {
+		_spec.SetField(grant.FieldPrincipalType, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.PrincipalID(); ok {
+		_spec.SetField(grant.FieldPrincipalID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Action(); ok {
 		_spec.SetField(grant.FieldAction, field.TypeEnum, value)

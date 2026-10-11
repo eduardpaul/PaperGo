@@ -18,15 +18,15 @@ The following core definitions are implemented in [Lists entities](https://githu
 
 | Entity | Purpose and principal fields | PaperGo equivalent or gap |
 | --- | --- | --- |
-| ContentType | Reusable schema: Id, Name, Description, IsBuiltIn, stable Key, ExtensionId, ordered Fields. | FieldDefinition and SchemaRevision are currently collection-specific; no reusable content-type catalog. |
-| ListDefinition | List/library: WorkspaceId, Name, Description, Kind, AllowFolders, ordered ContentTypeIds, Versioning, TemplateKey, HasUniquePermissions, SystemKey, IndexedFields, IndexPending, MaxVersions, DeletedAt/By. | Resource with kind list/library. PaperGo adds publishing_enabled, webdav_enabled and schema_head_id; it has no content-type choices, recycle state, or optional history pruning. |
-| ListItem | Row or folder: ListId, ContentTypeId, ParentId, IsFolder, Title, Fields JSON, HasUniquePermissions, ScopeId, promoted Text/Number/Date columns, DeletedAt/By. | Resource with kind item/folder, plus ItemRevision and ItemSurface. One container owns each item in both models. Deletion leaves a final `deleted_at` tombstone (the audit trail records who deleted it); there is no restore. |
+| ContentType | Reusable schema: Id, Name, Description, IsBuiltIn, stable Key, ExtensionId, ordered Fields. | Organization ContentType and FieldDefinition catalogs, live collection attachments and immutable effective SchemaRevision snapshots. |
+| ListDefinition | List/library: WorkspaceId, Name, Description, Kind, AllowFolders, ordered ContentTypeIds, Versioning, TemplateKey, HasUniquePermissions, SystemKey, IndexedFields, IndexPending, MaxVersions, DeletedAt/By. | Resource with kind list/library. PaperGo adds publishing_enabled, webdav_enabled and schema_head_id; content-type IDs attach live catalog definitions; versioning supports off/major with 1–500 retained history entries; live collections expose item/folder recycle-bin listing, restoration and permanent purge. |
+| ListItem | Row or folder: ListId, ContentTypeId, ParentId, IsFolder, Title, Fields JSON, HasUniquePermissions, ScopeId, promoted Text/Number/Date columns, DeletedAt/By. | Resource with kind item/folder, plus ItemRevision and ItemSurface. One container owns each item in both models. Deletion records `deleted_at`/`deleted_by` and supports recovery or manager purge inside live collections. Items can change attached content types and move across compatible collections/workspaces with stable identity. |
 | ItemVersion | Historical snapshot: ItemId, ListId, Number, ContentTypeId, Title, Fields JSON, ChangedFields, CreatedAt/By. | ItemRevision additionally pins an immutable SchemaRevision and optional Blob. |
 | IndexedField | Embedded indexing plan: Field, Kind, Column, ValueField, Ready. | FieldDefinition.indexed plus typed FieldValue projections; no fixed column-slot allocation. |
 | ItemValue | Multi-valued identifier index: ItemId, Field, Value GUID, ListId. | No multi-valued custom field/reference indexes yet. |
 | AclEntry | Grant: ScopeId, PrincipalId, PrincipalType, Level, ListId, WorkspaceId. Principals include users, groups, and workspace roles. | Grant supports read/read_draft/write/publish/manage against resource ancestry; no group directory. |
-| ItemRelation | Edge: FirstItemId, SecondItemId, TypeId, Directed, Attributes JSON, Version. | Relationship has source_id, target_id, required type_id, the type key as name, directed, version and validated metadata; always within one workspace. |
-| ItemRelationshipType | Relationship policy: taxonomy-backed Id, Directed, InverseLabel, MaxIncoming, MaxOutgoing. | RelationshipType has a stable workspace key, label, inverse_label, directed flag, optional max_incoming/max_outgoing and an attribute schema; every link requires one. |
+| ItemRelation | Edge: FirstItemId, SecondItemId, TypeId, Directed, Attributes JSON, Version. | Relationship has source_id, target_id, required taxonomy term type_id, directed, version and validated metadata; new links require one workspace; cross-workspace moves preserve existing edges with authorization at both endpoints. |
+| ItemRelationshipType | Relationship policy: taxonomy-backed Id, Directed, InverseLabel, MaxIncoming, MaxOutgoing. | RelationshipType uses an organization taxonomy term ID, inverse_label, directed flag, optional max_incoming/max_outgoing and an attribute schema; every link requires one. Names, translations and synonyms live in taxonomy. |
 | ListView | Saved presentation/query: ListId, Name, Columns, Filter, OrderBy, GroupBy, Layout, IsDefault. | No saved view entity or compound query specification. |
 | SmartFolder | Virtual collection: optional WorkspaceId/OwnerId, Name, Description, Definition JSON. | Folders are physical containment only; no cross-list saved queries. |
 | ItemChange | Ordered delta marker: Sequence, ListId, ItemId, ScopeId, FromScopeId, Kind, At. | AuditEvent records actions, but there is no dedicated synchronization feed. |
@@ -76,7 +76,7 @@ The order below prioritizes a reusable foundation rather than feature parity.
 
 Introduce a field-type registry with definition validation, value normalization, and index encoding. Start with descriptions, defaults, length/range limits, date-only values, email/URL validation, and multi-choice/reference support as needed.
 
-Add reusable schema templates with stable keys before adding unrestricted shared mutable content types. Template adoption should create a new collection SchemaRevision. If we later allow multiple content types within one collection, each item revision should pin its content-type identity/version and fully resolved effective schema. Editing a shared template must not silently reinterpret existing revisions or published content.
+PaperGo provides workspace templates with explicit adoption and organization content types with live attachments. Shared definition edits validate all attached collection heads, then advance their effective schema snapshots atomically. Item revisions pin content-type identity and the resolved immutable schema; published content retains its saved interpretation.
 
 PaperDotNet supplies the [field registry contracts](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists.Contracts/Fields.cs) and [template provisioning pattern](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Templates/ListTemplates.cs). Its ItemVersion stores ContentTypeId, but the inspected list model does not provide the immutable schema pairing already present in PaperGo.
 
@@ -90,7 +90,7 @@ PaperDotNet's [ListView and SmartFolder](https://github.com/eduardpaul/PaperDotN
 
 ### 3. Transactional outbox and small durable jobs
 
-Write an OutboxEvent in the same transaction as content, publication, grants, relationships, and audit changes. Proposed fields: event ID/type, resource and revision IDs, actor, payload, occurred_at, attempts, next_attempt_at, and lease state. Dispatch after commit with at-least-once delivery and idempotent handlers. Add an Operation record for user-visible asynchronous progress.
+Implemented for item changes as the `domain_events` log and the workflow runner's dispatcher ([workflows](workflows.md#runs)); the rest of this section is the remaining scope. Write an OutboxEvent in the same transaction as content, publication, grants, relationships, and audit changes. Proposed fields: event ID/type, resource and revision IDs, actor, payload, occurred_at, attempts, next_attempt_at, and lease state. Dispatch after commit with at-least-once delivery and idempotent handlers. Add an Operation record for user-visible asynchronous progress.
 
 PaperDotNet has an [outbox abstraction](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/BuildingBlocks/PaperDotNet.Messaging/Outbox.cs) and a [central mutation writer](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/ItemWriter.cs) that commit state and events together. Adopt that invariant, not the entire .NET messaging stack. Synchronous extension hooks must pass through final validation and cannot bypass authorization, revision allocation, projection maintenance, or audit recording.
 
@@ -98,7 +98,7 @@ A durable item change feed can follow this work. It needs explicit rules for acc
 
 ### 4. Typed, versioned relationships
 
-Add RelationshipType with stable key, display/inverse labels, direction policy, and optional incoming/outgoing cardinality. Add optimistic concurrency and PATCH support to relationship metadata. A bounded attribute schema would be an additional PaperGo design choice: PaperDotNet currently validates a flat scalar property bag.
+RelationshipType uses the organization Relationships/Types term vocabulary, immutable policy semantics and optional incoming/outgoing cardinality. Links resolve or ensure labels and retain optimistic concurrency and metadata PATCH support. Go validates attributes with a bounded scalar schema; PaperDotNet validates a flat scalar property bag.
 
 The reference implements [relationship policies](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/RelationshipTypes.cs), [attribute bounds](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Lists/PaperDotNet.Lists/Features/RelationshipAttributes.cs), and [global relationships](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/docs/adr/0039-global-item-relationships.md). PaperGo should keep both endpoints visible in queries. Requiring write permission on both endpoints, supporting cross-workspace links, and allowing item moves each change existing behavior and deserve explicit policy decisions before implementation.
 
@@ -114,7 +114,7 @@ PaperDotNet's [StoredFile/FileVersion split and page text](https://github.com/ed
 
 Add optional TermSet/Term identifiers when controlled vocabularies become necessary; retain free tags for simple applications. Add group expansion and workspace membership when enterprise authorization needs them, with documented invalidation and revocation behavior.
 
-A recycle/restore lifecycle, explicit retention rules, consistent SQLite/blob backups, and tested restoration also belong in the foundation roadmap. PaperDotNet's soft-delete fields and configurable version retention are useful inputs, but automatic pruning must not remove a retained or published PaperGo revision/schema/blob reference.
+PaperGo provides collection recycle bins, restoration and permanent purge, configurable history retention, and durable purge cleanup. Consistent SQLite/blob backups remain a separate operations story. Frozen live/publication schemas and revisions remain intact through ordinary history retention; permanent purge removes the deleted item's content while retaining audit/run IDs.
 
 ## What to preserve or defer
 

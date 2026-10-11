@@ -12,7 +12,7 @@ import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type 
 export interface TemplatesRequestBuilder extends BaseRequestBuilder<TemplatesRequestBuilder> {
     /**
      * Gets an item from the papergo.v1.resources.item.templates.item collection
-     * @param templateID Schema template ID.
+     * @param templateID Unique identifier of the item
      * @returns {WithTemplateItemRequestBuilder}
      */
      byTemplateID(templateID: string) : WithTemplateItemRequestBuilder;

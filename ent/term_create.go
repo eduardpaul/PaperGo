@@ -67,6 +67,54 @@ func (_c *TermCreate) SetNormalizedName(v string) *TermCreate {
 	return _c
 }
 
+// SetDescription sets the "description" field.
+func (_c *TermCreate) SetDescription(v string) *TermCreate {
+	_c.mutation.SetDescription(v)
+	return _c
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_c *TermCreate) SetNillableDescription(v *string) *TermCreate {
+	if v != nil {
+		_c.SetDescription(*v)
+	}
+	return _c
+}
+
+// SetColor sets the "color" field.
+func (_c *TermCreate) SetColor(v string) *TermCreate {
+	_c.mutation.SetColor(v)
+	return _c
+}
+
+// SetNillableColor sets the "color" field if the given value is not nil.
+func (_c *TermCreate) SetNillableColor(v *string) *TermCreate {
+	if v != nil {
+		_c.SetColor(*v)
+	}
+	return _c
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (_c *TermCreate) SetSortOrder(v int) *TermCreate {
+	_c.mutation.SetSortOrder(v)
+	return _c
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_c *TermCreate) SetNillableSortOrder(v *int) *TermCreate {
+	if v != nil {
+		_c.SetSortOrder(*v)
+	}
+	return _c
+}
+
+// SetPath sets the "path" field.
+func (_c *TermCreate) SetPath(v string) *TermCreate {
+	_c.mutation.SetPath(v)
+	return _c
+}
+
 // SetLabels sets the "labels" field.
 func (_c *TermCreate) SetLabels(v map[string]string) *TermCreate {
 	_c.mutation.SetLabels(v)
@@ -76,6 +124,34 @@ func (_c *TermCreate) SetLabels(v map[string]string) *TermCreate {
 // SetSynonyms sets the "synonyms" field.
 func (_c *TermCreate) SetSynonyms(v []string) *TermCreate {
 	_c.mutation.SetSynonyms(v)
+	return _c
+}
+
+// SetMergedIntoID sets the "merged_into_id" field.
+func (_c *TermCreate) SetMergedIntoID(v string) *TermCreate {
+	_c.mutation.SetMergedIntoID(v)
+	return _c
+}
+
+// SetNillableMergedIntoID sets the "merged_into_id" field if the given value is not nil.
+func (_c *TermCreate) SetNillableMergedIntoID(v *string) *TermCreate {
+	if v != nil {
+		_c.SetMergedIntoID(*v)
+	}
+	return _c
+}
+
+// SetAvailableAsKeyword sets the "available_as_keyword" field.
+func (_c *TermCreate) SetAvailableAsKeyword(v bool) *TermCreate {
+	_c.mutation.SetAvailableAsKeyword(v)
+	return _c
+}
+
+// SetNillableAvailableAsKeyword sets the "available_as_keyword" field if the given value is not nil.
+func (_c *TermCreate) SetNillableAvailableAsKeyword(v *bool) *TermCreate {
+	if v != nil {
+		_c.SetAvailableAsKeyword(*v)
+	}
 	return _c
 }
 
@@ -160,6 +236,26 @@ func (_c *TermCreate) SetParent(v *Term) *TermCreate {
 	return _c.SetParentID(v.ID)
 }
 
+// AddMergedIDs adds the "merged" edge to the Term entity by IDs.
+func (_c *TermCreate) AddMergedIDs(ids ...string) *TermCreate {
+	_c.mutation.AddMergedIDs(ids...)
+	return _c
+}
+
+// AddMerged adds the "merged" edges to the Term entity.
+func (_c *TermCreate) AddMerged(v ...*Term) *TermCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddMergedIDs(ids...)
+}
+
+// SetMergedInto sets the "merged_into" edge to the Term entity.
+func (_c *TermCreate) SetMergedInto(v *Term) *TermCreate {
+	return _c.SetMergedIntoID(v.ID)
+}
+
 // Mutation returns the TermMutation object of the builder.
 func (_c *TermCreate) Mutation() *TermMutation {
 	return _c.mutation
@@ -199,6 +295,14 @@ func (_c *TermCreate) defaults() {
 		v := term.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.Description(); !ok {
+		v := term.DefaultDescription
+		_c.mutation.SetDescription(v)
+	}
+	if _, ok := _c.mutation.SortOrder(); !ok {
+		v := term.DefaultSortOrder
+		_c.mutation.SetSortOrder(v)
+	}
 	if _, ok := _c.mutation.Labels(); !ok {
 		v := term.DefaultLabels
 		_c.mutation.SetLabels(v)
@@ -206,6 +310,10 @@ func (_c *TermCreate) defaults() {
 	if _, ok := _c.mutation.Synonyms(); !ok {
 		v := term.DefaultSynonyms
 		_c.mutation.SetSynonyms(v)
+	}
+	if _, ok := _c.mutation.AvailableAsKeyword(); !ok {
+		v := term.DefaultAvailableAsKeyword
+		_c.mutation.SetAvailableAsKeyword(v)
 	}
 	if _, ok := _c.mutation.Deprecated(); !ok {
 		v := term.DefaultDeprecated
@@ -239,11 +347,23 @@ func (_c *TermCreate) check() error {
 	if _, ok := _c.mutation.NormalizedName(); !ok {
 		return &ValidationError{Name: "normalized_name", err: errors.New(`ent: missing required field "Term.normalized_name"`)}
 	}
+	if _, ok := _c.mutation.Description(); !ok {
+		return &ValidationError{Name: "description", err: errors.New(`ent: missing required field "Term.description"`)}
+	}
+	if _, ok := _c.mutation.SortOrder(); !ok {
+		return &ValidationError{Name: "sort_order", err: errors.New(`ent: missing required field "Term.sort_order"`)}
+	}
+	if _, ok := _c.mutation.Path(); !ok {
+		return &ValidationError{Name: "path", err: errors.New(`ent: missing required field "Term.path"`)}
+	}
 	if _, ok := _c.mutation.Labels(); !ok {
 		return &ValidationError{Name: "labels", err: errors.New(`ent: missing required field "Term.labels"`)}
 	}
 	if _, ok := _c.mutation.Synonyms(); !ok {
 		return &ValidationError{Name: "synonyms", err: errors.New(`ent: missing required field "Term.synonyms"`)}
+	}
+	if _, ok := _c.mutation.AvailableAsKeyword(); !ok {
+		return &ValidationError{Name: "available_as_keyword", err: errors.New(`ent: missing required field "Term.available_as_keyword"`)}
 	}
 	if _, ok := _c.mutation.Deprecated(); !ok {
 		return &ValidationError{Name: "deprecated", err: errors.New(`ent: missing required field "Term.deprecated"`)}
@@ -314,6 +434,22 @@ func (_c *TermCreate) createSpec() (*Term, *sqlgraph.CreateSpec) {
 		_spec.SetField(term.FieldNormalizedName, field.TypeString, value)
 		_node.NormalizedName = value
 	}
+	if value, ok := _c.mutation.Description(); ok {
+		_spec.SetField(term.FieldDescription, field.TypeString, value)
+		_node.Description = value
+	}
+	if value, ok := _c.mutation.Color(); ok {
+		_spec.SetField(term.FieldColor, field.TypeString, value)
+		_node.Color = &value
+	}
+	if value, ok := _c.mutation.SortOrder(); ok {
+		_spec.SetField(term.FieldSortOrder, field.TypeInt, value)
+		_node.SortOrder = value
+	}
+	if value, ok := _c.mutation.Path(); ok {
+		_spec.SetField(term.FieldPath, field.TypeString, value)
+		_node.Path = value
+	}
 	if value, ok := _c.mutation.Labels(); ok {
 		_spec.SetField(term.FieldLabels, field.TypeJSON, value)
 		_node.Labels = value
@@ -321,6 +457,10 @@ func (_c *TermCreate) createSpec() (*Term, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Synonyms(); ok {
 		_spec.SetField(term.FieldSynonyms, field.TypeJSON, value)
 		_node.Synonyms = value
+	}
+	if value, ok := _c.mutation.AvailableAsKeyword(); ok {
+		_spec.SetField(term.FieldAvailableAsKeyword, field.TypeBool, value)
+		_node.AvailableAsKeyword = value
 	}
 	if value, ok := _c.mutation.Deprecated(); ok {
 		_spec.SetField(term.FieldDeprecated, field.TypeBool, value)
@@ -382,6 +522,39 @@ func (_c *TermCreate) createSpec() (*Term, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.ParentID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.MergedIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   term.MergedTable,
+			Columns: []string{term.MergedColumn},
+			Bidi:    true,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.MergedIntoIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   term.MergedIntoTable,
+			Columns: []string{term.MergedIntoColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(term.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.MergedIntoID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

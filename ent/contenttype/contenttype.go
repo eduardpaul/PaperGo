@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -17,45 +16,33 @@ const (
 	FieldID = "id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
-	// FieldContainerID holds the string denoting the container_id field in the database.
-	FieldContainerID = "container_id"
 	// FieldKey holds the string denoting the key field in the database.
 	FieldKey = "key"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
-	// FieldFieldKeys holds the string denoting the field_keys field in the database.
-	FieldFieldKeys = "field_keys"
+	// FieldTemplateKey holds the string denoting the template_key field in the database.
+	FieldTemplateKey = "template_key"
+	// FieldFieldIds holds the string denoting the field_ids field in the database.
+	FieldFieldIds = "field_ids"
 	// FieldRules holds the string denoting the rules field in the database.
 	FieldRules = "rules"
-	// FieldIsDefault holds the string denoting the is_default field in the database.
-	FieldIsDefault = "is_default"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
-	// EdgeContainer holds the string denoting the container edge name in mutations.
-	EdgeContainer = "container"
 	// Table holds the table name of the contenttype in the database.
 	Table = "content_types"
-	// ContainerTable is the table that holds the container relation/edge.
-	ContainerTable = "content_types"
-	// ContainerInverseTable is the table name for the Resource entity.
-	// It exists in this package in order to avoid circular dependency with the "resource" package.
-	ContainerInverseTable = "resources"
-	// ContainerColumn is the table column denoting the container relation/edge.
-	ContainerColumn = "container_id"
 )
 
 // Columns holds all SQL columns for contenttype fields.
 var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
-	FieldContainerID,
 	FieldKey,
 	FieldName,
-	FieldFieldKeys,
+	FieldTemplateKey,
+	FieldFieldIds,
 	FieldRules,
-	FieldIsDefault,
 	FieldVersion,
 	FieldUpdatedAt,
 }
@@ -77,12 +64,12 @@ var (
 	KeyValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
-	// DefaultFieldKeys holds the default value on creation for the "field_keys" field.
-	DefaultFieldKeys []string
+	// TemplateKeyValidator is a validator for the "template_key" field. It is called by the builders before save.
+	TemplateKeyValidator func(string) error
+	// DefaultFieldIds holds the default value on creation for the "field_ids" field.
+	DefaultFieldIds []string
 	// DefaultRules holds the default value on creation for the "rules" field.
 	DefaultRules []model.ValidationRule
-	// DefaultIsDefault holds the default value on creation for the "is_default" field.
-	DefaultIsDefault bool
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
 	// VersionValidator is a validator for the "version" field. It is called by the builders before save.
@@ -110,11 +97,6 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
-// ByContainerID orders the results by the container_id field.
-func ByContainerID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldContainerID, opts...).ToFunc()
-}
-
 // ByKey orders the results by the key field.
 func ByKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldKey, opts...).ToFunc()
@@ -125,9 +107,9 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
 }
 
-// ByIsDefault orders the results by the is_default field.
-func ByIsDefault(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldIsDefault, opts...).ToFunc()
+// ByTemplateKey orders the results by the template_key field.
+func ByTemplateKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTemplateKey, opts...).ToFunc()
 }
 
 // ByVersion orders the results by the version field.
@@ -138,18 +120,4 @@ func ByVersion(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
-}
-
-// ByContainerField orders the results by container field.
-func ByContainerField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newContainerStep(), sql.OrderByField(field, opts...))
-	}
-}
-func newContainerStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ContainerInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, ContainerTable, ContainerColumn),
-	)
 }

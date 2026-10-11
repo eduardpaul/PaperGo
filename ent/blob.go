@@ -30,6 +30,8 @@ type Blob struct {
 	Filename string `json:"filename,omitempty"`
 	// ContentType holds the value of the "content_type" field.
 	ContentType string `json:"content_type,omitempty"`
+	// Languages holds the value of the "languages" field.
+	Languages string `json:"languages,omitempty"`
 	// Size holds the value of the "size" field.
 	Size int64 `json:"size,omitempty"`
 	// Sha256 holds the value of the "sha256" field.
@@ -67,7 +69,7 @@ func (*Blob) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case blob.FieldVersion, blob.FieldSize:
 			values[i] = new(sql.NullInt64)
-		case blob.FieldID, blob.FieldItemID, blob.FieldObjectKey, blob.FieldFilename, blob.FieldContentType, blob.FieldSha256:
+		case blob.FieldID, blob.FieldItemID, blob.FieldObjectKey, blob.FieldFilename, blob.FieldContentType, blob.FieldLanguages, blob.FieldSha256:
 			values[i] = new(sql.NullString)
 		case blob.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -127,6 +129,12 @@ func (_m *Blob) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field content_type", values[i])
 			} else if value.Valid {
 				_m.ContentType = value.String
+			}
+		case blob.FieldLanguages:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field languages", values[i])
+			} else if value.Valid {
+				_m.Languages = value.String
 			}
 		case blob.FieldSize:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -198,6 +206,9 @@ func (_m *Blob) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("content_type=")
 	builder.WriteString(_m.ContentType)
+	builder.WriteString(", ")
+	builder.WriteString("languages=")
+	builder.WriteString(_m.Languages)
 	builder.WriteString(", ")
 	builder.WriteString("size=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Size))

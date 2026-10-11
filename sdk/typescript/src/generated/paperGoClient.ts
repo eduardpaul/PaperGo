@@ -4,6 +4,8 @@
 // @ts-ignore
 import { HealthRequestBuilderNavigationMetadata, type HealthRequestBuilder } from './health/index.js';
 // @ts-ignore
+import { OpenapiJsonRequestBuilderRequestsMetadata, type OpenapiJsonRequestBuilder } from './openapiJson/index.js';
+// @ts-ignore
 import { type V1RequestBuilder, V1RequestBuilderNavigationMetadata } from './v1/index.js';
 // @ts-ignore
 import { apiClientProxifier, ParseNodeFactoryRegistry, SerializationWriterFactoryRegistry, type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type RequestAdapter } from '@microsoft/kiota-abstractions';
@@ -59,6 +61,10 @@ export interface PaperGoClient extends BaseRequestBuilder<PaperGoClient> {
      */
     get health(): HealthRequestBuilder;
     /**
+     * The openapiJson property
+     */
+    get openapiJson(): OpenapiJsonRequestBuilder;
+    /**
      * The v1 property
      */
     get v1(): V1RequestBuilder;
@@ -73,6 +79,9 @@ export const PaperGoClientUriTemplate = "{+baseurl}";
 export const PaperGoClientNavigationMetadata: Record<Exclude<keyof PaperGoClient, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
     health: {
         navigationMetadata: HealthRequestBuilderNavigationMetadata,
+    },
+    openapiJson: {
+        requestsMetadata: OpenapiJsonRequestBuilderRequestsMetadata,
     },
     v1: {
         navigationMetadata: V1RequestBuilderNavigationMetadata,

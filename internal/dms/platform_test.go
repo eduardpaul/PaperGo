@@ -23,7 +23,7 @@ func latest(t *testing.T, s *Service, id string) *ent.Resource {
 }
 func grantReader(t *testing.T, s *Service, w *ent.Resource) {
 	t.Helper()
-	_, e := s.SetPermissions(testContext, "alice", w.ID, latest(t, s, w.ID).Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}, {"reader", "read", "allow"}}})
+	e := setWorkspaceMembers(testContext, s, "alice", w.ID, WorkspaceMember{Subject: "reader", Role: "visitor"})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -52,8 +52,8 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 		t.Fatal(e)
 	}
 	rows, e := s.Schemas(testContext, "alice", l.ID, 0, 100)
-	if e != nil || len(rows) != 2 {
-		t.Fatal("template must freeze one effective schema", len(rows), e)
+	if e != nil || len(rows.Data) != 2 {
+		t.Fatal("template must freeze one effective schema", len(rows.Data), e)
 	}
 	r := create(t, s, l.ID, "item", "Invoice", map[string]any{"labels": []any{"red", "red", "blue"}, "email": "a@example.com", "date": "2026-10-07"})
 	if r.Values["serial"] != json.Number("9007199254740993") || r.Values["amount"] != "12.30" || len(r.Values["labels"].([]any)) != 2 {
@@ -73,7 +73,7 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 	if *c.SchemaHeadID != *l.SchemaHeadID {
 		t.Fatal("editing a template changed its consumers")
 	}
-	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version-1, ""); !errors.Is(e, ErrConflict) {
+	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version-1, ""); !errors.Is(e, ErrPreconditionFailed) {
 		t.Fatal("template version ignored", e)
 	}
 	c, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version, "")
@@ -114,18 +114,18 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 			}
 		}
 	}
-	q, e := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "labels", Value: json.RawMessage(`"blue"`)}}})
-	if e != nil || q.Total != 1 {
+	q, e := s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "labels", Value: json.RawMessage(`"blue"`)}}})
+	if e != nil || counted(q.Total) != 1 {
 		t.Fatal("multi-value query", q, e)
 	}
-	q, e = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "labels", Op: "ne", Value: json.RawMessage(`"blue"`)}}})
-	if e != nil || q.Total != 0 {
+	q, e = s.Query(testContext, "alice", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "labels", Op: "ne", Value: json.RawMessage(`"blue"`)}}})
+	if e != nil || counted(q.Total) != 0 {
 		t.Fatal("multi-value ne must match no member", q, e)
 	}
 }
 func TestTaxonomyAndLookupPreserveIDsAndValidateNewAssignments(t *testing.T) {
 	s, w, l := fixture(t)
-	set, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "topics", Name: "Topics"})
+	set, e := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "topics", Name: "Topics"})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -168,22 +168,22 @@ func TestTaxonomyAndLookupPreserveIDsAndValidateNewAssignments(t *testing.T) {
 	if _, e = s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: "Wrong lookup", Values: map[string]any{"contact": r.ID}}); e == nil {
 		t.Fatal("foreign lookup target")
 	}
-	matches, e := s.Terms(testContext, "alice", set.ID, "finanzas", "", 50)
+	matches, e := s.Terms(testContext, "alice", set.ID, TermsQuery{Search: "finanzas"})
 	if e != nil || len(matches.Data) != 1 || matches.Data[0].ID != root.ID {
 		t.Fatal("localized search", matches, e)
 	}
-	matches, e = s.Terms(testContext, "alice", set.ID, "money", "", 50)
+	matches, e = s.Terms(testContext, "alice", set.ID, TermsQuery{Search: "money"})
 	if e != nil || len(matches.Data) != 1 {
 		t.Fatal("synonym search", matches, e)
 	}
-	another, e := s.CreateTermSet(testContext, "alice", w.ID, TermSetInput{Key: "other", Name: "Other"})
+	another, e := s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: testTermGroup(s), Key: "other", Name: "Other"})
 	if e != nil {
 		t.Fatal(e)
 	}
 	if _, e = s.CreateTerm(testContext, "alice", another.ID, TermInput{Name: "Bad parent", ParentID: &root.ID}); e == nil {
 		t.Fatal("cross-set parent")
 	}
-	if _, e = s.CreateTermSet(testContext, "reader", w.ID, TermSetInput{Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
+	if _, e = s.CreateTermSet(testContext, "reader", TermSetInput{GroupID: testTermGroup(s), Key: "forbidden", Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
 		t.Fatal("taxonomy management authorization", e)
 	}
 }
@@ -204,7 +204,7 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 	for _, r := range []*ent.Resource{a, b, c, missing, hidden} {
 		publishItem(t, s, r)
 	}
-	if _, e := s.SetPermissions(testContext, "alice", hidden.ID, latest(t, s, hidden.ID).Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}}); e != nil {
+	if _, e := s.SetPermissions(testContext, "alice", hidden.ID, latest(t, s, hidden.ID).Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}}); e != nil {
 		t.Fatal(e)
 	}
 	values := map[string]any{"serial": json.Number("3"), "amount": "99.99"}
@@ -212,16 +212,16 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 	if _, e := s.Update(testContext, "alice", a.ID, latest(t, s, a.ID).Version, UpdateResource{Values: &values, Name: &name}); e != nil {
 		t.Fatal(e)
 	}
-	spec := QuerySpec{Sort: SortSpec{Field: "serial"}, GroupBy: "amount", Filter: &FilterExpr{Or: []FilterExpr{{Field: "serial", Op: "gte", Value: json.RawMessage("9007199254740993")}, {Field: "serial", Op: "missing"}}}}
-	query := QueryRequest{Query: spec, Limit: 1}
+	spec := QuerySpec{Sort: []SortSpec{{Field: "serial"}}, GroupBy: "amount", Filter: &FilterExpr{Or: []FilterExpr{{Field: "serial", Op: "gte", Value: json.RawMessage("9007199254740993")}, {Field: "serial", Op: "missing"}}}}
+	query := QueryRequest{Query: spec, Limit: 1, IncludeTotal: true}
 	ids := []string{}
 	for {
 		page, e := s.Query(testContext, "reader", l.ID, query)
 		if e != nil {
 			t.Fatal(e)
 		}
-		if page.Total != 4 {
-			t.Fatal("unauthorized/draft count", page.Total)
+		if counted(page.Total) != 4 {
+			t.Fatal("unauthorized/draft count", counted(page.Total))
 		}
 		for _, r := range page.Data {
 			ids = append(ids, r.ID)
@@ -256,7 +256,8 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 		t.Fatal("cursor reused across caller")
 	}
 	changed := spec
-	changed.Sort.Direction = "desc"
+	changed.Sort = append([]SortSpec{}, spec.Sort...)
+	changed.Sort[0].Direction = "desc"
 	if _, e = s.Query(testContext, "reader", l.ID, QueryRequest{Query: changed, After: first.NextCursor}); e == nil {
 		t.Fatal("cursor reused across query")
 	}
@@ -264,8 +265,8 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	data, e := s.QueryView(testContext, "reader", view.ID, ViewQueryRequest{})
-	if e != nil || data.Total != 4 {
+	data, e := s.QueryView(testContext, "reader", view.ID, ViewQueryRequest{IncludeTotal: true})
+	if e != nil || counted(data.Total) != 4 {
 		t.Fatal("view query", data, e)
 	}
 	for _, r := range data.Data {
@@ -285,7 +286,7 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 	if e != nil || current.IsDefault || current.Version != view.Version+1 {
 		t.Fatal("default view concurrency", current, e)
 	}
-	if _, e = s.UpdateView(testContext, "alice", view.ID, view.Version, ViewInput{Name: "Old"}); !errors.Is(e, ErrConflict) {
+	if _, e = s.UpdateView(testContext, "alice", view.ID, view.Version, ViewInput{Name: "Old"}); !errors.Is(e, ErrPreconditionFailed) {
 		t.Fatal("stale view update")
 	}
 	if _, e = s.CreateView(testContext, "reader", l.ID, ViewInput{Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
@@ -310,13 +311,13 @@ func TestExclusiveScopesInheritanceCopyAndReset(t *testing.T) {
 	item := create(t, s, nested.ID, "item", "Document", nil)
 	publishItem(t, s, item)
 	permissions, e := s.Permissions(testContext, "alice", item.ID)
-	if e != nil || permissions.ScopeID != w.ID || !permissions.Inherit || len(permissions.EffectiveGrants) != 2 {
+	if e != nil || permissions.ScopeID != w.ID || !permissions.Inherit || len(permissions.EffectiveGrants) != 3 {
 		t.Fatal("effective inherited scope", permissions, e)
 	}
-	if _, e = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Inherit: true, Grants: []Permission{{"alice", "manage", "allow"}}}); e == nil {
+	if _, e = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Inherit: true, Grants: []Permission{{"user", "alice", "manage", "allow"}}}); e == nil {
 		t.Fatal("augmented inheritance accepted")
 	}
-	folder, e = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}})
+	folder, e = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -344,38 +345,38 @@ func TestExclusiveScopesInheritanceCopyAndReset(t *testing.T) {
 		t.Fatal(e)
 	}
 	permissions, e = s.Permissions(testContext, "alice", item.ID)
-	if e != nil || permissions.ScopeID != folder.ID || len(permissions.EffectiveGrants) != 2 {
+	if e != nil || permissions.ScopeID != folder.ID || len(permissions.EffectiveGrants) != 3 {
 		t.Fatal("copy inherited scope", permissions, e)
 	}
-	_, e = s.SetPermissions(testContext, "alice", w.ID, latest(t, s, w.ID).Version, Permissions{Grants: []Permission{{"alice", "manage", "allow"}}})
+	e = s.RemoveWorkspaceMember(testContext, "alice", w.ID, "reader")
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.Get(testContext, "reader", item.ID); e != nil {
-		t.Fatal("exclusive copy should retain copied grant", e)
+	if _, e = s.Get(testContext, "reader", item.ID); !errors.Is(e, ErrForbidden) {
+		t.Fatal("copied workspace roles must track current membership", e)
 	}
 	inherited := create(t, s, l.ID, "folder", "Inherited", nil)
-	if _, e = s.Client.Grant.Create().SetResourceID(inherited.ID).SetSubject("reader").SetAction("read").SetEffect("allow").Save(testContext); e == nil {
+	if _, e = s.Client.Grant.Create().SetResourceID(inherited.ID).SetPrincipalType("user").SetPrincipalID("reader").SetAction("read").SetEffect("allow").Save(testContext); e == nil {
 		t.Fatal("database accepted a grant on an inherited resource")
 	}
 }
 func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
-	s, w, l := fixture(t)
+	s, _, l := fixture(t)
 	a := create(t, s, l.ID, "item", "A", nil)
 	b := create(t, s, l.ID, "item", "B", nil)
 	c := create(t, s, l.ID, "item", "C", nil)
-	typ, e := s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "owns", Label: "Owns", InverseLabel: "Owned by", Directed: true, MaxOutgoing: ptr(1), Attributes: []CreateField{{Key: "weight", Label: "Weight", Type: "decimal", Scale: 2, Required: true, Options: model.FieldOptions{Maximum: ptr("10.00")}}}})
+	typ, e := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Owns", InverseLabel: "Owned by", Directed: true, MaxOutgoing: ptr(1), Attributes: []CreateField{{Key: "weight", Label: "Weight", Type: "decimal", Scale: 2, Required: true, Options: model.FieldOptions{Maximum: ptr("10.00")}}}})
 	if e != nil {
 		t.Fatal(e)
 	}
-	edge, e := s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: typ.ID, TargetID: b.ID, Metadata: map[string]any{"weight": "1.20"}})
+	edge, e := s.Link(testContext, "alice", a.ID, CreateRelationship{Type: typ.ID, TargetID: b.ID, Metadata: map[string]any{"weight": "1.20"}})
 	if e != nil {
 		t.Fatal(e)
 	}
-	if edge.TypeID != typ.ID || edge.Name != "owns" || edge.Metadata["weight"] != "1.20" {
+	if edge.TypeID != typ.ID || edge.Metadata["weight"] != "1.20" {
 		t.Fatal("typed edge normalization", edge)
 	}
-	if _, e = s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: typ.ID, TargetID: c.ID, Metadata: map[string]any{"weight": "1.20"}}); !errors.Is(e, ErrConflict) {
+	if _, e = s.Link(testContext, "alice", a.ID, CreateRelationship{Type: typ.ID, TargetID: c.ID, Metadata: map[string]any{"weight": "1.20"}}); !errors.Is(e, ErrConflict) {
 		t.Fatal("cardinality ignored", e)
 	}
 	if _, e = s.UpdateRelationship(testContext, "alice", a.ID, edge.ID, edge.Version, UpdateRelationship{Metadata: map[string]any{"weight": "11.00"}}); e == nil {
@@ -385,28 +386,28 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 	if e != nil || updated.Version != 2 {
 		t.Fatal("edge update", updated, e)
 	}
-	if _, e = s.UpdateRelationship(testContext, "alice", a.ID, edge.ID, edge.Version, UpdateRelationship{Metadata: map[string]any{"weight": "3.00"}}); !errors.Is(e, ErrConflict) {
+	if _, e = s.UpdateRelationship(testContext, "alice", a.ID, edge.ID, edge.Version, UpdateRelationship{Metadata: map[string]any{"weight": "3.00"}}); !errors.Is(e, ErrPreconditionFailed) {
 		t.Fatal("stale edge update")
 	}
-	if e = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, edge.Version); !errors.Is(e, ErrConflict) {
+	if e = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, edge.Version); !errors.Is(e, ErrPreconditionFailed) {
 		t.Fatal("stale edge delete")
 	}
 	if e = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, updated.Version); e != nil {
 		t.Fatal(e)
 	}
-	sym, e := s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "related", Label: "Related"})
+	sym, e := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Related"})
 	if e != nil {
 		t.Fatal(e)
 	}
-	edge, e = s.Link(testContext, "alice", b.ID, CreateRelationship{TypeID: sym.ID, TargetID: a.ID})
+	edge, e = s.Link(testContext, "alice", b.ID, CreateRelationship{Type: sym.ID, TargetID: a.ID})
 	if e != nil {
 		t.Fatal(e)
 	}
 	if edge.Directed || edge.SourceID > edge.TargetID {
 		t.Fatal("noncanonical symmetric edge")
 	}
-	if _, e = s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: sym.ID, TargetID: b.ID}); !errors.Is(e, ErrConflict) {
-		t.Fatal("symmetric duplicate", e)
+	if again, e := s.Link(testContext, "alice", a.ID, CreateRelationship{Type: sym.ID, TargetID: b.ID}); e != nil || again.ID != edge.ID {
+		t.Fatal("symmetric retry", again, e)
 	}
 	for _, id := range []string{a.ID, b.ID} {
 		for _, direction := range []string{"incoming", "outgoing"} {
@@ -416,11 +417,11 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 			}
 		}
 	}
-	if _, e = s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "bad", Label: "Bad", MaxIncoming: ptr(1)}); e == nil {
+	if _, e = s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Bad", MaxIncoming: ptr(1)}); e == nil {
 		t.Fatal("directional cardinality on symmetric policy")
 	}
 	// Competing links allocate the single outgoing slot atomically.
-	single, e := s.CreateRelationshipType(testContext, "alice", w.ID, RelationshipTypeInput{Key: "single", Label: "Single", Directed: true, MaxOutgoing: ptr(1)})
+	single, e := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Single", Directed: true, MaxOutgoing: ptr(1)})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -430,7 +431,7 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 		wg.Add(1)
 		go func(target string) {
 			defer wg.Done()
-			_, e := s.Link(testContext, "alice", a.ID, CreateRelationship{TypeID: single.ID, TargetID: target})
+			_, e := s.Link(testContext, "alice", a.ID, CreateRelationship{Type: single.ID, TargetID: target})
 			results <- e
 		}(id)
 	}
@@ -465,14 +466,14 @@ func TestQueriesCanMatchHistoricalChoicesAfterValidationChanges(t *testing.T) {
 	if _, e = s.UpdateField(testContext, "alice", l.ID, d.ID, latest(t, s, l.ID).Version, UpdateField{Choices: &choices}); e != nil {
 		t.Fatal(e)
 	}
-	result, e := s.Query(testContext, "reader", l.ID, QueryRequest{Query: QuerySpec{Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"old"`)}}})
-	if e != nil || result.Total != 1 {
+	result, e := s.Query(testContext, "reader", l.ID, QueryRequest{IncludeTotal: true, Query: QuerySpec{Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"old"`)}}})
+	if e != nil || counted(result.Total) != 1 {
 		t.Fatal("historical choice became unqueryable", result, e)
 	}
 }
 func TestExpandedFieldIndexesSurviveIndexRebuild(t *testing.T) {
 	s, _, l := fixture(t)
-	d, e := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "labels", Label: "Labels", Type: "text", Indexed: true, Options: model.FieldOptions{Multiple: true}})
+	d, e := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "labels", Label: "Labels", Type: "choice", Choices: []string{"one", "two"}, Indexed: true, Options: model.FieldOptions{Multiple: true}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -484,6 +485,9 @@ func TestExpandedFieldIndexesSurviveIndexRebuild(t *testing.T) {
 	}
 	for _, flag := range []bool{false, true} {
 		if _, e = s.UpdateField(testContext, "alice", l.ID, d.ID, latest(t, s, l.ID).Version, UpdateField{Indexed: &flag}); e != nil {
+			t.Fatal(e)
+		}
+		if e = s.runOperations(testContext); e != nil {
 			t.Fatal(e)
 		}
 		n, e = s.Client.FieldValue.Query().Where(fieldvalue.ItemIDEQ(r.ID)).Count(testContext)

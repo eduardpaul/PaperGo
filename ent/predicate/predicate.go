@@ -12,11 +12,20 @@ type AuditEvent func(*sql.Selector)
 // Blob is the predicate function for blob builders.
 type Blob func(*sql.Selector)
 
+// BlobDeletion is the predicate function for blobdeletion builders.
+type BlobDeletion func(*sql.Selector)
+
 // BusinessKey is the predicate function for businesskey builders.
 type BusinessKey func(*sql.Selector)
 
+// CollectionType is the predicate function for collectiontype builders.
+type CollectionType func(*sql.Selector)
+
 // ContentType is the predicate function for contenttype builders.
 type ContentType func(*sql.Selector)
+
+// DomainEvent is the predicate function for domainevent builders.
+type DomainEvent func(*sql.Selector)
 
 // FieldDefinition is the predicate function for fielddefinition builders.
 type FieldDefinition func(*sql.Selector)
@@ -27,6 +36,27 @@ type FieldValue func(*sql.Selector)
 // Grant is the predicate function for grant builders.
 type Grant func(*sql.Selector)
 
+// IdentityAssignment is the predicate function for identityassignment builders.
+type IdentityAssignment func(*sql.Selector)
+
+// IdentityGroup is the predicate function for identitygroup builders.
+type IdentityGroup func(*sql.Selector)
+
+// IdentityMembership is the predicate function for identitymembership builders.
+type IdentityMembership func(*sql.Selector)
+
+// IdentityPreference is the predicate function for identitypreference builders.
+type IdentityPreference func(*sql.Selector)
+
+// IdentityRole is the predicate function for identityrole builders.
+type IdentityRole func(*sql.Selector)
+
+// IdentityUser is the predicate function for identityuser builders.
+type IdentityUser func(*sql.Selector)
+
+// ItemHistory is the predicate function for itemhistory builders.
+type ItemHistory func(*sql.Selector)
+
 // ItemRevision is the predicate function for itemrevision builders.
 type ItemRevision func(*sql.Selector)
 
@@ -35,6 +65,12 @@ type ItemSurface func(*sql.Selector)
 
 // ListView is the predicate function for listview builders.
 type ListView func(*sql.Selector)
+
+// Operation is the predicate function for operation builders.
+type Operation func(*sql.Selector)
+
+// OperationItem is the predicate function for operationitem builders.
+type OperationItem func(*sql.Selector)
 
 // Publication is the predicate function for publication builders.
 type Publication func(*sql.Selector)
@@ -60,8 +96,26 @@ type SmartFolder func(*sql.Selector)
 // Term is the predicate function for term builders.
 type Term func(*sql.Selector)
 
+// TermGroup is the predicate function for termgroup builders.
+type TermGroup func(*sql.Selector)
+
 // TermSet is the predicate function for termset builders.
 type TermSet func(*sql.Selector)
 
 // WebDAVCredential is the predicate function for webdavcredential builders.
 type WebDAVCredential func(*sql.Selector)
+
+// Workflow is the predicate function for workflow builders.
+type Workflow func(*sql.Selector)
+
+// WorkflowRun is the predicate function for workflowrun builders.
+type WorkflowRun func(*sql.Selector)
+
+// WorkflowRunItem is the predicate function for workflowrunitem builders.
+type WorkflowRunItem func(*sql.Selector)
+
+// WorkflowTrigger is the predicate function for workflowtrigger builders.
+type WorkflowTrigger func(*sql.Selector)
+
+// WorkflowVersion is the predicate function for workflowversion builders.
+type WorkflowVersion func(*sql.Selector)

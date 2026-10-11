@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"papergo/ent/blob"
-	"papergo/ent/fielddefinition"
 	"papergo/ent/grant"
 	"papergo/ent/itemrevision"
 	"papergo/ent/predicate"
@@ -36,6 +35,20 @@ func (_u *ResourceUpdate) Where(ps ...predicate.Resource) *ResourceUpdate {
 	return _u
 }
 
+// SetWorkspaceID sets the "workspace_id" field.
+func (_u *ResourceUpdate) SetWorkspaceID(v string) *ResourceUpdate {
+	_u.mutation.SetWorkspaceID(v)
+	return _u
+}
+
+// SetNillableWorkspaceID sets the "workspace_id" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableWorkspaceID(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetWorkspaceID(*v)
+	}
+	return _u
+}
+
 // SetParentID sets the "parent_id" field.
 func (_u *ResourceUpdate) SetParentID(v string) *ResourceUpdate {
 	_u.mutation.SetParentID(v)
@@ -56,6 +69,46 @@ func (_u *ResourceUpdate) ClearParentID() *ResourceUpdate {
 	return _u
 }
 
+// SetContainerID sets the "container_id" field.
+func (_u *ResourceUpdate) SetContainerID(v string) *ResourceUpdate {
+	_u.mutation.SetContainerID(v)
+	return _u
+}
+
+// SetNillableContainerID sets the "container_id" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableContainerID(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetContainerID(*v)
+	}
+	return _u
+}
+
+// ClearContainerID clears the value of the "container_id" field.
+func (_u *ResourceUpdate) ClearContainerID() *ResourceUpdate {
+	_u.mutation.ClearContainerID()
+	return _u
+}
+
+// SetContentTypeID sets the "content_type_id" field.
+func (_u *ResourceUpdate) SetContentTypeID(v string) *ResourceUpdate {
+	_u.mutation.SetContentTypeID(v)
+	return _u
+}
+
+// SetNillableContentTypeID sets the "content_type_id" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableContentTypeID(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetContentTypeID(*v)
+	}
+	return _u
+}
+
+// ClearContentTypeID clears the value of the "content_type_id" field.
+func (_u *ResourceUpdate) ClearContentTypeID() *ResourceUpdate {
+	_u.mutation.ClearContentTypeID()
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *ResourceUpdate) SetName(v string) *ResourceUpdate {
 	_u.mutation.SetName(v)
@@ -66,6 +119,34 @@ func (_u *ResourceUpdate) SetName(v string) *ResourceUpdate {
 func (_u *ResourceUpdate) SetNillableName(v *string) *ResourceUpdate {
 	if v != nil {
 		_u.SetName(*v)
+	}
+	return _u
+}
+
+// SetDescription sets the "description" field.
+func (_u *ResourceUpdate) SetDescription(v string) *ResourceUpdate {
+	_u.mutation.SetDescription(v)
+	return _u
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableDescription(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetDescription(*v)
+	}
+	return _u
+}
+
+// SetAllowFolders sets the "allow_folders" field.
+func (_u *ResourceUpdate) SetAllowFolders(v bool) *ResourceUpdate {
+	_u.mutation.SetAllowFolders(v)
+	return _u
+}
+
+// SetNillableAllowFolders sets the "allow_folders" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableAllowFolders(v *bool) *ResourceUpdate {
+	if v != nil {
+		_u.SetAllowFolders(*v)
 	}
 	return _u
 }
@@ -230,6 +311,41 @@ func (_u *ResourceUpdate) SetNillablePublishingEnabled(v *bool) *ResourceUpdate 
 	return _u
 }
 
+// SetVersioning sets the "versioning" field.
+func (_u *ResourceUpdate) SetVersioning(v resource.Versioning) *ResourceUpdate {
+	_u.mutation.SetVersioning(v)
+	return _u
+}
+
+// SetNillableVersioning sets the "versioning" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableVersioning(v *resource.Versioning) *ResourceUpdate {
+	if v != nil {
+		_u.SetVersioning(*v)
+	}
+	return _u
+}
+
+// SetMaxVersions sets the "max_versions" field.
+func (_u *ResourceUpdate) SetMaxVersions(v int) *ResourceUpdate {
+	_u.mutation.ResetMaxVersions()
+	_u.mutation.SetMaxVersions(v)
+	return _u
+}
+
+// SetNillableMaxVersions sets the "max_versions" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableMaxVersions(v *int) *ResourceUpdate {
+	if v != nil {
+		_u.SetMaxVersions(*v)
+	}
+	return _u
+}
+
+// AddMaxVersions adds value to the "max_versions" field.
+func (_u *ResourceUpdate) AddMaxVersions(v int) *ResourceUpdate {
+	_u.mutation.AddMaxVersions(v)
+	return _u
+}
+
 // SetWebdavEnabled sets the "webdav_enabled" field.
 func (_u *ResourceUpdate) SetWebdavEnabled(v bool) *ResourceUpdate {
 	_u.mutation.SetWebdavEnabled(v)
@@ -240,6 +356,20 @@ func (_u *ResourceUpdate) SetWebdavEnabled(v bool) *ResourceUpdate {
 func (_u *ResourceUpdate) SetNillableWebdavEnabled(v *bool) *ResourceUpdate {
 	if v != nil {
 		_u.SetWebdavEnabled(*v)
+	}
+	return _u
+}
+
+// SetDuplicatePolicy sets the "duplicate_policy" field.
+func (_u *ResourceUpdate) SetDuplicatePolicy(v resource.DuplicatePolicy) *ResourceUpdate {
+	_u.mutation.SetDuplicatePolicy(v)
+	return _u
+}
+
+// SetNillableDuplicatePolicy sets the "duplicate_policy" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableDuplicatePolicy(v *resource.DuplicatePolicy) *ResourceUpdate {
+	if v != nil {
+		_u.SetDuplicatePolicy(*v)
 	}
 	return _u
 }
@@ -324,6 +454,26 @@ func (_u *ResourceUpdate) ClearDeletedAt() *ResourceUpdate {
 	return _u
 }
 
+// SetDeletedBy sets the "deleted_by" field.
+func (_u *ResourceUpdate) SetDeletedBy(v string) *ResourceUpdate {
+	_u.mutation.SetDeletedBy(v)
+	return _u
+}
+
+// SetNillableDeletedBy sets the "deleted_by" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableDeletedBy(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetDeletedBy(*v)
+	}
+	return _u
+}
+
+// ClearDeletedBy clears the value of the "deleted_by" field.
+func (_u *ResourceUpdate) ClearDeletedBy() *ResourceUpdate {
+	_u.mutation.ClearDeletedBy()
+	return _u
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by IDs.
 func (_u *ResourceUpdate) AddChildIDs(ids ...string) *ResourceUpdate {
 	_u.mutation.AddChildIDs(ids...)
@@ -359,19 +509,9 @@ func (_u *ResourceUpdate) AddContainedItems(v ...*Resource) *ResourceUpdate {
 	return _u.AddContainedItemIDs(ids...)
 }
 
-// AddDefinitionIDs adds the "definitions" edge to the FieldDefinition entity by IDs.
-func (_u *ResourceUpdate) AddDefinitionIDs(ids ...string) *ResourceUpdate {
-	_u.mutation.AddDefinitionIDs(ids...)
-	return _u
-}
-
-// AddDefinitions adds the "definitions" edges to the FieldDefinition entity.
-func (_u *ResourceUpdate) AddDefinitions(v ...*FieldDefinition) *ResourceUpdate {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddDefinitionIDs(ids...)
+// SetContainer sets the "container" edge to the Resource entity.
+func (_u *ResourceUpdate) SetContainer(v *Resource) *ResourceUpdate {
+	return _u.SetContainerID(v.ID)
 }
 
 // AddGrantIDs adds the "grants" edge to the Grant entity by IDs.
@@ -547,25 +687,10 @@ func (_u *ResourceUpdate) RemoveContainedItems(v ...*Resource) *ResourceUpdate {
 	return _u.RemoveContainedItemIDs(ids...)
 }
 
-// ClearDefinitions clears all "definitions" edges to the FieldDefinition entity.
-func (_u *ResourceUpdate) ClearDefinitions() *ResourceUpdate {
-	_u.mutation.ClearDefinitions()
+// ClearContainer clears the "container" edge to the Resource entity.
+func (_u *ResourceUpdate) ClearContainer() *ResourceUpdate {
+	_u.mutation.ClearContainer()
 	return _u
-}
-
-// RemoveDefinitionIDs removes the "definitions" edge to FieldDefinition entities by IDs.
-func (_u *ResourceUpdate) RemoveDefinitionIDs(ids ...string) *ResourceUpdate {
-	_u.mutation.RemoveDefinitionIDs(ids...)
-	return _u
-}
-
-// RemoveDefinitions removes "definitions" edges to FieldDefinition entities.
-func (_u *ResourceUpdate) RemoveDefinitions(v ...*FieldDefinition) *ResourceUpdate {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveDefinitionIDs(ids...)
 }
 
 // ClearGrants clears all "grants" edges to the Grant entity.
@@ -771,14 +896,34 @@ func (_u *ResourceUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ResourceUpdate) check() error {
+	if v, ok := _u.mutation.WorkspaceID(); ok {
+		if err := resource.WorkspaceIDValidator(v); err != nil {
+			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "Resource.workspace_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ParentID(); ok {
 		if err := resource.ParentIDValidator(v); err != nil {
 			return &ValidationError{Name: "parent_id", err: fmt.Errorf(`ent: validator failed for field "Resource.parent_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ContainerID(); ok {
+		if err := resource.ContainerIDValidator(v); err != nil {
+			return &ValidationError{Name: "container_id", err: fmt.Errorf(`ent: validator failed for field "Resource.container_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ContentTypeID(); ok {
+		if err := resource.ContentTypeIDValidator(v); err != nil {
+			return &ValidationError{Name: "content_type_id", err: fmt.Errorf(`ent: validator failed for field "Resource.content_type_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := resource.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Resource.name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Description(); ok {
+		if err := resource.DescriptionValidator(v); err != nil {
+			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Resource.description": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Version(); ok {
@@ -789,6 +934,21 @@ func (_u *ResourceUpdate) check() error {
 	if v, ok := _u.mutation.NextRevisionNumber(); ok {
 		if err := resource.NextRevisionNumberValidator(v); err != nil {
 			return &ValidationError{Name: "next_revision_number", err: fmt.Errorf(`ent: validator failed for field "Resource.next_revision_number": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Versioning(); ok {
+		if err := resource.VersioningValidator(v); err != nil {
+			return &ValidationError{Name: "versioning", err: fmt.Errorf(`ent: validator failed for field "Resource.versioning": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.MaxVersions(); ok {
+		if err := resource.MaxVersionsValidator(v); err != nil {
+			return &ValidationError{Name: "max_versions", err: fmt.Errorf(`ent: validator failed for field "Resource.max_versions": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DuplicatePolicy(); ok {
+		if err := resource.DuplicatePolicyValidator(v); err != nil {
+			return &ValidationError{Name: "duplicate_policy", err: fmt.Errorf(`ent: validator failed for field "Resource.duplicate_policy": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.ScopeID(); ok {
@@ -816,11 +976,23 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.WorkspaceID(); ok {
+		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ContentTypeID(); ok {
+		_spec.SetField(resource.FieldContentTypeID, field.TypeString, value)
+	}
 	if _u.mutation.ContentTypeIDCleared() {
 		_spec.ClearField(resource.FieldContentTypeID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(resource.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Description(); ok {
+		_spec.SetField(resource.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AllowFolders(); ok {
+		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Tags(); ok {
 		_spec.SetField(resource.FieldTags, field.TypeJSON, value)
@@ -859,8 +1031,20 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.PublishingEnabled(); ok {
 		_spec.SetField(resource.FieldPublishingEnabled, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.Versioning(); ok {
+		_spec.SetField(resource.FieldVersioning, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.MaxVersions(); ok {
+		_spec.SetField(resource.FieldMaxVersions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedMaxVersions(); ok {
+		_spec.AddField(resource.FieldMaxVersions, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.WebdavEnabled(); ok {
 		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DuplicatePolicy(); ok {
+		_spec.SetField(resource.FieldDuplicatePolicy, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
@@ -885,6 +1069,12 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(resource.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DeletedBy(); ok {
+		_spec.SetField(resource.FieldDeletedBy, field.TypeString, value)
+	}
+	if _u.mutation.DeletedByCleared() {
+		_spec.ClearField(resource.FieldDeletedBy, field.TypeString)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1005,44 +1195,28 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if _u.mutation.DefinitionsCleared() {
+	if _u.mutation.ContainerCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ContainerTable,
+			Columns: []string{resource.ContainerColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := _u.mutation.RemovedDefinitionsIDs(); len(nodes) > 0 && !_u.mutation.DefinitionsCleared() {
+	if nodes := _u.mutation.ContainerIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ContainerTable,
+			Columns: []string{resource.ContainerColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.DefinitionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1472,6 +1646,20 @@ type ResourceUpdateOne struct {
 	mutation *ResourceMutation
 }
 
+// SetWorkspaceID sets the "workspace_id" field.
+func (_u *ResourceUpdateOne) SetWorkspaceID(v string) *ResourceUpdateOne {
+	_u.mutation.SetWorkspaceID(v)
+	return _u
+}
+
+// SetNillableWorkspaceID sets the "workspace_id" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableWorkspaceID(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetWorkspaceID(*v)
+	}
+	return _u
+}
+
 // SetParentID sets the "parent_id" field.
 func (_u *ResourceUpdateOne) SetParentID(v string) *ResourceUpdateOne {
 	_u.mutation.SetParentID(v)
@@ -1492,6 +1680,46 @@ func (_u *ResourceUpdateOne) ClearParentID() *ResourceUpdateOne {
 	return _u
 }
 
+// SetContainerID sets the "container_id" field.
+func (_u *ResourceUpdateOne) SetContainerID(v string) *ResourceUpdateOne {
+	_u.mutation.SetContainerID(v)
+	return _u
+}
+
+// SetNillableContainerID sets the "container_id" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableContainerID(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetContainerID(*v)
+	}
+	return _u
+}
+
+// ClearContainerID clears the value of the "container_id" field.
+func (_u *ResourceUpdateOne) ClearContainerID() *ResourceUpdateOne {
+	_u.mutation.ClearContainerID()
+	return _u
+}
+
+// SetContentTypeID sets the "content_type_id" field.
+func (_u *ResourceUpdateOne) SetContentTypeID(v string) *ResourceUpdateOne {
+	_u.mutation.SetContentTypeID(v)
+	return _u
+}
+
+// SetNillableContentTypeID sets the "content_type_id" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableContentTypeID(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetContentTypeID(*v)
+	}
+	return _u
+}
+
+// ClearContentTypeID clears the value of the "content_type_id" field.
+func (_u *ResourceUpdateOne) ClearContentTypeID() *ResourceUpdateOne {
+	_u.mutation.ClearContentTypeID()
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *ResourceUpdateOne) SetName(v string) *ResourceUpdateOne {
 	_u.mutation.SetName(v)
@@ -1502,6 +1730,34 @@ func (_u *ResourceUpdateOne) SetName(v string) *ResourceUpdateOne {
 func (_u *ResourceUpdateOne) SetNillableName(v *string) *ResourceUpdateOne {
 	if v != nil {
 		_u.SetName(*v)
+	}
+	return _u
+}
+
+// SetDescription sets the "description" field.
+func (_u *ResourceUpdateOne) SetDescription(v string) *ResourceUpdateOne {
+	_u.mutation.SetDescription(v)
+	return _u
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableDescription(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetDescription(*v)
+	}
+	return _u
+}
+
+// SetAllowFolders sets the "allow_folders" field.
+func (_u *ResourceUpdateOne) SetAllowFolders(v bool) *ResourceUpdateOne {
+	_u.mutation.SetAllowFolders(v)
+	return _u
+}
+
+// SetNillableAllowFolders sets the "allow_folders" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableAllowFolders(v *bool) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetAllowFolders(*v)
 	}
 	return _u
 }
@@ -1666,6 +1922,41 @@ func (_u *ResourceUpdateOne) SetNillablePublishingEnabled(v *bool) *ResourceUpda
 	return _u
 }
 
+// SetVersioning sets the "versioning" field.
+func (_u *ResourceUpdateOne) SetVersioning(v resource.Versioning) *ResourceUpdateOne {
+	_u.mutation.SetVersioning(v)
+	return _u
+}
+
+// SetNillableVersioning sets the "versioning" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableVersioning(v *resource.Versioning) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetVersioning(*v)
+	}
+	return _u
+}
+
+// SetMaxVersions sets the "max_versions" field.
+func (_u *ResourceUpdateOne) SetMaxVersions(v int) *ResourceUpdateOne {
+	_u.mutation.ResetMaxVersions()
+	_u.mutation.SetMaxVersions(v)
+	return _u
+}
+
+// SetNillableMaxVersions sets the "max_versions" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableMaxVersions(v *int) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetMaxVersions(*v)
+	}
+	return _u
+}
+
+// AddMaxVersions adds value to the "max_versions" field.
+func (_u *ResourceUpdateOne) AddMaxVersions(v int) *ResourceUpdateOne {
+	_u.mutation.AddMaxVersions(v)
+	return _u
+}
+
 // SetWebdavEnabled sets the "webdav_enabled" field.
 func (_u *ResourceUpdateOne) SetWebdavEnabled(v bool) *ResourceUpdateOne {
 	_u.mutation.SetWebdavEnabled(v)
@@ -1676,6 +1967,20 @@ func (_u *ResourceUpdateOne) SetWebdavEnabled(v bool) *ResourceUpdateOne {
 func (_u *ResourceUpdateOne) SetNillableWebdavEnabled(v *bool) *ResourceUpdateOne {
 	if v != nil {
 		_u.SetWebdavEnabled(*v)
+	}
+	return _u
+}
+
+// SetDuplicatePolicy sets the "duplicate_policy" field.
+func (_u *ResourceUpdateOne) SetDuplicatePolicy(v resource.DuplicatePolicy) *ResourceUpdateOne {
+	_u.mutation.SetDuplicatePolicy(v)
+	return _u
+}
+
+// SetNillableDuplicatePolicy sets the "duplicate_policy" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableDuplicatePolicy(v *resource.DuplicatePolicy) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetDuplicatePolicy(*v)
 	}
 	return _u
 }
@@ -1760,6 +2065,26 @@ func (_u *ResourceUpdateOne) ClearDeletedAt() *ResourceUpdateOne {
 	return _u
 }
 
+// SetDeletedBy sets the "deleted_by" field.
+func (_u *ResourceUpdateOne) SetDeletedBy(v string) *ResourceUpdateOne {
+	_u.mutation.SetDeletedBy(v)
+	return _u
+}
+
+// SetNillableDeletedBy sets the "deleted_by" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableDeletedBy(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetDeletedBy(*v)
+	}
+	return _u
+}
+
+// ClearDeletedBy clears the value of the "deleted_by" field.
+func (_u *ResourceUpdateOne) ClearDeletedBy() *ResourceUpdateOne {
+	_u.mutation.ClearDeletedBy()
+	return _u
+}
+
 // AddChildIDs adds the "children" edge to the Resource entity by IDs.
 func (_u *ResourceUpdateOne) AddChildIDs(ids ...string) *ResourceUpdateOne {
 	_u.mutation.AddChildIDs(ids...)
@@ -1795,19 +2120,9 @@ func (_u *ResourceUpdateOne) AddContainedItems(v ...*Resource) *ResourceUpdateOn
 	return _u.AddContainedItemIDs(ids...)
 }
 
-// AddDefinitionIDs adds the "definitions" edge to the FieldDefinition entity by IDs.
-func (_u *ResourceUpdateOne) AddDefinitionIDs(ids ...string) *ResourceUpdateOne {
-	_u.mutation.AddDefinitionIDs(ids...)
-	return _u
-}
-
-// AddDefinitions adds the "definitions" edges to the FieldDefinition entity.
-func (_u *ResourceUpdateOne) AddDefinitions(v ...*FieldDefinition) *ResourceUpdateOne {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddDefinitionIDs(ids...)
+// SetContainer sets the "container" edge to the Resource entity.
+func (_u *ResourceUpdateOne) SetContainer(v *Resource) *ResourceUpdateOne {
+	return _u.SetContainerID(v.ID)
 }
 
 // AddGrantIDs adds the "grants" edge to the Grant entity by IDs.
@@ -1983,25 +2298,10 @@ func (_u *ResourceUpdateOne) RemoveContainedItems(v ...*Resource) *ResourceUpdat
 	return _u.RemoveContainedItemIDs(ids...)
 }
 
-// ClearDefinitions clears all "definitions" edges to the FieldDefinition entity.
-func (_u *ResourceUpdateOne) ClearDefinitions() *ResourceUpdateOne {
-	_u.mutation.ClearDefinitions()
+// ClearContainer clears the "container" edge to the Resource entity.
+func (_u *ResourceUpdateOne) ClearContainer() *ResourceUpdateOne {
+	_u.mutation.ClearContainer()
 	return _u
-}
-
-// RemoveDefinitionIDs removes the "definitions" edge to FieldDefinition entities by IDs.
-func (_u *ResourceUpdateOne) RemoveDefinitionIDs(ids ...string) *ResourceUpdateOne {
-	_u.mutation.RemoveDefinitionIDs(ids...)
-	return _u
-}
-
-// RemoveDefinitions removes "definitions" edges to FieldDefinition entities.
-func (_u *ResourceUpdateOne) RemoveDefinitions(v ...*FieldDefinition) *ResourceUpdateOne {
-	ids := make([]string, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveDefinitionIDs(ids...)
 }
 
 // ClearGrants clears all "grants" edges to the Grant entity.
@@ -2220,14 +2520,34 @@ func (_u *ResourceUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ResourceUpdateOne) check() error {
+	if v, ok := _u.mutation.WorkspaceID(); ok {
+		if err := resource.WorkspaceIDValidator(v); err != nil {
+			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "Resource.workspace_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ParentID(); ok {
 		if err := resource.ParentIDValidator(v); err != nil {
 			return &ValidationError{Name: "parent_id", err: fmt.Errorf(`ent: validator failed for field "Resource.parent_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ContainerID(); ok {
+		if err := resource.ContainerIDValidator(v); err != nil {
+			return &ValidationError{Name: "container_id", err: fmt.Errorf(`ent: validator failed for field "Resource.container_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ContentTypeID(); ok {
+		if err := resource.ContentTypeIDValidator(v); err != nil {
+			return &ValidationError{Name: "content_type_id", err: fmt.Errorf(`ent: validator failed for field "Resource.content_type_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := resource.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Resource.name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Description(); ok {
+		if err := resource.DescriptionValidator(v); err != nil {
+			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Resource.description": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Version(); ok {
@@ -2238,6 +2558,21 @@ func (_u *ResourceUpdateOne) check() error {
 	if v, ok := _u.mutation.NextRevisionNumber(); ok {
 		if err := resource.NextRevisionNumberValidator(v); err != nil {
 			return &ValidationError{Name: "next_revision_number", err: fmt.Errorf(`ent: validator failed for field "Resource.next_revision_number": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Versioning(); ok {
+		if err := resource.VersioningValidator(v); err != nil {
+			return &ValidationError{Name: "versioning", err: fmt.Errorf(`ent: validator failed for field "Resource.versioning": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.MaxVersions(); ok {
+		if err := resource.MaxVersionsValidator(v); err != nil {
+			return &ValidationError{Name: "max_versions", err: fmt.Errorf(`ent: validator failed for field "Resource.max_versions": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DuplicatePolicy(); ok {
+		if err := resource.DuplicatePolicyValidator(v); err != nil {
+			return &ValidationError{Name: "duplicate_policy", err: fmt.Errorf(`ent: validator failed for field "Resource.duplicate_policy": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.ScopeID(); ok {
@@ -2282,11 +2617,23 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 			}
 		}
 	}
+	if value, ok := _u.mutation.WorkspaceID(); ok {
+		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ContentTypeID(); ok {
+		_spec.SetField(resource.FieldContentTypeID, field.TypeString, value)
+	}
 	if _u.mutation.ContentTypeIDCleared() {
 		_spec.ClearField(resource.FieldContentTypeID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(resource.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Description(); ok {
+		_spec.SetField(resource.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AllowFolders(); ok {
+		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Tags(); ok {
 		_spec.SetField(resource.FieldTags, field.TypeJSON, value)
@@ -2325,8 +2672,20 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	if value, ok := _u.mutation.PublishingEnabled(); ok {
 		_spec.SetField(resource.FieldPublishingEnabled, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.Versioning(); ok {
+		_spec.SetField(resource.FieldVersioning, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.MaxVersions(); ok {
+		_spec.SetField(resource.FieldMaxVersions, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedMaxVersions(); ok {
+		_spec.AddField(resource.FieldMaxVersions, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.WebdavEnabled(); ok {
 		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DuplicatePolicy(); ok {
+		_spec.SetField(resource.FieldDuplicatePolicy, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
@@ -2351,6 +2710,12 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(resource.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DeletedBy(); ok {
+		_spec.SetField(resource.FieldDeletedBy, field.TypeString, value)
+	}
+	if _u.mutation.DeletedByCleared() {
+		_spec.ClearField(resource.FieldDeletedBy, field.TypeString)
 	}
 	if _u.mutation.ChildrenCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2471,44 +2836,28 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if _u.mutation.DefinitionsCleared() {
+	if _u.mutation.ContainerCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ContainerTable,
+			Columns: []string{resource.ContainerColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := _u.mutation.RemovedDefinitionsIDs(); len(nodes) > 0 && !_u.mutation.DefinitionsCleared() {
+	if nodes := _u.mutation.ContainerIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   resource.ContainerTable,
+			Columns: []string{resource.ContainerColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.DefinitionsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   resource.DefinitionsTable,
-			Columns: []string{resource.DefinitionsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(fielddefinition.FieldID, field.TypeString),
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

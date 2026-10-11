@@ -1,0 +1,17 @@
+# Groups, roles and module scopes
+
+PaperGo uses one organization per database. Set `ADMIN_SUBJECT` to the verified OIDC subject of its first administrator. Development authentication defaults this setting to `DEV_SUBJECT`. Startup creates the Administrator and Member roles once. Changing the setting after initialization does not grant another subject administrator access.
+
+Verified bearer subjects enroll with the Member role on first use. Removing that assignment keeps it removed on subsequent authentication. Administrators can also enroll subjects through `POST /v1/identity/users` before adding them to groups or roles.
+
+The directory lives under `/v1/identity`. `identity.read` permits listing users, groups, roles and the scope catalog; `identity.manage` permits changes. Group and role metadata changes and deletion require the current quoted integer `If-Match`. Membership and assignment PUT/DELETE operations are idempotent and address a `user` or `group` principal explicitly. Nested groups have a maximum depth of 10 and cannot contain cycles. Built-in roles are immutable. Changes cannot remove the last effective Administrator, including changes to nested group membership.
+
+Role scopes are additive and resolve through direct assignments and nested group membership. `GET /v1/identity/me/scopes` shows the caller's current effective scopes. The Member role grants `workspace.read`, `workspace.create`, `list.read`, `list.write`, `contentType.read` and `taxonomy.read`. Organization administrators receive every catalog scope. Role and membership changes take effect without restarting the server or obtaining another token.
+
+Content authorization combines module scopes and resource ACLs inside the database transaction. Workspace owners retain ACL control but still need the relevant module scope. `workspace.manage` is the explicit organization-wide ACL override; it does not grant other module scopes implicitly. Copying an ACL preserves group IDs, and copying workspace inheritance preserves dynamic workspace roles. REST, WebDAV and workflow item actions all use current persisted role and group membership.
+
+Taxonomy roles operate on one organization term store shared by every workspace. `taxonomy.read` permits reads and open-set/keyword contributions without workspace membership. `taxonomy.manage` permits curation, imports, promotion, usage counts and organization taxonomy audit access. These scopes do not grant workspace or content access.
+
+Users have an `active` flag. GET `/v1/identity/users/{subject}/status` requires `identity.read`; PUT with `{"active":false}` or `{"active":true}` requires `identity.manage`. Inactive users receive no module scopes, cannot authenticate into module operations and are excluded from active-user selection. Enrollment preserves activation status. Disabling the last active administrator is rejected and rolled back. Person fields and GET `/v1/people` use these active subjects; person selection requires `list.read` and grants no content access.
+
+Active users read and edit their own [preferences](preferences.md) at `/v1/identity/me/preferences`. Personal values inherit the live organization defaults and built-in settings. `/v1/organization/preferences` reads the defaults; changes require `organization.manage`, which administrators have and can delegate through roles. Preference access does not require directory read/manage scopes.

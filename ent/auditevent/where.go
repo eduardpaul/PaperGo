@@ -184,6 +184,16 @@ func WorkspaceIDHasSuffix(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldHasSuffix(FieldWorkspaceID, v))
 }
 
+// WorkspaceIDIsNil applies the IsNil predicate on the "workspace_id" field.
+func WorkspaceIDIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldWorkspaceID))
+}
+
+// WorkspaceIDNotNil applies the NotNil predicate on the "workspace_id" field.
+func WorkspaceIDNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldWorkspaceID))
+}
+
 // WorkspaceIDEqualFold applies the EqualFold predicate on the "workspace_id" field.
 func WorkspaceIDEqualFold(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEqualFold(FieldWorkspaceID, v))
@@ -247,6 +257,16 @@ func ResourceIDHasPrefix(v string) predicate.AuditEvent {
 // ResourceIDHasSuffix applies the HasSuffix predicate on the "resource_id" field.
 func ResourceIDHasSuffix(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldHasSuffix(FieldResourceID, v))
+}
+
+// ResourceIDIsNil applies the IsNil predicate on the "resource_id" field.
+func ResourceIDIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldResourceID))
+}
+
+// ResourceIDNotNil applies the NotNil predicate on the "resource_id" field.
+func ResourceIDNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldResourceID))
 }
 
 // ResourceIDEqualFold applies the EqualFold predicate on the "resource_id" field.

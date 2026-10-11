@@ -15,41 +15,47 @@ import (
 )
 
 type FilterExpr struct {
-	And      []FilterExpr    `json:"and,omitempty" maxItems:"32"`
-	Or       []FilterExpr    `json:"or,omitempty" maxItems:"32"`
+	And      []FilterExpr    `json:"and,omitempty"`
+	Or       []FilterExpr    `json:"or,omitempty"`
 	Not      *FilterExpr     `json:"not,omitempty"`
-	Field    string          `json:"field,omitempty" doc:"Indexed field key or system field ($id, $name, $tags, $created_at, $created_by, $modified_at, $modified_by)."`
-	Op       string          `json:"op,omitempty" enum:"eq,ne,gt,gte,lt,lte,in,contains,missing,present"`
-	Value    json.RawMessage `json:"value,omitempty" doc:"Typed operand; an array for in."`
-	ValueRef string          `json:"value_ref,omitempty" enum:"me,today,yesterday,tomorrow,weekStart,weekEnd,monthStart,monthEnd,last7Days,next7Days,last30Days,next30Days" doc:"Exclusive with value. me resolves to the authenticated subject; UTC date references require date/datetime fields and resolve to midnight for datetime. Plain value strings stay literal."`
+	Field    string          `json:"field,omitempty"`
+	Op       string          `json:"op,omitempty"`
+	Value    json.RawMessage `json:"value,omitempty"`
+	ValueRef string          `json:"value_ref,omitempty"`
 }
 type SortSpec struct {
 	Field     string `json:"field,omitempty"`
-	Direction string `json:"direction,omitempty" enum:"asc,desc"`
+	Direction string `json:"direction,omitempty"`
 }
 type QuerySpec struct {
-	ContentTypeID string      `json:"content_type_id,omitempty" format:"uuid" doc:"Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type."`
+	ContentTypeID string      `json:"content_type_id,omitempty"`
 	Filter        *FilterExpr `json:"filter,omitempty"`
-	Sort          SortSpec    `json:"sort,omitempty"`
-	GroupBy       string      `json:"group_by,omitempty" doc:"Field key for /query/groups."`
-	ParentID      string      `json:"parent_id,omitempty" doc:"Restricts results to direct children of this folder."`
-	Search        string      `json:"search,omitempty" maxLength:"256" doc:"Full-text search over the selected surface."`
-	Tag           string      `json:"tag,omitempty" maxLength:"64"`
+	Sort          []SortSpec  `json:"sort,omitempty"`
+	GroupBy       string      `json:"group_by,omitempty"`
+	ParentID      string      `json:"parent_id,omitempty"`
+	Search        string      `json:"search,omitempty"`
+	Tag           string      `json:"tag,omitempty"`
 }
 type QueryRequest struct {
-	Query   QuerySpec `json:"query" required:"false"`
-	Surface string    `json:"surface,omitempty" enum:"auto,head,published" doc:"Defaults to auto: head for draft readers and published for ordinary readers. Head requires draft access."`
-	After   string    `json:"after,omitempty" doc:"Opaque cursor from next_cursor."`
-	Limit   int       `json:"limit,omitempty" minimum:"1" maximum:"100" doc:"Maximum results; defaults to 50."`
+	Select  []string  `json:"select,omitempty"`
+	Query   QuerySpec `json:"query"`
+	Surface string    `json:"surface,omitempty"`
+	After   string    `json:"-"`
+	Limit   int       `json:"-"`
+	// IncludeTotal counts every authorized match; omitted, total is absent.
+	IncludeTotal bool `json:"include_total,omitempty"`
 }
 type QueryResult struct {
-	Data       []*ent.Resource `json:"data"`
-	NextCursor string          `json:"next_cursor,omitempty"`
-	Total      int             `json:"total"`
+	Data       []*ent.Resource `json:"value"`
+	NextCursor string          `json:"-"`
+	Total      *int            `json:"total,omitempty"`
 }
 type QueryGroup struct {
 	Value any `json:"value"`
-	Count int `json:"count"`
+	// Label names the term of a term or keywords group when the caller can
+	// read the workspace's taxonomy.
+	Label string `json:"label,omitempty"`
+	Count int    `json:"count"`
 }
 type compiledQuery struct {
 	sql         string
@@ -59,11 +65,17 @@ type compiledQuery struct {
 	kind        string
 	// rankDef is the definition behind the rank column; nil for built-in columns.
 	rankDef *ent.FieldDefinition
+	// seek, set for ungrouped collection queries, pages from the sort index
+	// instead of sorting every eligible row.
+	seek        *seekPlan
+	orders      []queryOrder
+	projection  []string
+	includeTags bool
 }
 type queryCursor struct {
-	Fingerprint string          `json:"fingerprint"`
-	ID          string          `json:"id,omitempty"`
-	Value       json.RawMessage `json:"value"`
+	Fingerprint string            `json:"fingerprint"`
+	ID          string            `json:"id,omitempty"`
+	Values      []json.RawMessage `json:"values"`
 }
 type queryCompiler struct {
 	defs  map[string]*ent.FieldDefinition
@@ -90,8 +102,8 @@ func (q *queryCompiler) column(field string) (string, []any, string, error) {
 		return column, nil, "text", nil
 	}
 	d := q.defs[field]
-	if d == nil || !d.Indexed {
-		return "", nil, "", invalid("query fields must exist and be indexed: " + field)
+	if d == nil || !queryable(d) {
+		return "", nil, "", unqueryable(field, d)
 	}
 	if d.Options.Multiple {
 		return "", nil, "", invalid("sorting and grouping require a scalar field")
@@ -103,8 +115,8 @@ func indexColumn(d *ent.FieldDefinition) (string, string) {
 	switch string(d.Type) {
 	case "integer", "decimal":
 		return "value_integer", "integer"
-	case "number":
-		return "value_number", "number"
+	case "number", "currency":
+		return "value_text", "exact"
 	case "boolean":
 		return "value_boolean", "boolean"
 	default:
@@ -121,6 +133,11 @@ func queryValue(d *ent.FieldDefinition, v any) (any, error) {
 	if queryDefinition.Type == "choice" {
 		queryDefinition.Type = "text"
 	}
+	// Retained values can exceed today's write limits. Query representability
+	// is separate from both configured and default text constraints.
+	if _, ceiling := stringLimits(string(queryDefinition.Type)); ceiling > 0 {
+		queryDefinition.Options.MaxLength = &ceiling
+	}
 	x, e := scalarValue(&queryDefinition, v)
 	if e != nil {
 		return nil, e
@@ -131,8 +148,8 @@ func queryValue(d *ent.FieldDefinition, v any) (any, error) {
 	case "decimal":
 		_, n, e := decimal(x, d.Scale)
 		return n, e
-	case "number":
-		return number(x)
+	case "number", "currency":
+		return numberKey(x)
 	case "datetime":
 		t, e := time.Parse(time.RFC3339Nano, x.(string))
 		if e != nil {
@@ -213,8 +230,8 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 		return text, []any{tag}, nil
 	} else {
 		d = q.defs[f.Field]
-		if d == nil || !d.Indexed {
-			return "", nil, invalid("query fields must exist and be indexed: " + f.Field)
+		if d == nil || !queryable(d) {
+			return "", nil, unqueryable(f.Field, d)
 		}
 	}
 	prefix := ""
@@ -243,6 +260,12 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 	v, e := decodeValue(f.Value)
 	if e != nil || v == nil {
 		return "", nil, invalid("filter value is required")
+	}
+	if !builtin && (d.Type == "term" || d.Type == "keywords") {
+		return termFilter(d, op, v, prefix, args)
+	}
+	if op == "under" {
+		return "", nil, invalid("under requires a term or keywords field")
 	}
 	compare := ""
 	bind := []any{}
@@ -278,7 +301,7 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 			if operator == "" {
 				return "", nil, invalid("unsupported filter operator")
 			}
-			if (d.Type == "boolean" || d.Type == "lookup" || d.Type == "term" || d.Type == "choice") && op != "eq" && op != "ne" {
+			if (d.Type == "boolean" || d.Type == "lookup" || d.Type == "choice") && op != "eq" && op != "ne" {
 				return "", nil, invalid("field supports equality only")
 			}
 			compare = col + operator + "?"
@@ -301,7 +324,7 @@ func (s *Service) compileQuery(ctx context.Context, subject, containerID string,
 	if c.Kind != "list" && c.Kind != "library" {
 		return compiledQuery{}, invalid("queries require a collection")
 	}
-	defs, e := s.Client.FieldDefinition.Query().Where(fielddefinition.ContainerIDEQ(c.ID)).All(ctx)
+	defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID)).All(ctx)
 	if e != nil {
 		return compiledQuery{}, e
 	}
@@ -334,35 +357,64 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		if e != nil {
 			return compiledQuery{}, e
 		}
-		compiler.defs = definitionMap(selectDefinitions(defs, typ.FieldKeys))
+		compiler.defs = definitionMap(selectTypeDefinitions(defs, typ))
 	}
-	rankField := in.Query.Sort.Field
-	if rankField == "" {
-		rankField = "$id"
+	if len(in.Query.Sort) > 8 {
+		return compiledQuery{}, invalid("at most 8 sort keys")
 	}
-	if in.Query.Sort.Direction != "" && in.Query.Sort.Direction != "asc" && in.Query.Sort.Direction != "desc" {
-		return compiledQuery{}, invalid("sort direction must be asc or desc")
+	orders := append([]SortSpec{}, in.Query.Sort...)
+	if len(orders) == 0 {
+		orders = []SortSpec{{Field: "$id"}}
+	}
+	seen := map[string]bool{}
+	for _, order := range orders {
+		if order.Field == "" || seen[order.Field] {
+			return compiledQuery{}, invalid("sort keys must be unique known fields")
+		}
+		seen[order.Field] = true
+		if order.Direction != "" && order.Direction != "asc" && order.Direction != "desc" {
+			return compiledQuery{}, invalid("sort direction must be asc or desc")
+		}
+		if _, _, _, err := compiler.column(order.Field); err != nil {
+			return compiledQuery{}, err
+		}
 	}
 	if in.Query.GroupBy != "" {
-		if _, _, _, e := compiler.column(in.Query.GroupBy); e != nil {
-			return compiledQuery{}, e
+		if _, _, _, err := compiler.column(in.Query.GroupBy); err != nil {
+			return compiledQuery{}, err
 		}
 	}
 	if grouped {
 		if in.Query.GroupBy == "" {
 			return compiledQuery{}, invalid("group_by is required")
 		}
-		rankField = in.Query.GroupBy
+		if in.Select != nil {
+			return compiledQuery{}, invalid("select belongs to item queries")
+		}
+		orders = []SortSpec{{Field: in.Query.GroupBy}}
 	}
-	rank, rankArgs, kind, e := compiler.column(rankField)
-	if e != nil {
-		return compiledQuery{}, e
+	projection, includeTags, err := querySelection(compiler.defs, in.Select)
+	if err != nil {
+		return compiledQuery{}, err
 	}
-	selected, surfaceArgs := surfaceSQL("r.id", subject, in.Surface)
-	args := append([]any{}, rankArgs...)
-	args = append(args, surfaceArgs...)
-	args = append(args, c.ID)
-	text := "SELECT r.id," + rank + " AS sort_value FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind='item'"
+	rankField := orders[0].Field
+	rankParts := []string{}
+	rankArgs := []any{}
+	compiledOrders := []queryOrder{}
+	for i, order := range orders {
+		column, bind, kind, err := compiler.column(order.Field)
+		if err != nil {
+			return compiledQuery{}, err
+		}
+		alias := sortAlias(i)
+		rankParts = append(rankParts, column+" AS "+alias)
+		rankArgs = append(rankArgs, bind...)
+		compiledOrders = append(compiledOrders, queryOrder{kind: kind, descending: order.Direction == "desc"})
+	}
+	// Conditions reference only r and p, so the CTE below and the index-driven
+	// pages of queryseek.go share them.
+	text := ""
+	args := []any{}
 	if in.Query.ContentTypeID != "" {
 		text += " AND r.content_type_id=?"
 		args = append(args, in.Query.ContentTypeID)
@@ -396,8 +448,13 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		text += " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)"
 		args = append(args, phrase)
 	}
+	conditions, conditionArgs := text, args
+	selected, surfaceArgs := surfaceSQL("r.id", subject, in.Surface)
+	args = append(append(append([]any{}, rankArgs...), surfaceArgs...), c.ID)
+	text = "SELECT r.id," + strings.Join(rankParts, ",") + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder')" + conditions
+	args = append(args, conditionArgs...)
 	// SQLite evaluates these terms in order: cheap index filters first, so the
-	// recursive ACL walk runs only on rows that already match.
+	// ACL probe runs only on rows that already match.
 	action := "read"
 	if in.Surface == "head" {
 		action = "read_draft"
@@ -409,74 +466,132 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		Subject, Collection, Surface, Schema string
 		Query                                QuerySpec
 		Grouped                              bool
-	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped})
+		Select                               []string
+	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.Select})
 	sum := sha256.Sum256(fingerprint)
-	return compiledQuery{text, args, hex.EncodeToString(sum[:]), !grouped && in.Query.Sort.Direction == "desc", kind, compiler.defs[rankField]}, nil
+	q := compiledQuery{sql: text, args: args, fingerprint: hex.EncodeToString(sum[:]), descending: compiledOrders[0].descending, kind: compiledOrders[0].kind, rankDef: compiler.defs[rankField], orders: compiledOrders, projection: projection, includeTags: includeTags}
+	if !grouped && len(compiledOrders) == 1 {
+		column, _ := systemField(rankField)
+		if column == "r.id" {
+			column = "p.item_id"
+		}
+		q.seek = &seekPlan{collection: c.ID, subject: subject, surface: in.Surface, conditions: conditions, args: conditionArgs, column: column}
+	}
+	return q, nil
 }
 func cursorEncode(q compiledQuery, id string, value any) string {
-	raw, _ := json.Marshal(value)
+	values := []any{value}
+	if len(q.orders) > 1 {
+		values = value.([]any)
+	}
+	raw := make([]json.RawMessage, len(values))
+	for i, v := range values {
+		raw[i], _ = json.Marshal(v)
+	}
 	b, _ := json.Marshal(queryCursor{q.fingerprint, id, raw})
-	return "q1." + base64.RawURLEncoding.EncodeToString(b)
+	return "q2." + base64.RawURLEncoding.EncodeToString(b)
 }
-func cursorDecode(q compiledQuery, after string) (queryCursor, any, error) {
-	if len(after) > 128*1024 || !strings.HasPrefix(after, "q1.") {
+func cursorDecodeValues(q compiledQuery, after string) (queryCursor, []any, error) {
+	if len(after) > 128*1024 || !strings.HasPrefix(after, "q2.") {
 		return queryCursor{}, nil, invalid("invalid query cursor")
 	}
-	raw, e := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(after, "q1."))
-	if e != nil {
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(after, "q2."))
+	if err != nil {
 		return queryCursor{}, nil, invalid("invalid query cursor")
 	}
 	var c queryCursor
-	if e = json.Unmarshal(raw, &c); e != nil || c.Fingerprint != q.fingerprint {
+	if err = json.Unmarshal(raw, &c); err != nil || c.Fingerprint != q.fingerprint {
 		return c, nil, invalid("cursor does not match this query, schema or caller")
 	}
-	v, e := decodeValue(c.Value)
-	if e != nil {
-		return c, nil, invalid("invalid cursor value")
+	kinds := []string{}
+	for _, order := range q.orders {
+		kinds = append(kinds, order.kind)
 	}
-	if v == nil {
-		return c, nil, nil
+	if len(c.Values) != len(kinds) {
+		return c, nil, invalid("cursor sort key count differs")
 	}
-	switch q.kind {
-	case "integer", "boolean":
-		v, e = integer(v)
-	case "number":
-		v, e = number(v)
-	default:
-		if _, ok := v.(string); !ok {
-			e = invalid("expected text cursor")
+	values := make([]any, len(kinds))
+	for i, kind := range kinds {
+		v, e := decodeValue(c.Values[i])
+		if e != nil {
+			return c, nil, invalid("invalid cursor value")
 		}
+		if v != nil {
+			switch kind {
+			case "integer", "boolean":
+				v, e = integer(v)
+			case "exact":
+				key, ok := v.(string)
+				if !ok {
+					e = invalid("expected exact numeric cursor")
+				} else {
+					_, e = numberFromKey(key)
+				}
+			default:
+				if _, ok := v.(string); !ok {
+					e = invalid("expected text cursor")
+				}
+			}
+		}
+		if e != nil {
+			return c, nil, invalid("invalid cursor value")
+		}
+		values[i] = v
 	}
-	if e != nil {
-		return c, nil, invalid("invalid cursor value")
+	return c, values, nil
+}
+func cursorDecode(q compiledQuery, after string) (queryCursor, any, error) {
+	c, values, err := cursorDecodeValues(q, after)
+	if err != nil {
+		return c, nil, err
 	}
-	return c, v, nil
+	return c, values[0], nil
 }
 func keyset(q compiledQuery, after string, grouped bool) (string, []any, error) {
 	if after == "" {
 		return "", nil, nil
 	}
-	c, v, e := cursorDecode(q, after)
-	if e != nil {
-		return "", nil, e
+	c, values, err := cursorDecodeValues(q, after)
+	if err != nil {
+		return "", nil, err
+	}
+	if grouped {
+		if values[0] == nil {
+			return " WHERE 0", nil, nil
+		}
+		return " WHERE sort_value IS NULL OR sort_value>? ", []any{values[0]}, nil
+	}
+	if c.ID == "" {
+		return "", nil, invalid("cursor has no item ID")
+	}
+	conditions := []string{}
+	bind := []any{}
+	equal := []string{}
+	equalArgs := []any{}
+	for i, order := range q.orders {
+		alias := sortAlias(i)
+		v := values[i]
+		op := ">"
+		if order.descending {
+			op = "<"
+		}
+		if v != nil {
+			parts := append(append([]string{}, equal...), "("+alias+" IS NULL OR "+alias+op+"?)")
+			conditions = append(conditions, "("+strings.Join(parts, " AND ")+")")
+			bind = append(bind, equalArgs...)
+			bind = append(bind, v)
+		}
+		equal = append(equal, alias+" IS ?")
+		equalArgs = append(equalArgs, v)
 	}
 	op := ">"
 	if q.descending {
 		op = "<"
 	}
-	if grouped {
-		if v == nil {
-			return " WHERE 0", nil, nil
-		}
-		return " WHERE sort_value IS NULL OR sort_value>? ", []any{v}, nil
-	}
-	if c.ID == "" {
-		return "", nil, invalid("cursor has no item ID")
-	}
-	if v == nil {
-		return " WHERE sort_value IS NULL AND id>?", []any{c.ID}, nil
-	}
-	return " WHERE sort_value IS NULL OR sort_value" + op + "? OR (sort_value=? AND id>?)", []any{v, v, c.ID}, nil
+	conditions = append(conditions, "("+strings.Join(append(equal, "id"+op+"?"), " AND ")+")")
+	bind = append(bind, equalArgs...)
+	bind = append(bind, c.ID)
+	return " WHERE " + strings.Join(conditions, " OR "), bind, nil
 }
 func (s *Service) Query(ctx context.Context, subject, containerID string, in QueryRequest) (QueryResult, error) {
 	if in.Surface == "" {
@@ -487,44 +602,97 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 		if e != nil {
 			return QueryResult{}, e
 		}
-		return t.queryCompiled(ctx, subject, in, q)
+		out, err := t.queryCompiled(ctx, subject, in, q, q.projection)
+		if in.Select != nil && !q.includeTags {
+			for _, r := range out.Data {
+				r.Tags = []string{}
+			}
+		}
+		return out, err
 	})
 }
 
-func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery) (QueryResult, error) {
+// resourceSummaryColumns are every resources column but values.
+var resourceSummaryColumns = func() []string {
+	columns := []string{}
+	for _, c := range resource.Columns {
+		if c != resource.FieldValues {
+			columns = append(columns, c)
+		}
+	}
+	return columns
+}()
+
+// page selects one keyset page of IDs and sort values; where is keyset's clause.
+// Missing values sort last; ID ties follow the sort direction, as in queryseek.go.
+func (q compiledQuery) page(where string) string {
+	columns := []string{}
+	ordering := []string{}
+	for i, order := range q.orders {
+		alias := sortAlias(i)
+		direction := "ASC"
+		if order.descending {
+			direction = "DESC"
+		}
+		columns = append(columns, alias)
+		ordering = append(ordering, "("+alias+" IS NULL) ASC", alias+" "+direction)
+	}
+	direction := "ASC"
+	if q.descending {
+		direction = "DESC"
+	}
+	ordering = append(ordering, "id "+direction)
+	return "WITH eligible AS (" + q.sql + ") SELECT id," + strings.Join(columns, ",") + " FROM eligible" + where + " ORDER BY " + strings.Join(ordering, ",") + " LIMIT ?"
+}
+
+// eligiblePage sorts every eligible row of the CTE. Smart folders, which
+// union several collections, page this way.
+func (s *Service) eligiblePage(ctx context.Context, q compiledQuery, after string, n int) ([]rankedID, error) {
+	where, afterArgs, e := keyset(q, after, false)
+	if e != nil {
+		return nil, e
+	}
+	args := append(append([]any{}, q.args...), afterArgs...)
+	return s.queryRankedIDs(ctx, q, q.page(where), append(args, n)...)
+}
+
+// rankedIDs reads (id, sort_value) rows.
+func (s *Service) rankedIDs(ctx context.Context, query string, args ...any) ([]rankedID, error) {
+	rows, e := s.Client.QueryContext(ctx, query, args...)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []rankedID{}
+	for rows.Next() {
+		var r rankedID
+		if e = rows.Scan(&r.id, &r.rank); e != nil {
+			return nil, e
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// queryCompiled returns one page of q. A non-nil fields projects item values
+// to those keys (see overlayPage); nil returns complete values.
+func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery, fields []string) (QueryResult, error) {
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
-		where, afterArgs, e := keyset(q, in.After, false)
-		if e != nil {
-			return QueryResult{}, e
-		}
-		order := "ASC"
-		if q.descending {
-			order = "DESC"
-		}
 		limit := pageSize(in.Limit)
-		args := append(append([]any{}, q.args...), afterArgs...)
-		args = append(args, limit+1)
-		rows, e := t.Client.QueryContext(ctx, "WITH eligible AS ("+q.sql+") SELECT id,sort_value FROM eligible"+where+" ORDER BY (sort_value IS NULL) ASC,sort_value "+order+",id ASC LIMIT ?", args...)
+		var page []rankedID
+		var e error
+		if q.seek != nil {
+			page, e = t.seekPage(ctx, q, in.After, limit+1)
+		} else {
+			page, e = t.eligiblePage(ctx, q, in.After, limit+1)
+		}
 		if e != nil {
 			return QueryResult{}, e
 		}
-		ids := []string{}
-		ranks := []any{}
-		for rows.Next() {
-			var id string
-			var rank any
-			if e = rows.Scan(&id, &rank); e != nil {
-				break
-			}
-			ids = append(ids, id)
-			ranks = append(ranks, rank)
-		}
-		if e == nil {
-			e = rows.Err()
-		}
-		rows.Close()
-		if e != nil {
-			return QueryResult{}, e
+		ids := make([]string, len(page))
+		ranks := make([]any, len(page))
+		for i, r := range page {
+			ids[i], ranks[i] = r.id, r.rank
 		}
 		out := QueryResult{Data: []*ent.Resource{}}
 		if len(ids) > limit {
@@ -532,33 +700,34 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 			ids = ids[:limit]
 		}
 		if len(ids) > 0 {
-			resources, e := t.Client.Resource.Query().Where(resource.IDIn(ids...)).All(ctx)
+			// Item values come from the selected surface, so the resource's copy
+			// of the head values is never loaded.
+			resources, e := t.Client.Resource.Query().Where(resource.IDIn(ids...)).Select(resourceSummaryColumns...).All(ctx)
 			if e != nil {
 				return out, e
 			}
 			lookup := map[string]*ent.Resource{}
 			for _, r := range resources {
+				r.Values = map[string]any{}
 				lookup[r.ID] = r
 			}
 			for _, id := range ids {
 				out.Data = append(out.Data, lookup[id])
 			}
-			if _, e = t.overlayPage(ctx, subject, in.Surface, out.Data); e != nil {
+			if _, e = t.overlayPage(ctx, subject, in.Surface, out.Data, fields); e != nil {
 				return out, e
 			}
 		}
-		counts, e := t.Client.QueryContext(ctx, "WITH eligible AS ("+q.sql+") SELECT count(*) FROM eligible", q.args...)
-		if e != nil {
+		if !in.IncludeTotal {
+			return out, nil
+		}
+		// An exact total evaluates every eligible row, so callers opt in.
+		var total int
+		if e = t.scan(ctx, []any{&total}, "WITH eligible AS ("+q.sql+") SELECT count(*) FROM eligible", q.args...); e != nil {
 			return out, e
 		}
-		if counts.Next() {
-			e = counts.Scan(&out.Total)
-		}
-		if e == nil {
-			e = counts.Err()
-		}
-		counts.Close()
-		return out, e
+		out.Total = &total
+		return out, nil
 	})
 }
 func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, in QueryRequest) (Page[QueryGroup], error) {
@@ -567,7 +736,23 @@ func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, 
 		if e != nil {
 			return Page[QueryGroup]{}, e
 		}
-		return t.queryGroupsCompiled(ctx, in, q)
+		out, e := t.queryGroupsCompiled(ctx, in, q)
+		if e != nil || q.rankDef == nil || q.rankDef.Type != "term" && q.rankDef.Type != "keywords" {
+			return out, e
+		}
+		ids := make([]string, 0, len(out.Data))
+		for _, g := range out.Data {
+			if id, ok := g.Value.(string); ok {
+				ids = append(ids, id)
+			}
+		}
+		names, e := t.termNames(ctx, subject, ids)
+		for i := range out.Data {
+			if id, ok := out.Data[i].Value.(string); ok {
+				out.Data[i].Label = names[id]
+			}
+		}
+		return out, e
 	})
 }
 
@@ -631,6 +816,15 @@ func (s *Service) queryGroupsCompiled(ctx context.Context, in QueryRequest, q co
 					}
 					g.Value = value
 				}
+			} else if q.kind == "exact" {
+				key, ok := g.Value.(string)
+				if !ok {
+					return Page[QueryGroup]{}, invalid("invalid exact numeric group")
+				}
+				g.Value, e = numberFromKey(key)
+				if e != nil {
+					return Page[QueryGroup]{}, e
+				}
 			} else if q.kind == "boolean" {
 				if n, ok := g.Value.(int64); ok {
 					g.Value = n != 0
@@ -648,4 +842,49 @@ func (s *Service) validateQuery(ctx context.Context, subject, containerID string
 		return e
 	}
 	return nil
+}
+
+// termFilter matches term values. A value that holds a merged term counts as
+// the term it was merged into; under also matches the descendants of a term.
+func termFilter(d *ent.FieldDefinition, op string, v any, prefix string, args []any) (string, []any, error) {
+	var ids []any
+	switch op {
+	case "eq", "ne", "under":
+		x, e := queryValue(d, v)
+		if e != nil {
+			return "", nil, e
+		}
+		ids = []any{x}
+	case "in":
+		list, ok := v.([]any)
+		if !ok || len(list) < 1 || len(list) > 50 {
+			return "", nil, invalid("in requires 1..50 values")
+		}
+		for _, value := range list {
+			x, e := queryValue(d, value)
+			if e != nil {
+				return "", nil, e
+			}
+			ids = append(ids, x)
+		}
+	default:
+		return "", nil, invalid("term fields support eq, ne, in and under")
+	}
+	var set string
+	var bind []any
+	if op == "under" {
+		// The subtree of r is one range of the path index.
+		subtree := "terms r JOIN terms t ON t.path>=r.path AND t.path<substr(r.path,1,length(r.path)-1)||'0' WHERE r.id=?"
+		set = "SELECT t.id FROM " + subtree + " UNION ALL SELECT m.id FROM terms m WHERE m.merged_into_id IN (SELECT t.id FROM " + subtree + ")"
+		bind = []any{ids[0], ids[0]}
+	} else {
+		marks := strings.TrimPrefix(strings.Repeat(",?", len(ids)), ",")
+		set = "SELECT id FROM terms WHERE id IN (" + marks + ") UNION ALL SELECT id FROM terms WHERE merged_into_id IN (" + marks + ")"
+		bind = append(append([]any{}, ids...), ids...)
+	}
+	member := "f.value_text IN (" + set + ")"
+	if op == "ne" {
+		return "EXISTS (SELECT 1 FROM field_values f WHERE " + prefix + ") AND NOT EXISTS (SELECT 1 FROM field_values f WHERE " + prefix + " AND " + member + ")", append(append(append([]any{}, args...), args...), bind...), nil
+	}
+	return "EXISTS (SELECT 1 FROM field_values f WHERE " + prefix + " AND " + member + ")", append(args, bind...), nil
 }

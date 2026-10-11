@@ -44,3 +44,18 @@ func TestLoadLimitsValidatesAndDefaults(t *testing.T) {
 		t.Fatalf("overrides: %+v %v", c, err)
 	}
 }
+
+func TestOIDCRequiresExplicitFirstAdministrator(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("AUTH_MODE", "oidc")
+	t.Setenv("OIDC_ISSUER", "https://issuer.example")
+	t.Setenv("OIDC_AUDIENCE", "papergo")
+	t.Setenv("ADMIN_SUBJECT", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("OIDC accepted missing administrator subject")
+	}
+	t.Setenv("ADMIN_SUBJECT", "configured-admin")
+	if c, err := Load(); err != nil || c.AdminSubject != "configured-admin" {
+		t.Fatal(c, err)
+	}
+}
