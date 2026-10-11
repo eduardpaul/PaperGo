@@ -182,22 +182,27 @@ func TestItemTriggerConditionAndChainedWorkflow(t *testing.T) {
 		t.Fatalf("steps: %v", names)
 	}
 
-	// A write that rolls back starts nothing.
+	// A write that rolls back starts nothing, regardless of whether earlier
+	// successful writes still have events awaiting the background dispatcher.
+	var rolledBackID string
+	abandon := errors.New("abandon")
 	err = f.dms.Write(ctx, func(t *dms.Service) error {
-		if _, err := t.Create(ctx, "bob", f.list.ID, dms.CreateResource{Kind: "item", Name: "Draft", Values: map[string]any{"status": "new"}}); err != nil {
+		draft, err := t.Create(ctx, "bob", f.list.ID, dms.CreateResource{Kind: "item", Name: "Draft", Values: map[string]any{"status": "new"}})
+		if err != nil {
 			return err
 		}
-		return errors.New("abandon")
+		rolledBackID = draft.ID
+		return abandon
 	})
-	if err == nil {
-		t.Fatal("write did not fail")
+	if !errors.Is(err, abandon) {
+		t.Fatalf("write did not return the rollback error: %v", err)
 	}
 	n, err := f.db.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(mark.ID)).Count(ctx)
 	if err != nil || n != 1 {
 		t.Fatalf("rolled back write started runs: %d %v", n, err)
 	}
-	if n, err = f.db.Client.DomainEvent.Query().Where(domainevent.DispatchedAtIsNil()).Count(ctx); err != nil || n != 0 {
-		t.Fatalf("rolled back write logged %d undispatched events: %v", n, err)
+	if n, err = f.db.Client.DomainEvent.Query().Where(domainevent.ResourceIDEQ(rolledBackID)).Count(ctx); err != nil || n != 0 {
+		t.Fatalf("rolled back write logged %d events for %s: %v", n, rolledBackID, err)
 	}
 	// Runs are for workspace managers.
 	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{}); !errors.Is(err, dms.ErrNotFound) {
