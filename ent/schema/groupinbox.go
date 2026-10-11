@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -18,5 +19,5 @@ func (GroupInbox) Indexes() []ent.Index {
 }
 
 func (GroupInbox) Edges() []ent.Edge {
-	return []ent.Edge{edge.To("group", IdentityGroup.Type).Field("group_id").Required().Unique(), edge.To("library", Resource.Type).Field("library_id").Required().Unique()}
+	return []ent.Edge{edge.To("group", IdentityGroup.Type).Field("group_id").Required().Unique().Annotations(entsql.OnDelete(entsql.Cascade)), edge.To("library", Resource.Type).Field("library_id").Required().Unique()}
 }

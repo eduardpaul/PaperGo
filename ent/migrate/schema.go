@@ -397,7 +397,7 @@ var (
 				Symbol:     "group_inboxes_identity_groups_group",
 				Columns:    []*schema.Column{GroupInboxesColumns[2]},
 				RefColumns: []*schema.Column{IdentityGroupsColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "group_inboxes_resources_library",
@@ -1136,7 +1136,7 @@ var (
 				Symbol:     "resources_identity_users_personal_owner",
 				Columns:    []*schema.Column{ResourcesColumns[28]},
 				RefColumns: []*schema.Column{IdentityUsersColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "resources_resources_contained_items",

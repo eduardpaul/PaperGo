@@ -140,6 +140,19 @@ func (a *API) createDocumentTo(w http.ResponseWriter, r *http.Request, groupID s
 				a.problem(w, r, 400, "invalid_upload", "metadata must be one JSON object")
 				return
 			}
+			if inbox {
+				var fields map[string]json.RawMessage
+				if err = json.Unmarshal(raw, &fields); err != nil {
+					a.problem(w, r, 400, "invalid_upload", "metadata must be a JSON object")
+					return
+				}
+				_, folderOverride := fields["folder_id"]
+				_, typeOverride := fields["content_type_id"]
+				if folderOverride || typeOverride {
+					a.failure(w, r, &dms.ValidationError{Message: "Inbox uploads use the library root and default content type"})
+					return
+				}
+			}
 			if strings.TrimSpace(string(raw)) == "null" {
 				a.problem(w, r, 400, "invalid_upload", "metadata must be a JSON object")
 				return

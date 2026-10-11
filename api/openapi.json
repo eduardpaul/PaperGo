@@ -13081,10 +13081,11 @@
       "post": {
         "operationId": "createDocument",
         "summary": "Create a document, metadata and content from one multipart upload",
-        "description": "Requires list.write and document.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.",
+        "description": "Requires document.write, list.read and list.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period. Accepts only PDF, TIFF, JPEG, PNG and WebP detected from file signatures; filenames and declared MIME types do not determine stored content_type. Unsupported bytes return 415 without item/revision changes. Size limits apply while streaming.",
         "x-module-scopes": [
-          "list.write",
-          "document.write"
+          "document.write",
+          "list.read",
+          "list.write"
         ],
         "requestBody": {
           "required": true,

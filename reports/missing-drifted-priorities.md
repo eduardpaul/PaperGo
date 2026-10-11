@@ -1,17 +1,15 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-11; PaperDotNet `96df412`. 55 open comparisons: 43 missing, 9 partial, 3 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-11; PaperDotNet `96df412`. 53 open comparisons: 41 missing, 9 partial, 3 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
-## P1 (13)
+## P1 (11)
 
 - **P1 · ID-01 · Missing:** A user needs an external identity service for the production sign-in story.
 - **P1 · ID-04 · Partial:** User profiles and account anonymization are implemented; password management remains with the external identity provider.
-- **P1 · LST-32 · Missing:** An everyday user's initial landing/storage locations are missing.
 - **P1 · DOC-07 · Missing:** Scanned documents cannot become searchable text through PaperGo.
 - **P1 · DOC-08 · Missing:** Preview and processing retry/status stories are missing.
-- **P1 · DOC-10 · Missing:** Shared intake and personal triage cannot be reproduced through the product API.
 - **P1 · SRC-02 · Missing:** Words occurring only inside PDF/image contents cannot be found.
 - **P1 · WF-06 · Missing:** A launch form does not cover collecting a human decision during an active process.
 - **P1 · WF-10 · Drift:** The same automation can succeed/fail under different permissions. StartedBy is not proof that .NET actions run with caller ACLs.

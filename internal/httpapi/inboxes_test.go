@@ -123,6 +123,12 @@ func TestHomeAndInboxHTTPContracts(t *testing.T) {
 		if res.Code != 422 {
 			t.Fatal("override accepted", field, res.Code, res.Body.String())
 		}
+		for _, empty := range []string{"null", "\"\""} {
+			res = documentRequest(t, h, "/v1/identity/me/inbox/documents", documentPart{"file", "empty.pdf", "%PDF-other"}, documentPart{"metadata", "", `{"` + field + `":` + empty + `}`})
+			if res.Code != 422 {
+				t.Fatal("empty override accepted", field, res.Code, res.Body.String())
+			}
+		}
 	}
 	res = request(h, "DELETE", "/v1/resources/"+home.InboxLibraryID, "", testToken, `"1"`, "")
 	if res.Code != 409 || !strings.Contains(res.Body.String(), "protected_home") {

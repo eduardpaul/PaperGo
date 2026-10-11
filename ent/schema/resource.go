@@ -61,7 +61,7 @@ func (Resource) Fields() []ent.Field {
 func (Resource) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("children", Resource.Type),
-		edge.To("personal_owner", IdentityUser.Type).Field("personal_owner_id").Unique(),
+		edge.To("personal_owner", IdentityUser.Type).Field("personal_owner_id").Unique().Annotations(entsql.OnDelete(entsql.NoAction)),
 		edge.From("parent", Resource.Type).Ref("children").Field("parent_id").Unique(),
 		edge.To("contained_items", Resource.Type),
 		edge.From("container", Resource.Type).Ref("contained_items").Field("container_id").Unique(),
