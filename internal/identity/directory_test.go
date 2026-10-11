@@ -49,7 +49,7 @@ func TestNestedGroupsRolesAndRevocation(t *testing.T) {
 	if err = d.SetMember(ctx, user.ID, parent.ID, user, false); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatalf("self-escalation: %v", err)
 	}
-	if _, err = d.SaveRole(ctx, "", "", 0, identity.RoleInput{Name: "Anonymous escalation", Scopes: []string{"identity.manage"}}); !errors.Is(err, identity.ErrForbidden) {
+	if _, err = d.SaveRole(ctx, "", "", 0, identity.RoleInput{Name: "Anonymous escalation", Scopes: []string{"role.manage"}}); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatal("empty actor bypassed authorization", err)
 	}
 	if err = d.SetMember(ctx, admin, child.ID, user, true); err != nil {
@@ -63,6 +63,41 @@ func TestNestedGroupsRolesAndRevocation(t *testing.T) {
 	}
 	if err = d.SetAssignment(ctx, admin, identity.AdministratorRole, identity.Principal{Type: "user", ID: admin}, true); !errors.Is(err, identity.ErrLastAdministrator) {
 		t.Fatalf("last administrator: %v", err)
+	}
+}
+
+func TestGroupAdministratorCannotManageUsersOrRoles(t *testing.T) {
+	ctx := t.Context()
+	db := testutil.Database(t)
+	d := identity.Directory{DB: db.SQL}
+	role, err := d.SaveRole(ctx, "organization-admin", "", 0, identity.RoleInput{Name: "Group administrator", Scopes: []string{"group.read", "group.manage"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetAssignment(ctx, "organization-admin", role.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+		t.Fatal(err)
+	}
+	group, err := d.SaveGroup(ctx, "bob", "", 0, identity.GroupInput{Name: "Delegated group"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetMember(ctx, "bob", group.ID, identity.Principal{Type: "user", ID: "carol"}, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []func() error{
+		func() error { return d.CreateUser(ctx, "bob", "new-user") },
+		func() error { _, err := d.SetUserActive(ctx, "bob", "carol", false); return err },
+		func() error {
+			_, err := d.SaveRole(ctx, "bob", "", 0, identity.RoleInput{Name: "Escalation", Scopes: []string{"role.manage"}})
+			return err
+		},
+		func() error {
+			return d.SetAssignment(ctx, "bob", identity.AdministratorRole, identity.Principal{Type: "user", ID: "bob"}, false)
+		},
+	} {
+		if err = action(); !errors.Is(err, identity.ErrForbidden) {
+			t.Fatal("group administration granted user or role administration", err)
+		}
 	}
 }
 
@@ -86,7 +121,7 @@ func TestEnrollmentAndBootstrapDoNotRestoreRemovedRoles(t *testing.T) {
 	if err := d.Initialize(ctx, user); err != nil {
 		t.Fatal(err)
 	}
-	if err := identity.RequireScope(ctx, db.SQL, user, "identity.manage"); !errors.Is(err, identity.ErrForbidden) {
+	if err := identity.RequireScope(ctx, db.SQL, user, "role.manage"); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatalf("bootstrap promoted another user: %v", err)
 	}
 }
@@ -131,7 +166,7 @@ func TestNestedAdministratorProtectionAndGroupDepth(t *testing.T) {
 	if err = d.DeleteGroup(ctx, actor, parent.ID, parent.Version); !errors.Is(err, identity.ErrLastAdministrator) {
 		t.Fatal("last administrator group deleted", err)
 	}
-	if err = identity.RequireScope(ctx, db.SQL, "bob", "identity.manage"); err != nil {
+	if err = identity.RequireScope(ctx, db.SQL, "bob", "role.manage"); err != nil {
 		t.Fatal("failed change did not roll back", err)
 	}
 }

@@ -163,6 +163,9 @@ type BlobInput struct {
 }
 
 func (s *Service) CanUpload(ctx context.Context, subject, id string, version int) error {
+	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
+		return err
+	}
 	r, err := s.authorize(ctx, subject, id, "write")
 	if err != nil {
 		return err
@@ -255,6 +258,9 @@ func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, v
 
 // createBlob stores the metadata of the item's next blob version.
 func (s *Service) createBlob(ctx context.Context, subject, itemID string, in BlobInput, checkDuplicates bool) (*ent.Blob, error) {
+	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
+		return nil, err
+	}
 	if err := ValidateDocumentLanguages(in.Languages); err != nil {
 		return nil, err
 	}
@@ -289,6 +295,9 @@ func (s *Service) createBlob(ctx context.Context, subject, itemID string, in Blo
 func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent.Blob, error) {
 	if !s.transaction {
 		return read(ctx, s, func(t *Service) (*ent.Blob, error) { return t.GetBlob(ctx, subject, id, blobID) })
+	}
+	if err := s.RequireScope(ctx, subject, "document.read"); err != nil {
+		return nil, err
 	}
 	r, err := s.Get(ctx, subject, id)
 	if err != nil {

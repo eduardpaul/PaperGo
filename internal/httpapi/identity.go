@@ -23,7 +23,7 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 		return d.SetUserActive(r.Context(), subject(r), r.PathValue("subject"), *in.Active)
 	}))
 	m.HandleFunc("GET /v1/identity/scopes", foundationRead(a, func(r *http.Request) (any, error) {
-		if err := a.DMS.RequireScope(r.Context(), subject(r), "identity.read"); err != nil {
+		if err := a.DMS.RequireScope(r.Context(), subject(r), "role.read"); err != nil {
 			return nil, err
 		}
 		return identity.Catalog, nil

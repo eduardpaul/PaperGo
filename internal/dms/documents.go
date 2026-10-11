@@ -35,6 +35,9 @@ func ValidateDocumentLanguages(languages string) error {
 }
 
 func (s *Service) documentParent(ctx context.Context, subject, libraryID, folderID string) (*ent.Resource, error) {
+	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
+		return nil, err
+	}
 	library, err := s.authorize(ctx, subject, libraryID, "write")
 	if err != nil {
 		return nil, err

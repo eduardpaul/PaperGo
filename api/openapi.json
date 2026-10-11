@@ -1503,9 +1503,10 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "list.write",
+          "document.write"
         ],
-        "description": "Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires list.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period."
+        "description": "Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires list.write and document.write and item write access with current If-Match. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period."
       },
       "get": {
         "summary": "Download selected head/published blob; supports byte ranges",
@@ -1544,9 +1545,10 @@
             "$ref": "#/components/responses/Problem"
           }
         },
-        "description": "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read and document.read. Resource ACLs and any additional use-case checks also apply.",
         "x-module-scopes": [
-          "list.read"
+          "list.read",
+          "document.read"
         ]
       }
     },
@@ -10811,7 +10813,7 @@
     "/v1/identity/scopes": {
       "get": {
         "operationId": "listIdentityScopes",
-        "summary": "List module scope catalog (identity.read)",
+        "summary": "List module scope catalog (role.read)",
         "responses": {
           "200": {
             "description": "Success",
@@ -10837,9 +10839,9 @@
           }
         },
         "x-module-scopes": [
-          "identity.read"
+          "role.read"
         ],
-        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: role.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/me/scopes": {
@@ -10875,7 +10877,7 @@
     "/v1/identity/users": {
       "get": {
         "operationId": "listIdentityUsers",
-        "summary": "List enrolled subjects (identity.read)",
+        "summary": "List enrolled subjects (user.read)",
         "responses": {
           "200": {
             "description": "Success",
@@ -10901,13 +10903,13 @@
           }
         },
         "x-module-scopes": [
-          "identity.read"
+          "user.read"
         ],
-        "description": "List active directory subjects. Requires identity.read."
+        "description": "List active directory subjects. Requires user.read."
       },
       "post": {
         "operationId": "createIdentityUser",
-        "summary": "Enroll subject with Member role (identity.manage)",
+        "summary": "Enroll subject with Member role (user.manage)",
         "responses": {
           "201": {
             "description": "Success",
@@ -10940,15 +10942,15 @@
           }
         },
         "x-module-scopes": [
-          "identity.manage"
+          "user.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: user.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/groups": {
       "get": {
         "operationId": "listIdentityGroups",
-        "summary": "List groups (identity.read)",
+        "summary": "List groups (group.read)",
         "responses": {
           "200": {
             "description": "Success",
@@ -10974,13 +10976,13 @@
           }
         },
         "x-module-scopes": [
-          "identity.read"
+          "group.read"
         ],
-        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: group.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "operationId": "createIdentityGroup",
-        "summary": "Create group (identity.manage)",
+        "summary": "Create group (group.manage)",
         "responses": {
           "201": {
             "description": "Success",
@@ -11013,15 +11015,15 @@
           }
         },
         "x-module-scopes": [
-          "identity.manage"
+          "group.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: group.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/groups/{id}": {
       "put": {
         "operationId": "replaceIdentityGroup",
-        "summary": "Replace group (identity.manage)",
+        "summary": "Replace group (group.manage)",
         "responses": {
           "200": {
             "description": "Success",
@@ -11079,13 +11081,13 @@
           }
         },
         "x-module-scopes": [
-          "identity.manage"
+          "group.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: group.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "deleteIdentityGroup",
-        "summary": "Delete group (identity.manage)",
+        "summary": "Delete group (group.manage)",
         "responses": {
           "204": {
             "description": "Success"
@@ -11126,15 +11128,15 @@
           }
         ],
         "x-module-scopes": [
-          "identity.manage"
+          "group.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: group.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/groups/{id}/members": {
       "get": {
         "operationId": "listIdentityGroupMembers",
-        "summary": "List direct members (identity.read)",
+        "summary": "List direct members (group.read)",
         "responses": {
           "200": {
             "description": "Success",
@@ -11170,15 +11172,15 @@
           }
         ],
         "x-module-scopes": [
-          "identity.read"
+          "group.read"
         ],
-        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: group.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/groups/{id}/members/{principalType}/{principalID}": {
       "put": {
         "operationId": "setIdentityGroupMembers",
-        "summary": "Change members (identity.manage)",
+        "summary": "Change members (group.manage)",
         "responses": {
           "204": {
             "description": "Success"
@@ -11224,13 +11226,13 @@
           }
         ],
         "x-module-scopes": [
-          "identity.manage"
+          "group.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: group.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "removeIdentityGroupMembers",
-        "summary": "Change members (identity.manage)",
+        "summary": "Change members (group.manage)",
         "responses": {
           "204": {
             "description": "Success"
@@ -11276,15 +11278,15 @@
           }
         ],
         "x-module-scopes": [
-          "identity.manage"
+          "group.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: group.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/roles": {
       "get": {
         "operationId": "listIdentityRoles",
-        "summary": "List roles (identity.read)",
+        "summary": "List roles (role.read)",
         "responses": {
           "200": {
             "description": "Success",
@@ -11310,13 +11312,13 @@
           }
         },
         "x-module-scopes": [
-          "identity.read"
+          "role.read"
         ],
-        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: role.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
         "operationId": "createIdentityRole",
-        "summary": "Create role (identity.manage)",
+        "summary": "Create role (role.manage)",
         "responses": {
           "201": {
             "description": "Success",
@@ -11349,15 +11351,15 @@
           }
         },
         "x-module-scopes": [
-          "identity.manage"
+          "role.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: role.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/roles/{id}": {
       "put": {
         "operationId": "replaceIdentityRole",
-        "summary": "Replace role (identity.manage)",
+        "summary": "Replace role (role.manage)",
         "responses": {
           "200": {
             "description": "Success",
@@ -11415,13 +11417,13 @@
           }
         },
         "x-module-scopes": [
-          "identity.manage"
+          "role.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: role.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "deleteIdentityRole",
-        "summary": "Delete role (identity.manage)",
+        "summary": "Delete role (role.manage)",
         "responses": {
           "204": {
             "description": "Success"
@@ -11462,15 +11464,15 @@
           }
         ],
         "x-module-scopes": [
-          "identity.manage"
+          "role.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: role.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/roles/{id}/assignments": {
       "get": {
         "operationId": "listIdentityRoleAssignments",
-        "summary": "List direct assignments (identity.read)",
+        "summary": "List direct assignments (role.read)",
         "responses": {
           "200": {
             "description": "Success",
@@ -11506,15 +11508,15 @@
           }
         ],
         "x-module-scopes": [
-          "identity.read"
+          "role.read"
         ],
-        "description": " Required module scopes: identity.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: role.read. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/identity/roles/{id}/assignments/{principalType}/{principalID}": {
       "put": {
         "operationId": "setIdentityRoleAssignments",
-        "summary": "Change assignments (identity.manage)",
+        "summary": "Change assignments (role.manage)",
         "responses": {
           "204": {
             "description": "Success"
@@ -11560,13 +11562,13 @@
           }
         ],
         "x-module-scopes": [
-          "identity.manage"
+          "role.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: role.manage. Resource ACLs and any additional use-case checks also apply."
       },
       "delete": {
         "operationId": "removeIdentityRoleAssignments",
-        "summary": "Change assignments (identity.manage)",
+        "summary": "Change assignments (role.manage)",
         "responses": {
           "204": {
             "description": "Success"
@@ -11612,9 +11614,9 @@
           }
         ],
         "x-module-scopes": [
-          "identity.manage"
+          "role.manage"
         ],
-        "description": " Required module scopes: identity.manage. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: role.manage. Resource ACLs and any additional use-case checks also apply."
       }
     },
     "/v1/taxonomy/audit": {
@@ -12366,7 +12368,7 @@
       "get": {
         "operationId": "getIdentityUserStatus",
         "summary": "Read user activation status",
-        "description": "Requires identity.read.",
+        "description": "Requires user.read.",
         "parameters": [
           {
             "in": "path",
@@ -12400,7 +12402,7 @@
       "put": {
         "operationId": "setIdentityUserStatus",
         "summary": "Activate or deactivate a directory user",
-        "description": "Requires identity.manage. Inactive users cannot use module scopes or be assigned to person fields. Disabling the last active administrator is rejected.",
+        "description": "Requires user.manage. Inactive users cannot use module scopes or be assigned to person fields. Disabling the last active administrator is rejected.",
         "parameters": [
           {
             "in": "path",
@@ -12769,7 +12771,7 @@
       ],
       "post": {
         "summary": "Restore an earlier file as a new immutable file version",
-        "description": "Requires list.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.",
+        "description": "Requires list.write and document.write, item write access and the current numeric If-Match. Restores file bytes and filename while retaining current metadata. Creates a new blob sequence number and content revision; automatic publishing follows library settings. Explicit publication remains unchanged. Earlier versions remain immutable. The source version must belong to this item.",
         "parameters": [
           {
             "name": "If-Match",
@@ -12808,7 +12810,8 @@
           }
         },
         "x-module-scopes": [
-          "list.write"
+          "list.write",
+          "document.write"
         ],
         "operationId": "restoreFileVersion"
       }
@@ -12828,9 +12831,10 @@
       "post": {
         "operationId": "createDocument",
         "summary": "Create a document, metadata and content from one multipart upload",
-        "description": "Requires list.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period.",
+        "description": "Requires list.write and document.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag. Identical bytes share storage across items and workspaces; file-version metadata and access remain independent. Unreferenced completed objects are periodically collected after a one-hour grace period.",
         "x-module-scopes": [
-          "list.write"
+          "list.write",
+          "document.write"
         ],
         "requestBody": {
           "required": true,

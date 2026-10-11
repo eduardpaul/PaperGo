@@ -73,6 +73,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	documentScope := "document.write"
+	if scope == "list.read" {
+		documentScope = "document.read"
+	}
+	if err = h.DMS.RequireScope(r.Context(), subject, documentScope); err != nil {
+		h.fail(w, r, err)
+		return
+	}
 	library, path, ok := parsePath(r.URL.EscapedPath())
 	if !ok {
 		h.status(w, http.StatusBadRequest, "invalid path")

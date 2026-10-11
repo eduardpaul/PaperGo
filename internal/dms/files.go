@@ -110,6 +110,9 @@ func (s *Service) LibraryFolder(ctx context.Context, subject, libraryID string, 
 // before storing any bytes; PutFile repeats every check transactionally.
 func (s *Service) WriteTarget(ctx context.Context, subject, libraryID string, path []string, cond FileConditions) (*File, error) {
 	return read(ctx, s, func(t *Service) (*File, error) {
+		if err := t.RequireScope(ctx, subject, "document.write"); err != nil {
+			return nil, err
+		}
 		if len(path) == 0 {
 			_, lib, err := t.resolveFile(ctx, subject, libraryID, nil)
 			if err == nil {

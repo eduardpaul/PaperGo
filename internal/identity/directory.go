@@ -101,9 +101,9 @@ func (d Directory) transaction(ctx context.Context, fn func(*sql.Tx) error) erro
 	return tx.Commit()
 }
 
-func (d Directory) write(ctx context.Context, actor string, fn func(*sql.Tx) error) error {
+func (d Directory) write(ctx context.Context, actor, scope string, fn func(*sql.Tx) error) error {
 	return d.transaction(ctx, func(tx *sql.Tx) error {
-		if err := RequireScope(ctx, tx, actor, "identity.manage"); err != nil {
+		if err := RequireScope(ctx, tx, actor, scope); err != nil {
 			return err
 		}
 		if err := fn(tx); err != nil {
@@ -190,10 +190,10 @@ func (d Directory) CreateUser(ctx context.Context, actor, subject string) error 
 	if err := ValidateSubject(subject); err != nil {
 		return err
 	}
-	return d.write(ctx, actor, func(tx *sql.Tx) error { return ensureUser(ctx, tx, subject) })
+	return d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error { return ensureUser(ctx, tx, subject) })
 }
 func (d Directory) Users(ctx context.Context, actor string) ([]string, error) {
-	if err := RequireScope(ctx, d.DB, actor, "identity.read"); err != nil {
+	if err := RequireScope(ctx, d.DB, actor, "user.read"); err != nil {
 		return nil, err
 	}
 	rows, err := d.DB.QueryContext(ctx, "SELECT id FROM identity_users WHERE active=1 ORDER BY id")
@@ -212,7 +212,7 @@ func (d Directory) Users(ctx context.Context, actor string) ([]string, error) {
 	return out, rows.Err()
 }
 func (d Directory) Groups(ctx context.Context, actor string) ([]Group, error) {
-	if err := RequireScope(ctx, d.DB, actor, "identity.read"); err != nil {
+	if err := RequireScope(ctx, d.DB, actor, "group.read"); err != nil {
 		return nil, err
 	}
 	rows, err := d.DB.QueryContext(ctx, "SELECT id,name,description,version FROM identity_groups ORDER BY name,id")
@@ -239,7 +239,7 @@ func (d Directory) SaveGroup(ctx context.Context, actor, id string, version int,
 		id = uuid.NewString()
 		version = 0
 	}
-	err := d.write(ctx, actor, func(tx *sql.Tx) error {
+	err := d.write(ctx, actor, "group.manage", func(tx *sql.Tx) error {
 		if create {
 			_, err := tx.ExecContext(ctx, "INSERT INTO identity_groups(id,name,description,version,created_at) VALUES(?,?,?,1,CURRENT_TIMESTAMP)", id, in.Name, in.Description)
 			return err
@@ -260,13 +260,13 @@ func changed(result sql.Result, err error) error {
 	return err
 }
 func (d Directory) DeleteGroup(ctx context.Context, actor, id string, version int) error {
-	return d.write(ctx, actor, func(tx *sql.Tx) error {
+	return d.write(ctx, actor, "group.manage", func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, "DELETE FROM identity_groups WHERE id=? AND version=?", id, version)
 		return changed(result, err)
 	})
 }
 func (d Directory) Members(ctx context.Context, actor, id string) ([]Principal, error) {
-	if err := RequireScope(ctx, d.DB, actor, "identity.read"); err != nil {
+	if err := RequireScope(ctx, d.DB, actor, "group.read"); err != nil {
 		return nil, err
 	}
 	var exists bool
@@ -292,7 +292,7 @@ func (d Directory) Members(ctx context.Context, actor, id string) ([]Principal, 
 	return out, rows.Err()
 }
 func (d Directory) SetMember(ctx context.Context, actor, groupID string, p Principal, remove bool) error {
-	return d.write(ctx, actor, func(tx *sql.Tx) error {
+	return d.write(ctx, actor, "group.manage", func(tx *sql.Tx) error {
 		if err := ValidatePrincipal(ctx, tx, Principal{"group", groupID}); err != nil {
 			return err
 		}
@@ -329,7 +329,7 @@ func (d Directory) SetMember(ctx context.Context, actor, groupID string, p Princ
 	})
 }
 func (d Directory) Roles(ctx context.Context, actor string) ([]Role, error) {
-	if err := RequireScope(ctx, d.DB, actor, "identity.read"); err != nil {
+	if err := RequireScope(ctx, d.DB, actor, "role.read"); err != nil {
 		return nil, err
 	}
 	rows, err := d.DB.QueryContext(ctx, "SELECT id,name,description,scopes,builtin,version FROM identity_roles ORDER BY name,id")
@@ -364,7 +364,7 @@ func (d Directory) SaveRole(ctx context.Context, actor, id string, version int, 
 		in.Scopes = []string{}
 	}
 	raw, _ := json.Marshal(in.Scopes)
-	err := d.write(ctx, actor, func(tx *sql.Tx) error {
+	err := d.write(ctx, actor, "role.manage", func(tx *sql.Tx) error {
 		if create {
 			_, err := tx.ExecContext(ctx, "INSERT INTO identity_roles(id,name,description,scopes,builtin,version,created_at) VALUES(?,?,?,?,0,1,CURRENT_TIMESTAMP)", id, in.Name, in.Description, string(raw))
 			return err
@@ -375,13 +375,13 @@ func (d Directory) SaveRole(ctx context.Context, actor, id string, version int, 
 	return Role{ID: id, Name: in.Name, Description: in.Description, Scopes: in.Scopes, Version: version + 1}, err
 }
 func (d Directory) DeleteRole(ctx context.Context, actor, id string, version int) error {
-	return d.write(ctx, actor, func(tx *sql.Tx) error {
+	return d.write(ctx, actor, "role.manage", func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, "DELETE FROM identity_roles WHERE id=? AND version=? AND builtin=0", id, version)
 		return changed(result, err)
 	})
 }
 func (d Directory) Assignments(ctx context.Context, actor, id string) ([]Principal, error) {
-	if err := RequireScope(ctx, d.DB, actor, "identity.read"); err != nil {
+	if err := RequireScope(ctx, d.DB, actor, "role.read"); err != nil {
 		return nil, err
 	}
 	var exists bool
@@ -407,7 +407,7 @@ func (d Directory) Assignments(ctx context.Context, actor, id string) ([]Princip
 	return out, rows.Err()
 }
 func (d Directory) SetAssignment(ctx context.Context, actor, roleID string, p Principal, remove bool) error {
-	return d.write(ctx, actor, func(tx *sql.Tx) error {
+	return d.write(ctx, actor, "role.manage", func(tx *sql.Tx) error {
 		if err := ValidatePrincipal(ctx, tx, p); err != nil {
 			return err
 		}

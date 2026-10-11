@@ -32,9 +32,12 @@ type Scope struct {
 var Catalog = []Scope{
 	{"workspace.read", true}, {"workspace.create", true}, {"workspace.manage", false},
 	{"list.read", true}, {"list.write", true},
+	{"document.read", true}, {"document.write", true},
 	{"contentType.read", true}, {"contentType.manage", false},
 	{"taxonomy.read", true}, {"taxonomy.manage", false},
-	{"identity.read", false}, {"identity.manage", false},
+	{"user.read", true}, {"user.manage", false},
+	{"group.read", true}, {"group.manage", false},
+	{"role.read", false}, {"role.manage", false},
 	{"organization.manage", false},
 }
 
