@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"papergo/ent/blob"
 	"papergo/ent/grant"
+	"papergo/ent/identityuser"
 	"papergo/ent/itemrevision"
 	"papergo/ent/predicate"
 	"papergo/ent/publication"
@@ -46,6 +47,46 @@ func (_u *ResourceUpdate) SetNillableWorkspaceID(v *string) *ResourceUpdate {
 	if v != nil {
 		_u.SetWorkspaceID(*v)
 	}
+	return _u
+}
+
+// SetPersonalOwnerID sets the "personal_owner_id" field.
+func (_u *ResourceUpdate) SetPersonalOwnerID(v string) *ResourceUpdate {
+	_u.mutation.SetPersonalOwnerID(v)
+	return _u
+}
+
+// SetNillablePersonalOwnerID sets the "personal_owner_id" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillablePersonalOwnerID(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetPersonalOwnerID(*v)
+	}
+	return _u
+}
+
+// ClearPersonalOwnerID clears the value of the "personal_owner_id" field.
+func (_u *ResourceUpdate) ClearPersonalOwnerID() *ResourceUpdate {
+	_u.mutation.ClearPersonalOwnerID()
+	return _u
+}
+
+// SetSystemKey sets the "system_key" field.
+func (_u *ResourceUpdate) SetSystemKey(v string) *ResourceUpdate {
+	_u.mutation.SetSystemKey(v)
+	return _u
+}
+
+// SetNillableSystemKey sets the "system_key" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableSystemKey(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetSystemKey(*v)
+	}
+	return _u
+}
+
+// ClearSystemKey clears the value of the "system_key" field.
+func (_u *ResourceUpdate) ClearSystemKey() *ResourceUpdate {
+	_u.mutation.ClearSystemKey()
 	return _u
 }
 
@@ -489,6 +530,11 @@ func (_u *ResourceUpdate) AddChildren(v ...*Resource) *ResourceUpdate {
 	return _u.AddChildIDs(ids...)
 }
 
+// SetPersonalOwner sets the "personal_owner" edge to the IdentityUser entity.
+func (_u *ResourceUpdate) SetPersonalOwner(v *IdentityUser) *ResourceUpdate {
+	return _u.SetPersonalOwnerID(v.ID)
+}
+
 // SetParent sets the "parent" edge to the Resource entity.
 func (_u *ResourceUpdate) SetParent(v *Resource) *ResourceUpdate {
 	return _u.SetParentID(v.ID)
@@ -658,6 +704,12 @@ func (_u *ResourceUpdate) RemoveChildren(v ...*Resource) *ResourceUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveChildIDs(ids...)
+}
+
+// ClearPersonalOwner clears the "personal_owner" edge to the IdentityUser entity.
+func (_u *ResourceUpdate) ClearPersonalOwner() *ResourceUpdate {
+	_u.mutation.ClearPersonalOwner()
+	return _u
 }
 
 // ClearParent clears the "parent" edge to the Resource entity.
@@ -901,6 +953,16 @@ func (_u *ResourceUpdate) check() error {
 			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "Resource.workspace_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PersonalOwnerID(); ok {
+		if err := resource.PersonalOwnerIDValidator(v); err != nil {
+			return &ValidationError{Name: "personal_owner_id", err: fmt.Errorf(`ent: validator failed for field "Resource.personal_owner_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SystemKey(); ok {
+		if err := resource.SystemKeyValidator(v); err != nil {
+			return &ValidationError{Name: "system_key", err: fmt.Errorf(`ent: validator failed for field "Resource.system_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ParentID(); ok {
 		if err := resource.ParentIDValidator(v); err != nil {
 			return &ValidationError{Name: "parent_id", err: fmt.Errorf(`ent: validator failed for field "Resource.parent_id": %w`, err)}
@@ -978,6 +1040,12 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.WorkspaceID(); ok {
 		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SystemKey(); ok {
+		_spec.SetField(resource.FieldSystemKey, field.TypeString, value)
+	}
+	if _u.mutation.SystemKeyCleared() {
+		_spec.ClearField(resource.FieldSystemKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.ContentTypeID(); ok {
 		_spec.SetField(resource.FieldContentTypeID, field.TypeString, value)
@@ -1114,6 +1182,35 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    true,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.PersonalOwnerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   resource.PersonalOwnerTable,
+			Columns: []string{resource.PersonalOwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityuser.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PersonalOwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   resource.PersonalOwnerTable,
+			Columns: []string{resource.PersonalOwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityuser.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1660,6 +1757,46 @@ func (_u *ResourceUpdateOne) SetNillableWorkspaceID(v *string) *ResourceUpdateOn
 	return _u
 }
 
+// SetPersonalOwnerID sets the "personal_owner_id" field.
+func (_u *ResourceUpdateOne) SetPersonalOwnerID(v string) *ResourceUpdateOne {
+	_u.mutation.SetPersonalOwnerID(v)
+	return _u
+}
+
+// SetNillablePersonalOwnerID sets the "personal_owner_id" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillablePersonalOwnerID(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetPersonalOwnerID(*v)
+	}
+	return _u
+}
+
+// ClearPersonalOwnerID clears the value of the "personal_owner_id" field.
+func (_u *ResourceUpdateOne) ClearPersonalOwnerID() *ResourceUpdateOne {
+	_u.mutation.ClearPersonalOwnerID()
+	return _u
+}
+
+// SetSystemKey sets the "system_key" field.
+func (_u *ResourceUpdateOne) SetSystemKey(v string) *ResourceUpdateOne {
+	_u.mutation.SetSystemKey(v)
+	return _u
+}
+
+// SetNillableSystemKey sets the "system_key" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableSystemKey(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetSystemKey(*v)
+	}
+	return _u
+}
+
+// ClearSystemKey clears the value of the "system_key" field.
+func (_u *ResourceUpdateOne) ClearSystemKey() *ResourceUpdateOne {
+	_u.mutation.ClearSystemKey()
+	return _u
+}
+
 // SetParentID sets the "parent_id" field.
 func (_u *ResourceUpdateOne) SetParentID(v string) *ResourceUpdateOne {
 	_u.mutation.SetParentID(v)
@@ -2100,6 +2237,11 @@ func (_u *ResourceUpdateOne) AddChildren(v ...*Resource) *ResourceUpdateOne {
 	return _u.AddChildIDs(ids...)
 }
 
+// SetPersonalOwner sets the "personal_owner" edge to the IdentityUser entity.
+func (_u *ResourceUpdateOne) SetPersonalOwner(v *IdentityUser) *ResourceUpdateOne {
+	return _u.SetPersonalOwnerID(v.ID)
+}
+
 // SetParent sets the "parent" edge to the Resource entity.
 func (_u *ResourceUpdateOne) SetParent(v *Resource) *ResourceUpdateOne {
 	return _u.SetParentID(v.ID)
@@ -2269,6 +2411,12 @@ func (_u *ResourceUpdateOne) RemoveChildren(v ...*Resource) *ResourceUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveChildIDs(ids...)
+}
+
+// ClearPersonalOwner clears the "personal_owner" edge to the IdentityUser entity.
+func (_u *ResourceUpdateOne) ClearPersonalOwner() *ResourceUpdateOne {
+	_u.mutation.ClearPersonalOwner()
+	return _u
 }
 
 // ClearParent clears the "parent" edge to the Resource entity.
@@ -2525,6 +2673,16 @@ func (_u *ResourceUpdateOne) check() error {
 			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "Resource.workspace_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PersonalOwnerID(); ok {
+		if err := resource.PersonalOwnerIDValidator(v); err != nil {
+			return &ValidationError{Name: "personal_owner_id", err: fmt.Errorf(`ent: validator failed for field "Resource.personal_owner_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SystemKey(); ok {
+		if err := resource.SystemKeyValidator(v); err != nil {
+			return &ValidationError{Name: "system_key", err: fmt.Errorf(`ent: validator failed for field "Resource.system_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ParentID(); ok {
 		if err := resource.ParentIDValidator(v); err != nil {
 			return &ValidationError{Name: "parent_id", err: fmt.Errorf(`ent: validator failed for field "Resource.parent_id": %w`, err)}
@@ -2619,6 +2777,12 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if value, ok := _u.mutation.WorkspaceID(); ok {
 		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SystemKey(); ok {
+		_spec.SetField(resource.FieldSystemKey, field.TypeString, value)
+	}
+	if _u.mutation.SystemKeyCleared() {
+		_spec.ClearField(resource.FieldSystemKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.ContentTypeID(); ok {
 		_spec.SetField(resource.FieldContentTypeID, field.TypeString, value)
@@ -2755,6 +2919,35 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 			Bidi:    true,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.PersonalOwnerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   resource.PersonalOwnerTable,
+			Columns: []string{resource.PersonalOwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityuser.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PersonalOwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   resource.PersonalOwnerTable,
+			Columns: []string{resource.PersonalOwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityuser.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

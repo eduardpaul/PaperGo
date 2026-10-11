@@ -158,43 +158,54 @@ func (d Directory) UpdateUser(ctx context.Context, actor, subject string, in Use
 	})
 	return out, err
 }
-func (d Directory) DeleteUser(ctx context.Context, actor, subject string) error {
-	return d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error {
-		return auditedIdentity(ctx, tx, actor, "user.delete", "user", subject, func() error {
-			if actor == subject {
-				return ErrCannotDeleteSelf
-			}
-			current, err := userProfile(ctx, tx, subject)
-			if err != nil {
-				return err
-			}
-			if current.DeletedAt != nil {
-				return ErrNotFound
-			}
-			var lastOwner bool
-			if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM grants g JOIN resources w ON w.id=g.resource_id WHERE w.kind='workspace' AND w.deleted_at IS NULL AND g.principal_type='user' AND g.principal_id=? AND g.action='manage' AND NOT EXISTS(SELECT 1 FROM grants other JOIN identity_users u ON u.id=other.principal_id WHERE other.resource_id=w.id AND other.principal_type='user' AND other.action='manage' AND other.principal_id<>? AND u.active=1))", subject, subject).Scan(&lastOwner); err != nil {
-				return err
-			}
-			if lastOwner {
-				return ErrLastWorkspaceOwner
-			}
-			for _, query := range []string{
-				"DELETE FROM identity_memberships WHERE principal_type='user' AND principal_id=?",
-				"DELETE FROM identity_assignments WHERE principal_type='user' AND principal_id=?",
-				"DELETE FROM identity_preferences WHERE owner_type='user' AND owner_id=?",
-				"DELETE FROM grants WHERE principal_type='user' AND principal_id=?",
-				"DELETE FROM webdav_credentials WHERE subject=?",
-				"DELETE FROM identity_rest_tokens WHERE subject=?",
-				"DELETE FROM sync_tokens WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
-				"DELETE FROM sync_states WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
-				"DELETE FROM sync_views WHERE subject=?",
-			} {
-				if _, err = tx.ExecContext(ctx, query, subject); err != nil {
-					return err
-				}
-			}
-			_, err = tx.ExecContext(ctx, "UPDATE identity_users SET active=0,display_name='Deleted user',email='',deleted_at=? WHERE id=?", time.Now().UTC(), subject)
+
+// DeleteUserInTx participates in the content service transaction so Home cleanup
+// and account anonymization commit together. purgeHome must be supplied by it.
+func DeleteUserInTx(ctx context.Context, tx *sql.Tx, actor, subject string, purgeHome func() error) error {
+	if err := RequireScope(ctx, tx, actor, "user.manage"); err != nil {
+		return err
+	}
+	err := auditedIdentity(ctx, tx, actor, "user.delete", "user", subject, func() error {
+		if actor == subject {
+			return ErrCannotDeleteSelf
+		}
+		current, err := userProfile(ctx, tx, subject)
+		if err != nil {
 			return err
-		})
+		}
+		if current.DeletedAt != nil {
+			return ErrNotFound
+		}
+		var lastOwner bool
+		if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM grants g JOIN resources w ON w.id=g.resource_id WHERE w.kind='workspace' AND w.personal_owner_id IS NULL AND w.deleted_at IS NULL AND g.principal_type='user' AND g.principal_id=? AND g.action='manage' AND NOT EXISTS(SELECT 1 FROM grants other JOIN identity_users u ON u.id=other.principal_id WHERE other.resource_id=w.id AND other.principal_type='user' AND other.action='manage' AND other.principal_id<>? AND u.active=1))", subject, subject).Scan(&lastOwner); err != nil {
+			return err
+		}
+		if lastOwner {
+			return ErrLastWorkspaceOwner
+		}
+		if err = purgeHome(); err != nil {
+			return err
+		}
+		for _, query := range []string{
+			"DELETE FROM identity_memberships WHERE principal_type='user' AND principal_id=?",
+			"DELETE FROM identity_assignments WHERE principal_type='user' AND principal_id=?",
+			"DELETE FROM identity_preferences WHERE owner_type='user' AND owner_id=?",
+			"DELETE FROM grants WHERE principal_type='user' AND principal_id=?",
+			"DELETE FROM webdav_credentials WHERE subject=?",
+			"DELETE FROM identity_rest_tokens WHERE subject=?",
+			"DELETE FROM sync_tokens WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
+			"DELETE FROM sync_states WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
+			"DELETE FROM sync_views WHERE subject=?",
+		} {
+			if _, err = tx.ExecContext(ctx, query, subject); err != nil {
+				return err
+			}
+		}
+		_, err = tx.ExecContext(ctx, "UPDATE identity_users SET active=0,display_name='Deleted user',email='',deleted_at=? WHERE id=?", time.Now().UTC(), subject)
+		return err
 	})
+	if err != nil {
+		return err
+	}
+	return checkAdministrator(ctx, tx)
 }

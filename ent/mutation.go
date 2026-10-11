@@ -17,6 +17,7 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
+	"papergo/ent/groupinbox"
 	"papergo/ent/identityassignment"
 	"papergo/ent/identitygroup"
 	"papergo/ent/identitymembership"
@@ -79,6 +80,7 @@ const (
 	TypeFieldDefinition      = "FieldDefinition"
 	TypeFieldValue           = "FieldValue"
 	TypeGrant                = "Grant"
+	TypeGroupInbox           = "GroupInbox"
 	TypeIdentityAssignment   = "IdentityAssignment"
 	TypeIdentityGroup        = "IdentityGroup"
 	TypeIdentityMembership   = "IdentityMembership"
@@ -8024,6 +8026,546 @@ func (m *GrantMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Grant edge %s", name)
+}
+
+// GroupInboxMutation represents an operation that mutates the GroupInbox nodes in the graph.
+type GroupInboxMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *string
+	created_at     *time.Time
+	clearedFields  map[string]struct{}
+	group          *string
+	clearedgroup   bool
+	library        *string
+	clearedlibrary bool
+	done           bool
+	oldValue       func(context.Context) (*GroupInbox, error)
+	predicates     []predicate.GroupInbox
+}
+
+var _ ent.Mutation = (*GroupInboxMutation)(nil)
+
+// groupinboxOption allows management of the mutation configuration using functional options.
+type groupinboxOption func(*GroupInboxMutation)
+
+// newGroupInboxMutation creates new mutation for the GroupInbox entity.
+func newGroupInboxMutation(c config, op Op, opts ...groupinboxOption) *GroupInboxMutation {
+	m := &GroupInboxMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeGroupInbox,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withGroupInboxID sets the ID field of the mutation.
+func withGroupInboxID(id string) groupinboxOption {
+	return func(m *GroupInboxMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *GroupInbox
+		)
+		m.oldValue = func(ctx context.Context) (*GroupInbox, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().GroupInbox.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withGroupInbox sets the old GroupInbox of the mutation.
+func withGroupInbox(node *GroupInbox) groupinboxOption {
+	return func(m *GroupInboxMutation) {
+		m.oldValue = func(context.Context) (*GroupInbox, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m GroupInboxMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m GroupInboxMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of GroupInbox entities.
+func (m *GroupInboxMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *GroupInboxMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *GroupInboxMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().GroupInbox.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *GroupInboxMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *GroupInboxMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the GroupInbox entity.
+// If the GroupInbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupInboxMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *GroupInboxMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *GroupInboxMutation) SetGroupID(s string) {
+	m.group = &s
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *GroupInboxMutation) GroupID() (r string, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the GroupInbox entity.
+// If the GroupInbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupInboxMutation) OldGroupID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *GroupInboxMutation) ResetGroupID() {
+	m.group = nil
+}
+
+// SetLibraryID sets the "library_id" field.
+func (m *GroupInboxMutation) SetLibraryID(s string) {
+	m.library = &s
+}
+
+// LibraryID returns the value of the "library_id" field in the mutation.
+func (m *GroupInboxMutation) LibraryID() (r string, exists bool) {
+	v := m.library
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLibraryID returns the old "library_id" field's value of the GroupInbox entity.
+// If the GroupInbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupInboxMutation) OldLibraryID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLibraryID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLibraryID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLibraryID: %w", err)
+	}
+	return oldValue.LibraryID, nil
+}
+
+// ResetLibraryID resets all changes to the "library_id" field.
+func (m *GroupInboxMutation) ResetLibraryID() {
+	m.library = nil
+}
+
+// ClearGroup clears the "group" edge to the IdentityGroup entity.
+func (m *GroupInboxMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[groupinbox.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the IdentityGroup entity was cleared.
+func (m *GroupInboxMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *GroupInboxMutation) GroupIDs() (ids []string) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *GroupInboxMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// ClearLibrary clears the "library" edge to the Resource entity.
+func (m *GroupInboxMutation) ClearLibrary() {
+	m.clearedlibrary = true
+	m.clearedFields[groupinbox.FieldLibraryID] = struct{}{}
+}
+
+// LibraryCleared reports if the "library" edge to the Resource entity was cleared.
+func (m *GroupInboxMutation) LibraryCleared() bool {
+	return m.clearedlibrary
+}
+
+// LibraryIDs returns the "library" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// LibraryID instead. It exists only for internal usage by the builders.
+func (m *GroupInboxMutation) LibraryIDs() (ids []string) {
+	if id := m.library; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetLibrary resets all changes to the "library" edge.
+func (m *GroupInboxMutation) ResetLibrary() {
+	m.library = nil
+	m.clearedlibrary = false
+}
+
+// Where appends a list predicates to the GroupInboxMutation builder.
+func (m *GroupInboxMutation) Where(ps ...predicate.GroupInbox) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the GroupInboxMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *GroupInboxMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.GroupInbox, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *GroupInboxMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *GroupInboxMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (GroupInbox).
+func (m *GroupInboxMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *GroupInboxMutation) Fields() []string {
+	fields := make([]string, 0, 3)
+	if m.created_at != nil {
+		fields = append(fields, groupinbox.FieldCreatedAt)
+	}
+	if m.group != nil {
+		fields = append(fields, groupinbox.FieldGroupID)
+	}
+	if m.library != nil {
+		fields = append(fields, groupinbox.FieldLibraryID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *GroupInboxMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case groupinbox.FieldCreatedAt:
+		return m.CreatedAt()
+	case groupinbox.FieldGroupID:
+		return m.GroupID()
+	case groupinbox.FieldLibraryID:
+		return m.LibraryID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *GroupInboxMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case groupinbox.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case groupinbox.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case groupinbox.FieldLibraryID:
+		return m.OldLibraryID(ctx)
+	}
+	return nil, fmt.Errorf("unknown GroupInbox field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GroupInboxMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case groupinbox.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case groupinbox.FieldGroupID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case groupinbox.FieldLibraryID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLibraryID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown GroupInbox field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *GroupInboxMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *GroupInboxMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GroupInboxMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown GroupInbox numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *GroupInboxMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *GroupInboxMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *GroupInboxMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown GroupInbox nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *GroupInboxMutation) ResetField(name string) error {
+	switch name {
+	case groupinbox.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case groupinbox.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case groupinbox.FieldLibraryID:
+		m.ResetLibraryID()
+		return nil
+	}
+	return fmt.Errorf("unknown GroupInbox field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *GroupInboxMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.group != nil {
+		edges = append(edges, groupinbox.EdgeGroup)
+	}
+	if m.library != nil {
+		edges = append(edges, groupinbox.EdgeLibrary)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *GroupInboxMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case groupinbox.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	case groupinbox.EdgeLibrary:
+		if id := m.library; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *GroupInboxMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *GroupInboxMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *GroupInboxMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedgroup {
+		edges = append(edges, groupinbox.EdgeGroup)
+	}
+	if m.clearedlibrary {
+		edges = append(edges, groupinbox.EdgeLibrary)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *GroupInboxMutation) EdgeCleared(name string) bool {
+	switch name {
+	case groupinbox.EdgeGroup:
+		return m.clearedgroup
+	case groupinbox.EdgeLibrary:
+		return m.clearedlibrary
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *GroupInboxMutation) ClearEdge(name string) error {
+	switch name {
+	case groupinbox.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	case groupinbox.EdgeLibrary:
+		m.ClearLibrary()
+		return nil
+	}
+	return fmt.Errorf("unknown GroupInbox unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *GroupInboxMutation) ResetEdge(name string) error {
+	switch name {
+	case groupinbox.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	case groupinbox.EdgeLibrary:
+		m.ResetLibrary()
+		return nil
+	}
+	return fmt.Errorf("unknown GroupInbox edge %s", name)
 }
 
 // IdentityAssignmentMutation represents an operation that mutates the IdentityAssignment nodes in the graph.
@@ -22507,6 +23049,7 @@ type ResourceMutation struct {
 	id                        *string
 	created_at                *time.Time
 	workspace_id              *string
+	system_key                *string
 	content_type_id           *string
 	kind                      *resource.Kind
 	name                      *string
@@ -22539,6 +23082,8 @@ type ResourceMutation struct {
 	children                  map[string]struct{}
 	removedchildren           map[string]struct{}
 	clearedchildren           bool
+	personal_owner            *string
+	clearedpersonal_owner     bool
 	parent                    *string
 	clearedparent             bool
 	contained_items           map[string]struct{}
@@ -22752,6 +23297,104 @@ func (m *ResourceMutation) OldWorkspaceID(ctx context.Context) (v string, err er
 // ResetWorkspaceID resets all changes to the "workspace_id" field.
 func (m *ResourceMutation) ResetWorkspaceID() {
 	m.workspace_id = nil
+}
+
+// SetPersonalOwnerID sets the "personal_owner_id" field.
+func (m *ResourceMutation) SetPersonalOwnerID(s string) {
+	m.personal_owner = &s
+}
+
+// PersonalOwnerID returns the value of the "personal_owner_id" field in the mutation.
+func (m *ResourceMutation) PersonalOwnerID() (r string, exists bool) {
+	v := m.personal_owner
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPersonalOwnerID returns the old "personal_owner_id" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldPersonalOwnerID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPersonalOwnerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPersonalOwnerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPersonalOwnerID: %w", err)
+	}
+	return oldValue.PersonalOwnerID, nil
+}
+
+// ClearPersonalOwnerID clears the value of the "personal_owner_id" field.
+func (m *ResourceMutation) ClearPersonalOwnerID() {
+	m.personal_owner = nil
+	m.clearedFields[resource.FieldPersonalOwnerID] = struct{}{}
+}
+
+// PersonalOwnerIDCleared returns if the "personal_owner_id" field was cleared in this mutation.
+func (m *ResourceMutation) PersonalOwnerIDCleared() bool {
+	_, ok := m.clearedFields[resource.FieldPersonalOwnerID]
+	return ok
+}
+
+// ResetPersonalOwnerID resets all changes to the "personal_owner_id" field.
+func (m *ResourceMutation) ResetPersonalOwnerID() {
+	m.personal_owner = nil
+	delete(m.clearedFields, resource.FieldPersonalOwnerID)
+}
+
+// SetSystemKey sets the "system_key" field.
+func (m *ResourceMutation) SetSystemKey(s string) {
+	m.system_key = &s
+}
+
+// SystemKey returns the value of the "system_key" field in the mutation.
+func (m *ResourceMutation) SystemKey() (r string, exists bool) {
+	v := m.system_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSystemKey returns the old "system_key" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldSystemKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSystemKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSystemKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSystemKey: %w", err)
+	}
+	return oldValue.SystemKey, nil
+}
+
+// ClearSystemKey clears the value of the "system_key" field.
+func (m *ResourceMutation) ClearSystemKey() {
+	m.system_key = nil
+	m.clearedFields[resource.FieldSystemKey] = struct{}{}
+}
+
+// SystemKeyCleared returns if the "system_key" field was cleared in this mutation.
+func (m *ResourceMutation) SystemKeyCleared() bool {
+	_, ok := m.clearedFields[resource.FieldSystemKey]
+	return ok
+}
+
+// ResetSystemKey resets all changes to the "system_key" field.
+func (m *ResourceMutation) ResetSystemKey() {
+	m.system_key = nil
+	delete(m.clearedFields, resource.FieldSystemKey)
 }
 
 // SetParentID sets the "parent_id" field.
@@ -24036,6 +24679,33 @@ func (m *ResourceMutation) ResetChildren() {
 	m.removedchildren = nil
 }
 
+// ClearPersonalOwner clears the "personal_owner" edge to the IdentityUser entity.
+func (m *ResourceMutation) ClearPersonalOwner() {
+	m.clearedpersonal_owner = true
+	m.clearedFields[resource.FieldPersonalOwnerID] = struct{}{}
+}
+
+// PersonalOwnerCleared reports if the "personal_owner" edge to the IdentityUser entity was cleared.
+func (m *ResourceMutation) PersonalOwnerCleared() bool {
+	return m.PersonalOwnerIDCleared() || m.clearedpersonal_owner
+}
+
+// PersonalOwnerIDs returns the "personal_owner" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// PersonalOwnerID instead. It exists only for internal usage by the builders.
+func (m *ResourceMutation) PersonalOwnerIDs() (ids []string) {
+	if id := m.personal_owner; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetPersonalOwner resets all changes to the "personal_owner" edge.
+func (m *ResourceMutation) ResetPersonalOwner() {
+	m.personal_owner = nil
+	m.clearedpersonal_owner = false
+}
+
 // ClearParent clears the "parent" edge to the Resource entity.
 func (m *ResourceMutation) ClearParent() {
 	m.clearedparent = true
@@ -24637,12 +25307,18 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 30)
+	fields := make([]string, 0, 32)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
 	if m.workspace_id != nil {
 		fields = append(fields, resource.FieldWorkspaceID)
+	}
+	if m.personal_owner != nil {
+		fields = append(fields, resource.FieldPersonalOwnerID)
+	}
+	if m.system_key != nil {
+		fields = append(fields, resource.FieldSystemKey)
 	}
 	if m.parent != nil {
 		fields = append(fields, resource.FieldParentID)
@@ -24740,6 +25416,10 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case resource.FieldWorkspaceID:
 		return m.WorkspaceID()
+	case resource.FieldPersonalOwnerID:
+		return m.PersonalOwnerID()
+	case resource.FieldSystemKey:
+		return m.SystemKey()
 	case resource.FieldParentID:
 		return m.ParentID()
 	case resource.FieldContainerID:
@@ -24809,6 +25489,10 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldCreatedAt(ctx)
 	case resource.FieldWorkspaceID:
 		return m.OldWorkspaceID(ctx)
+	case resource.FieldPersonalOwnerID:
+		return m.OldPersonalOwnerID(ctx)
+	case resource.FieldSystemKey:
+		return m.OldSystemKey(ctx)
 	case resource.FieldParentID:
 		return m.OldParentID(ctx)
 	case resource.FieldContainerID:
@@ -24887,6 +25571,20 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWorkspaceID(v)
+		return nil
+	case resource.FieldPersonalOwnerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPersonalOwnerID(v)
+		return nil
+	case resource.FieldSystemKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSystemKey(v)
 		return nil
 	case resource.FieldParentID:
 		v, ok := value.(string)
@@ -25153,6 +25851,12 @@ func (m *ResourceMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ResourceMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(resource.FieldPersonalOwnerID) {
+		fields = append(fields, resource.FieldPersonalOwnerID)
+	}
+	if m.FieldCleared(resource.FieldSystemKey) {
+		fields = append(fields, resource.FieldSystemKey)
+	}
 	if m.FieldCleared(resource.FieldParentID) {
 		fields = append(fields, resource.FieldParentID)
 	}
@@ -25197,6 +25901,12 @@ func (m *ResourceMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ResourceMutation) ClearField(name string) error {
 	switch name {
+	case resource.FieldPersonalOwnerID:
+		m.ClearPersonalOwnerID()
+		return nil
+	case resource.FieldSystemKey:
+		m.ClearSystemKey()
+		return nil
 	case resource.FieldParentID:
 		m.ClearParentID()
 		return nil
@@ -25240,6 +25950,12 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldWorkspaceID:
 		m.ResetWorkspaceID()
+		return nil
+	case resource.FieldPersonalOwnerID:
+		m.ResetPersonalOwnerID()
+		return nil
+	case resource.FieldSystemKey:
+		m.ResetSystemKey()
 		return nil
 	case resource.FieldParentID:
 		m.ResetParentID()
@@ -25331,9 +26047,12 @@ func (m *ResourceMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ResourceMutation) AddedEdges() []string {
-	edges := make([]string, 0, 14)
+	edges := make([]string, 0, 15)
 	if m.children != nil {
 		edges = append(edges, resource.EdgeChildren)
+	}
+	if m.personal_owner != nil {
+		edges = append(edges, resource.EdgePersonalOwner)
 	}
 	if m.parent != nil {
 		edges = append(edges, resource.EdgeParent)
@@ -25387,6 +26106,10 @@ func (m *ResourceMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case resource.EdgePersonalOwner:
+		if id := m.personal_owner; id != nil {
+			return []ent.Value{*id}
+		}
 	case resource.EdgeParent:
 		if id := m.parent; id != nil {
 			return []ent.Value{*id}
@@ -25461,7 +26184,7 @@ func (m *ResourceMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ResourceMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 14)
+	edges := make([]string, 0, 15)
 	if m.removedchildren != nil {
 		edges = append(edges, resource.EdgeChildren)
 	}
@@ -25556,9 +26279,12 @@ func (m *ResourceMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ResourceMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 14)
+	edges := make([]string, 0, 15)
 	if m.clearedchildren {
 		edges = append(edges, resource.EdgeChildren)
+	}
+	if m.clearedpersonal_owner {
+		edges = append(edges, resource.EdgePersonalOwner)
 	}
 	if m.clearedparent {
 		edges = append(edges, resource.EdgeParent)
@@ -25608,6 +26334,8 @@ func (m *ResourceMutation) EdgeCleared(name string) bool {
 	switch name {
 	case resource.EdgeChildren:
 		return m.clearedchildren
+	case resource.EdgePersonalOwner:
+		return m.clearedpersonal_owner
 	case resource.EdgeParent:
 		return m.clearedparent
 	case resource.EdgeContainedItems:
@@ -25642,6 +26370,9 @@ func (m *ResourceMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *ResourceMutation) ClearEdge(name string) error {
 	switch name {
+	case resource.EdgePersonalOwner:
+		m.ClearPersonalOwner()
+		return nil
 	case resource.EdgeParent:
 		m.ClearParent()
 		return nil
@@ -25667,6 +26398,9 @@ func (m *ResourceMutation) ResetEdge(name string) error {
 	switch name {
 	case resource.EdgeChildren:
 		m.ResetChildren()
+		return nil
+	case resource.EdgePersonalOwner:
+		m.ResetPersonalOwner()
 		return nil
 	case resource.EdgeParent:
 		m.ResetParent()

@@ -7,6 +7,7 @@ import (
 
 func (a *API) registerIdentity(m *http.ServeMux) {
 	a.registerPreferences(m)
+	a.registerInboxes(m)
 	d := a.DMS.Directory()
 	m.HandleFunc("GET /v1/identity/me/tokens", foundationRead(a, func(r *http.Request) (any, error) { return d.RESTTokens(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/identity/me/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.RESTTokenInput, _ int) (any, error) {
@@ -56,7 +57,7 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 		return d.UpdateUser(r.Context(), subject(r), r.PathValue("subject"), in)
 	}))
 	m.HandleFunc("DELETE /v1/identity/users/{subject}", func(w http.ResponseWriter, r *http.Request) {
-		if err := d.DeleteUser(r.Context(), subject(r), r.PathValue("subject")); err != nil {
+		if err := a.DMS.DeleteUser(r.Context(), subject(r), r.PathValue("subject")); err != nil {
 			a.failure(w, r, err)
 			return
 		}

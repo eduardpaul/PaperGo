@@ -23,7 +23,25 @@ func blobResponse(b *ent.Blob, resourceVersion int) map[string]any {
 const documentMetadataLimit int64 = 64 << 10
 
 func (a *API) createDocument(w http.ResponseWriter, r *http.Request) {
-	if err := a.DMS.CanCreateDocument(r.Context(), subject(r), r.PathValue("id")); err != nil {
+	a.createDocumentTo(w, r, "", false)
+}
+func (a *API) createPersonalInboxDocument(w http.ResponseWriter, r *http.Request) {
+	a.createDocumentTo(w, r, "", true)
+}
+func (a *API) createGroupInboxDocument(w http.ResponseWriter, r *http.Request) {
+	a.createDocumentTo(w, r, r.PathValue("id"), true)
+}
+func (a *API) createDocumentTo(w http.ResponseWriter, r *http.Request, groupID string, inbox bool) {
+	libraryID := r.PathValue("id")
+	if inbox {
+		var err error
+		libraryID, err = a.DMS.InboxUploadDestination(r.Context(), subject(r), groupID)
+		if err != nil {
+			a.failure(w, r, err)
+			return
+		}
+	}
+	if err := a.DMS.CanCreateDocument(r.Context(), subject(r), libraryID); err != nil {
 		a.failure(w, r, err)
 		return
 	}
@@ -136,7 +154,13 @@ func (a *API) createDocument(w http.ResponseWriter, r *http.Request) {
 		a.problem(w, r, 400, "invalid_upload", "a file part is required")
 		return
 	}
-	out, err := a.DMS.CreateDocument(r.Context(), subject(r), r.PathValue("id"), metadata, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256})
+	content := dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256}
+	var out *dms.DocumentUpload
+	if inbox {
+		out, err = a.DMS.CreateInboxDocument(r.Context(), subject(r), groupID, libraryID, metadata, content)
+	} else {
+		out, err = a.DMS.CreateDocument(r.Context(), subject(r), libraryID, metadata, content)
+	}
 	if err != nil {
 		a.failure(w, r, err)
 		return

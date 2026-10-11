@@ -34,6 +34,8 @@ type Tx struct {
 	FieldValue *FieldValueClient
 	// Grant is the client for interacting with the Grant builders.
 	Grant *GrantClient
+	// GroupInbox is the client for interacting with the GroupInbox builders.
+	GroupInbox *GroupInboxClient
 	// IdentityAssignment is the client for interacting with the IdentityAssignment builders.
 	IdentityAssignment *IdentityAssignmentClient
 	// IdentityGroup is the client for interacting with the IdentityGroup builders.
@@ -243,6 +245,7 @@ func (tx *Tx) init() {
 	tx.FieldDefinition = NewFieldDefinitionClient(tx.config)
 	tx.FieldValue = NewFieldValueClient(tx.config)
 	tx.Grant = NewGrantClient(tx.config)
+	tx.GroupInbox = NewGroupInboxClient(tx.config)
 	tx.IdentityAssignment = NewIdentityAssignmentClient(tx.config)
 	tx.IdentityGroup = NewIdentityGroupClient(tx.config)
 	tx.IdentityMembership = NewIdentityMembershipClient(tx.config)

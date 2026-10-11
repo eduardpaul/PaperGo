@@ -72,6 +72,17 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if _, err = s.Directory().SetUserActive(ctx, admin, "bob", false); err != nil {
 		t.Fatal(err)
 	}
+	home, err := s.Home(ctx, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	group, err := s.Directory().SaveGroup(ctx, admin, "", 0, identity.GroupInput{Name: "Package Inbox"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SetGroupInbox(ctx, "alice", group.ID, GroupInboxInput{LibraryID: home.InboxLibraryID}); err != nil {
+		t.Fatal(err)
+	}
 	// A credential exists in the source, but never in the portable graph.
 	if _, err = s.Directory().CreateRESTToken(ctx, admin, identity.RESTTokenInput{Name: "Export source", Scopes: []string{"organization.manage"}}); err != nil {
 		t.Fatal(err)
@@ -202,6 +213,14 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	real, err = target.Client.Operation.Get(ctx, real.ID)
 	if err != nil || real.Status != operation.StatusSucceeded {
 		t.Fatal(err, real.Error)
+	}
+	restoredHome, err := target.Home(ctx, "alice")
+	if err != nil || restoredHome != home {
+		t.Fatal("Home identity not restored", restoredHome, err)
+	}
+	restoredInbox, err := target.GroupInbox(ctx, "alice", group.ID)
+	if err != nil || restoredInbox.LibraryID != home.InboxLibraryID {
+		t.Fatal("Inbox binding not restored", restoredInbox, err)
 	}
 	loaded, err := target.Get(ctx, admin, item.ID)
 	if err != nil || loaded.Name != "Invoice" || fmt.Sprint(loaded.Values["amount"]) != "7" {

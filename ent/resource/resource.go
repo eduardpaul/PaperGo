@@ -19,6 +19,10 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldWorkspaceID holds the string denoting the workspace_id field in the database.
 	FieldWorkspaceID = "workspace_id"
+	// FieldPersonalOwnerID holds the string denoting the personal_owner_id field in the database.
+	FieldPersonalOwnerID = "personal_owner_id"
+	// FieldSystemKey holds the string denoting the system_key field in the database.
+	FieldSystemKey = "system_key"
 	// FieldParentID holds the string denoting the parent_id field in the database.
 	FieldParentID = "parent_id"
 	// FieldContainerID holds the string denoting the container_id field in the database.
@@ -77,6 +81,8 @@ const (
 	FieldDeletedBy = "deleted_by"
 	// EdgeChildren holds the string denoting the children edge name in mutations.
 	EdgeChildren = "children"
+	// EdgePersonalOwner holds the string denoting the personal_owner edge name in mutations.
+	EdgePersonalOwner = "personal_owner"
 	// EdgeParent holds the string denoting the parent edge name in mutations.
 	EdgeParent = "parent"
 	// EdgeContainedItems holds the string denoting the contained_items edge name in mutations.
@@ -109,6 +115,13 @@ const (
 	ChildrenTable = "resources"
 	// ChildrenColumn is the table column denoting the children relation/edge.
 	ChildrenColumn = "parent_id"
+	// PersonalOwnerTable is the table that holds the personal_owner relation/edge.
+	PersonalOwnerTable = "resources"
+	// PersonalOwnerInverseTable is the table name for the IdentityUser entity.
+	// It exists in this package in order to avoid circular dependency with the "identityuser" package.
+	PersonalOwnerInverseTable = "identity_users"
+	// PersonalOwnerColumn is the table column denoting the personal_owner relation/edge.
+	PersonalOwnerColumn = "personal_owner_id"
 	// ParentTable is the table that holds the parent relation/edge.
 	ParentTable = "resources"
 	// ParentColumn is the table column denoting the parent relation/edge.
@@ -198,6 +211,8 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldWorkspaceID,
+	FieldPersonalOwnerID,
+	FieldSystemKey,
 	FieldParentID,
 	FieldContainerID,
 	FieldContentTypeID,
@@ -243,6 +258,10 @@ var (
 	DefaultCreatedAt func() time.Time
 	// WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
 	WorkspaceIDValidator func(string) error
+	// PersonalOwnerIDValidator is a validator for the "personal_owner_id" field. It is called by the builders before save.
+	PersonalOwnerIDValidator func(string) error
+	// SystemKeyValidator is a validator for the "system_key" field. It is called by the builders before save.
+	SystemKeyValidator func(string) error
 	// ParentIDValidator is a validator for the "parent_id" field. It is called by the builders before save.
 	ParentIDValidator func(string) error
 	// ContainerIDValidator is a validator for the "container_id" field. It is called by the builders before save.
@@ -396,6 +415,16 @@ func ByWorkspaceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWorkspaceID, opts...).ToFunc()
 }
 
+// ByPersonalOwnerID orders the results by the personal_owner_id field.
+func ByPersonalOwnerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPersonalOwnerID, opts...).ToFunc()
+}
+
+// BySystemKey orders the results by the system_key field.
+func BySystemKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSystemKey, opts...).ToFunc()
+}
+
 // ByParentID orders the results by the parent_id field.
 func ByParentID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldParentID, opts...).ToFunc()
@@ -532,6 +561,13 @@ func ByChildrenCount(opts ...sql.OrderTermOption) OrderOption {
 func ByChildren(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newChildrenStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByPersonalOwnerField orders the results by personal_owner field.
+func ByPersonalOwnerField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPersonalOwnerStep(), sql.OrderByField(field, opts...))
 	}
 }
 
@@ -686,6 +722,13 @@ func newChildrenStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(Table, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ChildrenTable, ChildrenColumn),
+	)
+}
+func newPersonalOwnerStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(PersonalOwnerInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, PersonalOwnerTable, PersonalOwnerColumn),
 	)
 }
 func newParentStep() *sqlgraph.Step {

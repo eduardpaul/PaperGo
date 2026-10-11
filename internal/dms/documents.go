@@ -2,6 +2,8 @@ package dms
 
 import (
 	"context"
+	"errors"
+	"papergo/internal/identity"
 	"regexp"
 	"strings"
 
@@ -60,12 +62,21 @@ func (s *Service) documentParent(ctx context.Context, subject, libraryID, folder
 
 // CanCreateDocument authorizes the destination before the HTTP layer streams bytes.
 func (s *Service) CanCreateDocument(ctx context.Context, subject, libraryID string) error {
+	if err := s.RequireScope(ctx, subject, "list.write"); err != nil {
+		return err
+	}
 	_, err := read(ctx, s, func(t *Service) (*ent.Resource, error) { return t.documentParent(ctx, subject, libraryID, "") })
 	return err
 }
 
 func (s *Service) CreateDocument(ctx context.Context, subject, libraryID string, metadata DocumentMetadata, content BlobInput) (out *DocumentUpload, err error) {
 	err = s.write(ctx, func(t *Service) error {
+		if err := identity.RequireCredential(ctx, t.tx, subject); err != nil {
+			if errors.Is(err, identity.ErrInvalidRESTToken) {
+				return ErrForbidden
+			}
+			return err
+		}
 		parent, err := t.documentParent(ctx, subject, libraryID, metadata.FolderID)
 		if err != nil {
 			return err

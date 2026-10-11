@@ -21,6 +21,7 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
+	"papergo/ent/groupinbox"
 	"papergo/ent/identityassignment"
 	"papergo/ent/identitygroup"
 	"papergo/ent/identitymembership"
@@ -89,6 +90,8 @@ type Client struct {
 	FieldValue *FieldValueClient
 	// Grant is the client for interacting with the Grant builders.
 	Grant *GrantClient
+	// GroupInbox is the client for interacting with the GroupInbox builders.
+	GroupInbox *GroupInboxClient
 	// IdentityAssignment is the client for interacting with the IdentityAssignment builders.
 	IdentityAssignment *IdentityAssignmentClient
 	// IdentityGroup is the client for interacting with the IdentityGroup builders.
@@ -178,6 +181,7 @@ func (c *Client) init() {
 	c.FieldDefinition = NewFieldDefinitionClient(c.config)
 	c.FieldValue = NewFieldValueClient(c.config)
 	c.Grant = NewGrantClient(c.config)
+	c.GroupInbox = NewGroupInboxClient(c.config)
 	c.IdentityAssignment = NewIdentityAssignmentClient(c.config)
 	c.IdentityGroup = NewIdentityGroupClient(c.config)
 	c.IdentityMembership = NewIdentityMembershipClient(c.config)
@@ -314,6 +318,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		FieldDefinition:      NewFieldDefinitionClient(cfg),
 		FieldValue:           NewFieldValueClient(cfg),
 		Grant:                NewGrantClient(cfg),
+		GroupInbox:           NewGroupInboxClient(cfg),
 		IdentityAssignment:   NewIdentityAssignmentClient(cfg),
 		IdentityGroup:        NewIdentityGroupClient(cfg),
 		IdentityMembership:   NewIdentityMembershipClient(cfg),
@@ -377,6 +382,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		FieldDefinition:      NewFieldDefinitionClient(cfg),
 		FieldValue:           NewFieldValueClient(cfg),
 		Grant:                NewGrantClient(cfg),
+		GroupInbox:           NewGroupInboxClient(cfg),
 		IdentityAssignment:   NewIdentityAssignmentClient(cfg),
 		IdentityGroup:        NewIdentityGroupClient(cfg),
 		IdentityMembership:   NewIdentityMembershipClient(cfg),
@@ -442,7 +448,7 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
+		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
 		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
 		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
@@ -461,7 +467,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
+		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
 		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
 		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
@@ -497,6 +503,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.FieldValue.mutate(ctx, m)
 	case *GrantMutation:
 		return c.Grant.mutate(ctx, m)
+	case *GroupInboxMutation:
+		return c.GroupInbox.mutate(ctx, m)
 	case *IdentityAssignmentMutation:
 		return c.IdentityAssignment.mutate(ctx, m)
 	case *IdentityGroupMutation:
@@ -2009,6 +2017,171 @@ func (c *GrantClient) mutate(ctx context.Context, m *GrantMutation) (Value, erro
 		return (&GrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Grant mutation op: %q", m.Op())
+	}
+}
+
+// GroupInboxClient is a client for the GroupInbox schema.
+type GroupInboxClient struct {
+	config
+}
+
+// NewGroupInboxClient returns a client for the GroupInbox from the given config.
+func NewGroupInboxClient(c config) *GroupInboxClient {
+	return &GroupInboxClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `groupinbox.Hooks(f(g(h())))`.
+func (c *GroupInboxClient) Use(hooks ...Hook) {
+	c.hooks.GroupInbox = append(c.hooks.GroupInbox, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `groupinbox.Intercept(f(g(h())))`.
+func (c *GroupInboxClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GroupInbox = append(c.inters.GroupInbox, interceptors...)
+}
+
+// Create returns a builder for creating a GroupInbox entity.
+func (c *GroupInboxClient) Create() *GroupInboxCreate {
+	mutation := newGroupInboxMutation(c.config, OpCreate)
+	return &GroupInboxCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GroupInbox entities.
+func (c *GroupInboxClient) CreateBulk(builders ...*GroupInboxCreate) *GroupInboxCreateBulk {
+	return &GroupInboxCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GroupInboxClient) MapCreateBulk(slice any, setFunc func(*GroupInboxCreate, int)) *GroupInboxCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GroupInboxCreateBulk{err: fmt.Errorf("calling to GroupInboxClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GroupInboxCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GroupInboxCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GroupInbox.
+func (c *GroupInboxClient) Update() *GroupInboxUpdate {
+	mutation := newGroupInboxMutation(c.config, OpUpdate)
+	return &GroupInboxUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GroupInboxClient) UpdateOne(_m *GroupInbox) *GroupInboxUpdateOne {
+	mutation := newGroupInboxMutation(c.config, OpUpdateOne, withGroupInbox(_m))
+	return &GroupInboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GroupInboxClient) UpdateOneID(id string) *GroupInboxUpdateOne {
+	mutation := newGroupInboxMutation(c.config, OpUpdateOne, withGroupInboxID(id))
+	return &GroupInboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GroupInbox.
+func (c *GroupInboxClient) Delete() *GroupInboxDelete {
+	mutation := newGroupInboxMutation(c.config, OpDelete)
+	return &GroupInboxDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GroupInboxClient) DeleteOne(_m *GroupInbox) *GroupInboxDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GroupInboxClient) DeleteOneID(id string) *GroupInboxDeleteOne {
+	builder := c.Delete().Where(groupinbox.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GroupInboxDeleteOne{builder}
+}
+
+// Query returns a query builder for GroupInbox.
+func (c *GroupInboxClient) Query() *GroupInboxQuery {
+	return &GroupInboxQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGroupInbox},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GroupInbox entity by its id.
+func (c *GroupInboxClient) Get(ctx context.Context, id string) (*GroupInbox, error) {
+	return c.Query().Where(groupinbox.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GroupInboxClient) GetX(ctx context.Context, id string) *GroupInbox {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryGroup queries the group edge of a GroupInbox.
+func (c *GroupInboxClient) QueryGroup(_m *GroupInbox) *IdentityGroupQuery {
+	query := (&IdentityGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(groupinbox.Table, groupinbox.FieldID, id),
+			sqlgraph.To(identitygroup.Table, identitygroup.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, groupinbox.GroupTable, groupinbox.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryLibrary queries the library edge of a GroupInbox.
+func (c *GroupInboxClient) QueryLibrary(_m *GroupInbox) *ResourceQuery {
+	query := (&ResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(groupinbox.Table, groupinbox.FieldID, id),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, groupinbox.LibraryTable, groupinbox.LibraryColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *GroupInboxClient) Hooks() []Hook {
+	return c.hooks.GroupInbox
+}
+
+// Interceptors returns the client interceptors.
+func (c *GroupInboxClient) Interceptors() []Interceptor {
+	return c.inters.GroupInbox
+}
+
+func (c *GroupInboxClient) mutate(ctx context.Context, m *GroupInboxMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GroupInboxCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GroupInboxUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GroupInboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GroupInboxDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown GroupInbox mutation op: %q", m.Op())
 	}
 }
 
@@ -4850,6 +5023,22 @@ func (c *ResourceClient) QueryChildren(_m *Resource) *ResourceQuery {
 	return query
 }
 
+// QueryPersonalOwner queries the personal_owner edge of a Resource.
+func (c *ResourceClient) QueryPersonalOwner(_m *Resource) *IdentityUserQuery {
+	query := (&IdentityUserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(resource.Table, resource.FieldID, id),
+			sqlgraph.To(identityuser.Table, identityuser.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, resource.PersonalOwnerTable, resource.PersonalOwnerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryParent queries the parent edge of a Resource.
 func (c *ResourceClient) QueryParent(_m *Resource) *ResourceQuery {
 	query := (&ResourceClient{config: c.config}).Query()
@@ -7306,25 +7495,25 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 type (
 	hooks struct {
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
-		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
-		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
-		IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
-		ItemSurface, ListView, LiveChange, Operation, OperationItem, Publication,
-		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup, TermSet,
-		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
-		WorkflowVersion []ent.Hook
+		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
+		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
+		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
+		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,
+		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
+		SchemaTemplate, SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup,
+		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
-		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
-		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
-		IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
-		ItemSurface, ListView, LiveChange, Operation, OperationItem, Publication,
-		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup, TermSet,
-		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
-		WorkflowVersion []ent.Interceptor
+		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
+		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
+		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
+		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,
+		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
+		SchemaTemplate, SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup,
+		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		WorkflowTrigger, WorkflowVersion []ent.Interceptor
 	}
 )
 

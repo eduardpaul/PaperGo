@@ -94,6 +94,9 @@ func (s *Service) SetWorkspaceMember(ctx context.Context, subject, id string, in
 		if err != nil {
 			return err
 		}
+		if w.PersonalOwnerID != nil {
+			return ErrProtectedHome
+		}
 		if err = identity.ValidatePrincipal(ctx, t.tx, identity.Principal{Type: "user", ID: in.Subject}); err != nil {
 			return invalid(err.Error())
 		}
@@ -141,6 +144,9 @@ func (s *Service) RemoveWorkspaceMember(ctx context.Context, subject, id, member
 		w, err := t.workspace(ctx, subject, id, "manage")
 		if err != nil {
 			return err
+		}
+		if w.PersonalOwnerID != nil {
+			return ErrProtectedHome
 		}
 		g, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.PrincipalIDEQ(member), grant.PrincipalTypeEQ(grant.PrincipalTypeUser)).Only(ctx)
 		if ent.IsNotFound(err) {

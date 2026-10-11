@@ -36,6 +36,9 @@ type FieldValue func(*sql.Selector)
 // Grant is the predicate function for grant builders.
 type Grant func(*sql.Selector)
 
+// GroupInbox is the predicate function for groupinbox builders.
+type GroupInbox func(*sql.Selector)
+
 // IdentityAssignment is the predicate function for identityassignment builders.
 type IdentityAssignment func(*sql.Selector)
 

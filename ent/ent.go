@@ -16,6 +16,7 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
+	"papergo/ent/groupinbox"
 	"papergo/ent/identityassignment"
 	"papergo/ent/identitygroup"
 	"papergo/ent/identitymembership"
@@ -126,6 +127,7 @@ func checkColumn(t, c string) error {
 			fielddefinition.Table:      fielddefinition.ValidColumn,
 			fieldvalue.Table:           fieldvalue.ValidColumn,
 			grant.Table:                grant.ValidColumn,
+			groupinbox.Table:           groupinbox.ValidColumn,
 			identityassignment.Table:   identityassignment.ValidColumn,
 			identitygroup.Table:        identitygroup.ValidColumn,
 			identitymembership.Table:   identitymembership.ValidColumn,

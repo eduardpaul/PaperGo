@@ -128,6 +128,18 @@ func (f GrantFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GrantMutation", m)
 }
 
+// The GroupInboxFunc type is an adapter to allow the use of ordinary
+// function as GroupInbox mutator.
+type GroupInboxFunc func(context.Context, *ent.GroupInboxMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f GroupInboxFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.GroupInboxMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GroupInboxMutation", m)
+}
+
 // The IdentityAssignmentFunc type is an adapter to allow the use of ordinary
 // function as IdentityAssignment mutator.
 type IdentityAssignmentFunc func(context.Context, *ent.IdentityAssignmentMutation) (ent.Value, error)

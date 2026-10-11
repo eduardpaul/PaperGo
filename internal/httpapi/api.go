@@ -207,7 +207,7 @@ func transferRequest(r *http.Request) bool {
 	}
 	if r.Method == http.MethodPost {
 		parts := strings.Split(r.URL.Path, "/")
-		return len(parts) == 5 && parts[1] == "v1" && parts[2] == "resources" && parts[4] == "documents"
+		return (len(parts) == 5 && parts[1] == "v1" && parts[2] == "resources" && parts[4] == "documents") || r.URL.Path == "/v1/identity/me/inbox/documents" || (len(parts) == 7 && parts[1] == "v1" && parts[2] == "identity" && parts[3] == "groups" && parts[5] == "inbox" && parts[6] == "documents")
 	}
 	switch r.Method {
 	case http.MethodGet, http.MethodHead, http.MethodPut:
@@ -292,6 +292,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(404, "not_found", "resource not found")
 	case errors.Is(err, dms.ErrForbidden) || errors.Is(err, identity.ErrForbidden):
 		problem(403, "forbidden", "access denied")
+	case errors.Is(err, dms.ErrProtectedHome):
+		problem(409, "protected_home", err.Error())
 	case errors.Is(err, dms.ErrLastOwner):
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):

@@ -27,3 +27,7 @@ Workspace membership is stored as one root user grant per subject. Root permissi
 Deleting a workspace tombstones its entire live resource tree in one transaction, removes content search projections and hides relationships, and disables and tombstones its workflows. New content and workflow access then fail. Immutable revisions, publications, workflow versions, run history, audit records and blob objects remain retained. Running workflow activities that access deleted content encounter the same missing-resource checks; deletion does not cancel durable runs.
 
 Adding or changing a workspace membership rejects inactive users with `422`. Existing inactive memberships can be removed; reactivation is required before a role change.
+
+## Personal Home
+
+An active user discovers Home through GET `/v1/identity/me/home` with `list.read`; discovery needs no workspace creation or catalog administration permission. Home has a fixed sole owner. Its default Documents and Inbox libraries inherit that access. The organization administrator override and descendant ACLs apply. Ordinary deletion of Home or either default library, and changes to Home membership, return `protected_home` (409). Read-only `personal_owner_id` and `system_key` identify these resources.

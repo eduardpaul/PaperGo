@@ -3,6 +3,7 @@ package identity_test
 import (
 	"context"
 	"errors"
+	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/testutil"
 	"strings"
@@ -11,7 +12,8 @@ import (
 
 func TestUserProfilesAndAccountAnonymization(t *testing.T) {
 	db := testutil.Database(t)
-	d := identity.Directory{DB: db.SQL}
+	s := dms.NewService(db.SQL)
+	d := s.Directory()
 	ctx := context.Background()
 	admin := "organization-admin"
 	u, err := d.CreateUser(ctx, admin, identity.UserInput{Subject: "profile-user", DisplayName: "  Ada  ", Email: "ada@example.com"})
@@ -52,16 +54,16 @@ func TestUserProfilesAndAccountAnonymization(t *testing.T) {
 	if _, err = db.SQL.ExecContext(ctx, "INSERT INTO webdav_credentials(id,created_at,subject,label,secret_hash) VALUES('profile-credential',CURRENT_TIMESTAMP,?,'Test',?)", u.Subject, strings.Repeat("a", 64)); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.DeleteUser(ctx, u.Subject, u.Subject); !errors.Is(err, identity.ErrForbidden) {
+	if err = s.DeleteUser(ctx, u.Subject, u.Subject); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatal("unprivileged deletion", err)
 	}
-	if err = d.DeleteUser(ctx, admin, admin); !errors.Is(err, identity.ErrCannotDeleteSelf) {
+	if err = s.DeleteUser(ctx, admin, admin); !errors.Is(err, identity.ErrCannotDeleteSelf) {
 		t.Fatal(err)
 	}
-	if err = d.DeleteUser(ctx, "alice", admin); !errors.Is(err, identity.ErrLastAdministrator) {
+	if err = s.DeleteUser(ctx, "alice", admin); !errors.Is(err, identity.ErrLastAdministrator) {
 		t.Fatal("last administrator deleted", err)
 	}
-	if err = d.DeleteUser(ctx, admin, u.Subject); err != nil {
+	if err = s.DeleteUser(ctx, admin, u.Subject); err != nil {
 		t.Fatal(err)
 	}
 	deleted, err := d.User(ctx, admin, u.Subject)

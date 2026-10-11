@@ -380,6 +380,45 @@ var (
 			},
 		},
 	}
+	// GroupInboxesColumns holds the columns for the "group_inboxes" table.
+	GroupInboxesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "group_id", Type: field.TypeString, Size: 36},
+		{Name: "library_id", Type: field.TypeString, Size: 36},
+	}
+	// GroupInboxesTable holds the schema information for the "group_inboxes" table.
+	GroupInboxesTable = &schema.Table{
+		Name:       "group_inboxes",
+		Columns:    GroupInboxesColumns,
+		PrimaryKey: []*schema.Column{GroupInboxesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "group_inboxes_identity_groups_group",
+				Columns:    []*schema.Column{GroupInboxesColumns[2]},
+				RefColumns: []*schema.Column{IdentityGroupsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "group_inboxes_resources_library",
+				Columns:    []*schema.Column{GroupInboxesColumns[3]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "groupinbox_group_id",
+				Unique:  true,
+				Columns: []*schema.Column{GroupInboxesColumns[2]},
+			},
+			{
+				Name:    "groupinbox_library_id",
+				Unique:  false,
+				Columns: []*schema.Column{GroupInboxesColumns[3]},
+			},
+		},
+	}
 	// IdentityAssignmentsColumns holds the columns for the "identity_assignments" table.
 	IdentityAssignmentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1050,6 +1089,7 @@ var (
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "workspace_id", Type: field.TypeString, Size: 36},
+		{Name: "system_key", Type: field.TypeString, Nullable: true, Size: 32},
 		{Name: "content_type_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "kind", Type: field.TypeEnum, Enums: []string{"workspace", "list", "library", "folder", "item"}},
 		{Name: "name", Type: field.TypeString, Size: 4096},
@@ -1074,6 +1114,7 @@ var (
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "deleted_by", Type: field.TypeString, Nullable: true},
 		{Name: "parent_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "personal_owner_id", Type: field.TypeString, Nullable: true, Size: 255},
 		{Name: "container_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "head_revision_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "published_revision_id", Type: field.TypeString, Nullable: true, Size: 36},
@@ -1087,31 +1128,37 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[26]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[27]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_head_revision",
+				Symbol:     "resources_identity_users_personal_owner",
 				Columns:    []*schema.Column{ResourcesColumns[28]},
+				RefColumns: []*schema.Column{IdentityUsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "resources_resources_contained_items",
+				Columns:    []*schema.Column{ResourcesColumns[29]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "resources_item_revisions_head_revision",
+				Columns:    []*schema.Column{ResourcesColumns[30]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_item_revisions_published_revision",
-				Columns:    []*schema.Column{ResourcesColumns[29]},
+				Columns:    []*schema.Column{ResourcesColumns[31]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_schema_revisions_schema_head",
-				Columns:    []*schema.Column{ResourcesColumns[30]},
+				Columns:    []*schema.Column{ResourcesColumns[32]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1120,42 +1167,58 @@ var (
 			{
 				Name:    "resource_workspace_id_kind_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[4], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[5], ResourcesColumns[0]},
+			},
+			{
+				Name:    "resource_personal_owner_id",
+				Unique:  true,
+				Columns: []*schema.Column{ResourcesColumns[28]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "personal_owner_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "resource_workspace_id_system_key",
+				Unique:  true,
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "system_key IS NOT NULL",
+				},
 			},
 			{
 				Name:    "resource_kind_id_workspace_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[4], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[5], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[23]},
 			},
 			{
 				Name:    "resource_workspace_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[23]},
 			},
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[0], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[0], ResourcesColumns[23]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_content_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[3], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[4], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[23]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[23]},
+				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[24]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
 				},
@@ -1779,6 +1842,7 @@ var (
 		FieldDefinitionsTable,
 		FieldValuesTable,
 		GrantsTable,
+		GroupInboxesTable,
 		IdentityAssignmentsTable,
 		IdentityGroupsTable,
 		IdentityMembershipsTable,
@@ -1824,6 +1888,8 @@ func init() {
 	CollectionTypesTable.ForeignKeys[1].RefTable = ContentTypesTable
 	FieldValuesTable.ForeignKeys[0].RefTable = ItemSurfacesTable
 	GrantsTable.ForeignKeys[0].RefTable = ResourcesTable
+	GroupInboxesTable.ForeignKeys[0].RefTable = IdentityGroupsTable
+	GroupInboxesTable.ForeignKeys[1].RefTable = ResourcesTable
 	IdentityAssignmentsTable.ForeignKeys[0].RefTable = IdentityRolesTable
 	IdentityMembershipsTable.ForeignKeys[0].RefTable = IdentityGroupsTable
 	IdentityRestTokensTable.ForeignKeys[0].RefTable = IdentityUsersTable
@@ -1843,10 +1909,11 @@ func init() {
 	RelationshipsTable.ForeignKeys[1].RefTable = ResourcesTable
 	RelationshipsTable.ForeignKeys[2].RefTable = ResourcesTable
 	ResourcesTable.ForeignKeys[0].RefTable = ResourcesTable
-	ResourcesTable.ForeignKeys[1].RefTable = ResourcesTable
-	ResourcesTable.ForeignKeys[2].RefTable = ItemRevisionsTable
+	ResourcesTable.ForeignKeys[1].RefTable = IdentityUsersTable
+	ResourcesTable.ForeignKeys[2].RefTable = ResourcesTable
 	ResourcesTable.ForeignKeys[3].RefTable = ItemRevisionsTable
-	ResourcesTable.ForeignKeys[4].RefTable = SchemaRevisionsTable
+	ResourcesTable.ForeignKeys[4].RefTable = ItemRevisionsTable
+	ResourcesTable.ForeignKeys[5].RefTable = SchemaRevisionsTable
 	SchemaRevisionsTable.ForeignKeys[0].RefTable = ResourcesTable
 	SchemaTemplatesTable.ForeignKeys[0].RefTable = ResourcesTable
 	SmartFoldersTable.ForeignKeys[0].RefTable = ResourcesTable

@@ -288,7 +288,7 @@
       },
       "delete": {
         "summary": "Delete and anonymize an account",
-        "description": "Retains the subject for author/person references, clears display name/email, disables authentication, removes grants, roles, groups, preferences and REST/WebDAV credentials. Self deletion, last administrator deletion and deletion of the last active workspace owner return 409. Deleted accounts cannot be reactivated.",
+        "description": "Retains the subject for author/person references, clears display name/email, disables authentication, removes grants, roles, groups, preferences and REST/WebDAV credentials. Self deletion, last administrator deletion and deletion of the last active workspace owner return 409. Deleted accounts cannot be reactivated. Account deletion permanently purges personal Home resources, histories, configuration and execution payloads in the anonymization transaction. Shared documents and organization audit records remain. File objects are queued for restart-safe cleanup and retained while referenced elsewhere.",
         "responses": {
           "204": {
             "description": "Account anonymized"
@@ -13697,6 +13697,288 @@
           }
         }
       }
+    },
+    "/v1/identity/me/home": {
+      "get": {
+        "operationId": "getHome",
+        "summary": "Discover and lazily provision personal Home and default libraries",
+        "description": "Atomically provisions one Home per active user with Documents and Inbox libraries using the Documents template, major versioning and a default view. Requires list.read; no workspace creation or catalog administration scopes. Ordinary deletion of Home and its default libraries is blocked. Home has one fixed owner; the administrator override and descendant ACLs still apply.",
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Home"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/identity/me/inboxes": {
+      "get": {
+        "operationId": "listMyInboxes",
+        "summary": "Discover personal and effective group Inbox destinations",
+        "description": "Personal Inbox first, followed by readable libraries bound to effective nested group memberships, sorted by group name. One entry per binding, including readable libraries without upload access. Personal locations are provisioned lazily.",
+        "x-module-scopes": [
+          "document.read"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Inbox"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/identity/groups/{id}/inbox": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getGroupInbox",
+        "summary": "Read a visible group Inbox binding",
+        "x-module-scopes": [
+          "document.read"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupInbox"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setGroupInbox",
+        "summary": "Bind a group Inbox to an existing library",
+        "description": "Requires document.write and Manage access to the new and existing live library, without group administration rights or an If-Match header. A deleted destination can be replaced. Repeating the same binding is a no-op.",
+        "x-module-scopes": [
+          "document.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupInboxInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupInbox"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteGroupInbox",
+        "summary": "Remove the binding, preserving the library and its documents",
+        "description": "Requires document.write and Manage access to the existing live destination. No If-Match required. A deleted destination can be unbound.",
+        "x-module-scopes": [
+          "document.write"
+        ],
+        "responses": {
+          "204": {
+            "description": "Binding removed"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/identity/me/inbox/documents": {
+      "post": {
+        "operationId": "uploadPersonalInboxDocument",
+        "summary": "Upload a document to personal Inbox",
+        "description": "Uses the existing streamed document upload contract and permission model: document.write, list.read, list.write and destination write access. Uploads use the library root and default content type; folder_id and content_type_id overrides return 422. Permission checks occur before streaming and again at commit. Personal locations are created on first use.",
+        "x-module-scopes": [
+          "document.write",
+          "list.read",
+          "list.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "metadata": {
+                    "$ref": "#/components/schemas/InboxDocumentMetadata"
+                  }
+                }
+              },
+              "encoding": {
+                "metadata": {
+                  "contentType": "application/json"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created document and its first file version",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUpload"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/identity/groups/{id}/inbox/documents": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "uploadGroupInboxDocument",
+        "summary": "Upload a document to a group Inbox",
+        "description": "Uses the existing streamed document upload contract and permission model: document.write, list.read, list.write and destination write access. Uploads use the library root and default content type; folder_id and content_type_id overrides return 422. Permission checks occur before streaming and again at commit. Effective nested group membership is required; missing binding or nonmembership returns 404. Binding changes during streaming return 409.",
+        "x-module-scopes": [
+          "document.write",
+          "list.read",
+          "list.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "metadata": {
+                    "$ref": "#/components/schemas/InboxDocumentMetadata"
+                  }
+                }
+              },
+              "encoding": {
+                "metadata": {
+                  "contentType": "application/json"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created document and its first file version",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUpload"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -14154,6 +14436,27 @@
               "block"
             ],
             "description": "Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file."
+          },
+          "personal_owner_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true,
+            "description": "Owner of a personal Home workspace; membership is fixed."
+          },
+          "system_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true,
+            "enum": [
+              "home.documents",
+              "home.inbox",
+              null
+            ],
+            "description": "Protected default Home library identity."
           }
         },
         "required": [
@@ -19244,6 +19547,143 @@
               "null"
             ],
             "format": "uri"
+          }
+        }
+      },
+      "Home": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspace_id",
+          "documents_library_id",
+          "inbox_library_id"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documents_library_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inbox_library_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "GroupInboxInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "library_id"
+        ],
+        "properties": {
+          "library_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "GroupInbox": {
+        "type": "object",
+        "required": [
+          "group_id",
+          "group_name",
+          "workspace_id",
+          "library_id",
+          "library_name"
+        ],
+        "properties": {
+          "group_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "group_name": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "library_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "library_name": {
+            "type": "string"
+          }
+        }
+      },
+      "Inbox": {
+        "type": "object",
+        "required": [
+          "kind",
+          "workspace_id",
+          "library_id",
+          "library_name",
+          "group_id",
+          "group_name"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "group"
+            ]
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "library_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "library_name": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "group_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "InboxDocumentMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Item name; defaults to the uploaded filename. Limited to 1024 UTF-16 units before trimming."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Custom field values, validated against the selected type. Exact JSON numbers are preserved."
+          },
+          "languages": {
+            "type": "string",
+            "maxLength": 191,
+            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
           }
         }
       }

@@ -9,6 +9,7 @@ import (
 	"math"
 	"papergo/ent/blob"
 	"papergo/ent/grant"
+	"papergo/ent/identityuser"
 	"papergo/ent/itemrevision"
 	"papergo/ent/predicate"
 	"papergo/ent/publication"
@@ -30,6 +31,7 @@ type ResourceQuery struct {
 	inters                []Interceptor
 	predicates            []predicate.Resource
 	withChildren          *ResourceQuery
+	withPersonalOwner     *IdentityUserQuery
 	withParent            *ResourceQuery
 	withContainedItems    *ResourceQuery
 	withContainer         *ResourceQuery
@@ -94,6 +96,28 @@ func (_q *ResourceQuery) QueryChildren() *ResourceQuery {
 			sqlgraph.From(resource.Table, resource.FieldID, selector),
 			sqlgraph.To(resource.Table, resource.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, resource.ChildrenTable, resource.ChildrenColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryPersonalOwner chains the current query on the "personal_owner" edge.
+func (_q *ResourceQuery) QueryPersonalOwner() *IdentityUserQuery {
+	query := (&IdentityUserClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(resource.Table, resource.FieldID, selector),
+			sqlgraph.To(identityuser.Table, identityuser.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, resource.PersonalOwnerTable, resource.PersonalOwnerColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -580,6 +604,7 @@ func (_q *ResourceQuery) Clone() *ResourceQuery {
 		inters:                append([]Interceptor{}, _q.inters...),
 		predicates:            append([]predicate.Resource{}, _q.predicates...),
 		withChildren:          _q.withChildren.Clone(),
+		withPersonalOwner:     _q.withPersonalOwner.Clone(),
 		withParent:            _q.withParent.Clone(),
 		withContainedItems:    _q.withContainedItems.Clone(),
 		withContainer:         _q.withContainer.Clone(),
@@ -607,6 +632,17 @@ func (_q *ResourceQuery) WithChildren(opts ...func(*ResourceQuery)) *ResourceQue
 		opt(query)
 	}
 	_q.withChildren = query
+	return _q
+}
+
+// WithPersonalOwner tells the query-builder to eager-load the nodes that are connected to
+// the "personal_owner" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ResourceQuery) WithPersonalOwner(opts ...func(*IdentityUserQuery)) *ResourceQuery {
+	query := (&IdentityUserClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withPersonalOwner = query
 	return _q
 }
 
@@ -831,8 +867,9 @@ func (_q *ResourceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Res
 	var (
 		nodes       = []*Resource{}
 		_spec       = _q.querySpec()
-		loadedTypes = [14]bool{
+		loadedTypes = [15]bool{
 			_q.withChildren != nil,
+			_q.withPersonalOwner != nil,
 			_q.withParent != nil,
 			_q.withContainedItems != nil,
 			_q.withContainer != nil,
@@ -870,6 +907,12 @@ func (_q *ResourceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Res
 		if err := _q.loadChildren(ctx, query, nodes,
 			func(n *Resource) { n.Edges.Children = []*Resource{} },
 			func(n *Resource, e *Resource) { n.Edges.Children = append(n.Edges.Children, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withPersonalOwner; query != nil {
+		if err := _q.loadPersonalOwner(ctx, query, nodes, nil,
+			func(n *Resource, e *IdentityUser) { n.Edges.PersonalOwner = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -992,6 +1035,38 @@ func (_q *ResourceQuery) loadChildren(ctx context.Context, query *ResourceQuery,
 			return fmt.Errorf(`unexpected referenced foreign-key "parent_id" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
+	}
+	return nil
+}
+func (_q *ResourceQuery) loadPersonalOwner(ctx context.Context, query *IdentityUserQuery, nodes []*Resource, init func(*Resource), assign func(*Resource, *IdentityUser)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*Resource)
+	for i := range nodes {
+		if nodes[i].PersonalOwnerID == nil {
+			continue
+		}
+		fk := *nodes[i].PersonalOwnerID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(identityuser.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "personal_owner_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
 	}
 	return nil
 }
@@ -1423,6 +1498,9 @@ func (_q *ResourceQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != resource.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withPersonalOwner != nil {
+			_spec.Node.AddColumnOnce(resource.FieldPersonalOwnerID)
 		}
 		if _q.withParent != nil {
 			_spec.Node.AddColumnOnce(resource.FieldParentID)

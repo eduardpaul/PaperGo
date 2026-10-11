@@ -17,6 +17,8 @@ func (Resource) Mixin() []ent.Mixin { return []ent.Mixin{Identity{}} }
 func (Resource) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("workspace_id").NotEmpty().MaxLen(36),
+		field.String("personal_owner_id").Optional().Nillable().MaxLen(255),
+		field.String("system_key").Optional().Nillable().MaxLen(32),
 		// Folders and items can move within their collection; triggers keep containment valid.
 		field.String("parent_id").Optional().Nillable().MaxLen(36),
 		field.String("container_id").Optional().Nillable().MaxLen(36),
@@ -59,6 +61,7 @@ func (Resource) Fields() []ent.Field {
 func (Resource) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("children", Resource.Type),
+		edge.To("personal_owner", IdentityUser.Type).Field("personal_owner_id").Unique(),
 		edge.From("parent", Resource.Type).Ref("children").Field("parent_id").Unique(),
 		edge.To("contained_items", Resource.Type),
 		edge.From("container", Resource.Type).Ref("contained_items").Field("container_id").Unique(),
@@ -77,6 +80,8 @@ func (Resource) Edges() []ent.Edge {
 func (Resource) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("workspace_id", "kind", "id"),
+		index.Fields("personal_owner_id").Unique().Annotations(entsql.IndexWhere("personal_owner_id IS NOT NULL")),
+		index.Fields("workspace_id", "system_key").Unique().Annotations(entsql.IndexWhere("system_key IS NOT NULL")),
 		index.Fields("kind", "id", "workspace_id", "scope_id"),
 		// scope_id makes these covering for permission checks, so rows a subject
 		// cannot read are rejected without loading them.

@@ -109,18 +109,7 @@ func (d Directory) write(ctx context.Context, actor, scope string, fn func(*sql.
 		if err := fn(tx); err != nil {
 			return err
 		}
-		// Check after every change, including nested memberships and role removal.
-		principal, _ := PrincipalSQL("a", "unused")
-		principal = strings.ReplaceAll(principal, "?", "u.id")
-		var exists bool
-		err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM identity_users u WHERE u.active=1 AND EXISTS(SELECT 1 FROM identity_assignments a WHERE a.role_id='administrator' AND `+principal+`))`).Scan(&exists)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return ErrLastAdministrator
-		}
-		return nil
+		return checkAdministrator(ctx, tx)
 	})
 }
 
@@ -475,4 +464,19 @@ func (d Directory) SetAssignment(ctx context.Context, actor, roleID string, p Pr
 func IsConstraint(err error) bool {
 	var coded interface{ Code() int }
 	return errors.As(err, &coded) && coded.Code()&255 == 19
+}
+
+func checkAdministrator(ctx context.Context, tx *sql.Tx) error {
+	// Check after every change, including nested memberships and role removal.
+	principal, _ := PrincipalSQL("a", "unused")
+	principal = strings.ReplaceAll(principal, "?", "u.id")
+	var exists bool
+	err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM identity_users u WHERE u.active=1 AND EXISTS(SELECT 1 FROM identity_assignments a WHERE a.role_id='administrator' AND `+principal+`))`).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrLastAdministrator
+	}
+	return nil
 }

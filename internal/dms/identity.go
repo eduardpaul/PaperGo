@@ -9,6 +9,9 @@ import (
 
 func (s *Service) Directory() identity.Directory { return identity.Directory{DB: s.db} }
 func (s *Service) RequireScope(ctx context.Context, subject, scope string) error {
+	if s.homeProvisioning {
+		return nil
+	}
 	var q identity.Querier = s.db
 	if s.transaction {
 		q = s.tx

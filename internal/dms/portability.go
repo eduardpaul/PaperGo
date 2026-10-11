@@ -39,7 +39,7 @@ var packageTables = []string{
 	"term_groups", "term_sets", "terms", "relationship_types", "field_definitions", "content_types",
 	"resources", "collection_types", "schema_revisions", "schema_templates", "list_views", "smart_folders",
 	"blobs", "item_revisions", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
-	"workflows", "workflow_versions", "workflow_triggers",
+	"workflows", "workflow_versions", "workflow_triggers", "group_inboxes",
 }
 
 type packageTable struct {
@@ -685,6 +685,13 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 	}
 	if _, err = s.Client.FieldDefinition.Update().SetIndexStatus(fielddefinition.IndexStatusReady).Save(ctx); err != nil {
 		return err
+	}
+	var invalidHome bool
+	if err = s.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM resources w WHERE w.personal_owner_id IS NOT NULL AND (w.deleted_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM identity_users u WHERE u.id=w.personal_owner_id AND u.deleted_at IS NULL) OR NOT EXISTS(SELECT 1 FROM grants g WHERE g.resource_id=w.id AND g.principal_type='user' AND g.principal_id=w.personal_owner_id AND g.action='manage' AND g.effect='allow') OR NOT EXISTS(SELECT 1 FROM resources l WHERE l.workspace_id=w.id AND l.system_key='home.documents' AND l.deleted_at IS NULL) OR NOT EXISTS(SELECT 1 FROM resources l WHERE l.workspace_id=w.id AND l.system_key='home.inbox' AND l.deleted_at IS NULL)))").Scan(&invalidHome); err != nil {
+		return err
+	}
+	if invalidHome {
+		return invalid("package contains an incomplete or deleted personal Home")
 	}
 	// Deferral permits cycles such as resource->revision->resource; explicitly
 	// check before a dry run reports success (its savepoint never commits).

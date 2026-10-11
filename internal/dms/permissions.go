@@ -122,6 +122,16 @@ func (s *Service) authorize(ctx context.Context, subject, id, action string) (*e
 	if err != nil {
 		return nil, err
 	}
+	if s.homeProvisioning {
+		w, err := s.Client.Resource.Get(ctx, r.WorkspaceID)
+		if err != nil {
+			return nil, err
+		}
+		if w.PersonalOwnerID != nil && *w.PersonalOwnerID == subject {
+			return r, nil
+		}
+		return nil, ErrForbidden
+	}
 	allowed, err := s.allowedMany(ctx, subject, action, []*ent.Resource{r})
 	if err != nil {
 		return nil, err

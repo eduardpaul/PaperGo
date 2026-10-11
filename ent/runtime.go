@@ -14,6 +14,7 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
+	"papergo/ent/groupinbox"
 	"papergo/ent/identityassignment"
 	"papergo/ent/identitygroup"
 	"papergo/ent/identitymembership"
@@ -516,6 +517,57 @@ func init() {
 	grant.DefaultID = grantDescID.Default.(func() string)
 	// grant.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	grant.IDValidator = grantDescID.Validators[0].(func(string) error)
+	groupinboxMixin := schema.GroupInbox{}.Mixin()
+	groupinboxMixinFields0 := groupinboxMixin[0].Fields()
+	_ = groupinboxMixinFields0
+	groupinboxFields := schema.GroupInbox{}.Fields()
+	_ = groupinboxFields
+	// groupinboxDescCreatedAt is the schema descriptor for created_at field.
+	groupinboxDescCreatedAt := groupinboxMixinFields0[1].Descriptor()
+	// groupinbox.DefaultCreatedAt holds the default value on creation for the created_at field.
+	groupinbox.DefaultCreatedAt = groupinboxDescCreatedAt.Default.(func() time.Time)
+	// groupinboxDescGroupID is the schema descriptor for group_id field.
+	groupinboxDescGroupID := groupinboxFields[0].Descriptor()
+	// groupinbox.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
+	groupinbox.GroupIDValidator = func() func(string) error {
+		validators := groupinboxDescGroupID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(group string) error {
+			for _, fn := range fns {
+				if err := fn(group); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// groupinboxDescLibraryID is the schema descriptor for library_id field.
+	groupinboxDescLibraryID := groupinboxFields[1].Descriptor()
+	// groupinbox.LibraryIDValidator is a validator for the "library_id" field. It is called by the builders before save.
+	groupinbox.LibraryIDValidator = func() func(string) error {
+		validators := groupinboxDescLibraryID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(library string) error {
+			for _, fn := range fns {
+				if err := fn(library); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// groupinboxDescID is the schema descriptor for id field.
+	groupinboxDescID := groupinboxMixinFields0[0].Descriptor()
+	// groupinbox.DefaultID holds the default value on creation for the id field.
+	groupinbox.DefaultID = groupinboxDescID.Default.(func() string)
+	// groupinbox.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	groupinbox.IDValidator = groupinboxDescID.Validators[0].(func(string) error)
 	identityassignmentMixin := schema.IdentityAssignment{}.Mixin()
 	identityassignmentMixinFields0 := identityassignmentMixin[0].Fields()
 	_ = identityassignmentMixinFields0
@@ -1342,20 +1394,28 @@ func init() {
 			return nil
 		}
 	}()
+	// resourceDescPersonalOwnerID is the schema descriptor for personal_owner_id field.
+	resourceDescPersonalOwnerID := resourceFields[1].Descriptor()
+	// resource.PersonalOwnerIDValidator is a validator for the "personal_owner_id" field. It is called by the builders before save.
+	resource.PersonalOwnerIDValidator = resourceDescPersonalOwnerID.Validators[0].(func(string) error)
+	// resourceDescSystemKey is the schema descriptor for system_key field.
+	resourceDescSystemKey := resourceFields[2].Descriptor()
+	// resource.SystemKeyValidator is a validator for the "system_key" field. It is called by the builders before save.
+	resource.SystemKeyValidator = resourceDescSystemKey.Validators[0].(func(string) error)
 	// resourceDescParentID is the schema descriptor for parent_id field.
-	resourceDescParentID := resourceFields[1].Descriptor()
+	resourceDescParentID := resourceFields[3].Descriptor()
 	// resource.ParentIDValidator is a validator for the "parent_id" field. It is called by the builders before save.
 	resource.ParentIDValidator = resourceDescParentID.Validators[0].(func(string) error)
 	// resourceDescContainerID is the schema descriptor for container_id field.
-	resourceDescContainerID := resourceFields[2].Descriptor()
+	resourceDescContainerID := resourceFields[4].Descriptor()
 	// resource.ContainerIDValidator is a validator for the "container_id" field. It is called by the builders before save.
 	resource.ContainerIDValidator = resourceDescContainerID.Validators[0].(func(string) error)
 	// resourceDescContentTypeID is the schema descriptor for content_type_id field.
-	resourceDescContentTypeID := resourceFields[3].Descriptor()
+	resourceDescContentTypeID := resourceFields[5].Descriptor()
 	// resource.ContentTypeIDValidator is a validator for the "content_type_id" field. It is called by the builders before save.
 	resource.ContentTypeIDValidator = resourceDescContentTypeID.Validators[0].(func(string) error)
 	// resourceDescName is the schema descriptor for name field.
-	resourceDescName := resourceFields[5].Descriptor()
+	resourceDescName := resourceFields[7].Descriptor()
 	// resource.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	resource.NameValidator = func() func(string) error {
 		validators := resourceDescName.Validators
@@ -1374,49 +1434,49 @@ func init() {
 		}
 	}()
 	// resourceDescDescription is the schema descriptor for description field.
-	resourceDescDescription := resourceFields[6].Descriptor()
+	resourceDescDescription := resourceFields[8].Descriptor()
 	// resource.DefaultDescription holds the default value on creation for the description field.
 	resource.DefaultDescription = resourceDescDescription.Default.(string)
 	// resource.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
 	resource.DescriptionValidator = resourceDescDescription.Validators[0].(func(string) error)
 	// resourceDescAllowFolders is the schema descriptor for allow_folders field.
-	resourceDescAllowFolders := resourceFields[7].Descriptor()
+	resourceDescAllowFolders := resourceFields[9].Descriptor()
 	// resource.DefaultAllowFolders holds the default value on creation for the allow_folders field.
 	resource.DefaultAllowFolders = resourceDescAllowFolders.Default.(bool)
 	// resourceDescTags is the schema descriptor for tags field.
-	resourceDescTags := resourceFields[8].Descriptor()
+	resourceDescTags := resourceFields[10].Descriptor()
 	// resource.DefaultTags holds the default value on creation for the tags field.
 	resource.DefaultTags = resourceDescTags.Default.([]string)
 	// resourceDescTemplateKeys is the schema descriptor for template_keys field.
-	resourceDescTemplateKeys := resourceFields[9].Descriptor()
+	resourceDescTemplateKeys := resourceFields[11].Descriptor()
 	// resource.DefaultTemplateKeys holds the default value on creation for the template_keys field.
 	resource.DefaultTemplateKeys = resourceDescTemplateKeys.Default.([]string)
 	// resourceDescValues is the schema descriptor for values field.
-	resourceDescValues := resourceFields[10].Descriptor()
+	resourceDescValues := resourceFields[12].Descriptor()
 	// resource.DefaultValues holds the default value on creation for the values field.
 	resource.DefaultValues = resourceDescValues.Default.(map[string]interface{})
 	// resourceDescInheritPermissions is the schema descriptor for inherit_permissions field.
-	resourceDescInheritPermissions := resourceFields[11].Descriptor()
+	resourceDescInheritPermissions := resourceFields[13].Descriptor()
 	// resource.DefaultInheritPermissions holds the default value on creation for the inherit_permissions field.
 	resource.DefaultInheritPermissions = resourceDescInheritPermissions.Default.(bool)
 	// resourceDescVersion is the schema descriptor for version field.
-	resourceDescVersion := resourceFields[12].Descriptor()
+	resourceDescVersion := resourceFields[14].Descriptor()
 	// resource.DefaultVersion holds the default value on creation for the version field.
 	resource.DefaultVersion = resourceDescVersion.Default.(int)
 	// resource.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	resource.VersionValidator = resourceDescVersion.Validators[0].(func(int) error)
 	// resourceDescNextRevisionNumber is the schema descriptor for next_revision_number field.
-	resourceDescNextRevisionNumber := resourceFields[16].Descriptor()
+	resourceDescNextRevisionNumber := resourceFields[18].Descriptor()
 	// resource.DefaultNextRevisionNumber holds the default value on creation for the next_revision_number field.
 	resource.DefaultNextRevisionNumber = resourceDescNextRevisionNumber.Default.(int)
 	// resource.NextRevisionNumberValidator is a validator for the "next_revision_number" field. It is called by the builders before save.
 	resource.NextRevisionNumberValidator = resourceDescNextRevisionNumber.Validators[0].(func(int) error)
 	// resourceDescPublishingEnabled is the schema descriptor for publishing_enabled field.
-	resourceDescPublishingEnabled := resourceFields[17].Descriptor()
+	resourceDescPublishingEnabled := resourceFields[19].Descriptor()
 	// resource.DefaultPublishingEnabled holds the default value on creation for the publishing_enabled field.
 	resource.DefaultPublishingEnabled = resourceDescPublishingEnabled.Default.(bool)
 	// resourceDescMaxVersions is the schema descriptor for max_versions field.
-	resourceDescMaxVersions := resourceFields[19].Descriptor()
+	resourceDescMaxVersions := resourceFields[21].Descriptor()
 	// resource.DefaultMaxVersions holds the default value on creation for the max_versions field.
 	resource.DefaultMaxVersions = resourceDescMaxVersions.Default.(int)
 	// resource.MaxVersionsValidator is a validator for the "max_versions" field. It is called by the builders before save.
@@ -1436,29 +1496,29 @@ func init() {
 		}
 	}()
 	// resourceDescWebdavEnabled is the schema descriptor for webdav_enabled field.
-	resourceDescWebdavEnabled := resourceFields[20].Descriptor()
+	resourceDescWebdavEnabled := resourceFields[22].Descriptor()
 	// resource.DefaultWebdavEnabled holds the default value on creation for the webdav_enabled field.
 	resource.DefaultWebdavEnabled = resourceDescWebdavEnabled.Default.(bool)
 	// resourceDescUpdatedAt is the schema descriptor for updated_at field.
-	resourceDescUpdatedAt := resourceFields[22].Descriptor()
+	resourceDescUpdatedAt := resourceFields[24].Descriptor()
 	// resource.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	resource.DefaultUpdatedAt = resourceDescUpdatedAt.Default.(func() time.Time)
 	// resource.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	resource.UpdateDefaultUpdatedAt = resourceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// resourceDescCreatedBy is the schema descriptor for created_by field.
-	resourceDescCreatedBy := resourceFields[23].Descriptor()
+	resourceDescCreatedBy := resourceFields[25].Descriptor()
 	// resource.DefaultCreatedBy holds the default value on creation for the created_by field.
 	resource.DefaultCreatedBy = resourceDescCreatedBy.Default.(string)
 	// resourceDescUpdatedBy is the schema descriptor for updated_by field.
-	resourceDescUpdatedBy := resourceFields[24].Descriptor()
+	resourceDescUpdatedBy := resourceFields[26].Descriptor()
 	// resource.DefaultUpdatedBy holds the default value on creation for the updated_by field.
 	resource.DefaultUpdatedBy = resourceDescUpdatedBy.Default.(string)
 	// resourceDescScopeID is the schema descriptor for scope_id field.
-	resourceDescScopeID := resourceFields[25].Descriptor()
+	resourceDescScopeID := resourceFields[27].Descriptor()
 	// resource.ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
 	resource.ScopeIDValidator = resourceDescScopeID.Validators[0].(func(string) error)
 	// resourceDescNameKey is the schema descriptor for name_key field.
-	resourceDescNameKey := resourceFields[26].Descriptor()
+	resourceDescNameKey := resourceFields[28].Descriptor()
 	// resource.NameKeyValidator is a validator for the "name_key" field. It is called by the builders before save.
 	resource.NameKeyValidator = resourceDescNameKey.Validators[0].(func(string) error)
 	// resourceDescID is the schema descriptor for id field.

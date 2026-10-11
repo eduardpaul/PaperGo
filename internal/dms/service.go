@@ -23,6 +23,8 @@ type Service struct {
 	db          *sql.DB
 	writeMu     chan struct{}
 	transaction bool
+	// Set only while provisioning the caller's fixed Home resources.
+	homeProvisioning bool
 	// operations wakes RunOperations when work is queued.
 	operations          chan struct{}
 	onCommit            func()
@@ -354,6 +356,14 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, e
 		}
 		builder.SetTemplateKeys([]string{template.Key})
+	}
+	if s.homeProvisioning {
+		if in.Kind == "workspace" {
+			builder.SetPersonalOwnerID(subject)
+		}
+		if collection {
+			builder.SetSystemKey("home." + strings.ToLower(in.Name))
+		}
 	}
 	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
 	builder.SetVersioning(resource.Versioning(versioning)).SetNillableMaxVersions(in.MaxVersions)
@@ -780,6 +790,9 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 	r, err := s.authorize(ctx, subject, id, "write")
 	if err != nil {
 		return err
+	}
+	if r.PersonalOwnerID != nil || r.SystemKey != nil {
+		return ErrProtectedHome
 	}
 	collection := r.Kind == resource.KindList || r.Kind == resource.KindLibrary
 	if r.Kind == resource.KindWorkspace || collection {
