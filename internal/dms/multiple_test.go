@@ -122,7 +122,7 @@ func TestMultiplePersonValuesDefaultsQueriesAndInactiveAssignments(t *testing.T)
 	if _, err = s.Directory().SetUserActive(testContext, "alice", "assignee", true); err != nil {
 		t.Fatal(err)
 	}
-	item, err = s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Values: &map[string]any{"owner": "assignee"}})
+	_, err = s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Values: &map[string]any{"owner": "assignee"}})
 	if err != nil {
 		t.Fatal(err)
 	}

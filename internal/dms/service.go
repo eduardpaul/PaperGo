@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	"fmt"
 	"github.com/google/uuid"
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
@@ -1148,11 +1147,4 @@ func (s *Service) effectivePermissions(ctx context.Context, r *ent.Resource) (st
 		permissions = append(permissions, Permission{string(g.PrincipalType), g.PrincipalID, string(g.Action), string(g.Effect)})
 	}
 	return r.ID, permissions, nil
-}
-
-func checkVersion(version int) error {
-	if version < 1 {
-		return invalid(fmt.Sprintf("version must be positive: %d", version))
-	}
-	return nil
 }

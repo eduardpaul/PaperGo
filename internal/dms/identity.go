@@ -44,16 +44,6 @@ func (s *Service) contentTypeResource(ctx context.Context, subject, id, action s
 	}
 	return s.authorize(ctx, subject, id, action)
 }
-func (s *Service) listWorkspace(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
-	scope := "list.read"
-	if action == "manage" {
-		scope = "list.write"
-	}
-	if err := s.RequireScope(ctx, subject, scope); err != nil {
-		return nil, err
-	}
-	return s.workspace(ctx, subject, id, action)
-}
 func (s *Service) schemaWorkspace(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
 	scope := "contentType.read"
 	if action == "manage" {

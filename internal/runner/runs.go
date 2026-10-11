@@ -276,9 +276,9 @@ func (r *Runner) pending(ctx context.Context, subject, id string) (Run, error) {
 func (r *Runner) Run(ctx context.Context, subject, id string) (Run, error) {
 	row, err := r.row(ctx, subject, id)
 	if errors.Is(err, dms.ErrNotFound) {
-		run, err := r.pending(ctx, subject, id)
-		if !errors.Is(err, errDispatched) {
-			return run, err
+		run, pendingErr := r.pending(ctx, subject, id)
+		if !errors.Is(pendingErr, errDispatched) {
+			return run, pendingErr
 		}
 		// The dispatcher started the run between the two reads.
 		row, err = r.row(ctx, subject, id)

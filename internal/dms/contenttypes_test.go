@@ -134,7 +134,7 @@ func TestUniqueKeysReserveBothSurfacesAndRollbackBulk(t *testing.T) {
 	if err != nil || count != 2 {
 		t.Fatal("claims leaked", count, err)
 	}
-	item, err = s.Unpublish(testContext, "alice", item.ID, item.Version)
+	_, err = s.Unpublish(testContext, "alice", item.ID, item.Version)
 	if err != nil {
 		t.Fatal(err)
 	}

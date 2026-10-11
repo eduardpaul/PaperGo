@@ -91,7 +91,7 @@ func TestHTTPGroupPermissionsAndModuleScopeRevocation(t *testing.T) {
 		t.Fatal(resp.Code, resp.Body.String())
 	}
 	resp = request(bob, "GET", "/v1/identity/me/scopes", "", testToken, "", "")
-	if resp.Code != 200 || string(resp.Body.Bytes()) != "[]\n" {
+	if resp.Code != 200 || resp.Body.String() != "[]\n" {
 		t.Fatal(resp.Code, resp.Body.String())
 	}
 	resp = request(h, "PUT", "/v1/resources/"+list.ID+"/permissions", `{"grants":[{"subject":"alice","action":"manage"}]}`, testToken, `"2"`, "application/json")

@@ -5,13 +5,39 @@ on:
 permissions:
   contents: read
 jobs:
+  staticcheck:
+    name: Staticcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - name: Install Staticcheck
+        # This upstream revision supports Go 1.27.2's export format.
+        run: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45
+      - name: Analyze code and tests
+        run: staticcheck ./...
+  docker-smoke:
+    name: Docker build and startup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ariga/setup-atlas@v0
+        with:
+          version: 'v1.3.0'
+      - name: Build image and smoke test
+        run: bash scripts/docker-smoke.sh
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.2'
           cache: true
       - name: Verify module checksums
         run: go mod verify

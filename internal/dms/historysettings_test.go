@@ -186,7 +186,7 @@ func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 	if err != nil || item.Name != "Second" {
 		t.Fatal(item, err)
 	}
-	c, err = s.Update(testContext, "alice", c.ID, c.Version, UpdateResource{Versioning: ptr("major")})
+	_, err = s.Update(testContext, "alice", c.ID, c.Version, UpdateResource{Versioning: ptr("major")})
 	if err != nil {
 		t.Fatal(err)
 	}

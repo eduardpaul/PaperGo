@@ -9,24 +9,6 @@ import (
 	"slices"
 )
 
-func filterUsesField(f *FilterExpr, key string) bool {
-	if f == nil {
-		return false
-	}
-	if f.Field == key {
-		return true
-	}
-	if filterUsesField(f.Not, key) {
-		return true
-	}
-	for _, child := range append(append([]FilterExpr{}, f.And...), f.Or...) {
-		if filterUsesField(&child, key) {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *Service) DeleteField(ctx context.Context, subject, collection, id string, version int) error {
 	return s.write(ctx, func(t *Service) error {
 		c, err := t.contentTypeResource(ctx, subject, collection, "manage")

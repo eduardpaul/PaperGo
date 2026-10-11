@@ -120,7 +120,7 @@ func (a *API) batch(next http.Handler) http.HandlerFunc {
 			if blocked {
 				result.Status = 424
 				result.Headers["Content-Type"] = "application/problem+json"
-				result.Body = map[string]any{"type": "about:blank", "title": http.StatusText(424), "status": 424, "code": "failed_dependency", "detail": "a prerequisite request failed"}
+				result.Body = map[string]any{"type": "about:blank", "title": http.StatusText(http.StatusFailedDependency), "status": http.StatusFailedDependency, "code": "failed_dependency", "detail": "a prerequisite request failed"}
 			} else {
 				result = a.batchCall(r, call, targets[i], next)
 			}
@@ -193,7 +193,7 @@ func (a *API) batchCall(outer *http.Request, call batchRequest, target *url.URL,
 	if capture.overflow {
 		result.Status = 413
 		result.Headers = map[string]string{"Content-Type": "application/problem+json", "X-Request-ID": capture.header.Get("X-Request-ID")}
-		result.Body = map[string]any{"type": "about:blank", "title": http.StatusText(413), "status": 413, "code": "batch_response_too_large", "detail": "subresponse exceeds 16 MiB"}
+		result.Body = map[string]any{"type": "about:blank", "title": http.StatusText(http.StatusRequestEntityTooLarge), "status": http.StatusRequestEntityTooLarge, "code": "batch_response_too_large", "detail": "subresponse exceeds 16 MiB"}
 	} else if capture.body.Len() > 0 {
 		data := capture.body.Bytes()
 		switch {

@@ -59,7 +59,7 @@ func TestCollectionHistorySettingsAPI(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	name = "Three"
-	item, err = s.Update(t.Context(), "alice", item.ID, item.Version, dms.UpdateResource{Name: &name})
+	_, err = s.Update(t.Context(), "alice", item.ID, item.Version, dms.UpdateResource{Name: &name})
 	if err != nil {
 		t.Fatal(err)
 	}

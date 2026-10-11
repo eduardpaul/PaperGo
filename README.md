@@ -4,7 +4,7 @@ Go foundation for headless DMS and CMS applications. Uses **SQLite**, **Ent** fo
 
 ## Run locally
 
-Requires Go 1.26+ (the local toolchain and CI use Go 1.27.1) and Atlas. This workspace has isolated tools under `.tools/`; they are ignored by Git. No Docker or database service is required.
+Requires Go 1.26+ (CI and the Docker build use Go 1.27.2) and Atlas. This workspace has isolated tools under `.tools/`; they are ignored by Git. No Docker or database service is required.
 
 PowerShell, from the repository root:
 
@@ -23,7 +23,7 @@ With globally installed tools, replace `.tools/atlas.exe` with `atlas`; run `go 
 ./scripts/check.ps1
 ```
 
-Tests use temporary SQLite files and apply the actual versioned migrations, including FTS5, triggers, foreign keys, and Atlas checksum validation. CI also runs the Go race detector and verifies regenerated Ent code.
+Tests use temporary SQLite files and apply the actual versioned migrations, including FTS5, triggers, foreign keys, and Atlas checksum validation. CI also runs the Go race detector, verifies regenerated Ent code, and runs Staticcheck. Dependency vulnerability scans run on pushes, pull requests, and weekly. The Docker smoke test builds the image, applies the schema to a disposable database, and checks readiness, liveness, and an authenticated write under the image's default user. Run it locally with Docker, Atlas, and curl installed: `bash scripts/docker-smoke.sh`.
 
 The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
@@ -201,7 +201,7 @@ atlas migrate apply --env local
 
 Use one API process with a local persistent disk. SQLite runs WAL mode, foreign-key enforcement and FULL synchronous durability. Write transactions take the write lock when they begin and wait up to 30 seconds for it, so API requests and workflow steps share the single writer; an in-process mutex keeps request writes in order, and WebDAV locks live in the same process; readers use a bounded connection pool. The workflow runner runs inside the API process and keeps its tables in the same database file; `NODE_ID` names the process (default `local`) and `RUN_RETENTION` sets how long finished runs are kept (default `720h`). Do not run multiple API replicas against a shared network filesystem. See [SQLite's WAL documentation](https://www.sqlite.org/wal.html).
 
-For production, set `APP_ENV=production`, `AUTH_MODE=oidc`, an HTTPS `OIDC_ISSUER`, and the API audience in `OIDC_AUDIENCE`. The provider must issue signed JWT bearer tokens with issuer, audience, subject and expiry claims; locally issued personal REST tokens provide scoped credentials for REST integrations. The audience must be registered for this API. Development authentication is rejected in production. Terminate TLS at the ingress, enforce deployment request/rate limits there, and apply migrations before starting the API. The Docker image runs as UID 65532 and needs a writable persistent `/data` volume. Docker is not installed in the current workspace, so image verification requires CI or another host.
+For production, set `APP_ENV=production`, `AUTH_MODE=oidc`, an HTTPS `OIDC_ISSUER`, and the API audience in `OIDC_AUDIENCE`. The provider must issue signed JWT bearer tokens with issuer, audience, subject and expiry claims; locally issued personal REST tokens provide scoped credentials for REST integrations. The audience must be registered for this API. Development authentication is rejected in production. Terminate TLS at the ingress, enforce deployment request/rate limits there, and apply migrations before starting the API. The Docker image runs as UID 65532 and needs a writable persistent `/data` volume. CI builds the image and checks startup against a fresh SQLite database.
 
 Back up SQLite with its online backup API or `VACUUM INTO` and back up the referenced blob files consistently; copying only the `.db` file while WAL is active is not a valid backup. Blobs are created before their metadata transaction; ordinary failed writes clean up the object, while a process crash between those steps can leave an unreferenced file. The periodic collector removes unreferenced objects after a one-hour grace period and protects shared file versions and pending/exported packages. Deleted resources retain blobs for recovery. Permanent recycle-bin purge removes retained content and queues storage cleanup durably; failures retry after restart. Audit and workflow run records retain IDs. History retention removes user-visible history entries without deleting snapshots needed by live/publication/event processing.
 
