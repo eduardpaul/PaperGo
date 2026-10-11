@@ -44,11 +44,11 @@ func fixture(t *testing.T) (Options, *database.Database, string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	object, err := store.Put(ctx, strings.NewReader("saved bytes"), 100)
+	object, err := store.Put(ctx, strings.NewReader("%PDF-saved bytes"), 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.AttachBlob(ctx, "alice", i.ID, i.Version, dms.BlobInput{ObjectKey: object.Key, Filename: "note.txt", ContentType: "text/plain", Size: object.Size, SHA256: object.SHA256}); err != nil {
+	if _, err = s.AttachBlob(ctx, "alice", i.ID, i.Version, dms.BlobInput{ObjectKey: object.Key, Filename: "note.pdf", ContentType: "application/pdf", Size: object.Size, SHA256: object.SHA256}); err != nil {
 		t.Fatal(err)
 	}
 	return in, db, i.ID, object.Key
@@ -89,7 +89,7 @@ func TestLiveBackupAndRestoreCompleteState(t *testing.T) {
 	}
 	restored.Close()
 	data, err := os.ReadFile(filepath.Join(dest.BlobPath, key))
-	if err != nil || string(data) != "saved bytes" {
+	if err != nil || string(data) != "%PDF-saved bytes" {
 		t.Fatal(string(data), err)
 	}
 	if err = Restore(context.Background(), dest); err == nil {

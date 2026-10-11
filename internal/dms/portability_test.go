@@ -76,6 +76,21 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if _, err = s.Directory().CreateRESTToken(ctx, admin, identity.RESTTokenInput{Name: "Export source", Scopes: []string{"organization.manage"}}); err != nil {
 		t.Fatal(err)
 	}
+	// Moving a live folder can leave a retained deleted child deeper than
+	// the live hierarchy limit. Packages preserve that tombstone unchanged.
+	parent := list
+	for i := 0; i < MaxFolderDepth-1; i++ {
+		parent = create(t, s, parent.ID, "folder", fmt.Sprintf("depth-%d", i), nil)
+	}
+	moving := create(t, s, list.ID, "folder", "Retained parent", nil)
+	deleted := create(t, s, moving.ID, "folder", "Retained child", nil)
+	if err = s.Delete(ctx, "alice", deleted.ID, deleted.Version, DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Update(ctx, "alice", moving.ID, moving.Version, UpdateResource{ParentID: &parent.ID}); err != nil {
+		t.Fatal(err)
+	}
+	create(t, s, list.ID, "item", strings.Repeat("漢", 1024), nil)
 	export, err := s.StartExport(ctx, admin)
 	if err != nil {
 		t.Fatal(err)
@@ -214,6 +229,12 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	var credentials int
 	if err = target.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM identity_rest_tokens").Scan(&credentials); err != nil || credentials != 0 {
 		t.Fatal(credentials, err)
+	}
+	if row, err := target.Client.Resource.Get(ctx, deleted.ID); err != nil || row.DeletedAt == nil {
+		t.Fatal("tombstone not restored", row, err)
+	}
+	if _, err := target.RestoreDeleted(ctx, admin, list.ID, deleted.ID, false); err == nil {
+		t.Fatal("overdeep deleted folder restored")
 	}
 	// Applying to a populated app must fail without changing its graph.
 	before, _ := target.Client.Resource.Query().Count(ctx)

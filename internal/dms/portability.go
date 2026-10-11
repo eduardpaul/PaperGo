@@ -551,7 +551,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 		if kind == "folder" {
 			depth++
 		}
-		if depth > MaxFolderDepth {
+		if row["deleted_at"] == nil && depth > MaxFolderDepth {
 			return invalid("package exceeds maximum folder depth")
 		}
 		folderDepths[row["id"]] = depth
