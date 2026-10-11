@@ -169,7 +169,7 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}}})
+	_, err = s.SetPermissions(testContext, "alice", target.ID, latest(t, s, target.ID).Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

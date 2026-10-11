@@ -36,7 +36,7 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}, {"user", "bob", "write", "allow"}}})
+	item, err = s.SetPermissions(testContext, "alice", item.ID, latest(t, s, item.ID).Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}, {"user", "bob", "write", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

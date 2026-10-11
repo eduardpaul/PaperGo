@@ -1067,7 +1067,7 @@
             }
           }
         },
-        "description": "Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
         "x-module-scopes": [
           "list.write"
         ]
@@ -1122,7 +1122,7 @@
             "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
-        "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
         "x-module-scopes": [
           "list.write"
         ]
@@ -1296,7 +1296,7 @@
             }
           }
         },
-        "description": "Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Either endpoint may patch a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Omitted metadata keys remain; null removes a key. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
         "x-module-scopes": [
           "list.write"
         ]

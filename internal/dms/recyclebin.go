@@ -7,6 +7,7 @@ import (
 
 	"papergo/ent"
 	"papergo/ent/itemsurface"
+	"papergo/ent/relationship"
 	"papergo/ent/resource"
 	"papergo/internal/storage"
 )
@@ -254,6 +255,15 @@ func (s *Service) PurgeDeleted(ctx context.Context, subject, collection, id stri
 			}
 			if err = t.Client.Resource.UpdateOne(row).ClearHeadRevisionID().ClearPublishedRevisionID().Exec(ctx); err != nil {
 				return err
+			}
+			links, err := t.Client.Relationship.Query().Where(relationship.Or(relationship.SourceIDEQ(row.ID), relationship.TargetIDEQ(row.ID))).All(ctx)
+			if err != nil {
+				return err
+			}
+			for _, link := range links {
+				if err = t.touchRelationship(ctx, subject, link, "deleted"); err != nil {
+					return err
+				}
 			}
 			for _, statement := range []string{
 				`DELETE FROM field_values WHERE item_id=?`, `DELETE FROM business_keys WHERE item_id=?`, `DELETE FROM item_surfaces WHERE item_id=?`,

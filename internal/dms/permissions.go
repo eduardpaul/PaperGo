@@ -4,9 +4,11 @@ import (
 	"context"
 	entsql "entgo.io/ent/dialect/sql"
 	"papergo/ent"
+	"papergo/ent/itemsurface"
 	"papergo/ent/resource"
 	"papergo/internal/identity"
 	"strings"
+	"time"
 )
 
 const MaxDepth = 32
@@ -191,6 +193,14 @@ func (s *Service) GetSurface(ctx context.Context, subject, id, surface string) (
 	if err = overlayRevision(r, revision); err != nil {
 		return nil, err
 	}
+	projection, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(id), itemsurface.RevisionIDEQ(*selected)).First(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if r.UpdatedAt, err = time.Parse(time.RFC3339Nano, projection.ModifiedAt); err != nil {
+		return nil, err
+	}
+	r.UpdatedBy = projection.ModifiedBy
 	if !draft[id] || surface == "published" {
 		r.HeadRevisionID = nil
 		r.NextRevisionNumber = 0

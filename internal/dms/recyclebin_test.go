@@ -23,7 +23,7 @@ func TestRecycleBinRestoreTreeAndPurge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Publish(testContext, "alice", item.ID, item.Version); err != nil {
+	if _, err := s.Publish(testContext, "alice", item.ID, latest(t, s, item.ID).Version); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{Recursive: true}); err != nil {

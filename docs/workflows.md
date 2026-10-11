@@ -39,7 +39,7 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | Type | Starts a run when | The run's item |
 | --- | --- | --- |
 | `item.created` | an item is created (its first revision) | the item |
-| `item.updated` | an item's content changes or it moves across collections | the item |
+| `item.updated` | an item's content changes, it moves across collections, or its relationships change | the item |
 | `item.published` | a revision is published, explicitly or automatically | the item |
 | `item.unpublished` | an item is unpublished | the item |
 | `item.deleted` | an item is deleted, alone or with its folder | none (`{trigger:resource_id}` names it) |
@@ -315,3 +315,5 @@ PaperGo code that should happen after a change or on a schedule:
 1. Adds an activity in `internal/workflow`, documented in the catalog and safe to run once per step. Activities change data through `dms` with the run's author, so permissions, validation and events stay in one place.
 2. Ships the process as a built-in workflow when people should see or change it.
 3. Never reacts to changes in hidden code paths.
+
+Relationship creation, attribute updates, deletion and taxonomy merges emit `item.updated` for each live endpoint. These writes advance both item ETags and modification timestamps without adding metadata history. Their data includes `relationship_id`, `relationship_action`, `peer_id`, `changed_fields: ["$relationships"]`, the head `revision_id` and `content_type_id`. Term filters can match present terms; added/removed term filters do not fire for relationship-only changes. Duplicate link requests leave both endpoints unchanged. Purging an item emits relationship changes for surviving peers.

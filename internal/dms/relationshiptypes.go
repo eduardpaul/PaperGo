@@ -305,6 +305,9 @@ func (s *Service) UpdateRelationship(ctx context.Context, subject, itemID, linkI
 		if e != nil {
 			return e
 		}
+		if e = t.touchRelationship(ctx, subject, out, "updated"); e != nil {
+			return e
+		}
 		return t.audit(ctx, subject, "relationship.update", source, map[string]any{"relationship_id": linkID, "version": out.Version})
 	})
 	return

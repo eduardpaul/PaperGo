@@ -104,6 +104,9 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 		if e != nil {
 			return e
 		}
+		if e = t.touchRelationship(ctx, subject, out, "created"); e != nil {
+			return e
+		}
 		return t.audit(ctx, subject, "relationship.create", source, map[string]any{"relationship_id": out.ID, "target_id": in.TargetID})
 	})
 	return

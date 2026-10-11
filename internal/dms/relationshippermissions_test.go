@@ -36,7 +36,7 @@ func TestRelationshipsRequireWritableEndpointsAndCanMutateFromEitherEnd(t *testi
 	if err != nil {
 		t.Fatal("target could not update directed edge", err)
 	}
-	target, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Grants: []Permission{{"user", "bob", "read", "allow"}}})
+	target, err = s.SetPermissions(testContext, "alice", target.ID, latest(t, s, target.ID).Version, Permissions{Grants: []Permission{{"user", "bob", "read", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

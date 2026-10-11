@@ -268,11 +268,11 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 	}
 	for _, action := range []string{"delete", "unpublish"} {
 		bulkFails(t, s, "alice", list.ID, 1, ErrPreconditionFailed,
-			BulkOperation{Action: action, ID: first.ID, Version: 2},
+			BulkOperation{Action: action, ID: first.ID, Version: 3},
 			BulkOperation{Action: "delete", ID: second.ID, Version: 99},
 		)
 		page, err := s.Browse(testContext, "alice", Browse{WorkspaceID: w.ID, Search: "Searchable", Surface: "published"})
-		if err != nil || len(page.Data) != 1 || page.Data[0].ID != first.ID || page.Data[0].Version != 2 {
+		if err != nil || len(page.Data) != 1 || page.Data[0].ID != first.ID || page.Data[0].Version != 3 {
 			t.Fatalf("%s lost published FTS surface: %+v %v", action, page, err)
 		}
 		if _, err := s.Client.Relationship.Get(testContext, link.ID); err != nil {
@@ -280,8 +280,8 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 		}
 	}
 	bulkOK(t, s, "alice", list.ID,
-		BulkOperation{Action: "delete", ID: first.ID, Version: 2},
-		BulkOperation{Action: "delete", ID: second.ID, Version: 2},
+		BulkOperation{Action: "delete", ID: first.ID, Version: 3},
+		BulkOperation{Action: "delete", ID: second.ID, Version: 3},
 	)
 	links, _ := s.Client.Relationship.Query().Count(testContext)
 	surfaces, _ := s.Client.ItemSurface.Query().Count(testContext)

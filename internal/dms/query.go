@@ -11,6 +11,7 @@ import (
 	"papergo/ent/predicate"
 	"papergo/ent/resource"
 	"strings"
+	"time"
 )
 
 type Page[T any] struct {
@@ -281,7 +282,9 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 		r.Values = values
 		r.UpdatedBy = p.ModifiedBy
 		if rev := revisionLookup[p.RevisionID]; rev != nil {
-			r.UpdatedAt = rev.CreatedAt
+			if r.UpdatedAt, err = time.Parse(time.RFC3339Nano, p.ModifiedAt); err != nil {
+				return nil, err
+			}
 			selectedRevisions[r.ID] = rev
 		}
 		if selected == itemsurface.SurfacePublished {
