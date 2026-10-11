@@ -13,6 +13,7 @@ import (
 	"papergo/ent/resource"
 	"papergo/internal/identity"
 	"papergo/internal/model"
+	"papergo/internal/requestmeta"
 	"strings"
 	"time"
 )
@@ -28,6 +29,8 @@ type Service struct {
 	tx                  *sql.Tx
 	pending             *[]Event
 	collectionTemplates map[string]CollectionTemplate
+	auditProperties     map[string]map[string]bool
+	traceID             string
 }
 
 // NewService serves the PaperGo database db.
@@ -87,8 +90,11 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 // raised in the domain event log, so they commit or roll back with its
 // writes. It returns how many events it recorded.
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
+	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
 	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates}
+	t.traceID = requestmeta.Trace(ctx)
+	t.captureAuditProperties()
 	if err := fn(t); err != nil {
 		return 0, err
 	}
@@ -133,8 +139,8 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 	return out, err
 }
 func (s *Service) audit(ctx context.Context, subject, action string, r *ent.Resource, details map[string]any) error {
-	_, err := s.Client.AuditEvent.Create().SetWorkspaceID(r.WorkspaceID).SetResourceID(r.ID).SetSubject(subject).SetAction(action).SetDetails(details).Save(ctx)
-	return err
+	typ, id := auditEntity(action, r, details)
+	return s.Client.AuditEvent.Create().SetWorkspaceID(r.WorkspaceID).SetResourceID(r.ID).SetSubject(subject).SetAction(action).SetEntityType(typ).SetEntityID(id).SetProperties(s.changedProperties(id, action)).SetTraceID(s.traceID).SetDetails(details).Exec(ctx)
 }
 func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, error) {
 	return s.GetSurface(ctx, subject, id, "auto")
@@ -890,7 +896,7 @@ func (s *Service) CreateField(ctx context.Context, subject, containerID string, 
 		if e = t.refreshCollections(ctx, subject, collections); e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "field.create", c, map[string]any{"key": in.Key})
+		return t.audit(ctx, subject, "field.create", c, map[string]any{"key": in.Key, "field_id": out.ID})
 	})
 	return
 }

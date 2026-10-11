@@ -112,15 +112,17 @@ func (d Directory) UpdateMe(ctx context.Context, subject string, name *string) (
 		return MeProfile{}, err
 	}
 	err := d.transaction(ctx, func(tx *sql.Tx) error {
-		out, err := userProfile(ctx, tx, subject)
-		if err != nil {
+		return auditedIdentity(ctx, tx, subject, "user.update", "user", subject, func() error {
+			out, err := userProfile(ctx, tx, subject)
+			if err != nil {
+				return err
+			}
+			if !out.Active || out.DeletedAt != nil {
+				return ErrForbidden
+			}
+			_, err = tx.ExecContext(ctx, "UPDATE identity_users SET display_name=? WHERE id=?", nameValue, subject)
 			return err
-		}
-		if !out.Active || out.DeletedAt != nil {
-			return ErrForbidden
-		}
-		_, err = tx.ExecContext(ctx, "UPDATE identity_users SET display_name=? WHERE id=?", nameValue, subject)
-		return err
+		})
 	})
 	if err != nil {
 		return MeProfile{}, err
@@ -130,65 +132,69 @@ func (d Directory) UpdateMe(ctx context.Context, subject string, name *string) (
 func (d Directory) UpdateUser(ctx context.Context, actor, subject string, in UserUpdate) (UserProfile, error) {
 	var out UserProfile
 	err := d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error {
-		current, err := userProfile(ctx, tx, subject)
-		if err != nil {
+		return auditedIdentity(ctx, tx, actor, "user.update", "user", subject, func() error {
+			current, err := userProfile(ctx, tx, subject)
+			if err != nil {
+				return err
+			}
+			if current.DeletedAt != nil {
+				return ErrNotFound
+			}
+			if in.DisplayName != nil {
+				current.DisplayName = strings.TrimSpace(*in.DisplayName)
+			}
+			if in.Email != nil {
+				current.Email = strings.TrimSpace(*in.Email)
+			}
+			if err = validateProfile(current.DisplayName, current.Email); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, "UPDATE identity_users SET display_name=?,email=? WHERE id=?", current.DisplayName, current.Email, subject); err != nil {
+				return err
+			}
+			out, err = userProfile(ctx, tx, subject)
 			return err
-		}
-		if current.DeletedAt != nil {
-			return ErrNotFound
-		}
-		if in.DisplayName != nil {
-			current.DisplayName = strings.TrimSpace(*in.DisplayName)
-		}
-		if in.Email != nil {
-			current.Email = strings.TrimSpace(*in.Email)
-		}
-		if err = validateProfile(current.DisplayName, current.Email); err != nil {
-			return err
-		}
-		if _, err = tx.ExecContext(ctx, "UPDATE identity_users SET display_name=?,email=? WHERE id=?", current.DisplayName, current.Email, subject); err != nil {
-			return err
-		}
-		out, err = userProfile(ctx, tx, subject)
-		return err
+		})
 	})
 	return out, err
 }
 func (d Directory) DeleteUser(ctx context.Context, actor, subject string) error {
 	return d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error {
-		if actor == subject {
-			return ErrCannotDeleteSelf
-		}
-		current, err := userProfile(ctx, tx, subject)
-		if err != nil {
-			return err
-		}
-		if current.DeletedAt != nil {
-			return ErrNotFound
-		}
-		var lastOwner bool
-		if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM grants g JOIN resources w ON w.id=g.resource_id WHERE w.kind='workspace' AND w.deleted_at IS NULL AND g.principal_type='user' AND g.principal_id=? AND g.action='manage' AND NOT EXISTS(SELECT 1 FROM grants other JOIN identity_users u ON u.id=other.principal_id WHERE other.resource_id=w.id AND other.principal_type='user' AND other.action='manage' AND other.principal_id<>? AND u.active=1))", subject, subject).Scan(&lastOwner); err != nil {
-			return err
-		}
-		if lastOwner {
-			return ErrLastWorkspaceOwner
-		}
-		for _, query := range []string{
-			"DELETE FROM identity_memberships WHERE principal_type='user' AND principal_id=?",
-			"DELETE FROM identity_assignments WHERE principal_type='user' AND principal_id=?",
-			"DELETE FROM identity_preferences WHERE owner_type='user' AND owner_id=?",
-			"DELETE FROM grants WHERE principal_type='user' AND principal_id=?",
-			"DELETE FROM webdav_credentials WHERE subject=?",
-			"DELETE FROM identity_rest_tokens WHERE subject=?",
-			"DELETE FROM sync_tokens WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
-			"DELETE FROM sync_states WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
-			"DELETE FROM sync_views WHERE subject=?",
-		} {
-			if _, err = tx.ExecContext(ctx, query, subject); err != nil {
+		return auditedIdentity(ctx, tx, actor, "user.delete", "user", subject, func() error {
+			if actor == subject {
+				return ErrCannotDeleteSelf
+			}
+			current, err := userProfile(ctx, tx, subject)
+			if err != nil {
 				return err
 			}
-		}
-		_, err = tx.ExecContext(ctx, "UPDATE identity_users SET active=0,display_name='Deleted user',email='',deleted_at=? WHERE id=?", time.Now().UTC(), subject)
-		return err
+			if current.DeletedAt != nil {
+				return ErrNotFound
+			}
+			var lastOwner bool
+			if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM grants g JOIN resources w ON w.id=g.resource_id WHERE w.kind='workspace' AND w.deleted_at IS NULL AND g.principal_type='user' AND g.principal_id=? AND g.action='manage' AND NOT EXISTS(SELECT 1 FROM grants other JOIN identity_users u ON u.id=other.principal_id WHERE other.resource_id=w.id AND other.principal_type='user' AND other.action='manage' AND other.principal_id<>? AND u.active=1))", subject, subject).Scan(&lastOwner); err != nil {
+				return err
+			}
+			if lastOwner {
+				return ErrLastWorkspaceOwner
+			}
+			for _, query := range []string{
+				"DELETE FROM identity_memberships WHERE principal_type='user' AND principal_id=?",
+				"DELETE FROM identity_assignments WHERE principal_type='user' AND principal_id=?",
+				"DELETE FROM identity_preferences WHERE owner_type='user' AND owner_id=?",
+				"DELETE FROM grants WHERE principal_type='user' AND principal_id=?",
+				"DELETE FROM webdav_credentials WHERE subject=?",
+				"DELETE FROM identity_rest_tokens WHERE subject=?",
+				"DELETE FROM sync_tokens WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
+				"DELETE FROM sync_states WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
+				"DELETE FROM sync_views WHERE subject=?",
+			} {
+				if _, err = tx.ExecContext(ctx, query, subject); err != nil {
+					return err
+				}
+			}
+			_, err = tx.ExecContext(ctx, "UPDATE identity_users SET active=0,display_name='Deleted user',email='',deleted_at=? WHERE id=?", time.Now().UTC(), subject)
+			return err
+		})
 	})
 }

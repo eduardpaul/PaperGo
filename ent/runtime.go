@@ -81,8 +81,20 @@ func init() {
 	auditeventDescAction := auditeventFields[3].Descriptor()
 	// auditevent.ActionValidator is a validator for the "action" field. It is called by the builders before save.
 	auditevent.ActionValidator = auditeventDescAction.Validators[0].(func(string) error)
+	// auditeventDescEntityType is the schema descriptor for entity_type field.
+	auditeventDescEntityType := auditeventFields[4].Descriptor()
+	// auditevent.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	auditevent.EntityTypeValidator = auditeventDescEntityType.Validators[0].(func(string) error)
+	// auditeventDescProperties is the schema descriptor for properties field.
+	auditeventDescProperties := auditeventFields[6].Descriptor()
+	// auditevent.DefaultProperties holds the default value on creation for the properties field.
+	auditevent.DefaultProperties = auditeventDescProperties.Default.([]string)
+	// auditeventDescTraceID is the schema descriptor for trace_id field.
+	auditeventDescTraceID := auditeventFields[7].Descriptor()
+	// auditevent.TraceIDValidator is a validator for the "trace_id" field. It is called by the builders before save.
+	auditevent.TraceIDValidator = auditeventDescTraceID.Validators[0].(func(string) error)
 	// auditeventDescDetails is the schema descriptor for details field.
-	auditeventDescDetails := auditeventFields[4].Descriptor()
+	auditeventDescDetails := auditeventFields[8].Descriptor()
 	// auditevent.DefaultDetails holds the default value on creation for the details field.
 	auditevent.DefaultDetails = auditeventDescDetails.Default.(map[string]interface{})
 	// auditeventDescID is the schema descriptor for id field.

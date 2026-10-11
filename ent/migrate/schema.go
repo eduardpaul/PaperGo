@@ -17,6 +17,10 @@ var (
 		{Name: "resource_id", Type: field.TypeString, Nullable: true},
 		{Name: "subject", Type: field.TypeString},
 		{Name: "action", Type: field.TypeString},
+		{Name: "entity_type", Type: field.TypeString},
+		{Name: "entity_id", Type: field.TypeString, Nullable: true},
+		{Name: "properties", Type: field.TypeJSON},
+		{Name: "trace_id", Type: field.TypeString},
 		{Name: "details", Type: field.TypeJSON},
 	}
 	// AuditEventsTable holds the schema information for the "audit_events" table.
@@ -34,6 +38,21 @@ var (
 				Name:    "auditevent_resource_id_created_at",
 				Unique:  false,
 				Columns: []*schema.Column{AuditEventsColumns[3], AuditEventsColumns[1]},
+			},
+			{
+				Name:    "auditevent_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[1], AuditEventsColumns[0]},
+			},
+			{
+				Name:    "auditevent_subject_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[4], AuditEventsColumns[1]},
+			},
+			{
+				Name:    "auditevent_entity_type_entity_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[6], AuditEventsColumns[7], AuditEventsColumns[1]},
 			},
 		},
 	}

@@ -74,6 +74,38 @@ func (_c *AuditEventCreate) SetAction(v string) *AuditEventCreate {
 	return _c
 }
 
+// SetEntityType sets the "entity_type" field.
+func (_c *AuditEventCreate) SetEntityType(v string) *AuditEventCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
+}
+
+// SetEntityID sets the "entity_id" field.
+func (_c *AuditEventCreate) SetEntityID(v string) *AuditEventCreate {
+	_c.mutation.SetEntityID(v)
+	return _c
+}
+
+// SetNillableEntityID sets the "entity_id" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableEntityID(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetEntityID(*v)
+	}
+	return _c
+}
+
+// SetProperties sets the "properties" field.
+func (_c *AuditEventCreate) SetProperties(v []string) *AuditEventCreate {
+	_c.mutation.SetProperties(v)
+	return _c
+}
+
+// SetTraceID sets the "trace_id" field.
+func (_c *AuditEventCreate) SetTraceID(v string) *AuditEventCreate {
+	_c.mutation.SetTraceID(v)
+	return _c
+}
+
 // SetDetails sets the "details" field.
 func (_c *AuditEventCreate) SetDetails(v map[string]interface{}) *AuditEventCreate {
 	_c.mutation.SetDetails(v)
@@ -133,6 +165,10 @@ func (_c *AuditEventCreate) defaults() {
 		v := auditevent.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.Properties(); !ok {
+		v := auditevent.DefaultProperties
+		_c.mutation.SetProperties(v)
+	}
 	if _, ok := _c.mutation.Details(); !ok {
 		v := auditevent.DefaultDetails
 		_c.mutation.SetDetails(v)
@@ -172,6 +208,25 @@ func (_c *AuditEventCreate) check() error {
 	if v, ok := _c.mutation.Action(); ok {
 		if err := auditevent.ActionValidator(v); err != nil {
 			return &ValidationError{Name: "action", err: fmt.Errorf(`ent: validator failed for field "AuditEvent.action": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.EntityType(); !ok {
+		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "AuditEvent.entity_type"`)}
+	}
+	if v, ok := _c.mutation.EntityType(); ok {
+		if err := auditevent.EntityTypeValidator(v); err != nil {
+			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "AuditEvent.entity_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Properties(); !ok {
+		return &ValidationError{Name: "properties", err: errors.New(`ent: missing required field "AuditEvent.properties"`)}
+	}
+	if _, ok := _c.mutation.TraceID(); !ok {
+		return &ValidationError{Name: "trace_id", err: errors.New(`ent: missing required field "AuditEvent.trace_id"`)}
+	}
+	if v, ok := _c.mutation.TraceID(); ok {
+		if err := auditevent.TraceIDValidator(v); err != nil {
+			return &ValidationError{Name: "trace_id", err: fmt.Errorf(`ent: validator failed for field "AuditEvent.trace_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Details(); !ok {
@@ -236,6 +291,22 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Action(); ok {
 		_spec.SetField(auditevent.FieldAction, field.TypeString, value)
 		_node.Action = value
+	}
+	if value, ok := _c.mutation.EntityType(); ok {
+		_spec.SetField(auditevent.FieldEntityType, field.TypeString, value)
+		_node.EntityType = value
+	}
+	if value, ok := _c.mutation.EntityID(); ok {
+		_spec.SetField(auditevent.FieldEntityID, field.TypeString, value)
+		_node.EntityID = value
+	}
+	if value, ok := _c.mutation.Properties(); ok {
+		_spec.SetField(auditevent.FieldProperties, field.TypeJSON, value)
+		_node.Properties = value
+	}
+	if value, ok := _c.mutation.TraceID(); ok {
+		_spec.SetField(auditevent.FieldTraceID, field.TypeString, value)
+		_node.TraceID = value
 	}
 	if value, ok := _c.mutation.Details(); ok {
 		_spec.SetField(auditevent.FieldDetails, field.TypeJSON, value)

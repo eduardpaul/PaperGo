@@ -12,6 +12,7 @@ import (
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"papergo/internal/requestmeta"
 	"papergo/internal/runner"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
@@ -88,7 +89,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
-	api.HandleFunc("GET /v1/workspaces/{id}/audit", a.audit)
+	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
 	api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
 	api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
@@ -621,14 +622,6 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", strconv.Quote(b.Sha256))
 	http.ServeContent(transfer.Writer(w), r, b.Filename, b.CreatedAt, file)
 }
-func (a *API) audit(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Audit(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	respond(w, r, 200, out)
-}
 
 func (a *API) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -684,7 +677,7 @@ func (w *responseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter 
 func (a *API) observe(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := uuid.NewString()
-		r = r.WithContext(context.WithValue(r.Context(), requestKey{}, id))
+		r = r.WithContext(requestmeta.WithTrace(context.WithValue(r.Context(), requestKey{}, id), id))
 		w.Header().Set("X-Request-ID", id)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "private, no-store")

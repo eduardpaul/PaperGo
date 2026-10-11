@@ -218,7 +218,7 @@ Each row describes the current implementation and a user-visible consequence. Th
 
 | Priority | ID / status | User story | PaperDotNet behavior | Current PaperGo behavior | Missing or different outcome | Source evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| P2 | AUD-01 · Partial | Review and filter organization-wide audit history | GET auditLog aggregates module audit stores; entity type/id, user and date filters; newest first, properties/trace ID. | Workspace audit plus organization taxonomy/content-type curation feeds. | No unified organization log with entity/actor/time filters, changed-property/trace fields and newest-first merged paging. | [.NET AUDIT](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Audit/PaperDotNet.Audit/AuditModule.cs#L48)<br>[Go audit.go:31](C:/Users/eduapaul/Documents/PaperGo/internal/dms/audit.go:31) |
+| P2 | AUD-01 · Covered | Read an organization-wide audit feed | Actor, entity and date filters; changed property names, trace IDs, newest-first paging. | `/v1/audit` unifies directory, configuration and content mutations with `audit.read` and stable time/ID keysets. | Current property names are recorded without retaining previous values. | [Go audit.go](C:/Users/eduapaul/Documents/PaperGo/internal/dms/audit.go) |
 
 ### API and operations
 

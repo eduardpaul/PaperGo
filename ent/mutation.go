@@ -116,19 +116,24 @@ const (
 // AuditEventMutation represents an operation that mutates the AuditEvent nodes in the graph.
 type AuditEventMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *string
-	created_at    *time.Time
-	workspace_id  *string
-	resource_id   *string
-	subject       *string
-	action        *string
-	details       *map[string]interface{}
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*AuditEvent, error)
-	predicates    []predicate.AuditEvent
+	op               Op
+	typ              string
+	id               *string
+	created_at       *time.Time
+	workspace_id     *string
+	resource_id      *string
+	subject          *string
+	action           *string
+	entity_type      *string
+	entity_id        *string
+	properties       *[]string
+	appendproperties []string
+	trace_id         *string
+	details          *map[string]interface{}
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*AuditEvent, error)
+	predicates       []predicate.AuditEvent
 }
 
 var _ ent.Mutation = (*AuditEventMutation)(nil)
@@ -441,6 +446,178 @@ func (m *AuditEventMutation) ResetAction() {
 	m.action = nil
 }
 
+// SetEntityType sets the "entity_type" field.
+func (m *AuditEventMutation) SetEntityType(s string) {
+	m.entity_type = &s
+}
+
+// EntityType returns the value of the "entity_type" field in the mutation.
+func (m *AuditEventMutation) EntityType() (r string, exists bool) {
+	v := m.entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityType returns the old "entity_type" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldEntityType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityType: %w", err)
+	}
+	return oldValue.EntityType, nil
+}
+
+// ResetEntityType resets all changes to the "entity_type" field.
+func (m *AuditEventMutation) ResetEntityType() {
+	m.entity_type = nil
+}
+
+// SetEntityID sets the "entity_id" field.
+func (m *AuditEventMutation) SetEntityID(s string) {
+	m.entity_id = &s
+}
+
+// EntityID returns the value of the "entity_id" field in the mutation.
+func (m *AuditEventMutation) EntityID() (r string, exists bool) {
+	v := m.entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityID returns the old "entity_id" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
+	}
+	return oldValue.EntityID, nil
+}
+
+// ClearEntityID clears the value of the "entity_id" field.
+func (m *AuditEventMutation) ClearEntityID() {
+	m.entity_id = nil
+	m.clearedFields[auditevent.FieldEntityID] = struct{}{}
+}
+
+// EntityIDCleared returns if the "entity_id" field was cleared in this mutation.
+func (m *AuditEventMutation) EntityIDCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldEntityID]
+	return ok
+}
+
+// ResetEntityID resets all changes to the "entity_id" field.
+func (m *AuditEventMutation) ResetEntityID() {
+	m.entity_id = nil
+	delete(m.clearedFields, auditevent.FieldEntityID)
+}
+
+// SetProperties sets the "properties" field.
+func (m *AuditEventMutation) SetProperties(s []string) {
+	m.properties = &s
+	m.appendproperties = nil
+}
+
+// Properties returns the value of the "properties" field in the mutation.
+func (m *AuditEventMutation) Properties() (r []string, exists bool) {
+	v := m.properties
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProperties returns the old "properties" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldProperties(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProperties is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProperties requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProperties: %w", err)
+	}
+	return oldValue.Properties, nil
+}
+
+// AppendProperties adds s to the "properties" field.
+func (m *AuditEventMutation) AppendProperties(s []string) {
+	m.appendproperties = append(m.appendproperties, s...)
+}
+
+// AppendedProperties returns the list of values that were appended to the "properties" field in this mutation.
+func (m *AuditEventMutation) AppendedProperties() ([]string, bool) {
+	if len(m.appendproperties) == 0 {
+		return nil, false
+	}
+	return m.appendproperties, true
+}
+
+// ResetProperties resets all changes to the "properties" field.
+func (m *AuditEventMutation) ResetProperties() {
+	m.properties = nil
+	m.appendproperties = nil
+}
+
+// SetTraceID sets the "trace_id" field.
+func (m *AuditEventMutation) SetTraceID(s string) {
+	m.trace_id = &s
+}
+
+// TraceID returns the value of the "trace_id" field in the mutation.
+func (m *AuditEventMutation) TraceID() (r string, exists bool) {
+	v := m.trace_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTraceID returns the old "trace_id" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldTraceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTraceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTraceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTraceID: %w", err)
+	}
+	return oldValue.TraceID, nil
+}
+
+// ResetTraceID resets all changes to the "trace_id" field.
+func (m *AuditEventMutation) ResetTraceID() {
+	m.trace_id = nil
+}
+
 // SetDetails sets the "details" field.
 func (m *AuditEventMutation) SetDetails(value map[string]interface{}) {
 	m.details = &value
@@ -511,7 +688,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 10)
 	if m.created_at != nil {
 		fields = append(fields, auditevent.FieldCreatedAt)
 	}
@@ -526,6 +703,18 @@ func (m *AuditEventMutation) Fields() []string {
 	}
 	if m.action != nil {
 		fields = append(fields, auditevent.FieldAction)
+	}
+	if m.entity_type != nil {
+		fields = append(fields, auditevent.FieldEntityType)
+	}
+	if m.entity_id != nil {
+		fields = append(fields, auditevent.FieldEntityID)
+	}
+	if m.properties != nil {
+		fields = append(fields, auditevent.FieldProperties)
+	}
+	if m.trace_id != nil {
+		fields = append(fields, auditevent.FieldTraceID)
 	}
 	if m.details != nil {
 		fields = append(fields, auditevent.FieldDetails)
@@ -548,6 +737,14 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.Subject()
 	case auditevent.FieldAction:
 		return m.Action()
+	case auditevent.FieldEntityType:
+		return m.EntityType()
+	case auditevent.FieldEntityID:
+		return m.EntityID()
+	case auditevent.FieldProperties:
+		return m.Properties()
+	case auditevent.FieldTraceID:
+		return m.TraceID()
 	case auditevent.FieldDetails:
 		return m.Details()
 	}
@@ -569,6 +766,14 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldSubject(ctx)
 	case auditevent.FieldAction:
 		return m.OldAction(ctx)
+	case auditevent.FieldEntityType:
+		return m.OldEntityType(ctx)
+	case auditevent.FieldEntityID:
+		return m.OldEntityID(ctx)
+	case auditevent.FieldProperties:
+		return m.OldProperties(ctx)
+	case auditevent.FieldTraceID:
+		return m.OldTraceID(ctx)
 	case auditevent.FieldDetails:
 		return m.OldDetails(ctx)
 	}
@@ -615,6 +820,34 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAction(v)
 		return nil
+	case auditevent.FieldEntityType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityType(v)
+		return nil
+	case auditevent.FieldEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityID(v)
+		return nil
+	case auditevent.FieldProperties:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProperties(v)
+		return nil
+	case auditevent.FieldTraceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTraceID(v)
+		return nil
 	case auditevent.FieldDetails:
 		v, ok := value.(map[string]interface{})
 		if !ok {
@@ -658,6 +891,9 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldResourceID) {
 		fields = append(fields, auditevent.FieldResourceID)
 	}
+	if m.FieldCleared(auditevent.FieldEntityID) {
+		fields = append(fields, auditevent.FieldEntityID)
+	}
 	return fields
 }
 
@@ -677,6 +913,9 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldResourceID:
 		m.ClearResourceID()
+		return nil
+	case auditevent.FieldEntityID:
+		m.ClearEntityID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent nullable field %s", name)
@@ -700,6 +939,18 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldAction:
 		m.ResetAction()
+		return nil
+	case auditevent.FieldEntityType:
+		m.ResetEntityType()
+		return nil
+	case auditevent.FieldEntityID:
+		m.ResetEntityID()
+		return nil
+	case auditevent.FieldProperties:
+		m.ResetProperties()
+		return nil
+	case auditevent.FieldTraceID:
+		m.ResetTraceID()
 		return nil
 	case auditevent.FieldDetails:
 		m.ResetDetails()

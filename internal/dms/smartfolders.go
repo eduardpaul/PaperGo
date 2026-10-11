@@ -171,7 +171,7 @@ func (s *Service) smartFolder(ctx context.Context, subject, id string, manage bo
 
 func (s *Service) auditSmartFolder(ctx context.Context, subject, action string, f *ent.SmartFolder) error {
 	if f.WorkspaceID == nil || f.OwnerID != nil {
-		return nil
+		return s.auditCatalog(ctx, subject, action, map[string]any{"smart_folder_id": f.ID})
 	}
 	if err := s.Client.Resource.UpdateOneID(*f.WorkspaceID).SetUpdatedBy(subject).AddVersion(1).Exec(ctx); err != nil {
 		return err

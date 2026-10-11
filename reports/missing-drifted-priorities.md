@@ -1,6 +1,6 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 66 open comparisons: 45 missing, 12 partial, 9 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 65 open comparisons: 45 missing, 11 partial, 9 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
@@ -20,7 +20,7 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P1 · TSK-01 · Missing:** No task template, task-specific validation/assignment lifecycle or task views are registered. Person fields alone do not implement task behavior.
 - **P1 · TSK-04 · Missing:** Cannot port a personal task dashboard or document follow-up.
 
-## P2 (43)
+## P2 (42)
 
 - **P2 · TEN-01 · Drift:** Multi-organization hosting requires an explicit scope decision; workspace ACLs alone do not provide tenant isolation.
 - **P2 · TEN-02 · Missing:** Separate organizations cannot be provisioned and resolved by host in one service.
@@ -63,7 +63,6 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P2 · PRV-01 · Partial:** No complete application package for workspaces, identity, workflows and contributed module settings, with parameterized dry-run/reapplication.
 - **P2 · PRV-02 · Missing:** Cannot transfer a complete set of items, file content and module state.
 - **P2 · MCP-01 · Missing:** Assistant/tool clients cannot use the same integration story.
-- **P2 · AUD-01 · Partial:** No unified organization log with entity/actor/time filters, changed-property/trace fields and newest-first merged paging.
 - **P2 · LST-48 · Drift:** A 256-character item title accepted upstream fails in Go. Title limits remain different even though custom text-field limits align.
 
 ## P3 (10)

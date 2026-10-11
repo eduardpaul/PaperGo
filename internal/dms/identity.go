@@ -28,7 +28,8 @@ func (s *Service) requireTaxonomy(ctx context.Context, subject, action string) e
 	return s.RequireScope(ctx, subject, scope)
 }
 func (s *Service) auditTaxonomy(ctx context.Context, subject, action string, details map[string]any) error {
-	return s.Client.AuditEvent.Create().SetSubject(subject).SetAction(action).SetDetails(details).Exec(ctx)
+	typ, id := auditEntity(action, nil, details)
+	return s.Client.AuditEvent.Create().SetSubject(subject).SetAction(action).SetEntityType(typ).SetEntityID(id).SetProperties(s.changedProperties(id, action)).SetTraceID(s.traceID).SetDetails(details).Exec(ctx)
 }
 func (s *Service) contentTypeResource(ctx context.Context, subject, id, action string) (*ent.Resource, error) {
 	scope := "contentType.read"

@@ -91,7 +91,7 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |
 | POST | `/v1/resources/{id}/documents` | Create a library document using multipart `file` and optional `metadata` JSON; see [documents](docs/documents.md) |
 | POST | `/v1/items/{id}/content/versions/{number}/restore` | Restore an earlier file as a new version; requires current numeric `If-Match` |
-| GET | `/v1/workspaces/{id}/audit` | Workspace manager audit feed |
+| GET | `/v1/audit` | Organization-wide feed requiring `audit.read`; actor/entity/workspace/date filters, changed properties, trace IDs and newest-first paging |
 | GET / PATCH | `/v1/identity/me` | Current user profile and self display-name edits |
 | GET / PATCH | `/v1/organization` | Organization identity and profile; edits require organization.manage and ETag |
 | POST / GET | `/v1/identity/me/tokens` | Issue/list scoped expiring personal REST tokens |

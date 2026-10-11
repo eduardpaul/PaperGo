@@ -200,22 +200,24 @@ func (d Directory) CreateUser(ctx context.Context, actor string, in UserInput) (
 		return out, err
 	}
 	err := d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error {
-		var exists bool
-		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=?)", in.Subject).Scan(&exists); err != nil {
+		return auditedIdentity(ctx, tx, actor, "user.create", "user", in.Subject, func() error {
+			var exists bool
+			if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=?)", in.Subject).Scan(&exists); err != nil {
+				return err
+			}
+			if exists {
+				return invalid("user already exists")
+			}
+			if err := ensureUser(ctx, tx, in.Subject); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE identity_users SET display_name=?,email=? WHERE id=?", in.DisplayName, in.Email, in.Subject); err != nil {
+				return err
+			}
+			var err error
+			out, err = userProfile(ctx, tx, in.Subject)
 			return err
-		}
-		if exists {
-			return invalid("user already exists")
-		}
-		if err := ensureUser(ctx, tx, in.Subject); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, "UPDATE identity_users SET display_name=?,email=? WHERE id=?", in.DisplayName, in.Email, in.Subject); err != nil {
-			return err
-		}
-		var err error
-		out, err = userProfile(ctx, tx, in.Subject)
-		return err
+		})
 	})
 	return out, err
 }
@@ -270,12 +272,14 @@ func (d Directory) SaveGroup(ctx context.Context, actor, id string, version int,
 		version = 0
 	}
 	err := d.write(ctx, actor, "group.manage", func(tx *sql.Tx) error {
-		if create {
-			_, err := tx.ExecContext(ctx, "INSERT INTO identity_groups(id,name,description,version,created_at) VALUES(?,?,?,1,CURRENT_TIMESTAMP)", id, in.Name, in.Description)
-			return err
-		}
-		result, err := tx.ExecContext(ctx, "UPDATE identity_groups SET name=?,description=?,version=version+1 WHERE id=? AND version=?", in.Name, in.Description, id, version)
-		return changed(result, err)
+		return auditedIdentity(ctx, tx, actor, "group.update", "group", id, func() error {
+			if create {
+				_, err := tx.ExecContext(ctx, "INSERT INTO identity_groups(id,name,description,version,created_at) VALUES(?,?,?,1,CURRENT_TIMESTAMP)", id, in.Name, in.Description)
+				return err
+			}
+			result, err := tx.ExecContext(ctx, "UPDATE identity_groups SET name=?,description=?,version=version+1 WHERE id=? AND version=?", in.Name, in.Description, id, version)
+			return changed(result, err)
+		})
 	})
 	return Group{ID: id, Name: in.Name, Description: in.Description, Version: version + 1}, err
 }
@@ -291,8 +295,10 @@ func changed(result sql.Result, err error) error {
 }
 func (d Directory) DeleteGroup(ctx context.Context, actor, id string, version int) error {
 	return d.write(ctx, actor, "group.manage", func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, "DELETE FROM identity_groups WHERE id=? AND version=?", id, version)
-		return changed(result, err)
+		return auditedIdentity(ctx, tx, actor, "group.delete", "group", id, func() error {
+			result, err := tx.ExecContext(ctx, "DELETE FROM identity_groups WHERE id=? AND version=?", id, version)
+			return changed(result, err)
+		})
 	})
 }
 func (d Directory) Members(ctx context.Context, actor, id string) ([]Principal, error) {
@@ -323,39 +329,41 @@ func (d Directory) Members(ctx context.Context, actor, id string) ([]Principal, 
 }
 func (d Directory) SetMember(ctx context.Context, actor, groupID string, p Principal, remove bool) error {
 	return d.write(ctx, actor, "group.manage", func(tx *sql.Tx) error {
-		if err := ValidatePrincipal(ctx, tx, Principal{"group", groupID}); err != nil {
-			return err
-		}
-		if err := ValidatePrincipal(ctx, tx, p); err != nil {
-			return err
-		}
-		if remove {
-			_, err := tx.ExecContext(ctx, "DELETE FROM identity_memberships WHERE group_id=? AND principal_type=? AND principal_id=?", groupID, p.Type, p.ID)
-			return err
-		}
-		if p.Type == "group" {
-			var cycle bool
-			err := tx.QueryRowContext(ctx, `WITH RECURSIVE descendants(id) AS (SELECT ? UNION SELECT principal_id FROM identity_memberships m JOIN descendants d ON m.group_id=d.id WHERE principal_type='group') SELECT EXISTS(SELECT 1 FROM descendants WHERE id=?)`, p.ID, groupID).Scan(&cycle)
+		return auditedIdentity(ctx, tx, actor, "group.member", "group", groupID, func() error {
+			if err := ValidatePrincipal(ctx, tx, Principal{"group", groupID}); err != nil {
+				return err
+			}
+			if err := ValidatePrincipal(ctx, tx, p); err != nil {
+				return err
+			}
+			if remove {
+				_, err := tx.ExecContext(ctx, "DELETE FROM identity_memberships WHERE group_id=? AND principal_type=? AND principal_id=?", groupID, p.Type, p.ID)
+				return err
+			}
+			if p.Type == "group" {
+				var cycle bool
+				err := tx.QueryRowContext(ctx, `WITH RECURSIVE descendants(id) AS (SELECT ? UNION SELECT principal_id FROM identity_memberships m JOIN descendants d ON m.group_id=d.id WHERE principal_type='group') SELECT EXISTS(SELECT 1 FROM descendants WHERE id=?)`, p.ID, groupID).Scan(&cycle)
+				if err != nil {
+					return err
+				}
+				if cycle {
+					return invalid("nested groups must not form a cycle")
+				}
+			}
+			_, err := tx.ExecContext(ctx, "INSERT INTO identity_memberships(id,group_id,principal_type,principal_id,created_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(group_id,principal_type,principal_id) DO NOTHING", uuid.NewString(), groupID, p.Type, p.ID)
 			if err != nil {
 				return err
 			}
-			if cycle {
-				return invalid("nested groups must not form a cycle")
+			var depth int
+			err = tx.QueryRowContext(ctx, `WITH RECURSIVE paths(id,depth) AS (SELECT id,1 FROM identity_groups UNION SELECT m.principal_id,p.depth+1 FROM identity_memberships m JOIN paths p ON m.group_id=p.id WHERE m.principal_type='group' AND p.depth<=?) SELECT COALESCE(MAX(depth),0) FROM paths`, MaxGroupDepth).Scan(&depth)
+			if err != nil {
+				return err
 			}
-		}
-		_, err := tx.ExecContext(ctx, "INSERT INTO identity_memberships(id,group_id,principal_type,principal_id,created_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(group_id,principal_type,principal_id) DO NOTHING", uuid.NewString(), groupID, p.Type, p.ID)
-		if err != nil {
-			return err
-		}
-		var depth int
-		err = tx.QueryRowContext(ctx, `WITH RECURSIVE paths(id,depth) AS (SELECT id,1 FROM identity_groups UNION SELECT m.principal_id,p.depth+1 FROM identity_memberships m JOIN paths p ON m.group_id=p.id WHERE m.principal_type='group' AND p.depth<=?) SELECT COALESCE(MAX(depth),0) FROM paths`, MaxGroupDepth).Scan(&depth)
-		if err != nil {
-			return err
-		}
-		if depth > MaxGroupDepth {
-			return invalid("nested groups exceed the maximum depth of 10")
-		}
-		return nil
+			if depth > MaxGroupDepth {
+				return invalid("nested groups exceed the maximum depth of 10")
+			}
+			return nil
+		})
 	})
 }
 func (d Directory) Roles(ctx context.Context, actor string) ([]Role, error) {
@@ -395,19 +403,23 @@ func (d Directory) SaveRole(ctx context.Context, actor, id string, version int, 
 	}
 	raw, _ := json.Marshal(in.Scopes)
 	err := d.write(ctx, actor, "role.manage", func(tx *sql.Tx) error {
-		if create {
-			_, err := tx.ExecContext(ctx, "INSERT INTO identity_roles(id,name,description,scopes,builtin,version,created_at) VALUES(?,?,?,?,0,1,CURRENT_TIMESTAMP)", id, in.Name, in.Description, string(raw))
-			return err
-		}
-		result, err := tx.ExecContext(ctx, "UPDATE identity_roles SET name=?,description=?,scopes=?,version=version+1 WHERE id=? AND version=? AND builtin=0", in.Name, in.Description, string(raw), id, version)
-		return changed(result, err)
+		return auditedIdentity(ctx, tx, actor, "role.update", "role", id, func() error {
+			if create {
+				_, err := tx.ExecContext(ctx, "INSERT INTO identity_roles(id,name,description,scopes,builtin,version,created_at) VALUES(?,?,?,?,0,1,CURRENT_TIMESTAMP)", id, in.Name, in.Description, string(raw))
+				return err
+			}
+			result, err := tx.ExecContext(ctx, "UPDATE identity_roles SET name=?,description=?,scopes=?,version=version+1 WHERE id=? AND version=? AND builtin=0", in.Name, in.Description, string(raw), id, version)
+			return changed(result, err)
+		})
 	})
 	return Role{ID: id, Name: in.Name, Description: in.Description, Scopes: in.Scopes, Version: version + 1}, err
 }
 func (d Directory) DeleteRole(ctx context.Context, actor, id string, version int) error {
 	return d.write(ctx, actor, "role.manage", func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, "DELETE FROM identity_roles WHERE id=? AND version=? AND builtin=0", id, version)
-		return changed(result, err)
+		return auditedIdentity(ctx, tx, actor, "role.delete", "role", id, func() error {
+			result, err := tx.ExecContext(ctx, "DELETE FROM identity_roles WHERE id=? AND version=? AND builtin=0", id, version)
+			return changed(result, err)
+		})
 	})
 }
 func (d Directory) Assignments(ctx context.Context, actor, id string) ([]Principal, error) {
@@ -438,22 +450,24 @@ func (d Directory) Assignments(ctx context.Context, actor, id string) ([]Princip
 }
 func (d Directory) SetAssignment(ctx context.Context, actor, roleID string, p Principal, remove bool) error {
 	return d.write(ctx, actor, "role.manage", func(tx *sql.Tx) error {
-		if err := ValidatePrincipal(ctx, tx, p); err != nil {
+		return auditedIdentity(ctx, tx, actor, "role.assignment", "role", roleID, func() error {
+			if err := ValidatePrincipal(ctx, tx, p); err != nil {
+				return err
+			}
+			var exists bool
+			if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_roles WHERE id=?)", roleID).Scan(&exists); err != nil {
+				return err
+			}
+			if !exists {
+				return ErrNotFound
+			}
+			if remove {
+				_, err := tx.ExecContext(ctx, "DELETE FROM identity_assignments WHERE role_id=? AND principal_type=? AND principal_id=?", roleID, p.Type, p.ID)
+				return err
+			}
+			_, err := tx.ExecContext(ctx, "INSERT INTO identity_assignments(id,role_id,principal_type,principal_id,created_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(role_id,principal_type,principal_id) DO NOTHING", uuid.NewString(), roleID, p.Type, p.ID)
 			return err
-		}
-		var exists bool
-		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_roles WHERE id=?)", roleID).Scan(&exists); err != nil {
-			return err
-		}
-		if !exists {
-			return ErrNotFound
-		}
-		if remove {
-			_, err := tx.ExecContext(ctx, "DELETE FROM identity_assignments WHERE role_id=? AND principal_type=? AND principal_id=?", roleID, p.Type, p.ID)
-			return err
-		}
-		_, err := tx.ExecContext(ctx, "INSERT INTO identity_assignments(id,role_id,principal_type,principal_id,created_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(role_id,principal_type,principal_id) DO NOTHING", uuid.NewString(), roleID, p.Type, p.ID)
-		return err
+		})
 	})
 }
 

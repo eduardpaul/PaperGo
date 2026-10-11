@@ -78,7 +78,7 @@ Content types and field definitions form an organization catalog. Types referenc
 
 | Method | Route | Concurrency |
 | --- | --- | --- |
-| GET | /v1/content-types/audit | Catalog curation audit; contentType.manage |
+| GET | /v1/audit | Organization audit feed; audit.read |
 | GET / POST | /v1/content-types | Organization catalog; creation needs no collection ETag |
 | GET / PUT | /v1/content-types/{id} | Replacement requires content type If-Match |
 | GET / POST | /v1/fields | Organization field catalog |
@@ -196,7 +196,7 @@ Run `go test ./internal/dms -run '^$' -bench BenchmarkItemUpdates -benchmem` to 
 | GET / POST | /v1/keywords | Suggest keywords, or get or add one |
 | GET | /v1/keywords/popular | Most used keywords |
 | POST | /v1/keywords/{id}/promote | Promote a keyword into a managed set |
-| GET | /v1/taxonomy/audit | Organization curation audit (taxonomy.manage) |
+
 | GET | /v1/taxonomy/export | Export the taxonomy as a package |
 | POST | /v1/taxonomy/import | Import a taxonomy package |
 
@@ -214,7 +214,7 @@ Listing `GET /v1/term-sets/{id}/terms` returns the root terms, or the children o
 
 **Packages.** `GET /v1/taxonomy/export` returns the taxonomy by name, for setting it up in another organization deployment: `groups` (the system group marked `system`) with their `sets` (key, name, description, `is_open`) and nested `terms` (name, description, color, sort order, labels, synonyms, deprecation, `available_as_keyword`, `children`). Merged terms are left out; IDs never appear. `POST /v1/taxonomy/import` (manage) is additive and atomic: groups match by name (the system group by role), sets by key and terms by name under the same parent; what exists stays as it is and what is missing is created. It reports `groups_created`, `sets_created` and `terms_created`. Smart folder packages refer to terms by set key and path, so importing the taxonomy first makes them portable.
 
-Curation, closed-set creation, imports, popularity counts and audit reads require `taxonomy.manage`; reads and open-set contributions require `taxonomy.read`. Workspace membership and resource ACLs do not govern the term store. `GET /v1/taxonomy/audit` lists organization taxonomy mutations. Popularity counts span indexed content across all live workspaces. PUT, move, merge, promote and DELETE require the entity's ETag. Labels resolve from the current taxonomy; term definitions themselves are not immutable content-history snapshots. Free tags are separate plain-text labels.
+Curation, closed-set creation, imports and popularity counts require `taxonomy.manage`; reads and open-set contributions require `taxonomy.read`. Workspace membership and resource ACLs do not govern the term store. `GET /v1/audit` requires `audit.read` and lists organization identity, configuration and content mutations newest first. Filter by actor, entity type/ID, workspace and inclusive `from` / exclusive `to` dates. Changed property names and trace IDs support investigation without retaining prior values. Popularity counts span indexed content across all live workspaces. PUT, move, merge, promote and DELETE require the entity's ETag. Labels resolve from the current taxonomy; term definitions themselves are not immutable content-history snapshots. Free tags are separate plain-text labels.
 
 ## Typed relationships
 

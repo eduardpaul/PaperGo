@@ -39,7 +39,7 @@ var Catalog = []Scope{
 	{"user.read", true}, {"user.manage", false},
 	{"group.read", true}, {"group.manage", false},
 	{"role.read", false}, {"role.manage", false},
-	{"organization.manage", false},
+	{"organization.manage", false}, {"audit.read", false},
 }
 
 type Querier interface {

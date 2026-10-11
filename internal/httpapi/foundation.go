@@ -92,9 +92,6 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/collection-templates", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.CollectionTemplates(r.Context(), subject(r))
 	}))
-	m.HandleFunc("GET /v1/content-types/audit", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.ContentTypeAudit(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
-	}))
 	m.HandleFunc("GET /v1/content-types", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.CatalogContentTypes(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/content-types", foundationMutation(a, 201, false, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
 		return a.DMS.CreateContentType(r.Context(), subject(r), in)

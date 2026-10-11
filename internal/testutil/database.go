@@ -44,7 +44,7 @@ func DatabaseAt(t testing.TB, path string) *database.Database {
 			t.Fatal(err)
 		}
 	}
-	role, err := directory.SaveRole(context.Background(), "organization-admin", "", 0, identity.RoleInput{Name: "Fixture curator", Scopes: []string{"contentType.manage", "taxonomy.manage", "user.read", "user.manage", "group.read", "group.manage", "role.read", "role.manage"}})
+	role, err := directory.SaveRole(context.Background(), "organization-admin", "", 0, identity.RoleInput{Name: "Fixture curator", Scopes: []string{"contentType.manage", "taxonomy.manage", "user.read", "user.manage", "group.read", "group.manage", "role.read", "role.manage", "audit.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}

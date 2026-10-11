@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	_ "time/tzdata"
@@ -177,6 +178,14 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 		if version != current {
 			return ErrPreconditionFailed
 		}
+		properties := []string{}
+		for k, v := range patch {
+			old, exists := own[k]
+			if v == nil && exists || v != nil && (!exists || old != *v) {
+				properties = append(properties, k)
+			}
+		}
+		sort.Strings(properties)
 		for k, v := range patch {
 			if v == nil {
 				delete(own, k)

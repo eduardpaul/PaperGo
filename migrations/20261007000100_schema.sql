@@ -15,7 +15,7 @@ CREATE TRIGGER identity_preference_owner_immutable BEFORE UPDATE OF owner_type,o
  SELECT RAISE(ABORT,'preference owner is immutable');
 END;
 
-CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NULL, `resource_id` text NULL, `subject` text NOT NULL, `action` text NOT NULL, `details` json NOT NULL, PRIMARY KEY (`id`));
+CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NULL, `resource_id` text NULL, `subject` text NOT NULL, `action` text NOT NULL, entity_type TEXT NOT NULL CHECK(length(entity_type)>0), entity_id TEXT NULL, properties JSON NOT NULL DEFAULT '[]' CHECK(json_valid(properties) AND json_type(properties)='array'), trace_id TEXT NOT NULL CHECK(length(trace_id)>0), `details` json NOT NULL, PRIMARY KEY (`id`));
 CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL, languages TEXT NOT NULL DEFAULT '' CHECK(length(languages)<=191), `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT NULL, `key` text NOT NULL, `label` text NOT NULL, `type` text NOT NULL, `required` bool NOT NULL DEFAULT (false), `choices` json NOT NULL, indexed BOOLEAN NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), index_status TEXT NOT NULL DEFAULT 'ready' CHECK(index_status IN ('ready','building','failed')), scale INTEGER NOT NULL DEFAULT 0, options JSON NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object'), PRIMARY KEY (`id`));
 CREATE TABLE blob_deletions (id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, object_key TEXT NOT NULL UNIQUE);
@@ -687,3 +687,7 @@ CREATE TABLE sync_tokens(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NU
 CREATE INDEX synctoken_view_id_sequence ON sync_tokens(view_id,sequence);
 CREATE INDEX synctoken_expires_at ON sync_tokens(expires_at);
 CREATE INDEX synctoken_page_expires_at ON sync_tokens(page_expires_at);
+
+CREATE INDEX auditevent_created_at_id ON audit_events(created_at,id);
+CREATE INDEX auditevent_subject_created_at ON audit_events(subject,created_at);
+CREATE INDEX auditevent_entity_type_entity_id_created_at ON audit_events(entity_type,entity_id,created_at);

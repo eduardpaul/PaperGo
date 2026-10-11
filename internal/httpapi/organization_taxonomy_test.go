@@ -77,11 +77,11 @@ func TestOrganizationTaxonomyHTTPScopesAndGroupRevocation(t *testing.T) {
 	if res.Code != 403 {
 		t.Fatal("closed-set curation", res.Code, res.Body.String())
 	}
-	res = request(bob, "GET", "/v1/taxonomy/audit", "", testToken, "", "")
+	res = request(bob, "GET", "/v1/audit", "", testToken, "", "")
 	if res.Code != 403 {
 		t.Fatal("reader audit access", res.Code, res.Body.String())
 	}
-	res = request(h, "GET", "/v1/taxonomy/audit", "", testToken, "", "")
+	res = request(h, "GET", "/v1/audit", "", testToken, "", "")
 	if res.Code != 200 {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -92,7 +92,7 @@ func TestOrganizationTaxonomyHTTPScopesAndGroupRevocation(t *testing.T) {
 		t.Fatal(audit, err)
 	}
 	for _, e := range audit.Data {
-		if e.WorkspaceID != "" || e.ResourceID != "" {
+		if e.TraceID == "" {
 			t.Fatal(e)
 		}
 	}
