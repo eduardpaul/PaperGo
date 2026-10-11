@@ -94,7 +94,10 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	send("GET", "/v1/terms/"+term.ID, "", "", 200)
 	send("GET", "/v1/term-sets", "", "", 200)
 	send("GET", "/v1/relationship-types", "", "", 200)
-	send("POST", "/v1/resources/"+l.ID+"/query", `{"query":{"unknown":"bad"}}`, "", 400)
+	unknown := send("POST", "/v1/resources/"+l.ID+"/query", `{"query":{"unknown":"bad"}}`, "", 422)
+	if !strings.Contains(string(unknown), `"location":"body.unknown"`) {
+		t.Fatal("unknown query field", string(unknown))
+	}
 	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":true,"grants":[{"principal_type":"user","principal_id":"alice","action":"manage"}]}`, `"2"`, 422)
 	send("PUT", "/v1/resources/"+l.ID+"/permissions", `{"inherit":false,"copy_inherited":true,"grants":[]}`, `"2"`, 200)
 	acl := send("GET", "/v1/resources/"+item.ID+"/permissions", "", "", 200)

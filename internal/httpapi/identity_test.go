@@ -7,6 +7,7 @@ import (
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"strings"
 	"testing"
 )
 
@@ -95,7 +96,7 @@ func TestHTTPGroupPermissionsAndModuleScopeRevocation(t *testing.T) {
 		t.Fatal(resp.Code, resp.Body.String())
 	}
 	resp = request(h, "PUT", "/v1/resources/"+list.ID+"/permissions", `{"grants":[{"subject":"alice","action":"manage"}]}`, testToken, `"2"`, "application/json")
-	if resp.Code != 400 {
+	if resp.Code != 422 || !strings.Contains(resp.Body.String(), `"location":"body.subject"`) {
 		t.Fatal(resp.Code, resp.Body.String())
 	}
 }

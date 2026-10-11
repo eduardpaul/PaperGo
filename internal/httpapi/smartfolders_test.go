@@ -61,7 +61,7 @@ func TestSmartFolderRESTDefinitionsQueriesAndActions(t *testing.T) {
 			t.Fatal(response.Code, response.Body.String())
 		}
 		response = request(h, "POST", path, `{"unexpected":true}`, testToken, "", "application/json")
-		if response.Code != 400 {
+		if response.Code != 422 {
 			t.Fatal(response.Code, response.Body.String())
 		}
 	}

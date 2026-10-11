@@ -44,14 +44,15 @@ func TestRESTBulkAtomicPreconditionsAndStrictJSON(t *testing.T) {
 	if err != nil || got.Name != "A" || got.Version != 1 {
 		t.Fatal("HTTP rollback", got, err)
 	}
-	for _, body := range []string{
-		`{"operations":[{"action":"create","create":{"name":"C","kind":"folder"}}]}`,
-		fmt.Sprintf(`{"operations":[{"action":"update","id":%q,"version":1,"update":{"publishing_enabled":false}}]}`, a.ID),
-		`{"operations":[],"mode":"partial"}`,
-		`{"operations":[]} {}`,
+	// Unknown fields fail schema validation; anything but one JSON value is malformed.
+	for body, status := range map[string]int{
+		`{"operations":[{"action":"create","create":{"name":"C","kind":"folder"}}]}`:                                        422,
+		fmt.Sprintf(`{"operations":[{"action":"update","id":%q,"version":1,"update":{"publishing_enabled":false}}]}`, a.ID): 422,
+		`{"operations":[],"mode":"partial"}`: 422,
+		`{"operations":[]} {}`:               400,
 	} {
 		res := request(h, "POST", path, body, testToken, "", "application/json")
-		if res.Code != 400 {
+		if res.Code != status {
 			t.Fatal("strict decoding", res.Code, res.Body.String())
 		}
 	}

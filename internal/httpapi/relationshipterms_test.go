@@ -55,7 +55,7 @@ func TestRelationshipTaxonomyAPI(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	res = request(bob, "POST", "/v1/items/"+a.ID+"/relationships", fmt.Sprintf(`{"type_id":%q,"target_id":%q}`, edge.TypeID, b.ID), testToken, "", "application/json")
-	if res.Code != 400 {
+	if res.Code != 422 || !strings.Contains(res.Body.String(), `"location":"body.type_id"`) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 }

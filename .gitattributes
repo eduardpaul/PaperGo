@@ -1,3 +1,6 @@
 # Atlas checksums cover bytes, so migration files must retain LF on every host.
 migrations/*.sql text eol=lf
 migrations/atlas.sum text eol=lf
+# Generated files are byte-for-byte reproducible; CI compares them after regeneration.
+api/openapi.json text eol=lf
+sdk/typescript/src/generated/** text eol=lf

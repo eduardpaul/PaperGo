@@ -37,11 +37,13 @@ func TestRESTFilteredBulkUpdateProgressFailuresAndStrictInput(t *testing.T) {
 	if res := request(h, "POST", path, body, "", "", "application/json"); res.Code != 401 {
 		t.Fatal(res.Code)
 	}
-	for _, bad := range []string{`{"values":{"status":"done"},"mode":"partial"}`, `{"values":{"status":"done"}} {}`} {
-		res := request(h, "POST", path, bad, testToken, "", "application/json")
-		if res.Code != 400 {
-			t.Fatal(res.Code, res.Body.String())
-		}
+	res := request(h, "POST", path, `{"values":{"status":"done"},"mode":"partial"}`, testToken, "", "application/json")
+	if res.Code != 422 || !strings.Contains(res.Body.String(), `"location":"body.mode"`) {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	res = request(h, "POST", path, `{"values":{"status":"done"}} {}`, testToken, "", "application/json")
+	if res.Code != 400 || !strings.Contains(res.Body.String(), `"code":"invalid_json"`) {
+		t.Fatal(res.Code, res.Body.String())
 	}
 	for _, bad := range []string{`{}`, `{"values":{}}`, `{"query":{"sort":[{"field":"$name"}]},"values":{"status":"done"}}`, `{"query":{"filter":{"field":"bad","value":1}},"values":{"status":"done"}}`} {
 		res := request(h, "POST", path, bad, testToken, "", "application/json")
@@ -49,7 +51,7 @@ func TestRESTFilteredBulkUpdateProgressFailuresAndStrictInput(t *testing.T) {
 			t.Fatal(res.Code, res.Body.String())
 		}
 	}
-	res := request(h, "POST", path, body, testToken, "", "application/json")
+	res = request(h, "POST", path, body, testToken, "", "application/json")
 	var op ent.Operation
 	if res.Code != 202 || json.Unmarshal(res.Body.Bytes(), &op) != nil || op.Status != "pending" || res.Header().Get("Location") != "/v1/operations/"+op.ID {
 		t.Fatal(res.Code, res.Body.String())

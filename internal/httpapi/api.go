@@ -98,6 +98,14 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("DELETE /v1/webdav-credentials/{id}", a.revokeWebDAVCredential)
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
 	root := http.NewServeMux()
+	spec, err := Spec()
+	if err != nil {
+		panic(err)
+	}
+	root.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/openapi+json")
+		_, _ = w.Write(spec)
+	})
 	root.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { respond(w, r, 200, map[string]string{"status": "ok"}) })
 	root.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second)
@@ -248,13 +256,33 @@ func respond(w http.ResponseWriter, r *http.Request, status int, body any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }
+func unknownField(err error) (string, bool) {
+	const prefix = `json: unknown field "`
+	message := err.Error()
+	if strings.HasPrefix(message, prefix) && strings.HasSuffix(message, `"`) {
+		return strings.TrimSuffix(strings.TrimPrefix(message, prefix), `"`), true
+	}
+	return "", false
+}
+
 func (a *API) problem(w http.ResponseWriter, r *http.Request, status int, code, message string, operationIndex ...int) {
+	a.writeProblem(w, r, status, code, message, nil, operationIndex...)
+}
+
+func (a *API) validation(w http.ResponseWriter, r *http.Request, location, message string) {
+	a.writeProblem(w, r, 422, "validation_failed", "request failed schema validation: "+location+": "+message, []ProblemDetail{{Location: location, Message: message}})
+}
+
+func (a *API) writeProblem(w http.ResponseWriter, r *http.Request, status int, code, message string, details []ProblemDetail, operationIndex ...int) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	id, _ := r.Context().Value(requestKey{}).(string)
 	body := map[string]any{"type": "about:blank", "title": http.StatusText(status), "status": status, "code": code, "detail": message, "request_id": id}
 	if len(operationIndex) > 0 {
 		body["operation_index"] = operationIndex[0]
+	}
+	if len(details) > 0 {
+		body["errors"] = details
 	}
 	_ = json.NewEncoder(w).Encode(body)
 }
@@ -328,6 +356,8 @@ func (a *API) decode(w http.ResponseWriter, r *http.Request, dst any) bool {
 		var max *http.MaxBytesError
 		if errors.As(err, &max) {
 			a.failure(w, r, err)
+		} else if field, ok := unknownField(err); ok {
+			a.validation(w, r, "body."+field, "unexpected property")
 		} else {
 			a.problem(w, r, 400, "invalid_json", "invalid JSON request body")
 		}

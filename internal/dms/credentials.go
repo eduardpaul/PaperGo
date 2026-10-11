@@ -23,8 +23,8 @@ const (
 )
 
 type WebDAVCredentialInput struct {
-	Label     string     `json:"label"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Label     string     `json:"label" minLength:"1" maxLength:"100" doc:"Trimmed name identifying the device or client."`
+	ExpiresAt *time.Time `json:"expires_at,omitempty" doc:"Optional future expiry; credentials without one last until revoked."`
 }
 
 // NewWebDAVCredential carries the password, which is never readable again.

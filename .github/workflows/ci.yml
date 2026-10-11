@@ -20,10 +20,36 @@ jobs:
           go generate ./ent
           git diff --exit-code -- ent go.mod go.sum
       - name: Verify formatting
-        run: test -z "$(gofmt -l cmd internal ent/schema)"
+        run: test -z "$(gofmt -l cmd internal ent/schema sdk/typescript/test/server)"
       - name: Vet
         run: go vet ./...
       - name: Test with race detection
         run: go test -race -count=1 ./...
       - name: Build portable API
         run: CGO_ENABLED=0 go build -trimpath -o bin/papergo ./cmd/api
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: Verify the generated contract and SDK
+        run: |
+          go generate ./internal/httpapi
+          git add -N api sdk
+          git diff --exit-code -- api sdk
+      - name: Test the SDK against the API
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm test
