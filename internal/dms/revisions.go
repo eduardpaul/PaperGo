@@ -179,6 +179,10 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 		previous = nil
 		applyDefaults = false
 	}
+	defs, rules = resourceDefinitions(r.Kind, defs, rules)
+	if r.Kind == resource.KindFolder {
+		applyDefaults = false
+	}
 	if err = s.normalizeItemValues(ctx, actor, defs, r.Values, previous, applyDefaults); err != nil {
 		return nil, err
 	}
@@ -200,6 +204,15 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	r.NextRevisionNumber++
 	if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfaceHead, defs); err != nil {
 		return nil, err
+	}
+	if r.Kind == resource.KindFolder {
+		// Folder metadata is immediately visible. Internal schema snapshots keep
+		// its projections consistent without creating publications or history.
+		if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfacePublished, defs); err != nil {
+			return nil, err
+		}
+		err = s.Client.Resource.UpdateOneID(r.ID).SetPublishedRevisionID(rev.ID).Exec(ctx)
+		return rev, err
 	}
 	typ := EventItemUpdated
 	if rev.RevisionNumber == 1 {
@@ -448,8 +461,8 @@ func (s *Service) ItemSchema(ctx context.Context, subject, id, surface string) (
 	if err != nil {
 		return nil, err
 	}
-	if r.Kind != resource.KindItem {
-		return nil, invalid("item schema belongs to an item")
+	if !contentKind(r.Kind) {
+		return nil, invalid("content schema belongs to an item or folder")
 	}
 	selected := r.HeadRevisionID
 	if selected == nil {

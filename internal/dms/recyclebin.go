@@ -36,7 +36,7 @@ func (s *Service) RecycleBin(ctx context.Context, subject, collection, after str
 			out.NextCursor = rows[len(rows)-1].ID
 		}
 		for _, r := range rows {
-			if r.Kind == resource.KindItem {
+			if contentKind(r.Kind) {
 				if err = t.overlayHead(ctx, r); err != nil {
 					return out, err
 				}
@@ -113,7 +113,7 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 			}
 		}
 		for _, row := range rows {
-			if row.Kind == resource.KindItem {
+			if contentKind(row.Kind) {
 				if _, e = t.contentType(ctx, collection, *row.ContentTypeID); e != nil {
 					return invalid("reattach the deleted item's content type before restoring it")
 				}
@@ -138,7 +138,7 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 			if e != nil {
 				return e
 			}
-			if row.Kind == resource.KindItem {
+			if contentKind(row.Kind) {
 				// Restore the retained head and publication with their frozen schemas.
 				for _, surface := range []struct {
 					id   *string
@@ -163,7 +163,9 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 						return e
 					}
 				}
-				t.emit(ctx, EventItemRestored, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
+				if row.Kind == resource.KindItem {
+					t.emit(ctx, EventItemRestored, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
+				}
 			}
 			if e = t.audit(ctx, subject, "resource.restore", row, map[string]any{"parent_id": parent}); e != nil {
 				return e
@@ -172,7 +174,7 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 				out = row
 			}
 		}
-		if out.Kind == resource.KindItem {
+		if contentKind(out.Kind) {
 			return t.overlayHead(ctx, out)
 		}
 		return nil

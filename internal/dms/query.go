@@ -105,7 +105,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if strings.TrimSpace(in.Search) != "" {
 		phrase := ftsPhrase(in.Search)
 		candidates = append(candidates, candidateSet{
-			sql:          "SELECT rr.id FROM resources rr WHERE rr.rowid IN (SELECT rowid FROM resource_search WHERE resource_search MATCH ?) AND rr.kind<>'item' UNION ALL SELECT s.item_id FROM item_surfaces s WHERE s.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)",
+			sql:          "SELECT rr.id FROM resources rr WHERE rr.rowid IN (SELECT rowid FROM resource_search WHERE resource_search MATCH ?) AND rr.kind NOT IN ('item','folder') UNION ALL SELECT s.item_id FROM item_surfaces s WHERE s.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)",
 			args:         []any{phrase, phrase},
 			estimate:     "SELECT 1 FROM resource_search WHERE resource_search MATCH ? UNION ALL SELECT 1 FROM item_surface_search WHERE item_surface_search MATCH ?",
 			estimateArgs: []any{phrase, phrase},
@@ -134,7 +134,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if in.Tag != "" {
 		q.Where(func(sel *entsql.Selector) {
 			selected, args := surfaceSQL(sel.C(resource.FieldID), subject, in.Surface)
-			query := "(" + sel.C(resource.FieldKind) + "<>'item' AND " + sel.C(resource.FieldID) + " IN (SELECT resource_id FROM resource_tags WHERE tag=?) OR " + sel.C(resource.FieldKind) + "='item' AND EXISTS (SELECT 1 FROM item_surfaces p JOIN item_surface_tags t ON t.surface_id=p.id WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND t.tag=?))"
+			query := "(" + sel.C(resource.FieldKind) + " NOT IN ('item','folder') AND " + sel.C(resource.FieldID) + " IN (SELECT resource_id FROM resource_tags WHERE tag=?) OR " + sel.C(resource.FieldKind) + " IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p JOIN item_surface_tags t ON t.surface_id=p.id WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND t.tag=?))"
 			values := []any{in.Tag}
 			values = append(values, args...)
 			values = append(values, in.Tag)
@@ -146,7 +146,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		q.Where(func(sel *entsql.Selector) {
 			selected, args := surfaceSQL(sel.C(resource.FieldID), subject, in.Surface)
 			// FTS rowids are content-table rowids; the UNINDEXED id column would cost a lookup per match.
-			query := "(" + sel.C(resource.FieldKind) + "<>'item' AND " + sel.C("rowid") + " IN (SELECT rowid FROM resource_search WHERE resource_search MATCH ?) OR " + sel.C(resource.FieldKind) + "='item' AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)))"
+			query := "(" + sel.C(resource.FieldKind) + " NOT IN ('item','folder') AND " + sel.C("rowid") + " IN (SELECT rowid FROM resource_search WHERE resource_search MATCH ?) OR " + sel.C(resource.FieldKind) + " IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)))"
 			values := []any{phrase}
 			values = append(values, args...)
 			values = append(values, phrase)
@@ -206,7 +206,7 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 	ids := []string{}
 	items := []*ent.Resource{}
 	for _, r := range rows {
-		if r.Kind == resource.KindItem {
+		if contentKind(r.Kind) {
 			ids = append(ids, r.ID)
 			items = append(items, r)
 		}

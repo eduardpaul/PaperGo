@@ -62,7 +62,7 @@ func (s *Service) Tags(ctx context.Context, subject, workspaceID string, in Tags
 	selected, selectedArgs := surfaceSQL("r.id", subject, "auto")
 	query := `SELECT tag, count(*) FROM (
 		SELECT t.tag AS tag FROM resource_tags t JOIN resources r ON r.id=t.resource_id
-		WHERE ` + match + ` AND r.kind<>'item' AND r.deleted_at IS NULL AND ` + scope + ` AND ` + readable + `
+		WHERE ` + match + ` AND r.kind NOT IN ('item','folder') AND r.deleted_at IS NULL AND ` + scope + ` AND ` + readable + `
 		UNION ALL
 		SELECT t.tag FROM item_surface_tags t JOIN item_surfaces p ON p.id=t.surface_id JOIN resources r ON r.id=p.item_id
 		WHERE ` + match + ` AND r.deleted_at IS NULL AND ` + scope + ` AND p.surface=` + selected + ` AND ` + readable + `

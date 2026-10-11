@@ -155,8 +155,8 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 	if err != nil {
 		return result, err
 	}
-	if r.Kind != resource.KindItem || r.ContainerID == nil || *r.ContainerID != collectionID {
-		return result, invalid("bulk targets must be items in this collection")
+	if !contentKind(r.Kind) || r.ContainerID == nil || *r.ContainerID != collectionID {
+		return result, invalid("bulk targets must be items or folders in this collection")
 	}
 	switch op.Action {
 	case "update":

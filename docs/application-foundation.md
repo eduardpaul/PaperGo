@@ -74,7 +74,7 @@ Existing item revisions keep their frozen schema. Later content edits adopt thei
 
 ## Content types, business keys and cross-field rules
 
-Content types and field definitions form an organization catalog. Types reference immutable field IDs with `field_ids`; collections attach type IDs without copying. Each collection resolves at most 200 fields and 32 types. Types sharing a field key within a collection must use the same catalog field ID. Creating a collection with `content_type_ids` attaches those definitions, with the first as default. Omitting this list creates an editable `Item` catalog definition and attaches it as default. Each item has an immutable `content_type_id`; omission on item creation selects its collection's default. Bulk creation and content updates use the same resolution.
+Content types and field definitions form an organization catalog. Types reference immutable field IDs with `field_ids`; collections attach type IDs without copying. Each collection resolves at most 200 fields and 32 types. Types sharing a field key within a collection must use the same catalog field ID. Creating a collection with `content_type_ids` attaches those definitions, with the first as default. Omitting this list creates an editable `Item` catalog definition and attaches it as default. Each item and folder has an attached `content_type_id`; omission on creation selects its collection's default. PATCH can change the content type, retaining shared fields and pruning fields absent from the destination type. Folder fields are optional and receive no defaults; their metadata is live and has no public version history. Bulk creation and content updates use the same resolution.
 
 | Method | Route | Concurrency |
 | --- | --- | --- |

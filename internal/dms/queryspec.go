@@ -451,7 +451,7 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 	conditions, conditionArgs := text, args
 	selected, surfaceArgs := surfaceSQL("r.id", subject, in.Surface)
 	args = append(append(append([]any{}, rankArgs...), surfaceArgs...), c.ID)
-	text = "SELECT r.id," + strings.Join(rankParts, ",") + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind='item'" + conditions
+	text = "SELECT r.id," + strings.Join(rankParts, ",") + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder')" + conditions
 	args = append(args, conditionArgs...)
 	// SQLite evaluates these terms in order: cheap index filters first, so the
 	// ACL probe runs only on rows that already match.

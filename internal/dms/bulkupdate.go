@@ -103,7 +103,7 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *ent.Operation) error {
 	queued := len(*s.pending)
 	r, e := s.authorize(ctx, op.CreatedBy, row.ItemID, "write")
 	if e == nil {
-		if r.ContainerID == nil || *r.ContainerID != op.ContainerID || r.Kind != "item" {
+		if r.ContainerID == nil || *r.ContainerID != op.ContainerID || !contentKind(r.Kind) {
 			e = invalid("bulk target is outside the collection")
 		} else {
 			patch := UpdateResource{Name: in.Name, Tags: in.Tags, ContentTypeID: in.ContentTypeID}

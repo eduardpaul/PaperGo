@@ -449,7 +449,7 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *ent.Res
 	}
 	defs = selectDefinitions(defs, keys)
 	for after := ""; ; {
-		items, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.ContentTypeIDEQ(typeID), resource.DeletedAtIsNil(), resource.IDGT(after)).Order(ent.Asc(resource.FieldID)).Limit(surfaceBatch).Select(resource.FieldID).All(ctx)
+		items, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.ContentTypeIDEQ(typeID), resource.DeletedAtIsNil(), resource.IDGT(after)).Order(ent.Asc(resource.FieldID)).Limit(surfaceBatch).Select(resource.FieldID, resource.FieldKind).All(ctx)
 		if err != nil {
 			return err
 		}
@@ -464,7 +464,12 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *ent.Res
 		if err != nil {
 			return err
 		}
+		kinds := map[string]resource.Kind{}
+		for _, item := range items {
+			kinds[item.ID] = item.Kind
+		}
 		for _, head := range heads {
+			selected, selectedRules := resourceDefinitions(kinds[head.ItemID], defs, rules)
 			values, e := decodeValues(head.Payload)
 			if e != nil {
 				return e
@@ -475,17 +480,17 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *ent.Res
 					projected[key] = value
 				}
 			}
-			for _, d := range defs {
+			for _, d := range selected {
 				if d.Required && len(d.Options.DefaultValue) == 0 && emptyValue(projected[d.Key]) {
 					return invalid("required field missing: " + d.Key)
 				}
 			}
 			// Reference grants can change independently; schema adoption validates
 			// stored values without requiring managers to impersonate their authors.
-			if e = normalizeRevisionValues(defs, projected, values, false); e != nil {
+			if e = normalizeRevisionValues(selected, projected, values, false); e != nil {
 				return e
 			}
-			if e = evaluateRules(defs, rules, projected); e != nil {
+			if e = evaluateRules(selected, selectedRules, projected); e != nil {
 				return e
 			}
 		}

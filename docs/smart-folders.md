@@ -30,7 +30,7 @@ POST `/v1/smart-folders/{id}/query` with `surface`, `path`, `after` and `limit`.
 
 POST `/v1/smart-folders/{id}/query/groups` for the next metadata navigation level. Up to three scalar indexed fields can form a path. Date/datetime fields support `by: "year"` or `"month"`. Cross-collection grouping requires compatible types, decimal scales and reference scopes. Pass group values as strings in `path`; pass JSON null for `(empty)`. Term labels require taxonomy access. The endpoint returns an empty group list at the final level.
 
-`include_folders` includes physical folders alongside items. Physical folders have system metadata and tags but no custom values or content type; term/content-type selectors exclude them. Custom `missing` filters and empty navigation groups can include them. Smart folder navigation does not move physical resources.
+`include_folders` includes physical folders alongside items. Physical folders have an attached content type and optional custom values, terms and keywords. They participate in content-type selectors, taxonomy filters and metadata navigation. Their metadata is immediately visible on both surfaces. Smart folder navigation does not move physical resources.
 
 Classify an item with POST `/v1/smart-folders/{id}/items`. Supply `folder_version`, `collection_id`, optional navigation `path`, and either `item_id` with its current `version`, or `create` with the ordinary bulk-create item fields. New items may specify `parent_id`; the default parent is the collection. Existing items retain their parent. The response is the item with its new ETag: 201 for creation, 200 for edits. Read access to a definition does not grant write access to content.
 

@@ -161,6 +161,12 @@ func (s *Service) GetSurface(ctx context.Context, subject, id, surface string) (
 	if err != nil {
 		return nil, err
 	}
+	if r.Kind == resource.KindFolder {
+		if err = s.overlayHead(ctx, r); err != nil {
+			return nil, err
+		}
+		return r, nil
+	}
 	if r.Kind != resource.KindItem {
 		return r, nil
 	}

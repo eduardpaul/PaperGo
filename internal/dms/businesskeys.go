@@ -92,7 +92,7 @@ func (s *Service) rebuildBusinessKeys(ctx context.Context, collection string) er
 		return nil
 	}
 	for after := ""; ; {
-		items, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil(), resource.IDGT(after)).Order(ent.Asc(resource.FieldID)).Select(resource.FieldID).Limit(surfaceBatch).All(ctx)
+		items, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.KindIn(resource.KindItem, resource.KindFolder), resource.DeletedAtIsNil(), resource.IDGT(after)).Order(ent.Asc(resource.FieldID)).Select(resource.FieldID).Limit(surfaceBatch).All(ctx)
 		if err != nil {
 			return err
 		}

@@ -199,7 +199,8 @@ func TestBulkBoundsShapesAndDuplicateTargets(t *testing.T) {
 		t.Fatal("duplicate target mutated", item, err)
 	}
 	folder := create(t, s, list.ID, "folder", "Folder", nil)
-	bulkFails(t, s, "alice", list.ID, 0, nil, BulkOperation{Action: "delete", ID: folder.ID, Version: 1})
+	bulkFails(t, s, "alice", list.ID, 0, nil, BulkOperation{Action: "publish", ID: folder.ID, Version: 1})
+	bulkOK(t, s, "alice", list.ID, BulkOperation{Action: "delete", ID: folder.ID, Version: 1})
 }
 
 func TestBulkLibraryConflictsAndPublication(t *testing.T) {

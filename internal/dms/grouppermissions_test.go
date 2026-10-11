@@ -42,8 +42,13 @@ func TestGroupACLInheritanceCopyResetAndNamespace(t *testing.T) {
 		t.Fatal("nested group did not see inherited draft", err)
 	}
 	page, err := s.Query(ctx, "bob", list.ID, QueryRequest{})
-	if err != nil || len(page.Data) != 1 || page.Data[0].ID != item.ID {
+	if err != nil || len(page.Data) != 2 {
 		t.Fatalf("group query crossed exclusive ACL: %+v %v", page, err)
+	}
+	for _, entry := range page.Data {
+		if entry.ID != item.ID && entry.ID != folder.ID {
+			t.Fatal("exclusive resource leaked", entry.ID)
+		}
 	}
 	folder, err = s.SetPermissions(ctx, "alice", folder.ID, folder.Version, Permissions{CopyInherited: true})
 	if err != nil {

@@ -425,6 +425,11 @@
               "schema": {
                 "$ref": "#/components/schemas/UpdateResource"
               }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateResource"
+              }
             }
           }
         },
@@ -1233,6 +1238,11 @@
               "schema": {
                 "$ref": "#/components/schemas/UpdateRelationship"
               }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRelationship"
+              }
             }
           }
         },
@@ -1728,6 +1738,11 @@
               "schema": {
                 "$ref": "#/components/schemas/UpdateField"
               }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateField"
+              }
             }
           },
           "required": true
@@ -2038,7 +2053,7 @@
         "x-module-scopes": [
           "list.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": "Returns the frozen content schema of the caller-visible item or folder. Folders use their current metadata schema and do not enforce required fields. Requires list.read and resource read access."
       }
     },
     "/v1/workspaces/{id}/templates": {
@@ -2899,7 +2914,8 @@
               }
             }
           }
-        }
+        },
+        "description": " Queries include collection items and folders; folder metadata is live on both surfaces. Indexed filters, sorting, selection, totals and pagination apply to both."
       }
     },
     "/v1/resources/{id}/query/groups": {
@@ -4286,7 +4302,7 @@
       "post": {
         "summary": "Apply an atomic batch of item operations",
         "operationId": "bulkItems",
-        "description": "1..100 item creates, updates/moves, publishes, unpublishes or deletes in one list/library and one transaction. Requires collection read and per-operation write/publish permissions. Existing items require a positive current version in the body and may occur only once. No collection If-Match is required. Folder operations and blob transfers are excluded. Create parent_id defaults to the collection; all targets and destinations stay in it. All revisions, projections, relationships and audit effects roll back on any failure, which reports operation_index when applicable. No retry deduplication. Request body limit: 1 MiB.",
+        "description": "1..100 item creates, updates/moves, publishes, unpublishes or deletes in one list/library and one transaction. Requires collection read and per-operation write/publish permissions. Existing items require a positive current version in the body and may occur only once. No collection If-Match is required. Existing folders support metadata updates, same-collection moves and empty-folder deletion; publishing and creates target items. Blob transfers are excluded. Create parent_id defaults to the collection; all targets and destinations stay in it. All revisions, projections, relationships and audit effects roll back on any failure, which reports operation_index when applicable. No retry deduplication. Request body limit: 1 MiB.",
         "parameters": [
           {
             "name": "id",
@@ -11526,6 +11542,11 @@
               "schema": {
                 "$ref": "#/components/schemas/UpdateField"
               }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateField"
+              }
             }
           },
           "required": true
@@ -11651,7 +11672,7 @@
         ],
         "operationId": "startFilteredBulkUpdate",
         "summary": "Bulk edit matching items with durable progress",
-        "description": "Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items, including nested folders' items. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/tags can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.",
+        "description": "Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/tags can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.",
         "x-required-scopes": [
           "list.read",
           "list.write"
@@ -12797,7 +12818,7 @@
           "values": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Values validated by the revision schema. Integer, number and currency fields use exact JSON numbers; number/currency have the System.Decimal 96-bit coefficient and scale 0..28 domain. Fixed-scale decimal fields use canonical strings. Clients must use an exact-number parser to retain full precision. The total encoded field-value payload is limited to 8 MiB; JSON request bodies are limited to 16 MiB."
+            "description": "Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings."
           },
           "webdav_enabled": {
             "type": "boolean",
@@ -12858,7 +12879,7 @@
             "type": "string",
             "format": "uuid",
             "readOnly": true,
-            "description": "Immutable item content type assignment. Absent for other resource kinds."
+            "description": "Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
           },
           "template_keys": {
             "maxItems": 100,
@@ -12940,7 +12961,8 @@
           },
           "values": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "description": "Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings."
           },
           "publishing_enabled": {
             "default": false,
@@ -12955,7 +12977,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Collection content type ID. Omission selects the collection default."
+            "description": "Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
           },
           "description": {
             "type": "string",
@@ -13038,7 +13060,7 @@
           "values": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Per-field patch: omitted keys retain their values; null removes an optional field. Defaults apply only when creating an item. The resulting item must satisfy its current content type."
+            "description": "Custom fields on items and folders, validated against their attached collection content type. Folder fields are optional and receive no creation defaults. Folder edits are immediately visible; items follow publishing settings."
           },
           "publishing_enabled": {
             "default": false,
@@ -13080,7 +13102,7 @@
           "content_type_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
+            "description": "Items and folders: an attached collection content type. Creation selects the default when omitted. PATCH changes type, keeps shared fields and removes fields absent from the destination type. Folder required fields and creation defaults do not apply."
           },
           "duplicate_policy": {
             "type": "string",
@@ -15155,7 +15177,8 @@
           },
           "include_folders": {
             "type": "boolean",
-            "default": false
+            "default": false,
+            "description": "Include live physical folders, including their content types, typed metadata and taxonomy. Omitted/false selects items only."
           },
           "content_types": {
             "maxItems": 100,
@@ -15168,7 +15191,7 @@
             "uniqueItems": true
           }
         },
-        "description": "Live query across at most 100 readable collections. Name/key selectors ignore case. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have system metadata only and are excluded when term/content-type selectors are present. Equivalent collection predicates share one SQL branch; distinct shapes use UNION ALL. Queries are bounded to 30,000 SQL parameters.",
+        "description": "Live query across at most 100 readable collections. Name/key selectors ignore case. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have content types and optional custom fields, and participate in taxonomy/content-type selectors when include_folders is true. Equivalent collection predicates share one SQL branch; distinct shapes use UNION ALL. Queries are bounded to 30,000 SQL parameters.",
         "additionalProperties": false,
         "type": "object"
       },
@@ -15575,7 +15598,8 @@
           },
           "include_folders": {
             "type": "boolean",
-            "default": false
+            "default": false,
+            "description": "Include live physical folders, including their content types, typed metadata and taxonomy. Omitted/false selects items only."
           },
           "content_types": {
             "maxItems": 100,

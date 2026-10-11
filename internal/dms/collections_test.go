@@ -95,8 +95,11 @@ func TestCollectionDeletionRemovesLiveContentAndRetainsHistory(t *testing.T) {
 	if _, err = s.Client.Relationship.Get(testContext, edge.ID); err != nil {
 		t.Fatal("recovery edge lost", err)
 	}
-	if n, err := s.Client.ItemRevision.Query().Count(testContext); err != nil || n != 2 {
+	if n, err := s.Client.ItemRevision.Query().Count(testContext); err != nil || n != 3 {
 		t.Fatal("revision history lost", n, err)
+	}
+	if n, err := s.Client.ItemHistory.Query().Count(testContext); err != nil || n != 2 {
+		t.Fatal("folder snapshots must not create visible history", n, err)
 	}
 	if n, err := s.Client.ItemSurface.Query().Count(testContext); err != nil || n != 0 {
 		t.Fatal("derived content survived", n, err)

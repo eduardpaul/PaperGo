@@ -154,7 +154,7 @@ func (s *Service) seekArms(ctx context.Context, p *seekPlan, arms []seekArm, des
 		text, args := head(a)
 		var b strings.Builder
 		b.WriteString(text)
-		b.WriteString(" AND r.container_id=? AND r.kind='item'")
+		b.WriteString(" AND r.container_id=? AND r.kind IN ('item','folder')")
 		b.WriteString(p.conditions)
 		b.WriteString(" AND ")
 		b.WriteString(a.acl)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
+	"papergo/ent/itemsurface"
 	"papergo/internal/model"
 	"testing"
 	"time"
@@ -27,6 +28,9 @@ func TestSmartFolderPhysicalFoldersAndExactTimes(t *testing.T) {
 	stamp := time.Date(2026, 10, 8, 12, 30, 0, 123456789, time.FixedZone("offset", 3600))
 	_, err := s.Client.Resource.UpdateOneID(folder.ID).SetUpdatedAt(stamp).Save(testContext)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Client.ItemSurface.Update().Where(itemsurface.ItemIDEQ(folder.ID)).SetModifiedAt(queryTime(stamp)).Save(testContext); err != nil {
 		t.Fatal(err)
 	}
 	f := smartOK(t, s, SmartFolderInput{Name: "Folders", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{IncludeFolders: true, Filter: &FilterExpr{Field: "$modified_at", Value: json.RawMessage(`"2026-10-08T11:30:00.123456789Z"`)}, GroupBy: []SmartFolderGroupBy{{Field: "$modified_at", By: "month"}}}})

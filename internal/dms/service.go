@@ -237,8 +237,8 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if content != nil && in.Kind != "item" {
 		return nil, invalid("only items have content")
 	}
-	if in.ContentTypeID != "" && in.Kind != "item" {
-		return nil, invalid("content_type_id belongs to items")
+	if in.ContentTypeID != "" && in.Kind != "item" && in.Kind != "folder" {
+		return nil, invalid("content_type_id belongs to items and folders")
 	}
 	if len(in.ContentTypeIDs) > 0 && !collection {
 		return nil, invalid("content_type_ids belongs to collections")
@@ -302,7 +302,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		return nil, e
 	}
 	var typeID *string
-	if in.Kind == "item" {
+	if in.Kind == "item" || in.Kind == "folder" {
 		if containerID == nil {
 			return nil, invalid("item must belong to a list or library")
 		}
@@ -315,11 +315,12 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, e
 		}
 		typeID = &typ.ID
-		if e = normalizeValues(selectTypeDefinitions(defs, typ), in.Values); e != nil {
+		selected, _ := resourceDefinitions(resource.Kind(in.Kind), selectTypeDefinitions(defs, typ), nil)
+		if e = normalizeRevisionValues(selected, in.Values, nil, in.Kind == "item"); e != nil {
 			return nil, e
 		}
 	} else if len(in.Values) > 0 {
-		return nil, invalid("custom values are supported on items only")
+		return nil, invalid("custom values are supported on items and folders only")
 	}
 	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetTags(in.Tags).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
 	if template != nil {
@@ -390,7 +391,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		}
 	}
 	details := map[string]any{"kind": in.Kind}
-	if out.Kind == resource.KindItem {
+	if contentKind(out.Kind) {
 		var blobID *string
 		if content != nil {
 			b, e := s.createBlob(ctx, subject, out.ID, *content, true)
@@ -408,7 +409,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if e != nil {
 		return nil, e
 	}
-	if out.Kind == resource.KindItem {
+	if contentKind(out.Kind) {
 		if e = s.overlayHead(ctx, out); e != nil {
 			return nil, e
 		}
@@ -516,16 +517,16 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 			return nil, e
 		}
 	}
-	if r.Kind == resource.KindItem {
+	if contentKind(r.Kind) {
 		if e = s.overlayHead(ctx, r); e != nil {
 			return nil, e
 		}
 	}
-	if in.Values != nil && (r.Kind != resource.KindItem || r.ContainerID == nil) {
-		return nil, invalid("only items support custom values")
+	if in.Values != nil && (!contentKind(r.Kind) || r.ContainerID == nil) {
+		return nil, invalid("only items and folders support custom values")
 	}
-	if in.ContentTypeID != nil && (r.Kind != resource.KindItem || *in.ContentTypeID == "") {
-		return nil, invalid("content_type_id requires an attached item content type")
+	if in.ContentTypeID != nil && (!contentKind(r.Kind) || *in.ContentTypeID == "") {
+		return nil, invalid("content_type_id requires an attached content type")
 	}
 	moved := in.ParentID != nil && (r.ParentID == nil || *in.ParentID != *r.ParentID)
 	b := s.Client.Resource.Update().Where(resource.IDEQ(id), resource.VersionEQ(version)).AddVersion(1).SetUpdatedAt(time.Now().UTC())
@@ -550,7 +551,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		b.SetName(*in.Name).SetNillableNameKey(key)
 	}
 	// Item values are validated and normalized once, by recordRevision below.
-	if r.Kind == resource.KindItem {
+	if contentKind(r.Kind) {
 		if in.ContentTypeID != nil && *in.ContentTypeID != *r.ContentTypeID {
 			c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
 			if err != nil {
@@ -647,7 +648,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	if e != nil {
 		return nil, e
 	}
-	if out.Kind == resource.KindItem {
+	if contentKind(out.Kind) {
 		// A move alone changes location, not content, so it records no revision.
 		if content {
 			out.Values = r.Values
@@ -1057,7 +1058,7 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 		if _, e = t.authorize(ctx, subject, id, "manage"); e != nil {
 			return invalid("permission change would remove your manage access")
 		}
-		if out.Kind == resource.KindItem {
+		if contentKind(out.Kind) {
 			if e = t.overlayHead(ctx, out); e != nil {
 				return e
 			}

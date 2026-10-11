@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	entsql "entgo.io/ent/dialect/sql"
 	"errors"
-	"fmt"
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/resource"
@@ -329,28 +328,6 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 	return true
 }
 
-// Physical folders have system metadata but no item values or publication
-// surfaces. Reuse the item predicate with a system-metadata projection; indexed
-// custom-value predicates naturally see no values for these resource IDs.
-func (s *Service) smartPhysicalQuery(subject string, c smartCandidate, item compiledQuery, surface string) (compiledQuery, error) {
-	marker := " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface="
-	start := strings.Index(item.sql, marker)
-	where := strings.Index(item.sql, " WHERE r.container_id=? AND r.kind='item'")
-	if start < 0 || where < 0 {
-		return compiledQuery{}, fmt.Errorf("invalid compiled item query")
-	}
-	_, surfaceArgs := surfaceSQL("r.id", subject, surface)
-	// Rank arguments precede the surface selector. The rest of the predicate
-	// has the same argument order after replacing the JOIN.
-	rankArgs := strings.Count(item.sql[:start], "?")
-	args := append([]any{}, item.args[:rankArgs]...)
-	args = append(args, item.args[rankArgs+len(surfaceArgs):]...)
-	projection := ` FROM resources r JOIN (SELECT id,item_created_at,item_created_by,modified_at,modified_by,name,tags FROM (SELECT id,papergo_time(created_at) item_created_at,created_by item_created_by,papergo_time(updated_at) modified_at,updated_by modified_by,name,tags FROM resources WHERE kind='folder')) p ON p.id=r.id`
-	text := item.sql[:start] + projection + strings.Replace(item.sql[where:], "r.kind='item'", "r.kind='folder' AND r.deleted_at IS NULL", 1)
-	text = strings.ReplaceAll(text, "FROM item_surface_tags", "FROM (SELECT f.id surface_id,j.value tag FROM resources f,json_each(f.tags) j WHERE f.kind='folder')")
-	return compiledQuery{sql: text, args: args}, nil
-}
-
 func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent.SmartFolder, d SmartFolderDefinition, in SmartFolderQueryRequest, grouped bool) (compiledQuery, []smartCandidate, error) {
 	if err := smartPath(d, in.Path); err != nil {
 		return compiledQuery{}, nil, err
@@ -390,6 +367,9 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 				continue
 			}
 			return compiledQuery{}, nil, err
+		}
+		if !d.IncludeFolders {
+			q.sql += " AND r.kind='item'"
 		}
 		compiler := queryCompiler{defs: definitionMap(c.defs)}
 		if len(d.ContentTypes) > 0 {
@@ -435,13 +415,6 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 		}
 		rankArgumentCount := strings.Count(q.sql[:strings.Index(q.sql, " FROM resources r")], "?")
 		addSmartBranch(&branches, byShape, q, rankArgumentCount+len(surfaceArgs))
-		if d.IncludeFolders && len(roots) == 0 && len(d.ContentTypes) == 0 {
-			folderQuery, err := s.smartPhysicalQuery(subject, c, q, in.Surface)
-			if err != nil {
-				return compiledQuery{}, nil, err
-			}
-			addSmartBranch(&branches, byShape, folderQuery, rankArgumentCount)
-		}
 		schemas = append(schemas, *c.collection.SchemaHeadID)
 		usable = append(usable, c)
 	}
