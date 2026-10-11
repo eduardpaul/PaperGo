@@ -79,7 +79,6 @@ Each row describes the current implementation and a user-visible consequence. Th
 
 | Priority | ID / status | User story | PaperDotNet behavior | Current PaperGo behavior | Missing or different outcome | Source evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| P2 | WS-05 · Drift | Reject adding inactive workspace members | AddMemberAsync requires users.IsActiveAsync. | SetWorkspaceMember uses ValidatePrincipal, which checks existence without active status. | An inactive subject can be added/promoted. Module access remains blocked until reactivation, but the accepted membership request differs. | [.NET WorkspaceEndpoints.cs:184](https://github.com/eduardpaul/PaperDotNet/blob/96df412f040f53cc14711aaba35880e24817e084/src/Modules/Workspaces/PaperDotNet.Workspaces/Features/WorkspaceEndpoints.cs#L184)<br>[Go workspaces.go:96](C:/Users/eduapaul/Documents/PaperGo/internal/dms/workspaces.go:96) |
 
 ### Lists
 

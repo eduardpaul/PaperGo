@@ -17480,7 +17480,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 255,
-            "description": "Existing organization directory subject. Verified bearer subjects enroll on first authentication; identity managers can provision subjects through POST /v1/identity/users."
+            "description": "Active organization directory subject. Inactive users cannot be added or promoted. Verified bearer subjects enroll on first authentication; user managers can provision subjects through POST /v1/identity/users."
           },
           "role": {
             "type": "string",
@@ -17504,7 +17504,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 255,
-            "description": "Existing organization directory subject. Verified bearer subjects enroll on first authentication; identity managers can provision subjects through POST /v1/identity/users."
+            "description": "Active organization directory subject. Inactive users cannot be added or promoted. Verified bearer subjects enroll on first authentication; user managers can provision subjects through POST /v1/identity/users."
           },
           "role": {
             "type": "string",

@@ -8,6 +8,7 @@ import (
 
 	"papergo/ent"
 	"papergo/ent/grant"
+	"papergo/ent/identityuser"
 	"papergo/ent/resource"
 	"papergo/internal/identity"
 )
@@ -95,6 +96,13 @@ func (s *Service) SetWorkspaceMember(ctx context.Context, subject, id string, in
 		}
 		if err = identity.ValidatePrincipal(ctx, t.tx, identity.Principal{Type: "user", ID: in.Subject}); err != nil {
 			return invalid(err.Error())
+		}
+		active, err := t.Client.IdentityUser.Query().Where(identityuser.IDEQ(in.Subject), identityuser.ActiveEQ(true)).Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if !active {
+			return invalid("workspace members must be active users of the organization")
 		}
 		old, err := t.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.PrincipalIDEQ(in.Subject), grant.PrincipalTypeEQ(grant.PrincipalTypeUser)).Only(ctx)
 		if ent.IsNotFound(err) {

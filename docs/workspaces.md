@@ -12,7 +12,7 @@ A workspace contains lists, libraries and their content, plus workspace configur
 | POST | `/v1/workspaces/{id}/members` | Owner adds a subject or replaces its role |
 | DELETE | `/v1/workspaces/{id}/members/{member}` | Owner removes a subject |
 
-Membership bodies use `{"subject":"oidc-subject","role":"member"}`. The role defaults to `member`. Subjects must exist in the organization directory, contain 1 to 255 UTF-8 bytes, and have no surrounding whitespace. Verified bearer subjects enroll on first authentication; organization identity managers can provision them through `/v1/identity/users`.
+Membership bodies use `{"subject":"oidc-subject","role":"member"}`. The role defaults to `member`. Subjects must be active users in the organization directory, contain 1 to 255 UTF-8 bytes, and have no surrounding whitespace. Verified bearer subjects enroll on first authentication; organization identity managers can provision them through `/v1/identity/users`.
 
 | Role | Access |
 | --- | --- |
@@ -25,3 +25,5 @@ Membership changes return 204 and do not consume a workspace metadata ETag. Sett
 Workspace membership is stored as one root user grant per subject. Root permissions are managed through the membership API; PUT `/v1/resources/{id}/permissions` applies to collections and content and rejects workspace roots. Breaking child inheritance can restrict members and visitors; workspace owners retain access subject to module scopes. Copying workspace inheritance stores dynamic visitor/member/owner role principals, so membership changes affect copied role grants immediately. Explicit user and group grants remain independent of parent ACL edits; group membership still resolves dynamically. The `workspace.manage` organization scope grants control of every live workspace and descendant, with the required module scopes.
 
 Deleting a workspace tombstones its entire live resource tree in one transaction, removes content search projections and hides relationships, and disables and tombstones its workflows. New content and workflow access then fail. Immutable revisions, publications, workflow versions, run history, audit records and blob objects remain retained. Running workflow activities that access deleted content encounter the same missing-resource checks; deletion does not cancel durable runs.
+
+Adding or changing a workspace membership rejects inactive users with `422`. Existing inactive memberships can be removed; reactivation is required before a role change.
