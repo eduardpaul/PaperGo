@@ -35,6 +35,16 @@ func run(log *slog.Logger) error {
 	}
 	startup, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	dataLease, err := database.AcquireLease(c.DatabasePath, false)
+	if err != nil {
+		return err
+	}
+	defer dataLease.Close()
+	blobLease, err := database.AcquireLease(c.BlobPath, false)
+	if err != nil {
+		return err
+	}
+	defer blobLease.Close()
 	db, err := database.Open(startup, c.DatabasePath)
 	if err != nil {
 		return err

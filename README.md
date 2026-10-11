@@ -217,3 +217,16 @@ POST `/v1/resources/{collectionID}/bulk-update` queues a durable operation with 
 The response is 202 with a `Location` pointing to `/v1/operations/{id}`. Poll that URL for `matched`, `processed`, `updated`, `failed`, `progress` and `failures`. The runner freezes selection when it starts and commits each item independently through normal permissions, validation, history, uniqueness and event handling. Values merge; null removes a field. Selection uses head content and does not publish changes. Successful edits survive other items' failures. `succeeded` means execution finished, even when some items failed; `failed` means the operation stopped because collection access, schema or infrastructure failed; earlier successful edits remain committed. Counts include every failure, with at most 50 reported reasons. Results require the starter and current collection read access. Pending work resumes after restart. `/bulk` provides a separate atomic batch of explicit actions.
 
 Lookup fields may target any live collection in the organization, across workspace boundaries. Explicit assignments and defaults validate that every target is a live item of that collection, without requiring target read access or publication. Repeating a stored ID explicitly revalidates it; omitted lookup values survive unrelated edits. A lookup reference does not grant access to the target content.
+
+## Administrative backup and restore
+
+Build the administrative CLI with `go build -o papergo-admin ./cmd/admin`:
+
+```sh
+papergo-admin backup --file backup.tar.gz
+papergo-admin restore --file backup.tar.gz
+```
+
+`--database` and `--blobs` select paths; defaults use `DATABASE_PATH` and `BLOB_PATH`, then `data/papergo.db` and `data/blobs`. These commands need filesystem access and do not initialize HTTP authentication. Backup can run while the API is serving: it pauses database writes while snapshotting and copying referenced immutable files; reads continue. The gzip tar archive includes the complete SQLite database (including workflow runner state), referenced file bytes and a checksum manifest. Existing backup archives are never overwritten. The manifest is limited to 16 MiB.
+
+Stop the API before restoring. Restore rejects active API leases and existing destinations unless `--force` is supplied. It validates the complete archive, current build's schema hash, SQLite integrity/foreign keys, file references, sizes and SHA-256 checksums before replacing the database and blob directory. Invalid archives leave existing data intact. Installation failures restore the saved destinations. Symlinks, unsafe paths, duplicate entries and appended archives are rejected. Restore accepts archives matching this build's complete schema; it does not perform schema upgrades. Persistent `.lease` files coordinate the API and CLI through operating-system locks.
