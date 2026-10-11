@@ -26,6 +26,7 @@ import (
 	"papergo/ent/identitymembership"
 	"papergo/ent/identityorganization"
 	"papergo/ent/identitypreference"
+	"papergo/ent/identityresttoken"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
 	"papergo/ent/itemhistory"
@@ -94,6 +95,8 @@ type Client struct {
 	IdentityOrganization *IdentityOrganizationClient
 	// IdentityPreference is the client for interacting with the IdentityPreference builders.
 	IdentityPreference *IdentityPreferenceClient
+	// IdentityRESTToken is the client for interacting with the IdentityRESTToken builders.
+	IdentityRESTToken *IdentityRESTTokenClient
 	// IdentityRole is the client for interacting with the IdentityRole builders.
 	IdentityRole *IdentityRoleClient
 	// IdentityUser is the client for interacting with the IdentityUser builders.
@@ -168,6 +171,7 @@ func (c *Client) init() {
 	c.IdentityMembership = NewIdentityMembershipClient(c.config)
 	c.IdentityOrganization = NewIdentityOrganizationClient(c.config)
 	c.IdentityPreference = NewIdentityPreferenceClient(c.config)
+	c.IdentityRESTToken = NewIdentityRESTTokenClient(c.config)
 	c.IdentityRole = NewIdentityRoleClient(c.config)
 	c.IdentityUser = NewIdentityUserClient(c.config)
 	c.ItemHistory = NewItemHistoryClient(c.config)
@@ -299,6 +303,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IdentityMembership:   NewIdentityMembershipClient(cfg),
 		IdentityOrganization: NewIdentityOrganizationClient(cfg),
 		IdentityPreference:   NewIdentityPreferenceClient(cfg),
+		IdentityRESTToken:    NewIdentityRESTTokenClient(cfg),
 		IdentityRole:         NewIdentityRoleClient(cfg),
 		IdentityUser:         NewIdentityUserClient(cfg),
 		ItemHistory:          NewItemHistoryClient(cfg),
@@ -357,6 +362,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IdentityMembership:   NewIdentityMembershipClient(cfg),
 		IdentityOrganization: NewIdentityOrganizationClient(cfg),
 		IdentityPreference:   NewIdentityPreferenceClient(cfg),
+		IdentityRESTToken:    NewIdentityRESTTokenClient(cfg),
 		IdentityRole:         NewIdentityRoleClient(cfg),
 		IdentityUser:         NewIdentityUserClient(cfg),
 		ItemHistory:          NewItemHistoryClient(cfg),
@@ -413,12 +419,12 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
 		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityOrganization, c.IdentityPreference, c.IdentityRole, c.IdentityUser,
-		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView, c.Operation,
-		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
-		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
+		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
+		c.ListView, c.Operation, c.OperationItem, c.Publication, c.Relationship,
+		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
+		c.SmartFolder, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -431,12 +437,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
 		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityOrganization, c.IdentityPreference, c.IdentityRole, c.IdentityUser,
-		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView, c.Operation,
-		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
-		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
+		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
+		c.ListView, c.Operation, c.OperationItem, c.Publication, c.Relationship,
+		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
+		c.SmartFolder, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -475,6 +481,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdentityOrganization.mutate(ctx, m)
 	case *IdentityPreferenceMutation:
 		return c.IdentityPreference.mutate(ctx, m)
+	case *IdentityRESTTokenMutation:
+		return c.IdentityRESTToken.mutate(ctx, m)
 	case *IdentityRoleMutation:
 		return c.IdentityRole.mutate(ctx, m)
 	case *IdentityUserMutation:
@@ -2664,6 +2672,155 @@ func (c *IdentityPreferenceClient) mutate(ctx context.Context, m *IdentityPrefer
 		return (&IdentityPreferenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown IdentityPreference mutation op: %q", m.Op())
+	}
+}
+
+// IdentityRESTTokenClient is a client for the IdentityRESTToken schema.
+type IdentityRESTTokenClient struct {
+	config
+}
+
+// NewIdentityRESTTokenClient returns a client for the IdentityRESTToken from the given config.
+func NewIdentityRESTTokenClient(c config) *IdentityRESTTokenClient {
+	return &IdentityRESTTokenClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `identityresttoken.Hooks(f(g(h())))`.
+func (c *IdentityRESTTokenClient) Use(hooks ...Hook) {
+	c.hooks.IdentityRESTToken = append(c.hooks.IdentityRESTToken, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `identityresttoken.Intercept(f(g(h())))`.
+func (c *IdentityRESTTokenClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IdentityRESTToken = append(c.inters.IdentityRESTToken, interceptors...)
+}
+
+// Create returns a builder for creating a IdentityRESTToken entity.
+func (c *IdentityRESTTokenClient) Create() *IdentityRESTTokenCreate {
+	mutation := newIdentityRESTTokenMutation(c.config, OpCreate)
+	return &IdentityRESTTokenCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IdentityRESTToken entities.
+func (c *IdentityRESTTokenClient) CreateBulk(builders ...*IdentityRESTTokenCreate) *IdentityRESTTokenCreateBulk {
+	return &IdentityRESTTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IdentityRESTTokenClient) MapCreateBulk(slice any, setFunc func(*IdentityRESTTokenCreate, int)) *IdentityRESTTokenCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IdentityRESTTokenCreateBulk{err: fmt.Errorf("calling to IdentityRESTTokenClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IdentityRESTTokenCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IdentityRESTTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IdentityRESTToken.
+func (c *IdentityRESTTokenClient) Update() *IdentityRESTTokenUpdate {
+	mutation := newIdentityRESTTokenMutation(c.config, OpUpdate)
+	return &IdentityRESTTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IdentityRESTTokenClient) UpdateOne(_m *IdentityRESTToken) *IdentityRESTTokenUpdateOne {
+	mutation := newIdentityRESTTokenMutation(c.config, OpUpdateOne, withIdentityRESTToken(_m))
+	return &IdentityRESTTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IdentityRESTTokenClient) UpdateOneID(id string) *IdentityRESTTokenUpdateOne {
+	mutation := newIdentityRESTTokenMutation(c.config, OpUpdateOne, withIdentityRESTTokenID(id))
+	return &IdentityRESTTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IdentityRESTToken.
+func (c *IdentityRESTTokenClient) Delete() *IdentityRESTTokenDelete {
+	mutation := newIdentityRESTTokenMutation(c.config, OpDelete)
+	return &IdentityRESTTokenDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IdentityRESTTokenClient) DeleteOne(_m *IdentityRESTToken) *IdentityRESTTokenDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IdentityRESTTokenClient) DeleteOneID(id string) *IdentityRESTTokenDeleteOne {
+	builder := c.Delete().Where(identityresttoken.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IdentityRESTTokenDeleteOne{builder}
+}
+
+// Query returns a query builder for IdentityRESTToken.
+func (c *IdentityRESTTokenClient) Query() *IdentityRESTTokenQuery {
+	return &IdentityRESTTokenQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIdentityRESTToken},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IdentityRESTToken entity by its id.
+func (c *IdentityRESTTokenClient) Get(ctx context.Context, id string) (*IdentityRESTToken, error) {
+	return c.Query().Where(identityresttoken.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IdentityRESTTokenClient) GetX(ctx context.Context, id string) *IdentityRESTToken {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a IdentityRESTToken.
+func (c *IdentityRESTTokenClient) QueryUser(_m *IdentityRESTToken) *IdentityUserQuery {
+	query := (&IdentityUserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(identityresttoken.Table, identityresttoken.FieldID, id),
+			sqlgraph.To(identityuser.Table, identityuser.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, identityresttoken.UserTable, identityresttoken.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *IdentityRESTTokenClient) Hooks() []Hook {
+	return c.hooks.IdentityRESTToken
+}
+
+// Interceptors returns the client interceptors.
+func (c *IdentityRESTTokenClient) Interceptors() []Interceptor {
+	return c.inters.IdentityRESTToken
+}
+
+func (c *IdentityRESTTokenClient) mutate(ctx context.Context, m *IdentityRESTTokenMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IdentityRESTTokenCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IdentityRESTTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IdentityRESTTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IdentityRESTTokenDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IdentityRESTToken mutation op: %q", m.Op())
 	}
 }
 
@@ -6537,20 +6694,20 @@ type (
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
 		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
 		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
-		IdentityRole, IdentityUser, ItemHistory, ItemRevision, ItemSurface, ListView,
-		Operation, OperationItem, Publication, Relationship, RelationshipType,
-		Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup,
-		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
+		ItemSurface, ListView, Operation, OperationItem, Publication, Relationship,
+		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
+		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
 		WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
 		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
 		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
-		IdentityRole, IdentityUser, ItemHistory, ItemRevision, ItemSurface, ListView,
-		Operation, OperationItem, Publication, Relationship, RelationshipType,
-		Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup,
-		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
+		ItemSurface, ListView, Operation, OperationItem, Publication, Relationship,
+		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term,
+		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
 		WorkflowTrigger, WorkflowVersion []ent.Interceptor
 	}
 )

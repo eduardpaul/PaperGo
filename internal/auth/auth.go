@@ -28,8 +28,8 @@ func (d Development) Verify(_ context.Context, token string) (string, error) {
 
 var ErrUnauthenticated = errors.New("valid bearer authentication is required")
 
-// Authenticate verifies the request's "Authorization: Bearer" token and returns
-// its subject. Every HTTP surface uses it, so all accept exactly the same tokens.
+// Authenticate verifies a provider bearer token and returns its subject.
+// REST middleware also recognizes locally issued personal REST credentials.
 func Authenticate(r *http.Request, v Verifier) (string, error) {
 	parts := strings.Fields(r.Header.Get("Authorization"))
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || len(parts[1]) > 8192 {

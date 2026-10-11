@@ -152,7 +152,7 @@ func (s *Service) Relationships(ctx context.Context, subject, itemID, direction,
 	if after != "" {
 		q.Where(relationship.IDGT(after))
 	}
-	q.Where(relationshipVisibility(subject))
+	q.Where(relationshipVisibility(ctx, subject))
 	rows, err := q.Order(ent.Asc(relationship.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
 	if err != nil {
 		return Page[RelationshipView]{}, err

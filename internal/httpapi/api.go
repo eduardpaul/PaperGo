@@ -629,7 +629,20 @@ func (a *API) audit(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, err := auth.Authenticate(r, a.Auth)
+		var id string
+		var err error
+		parts := strings.Fields(r.Header.Get("Authorization"))
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.RESTTokenPrefix) {
+			token, e := a.DMS.Directory().AuthenticateRESTToken(r.Context(), parts[1])
+			if e != nil {
+				err = e
+			} else {
+				id = token.Subject
+				r = r.WithContext(identity.WithRESTToken(r.Context(), token))
+			}
+		} else {
+			id, err = auth.Authenticate(r, a.Auth)
+		}
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			a.problem(w, r, 401, "unauthorized", "valid bearer authentication is required")

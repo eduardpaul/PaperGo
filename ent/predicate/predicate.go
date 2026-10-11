@@ -51,6 +51,9 @@ type IdentityOrganization func(*sql.Selector)
 // IdentityPreference is the predicate function for identitypreference builders.
 type IdentityPreference func(*sql.Selector)
 
+// IdentityRESTToken is the predicate function for identityresttoken builders.
+type IdentityRESTToken func(*sql.Selector)
+
 // IdentityRole is the predicate function for identityrole builders.
 type IdentityRole func(*sql.Selector)
 

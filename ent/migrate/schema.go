@@ -495,6 +495,45 @@ var (
 			},
 		},
 	}
+	// IdentityRestTokensColumns holds the columns for the "identity_rest_tokens" table.
+	IdentityRestTokensColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString},
+		{Name: "prefix", Type: field.TypeString},
+		{Name: "secret_hash", Type: field.TypeString},
+		{Name: "scopes", Type: field.TypeJSON},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "last_used_at", Type: field.TypeTime, Nullable: true},
+		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "subject", Type: field.TypeString, Size: 255},
+	}
+	// IdentityRestTokensTable holds the schema information for the "identity_rest_tokens" table.
+	IdentityRestTokensTable = &schema.Table{
+		Name:       "identity_rest_tokens",
+		Columns:    IdentityRestTokensColumns,
+		PrimaryKey: []*schema.Column{IdentityRestTokensColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "identity_rest_tokens_identity_users_user",
+				Columns:    []*schema.Column{IdentityRestTokensColumns[9]},
+				RefColumns: []*schema.Column{IdentityUsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "identityresttoken_secret_hash",
+				Unique:  true,
+				Columns: []*schema.Column{IdentityRestTokensColumns[4]},
+			},
+			{
+				Name:    "identityresttoken_subject_id",
+				Unique:  false,
+				Columns: []*schema.Column{IdentityRestTokensColumns[9], IdentityRestTokensColumns[0]},
+			},
+		},
+	}
 	// IdentityRolesColumns holds the columns for the "identity_roles" table.
 	IdentityRolesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1573,6 +1612,7 @@ var (
 		IdentityMembershipsTable,
 		IdentityOrganizationsTable,
 		IdentityPreferencesTable,
+		IdentityRestTokensTable,
 		IdentityRolesTable,
 		IdentityUsersTable,
 		ItemHistoriesTable,
@@ -1610,6 +1650,7 @@ func init() {
 	GrantsTable.ForeignKeys[0].RefTable = ResourcesTable
 	IdentityAssignmentsTable.ForeignKeys[0].RefTable = IdentityRolesTable
 	IdentityMembershipsTable.ForeignKeys[0].RefTable = IdentityGroupsTable
+	IdentityRestTokensTable.ForeignKeys[0].RefTable = IdentityUsersTable
 	ItemHistoriesTable.ForeignKeys[0].RefTable = ItemRevisionsTable
 	ItemRevisionsTable.ForeignKeys[0].RefTable = BlobsTable
 	ItemRevisionsTable.ForeignKeys[1].RefTable = ResourcesTable

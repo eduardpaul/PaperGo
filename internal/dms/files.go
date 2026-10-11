@@ -354,8 +354,8 @@ func (s *Service) fileByID(ctx context.Context, subject, id string) (*File, erro
 // visibleFiles loads the live, readable, visible resources of q in ID order,
 // with each item's visible surface and the blob of its visible revision.
 func (s *Service) visibleFiles(ctx context.Context, subject string, q *ent.ResourceQuery) ([]*File, error) {
-	rows, err := q.Where(resource.DeletedAtIsNil(), permissionPredicate(subject, "read"), func(sel *entsql.Selector) {
-		text, args := visibleSQL(sel.C(resource.FieldID), subject, "auto")
+	rows, err := q.Where(resource.DeletedAtIsNil(), permissionPredicate(ctx, subject, "read"), func(sel *entsql.Selector) {
+		text, args := visibleSQL(ctx, sel.C(resource.FieldID), subject, "auto")
 		sel.Where(entsql.ExprP(text, args...))
 	}).Order(ent.Asc(resource.FieldID)).Limit(MaxFolderEntries + 1).All(ctx)
 	if err != nil {

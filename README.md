@@ -27,7 +27,7 @@ Tests use temporary SQLite files and apply the actual versioned migrations, incl
 
 The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
-[Organization groups and roles](docs/identity.md) are managed under `/v1/identity`. OIDC deployments require `ADMIN_SUBJECT` for the first administrator; development defaults to `DEV_SUBJECT`. Verified subjects enroll with the Member role on first authentication. Module scopes and resource ACLs apply independently, including to owners and workflow item actions.
+[Organization groups and roles](docs/identity.md) are managed under `/v1/identity`. OIDC deployments require `ADMIN_SUBJECT` for the first administrator; development defaults to `DEV_SUBJECT`. Verified subjects enroll with the Member role on first authentication. User profiles, guarded anonymization, organization metadata and scoped personal REST tokens are exposed by these APIs. Module scopes and resource ACLs apply independently, including to owners and workflow item actions.
 
 ## Data model and requirements
 
@@ -89,6 +89,10 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | POST | `/v1/resources/{id}/documents` | Create a library document using multipart `file` and optional `metadata` JSON; see [documents](docs/documents.md) |
 | POST | `/v1/items/{id}/content/versions/{number}/restore` | Restore an earlier file as a new version; requires current numeric `If-Match` |
 | GET | `/v1/workspaces/{id}/audit` | Workspace manager audit feed |
+| GET / PATCH | `/v1/identity/me` | Current user profile and self display-name edits |
+| GET / PATCH | `/v1/organization` | Organization identity and profile; edits require organization.manage and ETag |
+| POST / GET | `/v1/identity/me/tokens` | Issue/list scoped expiring personal REST tokens |
+| DELETE | `/v1/identity/me/tokens/{id}` | Revoke a personal REST token |
 | POST / GET | `/v1/webdav-credentials` | Issue / list the caller's WebDAV app passwords |
 | DELETE | `/v1/webdav-credentials/{id}` | Revoke one of the caller's WebDAV app passwords |
 | WebDAV | `/webdav/{libraryID}/...` | A WebDAV-enabled library as a network drive; see [WebDAV](#webdav) |
@@ -156,7 +160,7 @@ Move a folder or item with PATCH `{"parent_id":"<folder or collection id>"}`: th
 
 A library created with `"webdav_enabled": true`, or updated to it by a manager, is also served at `https://<host>/webdav/<libraryID>/` (RFC 4918 class 1 and 2). Its folders are collections and its items are files whose bytes are the caller's visible revision: head for draft readers, published for ordinary readers. Every request runs through the same service as the REST API, so permissions, publishing, validation, revisions and audit events are identical. Libraries without the flag and paths the caller cannot read return 404.
 
-WebDAV accepts the API bearer token or HTTP Basic. Windows Explorer and macOS Finder only use Basic, so each user issues an app password with `POST /v1/webdav-credentials` and `{"label":"Laptop"}` (optionally `expires_at`). The response shows `password` once; sign in with any user name and that password. Only its SHA-256 is stored, each principal can hold 20, and `DELETE /v1/webdav-credentials/{id}` revokes one.
+WebDAV accepts OIDC/development bearer tokens or HTTP Basic. Windows Explorer and macOS Finder only use Basic, so each user issues an app password with `POST /v1/webdav-credentials` and `{"label":"Laptop"}` (optionally `expires_at`). The response shows `password` once; sign in with any user name and that password. Only its SHA-256 is stored, each principal can hold 20, and `DELETE /v1/webdav-credentials/{id}` revokes one.
 
 To connect from Windows, choose **Map network drive** in Explorer and enter `https://<host>/webdav/<libraryID>/`, or run `net use Z: https://<host>/webdav/<libraryID>/ /user:me <password>`. Windows sends Basic credentials only over HTTPS unless `BasicAuthLevel` is set to `2` under `HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`, which local HTTP development needs (restart the WebClient service afterwards). The Windows client also rejects files above its `FileSizeLimitInBytes` (50 MB by default); the server limit is `MAX_UPLOAD_BYTES`.
 
@@ -194,7 +198,7 @@ atlas migrate apply --env local
 
 Use one API process with a local persistent disk. SQLite runs WAL mode, foreign-key enforcement and FULL synchronous durability. Write transactions take the write lock when they begin and wait up to 30 seconds for it, so API requests and workflow steps share the single writer; an in-process mutex keeps request writes in order, and WebDAV locks live in the same process; readers use a bounded connection pool. The workflow runner runs inside the API process and keeps its tables in the same database file; `NODE_ID` names the process (default `local`) and `RUN_RETENTION` sets how long finished runs are kept (default `720h`). Do not run multiple API replicas against a shared network filesystem. See [SQLite's WAL documentation](https://www.sqlite.org/wal.html).
 
-For production, set `APP_ENV=production`, `AUTH_MODE=oidc`, an HTTPS `OIDC_ISSUER`, and the API audience in `OIDC_AUDIENCE`. The provider must issue signed JWT bearer tokens with issuer, audience, subject and expiry claims; opaque tokens require a separate introspection adapter. The audience must be registered for this API. Development authentication is rejected in production. Terminate TLS at the ingress, enforce deployment request/rate limits there, and apply migrations before starting the API. The Docker image runs as UID 65532 and needs a writable persistent `/data` volume. Docker is not installed in the current workspace, so image verification requires CI or another host.
+For production, set `APP_ENV=production`, `AUTH_MODE=oidc`, an HTTPS `OIDC_ISSUER`, and the API audience in `OIDC_AUDIENCE`. The provider must issue signed JWT bearer tokens with issuer, audience, subject and expiry claims; locally issued personal REST tokens provide scoped credentials for REST integrations. The audience must be registered for this API. Development authentication is rejected in production. Terminate TLS at the ingress, enforce deployment request/rate limits there, and apply migrations before starting the API. The Docker image runs as UID 65532 and needs a writable persistent `/data` volume. Docker is not installed in the current workspace, so image verification requires CI or another host.
 
 Back up SQLite with its online backup API or `VACUUM INTO` and back up the referenced blob files consistently; copying only the `.db` file while WAL is active is not a valid backup. Blobs are created before their metadata transaction; ordinary failed writes clean up the object, while a process crash between those steps can leave an unreferenced file. A deployment should reconcile such orphan files after a grace period. Deleted resources retain blobs for recovery. Permanent recycle-bin purge removes retained content and queues storage cleanup durably; failures retry after restart. Audit and workflow run records retain IDs. History retention removes user-visible history entries without deleting snapshots needed by live/publication/event processing.
 

@@ -30,6 +30,10 @@ func TestRESTProfilesAndAccountDeletion(t *testing.T) {
 	if r.Code != 200 {
 		t.Fatal(r.Code, r.Body.String())
 	}
+	credential, err := s.Directory().CreateRESTToken(ctx, "profile-api", identity.RESTTokenInput{Name: "Account", Scopes: []string{"list.read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	w, err := s.Create(ctx, "profile-api", "", dms.CreateResource{Kind: "workspace", Name: "Owned"})
 	if err != nil {
 		t.Fatal(err)
@@ -55,6 +59,10 @@ func TestRESTProfilesAndAccountDeletion(t *testing.T) {
 	r = request(h, "PUT", "/v1/identity/users/profile-api/status", `{"active":true}`, testToken, "", "application/json")
 	if r.Code != 404 {
 		t.Fatal("deleted account revived", r.Code, r.Body.String())
+	}
+	r = request(h, "GET", "/v1/identity/me", "", credential.Secret, "", "")
+	if r.Code != 401 {
+		t.Fatal("deleted personal token admitted", r.Code, r.Body.String())
 	}
 	deletedHandler := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "profile-api"}, Logger: slog.Default()}).Handler()
 	r = request(deletedHandler, "GET", "/v1/identity/me", "", testToken, "", "")

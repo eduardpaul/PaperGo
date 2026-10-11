@@ -25,7 +25,7 @@ func (s *Service) RecycleBin(ctx context.Context, subject, collection, after str
 		if _, err := t.recycleCollection(ctx, subject, collection); err != nil {
 			return out, err
 		}
-		q := t.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.DeletedAtNotNil(), permissionPredicate(subject, "write"))
+		q := t.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.DeletedAtNotNil(), permissionPredicate(ctx, subject, "write"))
 		if after != "" {
 			q.Where(resource.IDGT(after))
 		}
@@ -71,7 +71,7 @@ func (s *Service) deletedResource(ctx context.Context, subject, collection, id, 
 	if _, err := s.recycleCollection(ctx, subject, collection); err != nil {
 		return nil, err
 	}
-	r, err := s.Client.Resource.Query().Where(resource.IDEQ(id), resource.ContainerIDEQ(collection), resource.DeletedAtNotNil(), permissionPredicate(subject, "write")).Only(ctx)
+	r, err := s.Client.Resource.Query().Where(resource.IDEQ(id), resource.ContainerIDEQ(collection), resource.DeletedAtNotNil(), permissionPredicate(ctx, subject, "write")).Only(ctx)
 	if ent.IsNotFound(err) {
 		return nil, ErrNotFound
 	}

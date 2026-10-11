@@ -179,6 +179,7 @@ func (d Directory) DeleteUser(ctx context.Context, actor, subject string) error 
 			"DELETE FROM identity_preferences WHERE owner_type='user' AND owner_id=?",
 			"DELETE FROM grants WHERE principal_type='user' AND principal_id=?",
 			"DELETE FROM webdav_credentials WHERE subject=?",
+			"DELETE FROM identity_rest_tokens WHERE subject=?",
 		} {
 			if _, err = tx.ExecContext(ctx, query, subject); err != nil {
 				return err

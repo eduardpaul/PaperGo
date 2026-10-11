@@ -127,14 +127,14 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if in.Surface == "head" {
 		action = "read_draft"
 	}
-	q.Where(permissionPredicate(subject, action))
+	q.Where(permissionPredicate(ctx, subject, action))
 	q.Where(func(sel *entsql.Selector) {
-		text, args := visibleSQL(sel.C(resource.FieldID), subject, in.Surface)
+		text, args := visibleSQL(ctx, sel.C(resource.FieldID), subject, in.Surface)
 		sel.Where(entsql.ExprP(text, args...))
 	})
 	if in.Tag != "" {
 		q.Where(func(sel *entsql.Selector) {
-			selected, args := surfaceSQL(sel.C(resource.FieldID), subject, in.Surface)
+			selected, args := surfaceSQL(ctx, sel.C(resource.FieldID), subject, in.Surface)
 			query := "(" + sel.C(resource.FieldKind) + " NOT IN ('item','folder') AND " + sel.C(resource.FieldID) + " IN (SELECT resource_id FROM resource_tags WHERE tag=?) OR " + sel.C(resource.FieldKind) + " IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p JOIN item_surface_tags t ON t.surface_id=p.id WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND t.tag=?))"
 			values := []any{in.Tag}
 			values = append(values, args...)
@@ -145,7 +145,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if strings.TrimSpace(in.Search) != "" {
 		phrase := ftsPhrase(in.Search)
 		q.Where(func(sel *entsql.Selector) {
-			selected, args := surfaceSQL(sel.C(resource.FieldID), subject, in.Surface)
+			selected, args := surfaceSQL(ctx, sel.C(resource.FieldID), subject, in.Surface)
 			// FTS rowids are content-table rowids; the UNINDEXED id column would cost a lookup per match.
 			query := "(" + sel.C(resource.FieldKind) + " NOT IN ('item','folder') AND " + sel.C("rowid") + " IN (SELECT rowid FROM resource_search WHERE resource_search MATCH ?) OR " + sel.C(resource.FieldKind) + " IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)))"
 			values := []any{phrase}

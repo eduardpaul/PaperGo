@@ -230,7 +230,7 @@ func (s *Service) SmartFolders(ctx context.Context, subject, workspace, after st
 		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
 			return Page[*ent.SmartFolder]{}, err
 		}
-		acl, args := permissionSQL("smart_folders.workspace_id", subject, "read")
+		acl, args := permissionSQL(ctx, "smart_folders.workspace_id", subject, "read")
 		q := t.Client.SmartFolder.Query().Where(smartfolder.IDGT(after), func(sel *entsql.Selector) {
 			sel.Where(entsql.ExprP("(owner_id=? OR (owner_id IS NULL AND "+acl+"))", append([]any{subject}, args...)...))
 		})

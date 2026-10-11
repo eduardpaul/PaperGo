@@ -93,7 +93,7 @@ func namedSelector(values []string, column string) (string, []any) {
 }
 
 func (s *Service) smartCandidates(ctx context.Context, subject string, f *ent.SmartFolder, d SmartFolderDefinition) ([]smartCandidate, error) {
-	q := s.Client.Resource.Query().Where(resource.KindIn(resource.KindList, resource.KindLibrary), permissionPredicate(subject, "read"))
+	q := s.Client.Resource.Query().Where(resource.KindIn(resource.KindList, resource.KindLibrary), permissionPredicate(ctx, subject, "read"))
 	if f.WorkspaceID != nil {
 		q.Where(resource.WorkspaceIDEQ(*f.WorkspaceID))
 	}
@@ -348,7 +348,7 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 	}
 	branches := []smartQueryBranch{}
 	byShape := map[string]int{}
-	_, surfaceArgs := surfaceSQL("r.id", subject, in.Surface)
+	_, surfaceArgs := surfaceSQL(ctx, "r.id", subject, in.Surface)
 	schemas := []string{}
 	var firstError error
 	var rankDef *ent.FieldDefinition

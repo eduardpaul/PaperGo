@@ -16,6 +16,108 @@
     }
   ],
   "paths": {
+    "/v1/identity/me/tokens/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Revoke a caller-owned personal REST token",
+        "responses": {
+          "204": {
+            "description": "Revoked immediately"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/identity/me/tokens": {
+      "get": {
+        "summary": "List current user REST credentials without secrets",
+        "responses": {
+          "200": {
+            "description": "Caller-owned non-revoked credentials, including expired ones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RESTToken"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an expiring scoped personal REST token",
+        "description": "Scopes must be distinct permissions the caller currently holds. Token authentication intersects these scopes with live user roles on every request. At most 100 active tokens per user. Personal tokens authenticate REST calls with Authorization: Bearer; WebDAV uses its own credentials.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expires_in_days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650,
+                    "default": 90
+                  }
+                },
+                "required": [
+                  "name",
+                  "scopes"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Secret returned once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedRESTToken"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/v1/organization": {
       "get": {
         "summary": "Read deployment organization identity and profile",
@@ -186,7 +288,7 @@
       },
       "delete": {
         "summary": "Delete and anonymize an account",
-        "description": "Retains the subject for author/person references, clears display name/email, disables authentication, removes grants, roles, groups, preferences and WebDAV credentials. Self deletion, last administrator deletion and deletion of the last active workspace owner return 409. Deleted accounts cannot be reactivated.",
+        "description": "Retains the subject for author/person references, clears display name/email, disables authentication, removes grants, roles, groups, preferences and REST/WebDAV credentials. Self deletion, last administrator deletion and deletion of the last active workspace owner return 409. Deleted accounts cannot be reactivated.",
         "responses": {
           "204": {
             "description": "Account anonymized"
@@ -13464,7 +13566,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "bearerFormat": "JWT or personal REST token"
       }
     },
     "responses": {
@@ -13480,6 +13582,63 @@
       }
     },
     "schemas": {
+      "CreatedRESTToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/RESTToken"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Shown only in this creation response; never stored in plaintext."
+          }
+        },
+        "required": [
+          "token",
+          "secret"
+        ]
+      },
+      "RESTToken": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_used_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "scopes",
+          "created_at",
+          "expires_at"
+        ]
+      },
       "Organization": {
         "type": "object",
         "properties": {

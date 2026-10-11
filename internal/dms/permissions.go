@@ -30,12 +30,12 @@ func impliedActions(action string) []string {
 
 // This SQL is isolated so a future database adapter can replace it. Additive
 // grants apply at the nearest exclusive scope; inherited resources have no ACL.
-func permissionSQL(idColumn, subject, action string) (string, []any) {
+func permissionSQL(ctx context.Context, idColumn, subject, action string) (string, []any) {
 	principal, args := aclPrincipalSQL("g", subject)
 	marks, actions := actionParameters(action)
 	args = append(args, actions...)
-	admin, adminArgs := identity.ScopeSQL(subject, "workspace.manage")
-	module, moduleArgs := modulePermissionSQL("acl.kind", subject, action)
+	admin, adminArgs := identity.ScopeSQL(ctx, subject, "workspace.manage")
+	module, moduleArgs := modulePermissionSQL(ctx, "acl.kind", subject, action)
 	query := `EXISTS (SELECT 1 FROM resources acl JOIN resources workspace ON workspace.id=acl.workspace_id AND workspace.deleted_at IS NULL
  WHERE acl.id=` + idColumn + ` AND acl.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM grants g WHERE g.resource_id=acl.scope_id AND ` + principal + ` AND g.effect='allow' AND g.action IN (` + marks + `))
  OR EXISTS(SELECT 1 FROM grants owner WHERE owner.resource_id=acl.workspace_id AND owner.principal_type='user' AND owner.principal_id=? AND owner.action='manage' AND owner.effect='allow')
@@ -63,30 +63,30 @@ func aclPrincipalSQL(alias, subject string) (string, []any) {
  AND membership.action=CASE ` + alias + `.principal_type WHEN 'workspace_visitor' THEN 'read' WHEN 'workspace_member' THEN 'write' ELSE 'manage' END)))`
 	return query, append(args, subject)
 }
-func modulePermissionSQL(kindColumn, subject, action string) (string, []any) {
+func modulePermissionSQL(ctx context.Context, kindColumn, subject, action string) (string, []any) {
 	scope := "list.read"
 	if action == "write" || action == "publish" {
 		scope = "list.write"
 	}
-	return identity.ScopeExpressionSQL(subject, `CASE WHEN `+kindColumn+`='workspace' THEN 'workspace.read' WHEN `+kindColumn+` IN ('item','folder') THEN '`+scope+`' ELSE 'list.read' END`)
+	return identity.ScopeExpressionSQL(ctx, subject, `CASE WHEN `+kindColumn+`='workspace' THEN 'workspace.read' WHEN `+kindColumn+` IN ('item','folder') THEN '`+scope+`' ELSE 'list.read' END`)
 }
 
 // scopeGrantSQL tests a grant on an ACL scope ID column directly.
-func scopeGrantSQL(scopeColumn, subject, action string) (string, []any) {
-	return permissionSQL(scopeColumn, subject, action)
+func scopeGrantSQL(ctx context.Context, scopeColumn, subject, action string) (string, []any) {
+	return permissionSQL(ctx, scopeColumn, subject, action)
 }
 
 // permissionPredicate filters resources rows by their own scope_id, which the
 // browse indexes cover, so unreadable rows are skipped without a table lookup.
-func permissionPredicate(subject, action string) func(*entsql.Selector) {
+func permissionPredicate(ctx context.Context, subject, action string) func(*entsql.Selector) {
 	return func(sel *entsql.Selector) {
 		principal, args := aclPrincipalSQL("g", subject)
 		marks, actions := actionParameters(action)
 		args = append(args, actions...)
 		args = append(args, subject)
-		admin, adminArgs := identity.ScopeSQL(subject, "workspace.manage")
+		admin, adminArgs := identity.ScopeSQL(ctx, subject, "workspace.manage")
 		args = append(args, adminArgs...)
-		module, moduleArgs := modulePermissionSQL(sel.C(resource.FieldKind), subject, action)
+		module, moduleArgs := modulePermissionSQL(ctx, sel.C(resource.FieldKind), subject, action)
 		args = append(args, moduleArgs...)
 		query := `((` + sel.C(resource.FieldScopeID) + ` IN (SELECT g.resource_id FROM grants g WHERE ` + principal + ` AND g.effect='allow' AND g.action IN (` + marks + `)) OR ` + sel.C(resource.FieldWorkspaceID) + ` IN (SELECT g.resource_id FROM grants g JOIN resources w ON w.id=g.resource_id WHERE g.principal_type='user' AND g.principal_id=? AND g.effect='allow' AND g.action='manage' AND w.kind='workspace' AND w.deleted_at IS NULL) OR ` + admin + `) AND ` + module + `)`
 		sel.Where(entsql.ExprP(query, args...))
@@ -101,7 +101,7 @@ func (s *Service) allowedMany(ctx context.Context, subject, action string, roots
 	for _, r := range roots {
 		ids = append(ids, r.ID)
 	}
-	allowed, err := s.Client.Resource.Query().Where(resource.IDIn(ids...), permissionPredicate(subject, action)).IDs(ctx)
+	allowed, err := s.Client.Resource.Query().Where(resource.IDIn(ids...), permissionPredicate(ctx, subject, action)).IDs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -130,18 +130,18 @@ func (s *Service) authorize(ctx context.Context, subject, id, action string) (*e
 	}
 	return r, nil
 }
-func surfaceSQL(idColumn, subject, surface string) (string, []any) {
+func surfaceSQL(ctx context.Context, idColumn, subject, surface string) (string, []any) {
 	if surface == "head" || surface == "published" {
 		return "'" + surface + "'", nil
 	}
-	query, args := permissionSQL(idColumn, subject, "read_draft")
+	query, args := permissionSQL(ctx, idColumn, subject, "read_draft")
 	return "CASE WHEN " + query + " THEN 'head' ELSE 'published' END", args
 }
 
 // When an item has both surfaces, either selection is visible, so the cheap
 // index probes short-circuit the recursive read_draft walk in surfaceSQL.
-func visibleSQL(idColumn, subject, surface string) (string, []any) {
-	selected, args := surfaceSQL(idColumn, subject, surface)
+func visibleSQL(ctx context.Context, idColumn, subject, surface string) (string, []any) {
+	selected, args := surfaceSQL(ctx, idColumn, subject, surface)
 	both := ""
 	if surface != "head" && surface != "published" {
 		both = ` OR EXISTS (SELECT 1 FROM item_surfaces vh WHERE vh.item_id=vr.id AND vh.surface='head') AND EXISTS (SELECT 1 FROM item_surfaces vp WHERE vp.item_id=vr.id AND vp.surface='published')`

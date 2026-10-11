@@ -22,6 +22,7 @@ import (
 	"papergo/ent/identitymembership"
 	"papergo/ent/identityorganization"
 	"papergo/ent/identitypreference"
+	"papergo/ent/identityresttoken"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
 	"papergo/ent/itemhistory"
@@ -79,6 +80,7 @@ const (
 	TypeIdentityMembership   = "IdentityMembership"
 	TypeIdentityOrganization = "IdentityOrganization"
 	TypeIdentityPreference   = "IdentityPreference"
+	TypeIdentityRESTToken    = "IdentityRESTToken"
 	TypeIdentityRole         = "IdentityRole"
 	TypeIdentityUser         = "IdentityUser"
 	TypeItemHistory          = "ItemHistory"
@@ -10611,6 +10613,894 @@ func (m *IdentityPreferenceMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *IdentityPreferenceMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown IdentityPreference edge %s", name)
+}
+
+// IdentityRESTTokenMutation represents an operation that mutates the IdentityRESTToken nodes in the graph.
+type IdentityRESTTokenMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *string
+	created_at    *time.Time
+	name          *string
+	prefix        *string
+	secret_hash   *string
+	scopes        *[]string
+	appendscopes  []string
+	expires_at    *time.Time
+	last_used_at  *time.Time
+	revoked_at    *time.Time
+	clearedFields map[string]struct{}
+	user          *string
+	cleareduser   bool
+	done          bool
+	oldValue      func(context.Context) (*IdentityRESTToken, error)
+	predicates    []predicate.IdentityRESTToken
+}
+
+var _ ent.Mutation = (*IdentityRESTTokenMutation)(nil)
+
+// identityresttokenOption allows management of the mutation configuration using functional options.
+type identityresttokenOption func(*IdentityRESTTokenMutation)
+
+// newIdentityRESTTokenMutation creates new mutation for the IdentityRESTToken entity.
+func newIdentityRESTTokenMutation(c config, op Op, opts ...identityresttokenOption) *IdentityRESTTokenMutation {
+	m := &IdentityRESTTokenMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeIdentityRESTToken,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withIdentityRESTTokenID sets the ID field of the mutation.
+func withIdentityRESTTokenID(id string) identityresttokenOption {
+	return func(m *IdentityRESTTokenMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *IdentityRESTToken
+		)
+		m.oldValue = func(ctx context.Context) (*IdentityRESTToken, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().IdentityRESTToken.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withIdentityRESTToken sets the old IdentityRESTToken of the mutation.
+func withIdentityRESTToken(node *IdentityRESTToken) identityresttokenOption {
+	return func(m *IdentityRESTTokenMutation) {
+		m.oldValue = func(context.Context) (*IdentityRESTToken, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m IdentityRESTTokenMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m IdentityRESTTokenMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of IdentityRESTToken entities.
+func (m *IdentityRESTTokenMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *IdentityRESTTokenMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *IdentityRESTTokenMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().IdentityRESTToken.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *IdentityRESTTokenMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *IdentityRESTTokenMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *IdentityRESTTokenMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetSubject sets the "subject" field.
+func (m *IdentityRESTTokenMutation) SetSubject(s string) {
+	m.user = &s
+}
+
+// Subject returns the value of the "subject" field in the mutation.
+func (m *IdentityRESTTokenMutation) Subject() (r string, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubject returns the old "subject" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldSubject(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubject is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubject requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubject: %w", err)
+	}
+	return oldValue.Subject, nil
+}
+
+// ResetSubject resets all changes to the "subject" field.
+func (m *IdentityRESTTokenMutation) ResetSubject() {
+	m.user = nil
+}
+
+// SetName sets the "name" field.
+func (m *IdentityRESTTokenMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *IdentityRESTTokenMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *IdentityRESTTokenMutation) ResetName() {
+	m.name = nil
+}
+
+// SetPrefix sets the "prefix" field.
+func (m *IdentityRESTTokenMutation) SetPrefix(s string) {
+	m.prefix = &s
+}
+
+// Prefix returns the value of the "prefix" field in the mutation.
+func (m *IdentityRESTTokenMutation) Prefix() (r string, exists bool) {
+	v := m.prefix
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPrefix returns the old "prefix" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldPrefix(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPrefix is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPrefix requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPrefix: %w", err)
+	}
+	return oldValue.Prefix, nil
+}
+
+// ResetPrefix resets all changes to the "prefix" field.
+func (m *IdentityRESTTokenMutation) ResetPrefix() {
+	m.prefix = nil
+}
+
+// SetSecretHash sets the "secret_hash" field.
+func (m *IdentityRESTTokenMutation) SetSecretHash(s string) {
+	m.secret_hash = &s
+}
+
+// SecretHash returns the value of the "secret_hash" field in the mutation.
+func (m *IdentityRESTTokenMutation) SecretHash() (r string, exists bool) {
+	v := m.secret_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSecretHash returns the old "secret_hash" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldSecretHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSecretHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSecretHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSecretHash: %w", err)
+	}
+	return oldValue.SecretHash, nil
+}
+
+// ResetSecretHash resets all changes to the "secret_hash" field.
+func (m *IdentityRESTTokenMutation) ResetSecretHash() {
+	m.secret_hash = nil
+}
+
+// SetScopes sets the "scopes" field.
+func (m *IdentityRESTTokenMutation) SetScopes(s []string) {
+	m.scopes = &s
+	m.appendscopes = nil
+}
+
+// Scopes returns the value of the "scopes" field in the mutation.
+func (m *IdentityRESTTokenMutation) Scopes() (r []string, exists bool) {
+	v := m.scopes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScopes returns the old "scopes" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldScopes(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScopes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScopes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScopes: %w", err)
+	}
+	return oldValue.Scopes, nil
+}
+
+// AppendScopes adds s to the "scopes" field.
+func (m *IdentityRESTTokenMutation) AppendScopes(s []string) {
+	m.appendscopes = append(m.appendscopes, s...)
+}
+
+// AppendedScopes returns the list of values that were appended to the "scopes" field in this mutation.
+func (m *IdentityRESTTokenMutation) AppendedScopes() ([]string, bool) {
+	if len(m.appendscopes) == 0 {
+		return nil, false
+	}
+	return m.appendscopes, true
+}
+
+// ResetScopes resets all changes to the "scopes" field.
+func (m *IdentityRESTTokenMutation) ResetScopes() {
+	m.scopes = nil
+	m.appendscopes = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *IdentityRESTTokenMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *IdentityRESTTokenMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *IdentityRESTTokenMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetLastUsedAt sets the "last_used_at" field.
+func (m *IdentityRESTTokenMutation) SetLastUsedAt(t time.Time) {
+	m.last_used_at = &t
+}
+
+// LastUsedAt returns the value of the "last_used_at" field in the mutation.
+func (m *IdentityRESTTokenMutation) LastUsedAt() (r time.Time, exists bool) {
+	v := m.last_used_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastUsedAt returns the old "last_used_at" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldLastUsedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastUsedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastUsedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastUsedAt: %w", err)
+	}
+	return oldValue.LastUsedAt, nil
+}
+
+// ClearLastUsedAt clears the value of the "last_used_at" field.
+func (m *IdentityRESTTokenMutation) ClearLastUsedAt() {
+	m.last_used_at = nil
+	m.clearedFields[identityresttoken.FieldLastUsedAt] = struct{}{}
+}
+
+// LastUsedAtCleared returns if the "last_used_at" field was cleared in this mutation.
+func (m *IdentityRESTTokenMutation) LastUsedAtCleared() bool {
+	_, ok := m.clearedFields[identityresttoken.FieldLastUsedAt]
+	return ok
+}
+
+// ResetLastUsedAt resets all changes to the "last_used_at" field.
+func (m *IdentityRESTTokenMutation) ResetLastUsedAt() {
+	m.last_used_at = nil
+	delete(m.clearedFields, identityresttoken.FieldLastUsedAt)
+}
+
+// SetRevokedAt sets the "revoked_at" field.
+func (m *IdentityRESTTokenMutation) SetRevokedAt(t time.Time) {
+	m.revoked_at = &t
+}
+
+// RevokedAt returns the value of the "revoked_at" field in the mutation.
+func (m *IdentityRESTTokenMutation) RevokedAt() (r time.Time, exists bool) {
+	v := m.revoked_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevokedAt returns the old "revoked_at" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldRevokedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevokedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevokedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevokedAt: %w", err)
+	}
+	return oldValue.RevokedAt, nil
+}
+
+// ClearRevokedAt clears the value of the "revoked_at" field.
+func (m *IdentityRESTTokenMutation) ClearRevokedAt() {
+	m.revoked_at = nil
+	m.clearedFields[identityresttoken.FieldRevokedAt] = struct{}{}
+}
+
+// RevokedAtCleared returns if the "revoked_at" field was cleared in this mutation.
+func (m *IdentityRESTTokenMutation) RevokedAtCleared() bool {
+	_, ok := m.clearedFields[identityresttoken.FieldRevokedAt]
+	return ok
+}
+
+// ResetRevokedAt resets all changes to the "revoked_at" field.
+func (m *IdentityRESTTokenMutation) ResetRevokedAt() {
+	m.revoked_at = nil
+	delete(m.clearedFields, identityresttoken.FieldRevokedAt)
+}
+
+// SetUserID sets the "user" edge to the IdentityUser entity by id.
+func (m *IdentityRESTTokenMutation) SetUserID(id string) {
+	m.user = &id
+}
+
+// ClearUser clears the "user" edge to the IdentityUser entity.
+func (m *IdentityRESTTokenMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[identityresttoken.FieldSubject] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the IdentityUser entity was cleared.
+func (m *IdentityRESTTokenMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserID returns the "user" edge ID in the mutation.
+func (m *IdentityRESTTokenMutation) UserID() (id string, exists bool) {
+	if m.user != nil {
+		return *m.user, true
+	}
+	return
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *IdentityRESTTokenMutation) UserIDs() (ids []string) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *IdentityRESTTokenMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// Where appends a list predicates to the IdentityRESTTokenMutation builder.
+func (m *IdentityRESTTokenMutation) Where(ps ...predicate.IdentityRESTToken) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the IdentityRESTTokenMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *IdentityRESTTokenMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.IdentityRESTToken, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *IdentityRESTTokenMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *IdentityRESTTokenMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (IdentityRESTToken).
+func (m *IdentityRESTTokenMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *IdentityRESTTokenMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.created_at != nil {
+		fields = append(fields, identityresttoken.FieldCreatedAt)
+	}
+	if m.user != nil {
+		fields = append(fields, identityresttoken.FieldSubject)
+	}
+	if m.name != nil {
+		fields = append(fields, identityresttoken.FieldName)
+	}
+	if m.prefix != nil {
+		fields = append(fields, identityresttoken.FieldPrefix)
+	}
+	if m.secret_hash != nil {
+		fields = append(fields, identityresttoken.FieldSecretHash)
+	}
+	if m.scopes != nil {
+		fields = append(fields, identityresttoken.FieldScopes)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, identityresttoken.FieldExpiresAt)
+	}
+	if m.last_used_at != nil {
+		fields = append(fields, identityresttoken.FieldLastUsedAt)
+	}
+	if m.revoked_at != nil {
+		fields = append(fields, identityresttoken.FieldRevokedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *IdentityRESTTokenMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case identityresttoken.FieldCreatedAt:
+		return m.CreatedAt()
+	case identityresttoken.FieldSubject:
+		return m.Subject()
+	case identityresttoken.FieldName:
+		return m.Name()
+	case identityresttoken.FieldPrefix:
+		return m.Prefix()
+	case identityresttoken.FieldSecretHash:
+		return m.SecretHash()
+	case identityresttoken.FieldScopes:
+		return m.Scopes()
+	case identityresttoken.FieldExpiresAt:
+		return m.ExpiresAt()
+	case identityresttoken.FieldLastUsedAt:
+		return m.LastUsedAt()
+	case identityresttoken.FieldRevokedAt:
+		return m.RevokedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *IdentityRESTTokenMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case identityresttoken.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case identityresttoken.FieldSubject:
+		return m.OldSubject(ctx)
+	case identityresttoken.FieldName:
+		return m.OldName(ctx)
+	case identityresttoken.FieldPrefix:
+		return m.OldPrefix(ctx)
+	case identityresttoken.FieldSecretHash:
+		return m.OldSecretHash(ctx)
+	case identityresttoken.FieldScopes:
+		return m.OldScopes(ctx)
+	case identityresttoken.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case identityresttoken.FieldLastUsedAt:
+		return m.OldLastUsedAt(ctx)
+	case identityresttoken.FieldRevokedAt:
+		return m.OldRevokedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown IdentityRESTToken field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *IdentityRESTTokenMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case identityresttoken.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case identityresttoken.FieldSubject:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubject(v)
+		return nil
+	case identityresttoken.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case identityresttoken.FieldPrefix:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPrefix(v)
+		return nil
+	case identityresttoken.FieldSecretHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSecretHash(v)
+		return nil
+	case identityresttoken.FieldScopes:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScopes(v)
+		return nil
+	case identityresttoken.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case identityresttoken.FieldLastUsedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastUsedAt(v)
+		return nil
+	case identityresttoken.FieldRevokedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevokedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown IdentityRESTToken field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *IdentityRESTTokenMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *IdentityRESTTokenMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *IdentityRESTTokenMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown IdentityRESTToken numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *IdentityRESTTokenMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(identityresttoken.FieldLastUsedAt) {
+		fields = append(fields, identityresttoken.FieldLastUsedAt)
+	}
+	if m.FieldCleared(identityresttoken.FieldRevokedAt) {
+		fields = append(fields, identityresttoken.FieldRevokedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *IdentityRESTTokenMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *IdentityRESTTokenMutation) ClearField(name string) error {
+	switch name {
+	case identityresttoken.FieldLastUsedAt:
+		m.ClearLastUsedAt()
+		return nil
+	case identityresttoken.FieldRevokedAt:
+		m.ClearRevokedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown IdentityRESTToken nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *IdentityRESTTokenMutation) ResetField(name string) error {
+	switch name {
+	case identityresttoken.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case identityresttoken.FieldSubject:
+		m.ResetSubject()
+		return nil
+	case identityresttoken.FieldName:
+		m.ResetName()
+		return nil
+	case identityresttoken.FieldPrefix:
+		m.ResetPrefix()
+		return nil
+	case identityresttoken.FieldSecretHash:
+		m.ResetSecretHash()
+		return nil
+	case identityresttoken.FieldScopes:
+		m.ResetScopes()
+		return nil
+	case identityresttoken.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case identityresttoken.FieldLastUsedAt:
+		m.ResetLastUsedAt()
+		return nil
+	case identityresttoken.FieldRevokedAt:
+		m.ResetRevokedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown IdentityRESTToken field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *IdentityRESTTokenMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.user != nil {
+		edges = append(edges, identityresttoken.EdgeUser)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *IdentityRESTTokenMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case identityresttoken.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *IdentityRESTTokenMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *IdentityRESTTokenMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *IdentityRESTTokenMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.cleareduser {
+		edges = append(edges, identityresttoken.EdgeUser)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *IdentityRESTTokenMutation) EdgeCleared(name string) bool {
+	switch name {
+	case identityresttoken.EdgeUser:
+		return m.cleareduser
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *IdentityRESTTokenMutation) ClearEdge(name string) error {
+	switch name {
+	case identityresttoken.EdgeUser:
+		m.ClearUser()
+		return nil
+	}
+	return fmt.Errorf("unknown IdentityRESTToken unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *IdentityRESTTokenMutation) ResetEdge(name string) error {
+	switch name {
+	case identityresttoken.EdgeUser:
+		m.ResetUser()
+		return nil
+	}
+	return fmt.Errorf("unknown IdentityRESTToken edge %s", name)
 }
 
 // IdentityRoleMutation represents an operation that mutates the IdentityRole nodes in the graph.

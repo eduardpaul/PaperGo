@@ -62,12 +62,12 @@ func (s *Service) Relationship(ctx context.Context, subject, itemID, edgeID stri
 		return t.relationshipView(ctx, subject, itemID, edge)
 	})
 }
-func relationshipVisibility(subject string) func(*entsql.Selector) {
+func relationshipVisibility(ctx context.Context, subject string) func(*entsql.Selector) {
 	return func(sel *entsql.Selector) {
 		for _, field := range []string{relationship.FieldSourceID, relationship.FieldTargetID} {
 			id := sel.C(field)
-			acl, args := permissionSQL(id, subject, "read")
-			visible, visibleArgs := visibleSQL(id, subject, "auto")
+			acl, args := permissionSQL(ctx, id, subject, "read")
+			visible, visibleArgs := visibleSQL(ctx, id, subject, "auto")
 			sel.Where(entsql.ExprP(acl+" AND "+visible, append(args, visibleArgs...)...))
 		}
 	}
@@ -85,7 +85,7 @@ func (s *Service) WorkspaceRelationships(ctx context.Context, subject, workspace
 		if w.Kind != resource.KindWorkspace {
 			return out, invalid("workspace_id must reference a workspace")
 		}
-		q := t.Client.Relationship.Query().Where(relationshipVisibility(subject))
+		q := t.Client.Relationship.Query().Where(relationshipVisibility(ctx, subject))
 		q.Where(func(sel *entsql.Selector) {
 			sel.Where(entsql.ExprP("EXISTS(SELECT 1 FROM resources peer WHERE peer.workspace_id=? AND peer.id IN ("+sel.C(relationship.FieldSourceID)+","+sel.C(relationship.FieldTargetID)+"))", workspaceID))
 		})

@@ -21,6 +21,7 @@ import (
 	"papergo/ent/identitymembership"
 	"papergo/ent/identityorganization"
 	"papergo/ent/identitypreference"
+	"papergo/ent/identityresttoken"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
 	"papergo/ent/itemhistory"
@@ -126,6 +127,7 @@ func checkColumn(t, c string) error {
 			identitymembership.Table:   identitymembership.ValidColumn,
 			identityorganization.Table: identityorganization.ValidColumn,
 			identitypreference.Table:   identitypreference.ValidColumn,
+			identityresttoken.Table:    identityresttoken.ValidColumn,
 			identityrole.Table:         identityrole.ValidColumn,
 			identityuser.Table:         identityuser.ValidColumn,
 			itemhistory.Table:          itemhistory.ValidColumn,

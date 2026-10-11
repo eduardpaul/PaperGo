@@ -19,6 +19,7 @@ import (
 	"papergo/ent/identitymembership"
 	"papergo/ent/identityorganization"
 	"papergo/ent/identitypreference"
+	"papergo/ent/identityresttoken"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
 	"papergo/ent/itemhistory"
@@ -710,6 +711,51 @@ func init() {
 	identitypreference.DefaultID = identitypreferenceDescID.Default.(func() string)
 	// identitypreference.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	identitypreference.IDValidator = identitypreferenceDescID.Validators[0].(func(string) error)
+	identityresttokenMixin := schema.IdentityRESTToken{}.Mixin()
+	identityresttokenMixinFields0 := identityresttokenMixin[0].Fields()
+	_ = identityresttokenMixinFields0
+	identityresttokenFields := schema.IdentityRESTToken{}.Fields()
+	_ = identityresttokenFields
+	// identityresttokenDescCreatedAt is the schema descriptor for created_at field.
+	identityresttokenDescCreatedAt := identityresttokenMixinFields0[1].Descriptor()
+	// identityresttoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	identityresttoken.DefaultCreatedAt = identityresttokenDescCreatedAt.Default.(func() time.Time)
+	// identityresttokenDescSubject is the schema descriptor for subject field.
+	identityresttokenDescSubject := identityresttokenFields[0].Descriptor()
+	// identityresttoken.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	identityresttoken.SubjectValidator = func() func(string) error {
+		validators := identityresttokenDescSubject.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(user string) error {
+			for _, fn := range fns {
+				if err := fn(user); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// identityresttokenDescName is the schema descriptor for name field.
+	identityresttokenDescName := identityresttokenFields[1].Descriptor()
+	// identityresttoken.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	identityresttoken.NameValidator = identityresttokenDescName.Validators[0].(func(string) error)
+	// identityresttokenDescPrefix is the schema descriptor for prefix field.
+	identityresttokenDescPrefix := identityresttokenFields[2].Descriptor()
+	// identityresttoken.PrefixValidator is a validator for the "prefix" field. It is called by the builders before save.
+	identityresttoken.PrefixValidator = identityresttokenDescPrefix.Validators[0].(func(string) error)
+	// identityresttokenDescSecretHash is the schema descriptor for secret_hash field.
+	identityresttokenDescSecretHash := identityresttokenFields[3].Descriptor()
+	// identityresttoken.SecretHashValidator is a validator for the "secret_hash" field. It is called by the builders before save.
+	identityresttoken.SecretHashValidator = identityresttokenDescSecretHash.Validators[0].(func(string) error)
+	// identityresttokenDescID is the schema descriptor for id field.
+	identityresttokenDescID := identityresttokenMixinFields0[0].Descriptor()
+	// identityresttoken.DefaultID holds the default value on creation for the id field.
+	identityresttoken.DefaultID = identityresttokenDescID.Default.(func() string)
+	// identityresttoken.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	identityresttoken.IDValidator = identityresttokenDescID.Validators[0].(func(string) error)
 	identityroleMixin := schema.IdentityRole{}.Mixin()
 	identityroleMixinFields0 := identityroleMixin[0].Fields()
 	_ = identityroleMixinFields0

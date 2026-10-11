@@ -36,16 +36,16 @@ type seekArm struct {
 // readable (head arm) or readable without drafts (published arm); an arm that
 // cannot match would otherwise scan its whole index to return nothing.
 func (s *Service) arms(ctx context.Context, p *seekPlan) ([]seekArm, error) {
-	draft, draftArgs := permissionSQL("r.id", p.subject, "read_draft")
-	read, readArgs := permissionSQL("r.id", p.subject, "read")
+	draft, draftArgs := permissionSQL(ctx, "r.id", p.subject, "read_draft")
+	read, readArgs := permissionSQL(ctx, "r.id", p.subject, "read")
 	switch p.surface {
 	case "head":
 		return []seekArm{{"head", draft, draftArgs}}, nil
 	case "published":
 		return []seekArm{{"published", read, readArgs}}, nil
 	}
-	scopeDraft, scopeDraftArgs := scopeGrantSQL("scopes.id", p.subject, "read_draft")
-	scopeRead, scopeReadArgs := scopeGrantSQL("scopes.id", p.subject, "read")
+	scopeDraft, scopeDraftArgs := scopeGrantSQL(ctx, "scopes.id", p.subject, "read_draft")
+	scopeRead, scopeReadArgs := scopeGrantSQL(ctx, "scopes.id", p.subject, "read")
 	args := append([]any{p.collection, p.collection}, scopeDraftArgs...)
 	args = append(append(args, scopeReadArgs...), scopeDraftArgs...)
 	var heads, published bool
