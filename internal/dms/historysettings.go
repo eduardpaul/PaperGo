@@ -47,7 +47,25 @@ func (s *Service) retainHistory(ctx context.Context, collection *ent.Resource, r
 			}
 		}
 	}
-	// Durable item events and publication audit reference immutable content
-	// snapshots independently of user history; retention removes history entries.
 	return nil
+}
+
+// CollectRevisions removes snapshots with no live surface, retained history or
+// queued event. Publication records contain their own immutable snapshots.
+// Queued events also keep the preceding revision for term-change triggers.
+func (s *Service) CollectRevisions(ctx context.Context) error {
+	return s.write(ctx, func(t *Service) error { return t.collectRevisions(ctx, "") })
+}
+
+func (s *Service) collectRevisions(ctx context.Context, itemID string) error {
+	_, err := s.Client.ExecContext(ctx, `DELETE FROM item_revisions AS v
+WHERE (?='' OR v.item_id=?)
+AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.head_revision_id=v.id OR r.published_revision_id=v.id)
+AND NOT EXISTS (SELECT 1 FROM item_surfaces p WHERE p.revision_id=v.id)
+AND NOT EXISTS (SELECT 1 FROM item_histories h WHERE h.revision_id=v.id)
+AND NOT EXISTS (SELECT 1 FROM domain_events e JOIN item_revisions event_revision
+ ON event_revision.id=json_extract(e.data,'$.revision_id')
+ WHERE e.dispatched_at IS NULL AND event_revision.item_id=v.item_id
+ AND (event_revision.id=v.id OR event_revision.revision_number=v.revision_number+1))`, itemID, itemID)
+	return err
 }

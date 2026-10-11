@@ -7,7 +7,6 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
-	"papergo/ent/itemrevision"
 	"papergo/ent/publication"
 	"papergo/ent/resource"
 	"time"
@@ -106,11 +105,6 @@ func (_c *PublicationCreate) SetNillableID(v *string) *PublicationCreate {
 // SetItem sets the "item" edge to the Resource entity.
 func (_c *PublicationCreate) SetItem(v *Resource) *PublicationCreate {
 	return _c.SetItemID(v.ID)
-}
-
-// SetRevision sets the "revision" edge to the ItemRevision entity.
-func (_c *PublicationCreate) SetRevision(v *ItemRevision) *PublicationCreate {
-	return _c.SetRevisionID(v.ID)
 }
 
 // Mutation returns the PublicationMutation object of the builder.
@@ -257,6 +251,10 @@ func (_c *PublicationCreate) createSpec() (*Publication, *sqlgraph.CreateSpec) {
 		_spec.SetField(publication.FieldAction, field.TypeEnum, value)
 		_node.Action = value
 	}
+	if value, ok := _c.mutation.RevisionID(); ok {
+		_spec.SetField(publication.FieldRevisionID, field.TypeString, value)
+		_node.RevisionID = &value
+	}
 	if value, ok := _c.mutation.PublishedBy(); ok {
 		_spec.SetField(publication.FieldPublishedBy, field.TypeString, value)
 		_node.PublishedBy = value
@@ -280,23 +278,6 @@ func (_c *PublicationCreate) createSpec() (*Publication, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.ItemID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.RevisionIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   publication.RevisionTable,
-			Columns: []string{publication.RevisionColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(itemrevision.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.RevisionID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

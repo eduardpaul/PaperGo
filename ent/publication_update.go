@@ -79,6 +79,9 @@ func (_u *PublicationUpdate) sqlSave(ctx context.Context) (_node int, err error)
 			}
 		}
 	}
+	if _u.mutation.RevisionIDCleared() {
+		_spec.ClearField(publication.FieldRevisionID, field.TypeString)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{publication.Label}
@@ -180,6 +183,9 @@ func (_u *PublicationUpdateOne) sqlSave(ctx context.Context) (_node *Publication
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.RevisionIDCleared() {
+		_spec.ClearField(publication.FieldRevisionID, field.TypeString)
 	}
 	_node = &Publication{config: _u.config}
 	_spec.Assign = _node.assignValues

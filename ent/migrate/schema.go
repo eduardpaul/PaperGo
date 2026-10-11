@@ -795,9 +795,9 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "version", Type: field.TypeInt},
 		{Name: "action", Type: field.TypeEnum, Enums: []string{"publish", "unpublish"}, Default: "publish"},
+		{Name: "revision_id", Type: field.TypeString, Nullable: true},
 		{Name: "published_by", Type: field.TypeString, Size: 255},
 		{Name: "snapshot", Type: field.TypeJSON},
-		{Name: "revision_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "item_id", Type: field.TypeString, Size: 36},
 	}
 	// PublicationsTable holds the schema information for the "publications" table.
@@ -806,12 +806,6 @@ var (
 		Columns:    PublicationsColumns,
 		PrimaryKey: []*schema.Column{PublicationsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "publications_item_revisions_revision",
-				Columns:    []*schema.Column{PublicationsColumns[6]},
-				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
 			{
 				Symbol:     "publications_resources_publications",
 				Columns:    []*schema.Column{PublicationsColumns[7]},
@@ -1592,8 +1586,7 @@ func init() {
 	OperationsTable.ForeignKeys[0].RefTable = ResourcesTable
 	OperationItemsTable.ForeignKeys[0].RefTable = OperationsTable
 	OperationItemsTable.ForeignKeys[1].RefTable = ResourcesTable
-	PublicationsTable.ForeignKeys[0].RefTable = ItemRevisionsTable
-	PublicationsTable.ForeignKeys[1].RefTable = ResourcesTable
+	PublicationsTable.ForeignKeys[0].RefTable = ResourcesTable
 	RelationshipsTable.ForeignKeys[0].RefTable = RelationshipTypesTable
 	RelationshipsTable.ForeignKeys[1].RefTable = ResourcesTable
 	RelationshipsTable.ForeignKeys[2].RefTable = ResourcesTable

@@ -212,6 +212,9 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 			return nil, err
 		}
 		err = s.Client.Resource.UpdateOneID(r.ID).SetPublishedRevisionID(rev.ID).Exec(ctx)
+		if err == nil {
+			err = s.collectRevisions(ctx, r.ID)
+		}
 		return rev, err
 	}
 	typ := EventItemUpdated

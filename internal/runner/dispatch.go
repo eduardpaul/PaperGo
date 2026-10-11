@@ -130,6 +130,9 @@ func (r *Runner) dispatchBatch(ctx context.Context) (int, []string, error) {
 		if err = t.Client.DomainEvent.Update().Where(domainevent.IDIn(ids...)).SetDispatchedAt(time.Now().UTC()).Exec(ctx); err != nil {
 			return err
 		}
+		if err = t.CollectRevisions(ctx); err != nil {
+			return err
+		}
 		n = len(rows)
 		return nil
 	})

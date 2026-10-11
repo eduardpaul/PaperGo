@@ -31,8 +31,6 @@ const (
 	FieldSnapshot = "snapshot"
 	// EdgeItem holds the string denoting the item edge name in mutations.
 	EdgeItem = "item"
-	// EdgeRevision holds the string denoting the revision edge name in mutations.
-	EdgeRevision = "revision"
 	// Table holds the table name of the publication in the database.
 	Table = "publications"
 	// ItemTable is the table that holds the item relation/edge.
@@ -42,13 +40,6 @@ const (
 	ItemInverseTable = "resources"
 	// ItemColumn is the table column denoting the item relation/edge.
 	ItemColumn = "item_id"
-	// RevisionTable is the table that holds the revision relation/edge.
-	RevisionTable = "publications"
-	// RevisionInverseTable is the table name for the ItemRevision entity.
-	// It exists in this package in order to avoid circular dependency with the "itemrevision" package.
-	RevisionInverseTable = "item_revisions"
-	// RevisionColumn is the table column denoting the revision relation/edge.
-	RevisionColumn = "revision_id"
 )
 
 // Columns holds all SQL columns for publication fields.
@@ -158,24 +149,10 @@ func ByItemField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newItemStep(), sql.OrderByField(field, opts...))
 	}
 }
-
-// ByRevisionField orders the results by revision field.
-func ByRevisionField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newRevisionStep(), sql.OrderByField(field, opts...))
-	}
-}
 func newItemStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ItemInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, ItemTable, ItemColumn),
-	)
-}
-func newRevisionStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(RevisionInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, RevisionTable, RevisionColumn),
 	)
 }

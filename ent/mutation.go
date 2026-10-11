@@ -16789,24 +16789,23 @@ func (m *OperationItemMutation) ResetEdge(name string) error {
 // PublicationMutation represents an operation that mutates the Publication nodes in the graph.
 type PublicationMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	created_at      *time.Time
-	version         *int
-	addversion      *int
-	action          *publication.Action
-	published_by    *string
-	snapshot        *jsontext.Value
-	appendsnapshot  jsontext.Value
-	clearedFields   map[string]struct{}
-	item            *string
-	cleareditem     bool
-	revision        *string
-	clearedrevision bool
-	done            bool
-	oldValue        func(context.Context) (*Publication, error)
-	predicates      []predicate.Publication
+	op             Op
+	typ            string
+	id             *string
+	created_at     *time.Time
+	version        *int
+	addversion     *int
+	action         *publication.Action
+	revision_id    *string
+	published_by   *string
+	snapshot       *jsontext.Value
+	appendsnapshot jsontext.Value
+	clearedFields  map[string]struct{}
+	item           *string
+	cleareditem    bool
+	done           bool
+	oldValue       func(context.Context) (*Publication, error)
+	predicates     []predicate.Publication
 }
 
 var _ ent.Mutation = (*PublicationMutation)(nil)
@@ -17079,12 +17078,12 @@ func (m *PublicationMutation) ResetAction() {
 
 // SetRevisionID sets the "revision_id" field.
 func (m *PublicationMutation) SetRevisionID(s string) {
-	m.revision = &s
+	m.revision_id = &s
 }
 
 // RevisionID returns the value of the "revision_id" field in the mutation.
 func (m *PublicationMutation) RevisionID() (r string, exists bool) {
-	v := m.revision
+	v := m.revision_id
 	if v == nil {
 		return
 	}
@@ -17110,7 +17109,7 @@ func (m *PublicationMutation) OldRevisionID(ctx context.Context) (v *string, err
 
 // ClearRevisionID clears the value of the "revision_id" field.
 func (m *PublicationMutation) ClearRevisionID() {
-	m.revision = nil
+	m.revision_id = nil
 	m.clearedFields[publication.FieldRevisionID] = struct{}{}
 }
 
@@ -17122,7 +17121,7 @@ func (m *PublicationMutation) RevisionIDCleared() bool {
 
 // ResetRevisionID resets all changes to the "revision_id" field.
 func (m *PublicationMutation) ResetRevisionID() {
-	m.revision = nil
+	m.revision_id = nil
 	delete(m.clearedFields, publication.FieldRevisionID)
 }
 
@@ -17240,33 +17239,6 @@ func (m *PublicationMutation) ResetItem() {
 	m.cleareditem = false
 }
 
-// ClearRevision clears the "revision" edge to the ItemRevision entity.
-func (m *PublicationMutation) ClearRevision() {
-	m.clearedrevision = true
-	m.clearedFields[publication.FieldRevisionID] = struct{}{}
-}
-
-// RevisionCleared reports if the "revision" edge to the ItemRevision entity was cleared.
-func (m *PublicationMutation) RevisionCleared() bool {
-	return m.RevisionIDCleared() || m.clearedrevision
-}
-
-// RevisionIDs returns the "revision" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// RevisionID instead. It exists only for internal usage by the builders.
-func (m *PublicationMutation) RevisionIDs() (ids []string) {
-	if id := m.revision; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetRevision resets all changes to the "revision" edge.
-func (m *PublicationMutation) ResetRevision() {
-	m.revision = nil
-	m.clearedrevision = false
-}
-
 // Where appends a list predicates to the PublicationMutation builder.
 func (m *PublicationMutation) Where(ps ...predicate.Publication) {
 	m.predicates = append(m.predicates, ps...)
@@ -17314,7 +17286,7 @@ func (m *PublicationMutation) Fields() []string {
 	if m.action != nil {
 		fields = append(fields, publication.FieldAction)
 	}
-	if m.revision != nil {
+	if m.revision_id != nil {
 		fields = append(fields, publication.FieldRevisionID)
 	}
 	if m.published_by != nil {
@@ -17526,12 +17498,9 @@ func (m *PublicationMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *PublicationMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.item != nil {
 		edges = append(edges, publication.EdgeItem)
-	}
-	if m.revision != nil {
-		edges = append(edges, publication.EdgeRevision)
 	}
 	return edges
 }
@@ -17544,17 +17513,13 @@ func (m *PublicationMutation) AddedIDs(name string) []ent.Value {
 		if id := m.item; id != nil {
 			return []ent.Value{*id}
 		}
-	case publication.EdgeRevision:
-		if id := m.revision; id != nil {
-			return []ent.Value{*id}
-		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *PublicationMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -17566,12 +17531,9 @@ func (m *PublicationMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *PublicationMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.cleareditem {
 		edges = append(edges, publication.EdgeItem)
-	}
-	if m.clearedrevision {
-		edges = append(edges, publication.EdgeRevision)
 	}
 	return edges
 }
@@ -17582,8 +17544,6 @@ func (m *PublicationMutation) EdgeCleared(name string) bool {
 	switch name {
 	case publication.EdgeItem:
 		return m.cleareditem
-	case publication.EdgeRevision:
-		return m.clearedrevision
 	}
 	return false
 }
@@ -17595,9 +17555,6 @@ func (m *PublicationMutation) ClearEdge(name string) error {
 	case publication.EdgeItem:
 		m.ClearItem()
 		return nil
-	case publication.EdgeRevision:
-		m.ClearRevision()
-		return nil
 	}
 	return fmt.Errorf("unknown Publication unique edge %s", name)
 }
@@ -17608,9 +17565,6 @@ func (m *PublicationMutation) ResetEdge(name string) error {
 	switch name {
 	case publication.EdgeItem:
 		m.ResetItem()
-		return nil
-	case publication.EdgeRevision:
-		m.ResetRevision()
 		return nil
 	}
 	return fmt.Errorf("unknown Publication edge %s", name)

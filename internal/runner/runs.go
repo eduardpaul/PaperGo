@@ -422,7 +422,10 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 	cutoff := time.Now().Add(-r.cfg.Retention)
 	if err := r.dms.Write(ctx, func(t *dms.Service) error {
 		_, err := t.Client.DomainEvent.Delete().Where(domainevent.DispatchedAtLT(cutoff)).Exec(ctx)
-		return err
+		if err != nil {
+			return err
+		}
+		return t.CollectRevisions(ctx)
 	}); err != nil {
 		return 0, err
 	}

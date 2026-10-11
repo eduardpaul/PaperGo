@@ -5,6 +5,7 @@ import (
 	"papergo/ent/resource"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
@@ -50,6 +51,77 @@ func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
 	c, err := s.Create(testContext, "alice", w.ID, CreateResource{TemplateKey: "documents", Name: "No history", Versioning: ptr("off"), MaxVersions: ptr(500)})
 	if err != nil || c.Versioning != resource.VersioningOff || c.MaxVersions != 500 {
 		t.Fatal(c, err)
+	}
+}
+
+func TestSnapshotCollectionKeepsHistorySurfacesAndQueuedEvents(t *testing.T) {
+	s, w, _ := fixture(t)
+	c, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Retention", Versioning: ptr("major"), MaxVersions: ptr(2), PublishingEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := create(t, s, c.ID, "item", "Published", nil)
+	publication, err := s.Publish(testContext, "alice", item.ID, item.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item = latest(t, s, item.ID)
+	for _, name := range []string{"Second", "Third", "Fourth", "Fifth"} {
+		item, err = s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: &name})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 5 {
+		t.Fatal("queued event snapshots were removed", err)
+	}
+	// The dispatcher consumes term-change snapshots before releasing them.
+	if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 3 {
+		t.Fatal("snapshots exceed history plus published surface", err)
+	}
+	if current, e := s.GetSurface(testContext, "alice", item.ID, "published"); e != nil || current.Name != "Published" {
+		t.Fatal(current, e)
+	}
+	if _, err = s.Unpublish(testContext, "alice", item.ID, item.Version); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 2 {
+		t.Fatal("unpublished snapshot was retained", err)
+	}
+	if recorded, e := s.Client.Publication.Get(testContext, publication.ID); e != nil || string(recorded.Snapshot) != string(publication.Snapshot) {
+		t.Fatal("publication audit snapshot changed", recorded, e)
+	}
+	// Foreign keys still prevent collecting the live head directly.
+	if err = s.Client.ItemRevision.DeleteOneID(*item.HeadRevisionID).Exec(testContext); err == nil {
+		t.Fatal("live head was deleted")
+	}
+}
+
+func TestHistoryOffSnapshotsDoNotAccumulateAfterDispatch(t *testing.T) {
+	s, w, _ := fixture(t)
+	c, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Off"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := create(t, s, c.ID, "item", "First", nil)
+	for _, name := range []string{"Second", "Third", "Fourth"} {
+		var err error
+		item, err = s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: &name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+			t.Fatal(err)
+		}
+		if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 1 {
+			t.Fatal("history-off snapshots accumulated", err)
+		}
 	}
 }
 

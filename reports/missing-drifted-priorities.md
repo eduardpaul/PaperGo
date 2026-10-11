@@ -1,6 +1,6 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 79 open comparisons: 51 missing, 14 partial, 14 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 78 open comparisons: 51 missing, 14 partial, 13 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
@@ -21,7 +21,7 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P1 · TSK-01 · Missing:** No task template, task-specific validation/assignment lifecycle or task views are registered. Person fields alone do not implement task behavior.
 - **P1 · TSK-04 · Missing:** Cannot port a personal task dashboard or document follow-up.
 
-## P2 (55)
+## P2 (54)
 
 - **P2 · TEN-01 · Drift:** Multi-organization hosting requires an explicit scope decision; workspace ACLs alone do not provide tenant isolation.
 - **P2 · TEN-02 · Missing:** Separate organizations cannot be provisioned and resolved by host in one service.
@@ -75,7 +75,6 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P2 · WS-05 · Drift:** An inactive subject can be added/promoted. Module access remains blocked until reactivation, but the accepted membership request differs.
 - **P2 · LST-43 · Drift:** A default listing omits inbound directed edges, and explicit directional filters return a different graph.
 - **P2 · LST-44 · Drift:** Item-updated workflows and future subscribers do not react to link changes.
-- **P2 · LST-46 · Drift:** The configured count bounds exposed history, not persisted content snapshots. History-off writes still grow internal snapshot storage. File cleanup is separately DOC-05.
 - **P2 · LST-48 · Drift:** A 256-character item title accepted upstream fails in Go. Title limits remain different even though custom text-field limits align.
 - **P2 · LST-50 · Partial:** An edge editor must page the list and resolve endpoints separately instead of directly fetching its target edge.
 

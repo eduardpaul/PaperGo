@@ -3890,22 +3890,6 @@ func (c *PublicationClient) QueryItem(_m *Publication) *ResourceQuery {
 	return query
 }
 
-// QueryRevision queries the revision edge of a Publication.
-func (c *PublicationClient) QueryRevision(_m *Publication) *ItemRevisionQuery {
-	query := (&ItemRevisionClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(publication.Table, publication.FieldID, id),
-			sqlgraph.To(itemrevision.Table, itemrevision.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, publication.RevisionTable, publication.RevisionColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *PublicationClient) Hooks() []Hook {
 	return c.hooks.Publication

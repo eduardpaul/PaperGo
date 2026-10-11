@@ -92,7 +92,19 @@ func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error)
 	if err := fn(t); err != nil {
 		return 0, err
 	}
-	return len(pending), recordEvents(ctx, tx, pending)
+	if err := recordEvents(ctx, tx, pending); err != nil {
+		return 0, err
+	}
+	seen := map[string]bool{}
+	for _, event := range pending {
+		if event.ResourceID != "" && !seen[event.ResourceID] {
+			if err := t.collectRevisions(ctx, event.ResourceID); err != nil {
+				return 0, err
+			}
+			seen[event.ResourceID] = true
+		}
+	}
+	return len(pending), nil
 }
 
 // WriteTx runs fn as one write inside tx, which the caller owns and commits.
