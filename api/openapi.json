@@ -951,7 +951,7 @@
         }
       ],
       "get": {
-        "summary": "Read accessible incoming/outgoing item relationships",
+        "summary": "Read accessible incident item relationships",
         "responses": {
           "200": {
             "description": "Success",
@@ -1011,11 +1011,8 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": [
-                "outgoing",
-                "incoming"
-              ],
-              "default": "outgoing"
+              "enum": ["both", "outgoing", "incoming"],
+              "default": "both"
             }
           },
           {

@@ -39,7 +39,7 @@ func TestRelationshipLabelsShareTaxonomyIdentity(t *testing.T) {
 	if e != nil || len(types.Data) != 1 || types.Data[0].Term.Name != "Associated" {
 		t.Fatal(types, e)
 	}
-	query, e := s.Relationships(ctx, "bob", a.ID, "outgoing", "Associé", "", 50)
+	query, e := s.Relationships(ctx, "bob", a.ID, "both", "Associé", "", 50)
 	if e != nil || len(query.Data) != 1 {
 		t.Fatal(query, e)
 	}
@@ -189,7 +189,7 @@ func TestRelationshipAmbiguousLabelsAndDuplicateMerge(t *testing.T) {
 	if _, e = s.MergeTerm(ctx, "alice", first.ID, tm.Version, MergeTermInput{TargetTermID: second.ID}); e != nil {
 		t.Fatal(e)
 	}
-	edges, e := s.Relationships(ctx, "alice", a.ID, "outgoing", "alias", "", 50)
+	edges, e := s.Relationships(ctx, "alice", a.ID, "both", "alias", "", 50)
 	if e != nil || len(edges.Data) != 1 || edges.Data[0].TypeID != second.ID {
 		t.Fatal(edges, e)
 	}

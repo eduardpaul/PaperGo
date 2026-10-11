@@ -75,10 +75,10 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	if n, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(item.ID)).Count(testContext); err != nil || n != 0 {
 		t.Fatal("source grants kept", n, err)
 	}
-	if links, err := s.Relationships(testContext, "alice", item.ID, "outgoing", "", "", 50); err != nil || len(links.Data) != 1 || links.Data[0].ID != edge.ID {
+	if links, err := s.Relationships(testContext, "alice", item.ID, "both", "", "", 50); err != nil || len(links.Data) != 1 || links.Data[0].ID != edge.ID {
 		t.Fatal("links lost", links, err)
 	}
-	if links, err := s.Relationships(testContext, "carol", item.ID, "outgoing", "", "", 50); err != nil || len(links.Data) != 0 {
+	if links, err := s.Relationships(testContext, "carol", item.ID, "both", "", "", 50); err != nil || len(links.Data) != 0 {
 		t.Fatal("source peer disclosed", links, err)
 	}
 	for _, collection := range []string{source.ID, dest.ID} {

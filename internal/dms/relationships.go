@@ -122,12 +122,14 @@ func (s *Service) Relationships(ctx context.Context, subject, itemID, direction,
 	}
 	q := s.Client.Relationship.Query()
 	switch direction {
-	case "", "outgoing":
-		q.Where(relationship.Or(relationship.SourceIDEQ(itemID), relationship.And(relationship.DirectedEQ(false), relationship.TargetIDEQ(itemID))))
+	case "", "both":
+		q.Where(relationship.Or(relationship.SourceIDEQ(itemID), relationship.TargetIDEQ(itemID)))
+	case "outgoing":
+		q.Where(relationship.DirectedEQ(true), relationship.SourceIDEQ(itemID))
 	case "incoming":
-		q.Where(relationship.Or(relationship.TargetIDEQ(itemID), relationship.And(relationship.DirectedEQ(false), relationship.SourceIDEQ(itemID))))
+		q.Where(relationship.DirectedEQ(true), relationship.TargetIDEQ(itemID))
 	default:
-		return Page[*ent.Relationship]{}, invalid("direction must be outgoing or incoming")
+		return Page[*ent.Relationship]{}, invalid("direction must be both, outgoing or incoming")
 	}
 	if typeValue != "" {
 		predicate, err := s.resolveRelationshipTerm(ctx, subject, typeValue, false)

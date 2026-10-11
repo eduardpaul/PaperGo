@@ -226,7 +226,7 @@ Curation, closed-set creation, imports, popularity counts and audit reads requir
 
 A relationship type's ID is a term ID in the organization Relationships/Types vocabulary (`relationship_types`). Its name, localized labels, synonyms and deprecation are curated through taxonomy. POST accepts `name` (label or term ID), inverse_label, directed, optional max_incoming/max_outgoing (1..1000) and attributes. Reads require `list.read` and `taxonomy.read`; ensure requires `list.write` and `taxonomy.read`. Unknown labels contribute terms to the open set. Attributes use unindexed scalar field definitions, including defaults and validation. Reference/multiple attributes are rejected. An empty attribute schema permits no custom keys.
 
-Directed=false creates symmetric links: endpoints are stored in canonical order, reverse retries return the existing edge, and incoming/outgoing queries include either endpoint. Symmetric types cannot have directional cardinality or inverse labels.
+Directed=false creates symmetric links: endpoints are stored in canonical order, reverse retries return the existing edge, and an omitted direction or `both` includes either endpoint. Explicit `incoming`/`outgoing` filters select directed edges only. Symmetric types cannot have directional cardinality or inverse labels.
 
 POST an item's existing relationships endpoint with:
 

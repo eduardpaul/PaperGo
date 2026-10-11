@@ -199,7 +199,7 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	if n, err := s.Client.Relationship.Query().Where(relationship.TargetIDEQ(inner.ID)).Count(testContext); err != nil || n != 1 {
 		t.Fatalf("relationship not retained for recovery: %d %v", n, err)
 	}
-	if links, err := s.Relationships(testContext, "alice", outside.ID, "outgoing", "", "", 50); err != nil || len(links.Data) != 0 {
+	if links, err := s.Relationships(testContext, "alice", outside.ID, "both", "", "", 50); err != nil || len(links.Data) != 0 {
 		t.Fatalf("deleted relationship exposed: %+v %v", links, err)
 	}
 	event, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(folder.ID), auditevent.ActionEQ("resource.delete")).Only(testContext)
