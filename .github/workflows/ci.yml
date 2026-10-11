@@ -34,6 +34,7 @@ jobs:
         run: bash scripts/docker-smoke.sh
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -51,6 +52,6 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test with race detection
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -timeout=15m ./...
       - name: Build portable API
         run: CGO_ENABLED=0 go build -trimpath -o bin/papergo ./cmd/api

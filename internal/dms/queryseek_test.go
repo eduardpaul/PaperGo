@@ -97,11 +97,15 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 	}
 }
 
-// pageAll collects every page of a query, at most three rows per page.
+// pageAll walks seek results three rows at a time. The sorting reference reads
+// the entire 24-row fixture in one query, avoiding repeated sorting CTE work.
 func pageAll(t *testing.T, s *Service, subject, collection, surface string, spec QuerySpec, seek bool) []string {
 	t.Helper()
 	ids := []string{}
 	in := QueryRequest{Query: spec, Surface: surface, Limit: 3}
+	if !seek {
+		in.Limit = 100
+	}
 	for {
 		out, err := read(testContext, s, func(tx *Service) (QueryResult, error) {
 			q, err := tx.compileQuery(testContext, subject, collection, in, false)
