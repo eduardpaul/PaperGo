@@ -23,7 +23,7 @@ With globally installed tools, replace `.tools/atlas.exe` with `atlas`; run `go 
 ./scripts/check.ps1
 ```
 
-Tests use temporary SQLite files and apply the actual versioned migrations, including FTS5, triggers, foreign keys, and Atlas checksum validation. CI also runs the Go race detector, verifies regenerated Ent code, and runs Staticcheck. Dependency vulnerability scans run on pushes, pull requests, and weekly. The Docker smoke test builds the image, applies the schema to a disposable database, and checks readiness, liveness, and an authenticated write under the image's default user. Run it locally with Docker, Atlas, and curl installed: `bash scripts/docker-smoke.sh`.
+Tests use temporary SQLite files and apply the actual versioned migrations, including FTS5, triggers, foreign keys, and Atlas checksum validation. CI also runs the Go race detector, verifies regenerated Ent code, and runs Staticcheck. Dependency vulnerability scans run on pushes, pull requests, and weekly. The Docker smoke test builds the image, applies the schema to a disposable database using PaperGo's SQLite driver and the Atlas migration executor, and checks readiness, liveness, and an authenticated write under the image's default user. Run it locally with Docker, Go, and curl installed: `bash scripts/docker-smoke.sh`.
 
 The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
