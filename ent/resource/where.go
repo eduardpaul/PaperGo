@@ -1070,6 +1070,26 @@ func WebdavEnabledNEQ(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldNEQ(FieldWebdavEnabled, v))
 }
 
+// DuplicatePolicyEQ applies the EQ predicate on the "duplicate_policy" field.
+func DuplicatePolicyEQ(v DuplicatePolicy) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDuplicatePolicy, v))
+}
+
+// DuplicatePolicyNEQ applies the NEQ predicate on the "duplicate_policy" field.
+func DuplicatePolicyNEQ(v DuplicatePolicy) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldDuplicatePolicy, v))
+}
+
+// DuplicatePolicyIn applies the In predicate on the "duplicate_policy" field.
+func DuplicatePolicyIn(vs ...DuplicatePolicy) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldDuplicatePolicy, vs...))
+}
+
+// DuplicatePolicyNotIn applies the NotIn predicate on the "duplicate_policy" field.
+func DuplicatePolicyNotIn(vs ...DuplicatePolicy) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldDuplicatePolicy, vs...))
+}
+
 // UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
 func UpdatedAtEQ(v time.Time) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldUpdatedAt, v))

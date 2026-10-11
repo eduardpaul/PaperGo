@@ -175,10 +175,14 @@ func (s *Service) CanUpload(ctx context.Context, subject, id string, version int
 	}
 	return nil
 }
-func (s *Service) AttachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (out *ent.Blob, err error) {
+func (s *Service) AttachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (out *BlobUpload, err error) {
 	err = s.write(ctx, func(t *Service) error {
-		var e error
-		out, e = t.attachBlob(ctx, subject, id, version, in)
+		b, e := t.attachBlob(ctx, subject, id, version, in)
+		if e != nil {
+			return e
+		}
+		matches, e := t.checkDuplicatePolicy(ctx, subject, id, in.SHA256)
+		out = &BlobUpload{b, matches}
 		return e
 	})
 	return
@@ -208,7 +212,7 @@ func (s *Service) writeBlob(ctx context.Context, subject, id string, version int
 		return nil, ErrConflict
 	}
 	r.Version++
-	out, e := s.createBlob(ctx, id, in)
+	out, e := s.createBlob(ctx, subject, id, in, sourceVersion == nil)
 	if e != nil {
 		return nil, e
 	}
@@ -243,9 +247,14 @@ func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, v
 }
 
 // createBlob stores the metadata of the item's next blob version.
-func (s *Service) createBlob(ctx context.Context, itemID string, in BlobInput) (*ent.Blob, error) {
+func (s *Service) createBlob(ctx context.Context, subject, itemID string, in BlobInput, checkDuplicates bool) (*ent.Blob, error) {
 	if !filenameValid(in.Filename) || in.Size < 0 || len(in.SHA256) != 64 || len(in.ContentType) > 255 || in.ContentType == "" || in.ObjectKey == "" {
 		return nil, invalid("invalid blob metadata")
+	}
+	if checkDuplicates {
+		if _, err := s.checkDuplicatePolicy(ctx, subject, itemID, in.SHA256); err != nil {
+			return nil, err
+		}
 	}
 	version := 1
 	last, err := s.Client.Blob.Query().Where(blob.ItemIDEQ(itemID)).Order(ent.Desc(blob.FieldVersion)).First(ctx)

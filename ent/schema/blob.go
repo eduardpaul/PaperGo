@@ -26,5 +26,5 @@ func (Blob) Edges() []ent.Edge {
 	return []ent.Edge{edge.From("item", Resource.Type).Ref("blobs").Field("item_id").Unique().Required().Immutable()}
 }
 func (Blob) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("item_id", "version").Unique(), index.Fields("object_key")}
+	return []ent.Index{index.Fields("item_id", "version").Unique(), index.Fields("object_key"), index.Fields("sha256", "item_id")}
 }

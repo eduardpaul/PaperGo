@@ -64,6 +64,8 @@ type Resource struct {
 	MaxVersions int `json:"max_versions,omitempty"`
 	// WebdavEnabled holds the value of the "webdav_enabled" field.
 	WebdavEnabled bool `json:"webdav_enabled,omitempty"`
+	// DuplicatePolicy holds the value of the "duplicate_policy" field.
+	DuplicatePolicy resource.DuplicatePolicy `json:"duplicate_policy,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// CreatedBy holds the value of the "created_by" field.
@@ -266,7 +268,7 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case resource.FieldVersion, resource.FieldNextRevisionNumber, resource.FieldMaxVersions:
 			values[i] = new(sql.NullInt64)
-		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey, resource.FieldDeletedBy:
+		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldDuplicatePolicy, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey, resource.FieldDeletedBy:
 			values[i] = new(sql.NullString)
 		case resource.FieldCreatedAt, resource.FieldUpdatedAt, resource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -434,6 +436,12 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field webdav_enabled", values[i])
 			} else if value.Valid {
 				_m.WebdavEnabled = value.Bool
+			}
+		case resource.FieldDuplicatePolicy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field duplicate_policy", values[i])
+			} else if value.Valid {
+				_m.DuplicatePolicy = resource.DuplicatePolicy(value.String)
 			}
 		case resource.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -664,6 +672,9 @@ func (_m *Resource) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("webdav_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WebdavEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("duplicate_policy=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DuplicatePolicy))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))

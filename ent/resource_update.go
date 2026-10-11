@@ -360,6 +360,20 @@ func (_u *ResourceUpdate) SetNillableWebdavEnabled(v *bool) *ResourceUpdate {
 	return _u
 }
 
+// SetDuplicatePolicy sets the "duplicate_policy" field.
+func (_u *ResourceUpdate) SetDuplicatePolicy(v resource.DuplicatePolicy) *ResourceUpdate {
+	_u.mutation.SetDuplicatePolicy(v)
+	return _u
+}
+
+// SetNillableDuplicatePolicy sets the "duplicate_policy" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableDuplicatePolicy(v *resource.DuplicatePolicy) *ResourceUpdate {
+	if v != nil {
+		_u.SetDuplicatePolicy(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ResourceUpdate) SetUpdatedAt(v time.Time) *ResourceUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -932,6 +946,11 @@ func (_u *ResourceUpdate) check() error {
 			return &ValidationError{Name: "max_versions", err: fmt.Errorf(`ent: validator failed for field "Resource.max_versions": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DuplicatePolicy(); ok {
+		if err := resource.DuplicatePolicyValidator(v); err != nil {
+			return &ValidationError{Name: "duplicate_policy", err: fmt.Errorf(`ent: validator failed for field "Resource.duplicate_policy": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ScopeID(); ok {
 		if err := resource.ScopeIDValidator(v); err != nil {
 			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
@@ -1023,6 +1042,9 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.WebdavEnabled(); ok {
 		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DuplicatePolicy(); ok {
+		_spec.SetField(resource.FieldDuplicatePolicy, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)
@@ -1949,6 +1971,20 @@ func (_u *ResourceUpdateOne) SetNillableWebdavEnabled(v *bool) *ResourceUpdateOn
 	return _u
 }
 
+// SetDuplicatePolicy sets the "duplicate_policy" field.
+func (_u *ResourceUpdateOne) SetDuplicatePolicy(v resource.DuplicatePolicy) *ResourceUpdateOne {
+	_u.mutation.SetDuplicatePolicy(v)
+	return _u
+}
+
+// SetNillableDuplicatePolicy sets the "duplicate_policy" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableDuplicatePolicy(v *resource.DuplicatePolicy) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetDuplicatePolicy(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ResourceUpdateOne) SetUpdatedAt(v time.Time) *ResourceUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -2534,6 +2570,11 @@ func (_u *ResourceUpdateOne) check() error {
 			return &ValidationError{Name: "max_versions", err: fmt.Errorf(`ent: validator failed for field "Resource.max_versions": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DuplicatePolicy(); ok {
+		if err := resource.DuplicatePolicyValidator(v); err != nil {
+			return &ValidationError{Name: "duplicate_policy", err: fmt.Errorf(`ent: validator failed for field "Resource.duplicate_policy": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ScopeID(); ok {
 		if err := resource.ScopeIDValidator(v); err != nil {
 			return &ValidationError{Name: "scope_id", err: fmt.Errorf(`ent: validator failed for field "Resource.scope_id": %w`, err)}
@@ -2642,6 +2683,9 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if value, ok := _u.mutation.WebdavEnabled(); ok {
 		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DuplicatePolicy(); ok {
+		_spec.SetField(resource.FieldDuplicatePolicy, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)

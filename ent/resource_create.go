@@ -286,6 +286,20 @@ func (_c *ResourceCreate) SetNillableWebdavEnabled(v *bool) *ResourceCreate {
 	return _c
 }
 
+// SetDuplicatePolicy sets the "duplicate_policy" field.
+func (_c *ResourceCreate) SetDuplicatePolicy(v resource.DuplicatePolicy) *ResourceCreate {
+	_c.mutation.SetDuplicatePolicy(v)
+	return _c
+}
+
+// SetNillableDuplicatePolicy sets the "duplicate_policy" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableDuplicatePolicy(v *resource.DuplicatePolicy) *ResourceCreate {
+	if v != nil {
+		_c.SetDuplicatePolicy(*v)
+	}
+	return _c
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_c *ResourceCreate) SetUpdatedAt(v time.Time) *ResourceCreate {
 	_c.mutation.SetUpdatedAt(v)
@@ -645,6 +659,10 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultWebdavEnabled
 		_c.mutation.SetWebdavEnabled(v)
 	}
+	if _, ok := _c.mutation.DuplicatePolicy(); !ok {
+		v := resource.DefaultDuplicatePolicy
+		_c.mutation.SetDuplicatePolicy(v)
+	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := resource.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
@@ -767,6 +785,14 @@ func (_c *ResourceCreate) check() error {
 	}
 	if _, ok := _c.mutation.WebdavEnabled(); !ok {
 		return &ValidationError{Name: "webdav_enabled", err: errors.New(`ent: missing required field "Resource.webdav_enabled"`)}
+	}
+	if _, ok := _c.mutation.DuplicatePolicy(); !ok {
+		return &ValidationError{Name: "duplicate_policy", err: errors.New(`ent: missing required field "Resource.duplicate_policy"`)}
+	}
+	if v, ok := _c.mutation.DuplicatePolicy(); ok {
+		if err := resource.DuplicatePolicyValidator(v); err != nil {
+			return &ValidationError{Name: "duplicate_policy", err: fmt.Errorf(`ent: validator failed for field "Resource.duplicate_policy": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Resource.updated_at"`)}
@@ -894,6 +920,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.WebdavEnabled(); ok {
 		_spec.SetField(resource.FieldWebdavEnabled, field.TypeBool, value)
 		_node.WebdavEnabled = value
+	}
+	if value, ok := _c.mutation.DuplicatePolicy(); ok {
+		_spec.SetField(resource.FieldDuplicatePolicy, field.TypeEnum, value)
+		_node.DuplicatePolicy = value
 	}
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(resource.FieldUpdatedAt, field.TypeTime, value)

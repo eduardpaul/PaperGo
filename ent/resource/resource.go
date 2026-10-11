@@ -59,6 +59,8 @@ const (
 	FieldMaxVersions = "max_versions"
 	// FieldWebdavEnabled holds the string denoting the webdav_enabled field in the database.
 	FieldWebdavEnabled = "webdav_enabled"
+	// FieldDuplicatePolicy holds the string denoting the duplicate_policy field in the database.
+	FieldDuplicatePolicy = "duplicate_policy"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
 	// FieldCreatedBy holds the string denoting the created_by field in the database.
@@ -216,6 +218,7 @@ var Columns = []string{
 	FieldVersioning,
 	FieldMaxVersions,
 	FieldWebdavEnabled,
+	FieldDuplicatePolicy,
 	FieldUpdatedAt,
 	FieldCreatedBy,
 	FieldUpdatedBy,
@@ -348,6 +351,33 @@ func VersioningValidator(v Versioning) error {
 	}
 }
 
+// DuplicatePolicy defines the type for the "duplicate_policy" enum field.
+type DuplicatePolicy string
+
+// DuplicatePolicyWarn is the default value of the DuplicatePolicy enum.
+const DefaultDuplicatePolicy = DuplicatePolicyWarn
+
+// DuplicatePolicy values.
+const (
+	DuplicatePolicyAllow DuplicatePolicy = "allow"
+	DuplicatePolicyWarn  DuplicatePolicy = "warn"
+	DuplicatePolicyBlock DuplicatePolicy = "block"
+)
+
+func (dp DuplicatePolicy) String() string {
+	return string(dp)
+}
+
+// DuplicatePolicyValidator is a validator for the "duplicate_policy" field enum values. It is called by the builders before save.
+func DuplicatePolicyValidator(dp DuplicatePolicy) error {
+	switch dp {
+	case DuplicatePolicyAllow, DuplicatePolicyWarn, DuplicatePolicyBlock:
+		return nil
+	default:
+		return fmt.Errorf("resource: invalid enum value for duplicate_policy field: %q", dp)
+	}
+}
+
 // OrderOption defines the ordering options for the Resource queries.
 type OrderOption func(*sql.Selector)
 
@@ -449,6 +479,11 @@ func ByMaxVersions(opts ...sql.OrderTermOption) OrderOption {
 // ByWebdavEnabled orders the results by the webdav_enabled field.
 func ByWebdavEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWebdavEnabled, opts...).ToFunc()
+}
+
+// ByDuplicatePolicy orders the results by the duplicate_policy field.
+func ByDuplicatePolicy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDuplicatePolicy, opts...).ToFunc()
 }
 
 // ByUpdatedAt orders the results by the updated_at field.

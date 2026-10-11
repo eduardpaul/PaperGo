@@ -18873,6 +18873,7 @@ type ResourceMutation struct {
 	max_versions              *int
 	addmax_versions           *int
 	webdav_enabled            *bool
+	duplicate_policy          *resource.DuplicatePolicy
 	updated_at                *time.Time
 	created_by                *string
 	updated_by                *string
@@ -19987,6 +19988,42 @@ func (m *ResourceMutation) ResetWebdavEnabled() {
 	m.webdav_enabled = nil
 }
 
+// SetDuplicatePolicy sets the "duplicate_policy" field.
+func (m *ResourceMutation) SetDuplicatePolicy(rp resource.DuplicatePolicy) {
+	m.duplicate_policy = &rp
+}
+
+// DuplicatePolicy returns the value of the "duplicate_policy" field in the mutation.
+func (m *ResourceMutation) DuplicatePolicy() (r resource.DuplicatePolicy, exists bool) {
+	v := m.duplicate_policy
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDuplicatePolicy returns the old "duplicate_policy" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldDuplicatePolicy(ctx context.Context) (v resource.DuplicatePolicy, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDuplicatePolicy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDuplicatePolicy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDuplicatePolicy: %w", err)
+	}
+	return oldValue.DuplicatePolicy, nil
+}
+
+// ResetDuplicatePolicy resets all changes to the "duplicate_policy" field.
+func (m *ResourceMutation) ResetDuplicatePolicy() {
+	m.duplicate_policy = nil
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (m *ResourceMutation) SetUpdatedAt(t time.Time) {
 	m.updated_at = &t
@@ -20946,7 +20983,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 29)
+	fields := make([]string, 0, 30)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -21012,6 +21049,9 @@ func (m *ResourceMutation) Fields() []string {
 	}
 	if m.webdav_enabled != nil {
 		fields = append(fields, resource.FieldWebdavEnabled)
+	}
+	if m.duplicate_policy != nil {
+		fields = append(fields, resource.FieldDuplicatePolicy)
 	}
 	if m.updated_at != nil {
 		fields = append(fields, resource.FieldUpdatedAt)
@@ -21086,6 +21126,8 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.MaxVersions()
 	case resource.FieldWebdavEnabled:
 		return m.WebdavEnabled()
+	case resource.FieldDuplicatePolicy:
+		return m.DuplicatePolicy()
 	case resource.FieldUpdatedAt:
 		return m.UpdatedAt()
 	case resource.FieldCreatedBy:
@@ -21153,6 +21195,8 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldMaxVersions(ctx)
 	case resource.FieldWebdavEnabled:
 		return m.OldWebdavEnabled(ctx)
+	case resource.FieldDuplicatePolicy:
+		return m.OldDuplicatePolicy(ctx)
 	case resource.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
 	case resource.FieldCreatedBy:
@@ -21329,6 +21373,13 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWebdavEnabled(v)
+		return nil
+	case resource.FieldDuplicatePolicy:
+		v, ok := value.(resource.DuplicatePolicy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDuplicatePolicy(v)
 		return nil
 	case resource.FieldUpdatedAt:
 		v, ok := value.(time.Time)
@@ -21595,6 +21646,9 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldWebdavEnabled:
 		m.ResetWebdavEnabled()
+		return nil
+	case resource.FieldDuplicatePolicy:
+		m.ResetDuplicatePolicy()
 		return nil
 	case resource.FieldUpdatedAt:
 		m.ResetUpdatedAt()

@@ -1420,7 +1420,7 @@
         "x-module-scopes": [
           "list.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": "Checks the library duplicate policy in the same transaction as the new file revision. Warn returns duplicates; block returns 409 duplicate_file and stores no revision. Self, deleted items, historical files and inaccessible content do not count. Requires list.write and item write access with current If-Match."
       },
       "get": {
         "summary": "Download selected head/published blob; supports byte ranges",
@@ -12644,6 +12644,15 @@
             "minimum": 1,
             "maximum": 500,
             "description": "History entries kept per item, trimmed on each new recorded version. Defaults to 50."
+          },
+          "duplicate_policy": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "warn",
+              "block"
+            ],
+            "description": "Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file."
           }
         },
         "required": [
@@ -12743,6 +12752,15 @@
             "type": "string",
             "format": "uuid",
             "description": "Optional non-empty caller UUID for items or folders. An existing readable live entry in the same collection is returned unchanged; a different/deleted/inaccessible entry conflicts. Omitting id generates a server UUID."
+          },
+          "duplicate_policy": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "warn",
+              "block"
+            ],
+            "description": "Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file."
           }
         },
         "required": [
@@ -12815,6 +12833,15 @@
             "type": "string",
             "format": "uuid",
             "description": "Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
+          },
+          "duplicate_policy": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "warn",
+              "block"
+            ],
+            "description": "Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file."
           }
         },
         "required": [],
@@ -13282,6 +13309,13 @@
             "minimum": 1,
             "description": "Resource lock version after upload; also returned as ETag.",
             "type": "integer"
+          },
+          "duplicates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DuplicateDocument"
+            },
+            "description": "Upload warnings: at most 20 current matching documents visible to the caller. Empty for allow and successful block uploads. Restoration does not apply upload duplicate policy."
           }
         }
       },
@@ -17111,6 +17145,15 @@
             "minimum": 1,
             "maximum": 500,
             "description": "History entries kept per item, trimmed on each new recorded version. Defaults to 50."
+          },
+          "duplicate_policy": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "warn",
+              "block"
+            ],
+            "description": "Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file."
           }
         }
       },
@@ -17184,6 +17227,32 @@
           "parent_id": {
             "type": "string",
             "description": "Destination folder ID; empty or omitted selects the collection root."
+          }
+        }
+      },
+      "DuplicateDocument": {
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "collection_id",
+          "item_id",
+          "name"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "item_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
           }
         }
       }

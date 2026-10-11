@@ -259,7 +259,7 @@ func TestBlobSelectionFollowsPublishedRevision(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return b
+		return b.Blob
 	}
 	old := attach("old")
 	item = current(t, s, item.ID)

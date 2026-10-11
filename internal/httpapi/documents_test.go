@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"papergo/ent"
@@ -98,5 +99,68 @@ func TestRestoreFileVersionAPI(t *testing.T) {
 	files, err = os.ReadDir(path)
 	if err != nil || len(files) != 0 {
 		t.Fatal("purge left restored bytes", len(files), err, strconv.Itoa(item.Version))
+	}
+}
+
+func TestDocumentDuplicatePolicyAPI(t *testing.T) {
+	h, s, path := setup(t)
+	ctx := t.Context()
+	w, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Files"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib, err := s.Create(ctx, "alice", w.ID, dms.CreateResource{Kind: "library", Name: "Documents"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := s.Create(ctx, "alice", lib.ID, dms.CreateResource{Kind: "item", Name: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.Create(ctx, "alice", lib.ID, dms.CreateResource{Kind: "item", Name: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := "/v1/items/" + a.ID + "/content"
+	second := "/v1/items/" + b.ID + "/content"
+	res := request(h, "PUT", first, "same bytes", testToken, `"1"`, "text/plain")
+	if res.Code != 201 {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	res = request(h, "PUT", second, "same bytes", testToken, `"1"`, "text/plain")
+	var upload struct {
+		Duplicates []dms.DuplicateDocument `json:"duplicates"`
+	}
+	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &upload) != nil || len(upload.Duplicates) != 1 || upload.Duplicates[0].ItemID != a.ID {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	res = request(h, "PATCH", "/v1/resources/"+lib.ID, `{"duplicate_policy":"block"}`, testToken, `"1"`, "application/json")
+	if res.Code != 200 {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	res = request(h, "PUT", second, "same bytes", testToken, `"2"`, "text/plain")
+	if res.Code != 409 || !strings.Contains(res.Body.String(), `"code":"duplicate_file"`) {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	files, err := os.ReadDir(path)
+	if err != nil || len(files) != 2 {
+		t.Fatal("rejected duplicate left an object", len(files), err)
+	}
+	res = request(h, "PUT", second, "new bytes", testToken, `"2"`, "text/plain")
+	if res.Code != 201 {
+		t.Fatal("failed upload consumed version", res.Code, res.Body.String())
+	}
+	// Historical bytes in B no longer block a replacement of A by itself.
+	res = request(h, "PUT", first, "same bytes", testToken, `"2"`, "text/plain")
+	if res.Code != 201 {
+		t.Fatal("self/historical duplicate", res.Code, res.Body.String())
+	}
+	res = request(h, "PATCH", "/v1/resources/"+w.ID, `{"duplicate_policy":"allow"}`, testToken, `"1"`, "application/json")
+	if res.Code != 422 {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	res = request(h, "PATCH", "/v1/resources/"+lib.ID, `{"duplicate_policy":"invalid"}`, testToken, `"2"`, "application/json")
+	if res.Code != 422 {
+		t.Fatal(res.Code, res.Body.String())
 	}
 }

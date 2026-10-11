@@ -225,10 +225,13 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	problem := func(status int, code, message string) {
 		a.problem(w, r, status, code, message, operationIndex...)
 	}
+	var duplicate *dms.DuplicateError
 	var validation *dms.ValidationError
 	var identityValidation *identity.ValidationError
 	var max *http.MaxBytesError
 	switch {
+	case errors.As(err, &duplicate):
+		problem(409, "duplicate_file", duplicate.Error()+"; matching item "+duplicate.Documents[0].ItemID)
 	case errors.As(err, &identityValidation):
 		problem(422, "validation_failed", identityValidation.Error())
 	case errors.Is(err, identity.ErrLastAdministrator):
@@ -539,7 +542,9 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, version+1)
-	respond(w, 201, map[string]any{"id": out.ID, "item_id": out.ItemID, "version": out.Version, "resource_version": version + 1, "filename": out.Filename, "content_type": out.ContentType, "size": out.Size, "sha256": out.Sha256})
+	result := blobResponse(out.Blob, version+1)
+	result["duplicates"] = out.Duplicates
+	respond(w, 201, result)
 }
 func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	b, err := a.DMS.GetBlob(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("blob_id"))

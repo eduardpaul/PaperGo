@@ -129,6 +129,7 @@ func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, e
 }
 
 type CreateResource struct {
+	DuplicatePolicy   *string        `json:"duplicate_policy,omitempty"`
 	ID                *string        `json:"id,omitempty"`
 	TemplateKey       string         `json:"template_key,omitempty"`
 	ContentTypeID     string         `json:"content_type_id,omitempty"`
@@ -174,6 +175,12 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			in.MaxVersions = &tpl.MaxVersions
 		}
 		in.PublishingEnabled, in.WebDAVEnabled = tpl.PublishingEnabled, tpl.WebDAVEnabled
+		if in.DuplicatePolicy == nil && tpl.DuplicatePolicy != "" {
+			in.DuplicatePolicy = &tpl.DuplicatePolicy
+		}
+	}
+	if err := validateDuplicatePolicy(in.Kind, in.DuplicatePolicy); err != nil {
+		return nil, err
 	}
 	collection := in.Kind == "list" || in.Kind == "library"
 	if err := validateHistorySettings(collection, in.Versioning, in.MaxVersions); err != nil {
@@ -327,6 +334,9 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	}
 	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
 	builder.SetVersioning(resource.Versioning(versioning)).SetNillableMaxVersions(in.MaxVersions)
+	if in.DuplicatePolicy != nil {
+		builder.SetDuplicatePolicy(resource.DuplicatePolicy(*in.DuplicatePolicy))
+	}
 	builder.SetDescription(in.Description)
 	if in.AllowFolders != nil {
 		builder.SetAllowFolders(*in.AllowFolders)
@@ -383,7 +393,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if out.Kind == resource.KindItem {
 		var blobID *string
 		if content != nil {
-			b, e := s.createBlob(ctx, out.ID, *content)
+			b, e := s.createBlob(ctx, subject, out.ID, *content, true)
 			if e != nil {
 				return nil, e
 			}
@@ -422,6 +432,7 @@ func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
 }
 
 type UpdateResource struct {
+	DuplicatePolicy   *string         `json:"duplicate_policy,omitempty"`
 	Name              *string         `json:"name,omitempty"`
 	Description       *string         `json:"description,omitempty"`
 	AllowFolders      *bool           `json:"allow_folders,omitempty"`
@@ -446,7 +457,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 }
 func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*ent.Resource, error) {
 	content := in.Name != nil || in.Description != nil || in.Tags != nil || in.Values != nil || in.ContentTypeID != nil
-	if !content && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
+	if !content && in.DuplicatePolicy == nil && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
 		return nil, invalid("at least one change is required")
 	}
 	if in.Name != nil {
@@ -462,6 +473,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	r, e := s.authorize(ctx, subject, id, "write")
 	if e != nil {
 		return nil, e
+	}
+	if err := validateDuplicatePolicy(string(r.Kind), in.DuplicatePolicy); err != nil {
+		return nil, err
 	}
 	collection := r.Kind == resource.KindList || r.Kind == resource.KindLibrary
 	if err := validateHistorySettings(collection, in.Versioning, in.MaxVersions); err != nil {
@@ -609,6 +623,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	}
 	if in.Versioning != nil {
 		b.SetVersioning(resource.Versioning(*in.Versioning))
+	}
+	if in.DuplicatePolicy != nil {
+		b.SetDuplicatePolicy(resource.DuplicatePolicy(*in.DuplicatePolicy))
 	}
 	if in.MaxVersions != nil {
 		b.SetMaxVersions(*in.MaxVersions)

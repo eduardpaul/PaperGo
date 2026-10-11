@@ -22,6 +22,7 @@ type CollectionTemplate struct {
 	MaxVersions       int             `json:"max_versions"`
 	PublishingEnabled bool            `json:"publishing_enabled"`
 	WebDAVEnabled     bool            `json:"webdav_enabled"`
+	DuplicatePolicy   string          `json:"duplicate_policy,omitempty"`
 	ContentTypes      []TemplateInput `json:"content_types"`
 	Views             []ViewInput     `json:"views"`
 }
@@ -43,6 +44,11 @@ func builtInCollectionTemplates() map[string]CollectionTemplate {
 
 // RegisterCollectionTemplate takes an owned copy; duplicate keys are errors.
 func (s *Service) RegisterCollectionTemplate(in CollectionTemplate) error {
+	if in.DuplicatePolicy != "" {
+		if err := validateDuplicatePolicy(in.Kind, &in.DuplicatePolicy); err != nil {
+			return err
+		}
+	}
 	if !fieldKey.MatchString(in.Key) {
 		return invalid("invalid collection template key")
 	}

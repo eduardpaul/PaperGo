@@ -73,6 +73,11 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{BlobsColumns[3]},
 			},
+			{
+				Name:    "blob_sha256_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{BlobsColumns[7], BlobsColumns[8]},
+			},
 		},
 	}
 	// BlobDeletionsColumns holds the columns for the "blob_deletions" table.
@@ -907,6 +912,7 @@ var (
 		{Name: "versioning", Type: field.TypeEnum, Enums: []string{"off", "major"}, Default: "off"},
 		{Name: "max_versions", Type: field.TypeInt, Default: 50},
 		{Name: "webdav_enabled", Type: field.TypeBool, Default: false},
+		{Name: "duplicate_policy", Type: field.TypeEnum, Enums: []string{"allow", "warn", "block"}, Default: "warn"},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "created_by", Type: field.TypeString, Default: ""},
 		{Name: "updated_by", Type: field.TypeString, Default: ""},
@@ -928,31 +934,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[25]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[26]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_head_revision",
+				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[27]},
-				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_published_revision",
+				Symbol:     "resources_item_revisions_head_revision",
 				Columns:    []*schema.Column{ResourcesColumns[28]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_schema_revisions_schema_head",
+				Symbol:     "resources_item_revisions_published_revision",
 				Columns:    []*schema.Column{ResourcesColumns[29]},
+				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "resources_schema_revisions_schema_head",
+				Columns:    []*schema.Column{ResourcesColumns[30]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -966,37 +972,37 @@ var (
 			{
 				Name:    "resource_kind_id_workspace_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[4], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[21]},
+				Columns: []*schema.Column{ResourcesColumns[4], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[22]},
 			},
 			{
 				Name:    "resource_workspace_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[21]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[22]},
 			},
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[0], ResourcesColumns[21]},
+				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[0], ResourcesColumns[22]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_content_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[3], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[3], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[21]},
+				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[22]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[25], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[23]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
 				},
