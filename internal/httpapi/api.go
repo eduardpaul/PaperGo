@@ -94,7 +94,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("DELETE /v1/webdav-credentials/{id}", a.revokeWebDAVCredential)
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
 	root := http.NewServeMux()
-	root.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]string{"status": "ok"}) })
+	root.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { respond(w, r, 200, map[string]string{"status": "ok"}) })
 	root.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second)
 		defer cancel()
@@ -102,7 +102,7 @@ func (a *API) Handler() http.Handler {
 			a.problem(w, r, 503, "unavailable", "service is not ready")
 			return
 		}
-		respond(w, 200, map[string]string{"status": "ok"})
+		respond(w, r, 200, map[string]string{"status": "ok"})
 	})
 	limit := a.limiter()
 	root.Handle("/", a.authenticate(limit(api)))
@@ -209,7 +209,30 @@ func transferRequest(r *http.Request) bool {
 	parts := strings.Split(r.URL.Path, "/")
 	return len(parts) == 5 && parts[1] == "v1" && parts[2] == "items" && parts[4] == "content"
 }
-func respond(w http.ResponseWriter, status int, body any) {
+func respond(w http.ResponseWriter, r *http.Request, status int, body any) {
+	if page, ok := body.(interface {
+		APIPage() (map[string]any, string)
+	}); ok {
+		values, cursor := page.APIPage()
+		values["@odata.nextLink"] = nil
+		if cursor != "" {
+			next := *r.URL
+			query := next.Query()
+			query.Set("$skiptoken", cursor)
+			next.RawQuery = query.Encode()
+			if next.Scheme == "" {
+				next.Scheme = "http"
+				if r.TLS != nil {
+					next.Scheme = "https"
+				}
+			}
+			if next.Host == "" {
+				next.Host = r.Host
+			}
+			values["@odata.nextLink"] = next.String()
+		}
+		body = values
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
@@ -254,8 +277,10 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):
 		problem(409, "folder_not_empty", "The folder is not empty.")
-	case errors.Is(err, dms.ErrConflict) || errors.Is(err, identity.ErrConflict) || identity.IsConstraint(err):
-		problem(409, "conflict", "version conflict or duplicate")
+	case errors.Is(err, dms.ErrPreconditionFailed) || errors.Is(err, identity.ErrPreconditionFailed):
+		problem(412, "precondition_failed", "resource changed; read its current ETag before retrying")
+	case errors.Is(err, dms.ErrConflict) || identity.IsConstraint(err):
+		problem(409, "conflict", "resource conflicts with existing state")
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &max):
 		problem(413, "payload_too_large", "request body exceeds size limit")
 	case errors.Is(err, context.DeadlineExceeded) && errors.Is(r.Context().Err(), context.DeadlineExceeded):
@@ -295,25 +320,43 @@ func etag(w http.ResponseWriter, version int) {
 	w.Header().Set("ETag", strconv.Quote(strconv.Itoa(version)))
 }
 func (a *API) version(w http.ResponseWriter, r *http.Request) (int, bool) {
-	raw := r.Header.Get("If-Match")
+	return a.versionAtLeast(w, r, 1)
+}
+func (a *API) versionAtLeast(w http.ResponseWriter, r *http.Request, minimum int) (int, bool) {
+	raw := strings.TrimSpace(r.Header.Get("If-Match"))
 	if raw == "" {
 		a.problem(w, r, 428, "precondition_required", "If-Match with the current resource ETag is required")
 		return 0, false
 	}
-	v, err := strconv.Unquote(raw)
-	if err != nil {
-		a.problem(w, r, 400, "invalid_precondition", "If-Match must be a quoted integer ETag")
-		return 0, false
+	raw = strings.TrimPrefix(raw, "W/")
+	valid := len(raw) > 2 && raw[0] == '"' && raw[len(raw)-1] == '"'
+	value := ""
+	if valid {
+		value = raw[1 : len(raw)-1]
+		for _, c := range value {
+			valid = valid && c >= '0' && c <= '9'
+		}
 	}
-	version, err := strconv.Atoi(v)
-	if err != nil || version < 1 {
-		a.problem(w, r, 400, "invalid_precondition", "If-Match must be a positive integer ETag")
+	version, err := strconv.Atoi(value)
+	if !valid || err != nil || version < minimum {
+		a.problem(w, r, 400, "invalid_precondition", "If-Match must contain one quoted numeric ETag")
 		return 0, false
 	}
 	return version, true
 }
 func queryInt(r *http.Request, key string) int {
-	v, _ := strconv.Atoi(r.URL.Query().Get(key))
+	v, err := strconv.Atoi(r.URL.Query().Get(key))
+	if key == "$top" {
+		if err != nil {
+			return 50
+		}
+		if v < 1 {
+			return 1
+		}
+		if v > 500 {
+			return 500
+		}
+	}
 	return v
 }
 func (a *API) workspace(w http.ResponseWriter, r *http.Request) {
@@ -332,7 +375,7 @@ func (a *API) workspace(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Location", "/v1/resources/"+out.ID)
 	etag(w, out.Version)
-	respond(w, 201, out)
+	respond(w, r, 201, out)
 }
 func (a *API) create(w http.ResponseWriter, r *http.Request) {
 	var in dms.CreateResource
@@ -350,7 +393,7 @@ func (a *API) create(w http.ResponseWriter, r *http.Request) {
 	if created {
 		status = 201
 	}
-	respond(w, status, out)
+	respond(w, r, status, out)
 }
 func (a *API) get(w http.ResponseWriter, r *http.Request) {
 	out, err := a.DMS.GetSurface(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("surface"))
@@ -359,7 +402,7 @@ func (a *API) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) update(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)
@@ -376,7 +419,7 @@ func (a *API) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)
@@ -399,13 +442,13 @@ func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) children(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("after"), Limit: queryInt(r, "limit"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")})
+	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")})
 }
 func (a *API) browse(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("after"), Limit: queryInt(r, "limit"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")}
+	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")}
 	if r.URL.Path == "/v1/workspaces" {
-		in = dms.Browse{After: q.Get("after"), Limit: queryInt(r, "limit")}
+		in = dms.Browse{After: q.Get("$skiptoken"), Limit: queryInt(r, "$top")}
 	}
 	a.list(w, r, in)
 }
@@ -415,7 +458,7 @@ func (a *API) list(w http.ResponseWriter, r *http.Request, in dms.Browse) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) fields(w http.ResponseWriter, r *http.Request) {
 	out, err := a.DMS.Fields(r.Context(), subject(r), r.PathValue("id"))
@@ -423,7 +466,7 @@ func (a *API) fields(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, map[string]any{"data": out})
+	respond(w, r, 200, map[string]any{"value": out, "@odata.nextLink": nil})
 }
 func (a *API) createField(w http.ResponseWriter, r *http.Request) {
 	var in dms.CreateField
@@ -435,7 +478,7 @@ func (a *API) createField(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 201, out)
+	respond(w, r, 201, out)
 }
 func (a *API) permissions(w http.ResponseWriter, r *http.Request) {
 	out, err := a.DMS.Permissions(r.Context(), subject(r), r.PathValue("id"))
@@ -443,7 +486,7 @@ func (a *API) permissions(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) setPermissions(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)
@@ -460,7 +503,7 @@ func (a *API) setPermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) link(w http.ResponseWriter, r *http.Request) {
 	var in dms.CreateRelationship
@@ -473,16 +516,16 @@ func (a *API) link(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 201, out)
+	respond(w, r, 201, out)
 }
 func (a *API) relationships(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	out, err := a.DMS.Relationships(r.Context(), subject(r), r.PathValue("id"), q.Get("direction"), q.Get("type"), q.Get("after"), queryInt(r, "limit"))
+	out, err := a.DMS.Relationships(r.Context(), subject(r), r.PathValue("id"), q.Get("direction"), q.Get("type"), q.Get("$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) unlink(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)
@@ -506,15 +549,15 @@ func (a *API) publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, version+1)
-	respond(w, 201, out)
+	respond(w, r, 201, out)
 }
 func (a *API) publications(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Publications(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "after_version"), queryInt(r, "limit"))
+	out, err := a.DMS.Publications(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, map[string]any{"data": out})
+	respond(w, r, 200, out)
 }
 func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)
@@ -552,7 +595,7 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 	etag(w, version+1)
 	result := blobResponse(out.Blob, version+1)
 	result["duplicates"] = out.Duplicates
-	respond(w, 201, result)
+	respond(w, r, 201, result)
 }
 func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	b, err := a.DMS.GetBlob(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("blob_id"))
@@ -572,12 +615,12 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(transfer.Writer(w), r, b.Filename, b.CreatedAt, file)
 }
 func (a *API) audit(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Audit(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
+	out, err := a.DMS.Audit(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 
 func (a *API) authenticate(next http.Handler) http.Handler {
@@ -640,11 +683,11 @@ func (a *API) observe(next http.Handler) http.Handler {
 // tags lists the workspace's tag vocabulary (keywords) for pickers and autocomplete.
 func (a *API) tags(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	out, err := a.DMS.Tags(r.Context(), subject(r), r.PathValue("id"), dms.TagsQuery{CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("after"), Limit: limit})
+	limit := queryInt(r, "$top")
+	out, err := a.DMS.Tags(r.Context(), subject(r), r.PathValue("id"), dms.TagsQuery{CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("$skiptoken"), Limit: limit})
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }

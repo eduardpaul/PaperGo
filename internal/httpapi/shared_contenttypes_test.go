@@ -69,7 +69,7 @@ func TestOrganizationContentTypeAPISharingAndScopeRevocation(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	res = request(curator, "PATCH", "/v1/fields/"+field.ID, `{"label":"Stale"}`, testToken, `"1"`, "application/json")
-	if res.Code != 409 {
+	if res.Code != 412 {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	for _, c := range []*ent.Resource{a, b} {

@@ -5,7 +5,7 @@ import "errors"
 var (
 	ErrForbidden      = errors.New("access denied")
 	ErrNotFound       = errors.New("resource not found")
-	ErrConflict       = errors.New("version conflict or duplicate")
+	ErrConflict       = errors.New("resource conflicts with existing state")
 	ErrLastOwner      = errors.New("a workspace needs at least one owner")
 	ErrFolderNotEmpty = errors.New("the folder is not empty")
 	// Library file paths distinguish a missing parent folder from a missing

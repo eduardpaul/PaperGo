@@ -110,7 +110,7 @@ func (s *Service) UpdateView(ctx context.Context, subject, id string, version in
 			return e
 		}
 		if v.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if e = t.validateView(ctx, subject, v.ContainerID, &in); e != nil {
 			return e
@@ -143,7 +143,7 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 			return e
 		}
 		if v.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if e = t.Client.ListView.DeleteOne(v).Exec(ctx); e != nil {
 			return e
@@ -155,8 +155,8 @@ func (s *Service) DeleteView(ctx context.Context, subject, id string, version in
 type ViewQueryRequest struct {
 	Select       []string `json:"select,omitempty"`
 	Surface      string   `json:"surface,omitempty"`
-	After        string   `json:"after,omitempty"`
-	Limit        int      `json:"limit,omitempty"`
+	After        string   `json:"-"`
+	Limit        int      `json:"-"`
 	IncludeTotal bool     `json:"include_total,omitempty"`
 }
 

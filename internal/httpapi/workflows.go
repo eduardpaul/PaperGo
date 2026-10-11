@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"strconv"
 
 	"papergo/internal/dms"
 	"papergo/internal/runner"
@@ -41,7 +40,7 @@ var triggerTypes = []map[string]string{
 }
 
 func (a *API) workflowCatalog(w http.ResponseWriter, r *http.Request) {
-	respond(w, 200, map[string]any{"triggers": triggerTypes, "activities": workflow.Activities(), "builtins": workflow.BuiltIns()})
+	respond(w, r, 200, map[string]any{"triggers": triggerTypes, "activities": workflow.Activities(), "builtins": workflow.BuiltIns()})
 }
 
 func (a *API) workflows(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +49,7 @@ func (a *API) workflows(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, map[string]any{"data": out})
+	respond(w, r, 200, map[string]any{"value": out, "@odata.nextLink": nil})
 }
 
 func (a *API) createWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +64,7 @@ func (a *API) createWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Location", "/v1/workflows/"+out.ID)
 	etag(w, out.Version)
-	respond(w, 201, out)
+	respond(w, r, 201, out)
 }
 
 func (a *API) getWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +74,7 @@ func (a *API) getWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 
 func (a *API) updateWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +92,7 @@ func (a *API) updateWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 
 func (a *API) deleteWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +113,7 @@ func (a *API) workflowVersions(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, map[string]any{"data": out})
+	respond(w, r, 200, map[string]any{"value": out, "@odata.nextLink": nil})
 }
 
 func (a *API) startWorkflow(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +126,7 @@ func (a *API) startWorkflow(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 202, map[string]any{"run_ids": ids})
+	respond(w, r, 202, map[string]any{"run_ids": ids})
 }
 
 func (a *API) workflowBuiltIns(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +135,7 @@ func (a *API) workflowBuiltIns(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, map[string]any{"data": out})
+	respond(w, r, 200, map[string]any{"value": out, "@odata.nextLink": nil})
 }
 
 // setWorkflowBuiltIn needs If-Match once the built-in's workflow exists.
@@ -158,7 +157,7 @@ func (a *API) setWorkflowBuiltIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 
 func (a *API) copyWorkflowBuiltIn(w http.ResponseWriter, r *http.Request) {
@@ -173,18 +172,18 @@ func (a *API) copyWorkflowBuiltIn(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Location", "/v1/workflows/"+out.ID)
 	etag(w, out.Version)
-	respond(w, 201, out)
+	respond(w, r, 201, out)
 }
 
 func (a *API) workflowRuns(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	out, err := a.Runner.Runs(r.Context(), subject(r), r.PathValue("id"), runner.RunFilter{WorkflowID: q.Get("workflow_id"), ItemID: q.Get("item_id"), After: q.Get("after"), Limit: limit})
+	limit := queryInt(r, "$top")
+	out, err := a.Runner.Runs(r.Context(), subject(r), r.PathValue("id"), runner.RunFilter{WorkflowID: q.Get("workflow_id"), ItemID: q.Get("item_id"), After: q.Get("$skiptoken"), Limit: limit})
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 
 func (a *API) workflowRun(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +192,7 @@ func (a *API) workflowRun(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 
 func (a *API) cancelWorkflowRun(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +201,7 @@ func (a *API) cancelWorkflowRun(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 
 func (a *API) retryWorkflowRun(w http.ResponseWriter, r *http.Request) {
@@ -211,5 +210,5 @@ func (a *API) retryWorkflowRun(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 202, out)
+	respond(w, r, 202, out)
 }

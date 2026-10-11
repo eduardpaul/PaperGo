@@ -105,7 +105,7 @@ func (s *Service) UpdateTemplate(ctx context.Context, subject, id string, versio
 			return e
 		}
 		if old.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if in.Key == "" {
 			in.Key = old.Key
@@ -150,7 +150,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			return invalid("templates apply to collections")
 		}
 		if c.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		typ, e := t.contentType(ctx, c.ID, typeID)
 		if e != nil {
@@ -167,7 +167,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 			return invalid("template belongs to a different workspace")
 		}
 		if tpl.Version != templateVersion {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		defs, e := definitions(tpl.Definition)
 		if e != nil {

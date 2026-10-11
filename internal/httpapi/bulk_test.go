@@ -37,7 +37,7 @@ func TestRESTBulkAtomicPreconditionsAndStrictJSON(t *testing.T) {
 	a, b := out.Data[0], out.Data[1]
 	rollback := fmt.Sprintf(`{"operations":[{"action":"update","id":%q,"version":1,"update":{"name":"Changed"}},{"action":"delete","id":%q,"version":9}]}`, a.ID, b.ID)
 	failed := request(h, "POST", path, rollback, testToken, "", "application/json")
-	if failed.Code != 409 || !strings.Contains(failed.Body.String(), `"operation_index":1`) || strings.Contains(failed.Body.String(), `"data"`) {
+	if failed.Code != 412 || !strings.Contains(failed.Body.String(), `"operation_index":1`) || strings.Contains(failed.Body.String(), `"data"`) {
 		t.Fatal("indexed conflict", failed.Code, failed.Body.String())
 	}
 	got, err := s.Get(ctx, "alice", a.ID)

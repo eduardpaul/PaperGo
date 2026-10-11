@@ -288,7 +288,7 @@ func (s *Service) UpdateRelationship(ctx context.Context, subject, itemID, linkI
 			}
 		}
 		if old.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		values := patchValues(old.Metadata, in.Metadata)
 		if b, e := json.Marshal(values); e != nil || len(b) > 16*1024 {

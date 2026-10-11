@@ -18,10 +18,10 @@ func TestRevisionHistoryChangesPaginationAndRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	history, err := s.RevisionHistory(testContext, "alice", item.ID, 1, 10)
-	if err != nil || len(history) != 1 || !history[0].IsCurrent || !slices.Equal(history[0].ChangedFields, []string{"$name", "$tags", "a", "b"}) {
+	if err != nil || len(history.Data) != 1 || !history.Data[0].IsCurrent || !slices.Equal(history.Data[0].ChangedFields, []string{"$name", "$tags", "a", "b"}) {
 		t.Fatal(history, err)
 	}
-	if history[0].Edges.SchemaRevision == nil {
+	if history.Data[0].Edges.SchemaRevision == nil {
 		t.Fatal("original schema missing")
 	}
 	if _, err = s.Revision(testContext, "alice", item.ID, 3); !errors.Is(err, ErrNotFound) {
@@ -37,7 +37,7 @@ func TestRevisionHistoryChangesPaginationAndRestore(t *testing.T) {
 	if revision, err := s.Revision(testContext, "reader", item.ID, 1); err != nil || revision.Name != "Original" {
 		t.Fatal("ordinary reader cannot read history", revision, err)
 	}
-	if _, err = s.RestoreRevision(testContext, "alice", item.ID, 1, item.Version-1); !errors.Is(err, ErrConflict) {
+	if _, err = s.RestoreRevision(testContext, "alice", item.ID, 1, item.Version-1); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal("stale restore", err)
 	}
 	restored, err := s.RestoreRevision(testContext, "alice", item.ID, 1, item.Version)
@@ -72,15 +72,15 @@ func TestOrdinaryReaderHistorySnapshotsAndAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err := s.RevisionHistory(testContext, "reader", item.ID, 0, 1)
-	if err != nil || len(rows) != 1 || rows[0].IsCurrent || rows[0].Name != "First" {
+	if err != nil || len(rows.Data) != 1 || rows.Data[0].IsCurrent || rows.Data[0].Name != "First" {
 		t.Fatal(rows, err)
 	}
-	defs, _, err := typedDefinitions(rows[0].Edges.SchemaRevision.Definition, rows[0].ContentTypeID)
+	defs, _, err := typedDefinitions(rows.Data[0].Edges.SchemaRevision.Definition, rows.Data[0].ContentTypeID)
 	if err != nil || definitionMap(defs)["note"].Label != "Original label" {
 		t.Fatal("original schema lost", defs, err)
 	}
 	rows, err = s.RevisionHistory(testContext, "reader", item.ID, 1, 1)
-	if err != nil || len(rows) != 1 || !rows[0].IsCurrent || rows[0].Name != "Unpublished" || !slices.Equal(rows[0].ChangedFields, []string{"$name", "note"}) {
+	if err != nil || len(rows.Data) != 1 || !rows.Data[0].IsCurrent || rows.Data[0].Name != "Unpublished" || !slices.Equal(rows.Data[0].ChangedFields, []string{"$name", "note"}) {
 		t.Fatal(rows, err)
 	}
 	if current, err := s.Get(testContext, "reader", item.ID); err != nil || current.Name != "First" {

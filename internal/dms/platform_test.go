@@ -52,8 +52,8 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 		t.Fatal(e)
 	}
 	rows, e := s.Schemas(testContext, "alice", l.ID, 0, 100)
-	if e != nil || len(rows) != 2 {
-		t.Fatal("template must freeze one effective schema", len(rows), e)
+	if e != nil || len(rows.Data) != 2 {
+		t.Fatal("template must freeze one effective schema", len(rows.Data), e)
 	}
 	r := create(t, s, l.ID, "item", "Invoice", map[string]any{"labels": []any{"red", "red", "blue"}, "email": "a@example.com", "date": "2026-10-07"})
 	if r.Values["serial"] != json.Number("9007199254740993") || r.Values["amount"] != "12.30" || len(r.Values["labels"].([]any)) != 2 {
@@ -73,7 +73,7 @@ func TestRichTemplatesFreezeSchemasAndPreserveExactDefaults(t *testing.T) {
 	if *c.SchemaHeadID != *l.SchemaHeadID {
 		t.Fatal("editing a template changed its consumers")
 	}
-	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version-1, ""); !errors.Is(e, ErrConflict) {
+	if _, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version-1, ""); !errors.Is(e, ErrPreconditionFailed) {
 		t.Fatal("template version ignored", e)
 	}
 	c, e = s.ApplyTemplate(testContext, "alice", l.ID, tpl.ID, c.Version, tpl.Version, "")
@@ -286,7 +286,7 @@ func TestQueriesViewsAndCountsUseVisibleContentBeforePagination(t *testing.T) {
 	if e != nil || current.IsDefault || current.Version != view.Version+1 {
 		t.Fatal("default view concurrency", current, e)
 	}
-	if _, e = s.UpdateView(testContext, "alice", view.ID, view.Version, ViewInput{Name: "Old"}); !errors.Is(e, ErrConflict) {
+	if _, e = s.UpdateView(testContext, "alice", view.ID, view.Version, ViewInput{Name: "Old"}); !errors.Is(e, ErrPreconditionFailed) {
 		t.Fatal("stale view update")
 	}
 	if _, e = s.CreateView(testContext, "reader", l.ID, ViewInput{Name: "Forbidden"}); !errors.Is(e, ErrForbidden) {
@@ -386,10 +386,10 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 	if e != nil || updated.Version != 2 {
 		t.Fatal("edge update", updated, e)
 	}
-	if _, e = s.UpdateRelationship(testContext, "alice", a.ID, edge.ID, edge.Version, UpdateRelationship{Metadata: map[string]any{"weight": "3.00"}}); !errors.Is(e, ErrConflict) {
+	if _, e = s.UpdateRelationship(testContext, "alice", a.ID, edge.ID, edge.Version, UpdateRelationship{Metadata: map[string]any{"weight": "3.00"}}); !errors.Is(e, ErrPreconditionFailed) {
 		t.Fatal("stale edge update")
 	}
-	if e = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, edge.Version); !errors.Is(e, ErrConflict) {
+	if e = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, edge.Version); !errors.Is(e, ErrPreconditionFailed) {
 		t.Fatal("stale edge delete")
 	}
 	if e = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, updated.Version); e != nil {

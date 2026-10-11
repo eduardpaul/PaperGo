@@ -29,7 +29,7 @@ func (s *Service) UpdateField(ctx context.Context, subject, containerID, fieldID
 			return e
 		}
 		if c.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		d, e := t.Client.FieldDefinition.Query().Where(collectionFieldPredicate(c.ID), fielddefinition.IDEQ(fieldID)).Only(ctx)
 		if ent.IsNotFound(e) {
@@ -56,7 +56,7 @@ func (s *Service) UpdateCatalogField(ctx context.Context, subject, id string, ve
 			return e
 		}
 		if d.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		out, e = t.updateCatalogField(ctx, subject, d, in)
 		return e

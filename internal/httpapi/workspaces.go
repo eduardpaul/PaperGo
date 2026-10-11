@@ -11,7 +11,7 @@ func (a *API) workspaceMembers(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, http.StatusOK, map[string]any{"data": members})
+	respond(w, r, http.StatusOK, map[string]any{"value": members})
 }
 
 func (a *API) setWorkspaceMember(w http.ResponseWriter, r *http.Request) {

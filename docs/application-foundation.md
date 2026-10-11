@@ -114,12 +114,11 @@ POST `/v1/resources/{collectionID}/query` executes a bounded collection-wide ite
     "sort":[{"field": "amount", "direction": "desc"}],
     "group_by": "status"
   },
-  "surface": "auto",
-  "limit": 50
+  "surface": "auto"
 }
 ```
 
-The response contains resource `data` and optional `next_cursor`. Set `"include_total": true` to receive the authorized match count in `total`; it evaluates every match. `sort` is an ordered array of up to eight unique field/direction pairs, with independent `asc` or `desc` directions. Custom sort keys require ready scalar indexes. An omitted or empty array uses `$id` ascending. Missing values sort last at each key; the final ID tie follows the primary direction. Single-key pages scan the sort index; multiple keys sort the authorized matching set and use a typed lexicographic keyset cursor. Cursors bind the caller, collection, schema, surface, query and selection. Changing these inputs restarts pagination. Concurrent edits can move items between pages; snapshot guarantees apply to each request.
+The response contains resource `value` and `@odata.nextLink` (null on the final page). Set `$top` in the URL to select a page size (default 50, clamped to 1–500). Follow the returned link using POST with the same JSON body. The URL carries the opaque `$skiptoken`; paging is not part of the query body. Set `"include_total": true` to receive the authorized match count in `total`; it evaluates every match. `sort` is an ordered array of up to eight unique field/direction pairs, with independent `asc` or `desc` directions. Custom sort keys require ready scalar indexes. An omitted or empty array uses `$id` ascending. Missing values sort last at each key; the final ID tie follows the primary direction. Single-key pages scan the sort index; multiple keys sort the authorized matching set and use a typed lexicographic keyset cursor. Cursors bind the caller, collection, schema, surface, query and selection. Changing these inputs restarts pagination. Concurrent edits can move items between pages; snapshot guarantees apply to each request.
 
 `select` is an optional array of up to 50 unique known field keys on direct and saved-view query requests. It projects custom values in SQL, including unindexed fields; `$tags` includes tags. The resource metadata envelope remains present. Omitted selection returns all values on a direct query and the saved columns on a view. An explicit empty array returns no custom values. Ad hoc selection overrides saved-view columns. Selection does not change filtering, sorting or counts. Group queries do not accept `select`.
 
@@ -174,7 +173,7 @@ Each existing item may appear only once in a request. Targets must be items, so 
 
 Success returns HTTP 200 with `{"data":[{"action":"create","id":"NEW_ITEM_ID","version":1},...]}` in request order. Existing-item operations return the consumed version plus one, including deletes. Results omit content payloads. There is no response ETag or collection-level If-Match: each existing-item operation supplies its own numeric `version`.
 
-Operation failures return the usual problem status/code (for example 403, 404, 409, or 422) plus a zero-based `operation_index`; no partial results are returned. Invalid batch size and collection-level failures have no operation index. Unknown JSON fields and malformed bodies return 400. A rejected batch leaves no changes and can be corrected and resubmitted. Bulk requests do not deduplicate retries: a successful create submitted again creates another item, while repeating an existing-item mutation with its old version conflicts.
+Operation failures return the usual problem status/code (for example 403, 404, 409, 412, or 422) plus a zero-based `operation_index`; no partial results are returned. Invalid batch size and collection-level failures have no operation index. Unknown JSON fields and malformed bodies return 400. A rejected batch leaves no changes and can be corrected and resubmitted. Bulk requests do not deduplicate retries: a successful create submitted again creates another item, while repeating an existing-item mutation with its old version fails with 412.
 
 Run `go test ./internal/dms -run '^$' -bench BenchmarkItemUpdates -benchmem` to compare individual and bulk updates at 1, 10, and 100 items per workload. The benchmark uses indexed exact integers, automatic publication, retained revisions, and the actual SQLite schema; it reports items per second and allocations, excluding fixture setup.
 

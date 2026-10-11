@@ -454,8 +454,8 @@ func TestCrashRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	// create, stamp, tag: the stamp was not written twice.
-	if len(revisions) != 3 {
-		t.Fatalf("revisions after recovery: %d", len(revisions))
+	if len(revisions.Data) != 3 {
+		t.Fatalf("revisions after recovery: %d", len(revisions.Data))
 	}
 }
 

@@ -104,7 +104,7 @@ func TestPreferencesValidationAndConcurrentUpdatesAPI(t *testing.T) {
 		body, match string
 		status      int
 	}{
-		{`{}`, "", 428}, {`{}`, `"-1"`, 400}, {`{}`, `"1"`, 409},
+		{`{}`, "", 428}, {`{}`, `"-1"`, 400}, {`{}`, `"1"`, 412},
 		{`{"unknown":null}`, `"0"`, 422}, {`{"theme":"blue"}`, `"0"`, 422},
 		{`{"time_zone":"Invalid/Zone"}`, `"0"`, 422}, {`{"time_zone":"Local"}`, `"0"`, 422},
 		{`{"date_format":"dd/yy"}`, `"0"`, 422}, {`{"document_languages":"ENG"}`, `"0"`, 422},
@@ -133,7 +133,7 @@ func TestPreferencesValidationAndConcurrentUpdatesAPI(t *testing.T) {
 	for status := range statuses {
 		if status == 200 {
 			ok++
-		} else if status == 409 {
+		} else if status == 412 {
 			conflict++
 		} else {
 			t.Fatal(status)

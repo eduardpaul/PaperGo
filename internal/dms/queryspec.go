@@ -40,14 +40,14 @@ type QueryRequest struct {
 	Select  []string  `json:"select,omitempty"`
 	Query   QuerySpec `json:"query"`
 	Surface string    `json:"surface,omitempty"`
-	After   string    `json:"after,omitempty"`
-	Limit   int       `json:"limit,omitempty"`
+	After   string    `json:"-"`
+	Limit   int       `json:"-"`
 	// IncludeTotal counts every authorized match; omitted, total is absent.
 	IncludeTotal bool `json:"include_total,omitempty"`
 }
 type QueryResult struct {
-	Data       []*ent.Resource `json:"data"`
-	NextCursor string          `json:"next_cursor,omitempty"`
+	Data       []*ent.Resource `json:"value"`
+	NextCursor string          `json:"-"`
 	Total      *int            `json:"total,omitempty"`
 }
 type QueryGroup struct {

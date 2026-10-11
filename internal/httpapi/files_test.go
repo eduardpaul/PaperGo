@@ -118,7 +118,7 @@ func TestWebDAVCredentialEndpoints(t *testing.T) {
 	}
 	response = request(h, "GET", "/v1/webdav-credentials", "", testToken, "", "")
 	var list struct {
-		Data []map[string]any `json:"data"`
+		Data []map[string]any `json:"value"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &list); err != nil || len(list.Data) != 1 || list.Data[0]["password"] != nil || list.Data[0]["label"] != "Laptop" {
 		t.Fatal(response.Body.String())

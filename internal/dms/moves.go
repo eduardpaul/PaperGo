@@ -27,7 +27,7 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 			return invalid("only items and folders can move")
 		}
 		if r.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		dest, e := t.authorize(ctx, subject, in.CollectionID, "read")
 		if e != nil {

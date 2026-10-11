@@ -153,7 +153,7 @@ func TestWorkspaceValidationAndDeletionCoversExclusiveDescendants(t *testing.T) 
 	if _, err := s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Delete(testContext, "alice", w.ID, w.Version+1, DeleteOptions{}); !errors.Is(err, ErrConflict) {
+	if err := s.Delete(testContext, "alice", w.ID, w.Version+1, DeleteOptions{}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal("stale deletion accepted", err)
 	}
 	if err := s.Delete(testContext, "alice", w.ID, w.Version, DeleteOptions{}); err != nil {

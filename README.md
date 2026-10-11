@@ -56,9 +56,9 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
 ## API
 
-Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints are public. IDs are UUID strings. Lists of resources and relationships return `{ "data": [...], "next_cursor": "..." }`; pass `after` to continue. Default page size is 50, maximum 100.
+Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints are public. IDs are UUID strings. Lists of resources and relationships return `{ "value": [...], "@odata.nextLink": "..." }`; follow `@odata.nextLink` to continue; it is null on the final page. Use `$top` to select a page size (default 50, clamped to 1–500); links contain opaque `$skiptoken` continuations. POST query continuations use the same method and body.
 
-`POST /v1/$batch` executes 1�20 independent HTTP calls in order. Send `{"requests":[{"id":"list","method":"GET","url":"workspaces"}]}`. Each `responses` entry contains its ID, status, headers and optional body. Calls inherit authentication and may override request headers. `dependsOn` names earlier calls; failures skip dependents with 424. Successful writes persist independently. Relative API URLs only; nested batches and path traversal are rejected. Non-JSON string bodies become raw text; binary responses become base64 strings, with a 16 MiB limit per result.
+`POST /v1/$batch` executes 1–20 independent HTTP calls in order. Send `{"requests":[{"id":"list","method":"GET","url":"workspaces"}]}`. Each `responses` entry contains its ID, status, headers and optional body. Calls inherit authentication and may override request headers. `dependsOn` names earlier calls; failures skip dependents with 424. Successful writes persist independently. Relative API URLs only; nested batches and path traversal are rejected. Non-JSON string bodies become raw text; binary responses become base64 strings, with a 16 MiB limit per result.
 
 
 | Method | Route | Purpose |
@@ -67,7 +67,7 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | GET / PATCH / DELETE | `/v1/resources/{id}` | Read / update names, tags, item values, `parent_id` (move) and collection settings / delete a folder or item |
 | POST / GET | `/v1/resources/{id}/children` | Create / browse children |
 | POST | `/v1/resources/{id}/bulk` | Atomically create, update/move, publish, unpublish or delete up to 100 items in one list/library |
-| GET | `/v1/workspaces/{id}/tags` | The tag vocabulary with counts of readable resources; `collection_id`, `prefix`, `after`, `limit` |
+| GET | `/v1/workspaces/{id}/tags` | The tag vocabulary with counts of readable resources; `collection_id`, `prefix`, `$skiptoken`, `$top` |
 | POST / GET | `/v1/smart-folders` | Create / browse personal and shared query definitions |
 | GET / PUT / DELETE | `/v1/smart-folders/{id}` | Read / replace / delete a definition with its own ETag |
 | POST | `/v1/smart-folders/{id}/query`, `/query/groups` | Query live membership / navigate metadata groups with authorized counts |
@@ -77,13 +77,13 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | GET | `/v1/resources?workspace_id=...&q=...&tag=...` | Workspace search and tag filtering; optional `parent_id` narrows to direct children |
 | POST / GET | `/v1/resources/{id}/fields` | Add / read list or library field definitions |
 | PATCH | `/v1/resources/{id}/fields/{fieldID}` | Evolve label, choices, required or indexed; uses the container ETag |
-| GET | `/v1/resources/{id}/schemas` | Manager-only schema history; paginate with `after_revision` |
+| GET | `/v1/resources/{id}/schemas` | Manager-only schema history; paginate with `$skiptoken` |
 | PUT / GET | `/v1/resources/{id}/permissions` | Replace / read explicit ACLs and inheritance setting |
 | POST / GET | `/v1/items/{id}/relationships` | Create / query named edges; filter by `direction=incoming` or `outgoing` and `name` |
 | DELETE | `/v1/items/{id}/relationships/{linkID}` | Remove an outgoing relationship |
-| POST / GET | `/v1/items/{id}/publications` | Publish / read immutable snapshots; paginate with `after_version` |
+| POST / GET | `/v1/items/{id}/publications` | Publish / read immutable snapshots; paginate with `$skiptoken` |
 | POST | `/v1/items/{id}/unpublish` | Remove the published surface while retaining history |
-| GET | `/v1/items/{id}/revisions` | Retained content history for item readers; paginate with `after_revision` |
+| GET | `/v1/items/{id}/revisions` | Retained content history for item readers; paginate with `$skiptoken` |
 | GET | `/v1/items/{id}/schema?surface=auto` | Immutable schema of the caller's visible content revision |
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |
 | POST | `/v1/resources/{id}/documents` | Create a library document using multipart `file` and optional `metadata` JSON; see [documents](docs/documents.md) |
@@ -94,7 +94,7 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | WebDAV | `/webdav/{libraryID}/...` | A WebDAV-enabled library as a network drive; see [WebDAV](#webdav) |
 | GET | `/health/live`, `/health/ready` | Process liveness / database and migration readiness |
 
-Read/update responses carry a quoted numeric `ETag`. PATCH, resource DELETE, catalog PUT, view/relationship DELETE, template application, ACL replacement, blob upload, publish and unpublish require `If-Match: "<current version>"`. Missing preconditions return 428; stale versions return 409. These mutations consume a lock version; publishing an already published head returns 409. Content `revision_number`, blob `version`, and resource lock `version` are independent counters. Upload returns `resource_version` and an ETag for the resource. Publication event `version` records the lock version consumed by the transition. PATCH `values` replaces the whole custom-value object.
+Read/update responses carry a quoted numeric `ETag`. PATCH, resource DELETE, catalog PUT, view/relationship DELETE, template application, ACL replacement, blob upload, publish and unpublish require `If-Match: "<current version>"`. Missing preconditions return 428; stale versions return 412. These mutations consume a lock version; publishing an already published head returns 409. Content `revision_number`, blob `version`, and resource lock `version` are independent counters. Upload returns `resource_version` and an ETag for the resource. Publication event `version` records the lock version consumed by the transition. PATCH `values` replaces the whole custom-value object.
 
 GET resources and browsing support `surface=auto|head|published`. Auto chooses head for draft readers and published for ordinary readers. An unpublished item returns 404 to a reader; explicit head requests require draft access. Names, tags, values, search matches, field filters and downloads all use the chosen surface. Readers cannot download draft or arbitrary historical blobs. A published resource's lock version may advance when editors save drafts; its `updated_at` describes the selected content revision.
 
@@ -230,3 +230,5 @@ papergo-admin restore --file backup.tar.gz
 `--database` and `--blobs` select paths; defaults use `DATABASE_PATH` and `BLOB_PATH`, then `data/papergo.db` and `data/blobs`. These commands need filesystem access and do not initialize HTTP authentication. Backup can run while the API is serving: it pauses database writes while snapshotting and copying referenced immutable files; reads continue. The gzip tar archive includes the complete SQLite database (including workflow runner state), referenced file bytes and a checksum manifest. Existing backup archives are never overwritten. The manifest is limited to 16 MiB.
 
 Stop the API before restoring. Restore rejects active API leases and existing destinations unless `--force` is supplied. It validates the complete archive, current build's schema hash, SQLite integrity/foreign keys, file references, sizes and SHA-256 checksums before replacing the database and blob directory. Invalid archives leave existing data intact. Installation failures restore the saved destinations. Symlinks, unsafe paths, duplicate entries and appended archives are rejected. Restore accepts archives matching this build's complete schema; it does not perform schema upgrades. Persistent `.lease` files coordinate the API and CLI through operating-system locks.
+
+Conditional writes accept quoted numeric ETags, including `W/"n"`. Stale versions return HTTP 412 with a `precondition_failed` problem; duplicate names, keys and cardinality conflicts return 409. Missing required `If-Match` returns 428. Paged REST responses expose `value` and `@odata.nextLink`; query selection and filtering use the native typed request contract.

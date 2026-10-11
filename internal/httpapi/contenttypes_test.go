@@ -31,7 +31,7 @@ func TestRESTContentTypesBulkValidationAndRemoval(t *testing.T) {
 	for _, test := range []struct {
 		etag string
 		code int
-	}{{"", 428}, {`"9"`, 409}} {
+	}{{"", 428}, {`"9"`, 412}} {
 		res = request(h, "POST", path, body, testToken, test.etag, "application/json")
 		if res.Code != test.code {
 			t.Fatal(res.Code, res.Body.String())

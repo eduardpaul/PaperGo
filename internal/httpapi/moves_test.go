@@ -37,7 +37,7 @@ func TestMoveItemHTTP(t *testing.T) {
 		t.Fatal(r.Code, r.Body.String())
 	}
 	r = request(h, "POST", path, body, testToken, `"1"`, "application/json")
-	if r.Code != 409 {
+	if r.Code != 412 {
 		t.Fatal(r.Code, r.Body.String())
 	}
 }

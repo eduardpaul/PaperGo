@@ -255,7 +255,7 @@ func changed(result sql.Result, err error) error {
 	}
 	n, err := result.RowsAffected()
 	if err == nil && n != 1 {
-		return ErrConflict
+		return ErrPreconditionFailed
 	}
 	return err
 }

@@ -83,18 +83,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/Resource"
                       }
                     },
-                    "next_cursor": {
-                      "type": "string"
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ],
                   "additionalProperties": false
                 }
@@ -107,22 +111,23 @@
         },
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -209,18 +214,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/Resource"
                       }
                     },
-                    "next_cursor": {
-                      "type": "string"
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ],
                   "additionalProperties": false
                 }
@@ -233,22 +242,23 @@
         },
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "workspace_id",
@@ -405,6 +415,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -412,7 +425,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -444,6 +457,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -461,7 +477,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -480,15 +496,22 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ],
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "maxItems": 20,
                       "items": {
                         "$ref": "#/components/schemas/WebDAVCredential"
                       }
+                    },
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }
@@ -576,18 +599,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/Resource"
                       }
                     },
-                    "next_cursor": {
-                      "type": "string"
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ],
                   "additionalProperties": false
                 }
@@ -600,22 +627,23 @@
         },
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "schema": {
@@ -758,14 +786,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/FieldDefinition"
                       }
+                    },
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
-                  "required": [],
+                  "required": [
+                    "@odata.nextLink"
+                  ],
                   "additionalProperties": false
                 }
               }
@@ -870,6 +906,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -877,7 +916,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -921,18 +960,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/Relationship"
                       }
                     },
-                    "next_cursor": {
-                      "type": "string"
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ],
                   "additionalProperties": false
                 }
@@ -945,22 +988,23 @@
         },
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "direction",
@@ -1061,6 +1105,9 @@
           },
           "428": {
             "description": "If-Match required"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -1072,7 +1119,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag. Template adoption uses the collection ETag and also requires template_version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
@@ -1108,7 +1155,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag. Template adoption uses the collection ETag and also requires template_version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -1229,6 +1276,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "requestBody": {
@@ -1287,6 +1337,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -1294,7 +1347,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -1315,14 +1368,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/Publication"
                       }
+                    },
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
-                  "required": [],
+                  "required": [
+                    "@odata.nextLink"
+                  ],
                   "additionalProperties": false
                 }
               }
@@ -1334,22 +1395,23 @@
         },
         "parameters": [
           {
-            "name": "after_version",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
-              "type": "integer",
-              "minimum": 0
-            }
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "description": "Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
@@ -1393,6 +1455,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -1400,7 +1465,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -1507,18 +1572,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/AuditEvent"
                       }
                     },
-                    "next_cursor": {
-                      "type": "string"
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ],
                   "additionalProperties": false
                 }
@@ -1531,22 +1600,23 @@
         },
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ]
       }
@@ -1584,22 +1654,25 @@
             "description": "Only tags starting with this text."
           },
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "Cursor from next_cursor (the last tag)."
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
             },
-            "description": "Page size, at most 100."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -1730,6 +1803,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "requestBody": {
@@ -1752,7 +1828,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -1792,7 +1868,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -1811,6 +1887,9 @@
             "description": "Field removed"
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -1840,16 +1919,23 @@
               "application/json": {
                 "schema": {
                   "properties": {
-                    "data": {
+                    "value": {
                       "items": {
                         "$ref": "#/components/schemas/SchemaRevision"
                       },
                       "type": "array"
+                    },
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "type": "object",
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ]
                 }
               }
@@ -1862,22 +1948,21 @@
         "parameters": [
           {
             "schema": {
-              "minimum": 0,
-              "type": "integer"
+              "type": "string"
             },
-            "name": "after_revision",
-            "description": "Exclusive content/schema revision-number cursor.",
+            "name": "$skiptoken",
+            "description": "Opaque continuation token supplied by @odata.nextLink.",
             "in": "query"
           },
           {
             "schema": {
-              "default": 50,
-              "minimum": 1,
               "type": "integer",
-              "maximum": 100
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
             },
-            "name": "limit",
-            "description": "Maximum results.",
+            "name": "$top",
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
             "in": "query"
           }
         ]
@@ -1904,16 +1989,23 @@
               "application/json": {
                 "schema": {
                   "properties": {
-                    "data": {
+                    "value": {
                       "items": {
                         "$ref": "#/components/schemas/ItemRevision"
                       },
                       "type": "array"
+                    },
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "type": "object",
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ]
                 }
               }
@@ -1926,22 +2018,21 @@
         "parameters": [
           {
             "schema": {
-              "minimum": 0,
-              "type": "integer"
+              "type": "string"
             },
-            "name": "after_revision",
-            "description": "Exclusive content/schema revision-number cursor.",
+            "name": "$skiptoken",
+            "description": "Opaque continuation token supplied by @odata.nextLink.",
             "in": "query"
           },
           {
             "schema": {
-              "default": 50,
-              "minimum": 1,
               "type": "integer",
-              "maximum": 100
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
             },
-            "name": "limit",
-            "description": "Maximum results.",
+            "name": "$top",
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
             "in": "query"
           }
         ],
@@ -1986,6 +2077,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -1993,7 +2087,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric resource ETag, e.g. \"1\".",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -2070,21 +2164,23 @@
             }
           },
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -2482,7 +2578,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag. Template adoption uses the collection ETag and also requires template_version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -2603,6 +2699,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "requestBody": {
@@ -2650,7 +2749,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag. Template adoption uses the collection ETag and also requires template_version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -2771,6 +2870,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "requestBody": {
@@ -2801,6 +2903,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
           }
         ],
         "responses": {
@@ -2930,6 +3050,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
           }
         ],
         "responses": {
@@ -3061,21 +3199,23 @@
             }
           },
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -3315,21 +3455,23 @@
             }
           },
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -3727,7 +3869,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag. Template adoption uses the collection ETag and also requires template_version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -3848,6 +3990,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "requestBody": {
@@ -3884,7 +4029,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag. Template adoption uses the collection ETag and also requires template_version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -3896,6 +4041,9 @@
           },
           "428": {
             "description": "If-Match required"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -3916,6 +4064,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
           }
         ],
         "responses": {
@@ -4048,6 +4214,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
           }
         ],
         "responses": {
@@ -4414,7 +4598,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric collection ETag.",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
@@ -4451,6 +4635,9 @@
             }
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -4512,7 +4699,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric content-type ETag.",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
@@ -4549,6 +4736,9 @@
             }
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -4588,19 +4778,22 @@
           },
           {
             "in": "query",
-            "name": "after",
+            "name": "$skiptoken",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "$top",
             "schema": {
+              "type": "integer",
               "minimum": 1,
-              "maximum": 100,
-              "type": "integer"
-            }
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -4717,6 +4910,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "requestBody": {
@@ -4737,7 +4933,8 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "required": true
+            "required": true,
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "x-module-scopes": [
@@ -4755,7 +4952,8 @@
             "schema": {
               "type": "string"
             },
-            "required": true
+            "required": true,
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -4763,6 +4961,9 @@
             "description": "Deleted"
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -4815,7 +5016,27 @@
         "x-module-scopes": [
           "list.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ]
       }
     },
     "/v1/smart-folders/{id}/query/groups": {
@@ -4861,7 +5082,27 @@
         "x-module-scopes": [
           "list.read"
         ],
-        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "$top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "$skiptoken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Continuation from @odata.nextLink; resend the same query body."
+          }
+        ]
       }
     },
     "/v1/smart-folders/{id}/items": {
@@ -4957,6 +5198,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -4967,7 +5211,8 @@
             "schema": {
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
-            }
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "operationId": "unclassifySmartFolder",
@@ -5079,7 +5324,8 @@
             "schema": {
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
-            }
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "operationId": "importSmartFolders",
@@ -5103,6 +5349,9 @@
             }
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -5618,7 +5867,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -5739,6 +5988,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       },
@@ -5763,7 +6015,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -5859,6 +6111,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -6258,7 +6513,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Required once the built-in's workflow exists: its ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -6379,6 +6634,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -6561,22 +6819,25 @@
             "description": "Only runs on this item, including selection runs it is a member of."
           },
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "Cursor from next_cursor."
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
             },
-            "description": "Page size, at most 100."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -7045,25 +7306,25 @@
         "operationId": "termGroups",
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "Cursor from next_cursor."
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
             },
-            "description": "Page size."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -7453,7 +7714,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -7574,6 +7835,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -7601,7 +7865,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -7697,6 +7961,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -7851,25 +8118,25 @@
             "description": "Only the sets of this group."
           },
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "Cursor from next_cursor."
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
             },
-            "description": "Page size."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -8259,7 +8526,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -8380,6 +8647,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -8407,7 +8677,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -8503,6 +8773,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -8552,25 +8825,25 @@
             "description": "Also list deprecated terms."
           },
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "Cursor from next_cursor."
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
             },
-            "description": "Page size."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -9091,7 +9364,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -9212,6 +9485,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -9241,7 +9517,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -9362,6 +9638,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -9391,7 +9670,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -9512,6 +9791,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -9535,16 +9817,16 @@
             "description": "Search names, labels and synonyms."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 20,
-              "default": 20
+              "maximum": 500,
+              "default": 50
             },
-            "description": "At most 20."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -9941,7 +10223,7 @@
               "type": "string",
               "pattern": "^\"[1-9][0-9]*\"$"
             },
-            "description": "Current entity ETag."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -10062,6 +10344,9 @@
                 }
               }
             }
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -10329,14 +10614,21 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ],
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/WorkspaceMember"
                       }
+                    },
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "additionalProperties": false
@@ -10489,7 +10781,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -10504,6 +10797,9 @@
             }
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -10748,6 +11044,9 @@
           },
           "428": {
             "description": "If-Match required"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -10766,7 +11065,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Quoted current integer version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -10802,6 +11101,9 @@
           },
           "428": {
             "description": "If-Match required"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -10820,7 +11122,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Quoted current integer version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "x-module-scopes": [
@@ -11078,6 +11380,9 @@
           },
           "428": {
             "description": "If-Match required"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -11096,7 +11401,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Quoted current integer version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -11132,6 +11437,9 @@
           },
           "428": {
             "description": "If-Match required"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -11150,7 +11458,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Quoted current integer version."
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "x-module-scopes": [
@@ -11321,18 +11629,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/AuditEvent"
                       }
                     },
-                    "next_cursor": {
-                      "type": "string"
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ],
                   "additionalProperties": false
                 }
@@ -11345,22 +11657,23 @@
         },
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "operationId": "taxonomyAudit",
@@ -11534,6 +11847,9 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problem"
           }
         },
         "requestBody": {
@@ -11556,7 +11872,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric field ETag.",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -11577,7 +11893,7 @@
             "name": "If-Match",
             "in": "header",
             "required": true,
-            "description": "Current quoted numeric field ETag.",
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412.",
             "schema": {
               "type": "string"
             }
@@ -11596,6 +11912,9 @@
             "description": "Field removed"
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -11616,18 +11935,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
+                    "value": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/AuditEvent"
                       }
                     },
-                    "next_cursor": {
-                      "type": "string"
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
-                    "data"
+                    "value",
+                    "@odata.nextLink"
                   ],
                   "additionalProperties": false
                 }
@@ -11640,22 +11963,23 @@
         },
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "operationId": "contentTypeAudit",
@@ -11782,21 +12106,23 @@
         "operationId": "relationshipTypes",
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -12174,21 +12500,23 @@
         "description": "Requires a live readable collection and list.read; entries are filtered by list.write and their retained ACL scopes. Deleted content is excluded from ordinary reads and queries.",
         "parameters": [
           {
-            "name": "after",
+            "name": "$skiptoken",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
           },
           {
-            "name": "limit",
+            "name": "$top",
             "in": "query",
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
+              "maximum": 500,
               "default": 50
-            }
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -12332,7 +12660,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -12357,6 +12686,9 @@
             }
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -12397,7 +12729,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -12405,6 +12738,9 @@
             "description": "Detached; ETag contains the updated collection version"
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -12441,7 +12777,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "responses": {
@@ -12464,6 +12801,9 @@
             }
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -12578,7 +12918,7 @@
       },
       "patch": {
         "summary": "Merge-patch personal preferences",
-        "description": "Strings set overrides; null resumes inheritance; omitted fields stay unchanged. Requires an active authenticated user and the current numeric If-Match (zero before first edit). Missing preconditions return 428; stale versions return 409. Changes only the authenticated user.",
+        "description": "Strings set overrides; null resumes inheritance; omitted fields stay unchanged. Requires an active authenticated user and the current numeric If-Match (zero before first edit). Missing preconditions return 428; stale versions return 412. Changes only the authenticated user.",
         "parameters": [
           {
             "name": "If-Match",
@@ -12586,7 +12926,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -12623,6 +12964,9 @@
             }
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -12658,7 +13002,7 @@
       },
       "patch": {
         "summary": "Merge-patch organization defaults",
-        "description": "Strings set overrides; null resumes inheritance; omitted fields stay unchanged. Requires an active authenticated user and the current numeric If-Match (zero before first edit). Missing preconditions return 428; stale versions return 409. Requires organization.manage.",
+        "description": "Strings set overrides; null resumes inheritance; omitted fields stay unchanged. Requires an active authenticated user and the current numeric If-Match (zero before first edit). Missing preconditions return 428; stale versions return 412. Requires organization.manage.",
         "parameters": [
           {
             "name": "If-Match",
@@ -12666,7 +13010,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
           }
         ],
         "requestBody": {
@@ -12703,6 +13048,9 @@
             }
           },
           "default": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "412": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -14160,15 +14508,6 @@
             ],
             "default": "auto"
           },
-          "after": {
-            "type": "string"
-          },
-          "limit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100,
-            "default": 50
-          },
           "include_total": {
             "type": "boolean",
             "default": false,
@@ -14188,7 +14527,8 @@
           }
         },
         "required": [],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
       },
       "ViewQueryRequest": {
         "type": "object",
@@ -14201,15 +14541,6 @@
               "published"
             ],
             "default": "auto"
-          },
-          "after": {
-            "type": "string"
-          },
-          "limit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100,
-            "default": 50
           },
           "include_total": {
             "type": "boolean",
@@ -14227,7 +14558,8 @@
           }
         },
         "required": [],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
       },
       "ViewInput": {
         "type": "object",
@@ -14270,21 +14602,26 @@
       "QueryResult": {
         "type": "object",
         "properties": {
-          "data": {
+          "total": {
+            "type": "integer"
+          },
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Resource"
             }
           },
-          "next_cursor": {
-            "type": "string"
-          },
-          "total": {
-            "type": "integer"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -14448,54 +14785,69 @@
       "SchemaTemplatePage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SchemaTemplate"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
       "RelationshipTypePage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/RelationshipType"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
       "ListViewPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ListView"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -14587,36 +14939,46 @@
       "OperationPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Operation"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
       "QueryGroupPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/QueryGroup"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -15313,19 +15675,24 @@
       },
       "SmartFolderPage": {
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SmartFolder"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "type": "object",
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ]
       },
       "SmartFolderQueryRequest": {
@@ -15339,11 +15706,6 @@
               "published"
             ]
           },
-          "limit": {
-            "minimum": 1,
-            "maximum": 100,
-            "type": "integer"
-          },
           "path": {
             "maxItems": 3,
             "description": "One value per navigation level; null means missing. Numeric and boolean values use canonical strings, dates use YYYY or YYYY-MM when grouped.",
@@ -15356,9 +15718,6 @@
               "maxLength": 65536
             }
           },
-          "after": {
-            "type": "string"
-          },
           "include_total": {
             "type": "boolean",
             "default": false,
@@ -15366,7 +15725,9 @@
           }
         },
         "additionalProperties": false,
-        "type": "object"
+        "type": "object",
+        "required": [],
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
       },
       "SmartFolderEntry": {
         "properties": {
@@ -15398,20 +15759,25 @@
           "total": {
             "type": "integer"
           },
-          "next_cursor": {
-            "type": "string"
-          },
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SmartFolderEntry"
             }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "description": "Recently modified first, ID descending ties, permission filtering before pagination and the optional total. Cursors bind folder version, caller, surface, path, schemas and resolved references.",
         "type": "object",
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ]
       },
       "SmartFolderGroup": {
@@ -15433,25 +15799,30 @@
       },
       "SmartFolderGroupsResult": {
         "properties": {
-          "next_cursor": {
-            "type": "string"
-          },
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SmartFolderGroup"
-            }
-          },
           "by": {
             "type": "string"
           },
           "field": {
             "type": "string"
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmartFolderGroup"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "type": "object",
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ]
       },
       "SmartFolderDrop": {
@@ -15967,15 +16338,23 @@
       "WorkflowPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Workflow"
             }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -16005,15 +16384,23 @@
       "WorkflowVersionPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WorkflowVersion"
             }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -16200,15 +16587,23 @@
       "WorkflowBuiltInStatePage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WorkflowBuiltInState"
             }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -16367,18 +16762,23 @@
       "WorkflowRunPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WorkflowRun"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -16407,18 +16807,23 @@
       "TagCountPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TagCount"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -16478,18 +16883,23 @@
       "TermGroupPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TermGroup"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -16571,18 +16981,23 @@
       "TermSetPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TermSet"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -16733,33 +17148,46 @@
       "TermPage": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Term"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
       "TermList": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Term"
             }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -16825,15 +17253,23 @@
       "KeywordCountList": {
         "type": "object",
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/KeywordCount"
             }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         },
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "additionalProperties": false
       },
@@ -17507,17 +17943,22 @@
       "RecycleBinPage": {
         "type": "object",
         "required": [
-          "data"
+          "value",
+          "@odata.nextLink"
         ],
         "properties": {
-          "data": {
+          "value": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DeletedResource"
             }
           },
-          "next_cursor": {
-            "type": "string"
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
           }
         }
       },

@@ -81,7 +81,7 @@ func TestCollectionDeletionRemovesLiveContentAndRetainsHistory(t *testing.T) {
 	if _, err = s.SetPermissions(testContext, "alice", folder.ID, folder.Version, Permissions{Grants: []Permission{{"user", "alice", "manage", "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Delete(testContext, "bob", collection.ID, collection.Version-1, DeleteOptions{}); !errors.Is(err, ErrConflict) {
+	if err = s.Delete(testContext, "bob", collection.ID, collection.Version-1, DeleteOptions{}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal("stale delete accepted", err)
 	}
 	if err = s.Delete(testContext, "bob", collection.ID, collection.Version, DeleteOptions{}); err != nil {

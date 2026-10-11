@@ -2,7 +2,7 @@
 
 Deleting items or folders removes their live projections and hides their relationships, retaining content, permissions, versions, file references and links for recovery. Folder deletion requires `recursive=true` when it contains live children. Collections and workspaces delete their live trees.
 
-`GET /v1/resources/{collectionID}/recycle-bin` lists deleted items and folders in a live collection, ordered by ID, with `after` and `limit` pagination. Each entry includes `deleted_at` and `deleted_by`. Listing requires collection read access and only exposes entries for which the caller has write access, including module scope checks.
+`GET /v1/resources/{collectionID}/recycle-bin` lists deleted items and folders in a live collection, ordered by ID, with `$skiptoken` and `$top` pagination. Each entry includes `deleted_at` and `deleted_by`. Listing requires collection read access and only exposes entries for which the caller has write access, including module scope checks.
 
 `POST /v1/resources/{collectionID}/recycle-bin/{itemID}/restore` restores an entry to its original folder if active, otherwise the collection root. It retains its ACL, metadata, file content, relationships and history, restores head/published projections and indexes, and increments its lock version. Links become visible when both endpoints are active and readable. The destination also requires write access. `recursive=true` restores folder descendants deleted at the same time, excluding entries deleted earlier. Name and unique-value conflicts roll back the whole request.
 

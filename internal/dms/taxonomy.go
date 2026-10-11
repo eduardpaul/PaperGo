@@ -98,7 +98,7 @@ func (s *Service) UpdateTermGroup(ctx context.Context, subject, id string, versi
 			return e
 		}
 		if g.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if g.IsSystem {
 			return invalid("the system term group is managed by PaperGo")
@@ -119,7 +119,7 @@ func (s *Service) DeleteTermGroup(ctx context.Context, subject, id string, versi
 			return e
 		}
 		if g.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if g.IsSystem {
 			return invalid("the system term group cannot be deleted")
@@ -222,7 +222,7 @@ func (s *Service) UpdateTermSet(ctx context.Context, subject, setID string, vers
 			return e
 		}
 		if set.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if in.Key != "" && in.Key != set.Key || in.GroupID != "" && in.GroupID != set.GroupID {
 			return invalid("term set key and group are immutable")
@@ -247,7 +247,7 @@ func (s *Service) DeleteTermSet(ctx context.Context, subject, id string, version
 			return e
 		}
 		if set.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if set.IsKeywords {
 			return invalid("the keywords set cannot be deleted")
@@ -489,7 +489,7 @@ func (s *Service) termForChange(ctx context.Context, subject, id string, version
 		return nil, nil, e
 	}
 	if v.Version != version {
-		return nil, nil, ErrConflict
+		return nil, nil, ErrPreconditionFailed
 	}
 	if v.MergedIntoID != nil {
 		return nil, nil, invalid("the term was merged into " + *v.MergedIntoID)

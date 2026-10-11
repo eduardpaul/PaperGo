@@ -16,23 +16,23 @@ func (a *API) unpublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) revisions(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.RevisionHistory(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "after_revision"), queryInt(r, "limit"))
+	out, err := a.DMS.RevisionHistory(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, map[string]any{"data": out})
+	respond(w, r, 200, out)
 }
 func (a *API) schemas(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Schemas(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "after_revision"), queryInt(r, "limit"))
+	out, err := a.DMS.Schemas(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, map[string]any{"data": out})
+	respond(w, r, 200, out)
 }
 func (a *API) itemSchema(w http.ResponseWriter, r *http.Request) {
 	out, err := a.DMS.ItemSchema(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("surface"))
@@ -40,7 +40,7 @@ func (a *API) itemSchema(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) updateField(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)
@@ -57,5 +57,5 @@ func (a *API) updateField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, version+1)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }

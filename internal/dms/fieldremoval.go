@@ -34,7 +34,7 @@ func (s *Service) DeleteField(ctx context.Context, subject, collection, id strin
 			return err
 		}
 		if c.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		d, err := t.Client.FieldDefinition.Get(ctx, id)
 		if ent.IsNotFound(err) {
@@ -64,7 +64,7 @@ func (s *Service) DeleteCatalogField(ctx context.Context, subject, id string, ve
 			return e
 		}
 		if d.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		return t.deleteCatalogField(ctx, subject, d)
 	})

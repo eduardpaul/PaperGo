@@ -127,7 +127,7 @@ func (a *API) batch(next http.Handler) http.HandlerFunc {
 			failed[call.ID] = result.Status >= 400
 			out = append(out, result)
 		}
-		respond(w, 200, struct {
+		respond(w, r, 200, struct {
 			Responses []batchResponse `json:"responses"`
 		}{out})
 	}
@@ -172,6 +172,7 @@ func (a *API) batchCall(outer *http.Request, call batchRequest, target *url.URL,
 	}
 	r, _ := http.NewRequestWithContext(outer.Context(), strings.ToUpper(call.Method), target.String(), bytes.NewReader(body))
 	r.Header, r.Host, r.RemoteAddr = headers, outer.Host, outer.RemoteAddr
+	r.TLS = outer.TLS
 	if a.RequestTimeout > 0 && readRequest(r) && !transferRequest(r) {
 		ctx, cancel := context.WithTimeout(r.Context(), a.RequestTimeout)
 		defer cancel()

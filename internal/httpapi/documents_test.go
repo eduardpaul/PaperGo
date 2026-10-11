@@ -49,7 +49,7 @@ func TestRestoreFileVersionAPI(t *testing.T) {
 	for _, check := range []struct {
 		match  string
 		status int
-	}{{"", 428}, {`"4"`, 409}} {
+	}{{"", 428}, {`"4"`, 412}} {
 		res = request(h, "POST", restore, "", testToken, check.match, "")
 		if res.Code != check.status {
 			t.Fatal(res.Code, res.Body.String())

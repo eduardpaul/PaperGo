@@ -55,7 +55,7 @@ func TestCollectionHistorySettingsAPI(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	res = request(h, "PATCH", endpoint, `{"versioning":"major"}`, testToken, tag, "application/json")
-	if res.Code != 409 {
+	if res.Code != 412 {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	name = "Three"

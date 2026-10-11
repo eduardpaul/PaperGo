@@ -95,7 +95,7 @@ func TestBulkRollbackEveryDerivedEffect(t *testing.T) {
 	beforeAudit, _ := s.Client.AuditEvent.Query().Count(testContext)
 	beforeRevisions, _ := s.Client.ItemRevision.Query().Count(testContext)
 	name := "Rolled back"
-	bulkFails(t, s, "alice", list.ID, 2, ErrConflict,
+	bulkFails(t, s, "alice", list.ID, 2, ErrPreconditionFailed,
 		BulkOperation{Action: "update", ID: first.ID, Version: 1, Update: &BulkUpdate{Name: &name}},
 		BulkOperation{Action: "create", Create: &BulkCreate{Name: "Also rolled back"}},
 		BulkOperation{Action: "publish", ID: second.ID, Version: 99},
@@ -110,7 +110,7 @@ func TestBulkRollbackEveryDerivedEffect(t *testing.T) {
 	if count != 2 || audit != beforeAudit || revisions != beforeRevisions {
 		t.Fatal("transaction effects survived", count, audit, revisions)
 	}
-	bulkFails(t, s, "alice", list.ID, 1, ErrConflict,
+	bulkFails(t, s, "alice", list.ID, 1, ErrPreconditionFailed,
 		BulkOperation{Action: "publish", ID: first.ID, Version: 1},
 		BulkOperation{Action: "delete", ID: second.ID, Version: 99},
 	)
@@ -267,7 +267,7 @@ func TestBulkDeleteRollbackRestoresRelationshipsAndSurfaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, action := range []string{"delete", "unpublish"} {
-		bulkFails(t, s, "alice", list.ID, 1, ErrConflict,
+		bulkFails(t, s, "alice", list.ID, 1, ErrPreconditionFailed,
 			BulkOperation{Action: action, ID: first.ID, Version: 2},
 			BulkOperation{Action: "delete", ID: second.ID, Version: 99},
 		)
@@ -319,7 +319,7 @@ func TestConcurrentBulkUpdatesHaveOneWholeBatchWinner(t *testing.T) {
 				t.Fatal("both batches won")
 			}
 			winner = i
-		} else if !errors.Is(err, ErrConflict) {
+		} else if !errors.Is(err, ErrPreconditionFailed) {
 			t.Fatal(err)
 		}
 	}

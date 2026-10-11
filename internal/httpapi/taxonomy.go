@@ -12,10 +12,10 @@ import (
 
 func (a *API) registerTaxonomy(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/taxonomy/audit", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.TaxonomyAudit(r.Context(), subject(r), r.URL.Query().Get("after"), queryInt(r, "limit"))
+		return a.DMS.TaxonomyAudit(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("GET /v1/term-groups", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.TermGroups(r.Context(), subject(r), r.URL.Query().Get("after"), queryInt(r, "limit"))
+		return a.DMS.TermGroups(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("POST /v1/term-groups", foundationMutation(a, 201, false, func(r *http.Request, in dms.TermGroupInput, v int) (any, error) {
 		return a.DMS.CreateTermGroup(r.Context(), subject(r), in)
@@ -36,7 +36,7 @@ func (a *API) registerTaxonomy(m *http.ServeMux) {
 	}))
 	m.HandleFunc("GET /v1/term-sets", foundationRead(a, func(r *http.Request) (any, error) {
 		q := r.URL.Query()
-		return a.DMS.TermSets(r.Context(), subject(r), q.Get("group_id"), q.Get("after"), queryInt(r, "limit"))
+		return a.DMS.TermSets(r.Context(), subject(r), q.Get("group_id"), q.Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("POST /v1/term-sets", foundationMutation(a, 201, false, func(r *http.Request, in dms.TermSetInput, v int) (any, error) {
 		return a.DMS.CreateTermSet(r.Context(), subject(r), in)
@@ -51,7 +51,7 @@ func (a *API) registerTaxonomy(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/term-sets/{id}/terms", foundationRead(a, func(r *http.Request) (any, error) {
 		q := r.URL.Query()
 		return a.DMS.Terms(r.Context(), subject(r), r.PathValue("id"), dms.TermsQuery{ParentID: q.Get("parent_id"), Search: q.Get("q"),
-			IncludeDeprecated: q.Get("include_deprecated") == "true", After: q.Get("after"), Limit: queryInt(r, "limit")})
+			IncludeDeprecated: q.Get("include_deprecated") == "true", After: q.Get("$skiptoken"), Limit: queryInt(r, "$top")})
 	}))
 	m.HandleFunc("POST /v1/term-sets/{id}/terms", foundationMutation(a, 201, false, func(r *http.Request, in dms.TermInput, v int) (any, error) {
 		return a.DMS.CreateTerm(r.Context(), subject(r), r.PathValue("id"), in)
@@ -66,7 +66,7 @@ func (a *API) registerTaxonomy(m *http.ServeMux) {
 			}
 		}
 		out, e := a.DMS.TermsByID(r.Context(), subject(r), ids)
-		return map[string]any{"data": out}, e
+		return map[string]any{"value": out, "@odata.nextLink": nil}, e
 	}))
 	m.HandleFunc("GET /v1/terms/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Term(r.Context(), subject(r), r.PathValue("id")) }))
 	m.HandleFunc("PUT /v1/terms/{id}", foundationMutation(a, 200, true, func(r *http.Request, in dms.TermInput, v int) (any, error) {
@@ -79,8 +79,8 @@ func (a *API) registerTaxonomy(m *http.ServeMux) {
 		return a.DMS.MergeTerm(r.Context(), subject(r), r.PathValue("id"), v, in)
 	}))
 	m.HandleFunc("GET /v1/keywords", foundationRead(a, func(r *http.Request) (any, error) {
-		out, e := a.DMS.Keywords(r.Context(), subject(r), r.URL.Query().Get("q"), queryInt(r, "limit"))
-		return map[string]any{"data": out}, e
+		out, e := a.DMS.Keywords(r.Context(), subject(r), r.URL.Query().Get("q"), queryInt(r, "$top"))
+		return map[string]any{"value": out, "@odata.nextLink": nil}, e
 	}))
 	m.HandleFunc("POST /v1/keywords", func(w http.ResponseWriter, r *http.Request) {
 		var in dms.KeywordInput
@@ -97,11 +97,11 @@ func (a *API) registerTaxonomy(m *http.ServeMux) {
 			status = 201
 		}
 		etag(w, out.Version)
-		respond(w, status, out)
+		respond(w, r, status, out)
 	})
 	m.HandleFunc("GET /v1/keywords/popular", foundationRead(a, func(r *http.Request) (any, error) {
 		out, e := a.DMS.PopularKeywords(r.Context(), subject(r), queryInt(r, "top"))
-		return map[string]any{"data": out}, e
+		return map[string]any{"value": out, "@odata.nextLink": nil}, e
 	}))
 	m.HandleFunc("POST /v1/keywords/{id}/promote", foundationMutation(a, 200, true, func(r *http.Request, in dms.PromoteKeywordInput, v int) (any, error) {
 		return a.DMS.PromoteKeyword(r.Context(), subject(r), r.PathValue("id"), v, in)
@@ -140,5 +140,5 @@ func (a *API) importTerms(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }

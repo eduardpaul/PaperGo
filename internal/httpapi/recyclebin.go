@@ -3,12 +3,12 @@ package httpapi
 import "net/http"
 
 func (a *API) recycleBin(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.RecycleBin(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
+	out, err := a.DMS.RecycleBin(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) restoreDeleted(w http.ResponseWriter, r *http.Request) {
 	recursive, ok := a.recursive(w, r)
@@ -21,7 +21,7 @@ func (a *API) restoreDeleted(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 func (a *API) purgeDeleted(w http.ResponseWriter, r *http.Request) {
 	recursive, ok := a.recursive(w, r)

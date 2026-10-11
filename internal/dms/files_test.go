@@ -118,10 +118,10 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	if err := s.Delete(testContext, "editor", folder.ID, folder.Version, DeleteOptions{Recursive: true}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("editor recursively deleted protected content: %v", err)
 	}
-	if err := s.Delete(testContext, "alice", folder.ID, folder.Version+1, DeleteOptions{}); !errors.Is(err, ErrConflict) {
+	if err := s.Delete(testContext, "alice", folder.ID, folder.Version+1, DeleteOptions{}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatalf("stale delete accepted: %v", err)
 	}
-	if err := s.Delete(testContext, "alice", folder.ID, folder.Version+1, DeleteOptions{Recursive: true}); !errors.Is(err, ErrConflict) {
+	if err := s.Delete(testContext, "alice", folder.ID, folder.Version+1, DeleteOptions{Recursive: true}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatalf("stale recursive delete accepted: %v", err)
 	}
 	if err := s.Delete(testContext, "editor", lib.ID, current(t, s, lib.ID).Version, DeleteOptions{}); !errors.Is(err, ErrForbidden) {

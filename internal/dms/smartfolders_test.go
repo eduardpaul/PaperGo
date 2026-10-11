@@ -88,7 +88,7 @@ func TestSmartFolderOwnershipConcurrencyAndDefinitions(t *testing.T) {
 	if err = s.DeleteSmartFolder(testContext, "reader", shared.ID, shared.Version); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
-	if _, err = s.UpdateSmartFolder(testContext, "alice", shared.ID, 99, SmartFolderInput{Name: "Bad", WorkspaceID: &w.ID}); !errors.Is(err, ErrConflict) {
+	if _, err = s.UpdateSmartFolder(testContext, "alice", shared.ID, 99, SmartFolderInput{Name: "Bad", WorkspaceID: &w.ID}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal(err)
 	}
 	if _, err = s.UpdateSmartFolder(testContext, "alice", private.ID, private.Version, SmartFolderInput{Name: "Shared now", WorkspaceID: &w.ID}); !isValidation(err) {
@@ -106,7 +106,7 @@ func TestSmartFolderOwnershipConcurrencyAndDefinitions(t *testing.T) {
 	if _, err = s.UpdateSmartFolder(testContext, "alice", global.ID, global.Version, SmartFolderInput{Name: "Renamed", Personal: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.DeleteSmartFolder(testContext, "alice", global.ID, global.Version); !errors.Is(err, ErrConflict) {
+	if err = s.DeleteSmartFolder(testContext, "alice", global.ID, global.Version); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal(err)
 	}
 	if err = s.DeleteSmartFolder(testContext, "alice", global.ID, global.Version+1); err != nil {

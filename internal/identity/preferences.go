@@ -186,7 +186,7 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 			return e
 		}
 		if version != current {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		for k, v := range patch {
 			if v == nil {
@@ -202,7 +202,7 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 		if current == 0 {
 			_, e = tx.ExecContext(ctx, "INSERT INTO identity_preferences(id,created_at,owner_type,owner_id,`values`,version) VALUES(?,CURRENT_TIMESTAMP,?,?,?,1)", uuid.NewString(), ownerType, ownerID, string(raw))
 			if IsConstraint(e) {
-				return ErrConflict
+				return ErrPreconditionFailed
 			}
 			if e != nil {
 				return e

@@ -290,7 +290,7 @@ Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default
 | GET | /v1/workspaces/{id}/workflow-builtins | Built-ins with the workspace's built-in workflows |
 | PUT | /v1/workspaces/{id}/workflow-builtins/{key} | Turn on/off, set parameters |
 | POST | /v1/workspaces/{id}/workflow-builtins/{key}/copy | Copy into an editable workflow |
-| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `after`, `limit`) |
+| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `$skiptoken`, `$top`) |
 | GET | /v1/workflow-runs/{id} | A run with result and steps |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
 

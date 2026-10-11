@@ -438,21 +438,26 @@ func (s *Service) publishAllHeads(ctx context.Context, actor string, c *ent.Reso
 		after = rows[len(rows)-1].ID
 	}
 }
-func (s *Service) Revisions(ctx context.Context, subject, id string, after, limit int) ([]*ent.ItemRevision, error) {
+func (s *Service) Revisions(ctx context.Context, subject, id string, after, limit int) (Page[*ent.ItemRevision], error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) ([]*ent.ItemRevision, error) { return t.Revisions(ctx, subject, id, after, limit) })
+		return read(ctx, s, func(t *Service) (Page[*ent.ItemRevision], error) { return t.Revisions(ctx, subject, id, after, limit) })
 	}
 	r, err := s.authorize(ctx, subject, id, "read")
 	if err != nil {
-		return nil, err
+		return Page[*ent.ItemRevision]{}, err
 	}
 	if r.Kind != resource.KindItem {
-		return nil, invalid("revisions belong to items")
+		return Page[*ent.ItemRevision]{}, invalid("revisions belong to items")
 	}
-	return s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberGT(after), itemrevision.HasHistory()).WithSchemaRevision().WithHistory().Order(ent.Asc(itemrevision.FieldRevisionNumber)).Limit(pageSize(limit)).All(ctx)
+	rows, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberGT(after), itemrevision.HasHistory()).WithSchemaRevision().WithHistory().Order(ent.Asc(itemrevision.FieldRevisionNumber)).Limit(pageSize(limit) + 1).All(ctx)
+	if err != nil {
+		return Page[*ent.ItemRevision]{}, err
+	}
+	return numberedPage(rows, limit, func(v *ent.ItemRevision) int { return v.RevisionNumber }), nil
 }
 
 // ItemSchema exposes only the schema belonging to the caller's visible revision.
+
 func (s *Service) ItemSchema(ctx context.Context, subject, id, surface string) (*ent.SchemaRevision, error) {
 	if !s.transaction {
 		return read(ctx, s, func(t *Service) (*ent.SchemaRevision, error) { return t.ItemSchema(ctx, subject, id, surface) })
@@ -478,18 +483,22 @@ func (s *Service) ItemSchema(ctx context.Context, subject, id, surface string) (
 	return s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID)
 }
 
-func (s *Service) Schemas(ctx context.Context, subject, id string, after, limit int) ([]*ent.SchemaRevision, error) {
+func (s *Service) Schemas(ctx context.Context, subject, id string, after, limit int) (Page[*ent.SchemaRevision], error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) ([]*ent.SchemaRevision, error) { return t.Schemas(ctx, subject, id, after, limit) })
+		return read(ctx, s, func(t *Service) (Page[*ent.SchemaRevision], error) { return t.Schemas(ctx, subject, id, after, limit) })
 	}
 	r, err := s.authorize(ctx, subject, id, "manage")
 	if err != nil {
-		return nil, err
+		return Page[*ent.SchemaRevision]{}, err
 	}
 	if r.Kind != resource.KindList && r.Kind != resource.KindLibrary {
-		return nil, invalid("schema revisions belong to collections")
+		return Page[*ent.SchemaRevision]{}, invalid("schema revisions belong to collections")
 	}
-	return s.Client.SchemaRevision.Query().Where(schemarevision.ContainerIDEQ(id), schemarevision.RevisionNumberGT(after)).Order(ent.Asc(schemarevision.FieldRevisionNumber)).Limit(pageSize(limit)).All(ctx)
+	rows, err := s.Client.SchemaRevision.Query().Where(schemarevision.ContainerIDEQ(id), schemarevision.RevisionNumberGT(after)).Order(ent.Asc(schemarevision.FieldRevisionNumber)).Limit(pageSize(limit) + 1).All(ctx)
+	if err != nil {
+		return Page[*ent.SchemaRevision]{}, err
+	}
+	return numberedPage(rows, limit, func(v *ent.SchemaRevision) int { return v.RevisionNumber }), nil
 }
 
 func schemaField(d *ent.FieldDefinition) SchemaField {

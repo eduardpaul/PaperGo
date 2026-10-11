@@ -54,7 +54,7 @@ func TestOrganizationTaxonomyHTTPScopesAndGroupRevocation(t *testing.T) {
 			if err = json.Unmarshal(res.Body.Bytes(), &page); err != nil {
 				t.Fatal(err)
 			}
-			for _, row := range page["data"].([]any) {
+			for _, row := range page["value"].([]any) {
 				if _, ok := row.(map[string]any)["workspace_id"]; ok {
 					t.Fatal("workspace ownership in taxonomy response")
 				}
@@ -86,7 +86,7 @@ func TestOrganizationTaxonomyHTTPScopesAndGroupRevocation(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	var audit struct {
-		Data []ent.AuditEvent `json:"data"`
+		Data []ent.AuditEvent `json:"value"`
 	}
 	if err = json.Unmarshal(res.Body.Bytes(), &audit); err != nil || len(audit.Data) < 5 {
 		t.Fatal(audit, err)

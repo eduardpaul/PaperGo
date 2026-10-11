@@ -13,7 +13,7 @@ func (a *API) registerSmartFolders(m *http.ServeMux) {
 			return
 		}
 		etag(w, version)
-		respond(w, 200, out)
+		respond(w, r, 200, out)
 	})
 	m.HandleFunc("POST /v1/workspaces/{id}/smart-folders/import", foundationMutation(a, 200, true, func(r *http.Request, in dms.SmartFolderPackage, v int) (any, error) {
 		return a.DMS.ImportSmartFolders(r.Context(), subject(r), r.PathValue("id"), v, in)
@@ -33,7 +33,7 @@ func (a *API) registerSmartFolders(m *http.ServeMux) {
 		if created {
 			status = 201
 		}
-		respond(w, status, out)
+		respond(w, r, status, out)
 	})
 	m.HandleFunc("DELETE /v1/smart-folders/{id}/items/{itemID}", foundationMutation(a, 200, true, func(r *http.Request, in dms.SmartFolderUnclassify, v int) (any, error) {
 		return a.DMS.UnclassifySmartFolder(r.Context(), subject(r), r.PathValue("id"), r.PathValue("itemID"), in.FolderVersion, v)
@@ -45,7 +45,7 @@ func (a *API) registerSmartFolders(m *http.ServeMux) {
 		return a.DMS.SmartFolderGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	m.HandleFunc("GET /v1/smart-folders", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.SmartFolders(r.Context(), subject(r), r.URL.Query().Get("workspace_id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
+		return a.DMS.SmartFolders(r.Context(), subject(r), r.URL.Query().Get("workspace_id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("POST /v1/smart-folders", foundationMutation(a, 201, false, func(r *http.Request, in dms.SmartFolderInput, v int) (any, error) {
 		return a.DMS.CreateSmartFolder(r.Context(), subject(r), in)

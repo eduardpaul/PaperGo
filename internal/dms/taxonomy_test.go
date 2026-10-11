@@ -193,7 +193,7 @@ func TestMoveAndMergeTerms(t *testing.T) {
 	if child.Path != moved.Path+vat.ID+"/" {
 		t.Fatal("descendant path", child.Path)
 	}
-	if _, err = s.MoveTerm(testContext, "alice", tax.ID, tax.Version, MoveTermInput{}); !errors.Is(err, ErrConflict) {
+	if _, err = s.MoveTerm(testContext, "alice", tax.ID, tax.Version, MoveTermInput{}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal("stale move", err)
 	}
 	back, err := s.MoveTerm(testContext, "alice", tax.ID, moved.Version, MoveTermInput{ParentID: &money.ID})

@@ -68,10 +68,10 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 		t.Fatalf("published search lost: %+v %v", p, err)
 	}
 	events, err := s.Publications(testContext, "reader", item.ID, 0, 100)
-	if err != nil || len(events) != 1 || events[0].ID != pub.ID {
+	if err != nil || len(events.Data) != 1 || events.Data[0].ID != pub.ID {
 		t.Fatalf("events: %v %v", events, err)
 	}
-	if history, e := s.Revisions(testContext, "reader", item.ID, 0, 100); e != nil || len(history) != 2 || history[0].Name != "Hiddenword" || history[1].Name != name || history[1].Edges.SchemaRevision == nil {
+	if history, e := s.Revisions(testContext, "reader", item.ID, 0, 100); e != nil || len(history.Data) != 2 || history.Data[0].Name != "Hiddenword" || history.Data[1].Name != name || history.Data[1].Edges.SchemaRevision == nil {
 		t.Fatal("ordinary reader lost metadata history", history, e)
 	}
 	item, err = s.Unpublish(testContext, "alice", item.ID, item.Version)
@@ -81,10 +81,10 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 	if _, err = s.Get(testContext, "reader", item.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("unpublish ineffective", err)
 	}
-	if history, e := s.Revisions(testContext, "reader", item.ID, 0, 100); e != nil || len(history) != 2 {
+	if history, e := s.Revisions(testContext, "reader", item.ID, 0, 100); e != nil || len(history.Data) != 2 {
 		t.Fatal("unpublishing changed metadata history access", history, e)
 	}
-	if _, err = s.Publish(testContext, "alice", item.ID, item.Version-1); !errors.Is(err, ErrConflict) {
+	if _, err = s.Publish(testContext, "alice", item.ID, item.Version-1); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal("stale publish accepted", err)
 	}
 	if _, err = s.Publish(testContext, "alice", item.ID, item.Version); err != nil {
@@ -95,7 +95,7 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 		t.Fatal("republish failed", err)
 	}
 	revs, err := s.Revisions(testContext, "alice", item.ID, 0, 100)
-	if err != nil || len(revs) != 2 || revs[0].Name != "Hiddenword" {
+	if err != nil || len(revs.Data) != 2 || revs.Data[0].Name != "Hiddenword" {
 		t.Fatal("revision history changed", err)
 	}
 	// Lifecycle transitions consume lock versions but do not manufacture revisions.
@@ -215,10 +215,10 @@ func TestExactFieldsFrozenSchemasAndIndexRebuild(t *testing.T) {
 		t.Fatal("head decimal index missing", err)
 	}
 	revs, err := s.Revisions(testContext, "alice", item.ID, 0, 100)
-	if err != nil || len(revs) != 2 {
+	if err != nil || len(revs.Data) != 2 {
 		t.Fatal(err)
 	}
-	defs, err := s.Client.SchemaRevision.Get(testContext, revs[0].SchemaRevisionID)
+	defs, err := s.Client.SchemaRevision.Get(testContext, revs.Data[0].SchemaRevisionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,10 +226,10 @@ func TestExactFieldsFrozenSchemasAndIndexRebuild(t *testing.T) {
 		t.Fatal("schema history changed")
 	}
 	paired, err := s.ItemSchema(testContext, "reader", item.ID, "auto")
-	if err != nil || paired.ID != revs[0].SchemaRevisionID || strings.Contains(string(paired.Definition), "Total") {
+	if err != nil || paired.ID != revs.Data[0].SchemaRevisionID || strings.Contains(string(paired.Definition), "Total") {
 		t.Fatal("reader schema not paired with published revision", err)
 	}
-	if revs[0].Edges.SchemaRevision == nil || revs[0].Edges.SchemaRevision.ID != paired.ID {
+	if revs.Data[0].Edges.SchemaRevision == nil || revs.Data[0].Edges.SchemaRevision.ID != paired.ID {
 		t.Fatal("history lacks its immutable schema")
 	}
 	for _, v := range []any{"1.234", "92233720368547758.08", float64(1.2)} {

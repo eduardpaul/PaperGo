@@ -105,7 +105,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 			return e
 		}
 		if f.Version != in.FolderVersion {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		d, e := smartDefinition(f)
 		if e != nil {
@@ -139,7 +139,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 				return invalid("item must belong to the selected collection")
 			}
 			if item.Version != in.Version {
-				return ErrConflict
+				return ErrPreconditionFailed
 			}
 			if e = t.overlayHead(ctx, item); e != nil {
 				return e
@@ -395,7 +395,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 			return e
 		}
 		if f.Version != folderVersion {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		d, e := smartDefinition(f)
 		if e != nil {
@@ -409,7 +409,7 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 			return invalid("only items can be unclassified")
 		}
 		if item.Version != itemVersion {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		c, e := t.smartActionCandidate(ctx, subject, f, d, *item.ContainerID)
 		if e != nil {

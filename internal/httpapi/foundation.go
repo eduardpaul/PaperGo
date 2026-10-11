@@ -21,13 +21,24 @@ func foundationMutation[T any](a *API, status int, precondition bool, fn func(*h
 		if !a.decode(w, r, &in) {
 			return
 		}
+		switch query := any(&in).(type) {
+		case *dms.QueryRequest:
+			query.After = r.URL.Query().Get("$skiptoken")
+			query.Limit = queryInt(r, "$top")
+		case *dms.ViewQueryRequest:
+			query.After = r.URL.Query().Get("$skiptoken")
+			query.Limit = queryInt(r, "$top")
+		case *dms.SmartFolderQueryRequest:
+			query.After = r.URL.Query().Get("$skiptoken")
+			query.Limit = queryInt(r, "$top")
+		}
 		out, e := fn(r, in, version)
 		if e != nil {
 			a.failure(w, r, e)
 			return
 		}
 		entityETag(w, out)
-		respond(w, status, out)
+		respond(w, r, status, out)
 	}
 }
 func entityETag(w http.ResponseWriter, v any) {
@@ -70,7 +81,7 @@ func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFun
 			return
 		}
 		entityETag(w, out)
-		respond(w, 200, out)
+		respond(w, r, 200, out)
 	}
 }
 func (a *API) registerFoundation(m *http.ServeMux) {
@@ -78,7 +89,7 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 		return a.DMS.CollectionTemplates(r.Context(), subject(r))
 	}))
 	m.HandleFunc("GET /v1/content-types/audit", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.ContentTypeAudit(r.Context(), subject(r), r.URL.Query().Get("after"), queryInt(r, "limit"))
+		return a.DMS.ContentTypeAudit(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("GET /v1/content-types", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.CatalogContentTypes(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/content-types", foundationMutation(a, 201, false, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
@@ -144,7 +155,7 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 		return a.DMS.Bulk(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	m.HandleFunc("GET /v1/workspaces/{id}/templates", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.Templates(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
+		return a.DMS.Templates(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("POST /v1/workspaces/{id}/templates", foundationMutation(a, 201, false, func(r *http.Request, in dms.TemplateInput, v int) (any, error) {
 		return a.DMS.CreateTemplate(r.Context(), subject(r), r.PathValue("id"), in)
@@ -163,7 +174,7 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 		return a.DMS.QueryGroups(r.Context(), subject(r), r.PathValue("id"), in)
 	}))
 	m.HandleFunc("GET /v1/resources/{id}/operations", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.Operations(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
+		return a.DMS.Operations(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("GET /v1/operations/{id}", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.Operation(r.Context(), subject(r), r.PathValue("id")) }))
 	m.HandleFunc("POST /v1/resources/{id}/bulk-update", func(w http.ResponseWriter, r *http.Request) {
@@ -177,10 +188,10 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 			return
 		}
 		w.Header().Set("Location", "/v1/operations/"+op.ID)
-		respond(w, http.StatusAccepted, op)
+		respond(w, r, http.StatusAccepted, op)
 	})
 	m.HandleFunc("GET /v1/resources/{id}/views", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.Views(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("after"), queryInt(r, "limit"))
+		return a.DMS.Views(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("POST /v1/resources/{id}/views", foundationMutation(a, 201, false, func(r *http.Request, in dms.ViewInput, v int) (any, error) {
 		return a.DMS.CreateView(r.Context(), subject(r), r.PathValue("id"), in)
@@ -197,7 +208,7 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 	}))
 	a.registerTaxonomy(m)
 	m.HandleFunc("GET /v1/relationship-types", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.RelationshipTypes(r.Context(), subject(r), r.URL.Query().Get("after"), queryInt(r, "limit"))
+		return a.DMS.RelationshipTypes(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("POST /v1/relationship-types", foundationMutation(a, 201, false, func(r *http.Request, in dms.RelationshipTypeInput, v int) (any, error) {
 		return a.DMS.CreateRelationshipType(r.Context(), subject(r), in)

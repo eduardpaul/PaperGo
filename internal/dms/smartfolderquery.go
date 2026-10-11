@@ -66,8 +66,8 @@ type SmartFolderEntry struct {
 	Item           *ent.Resource `json:"item"`
 }
 type SmartFolderResult struct {
-	Data       []SmartFolderEntry `json:"data"`
-	NextCursor string             `json:"next_cursor,omitempty"`
+	Data       []SmartFolderEntry `json:"value"`
+	NextCursor string             `json:"-"`
 	Total      *int               `json:"total,omitempty"`
 }
 type SmartFolderGroup struct {
@@ -76,8 +76,8 @@ type SmartFolderGroup struct {
 	Count int    `json:"count"`
 }
 type SmartFolderGroupsResult struct {
-	Data       []SmartFolderGroup `json:"data"`
-	NextCursor string             `json:"next_cursor,omitempty"`
+	Data       []SmartFolderGroup `json:"value"`
+	NextCursor string             `json:"-"`
 	Field      string             `json:"field,omitempty"`
 	By         string             `json:"by,omitempty"`
 }

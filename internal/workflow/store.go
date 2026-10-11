@@ -340,7 +340,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 			return err
 		}
 		if w.Version != version {
-			return dms.ErrConflict
+			return dms.ErrPreconditionFailed
 		}
 		if w.BuiltinKey != nil {
 			return dms.Invalid("built-in workflows change through their parameters; copy one to edit its definition")
@@ -391,7 +391,7 @@ func revise(ctx context.Context, t *dms.Service, subject string, w *ent.Workflow
 	}
 	w, err = u.Save(ctx)
 	if ent.IsNotFound(err) {
-		return nil, nil, dms.ErrConflict
+		return nil, nil, dms.ErrPreconditionFailed
 	}
 	return w, v, err
 }
@@ -408,14 +408,14 @@ func (s *Service) Delete(ctx context.Context, subject, id string, version int) e
 			return err
 		}
 		if w.Version != version {
-			return dms.ErrConflict
+			return dms.ErrPreconditionFailed
 		}
 		n, err := t.Client.Workflow.Update().Where(workflow.IDEQ(id), workflow.VersionEQ(version)).SetDeletedAt(time.Now().UTC()).AddVersion(1).SetUpdatedBy(subject).Save(ctx)
 		if err != nil {
 			return err
 		}
 		if n != 1 {
-			return dms.ErrConflict
+			return dms.ErrPreconditionFailed
 		}
 		if _, err = t.Client.WorkflowTrigger.Delete().Where(workflowtrigger.WorkflowIDEQ(id)).Exec(ctx); err != nil {
 			return err

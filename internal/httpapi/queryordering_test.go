@@ -29,16 +29,17 @@ func TestMultiSortAndSelectAPI(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	path := "/v1/resources/" + c.ID + "/query"
-	body := `{"query":{"sort":[{"field":"n","direction":"desc"},{"field":"$name","direction":"asc"}]},"select":["n"],"limit":1,"include_total":true}`
+	path := "/v1/resources/" + c.ID + "/query?$top=1"
+	body := `{"query":{"sort":[{"field":"n","direction":"desc"},{"field":"$name","direction":"asc"}]},"select":["n"],"include_total":true}`
 	res := request(h, "POST", path, body, testToken, "", "application/json")
-	var result dms.QueryResult
-	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &result) != nil || len(result.Data) != 1 || result.Data[0].Name != "A" || len(result.Data[0].Values) != 1 || result.Total == nil || *result.Total != 2 || result.NextCursor == "" {
+	var result struct {
+		dms.QueryResult
+		NextLink string `json:"@odata.nextLink"`
+	}
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &result) != nil || len(result.Data) != 1 || result.Data[0].Name != "A" || len(result.Data[0].Values) != 1 || result.Total == nil || *result.Total != 2 || result.NextLink == "" {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	requestBody := map[string]any{"query": map[string]any{"sort": []dms.SortSpec{{Field: "n", Direction: "desc"}, {Field: "$name", Direction: "asc"}}}, "select": []string{"n"}, "after": result.NextCursor, "limit": 1}
-	raw, _ := json.Marshal(requestBody)
-	res = request(h, "POST", path, string(raw), testToken, "", "application/json")
+	res = request(h, "POST", result.NextLink, body, testToken, "", "application/json")
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &result) != nil || result.Data[0].Name != "B" {
 		t.Fatal(res.Code, res.Body.String())
 	}

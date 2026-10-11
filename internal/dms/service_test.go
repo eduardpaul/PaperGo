@@ -88,7 +88,7 @@ func TestFieldsSearchPublishingAndOwnership(t *testing.T) {
 	if err != nil || len(page.Data) != 0 {
 		t.Fatalf("stale search index: %+v %v", page, err)
 	}
-	if _, err = s.Publish(testContext, "alice", item.ID, 1); !errors.Is(err, ErrConflict) {
+	if _, err = s.Publish(testContext, "alice", item.ID, 1); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatalf("stale publish accepted: %v", err)
 	}
 	if _, err = s.Publications(testContext, "bob", item.ID, 0, 10); !errors.Is(err, ErrForbidden) {
@@ -201,7 +201,7 @@ func TestConcurrentUpdatesHaveOneWinner(t *testing.T) {
 			_, err := s.Update(testContext, "alice", item.ID, 1, UpdateResource{Name: &name})
 			if err == nil {
 				winners.Add(1)
-			} else if !errors.Is(err, ErrConflict) {
+			} else if !errors.Is(err, ErrPreconditionFailed) {
 				t.Errorf("unexpected write failure: %v", err)
 			}
 		}()

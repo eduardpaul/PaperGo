@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	ErrForbidden         = errors.New("identity access denied")
-	ErrNotFound          = errors.New("identity entry not found")
-	ErrConflict          = errors.New("identity version conflict")
-	ErrLastAdministrator = errors.New("an organization needs at least one administrator")
+	ErrForbidden          = errors.New("identity access denied")
+	ErrNotFound           = errors.New("identity entry not found")
+	ErrPreconditionFailed = errors.New("identity precondition failed")
+	ErrLastAdministrator  = errors.New("an organization needs at least one administrator")
 )
 
 type ValidationError struct{ Message string }

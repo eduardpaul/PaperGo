@@ -43,8 +43,8 @@ type SmartFolderInput struct {
 type SmartFolderQueryRequest struct {
 	Path         []*string `json:"path,omitempty"`
 	Surface      string    `json:"surface,omitempty"`
-	After        string    `json:"after,omitempty"`
-	Limit        int       `json:"limit,omitempty"`
+	After        string    `json:"-"`
+	Limit        int       `json:"-"`
 	IncludeTotal bool      `json:"include_total,omitempty"`
 }
 
@@ -249,7 +249,7 @@ func (s *Service) UpdateSmartFolder(ctx context.Context, subject, id string, ver
 			return e
 		}
 		if old.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		out, e = t.updateSmartFolder(ctx, subject, old, in)
 		return e
@@ -282,7 +282,7 @@ func (s *Service) DeleteSmartFolder(ctx context.Context, subject, id string, ver
 			return err
 		}
 		if f.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if err = t.Client.SmartFolder.DeleteOne(f).Exec(ctx); err != nil {
 			return err

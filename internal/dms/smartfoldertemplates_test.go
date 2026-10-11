@@ -62,7 +62,7 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 		t.Fatal(replaced, err)
 	}
 	_, err = s.ImportSmartFolders(testContext, "alice", target.ID, again.WorkspaceVersion, pkg)
-	if !errors.Is(err, ErrConflict) {
+	if !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal(err)
 	}
 	if err = s.SetWorkspaceMember(testContext, "alice", target.ID, WorkspaceMember{Subject: "reader", Role: "visitor"}); err != nil {

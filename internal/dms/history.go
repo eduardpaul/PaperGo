@@ -54,26 +54,26 @@ func revisionChanges(current, previous *ent.ItemRevision) ([]string, error) {
 	return changed, nil
 }
 
-func (s *Service) RevisionHistory(ctx context.Context, subject, id string, after, limit int) ([]RevisionView, error) {
-	return read(ctx, s, func(t *Service) ([]RevisionView, error) {
+func (s *Service) RevisionHistory(ctx context.Context, subject, id string, after, limit int) (Page[RevisionView], error) {
+	return read(ctx, s, func(t *Service) (Page[RevisionView], error) {
 		rows, err := t.Revisions(ctx, subject, id, after, limit)
 		if err != nil {
-			return nil, err
+			return Page[RevisionView]{}, err
 		}
 		item, err := t.Client.Resource.Get(ctx, id)
 		if err != nil {
-			return nil, err
+			return Page[RevisionView]{}, err
 		}
-		out := make([]RevisionView, 0, len(rows))
-		for _, revision := range rows {
+		out := make([]RevisionView, 0, len(rows.Data))
+		for _, revision := range rows.Data {
 			entry, err := revision.Edges.HistoryOrErr()
 			if err != nil {
-				return nil, err
+				return Page[RevisionView]{}, err
 			}
 			revision.Edges.History = nil
 			out = append(out, RevisionView{revision, item.HeadRevisionID != nil && *item.HeadRevisionID == revision.ID, entry.ChangedFields})
 		}
-		return out, nil
+		return Page[RevisionView]{Data: out, NextCursor: rows.NextCursor}, nil
 	})
 }
 
@@ -114,7 +114,7 @@ func (s *Service) RestoreRevision(ctx context.Context, subject, id string, numbe
 			return ErrNotFound
 		}
 		if item.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		old, err := t.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberEQ(number), itemrevision.HasHistory()).Only(ctx)
 		if ent.IsNotFound(err) {

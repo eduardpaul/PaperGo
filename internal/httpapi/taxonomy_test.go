@@ -53,7 +53,9 @@ func TestTaxonomyRoutes(t *testing.T) {
 	if len(roots.Data) != 1 || roots.Data[0].ID != finance.ID {
 		t.Fatalf("roots: %+v", roots)
 	}
-	var byID struct{ Data []dms.TermView }
+	var byID struct {
+		Data []dms.TermView `json:"value"`
+	}
 	send("GET", "/v1/terms?ids="+money.ID+","+finance.ID, "", "", "", 200, &byID)
 	if len(byID.Data) != 2 || byID.Data[0].MergedIntoID == nil || *byID.Data[0].MergedIntoID != finance.ID {
 		t.Fatalf("by id: %+v", byID)
@@ -62,7 +64,9 @@ func TestTaxonomyRoutes(t *testing.T) {
 	var keyword dms.TermView
 	send("POST", "/v1/keywords", `{"name":"Budget"}`, "", json_, 201, &keyword)
 	send("POST", "/v1/keywords", `{"name":"budget"}`, "", json_, 200, nil)
-	var suggestions struct{ Data []dms.TermView }
+	var suggestions struct {
+		Data []dms.TermView `json:"value"`
+	}
 	send("GET", "/v1/keywords?q=bud", "", "", "", 200, &suggestions)
 	if len(suggestions.Data) != 1 || suggestions.Data[0].ID != keyword.ID {
 		t.Fatalf("suggestions: %+v", suggestions)

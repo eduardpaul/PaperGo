@@ -20,7 +20,7 @@ func (s *Service) UnlinkVersion(ctx context.Context, subject, itemID, linkID str
 			}
 		}
 		if link.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if e = t.Client.Relationship.DeleteOne(link).Exec(ctx); e != nil {
 			return e

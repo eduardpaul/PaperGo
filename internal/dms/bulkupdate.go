@@ -118,7 +118,7 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *ent.Operation) error {
 	}
 	if e != nil {
 		var validation *ValidationError
-		if !errors.Is(e, ErrForbidden) && !errors.Is(e, ErrNotFound) && !errors.Is(e, ErrConflict) && !ent.IsConstraintError(e) && !errors.As(e, &validation) {
+		if !errors.Is(e, ErrForbidden) && !errors.Is(e, ErrNotFound) && !errors.Is(e, ErrConflict) && !errors.Is(e, ErrPreconditionFailed) && !ent.IsConstraintError(e) && !errors.As(e, &validation) {
 			// Infrastructure failures stop the operation and roll back this item.
 			return e
 		}
@@ -157,6 +157,8 @@ func bulkFailureReason(e error) string {
 		return "Access denied."
 	case errors.Is(e, ErrNotFound):
 		return "Item no longer exists."
+	case errors.Is(e, ErrPreconditionFailed):
+		return "Item changed since it was selected."
 	case errors.Is(e, ErrConflict), ent.IsConstraintError(e):
 		return "Item conflicts with a collection constraint."
 	default:

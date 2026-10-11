@@ -155,7 +155,7 @@ func (a *API) createDocument(w http.ResponseWriter, r *http.Request) {
 	committed = true
 	etag(w, out.Item.Version)
 	w.Header().Set("Location", "/v1/resources/"+out.Item.ID)
-	respond(w, 201, map[string]any{"item": out.Item, "file": blobResponse(out.File, out.Item.Version), "duplicates": out.Duplicates})
+	respond(w, r, 201, map[string]any{"item": out.Item, "file": blobResponse(out.File, out.Item.Version), "duplicates": out.Duplicates})
 }
 
 func (a *API) restoreBlob(w http.ResponseWriter, r *http.Request) {
@@ -174,5 +174,5 @@ func (a *API) restoreBlob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, version+1)
-	respond(w, http.StatusOK, blobResponse(out, version+1))
+	respond(w, r, http.StatusOK, blobResponse(out, version+1))
 }

@@ -260,7 +260,7 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 			return e
 		}
 		if old.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if in.Key == "" {
 			in.Key = old.Key
@@ -299,7 +299,7 @@ func (s *Service) AttachContentType(ctx context.Context, subject, collection str
 			return invalid("content types attach to collections")
 		}
 		if c.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if e = t.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return e
@@ -368,7 +368,7 @@ func (s *Service) DetachContentType(ctx context.Context, subject, collection, ty
 			return e
 		}
 		if c.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		a, e := t.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(collection), collectiontype.ContentTypeIDEQ(typeID)).Only(ctx)
 		if ent.IsNotFound(e) {

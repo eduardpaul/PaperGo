@@ -224,7 +224,7 @@ func (s *Service) ImportSmartFolders(ctx context.Context, subject, workspace str
 			return e
 		}
 		if w.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		existing, e := t.Client.SmartFolder.Query().Where(smartfolder.WorkspaceIDEQ(workspace), smartfolder.OwnerIDIsNil()).All(ctx)
 		if e != nil {

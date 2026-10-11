@@ -44,7 +44,7 @@ func TestSmartFolderRESTDefinitionsQueriesAndActions(t *testing.T) {
 		t.Fatal(response.Code, response.Body.String())
 	}
 	response = request(h, "PUT", "/v1/smart-folders/"+f.ID, body, testToken, `"9"`, "application/json")
-	if response.Code != 409 {
+	if response.Code != 412 {
 		t.Fatal(response.Code, response.Body.String())
 	}
 	response = request(h, "POST", "/v1/smart-folders/"+f.ID+"/items", fmt.Sprintf(`{"folder_version":1,"collection_id":%q,"create":{"name":"Invoice"}}`, l.ID), testToken, "", "application/json")

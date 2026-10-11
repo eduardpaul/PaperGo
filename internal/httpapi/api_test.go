@@ -81,7 +81,7 @@ func TestAuthenticationAndPreconditions(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	w = request(h, "PATCH", "/v1/resources/"+root.ID, `{"name":"Lost"}`, testToken, `"1"`, "application/json")
-	if w.Code != 409 {
+	if w.Code != 412 {
 		t.Fatal(w.Code)
 	}
 }
@@ -145,7 +145,7 @@ func TestBlobStreamingRevisionAndLimits(t *testing.T) {
 		t.Fatalf("failed upload left object: %d %v", len(files), err)
 	}
 	response = request(h, "PUT", endpoint, "stale", testToken, `"2"`, "text/plain")
-	if response.Code != 409 {
+	if response.Code != 412 {
 		t.Fatal("stale upload accepted")
 	}
 }

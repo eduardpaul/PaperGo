@@ -151,7 +151,7 @@ func TestTagVocabularyRoute(t *testing.T) {
 		}
 	}
 	w := request(h, "GET", "/v1/workspaces/"+ws.ID+"/tags?prefix=fin&collection_id="+list.ID, "", testToken, "", "")
-	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"data":[{"tag":"finance","count":2}]}` {
+	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"@odata.nextLink":null,"value":[{"tag":"finance","count":2}]}` {
 		t.Fatalf("tags: %d %s", w.Code, w.Body)
 	}
 }

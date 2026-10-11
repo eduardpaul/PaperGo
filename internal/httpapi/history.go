@@ -18,7 +18,7 @@ func (a *API) revision(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }
 
 func (a *API) restoreRevision(w http.ResponseWriter, r *http.Request) {
@@ -37,5 +37,5 @@ func (a *API) restoreRevision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag(w, out.Version)
-	respond(w, 200, out)
+	respond(w, r, 200, out)
 }

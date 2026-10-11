@@ -60,7 +60,7 @@ func TestWorkspaceMemberAPIAndMetadataLifecycle(t *testing.T) {
 	}
 	listed := request(h, "GET", path, "", testToken, "", "")
 	var members struct {
-		Data []dms.WorkspaceMember `json:"data"`
+		Data []dms.WorkspaceMember `json:"value"`
 	}
 	if listed.Code != 200 || json.Unmarshal(listed.Body.Bytes(), &members) != nil || len(members.Data) != 2 || members.Data[0] != (dms.WorkspaceMember{Subject: "alice", Role: "owner"}) || members.Data[1] != (dms.WorkspaceMember{Subject: "bob", Role: "visitor"}) {
 		t.Fatal(listed.Code, listed.Body.String())
@@ -93,7 +93,7 @@ func TestWorkspaceMemberAPIAndMetadataLifecycle(t *testing.T) {
 		t.Fatal("membership invalidated metadata ETag", r.Code, r.Body.String())
 	}
 	r = request(h, "DELETE", resourcePath, "", testToken, created.Header().Get("ETag"), "")
-	if r.Code != 409 {
+	if r.Code != 412 {
 		t.Fatal("stale workspace delete accepted", r.Code)
 	}
 	r = request(h, "DELETE", resourcePath, "", testToken, `"2"`, "")

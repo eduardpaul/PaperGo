@@ -191,7 +191,7 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 		var v *ent.WorkflowVersion
 		if w == nil {
 			if in.Version != 0 {
-				return dms.ErrConflict
+				return dms.ErrPreconditionFailed
 			}
 			name, wkey := b.Name, keyFromName(b.Key)
 			if c != nil {
@@ -213,7 +213,7 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 			}
 		} else {
 			if in.Version != w.Version {
-				return dms.ErrConflict
+				return dms.ErrPreconditionFailed
 			}
 			if w, v, err = revise(ctx, t, subject, w, raw, func(u *ent.WorkflowUpdateOne) { u.SetEnabled(in.Enabled).SetParameters(stored) }); err != nil {
 				return err

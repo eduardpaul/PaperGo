@@ -14,7 +14,7 @@ func (a *API) webdavCredentials(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, 200, map[string]any{"data": out})
+	respond(w, r, 200, map[string]any{"value": out, "@odata.nextLink": nil})
 }
 func (a *API) createWebDAVCredential(w http.ResponseWriter, r *http.Request) {
 	var in dms.WebDAVCredentialInput
@@ -27,7 +27,7 @@ func (a *API) createWebDAVCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Logger.InfoContext(r.Context(), "webdav credential created", "credential_id", out.ID, "subject", out.Subject, "request_id", r.Context().Value(requestKey{}))
-	respond(w, 201, out)
+	respond(w, r, 201, out)
 }
 func (a *API) revokeWebDAVCredential(w http.ResponseWriter, r *http.Request) {
 	if err := a.DMS.RevokeWebDAVCredential(r.Context(), subject(r), r.PathValue("id")); err != nil {

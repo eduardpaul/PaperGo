@@ -65,8 +65,12 @@ type RunFilter struct {
 
 // RunPage is one page of runs, newest first.
 type RunPage struct {
-	Data       []Run  `json:"data"`
-	NextCursor string `json:"next_cursor,omitempty"`
+	Data       []Run  `json:"value"`
+	NextCursor string `json:"-"`
+}
+
+func (p RunPage) APIPage() (map[string]any, string) {
+	return map[string]any{"value": p.Data}, p.NextCursor
 }
 
 func status(s dbos.WorkflowStatusType) string {
@@ -135,8 +139,11 @@ func manage(ctx context.Context, t *dms.Service, subject, workspaceID string) er
 
 // Runs lists a workspace's runs, newest first, to its managers.
 func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFilter) (RunPage, error) {
-	if f.Limit <= 0 || f.Limit > 100 {
+	if f.Limit <= 0 {
 		f.Limit = 50
+	}
+	if f.Limit > 500 {
+		f.Limit = 500
 	}
 	page, err := dms.Read(ctx, r.dms, func(t *dms.Service) (RunPage, error) {
 		if err := manage(ctx, t, subject, workspaceID); err != nil {

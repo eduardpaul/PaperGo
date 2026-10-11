@@ -82,7 +82,7 @@ func TestDetachContentTypeDefaultAndDeletedRecovery(t *testing.T) {
 	if err = s.Delete(testContext, "alice", i.ID, i.Version, DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.DetachContentType(testContext, "alice", c.ID, original.ID, c.Version); !errors.Is(err, ErrConflict) {
+	if _, err = s.DetachContentType(testContext, "alice", c.ID, original.ID, c.Version); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal("stale detach", err)
 	}
 	if _, err = s.DetachContentType(testContext, "alice", c.ID, original.ID, latest(t, s, c.ID).Version); err != nil {

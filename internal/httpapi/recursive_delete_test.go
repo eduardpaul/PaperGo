@@ -50,7 +50,7 @@ func TestExplicitRecursiveFolderDelete(t *testing.T) {
 			for _, precondition := range []struct {
 				match string
 				code  int
-			}{{"", 428}, {`"99"`, 409}} {
+			}{{"", 428}, {`"99"`, 412}} {
 				response := request(h, "DELETE", path+"?recursive=true", "", testToken, precondition.match, "")
 				if response.Code != precondition.code {
 					t.Fatal("recursive precondition ignored", response.Code, response.Body.String())

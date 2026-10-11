@@ -39,7 +39,7 @@ func TestNumberedRevisionReadAndRestoreAPI(t *testing.T) {
 	if response = request(h, "POST", path+"/1/restore", "", testToken, "", ""); response.Code != 428 {
 		t.Fatal(response.Code)
 	}
-	if response = request(h, "POST", path+"/1/restore", "", testToken, `"1"`, ""); response.Code != 409 {
+	if response = request(h, "POST", path+"/1/restore", "", testToken, `"1"`, ""); response.Code != 412 {
 		t.Fatal(response.Code, response.Body.String())
 	}
 	response = request(h, "POST", path+"/1/restore", "", testToken, `"2"`, "")
@@ -84,7 +84,7 @@ func TestOrdinaryReaderHistoryAPI(t *testing.T) {
 	}
 	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "reader"}, Logger: slog.Default()}).Handler()
 	path := "/v1/items/" + item.ID + "/revisions"
-	res := request(h, "GET", path+"?after=1&limit=1", "", testToken, "", "")
+	res := request(h, "GET", path+"?$skiptoken=1&$top=1", "", testToken, "", "")
 	if res.Code != 200 {
 		t.Fatal(res.Code, res.Body.String())
 	}

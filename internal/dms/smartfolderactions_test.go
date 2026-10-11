@@ -35,7 +35,7 @@ func TestSmartFolderClassificationAndUnclassification(t *testing.T) {
 	if err != nil || !created || item.Values["owner"] != "alice" || *item.ParentID != physical.ID {
 		t.Fatal(item, created, err)
 	}
-	if _, _, err = s.ClassifySmartFolder(testContext, "alice", f.ID, SmartFolderDrop{FolderVersion: f.Version + 1, CollectionID: l.ID, ItemID: item.ID, Version: item.Version}); !errors.Is(err, ErrConflict) {
+	if _, _, err = s.ClassifySmartFolder(testContext, "alice", f.ID, SmartFolderDrop{FolderVersion: f.Version + 1, CollectionID: l.ID, ItemID: item.ID, Version: item.Version}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal(err)
 	}
 	values := item.Values

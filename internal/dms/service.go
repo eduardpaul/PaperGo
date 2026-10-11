@@ -504,7 +504,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		return nil, invalid("allow_folders belongs to lists and libraries")
 	}
 	if r.Version != version {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	if in.PublishingEnabled != nil || in.WebDAVEnabled != nil {
 		if in.PublishingEnabled != nil && r.Kind != resource.KindList && r.Kind != resource.KindLibrary {
@@ -642,7 +642,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		return nil, e
 	}
 	if n != 1 {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	out, e := s.Client.Resource.Get(ctx, id)
 	if e != nil {
@@ -762,7 +762,7 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 		}
 	}
 	if r.Version != version {
-		return ErrConflict
+		return ErrPreconditionFailed
 	}
 	if r.Kind == resource.KindFolder && !recursive {
 		populated, err := s.Client.Resource.Query().Where(resource.ParentIDEQ(id), resource.DeletedAtIsNil()).Exist(ctx)
@@ -991,7 +991,7 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 			return e
 		}
 		if r.Version != version {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		if r.Kind == resource.KindWorkspace {
 			return invalid("workspace access is managed through members")
@@ -1044,7 +1044,7 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 			return e
 		}
 		if n != 1 {
-			return ErrConflict
+			return ErrPreconditionFailed
 		}
 		for _, g := range in.Grants {
 			if _, e = t.Client.Grant.Create().SetResourceID(id).SetPrincipalType(grant.PrincipalType(g.PrincipalType)).SetPrincipalID(g.PrincipalID).SetAction(grant.Action(g.Action)).SetEffect(grant.EffectAllow).Save(ctx); e != nil {

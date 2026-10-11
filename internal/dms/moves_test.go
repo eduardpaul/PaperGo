@@ -132,7 +132,7 @@ func TestMoveItemFailuresAreAtomic(t *testing.T) {
 		t.Fatal("unsupported type accepted")
 	}
 	dest := moveDestination(t, s, w.ID, "list", *item.ContentTypeID)
-	if _, err := s.MoveItem(testContext, "alice", item.ID, item.Version+1, MoveItem{CollectionID: dest.ID}); !errors.Is(err, ErrConflict) {
+	if _, err := s.MoveItem(testContext, "alice", item.ID, item.Version+1, MoveItem{CollectionID: dest.ID}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal("stale move", err)
 	}
 	if _, err := s.MoveItem(testContext, "alice", item.ID, item.Version, MoveItem{CollectionID: dest.ID, ParentID: c.ID}); err == nil {

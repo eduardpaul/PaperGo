@@ -31,7 +31,7 @@ func (s *Service) publish(ctx context.Context, subject, id string, version int) 
 		return nil, invalid("only items can be published")
 	}
 	if r.Version != version {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	c, e := s.Client.Resource.Get(ctx, *r.ContainerID)
 	if e != nil {
@@ -72,7 +72,7 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 		return nil, invalid("only items can be unpublished")
 	}
 	if r.Version != version {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	if r.PublishedRevisionID == nil {
 		return nil, ErrConflict
@@ -110,7 +110,7 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 		return nil, e
 	}
 	if n != 1 {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	out, e := s.Client.Resource.Get(ctx, id)
 	if e != nil {
@@ -125,26 +125,32 @@ func (s *Service) unpublish(ctx context.Context, subject, id string, version int
 	s.emit(ctx, EventItemUnpublished, subject, out.WorkspaceID, out.ContainerID, out.ID, map[string]any{"revision_id": rev.ID})
 	return out, s.audit(ctx, subject, "item.unpublish", out, map[string]any{"revision_id": rev.ID})
 }
-func (s *Service) Publications(ctx context.Context, subject, id string, after, limit int) ([]*ent.Publication, error) {
+func (s *Service) Publications(ctx context.Context, subject, id string, after, limit int) (Page[*ent.Publication], error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) ([]*ent.Publication, error) { return t.Publications(ctx, subject, id, after, limit) })
+		return read(ctx, s, func(t *Service) (Page[*ent.Publication], error) {
+			return t.Publications(ctx, subject, id, after, limit)
+		})
 	}
 	r, err := s.Get(ctx, subject, id)
 	if err != nil {
-		return nil, err
+		return Page[*ent.Publication]{}, err
 	}
 	q := s.Client.Publication.Query().Where(publication.ItemIDEQ(id), publication.VersionGT(after))
 	draft, err := s.allowedMany(ctx, subject, "read_draft", []*ent.Resource{r})
 	if err != nil {
-		return nil, err
+		return Page[*ent.Publication]{}, err
 	}
 	if !draft[id] {
 		if r.PublishedRevisionID == nil {
-			return []*ent.Publication{}, nil
+			return Page[*ent.Publication]{Data: []*ent.Publication{}}, nil
 		}
 		q.Where(publication.RevisionIDEQ(*r.PublishedRevisionID), publication.ActionEQ(publication.ActionPublish))
 	}
-	return q.Order(ent.Asc(publication.FieldVersion)).Limit(pageSize(limit)).All(ctx)
+	rows, err := q.Order(ent.Asc(publication.FieldVersion)).Limit(pageSize(limit) + 1).All(ctx)
+	if err != nil {
+		return Page[*ent.Publication]{}, err
+	}
+	return numberedPage(rows, limit, func(v *ent.Publication) int { return v.Version }), nil
 }
 
 type BlobInput struct {
@@ -162,7 +168,7 @@ func (s *Service) CanUpload(ctx context.Context, subject, id string, version int
 		return err
 	}
 	if r.Version != version {
-		return ErrConflict
+		return ErrPreconditionFailed
 	}
 	if r.Kind != resource.KindItem || r.ContainerID == nil {
 		return invalid("blob must belong to a library item")
@@ -210,7 +216,7 @@ func (s *Service) writeBlob(ctx context.Context, subject, id string, version int
 		return nil, e
 	}
 	if n != 1 {
-		return nil, ErrConflict
+		return nil, ErrPreconditionFailed
 	}
 	r.Version++
 	out, e := s.createBlob(ctx, subject, id, in, sourceVersion == nil)

@@ -189,7 +189,7 @@ func TestConcurrentSharedContentTypeUpdatesHaveOneAtomicWinner(t *testing.T) {
 	for e := range errs {
 		if e == nil {
 			winners++
-		} else if errors.Is(e, ErrConflict) {
+		} else if errors.Is(e, ErrPreconditionFailed) {
 			conflicts++
 		} else {
 			t.Fatal(e)
