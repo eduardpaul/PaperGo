@@ -13557,6 +13557,163 @@
           }
         }
       }
+    },
+    "/v1/portability/exports": {
+      "post": {
+        "tags": [
+          "Portability"
+        ],
+        "operationId": "startCoreExport",
+        "summary": "Export complete core configuration and content",
+        "description": "Organization-wide logical ZIP package. Includes identities and permissions, taxonomy, schemas, workspaces, workflows, saved queries, retained revisions/publications and deduplicated physical file objects. Credentials, audit records, cursors and execution state are installation-local. At most 100000 core records, 64 MiB manifest and 4 GiB ZIP/content. Export bytes expire after seven days.",
+        "x-required-scopes": [
+          "organization.manage"
+        ],
+        "responses": {
+          "202": {
+            "description": "Queued package operation. Follow Location for status, result and validation errors.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/portability/imports": {
+      "post": {
+        "tags": [
+          "Portability"
+        ],
+        "operationId": "startCoreImport",
+        "summary": "Validate and import a complete core package",
+        "description": "Imports into an instance with no resources. Stable entity IDs are preserved; existing built-ins and the initial administrator are reconciled. Other ID/name conflicts fail atomically. Requires organization.manage. dry_run validates through the same transaction and constraints, rolling back all changes. Preserves the importing administrator; no credential secrets or execution state are imported. Package objects are checksummed, bounded, deduplicated and copied to local storage. Poll operation result for valid/dry_run/rows/objects/errors.",
+        "x-required-scopes": [
+          "organization.manage"
+        ],
+        "parameters": [
+          {
+            "name": "dry_run",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/zip": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Queued package operation. Follow Location for status, result and validation errors.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/portability/exports/{id}/package": {
+      "get": {
+        "tags": [
+          "Portability"
+        ],
+        "operationId": "downloadCorePackage",
+        "summary": "Download an unexpired completed core export",
+        "description": "Only the starter with organization.manage can download it. Seven-day expiry; ETag is the package SHA256. Range and conditional downloads are supported.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-required-scopes": [
+          "organization.manage"
+        ],
+        "responses": {
+          "200": {
+            "description": "Core ZIP package",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {

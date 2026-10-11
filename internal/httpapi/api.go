@@ -45,6 +45,7 @@ func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(
 func (a *API) Handler() http.Handler {
 	api := http.NewServeMux()
 	api.HandleFunc("GET /v1/events", a.events)
+	a.registerPortability(api)
 	a.registerIdentity(api)
 	a.registerFoundation(api)
 	a.registerSmartFolders(api)
@@ -198,6 +199,9 @@ func readRequest(r *http.Request) bool {
 // transferRequest reports requests that stream a body: blob downloads and
 // uploads, and WebDAV file GET/PUT. COPY and every other method do database work.
 func transferRequest(r *http.Request) bool {
+	if (r.Method == http.MethodPost && r.URL.Path == "/v1/portability/imports") || (r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/portability/exports/") && strings.HasSuffix(r.URL.Path, "/package")) {
+		return true
+	}
 	if r.Method == http.MethodGet && r.URL.Path == "/v1/events" {
 		return true
 	}

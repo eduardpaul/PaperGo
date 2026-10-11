@@ -58,8 +58,6 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P2 · CAL-05 · Missing:** Upcoming-event alerts are absent.
 - **P2 · NTE-01 · Missing:** No built-in note template or automatic hashtag-to-keyword behavior.
 - **P2 · NTE-02 · Missing:** Linked knowledge-base navigation does not port.
-- **P2 · PRV-01 · Partial:** No complete application package for workspaces, identity, workflows and contributed module settings, with parameterized dry-run/reapplication.
-- **P2 · PRV-02 · Missing:** Cannot transfer a complete set of items, file content and module state.
 - **P2 · MCP-01 · Missing:** Assistant/tool clients cannot use the same integration story.
 - **P2 · LST-48 · Drift:** A 256-character item title accepted upstream fails in Go. Title limits remain different even though custom text-field limits align.
 

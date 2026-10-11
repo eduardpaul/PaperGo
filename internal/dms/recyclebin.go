@@ -313,7 +313,7 @@ func (s *Service) CleanupPurgedBlobs(ctx context.Context, store objectDeleter) e
 
 func (s *Service) deleteUnreferencedObject(ctx context.Context, store objectDeleter, key string) error {
 	var referenced bool
-	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=?)`, key); err != nil {
+	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=?) OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now')))`, key, OperationKindImport, key, OperationKindExport, key); err != nil {
 		return err
 	}
 	if referenced {
