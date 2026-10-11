@@ -156,12 +156,18 @@ func init() {
 			return nil
 		}
 	}()
+	// blobDescLanguages is the schema descriptor for languages field.
+	blobDescLanguages := blobFields[5].Descriptor()
+	// blob.DefaultLanguages holds the default value on creation for the languages field.
+	blob.DefaultLanguages = blobDescLanguages.Default.(string)
+	// blob.LanguagesValidator is a validator for the "languages" field. It is called by the builders before save.
+	blob.LanguagesValidator = blobDescLanguages.Validators[0].(func(string) error)
 	// blobDescSize is the schema descriptor for size field.
-	blobDescSize := blobFields[5].Descriptor()
+	blobDescSize := blobFields[6].Descriptor()
 	// blob.SizeValidator is a validator for the "size" field. It is called by the builders before save.
 	blob.SizeValidator = blobDescSize.Validators[0].(func(int64) error)
 	// blobDescSha256 is the schema descriptor for sha256 field.
-	blobDescSha256 := blobFields[6].Descriptor()
+	blobDescSha256 := blobFields[7].Descriptor()
 	// blob.Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
 	blob.Sha256Validator = func() func(string) error {
 		validators := blobDescSha256.Validators

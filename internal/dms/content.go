@@ -153,6 +153,7 @@ type BlobInput struct {
 	ContentType string
 	Size        int64
 	SHA256      string
+	Languages   string
 }
 
 func (s *Service) CanUpload(ctx context.Context, subject, id string, version int) error {
@@ -248,6 +249,9 @@ func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, v
 
 // createBlob stores the metadata of the item's next blob version.
 func (s *Service) createBlob(ctx context.Context, subject, itemID string, in BlobInput, checkDuplicates bool) (*ent.Blob, error) {
+	if err := ValidateDocumentLanguages(in.Languages); err != nil {
+		return nil, err
+	}
 	if !filenameValid(in.Filename) || in.Size < 0 || len(in.SHA256) != 64 || len(in.ContentType) > 255 || in.ContentType == "" || in.ObjectKey == "" {
 		return nil, invalid("invalid blob metadata")
 	}
@@ -263,7 +267,7 @@ func (s *Service) createBlob(ctx context.Context, subject, itemID string, in Blo
 	} else if !ent.IsNotFound(err) {
 		return nil, err
 	}
-	return s.Client.Blob.Create().SetItemID(itemID).SetVersion(version).SetObjectKey(in.ObjectKey).SetFilename(in.Filename).SetContentType(in.ContentType).SetSize(in.Size).SetSha256(in.SHA256).Save(ctx)
+	return s.Client.Blob.Create().SetItemID(itemID).SetVersion(version).SetObjectKey(in.ObjectKey).SetFilename(in.Filename).SetContentType(in.ContentType).SetLanguages(in.Languages).SetSize(in.Size).SetSha256(in.SHA256).Save(ctx)
 }
 func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent.Blob, error) {
 	if !s.transaction {

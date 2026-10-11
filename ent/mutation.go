@@ -756,6 +756,7 @@ type BlobMutation struct {
 	object_key    *string
 	filename      *string
 	content_type  *string
+	languages     *string
 	size          *int64
 	addsize       *int64
 	sha256        *string
@@ -1107,6 +1108,42 @@ func (m *BlobMutation) ResetContentType() {
 	m.content_type = nil
 }
 
+// SetLanguages sets the "languages" field.
+func (m *BlobMutation) SetLanguages(s string) {
+	m.languages = &s
+}
+
+// Languages returns the value of the "languages" field in the mutation.
+func (m *BlobMutation) Languages() (r string, exists bool) {
+	v := m.languages
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLanguages returns the old "languages" field's value of the Blob entity.
+// If the Blob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobMutation) OldLanguages(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLanguages is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLanguages requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLanguages: %w", err)
+	}
+	return oldValue.Languages, nil
+}
+
+// ResetLanguages resets all changes to the "languages" field.
+func (m *BlobMutation) ResetLanguages() {
+	m.languages = nil
+}
+
 // SetSize sets the "size" field.
 func (m *BlobMutation) SetSize(i int64) {
 	m.size = &i
@@ -1260,7 +1297,7 @@ func (m *BlobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BlobMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.created_at != nil {
 		fields = append(fields, blob.FieldCreatedAt)
 	}
@@ -1278,6 +1315,9 @@ func (m *BlobMutation) Fields() []string {
 	}
 	if m.content_type != nil {
 		fields = append(fields, blob.FieldContentType)
+	}
+	if m.languages != nil {
+		fields = append(fields, blob.FieldLanguages)
 	}
 	if m.size != nil {
 		fields = append(fields, blob.FieldSize)
@@ -1305,6 +1345,8 @@ func (m *BlobMutation) Field(name string) (ent.Value, bool) {
 		return m.Filename()
 	case blob.FieldContentType:
 		return m.ContentType()
+	case blob.FieldLanguages:
+		return m.Languages()
 	case blob.FieldSize:
 		return m.Size()
 	case blob.FieldSha256:
@@ -1330,6 +1372,8 @@ func (m *BlobMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldFilename(ctx)
 	case blob.FieldContentType:
 		return m.OldContentType(ctx)
+	case blob.FieldLanguages:
+		return m.OldLanguages(ctx)
 	case blob.FieldSize:
 		return m.OldSize(ctx)
 	case blob.FieldSha256:
@@ -1384,6 +1428,13 @@ func (m *BlobMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetContentType(v)
+		return nil
+	case blob.FieldLanguages:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLanguages(v)
 		return nil
 	case blob.FieldSize:
 		v, ok := value.(int64)
@@ -1492,6 +1543,9 @@ func (m *BlobMutation) ResetField(name string) error {
 		return nil
 	case blob.FieldContentType:
 		m.ResetContentType()
+		return nil
+	case blob.FieldLanguages:
+		m.ResetLanguages()
 		return nil
 	case blob.FieldSize:
 		m.ResetSize()

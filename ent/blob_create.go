@@ -65,6 +65,20 @@ func (_c *BlobCreate) SetContentType(v string) *BlobCreate {
 	return _c
 }
 
+// SetLanguages sets the "languages" field.
+func (_c *BlobCreate) SetLanguages(v string) *BlobCreate {
+	_c.mutation.SetLanguages(v)
+	return _c
+}
+
+// SetNillableLanguages sets the "languages" field if the given value is not nil.
+func (_c *BlobCreate) SetNillableLanguages(v *string) *BlobCreate {
+	if v != nil {
+		_c.SetLanguages(*v)
+	}
+	return _c
+}
+
 // SetSize sets the "size" field.
 func (_c *BlobCreate) SetSize(v int64) *BlobCreate {
 	_c.mutation.SetSize(v)
@@ -135,6 +149,10 @@ func (_c *BlobCreate) defaults() {
 		v := blob.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.Languages(); !ok {
+		v := blob.DefaultLanguages
+		_c.mutation.SetLanguages(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := blob.DefaultID()
 		_c.mutation.SetID(v)
@@ -184,6 +202,14 @@ func (_c *BlobCreate) check() error {
 	if v, ok := _c.mutation.ContentType(); ok {
 		if err := blob.ContentTypeValidator(v); err != nil {
 			return &ValidationError{Name: "content_type", err: fmt.Errorf(`ent: validator failed for field "Blob.content_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Languages(); !ok {
+		return &ValidationError{Name: "languages", err: errors.New(`ent: missing required field "Blob.languages"`)}
+	}
+	if v, ok := _c.mutation.Languages(); ok {
+		if err := blob.LanguagesValidator(v); err != nil {
+			return &ValidationError{Name: "languages", err: fmt.Errorf(`ent: validator failed for field "Blob.languages": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Size(); !ok {
@@ -264,6 +290,10 @@ func (_c *BlobCreate) createSpec() (*Blob, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ContentType(); ok {
 		_spec.SetField(blob.FieldContentType, field.TypeString, value)
 		_node.ContentType = value
+	}
+	if value, ok := _c.mutation.Languages(); ok {
+		_spec.SetField(blob.FieldLanguages, field.TypeString, value)
+		_node.Languages = value
 	}
 	if value, ok := _c.mutation.Size(); ok {
 		_spec.SetField(blob.FieldSize, field.TypeInt64, value)

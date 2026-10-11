@@ -1404,6 +1404,16 @@
               "minLength": 1,
               "maxLength": 255
             }
+          },
+          {
+            "name": "X-OCR-Languages",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 191
+            },
+            "description": "Optional per-upload OCR language hint, e.g. eng+deu."
           }
         ],
         "requestBody": {
@@ -12441,6 +12451,82 @@
         ],
         "operationId": "restoreFileVersion"
       }
+    },
+    "/v1/resources/{id}/documents": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "createDocument",
+        "summary": "Create a document, metadata and content from one multipart upload",
+        "description": "Requires list.write and write access to the library and selected folder. One file part is required; one metadata JSON form field is optional. Either order is accepted. File bytes stream under the configured upload limit; metadata is limited to 64 KiB and request framing to an additional 128 KiB. Metadata, first file version, first revision, indexes, publication and events commit together. Invalid metadata, malformed multipart, duplicate blocking and failed writes create no item and clean up stored bytes. Returns 201 with the new item, file, duplicate warnings, Location and numeric ETag.",
+        "x-module-scopes": [
+          "list.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "metadata": {
+                    "$ref": "#/components/schemas/DocumentMetadata"
+                  }
+                }
+              },
+              "encoding": {
+                "metadata": {
+                  "contentType": "application/json"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created document and its first file version",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUpload"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13316,6 +13402,11 @@
               "$ref": "#/components/schemas/DuplicateDocument"
             },
             "description": "Upload warnings: at most 20 current matching documents visible to the caller. Empty for allow and successful block uploads. Restoration does not apply upload duplicate policy."
+          },
+          "languages": {
+            "type": "string",
+            "maxLength": 191,
+            "description": "Per-upload OCR language hint; empty uses processing defaults. Restoration resets the hint."
           }
         }
       },
@@ -17253,6 +17344,65 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "DocumentMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Item name; defaults to the uploaded filename."
+          },
+          "content_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "An attached library content type; defaults to the library default."
+          },
+          "folder_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A writable folder in this library; defaults to the root."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Custom field values, validated against the selected type. Exact JSON numbers are preserved."
+          },
+          "languages": {
+            "type": "string",
+            "maxLength": 191,
+            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2\u201331 letters/underscores."
+          }
+        }
+      },
+      "DocumentUpload": {
+        "type": "object",
+        "required": [
+          "item",
+          "file",
+          "duplicates"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/Resource"
+          },
+          "file": {
+            "$ref": "#/components/schemas/Blob"
+          },
+          "duplicates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DuplicateDocument"
+            }
           }
         }
       }

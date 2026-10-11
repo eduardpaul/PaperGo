@@ -58,6 +58,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("DELETE /v1/resources/{id}", a.delete)
 	api.HandleFunc("GET /v1/resources/{id}/children", a.children)
 	api.HandleFunc("POST /v1/resources/{id}/children", a.create)
+	api.HandleFunc("POST /v1/resources/{id}/documents", a.createDocument)
 	api.HandleFunc("GET /v1/resources/{id}/fields", a.fields)
 	api.HandleFunc("POST /v1/resources/{id}/fields", a.createField)
 	api.HandleFunc("PATCH /v1/resources/{id}/fields/{fieldID}", a.updateField)
@@ -190,6 +191,10 @@ func readRequest(r *http.Request) bool {
 // transferRequest reports requests that stream a body: blob downloads and
 // uploads, and WebDAV file GET/PUT. COPY and every other method do database work.
 func transferRequest(r *http.Request) bool {
+	if r.Method == http.MethodPost {
+		parts := strings.Split(r.URL.Path, "/")
+		return len(parts) == 5 && parts[1] == "v1" && parts[2] == "resources" && parts[4] == "documents"
+	}
 	switch r.Method {
 	case http.MethodGet, http.MethodHead, http.MethodPut:
 	default:
@@ -533,7 +538,7 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	out, err := a.DMS.AttachBlob(r.Context(), subject(r), r.PathValue("id"), version, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256})
+	out, err := a.DMS.AttachBlob(r.Context(), subject(r), r.PathValue("id"), version, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256, Languages: strings.TrimSpace(r.Header.Get("X-OCR-Languages"))})
 	if err != nil {
 		if cleanupErr := a.Storage.Delete(context.Background(), object.Key); cleanupErr != nil {
 			a.Logger.Error("orphan cleanup failed", "object_key", object.Key, "error", cleanupErr)

@@ -26,6 +26,8 @@ const (
 	FieldFilename = "filename"
 	// FieldContentType holds the string denoting the content_type field in the database.
 	FieldContentType = "content_type"
+	// FieldLanguages holds the string denoting the languages field in the database.
+	FieldLanguages = "languages"
 	// FieldSize holds the string denoting the size field in the database.
 	FieldSize = "size"
 	// FieldSha256 holds the string denoting the sha256 field in the database.
@@ -52,6 +54,7 @@ var Columns = []string{
 	FieldObjectKey,
 	FieldFilename,
 	FieldContentType,
+	FieldLanguages,
 	FieldSize,
 	FieldSha256,
 }
@@ -79,6 +82,10 @@ var (
 	FilenameValidator func(string) error
 	// ContentTypeValidator is a validator for the "content_type" field. It is called by the builders before save.
 	ContentTypeValidator func(string) error
+	// DefaultLanguages holds the default value on creation for the "languages" field.
+	DefaultLanguages string
+	// LanguagesValidator is a validator for the "languages" field. It is called by the builders before save.
+	LanguagesValidator func(string) error
 	// SizeValidator is a validator for the "size" field. It is called by the builders before save.
 	SizeValidator func(int64) error
 	// Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
@@ -125,6 +132,11 @@ func ByFilename(opts ...sql.OrderTermOption) OrderOption {
 // ByContentType orders the results by the content_type field.
 func ByContentType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldContentType, opts...).ToFunc()
+}
+
+// ByLanguages orders the results by the languages field.
+func ByLanguages(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLanguages, opts...).ToFunc()
 }
 
 // BySize orders the results by the size field.

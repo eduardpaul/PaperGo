@@ -45,6 +45,7 @@ var (
 		{Name: "object_key", Type: field.TypeString},
 		{Name: "filename", Type: field.TypeString, Size: 255},
 		{Name: "content_type", Type: field.TypeString, Size: 255},
+		{Name: "languages", Type: field.TypeString, Size: 191, Default: ""},
 		{Name: "size", Type: field.TypeInt64},
 		{Name: "sha256", Type: field.TypeString, Size: 64},
 		{Name: "item_id", Type: field.TypeString, Size: 36},
@@ -57,7 +58,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "blobs_resources_blobs",
-				Columns:    []*schema.Column{BlobsColumns[8]},
+				Columns:    []*schema.Column{BlobsColumns[9]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -66,7 +67,7 @@ var (
 			{
 				Name:    "blob_item_id_version",
 				Unique:  true,
-				Columns: []*schema.Column{BlobsColumns[8], BlobsColumns[2]},
+				Columns: []*schema.Column{BlobsColumns[9], BlobsColumns[2]},
 			},
 			{
 				Name:    "blob_object_key",
@@ -76,7 +77,7 @@ var (
 			{
 				Name:    "blob_sha256_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{BlobsColumns[7], BlobsColumns[8]},
+				Columns: []*schema.Column{BlobsColumns[8], BlobsColumns[9]},
 			},
 		},
 	}

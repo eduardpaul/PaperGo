@@ -18,6 +18,7 @@ func (Blob) Fields() []ent.Field {
 		field.String("object_key").NotEmpty().Immutable(),
 		field.String("filename").NotEmpty().MaxLen(255).Immutable(),
 		field.String("content_type").NotEmpty().MaxLen(255).Immutable(),
+		field.String("languages").Default("").MaxLen(191).Immutable(),
 		field.Int64("size").NonNegative().Immutable(),
 		field.String("sha256").MinLen(64).MaxLen(64).Immutable(),
 	}
