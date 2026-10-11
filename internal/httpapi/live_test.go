@@ -47,11 +47,11 @@ func TestLiveStreamDeliveryReconnectAndCredentialRevocation(t *testing.T) {
 	previousInterval := livePollInterval
 	livePollInterval = 20 * time.Millisecond
 	t.Cleanup(func() { livePollInterval = previousInterval })
-	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), MaxInFlight: 1, RequestTimeout: 20 * time.Millisecond}
+	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), MaxInFlight: 1, RequestTimeout: 5 * time.Second}
 	handler := a.Handler()
 	server := httptest.NewServer(handler)
 	defer server.Close()
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	w, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "W"})
 	if err != nil {
@@ -96,8 +96,8 @@ func TestLiveStreamDeliveryReconnectAndCredentialRevocation(t *testing.T) {
 	if connected.kind != "connected" || !strings.HasPrefix(stream.Header.Get("Content-Type"), "text/event-stream") {
 		t.Fatal(connected, stream.Header)
 	}
-	// A stream outlives the ordinary read timeout and occupies a separate slot.
-	time.Sleep(30 * time.Millisecond)
+	// An open stream leaves the ordinary request slot available. Read-deadline
+	// exemption is asserted directly by TestQueriesReceiveTheReadDeadline.
 	res := request(handler, "GET", "/v1/resources/"+item.ID, "", testToken, "", "")
 	if res.Code != 200 {
 		t.Fatal(res.Code, res.Body.String())

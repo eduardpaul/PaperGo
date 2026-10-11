@@ -93,6 +93,7 @@ func TestQueriesReceiveTheReadDeadline(t *testing.T) {
 		deadline     bool
 	}{
 		{"GET", "/v1/workspaces", true},
+		{"GET", "/v1/events", false},
 		{"PROPFIND", "/webdav/lib/", true},
 		{"POST", "/v1/resources/x/query", true},
 		{"POST", "/v1/resources/x/query/groups", true},
@@ -121,6 +122,8 @@ func TestOnlyStreamedTransfersBypassAdmission(t *testing.T) {
 		method, path string
 		transfer     bool
 	}{
+		{"GET", "/v1/events", true},
+		{"POST", "/v1/events", false},
 		{"GET", "/v1/items/x/content", true},
 		{"PUT", "/v1/items/x/content", true},
 		{"POST", "/v1/items/x/content", false},
