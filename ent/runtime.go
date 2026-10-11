@@ -17,6 +17,7 @@ import (
 	"papergo/ent/identityassignment"
 	"papergo/ent/identitygroup"
 	"papergo/ent/identitymembership"
+	"papergo/ent/identityorganization"
 	"papergo/ent/identitypreference"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
@@ -643,6 +644,43 @@ func init() {
 	identitymembership.DefaultID = identitymembershipDescID.Default.(func() string)
 	// identitymembership.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	identitymembership.IDValidator = identitymembershipDescID.Validators[0].(func(string) error)
+	identityorganizationMixin := schema.IdentityOrganization{}.Mixin()
+	identityorganizationMixinFields0 := identityorganizationMixin[0].Fields()
+	_ = identityorganizationMixinFields0
+	identityorganizationFields := schema.IdentityOrganization{}.Fields()
+	_ = identityorganizationFields
+	// identityorganizationDescCreatedAt is the schema descriptor for created_at field.
+	identityorganizationDescCreatedAt := identityorganizationMixinFields0[1].Descriptor()
+	// identityorganization.DefaultCreatedAt holds the default value on creation for the created_at field.
+	identityorganization.DefaultCreatedAt = identityorganizationDescCreatedAt.Default.(func() time.Time)
+	// identityorganizationDescSingleton is the schema descriptor for singleton field.
+	identityorganizationDescSingleton := identityorganizationFields[0].Descriptor()
+	// identityorganization.DefaultSingleton holds the default value on creation for the singleton field.
+	identityorganization.DefaultSingleton = identityorganizationDescSingleton.Default.(bool)
+	// identityorganizationDescIdentifier is the schema descriptor for identifier field.
+	identityorganizationDescIdentifier := identityorganizationFields[1].Descriptor()
+	// identityorganization.IdentifierValidator is a validator for the "identifier" field. It is called by the builders before save.
+	identityorganization.IdentifierValidator = identityorganizationDescIdentifier.Validators[0].(func(string) error)
+	// identityorganizationDescDisplayName is the schema descriptor for display_name field.
+	identityorganizationDescDisplayName := identityorganizationFields[2].Descriptor()
+	// identityorganization.DisplayNameValidator is a validator for the "display_name" field. It is called by the builders before save.
+	identityorganization.DisplayNameValidator = identityorganizationDescDisplayName.Validators[0].(func(string) error)
+	// identityorganizationDescDescription is the schema descriptor for description field.
+	identityorganizationDescDescription := identityorganizationFields[3].Descriptor()
+	// identityorganization.DefaultDescription holds the default value on creation for the description field.
+	identityorganization.DefaultDescription = identityorganizationDescDescription.Default.(string)
+	// identityorganizationDescVersion is the schema descriptor for version field.
+	identityorganizationDescVersion := identityorganizationFields[4].Descriptor()
+	// identityorganization.DefaultVersion holds the default value on creation for the version field.
+	identityorganization.DefaultVersion = identityorganizationDescVersion.Default.(int)
+	// identityorganization.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	identityorganization.VersionValidator = identityorganizationDescVersion.Validators[0].(func(int) error)
+	// identityorganizationDescID is the schema descriptor for id field.
+	identityorganizationDescID := identityorganizationMixinFields0[0].Descriptor()
+	// identityorganization.DefaultID holds the default value on creation for the id field.
+	identityorganization.DefaultID = identityorganizationDescID.Default.(func() string)
+	// identityorganization.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	identityorganization.IDValidator = identityorganizationDescID.Validators[0].(func(string) error)
 	identitypreferenceMixin := schema.IdentityPreference{}.Mixin()
 	identitypreferenceMixinFields0 := identitypreferenceMixin[0].Fields()
 	_ = identitypreferenceMixinFields0

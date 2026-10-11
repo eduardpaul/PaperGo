@@ -24,6 +24,7 @@ import (
 	"papergo/ent/identityassignment"
 	"papergo/ent/identitygroup"
 	"papergo/ent/identitymembership"
+	"papergo/ent/identityorganization"
 	"papergo/ent/identitypreference"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
@@ -89,6 +90,8 @@ type Client struct {
 	IdentityGroup *IdentityGroupClient
 	// IdentityMembership is the client for interacting with the IdentityMembership builders.
 	IdentityMembership *IdentityMembershipClient
+	// IdentityOrganization is the client for interacting with the IdentityOrganization builders.
+	IdentityOrganization *IdentityOrganizationClient
 	// IdentityPreference is the client for interacting with the IdentityPreference builders.
 	IdentityPreference *IdentityPreferenceClient
 	// IdentityRole is the client for interacting with the IdentityRole builders.
@@ -163,6 +166,7 @@ func (c *Client) init() {
 	c.IdentityAssignment = NewIdentityAssignmentClient(c.config)
 	c.IdentityGroup = NewIdentityGroupClient(c.config)
 	c.IdentityMembership = NewIdentityMembershipClient(c.config)
+	c.IdentityOrganization = NewIdentityOrganizationClient(c.config)
 	c.IdentityPreference = NewIdentityPreferenceClient(c.config)
 	c.IdentityRole = NewIdentityRoleClient(c.config)
 	c.IdentityUser = NewIdentityUserClient(c.config)
@@ -278,46 +282,47 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                ctx,
-		config:             cfg,
-		AuditEvent:         NewAuditEventClient(cfg),
-		Blob:               NewBlobClient(cfg),
-		BlobDeletion:       NewBlobDeletionClient(cfg),
-		BusinessKey:        NewBusinessKeyClient(cfg),
-		CollectionType:     NewCollectionTypeClient(cfg),
-		ContentType:        NewContentTypeClient(cfg),
-		DomainEvent:        NewDomainEventClient(cfg),
-		FieldDefinition:    NewFieldDefinitionClient(cfg),
-		FieldValue:         NewFieldValueClient(cfg),
-		Grant:              NewGrantClient(cfg),
-		IdentityAssignment: NewIdentityAssignmentClient(cfg),
-		IdentityGroup:      NewIdentityGroupClient(cfg),
-		IdentityMembership: NewIdentityMembershipClient(cfg),
-		IdentityPreference: NewIdentityPreferenceClient(cfg),
-		IdentityRole:       NewIdentityRoleClient(cfg),
-		IdentityUser:       NewIdentityUserClient(cfg),
-		ItemHistory:        NewItemHistoryClient(cfg),
-		ItemRevision:       NewItemRevisionClient(cfg),
-		ItemSurface:        NewItemSurfaceClient(cfg),
-		ListView:           NewListViewClient(cfg),
-		Operation:          NewOperationClient(cfg),
-		OperationItem:      NewOperationItemClient(cfg),
-		Publication:        NewPublicationClient(cfg),
-		Relationship:       NewRelationshipClient(cfg),
-		RelationshipType:   NewRelationshipTypeClient(cfg),
-		Resource:           NewResourceClient(cfg),
-		SchemaRevision:     NewSchemaRevisionClient(cfg),
-		SchemaTemplate:     NewSchemaTemplateClient(cfg),
-		SmartFolder:        NewSmartFolderClient(cfg),
-		Term:               NewTermClient(cfg),
-		TermGroup:          NewTermGroupClient(cfg),
-		TermSet:            NewTermSetClient(cfg),
-		WebDAVCredential:   NewWebDAVCredentialClient(cfg),
-		Workflow:           NewWorkflowClient(cfg),
-		WorkflowRun:        NewWorkflowRunClient(cfg),
-		WorkflowRunItem:    NewWorkflowRunItemClient(cfg),
-		WorkflowTrigger:    NewWorkflowTriggerClient(cfg),
-		WorkflowVersion:    NewWorkflowVersionClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		AuditEvent:           NewAuditEventClient(cfg),
+		Blob:                 NewBlobClient(cfg),
+		BlobDeletion:         NewBlobDeletionClient(cfg),
+		BusinessKey:          NewBusinessKeyClient(cfg),
+		CollectionType:       NewCollectionTypeClient(cfg),
+		ContentType:          NewContentTypeClient(cfg),
+		DomainEvent:          NewDomainEventClient(cfg),
+		FieldDefinition:      NewFieldDefinitionClient(cfg),
+		FieldValue:           NewFieldValueClient(cfg),
+		Grant:                NewGrantClient(cfg),
+		IdentityAssignment:   NewIdentityAssignmentClient(cfg),
+		IdentityGroup:        NewIdentityGroupClient(cfg),
+		IdentityMembership:   NewIdentityMembershipClient(cfg),
+		IdentityOrganization: NewIdentityOrganizationClient(cfg),
+		IdentityPreference:   NewIdentityPreferenceClient(cfg),
+		IdentityRole:         NewIdentityRoleClient(cfg),
+		IdentityUser:         NewIdentityUserClient(cfg),
+		ItemHistory:          NewItemHistoryClient(cfg),
+		ItemRevision:         NewItemRevisionClient(cfg),
+		ItemSurface:          NewItemSurfaceClient(cfg),
+		ListView:             NewListViewClient(cfg),
+		Operation:            NewOperationClient(cfg),
+		OperationItem:        NewOperationItemClient(cfg),
+		Publication:          NewPublicationClient(cfg),
+		Relationship:         NewRelationshipClient(cfg),
+		RelationshipType:     NewRelationshipTypeClient(cfg),
+		Resource:             NewResourceClient(cfg),
+		SchemaRevision:       NewSchemaRevisionClient(cfg),
+		SchemaTemplate:       NewSchemaTemplateClient(cfg),
+		SmartFolder:          NewSmartFolderClient(cfg),
+		Term:                 NewTermClient(cfg),
+		TermGroup:            NewTermGroupClient(cfg),
+		TermSet:              NewTermSetClient(cfg),
+		WebDAVCredential:     NewWebDAVCredentialClient(cfg),
+		Workflow:             NewWorkflowClient(cfg),
+		WorkflowRun:          NewWorkflowRunClient(cfg),
+		WorkflowRunItem:      NewWorkflowRunItemClient(cfg),
+		WorkflowTrigger:      NewWorkflowTriggerClient(cfg),
+		WorkflowVersion:      NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -335,46 +340,47 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                ctx,
-		config:             cfg,
-		AuditEvent:         NewAuditEventClient(cfg),
-		Blob:               NewBlobClient(cfg),
-		BlobDeletion:       NewBlobDeletionClient(cfg),
-		BusinessKey:        NewBusinessKeyClient(cfg),
-		CollectionType:     NewCollectionTypeClient(cfg),
-		ContentType:        NewContentTypeClient(cfg),
-		DomainEvent:        NewDomainEventClient(cfg),
-		FieldDefinition:    NewFieldDefinitionClient(cfg),
-		FieldValue:         NewFieldValueClient(cfg),
-		Grant:              NewGrantClient(cfg),
-		IdentityAssignment: NewIdentityAssignmentClient(cfg),
-		IdentityGroup:      NewIdentityGroupClient(cfg),
-		IdentityMembership: NewIdentityMembershipClient(cfg),
-		IdentityPreference: NewIdentityPreferenceClient(cfg),
-		IdentityRole:       NewIdentityRoleClient(cfg),
-		IdentityUser:       NewIdentityUserClient(cfg),
-		ItemHistory:        NewItemHistoryClient(cfg),
-		ItemRevision:       NewItemRevisionClient(cfg),
-		ItemSurface:        NewItemSurfaceClient(cfg),
-		ListView:           NewListViewClient(cfg),
-		Operation:          NewOperationClient(cfg),
-		OperationItem:      NewOperationItemClient(cfg),
-		Publication:        NewPublicationClient(cfg),
-		Relationship:       NewRelationshipClient(cfg),
-		RelationshipType:   NewRelationshipTypeClient(cfg),
-		Resource:           NewResourceClient(cfg),
-		SchemaRevision:     NewSchemaRevisionClient(cfg),
-		SchemaTemplate:     NewSchemaTemplateClient(cfg),
-		SmartFolder:        NewSmartFolderClient(cfg),
-		Term:               NewTermClient(cfg),
-		TermGroup:          NewTermGroupClient(cfg),
-		TermSet:            NewTermSetClient(cfg),
-		WebDAVCredential:   NewWebDAVCredentialClient(cfg),
-		Workflow:           NewWorkflowClient(cfg),
-		WorkflowRun:        NewWorkflowRunClient(cfg),
-		WorkflowRunItem:    NewWorkflowRunItemClient(cfg),
-		WorkflowTrigger:    NewWorkflowTriggerClient(cfg),
-		WorkflowVersion:    NewWorkflowVersionClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		AuditEvent:           NewAuditEventClient(cfg),
+		Blob:                 NewBlobClient(cfg),
+		BlobDeletion:         NewBlobDeletionClient(cfg),
+		BusinessKey:          NewBusinessKeyClient(cfg),
+		CollectionType:       NewCollectionTypeClient(cfg),
+		ContentType:          NewContentTypeClient(cfg),
+		DomainEvent:          NewDomainEventClient(cfg),
+		FieldDefinition:      NewFieldDefinitionClient(cfg),
+		FieldValue:           NewFieldValueClient(cfg),
+		Grant:                NewGrantClient(cfg),
+		IdentityAssignment:   NewIdentityAssignmentClient(cfg),
+		IdentityGroup:        NewIdentityGroupClient(cfg),
+		IdentityMembership:   NewIdentityMembershipClient(cfg),
+		IdentityOrganization: NewIdentityOrganizationClient(cfg),
+		IdentityPreference:   NewIdentityPreferenceClient(cfg),
+		IdentityRole:         NewIdentityRoleClient(cfg),
+		IdentityUser:         NewIdentityUserClient(cfg),
+		ItemHistory:          NewItemHistoryClient(cfg),
+		ItemRevision:         NewItemRevisionClient(cfg),
+		ItemSurface:          NewItemSurfaceClient(cfg),
+		ListView:             NewListViewClient(cfg),
+		Operation:            NewOperationClient(cfg),
+		OperationItem:        NewOperationItemClient(cfg),
+		Publication:          NewPublicationClient(cfg),
+		Relationship:         NewRelationshipClient(cfg),
+		RelationshipType:     NewRelationshipTypeClient(cfg),
+		Resource:             NewResourceClient(cfg),
+		SchemaRevision:       NewSchemaRevisionClient(cfg),
+		SchemaTemplate:       NewSchemaTemplateClient(cfg),
+		SmartFolder:          NewSmartFolderClient(cfg),
+		Term:                 NewTermClient(cfg),
+		TermGroup:            NewTermGroupClient(cfg),
+		TermSet:              NewTermSetClient(cfg),
+		WebDAVCredential:     NewWebDAVCredentialClient(cfg),
+		Workflow:             NewWorkflowClient(cfg),
+		WorkflowRun:          NewWorkflowRunClient(cfg),
+		WorkflowRunItem:      NewWorkflowRunItemClient(cfg),
+		WorkflowTrigger:      NewWorkflowTriggerClient(cfg),
+		WorkflowVersion:      NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -407,9 +413,9 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
 		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityPreference, c.IdentityRole, c.IdentityUser, c.ItemHistory,
-		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.OperationItem,
-		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.IdentityOrganization, c.IdentityPreference, c.IdentityRole, c.IdentityUser,
+		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView, c.Operation,
+		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
 		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
 		c.WorkflowTrigger, c.WorkflowVersion,
@@ -425,9 +431,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
 		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityPreference, c.IdentityRole, c.IdentityUser, c.ItemHistory,
-		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.OperationItem,
-		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.IdentityOrganization, c.IdentityPreference, c.IdentityRole, c.IdentityUser,
+		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView, c.Operation,
+		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
 		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
 		c.WorkflowTrigger, c.WorkflowVersion,
@@ -465,6 +471,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdentityGroup.mutate(ctx, m)
 	case *IdentityMembershipMutation:
 		return c.IdentityMembership.mutate(ctx, m)
+	case *IdentityOrganizationMutation:
+		return c.IdentityOrganization.mutate(ctx, m)
 	case *IdentityPreferenceMutation:
 		return c.IdentityPreference.mutate(ctx, m)
 	case *IdentityRoleMutation:
@@ -2390,6 +2398,139 @@ func (c *IdentityMembershipClient) mutate(ctx context.Context, m *IdentityMember
 		return (&IdentityMembershipDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown IdentityMembership mutation op: %q", m.Op())
+	}
+}
+
+// IdentityOrganizationClient is a client for the IdentityOrganization schema.
+type IdentityOrganizationClient struct {
+	config
+}
+
+// NewIdentityOrganizationClient returns a client for the IdentityOrganization from the given config.
+func NewIdentityOrganizationClient(c config) *IdentityOrganizationClient {
+	return &IdentityOrganizationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `identityorganization.Hooks(f(g(h())))`.
+func (c *IdentityOrganizationClient) Use(hooks ...Hook) {
+	c.hooks.IdentityOrganization = append(c.hooks.IdentityOrganization, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `identityorganization.Intercept(f(g(h())))`.
+func (c *IdentityOrganizationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IdentityOrganization = append(c.inters.IdentityOrganization, interceptors...)
+}
+
+// Create returns a builder for creating a IdentityOrganization entity.
+func (c *IdentityOrganizationClient) Create() *IdentityOrganizationCreate {
+	mutation := newIdentityOrganizationMutation(c.config, OpCreate)
+	return &IdentityOrganizationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IdentityOrganization entities.
+func (c *IdentityOrganizationClient) CreateBulk(builders ...*IdentityOrganizationCreate) *IdentityOrganizationCreateBulk {
+	return &IdentityOrganizationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IdentityOrganizationClient) MapCreateBulk(slice any, setFunc func(*IdentityOrganizationCreate, int)) *IdentityOrganizationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IdentityOrganizationCreateBulk{err: fmt.Errorf("calling to IdentityOrganizationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IdentityOrganizationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IdentityOrganizationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IdentityOrganization.
+func (c *IdentityOrganizationClient) Update() *IdentityOrganizationUpdate {
+	mutation := newIdentityOrganizationMutation(c.config, OpUpdate)
+	return &IdentityOrganizationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IdentityOrganizationClient) UpdateOne(_m *IdentityOrganization) *IdentityOrganizationUpdateOne {
+	mutation := newIdentityOrganizationMutation(c.config, OpUpdateOne, withIdentityOrganization(_m))
+	return &IdentityOrganizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IdentityOrganizationClient) UpdateOneID(id string) *IdentityOrganizationUpdateOne {
+	mutation := newIdentityOrganizationMutation(c.config, OpUpdateOne, withIdentityOrganizationID(id))
+	return &IdentityOrganizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IdentityOrganization.
+func (c *IdentityOrganizationClient) Delete() *IdentityOrganizationDelete {
+	mutation := newIdentityOrganizationMutation(c.config, OpDelete)
+	return &IdentityOrganizationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IdentityOrganizationClient) DeleteOne(_m *IdentityOrganization) *IdentityOrganizationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IdentityOrganizationClient) DeleteOneID(id string) *IdentityOrganizationDeleteOne {
+	builder := c.Delete().Where(identityorganization.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IdentityOrganizationDeleteOne{builder}
+}
+
+// Query returns a query builder for IdentityOrganization.
+func (c *IdentityOrganizationClient) Query() *IdentityOrganizationQuery {
+	return &IdentityOrganizationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIdentityOrganization},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IdentityOrganization entity by its id.
+func (c *IdentityOrganizationClient) Get(ctx context.Context, id string) (*IdentityOrganization, error) {
+	return c.Query().Where(identityorganization.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IdentityOrganizationClient) GetX(ctx context.Context, id string) *IdentityOrganization {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IdentityOrganizationClient) Hooks() []Hook {
+	return c.hooks.IdentityOrganization
+}
+
+// Interceptors returns the client interceptors.
+func (c *IdentityOrganizationClient) Interceptors() []Interceptor {
+	return c.inters.IdentityOrganization
+}
+
+func (c *IdentityOrganizationClient) mutate(ctx context.Context, m *IdentityOrganizationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IdentityOrganizationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IdentityOrganizationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IdentityOrganizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IdentityOrganizationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IdentityOrganization mutation op: %q", m.Op())
 	}
 }
 
@@ -6395,22 +6536,22 @@ type (
 	hooks struct {
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
 		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
-		IdentityGroup, IdentityMembership, IdentityPreference, IdentityRole,
-		IdentityUser, ItemHistory, ItemRevision, ItemSurface, ListView, Operation,
-		OperationItem, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup, TermSet,
-		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
-		WorkflowVersion []ent.Hook
+		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
+		IdentityRole, IdentityUser, ItemHistory, ItemRevision, ItemSurface, ListView,
+		Operation, OperationItem, Publication, Relationship, RelationshipType,
+		Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup,
+		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
 		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
-		IdentityGroup, IdentityMembership, IdentityPreference, IdentityRole,
-		IdentityUser, ItemHistory, ItemRevision, ItemSurface, ListView, Operation,
-		OperationItem, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup, TermSet,
-		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
-		WorkflowVersion []ent.Interceptor
+		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
+		IdentityRole, IdentityUser, ItemHistory, ItemRevision, ItemSurface, ListView,
+		Operation, OperationItem, Publication, Relationship, RelationshipType,
+		Resource, SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup,
+		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		WorkflowTrigger, WorkflowVersion []ent.Interceptor
 	}
 )
 

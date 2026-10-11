@@ -8,6 +8,10 @@ import (
 func (a *API) registerIdentity(m *http.ServeMux) {
 	a.registerPreferences(m)
 	d := a.DMS.Directory()
+	m.HandleFunc("GET /v1/organization", foundationRead(a, func(r *http.Request) (any, error) { return d.Organization(r.Context(), subject(r)) }))
+	m.HandleFunc("PATCH /v1/organization", foundationMutation(a, 200, true, func(r *http.Request, in identity.OrganizationUpdate, v int) (any, error) {
+		return d.UpdateOrganization(r.Context(), subject(r), v, in)
+	}))
 	m.HandleFunc("GET /v1/people", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.People(r.Context(), subject(r))
 	}))
@@ -33,7 +37,9 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/identity/me", foundationRead(a, func(r *http.Request) (any, error) { return d.Me(r.Context(), subject(r)) }))
 	m.HandleFunc("PATCH /v1/identity/me", foundationMutation(a, 200, false, func(r *http.Request, in struct {
 		DisplayName *string `json:"display_name"`
-	}, _ int) (any, error) { return d.UpdateMe(r.Context(), subject(r), in.DisplayName) }))
+	}, _ int) (any, error) {
+		return d.UpdateMe(r.Context(), subject(r), in.DisplayName)
+	}))
 	m.HandleFunc("GET /v1/identity/users/{subject}", foundationRead(a, func(r *http.Request) (any, error) { return d.User(r.Context(), subject(r), r.PathValue("subject")) }))
 	m.HandleFunc("PATCH /v1/identity/users/{subject}", foundationMutation(a, 200, false, func(r *http.Request, in identity.UserUpdate, _ int) (any, error) {
 		return d.UpdateUser(r.Context(), subject(r), r.PathValue("subject"), in)

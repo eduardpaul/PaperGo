@@ -43,6 +43,8 @@ func foundationMutation[T any](a *API, status int, precondition bool, fn func(*h
 }
 func entityETag(w http.ResponseWriter, v any) {
 	switch x := v.(type) {
+	case identity.Organization:
+		etag(w, x.Version)
 	case identity.Group:
 		etag(w, x.Version)
 	case identity.Role:

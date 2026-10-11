@@ -28,6 +28,8 @@ type UserUpdate struct {
 	Email       *string `json:"email,omitempty"`
 }
 type MeProfile struct {
+	OrganizationID         string `json:"organization_id"`
+	OrganizationIdentifier string `json:"organization_identifier"`
 	UserProfile
 	Scopes []string `json:"scopes"`
 }
@@ -90,6 +92,12 @@ func (d Directory) Me(ctx context.Context, subject string) (MeProfile, error) {
 		if !out.Active || out.DeletedAt != nil {
 			return ErrForbidden
 		}
+		org, err := organization(ctx, tx)
+		if err != nil {
+			return err
+		}
+		out.OrganizationID = org.ID
+		out.OrganizationIdentifier = org.Identifier
 		out.Scopes, err = EffectiveScopes(ctx, tx, subject)
 		return err
 	})

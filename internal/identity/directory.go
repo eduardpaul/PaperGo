@@ -131,6 +131,9 @@ func (d Directory) Initialize(ctx context.Context, administrator string) error {
 		return err
 	}
 	return d.transaction(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO identity_organizations(id,created_at,singleton,identifier,display_name,description,version) VALUES(?,CURRENT_TIMESTAMP,1,'papergo','PaperGo','',1) ON CONFLICT(singleton) DO NOTHING", uuid.NewString()); err != nil {
+			return err
+		}
 		var initialized bool
 		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_roles WHERE id=?)", AdministratorRole).Scan(&initialized); err != nil {
 			return err

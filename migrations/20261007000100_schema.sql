@@ -627,7 +627,9 @@ WHEN old.action='manage' AND EXISTS(SELECT 1 FROM resources WHERE id=old.resourc
  THEN RAISE(ABORT,'a workspace needs at least one owner') END;
 END;
 
--- Organization directory, nested groups and module-scoped roles.
+-- Organization identity, directory, nested groups and module-scoped roles.
+CREATE TABLE identity_organizations (id TEXT NOT NULL PRIMARY KEY, created_at DATETIME NOT NULL, singleton BOOLEAN NOT NULL DEFAULT 1 CHECK(singleton=1), identifier TEXT NOT NULL CHECK(length(identifier) BETWEEN 1 AND 128), display_name TEXT NOT NULL CHECK(length(display_name) BETWEEN 1 AND 200), description TEXT NOT NULL DEFAULT '' CHECK(length(description)<=2000), version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
+CREATE UNIQUE INDEX identityorganization_singleton ON identity_organizations(singleton);
 CREATE TABLE identity_users (id TEXT NOT NULL PRIMARY KEY CHECK(length(id) BETWEEN 1 AND 255 AND id=trim(id)), created_at datetime NOT NULL, active BOOLEAN NOT NULL DEFAULT 1 CHECK(active IN (0,1)), display_name TEXT NOT NULL DEFAULT '' CHECK(length(display_name)<=200), email TEXT NOT NULL DEFAULT '' CHECK(length(email)<=256), deleted_at DATETIME, CHECK(deleted_at IS NULL OR (active=0 AND display_name='Deleted user' AND email='')));
 CREATE TABLE identity_groups (id TEXT NOT NULL PRIMARY KEY, created_at datetime NOT NULL, name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 200), description TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
 CREATE UNIQUE INDEX identitygroup_name ON identity_groups(name);
