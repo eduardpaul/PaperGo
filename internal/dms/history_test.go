@@ -17,7 +17,7 @@ func TestRevisionHistoryChangesPaginationAndRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	history, err := s.RevisionHistory(testContext, "alice", item.ID, 1, 10)
+	history, err := s.RevisionHistory(testContext, "alice", item.ID, 0, 1)
 	if err != nil || len(history.Data) != 1 || !history.Data[0].IsCurrent || !slices.Equal(history.Data[0].ChangedFields, []string{"$name", "$tags", "a", "b"}) {
 		t.Fatal(history, err)
 	}
@@ -72,15 +72,15 @@ func TestOrdinaryReaderHistorySnapshotsAndAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err := s.RevisionHistory(testContext, "reader", item.ID, 0, 1)
-	if err != nil || len(rows.Data) != 1 || rows.Data[0].IsCurrent || rows.Data[0].Name != "First" {
+	if err != nil || len(rows.Data) != 1 || !rows.Data[0].IsCurrent || rows.Data[0].Name != "Unpublished" || rows.NextCursor != "2" || !slices.Equal(rows.Data[0].ChangedFields, []string{"$name", "note"}) {
 		t.Fatal(rows, err)
 	}
 	defs, _, err := typedDefinitions(rows.Data[0].Edges.SchemaRevision.Definition, rows.Data[0].ContentTypeID)
 	if err != nil || definitionMap(defs)["note"].Label != "Original label" {
 		t.Fatal("original schema lost", defs, err)
 	}
-	rows, err = s.RevisionHistory(testContext, "reader", item.ID, 1, 1)
-	if err != nil || len(rows.Data) != 1 || !rows.Data[0].IsCurrent || rows.Data[0].Name != "Unpublished" || !slices.Equal(rows.Data[0].ChangedFields, []string{"$name", "note"}) {
+	rows, err = s.RevisionHistory(testContext, "reader", item.ID, 2, 1)
+	if err != nil || len(rows.Data) != 1 || rows.Data[0].IsCurrent || rows.Data[0].Name != "First" || rows.NextCursor != "" {
 		t.Fatal(rows, err)
 	}
 	if current, err := s.Get(testContext, "reader", item.ID); err != nil || current.Name != "First" {
@@ -99,7 +99,6 @@ func TestOrdinaryReaderHistorySnapshotsAndAuthorization(t *testing.T) {
 	}
 	for _, get := range []func() error{
 		func() error { _, e := s.RevisionHistory(testContext, "reader", private.ID, 0, 10); return e },
-		func() error { _, e := s.Revisions(testContext, "reader", private.ID, 0, 10); return e },
 		func() error { _, e := s.Revision(testContext, "reader", private.ID, 1); return e },
 	} {
 		if e := get(); !errors.Is(e, ErrForbidden) {

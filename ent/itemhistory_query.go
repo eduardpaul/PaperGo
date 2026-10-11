@@ -9,6 +9,7 @@ import (
 	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/predicate"
+	"papergo/ent/resource"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -24,6 +25,7 @@ type ItemHistoryQuery struct {
 	inters       []Interceptor
 	predicates   []predicate.ItemHistory
 	withRevision *ItemRevisionQuery
+	withItem     *ResourceQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -75,6 +77,28 @@ func (_q *ItemHistoryQuery) QueryRevision() *ItemRevisionQuery {
 			sqlgraph.From(itemhistory.Table, itemhistory.FieldID, selector),
 			sqlgraph.To(itemrevision.Table, itemrevision.FieldID),
 			sqlgraph.Edge(sqlgraph.O2O, true, itemhistory.RevisionTable, itemhistory.RevisionColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryItem chains the current query on the "item" edge.
+func (_q *ItemHistoryQuery) QueryItem() *ResourceQuery {
+	query := (&ResourceClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(itemhistory.Table, itemhistory.FieldID, selector),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, itemhistory.ItemTable, itemhistory.ItemColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -275,6 +299,7 @@ func (_q *ItemHistoryQuery) Clone() *ItemHistoryQuery {
 		inters:       append([]Interceptor{}, _q.inters...),
 		predicates:   append([]predicate.ItemHistory{}, _q.predicates...),
 		withRevision: _q.withRevision.Clone(),
+		withItem:     _q.withItem.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -289,6 +314,17 @@ func (_q *ItemHistoryQuery) WithRevision(opts ...func(*ItemRevisionQuery)) *Item
 		opt(query)
 	}
 	_q.withRevision = query
+	return _q
+}
+
+// WithItem tells the query-builder to eager-load the nodes that are connected to
+// the "item" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ItemHistoryQuery) WithItem(opts ...func(*ResourceQuery)) *ItemHistoryQuery {
+	query := (&ResourceClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withItem = query
 	return _q
 }
 
@@ -370,8 +406,9 @@ func (_q *ItemHistoryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	var (
 		nodes       = []*ItemHistory{}
 		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			_q.withRevision != nil,
+			_q.withItem != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -395,6 +432,12 @@ func (_q *ItemHistoryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	if query := _q.withRevision; query != nil {
 		if err := _q.loadRevision(ctx, query, nodes, nil,
 			func(n *ItemHistory, e *ItemRevision) { n.Edges.Revision = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withItem; query != nil {
+		if err := _q.loadItem(ctx, query, nodes, nil,
+			func(n *ItemHistory, e *Resource) { n.Edges.Item = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -430,6 +473,35 @@ func (_q *ItemHistoryQuery) loadRevision(ctx context.Context, query *ItemRevisio
 	}
 	return nil
 }
+func (_q *ItemHistoryQuery) loadItem(ctx context.Context, query *ResourceQuery, nodes []*ItemHistory, init func(*ItemHistory), assign func(*ItemHistory, *Resource)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*ItemHistory)
+	for i := range nodes {
+		fk := nodes[i].ItemID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(resource.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "item_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 
 func (_q *ItemHistoryQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
@@ -458,6 +530,9 @@ func (_q *ItemHistoryQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if _q.withRevision != nil {
 			_spec.Node.AddColumnOnce(itemhistory.FieldRevisionID)
+		}
+		if _q.withItem != nil {
+			_spec.Node.AddColumnOnce(itemhistory.FieldItemID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

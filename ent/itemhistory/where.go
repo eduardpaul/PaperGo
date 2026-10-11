@@ -75,6 +75,16 @@ func RevisionID(v string) predicate.ItemHistory {
 	return predicate.ItemHistory(sql.FieldEQ(FieldRevisionID, v))
 }
 
+// ItemID applies equality check predicate on the "item_id" field. It's identical to ItemIDEQ.
+func ItemID(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldEQ(FieldItemID, v))
+}
+
+// Number applies equality check predicate on the "number" field. It's identical to NumberEQ.
+func Number(v int) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldEQ(FieldNumber, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.ItemHistory {
 	return predicate.ItemHistory(sql.FieldEQ(FieldCreatedAt, v))
@@ -180,6 +190,111 @@ func RevisionIDContainsFold(v string) predicate.ItemHistory {
 	return predicate.ItemHistory(sql.FieldContainsFold(FieldRevisionID, v))
 }
 
+// ItemIDEQ applies the EQ predicate on the "item_id" field.
+func ItemIDEQ(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldEQ(FieldItemID, v))
+}
+
+// ItemIDNEQ applies the NEQ predicate on the "item_id" field.
+func ItemIDNEQ(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldNEQ(FieldItemID, v))
+}
+
+// ItemIDIn applies the In predicate on the "item_id" field.
+func ItemIDIn(vs ...string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldIn(FieldItemID, vs...))
+}
+
+// ItemIDNotIn applies the NotIn predicate on the "item_id" field.
+func ItemIDNotIn(vs ...string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldNotIn(FieldItemID, vs...))
+}
+
+// ItemIDGT applies the GT predicate on the "item_id" field.
+func ItemIDGT(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldGT(FieldItemID, v))
+}
+
+// ItemIDGTE applies the GTE predicate on the "item_id" field.
+func ItemIDGTE(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldGTE(FieldItemID, v))
+}
+
+// ItemIDLT applies the LT predicate on the "item_id" field.
+func ItemIDLT(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldLT(FieldItemID, v))
+}
+
+// ItemIDLTE applies the LTE predicate on the "item_id" field.
+func ItemIDLTE(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldLTE(FieldItemID, v))
+}
+
+// ItemIDContains applies the Contains predicate on the "item_id" field.
+func ItemIDContains(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldContains(FieldItemID, v))
+}
+
+// ItemIDHasPrefix applies the HasPrefix predicate on the "item_id" field.
+func ItemIDHasPrefix(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldHasPrefix(FieldItemID, v))
+}
+
+// ItemIDHasSuffix applies the HasSuffix predicate on the "item_id" field.
+func ItemIDHasSuffix(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldHasSuffix(FieldItemID, v))
+}
+
+// ItemIDEqualFold applies the EqualFold predicate on the "item_id" field.
+func ItemIDEqualFold(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldEqualFold(FieldItemID, v))
+}
+
+// ItemIDContainsFold applies the ContainsFold predicate on the "item_id" field.
+func ItemIDContainsFold(v string) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldContainsFold(FieldItemID, v))
+}
+
+// NumberEQ applies the EQ predicate on the "number" field.
+func NumberEQ(v int) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldEQ(FieldNumber, v))
+}
+
+// NumberNEQ applies the NEQ predicate on the "number" field.
+func NumberNEQ(v int) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldNEQ(FieldNumber, v))
+}
+
+// NumberIn applies the In predicate on the "number" field.
+func NumberIn(vs ...int) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldIn(FieldNumber, vs...))
+}
+
+// NumberNotIn applies the NotIn predicate on the "number" field.
+func NumberNotIn(vs ...int) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldNotIn(FieldNumber, vs...))
+}
+
+// NumberGT applies the GT predicate on the "number" field.
+func NumberGT(v int) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldGT(FieldNumber, v))
+}
+
+// NumberGTE applies the GTE predicate on the "number" field.
+func NumberGTE(v int) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldGTE(FieldNumber, v))
+}
+
+// NumberLT applies the LT predicate on the "number" field.
+func NumberLT(v int) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldLT(FieldNumber, v))
+}
+
+// NumberLTE applies the LTE predicate on the "number" field.
+func NumberLTE(v int) predicate.ItemHistory {
+	return predicate.ItemHistory(sql.FieldLTE(FieldNumber, v))
+}
+
 // HasRevision applies the HasEdge predicate on the "revision" edge.
 func HasRevision() predicate.ItemHistory {
 	return predicate.ItemHistory(func(s *sql.Selector) {
@@ -195,6 +310,29 @@ func HasRevision() predicate.ItemHistory {
 func HasRevisionWith(preds ...predicate.ItemRevision) predicate.ItemHistory {
 	return predicate.ItemHistory(func(s *sql.Selector) {
 		step := newRevisionStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasItem applies the HasEdge predicate on the "item" edge.
+func HasItem() predicate.ItemHistory {
+	return predicate.ItemHistory(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, ItemTable, ItemColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasItemWith applies the HasEdge predicate on the "item" edge with a given conditions (other predicates).
+func HasItemWith(preds ...predicate.Resource) predicate.ItemHistory {
+	return predicate.ItemHistory(func(s *sql.Selector) {
+		step := newItemStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

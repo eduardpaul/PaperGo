@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
+	"papergo/ent/resource"
 	"strings"
 	"time"
 
@@ -23,6 +24,10 @@ type ItemHistory struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// RevisionID holds the value of the "revision_id" field.
 	RevisionID string `json:"revision_id,omitempty"`
+	// ItemID holds the value of the "item_id" field.
+	ItemID string `json:"item_id,omitempty"`
+	// Number holds the value of the "number" field.
+	Number int `json:"number,omitempty"`
 	// ChangedFields holds the value of the "changed_fields" field.
 	ChangedFields []string `json:"changed_fields,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -35,9 +40,11 @@ type ItemHistory struct {
 type ItemHistoryEdges struct {
 	// Revision holds the value of the revision edge.
 	Revision *ItemRevision `json:"revision,omitempty"`
+	// Item holds the value of the item edge.
+	Item *Resource `json:"item,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // RevisionOrErr returns the Revision value or an error if the edge
@@ -51,6 +58,17 @@ func (e ItemHistoryEdges) RevisionOrErr() (*ItemRevision, error) {
 	return nil, &NotLoadedError{edge: "revision"}
 }
 
+// ItemOrErr returns the Item value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ItemHistoryEdges) ItemOrErr() (*Resource, error) {
+	if e.Item != nil {
+		return e.Item, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: resource.Label}
+	}
+	return nil, &NotLoadedError{edge: "item"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*ItemHistory) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -58,7 +76,9 @@ func (*ItemHistory) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case itemhistory.FieldChangedFields:
 			values[i] = new([]byte)
-		case itemhistory.FieldID, itemhistory.FieldRevisionID:
+		case itemhistory.FieldNumber:
+			values[i] = new(sql.NullInt64)
+		case itemhistory.FieldID, itemhistory.FieldRevisionID, itemhistory.FieldItemID:
 			values[i] = new(sql.NullString)
 		case itemhistory.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -95,6 +115,18 @@ func (_m *ItemHistory) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.RevisionID = value.String
 			}
+		case itemhistory.FieldItemID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field item_id", values[i])
+			} else if value.Valid {
+				_m.ItemID = value.String
+			}
+		case itemhistory.FieldNumber:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field number", values[i])
+			} else if value.Valid {
+				_m.Number = int(value.Int64)
+			}
 		case itemhistory.FieldChangedFields:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field changed_fields", values[i])
@@ -119,6 +151,11 @@ func (_m *ItemHistory) Value(name string) (ent.Value, error) {
 // QueryRevision queries the "revision" edge of the ItemHistory entity.
 func (_m *ItemHistory) QueryRevision() *ItemRevisionQuery {
 	return NewItemHistoryClient(_m.config).QueryRevision(_m)
+}
+
+// QueryItem queries the "item" edge of the ItemHistory entity.
+func (_m *ItemHistory) QueryItem() *ResourceQuery {
+	return NewItemHistoryClient(_m.config).QueryItem(_m)
 }
 
 // Update returns a builder for updating this ItemHistory.
@@ -149,6 +186,12 @@ func (_m *ItemHistory) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("revision_id=")
 	builder.WriteString(_m.RevisionID)
+	builder.WriteString(", ")
+	builder.WriteString("item_id=")
+	builder.WriteString(_m.ItemID)
+	builder.WriteString(", ")
+	builder.WriteString("number=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Number))
 	builder.WriteString(", ")
 	builder.WriteString("changed_fields=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ChangedFields))

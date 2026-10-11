@@ -68,7 +68,7 @@ func TestFolderFieldsSearchAndLiveReaderVisibility(t *testing.T) {
 	if _, err = s.Publish(testContext, "alice", f.ID, f.Version); !isValidation(err) {
 		t.Fatal("folder publication accepted", err)
 	}
-	if _, err = s.Revisions(testContext, "reader", f.ID, 0, 10); !isValidation(err) {
+	if _, err = s.RevisionHistory(testContext, "reader", f.ID, 0, 10); !isValidation(err) {
 		t.Fatal("folder history exposed", err)
 	}
 	count, err := s.Client.Publication.Query().Where(publication.ItemIDEQ(f.ID)).Count(testContext)

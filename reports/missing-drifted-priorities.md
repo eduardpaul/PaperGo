@@ -70,5 +70,4 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P3 · EXT-01 · Missing:** Administrators cannot activate/configure packaged extensions.
 - **P3 · EXT-02 · Partial:** No equivalent contributed field/API/activity/job/trigger/MCP SDK and registration lifecycle. Template contribution covers only a subset.
 - **P3 · LST-45 · Drift:** A valid 101-person/choice/lookup/term array is rejected; even 101 identical inputs exceed the Go cap. Type categories themselves align (LST-40).
-- **P3 · LST-47 · Drift:** The first page shows oldest entries and numbering/current markers differ after off-mode writes.
 - **P3 · LST-49 · Drift:** Deep hierarchies cannot be represented at the same depth. Boundary scenarios must account for workspace/collection levels in Go.

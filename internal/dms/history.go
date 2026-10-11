@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"papergo/ent"
+	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/resource"
 )
@@ -54,26 +55,45 @@ func revisionChanges(current, previous *ent.ItemRevision) ([]string, error) {
 	return changed, nil
 }
 
+func (s *Service) currentHistoryNumber(ctx context.Context, id string) (number int, err error) {
+	err = s.scan(ctx, []any{&number}, "SELECT COALESCE(MAX(number),0) FROM item_histories WHERE item_id=?", id)
+	return
+}
+func historyView(history *ent.ItemHistory, current int) RevisionView {
+	revision := *history.Edges.Revision
+	revision.RevisionNumber = history.Number
+	revision.Edges.History = nil
+	return RevisionView{&revision, history.Number == current, history.ChangedFields}
+}
 func (s *Service) RevisionHistory(ctx context.Context, subject, id string, after, limit int) (Page[RevisionView], error) {
 	return read(ctx, s, func(t *Service) (Page[RevisionView], error) {
-		rows, err := t.Revisions(ctx, subject, id, after, limit)
+		item, err := t.authorize(ctx, subject, id, "read")
 		if err != nil {
 			return Page[RevisionView]{}, err
 		}
-		item, err := t.Client.Resource.Get(ctx, id)
+		if item.Kind != resource.KindItem {
+			return Page[RevisionView]{}, invalid("revisions belong to items")
+		}
+		if after < 0 {
+			return Page[RevisionView]{}, invalid("history cursor must be a positive recorded version number")
+		}
+		query := t.Client.ItemHistory.Query().Where(itemhistory.ItemIDEQ(id))
+		if after > 0 {
+			query.Where(itemhistory.NumberLT(after))
+		}
+		rows, err := query.WithRevision(func(q *ent.ItemRevisionQuery) { q.WithSchemaRevision() }).Order(ent.Desc(itemhistory.FieldNumber)).Limit(pageSize(limit) + 1).All(ctx)
 		if err != nil {
 			return Page[RevisionView]{}, err
 		}
-		out := make([]RevisionView, 0, len(rows.Data))
-		for _, revision := range rows.Data {
-			entry, err := revision.Edges.HistoryOrErr()
-			if err != nil {
-				return Page[RevisionView]{}, err
-			}
-			revision.Edges.History = nil
-			out = append(out, RevisionView{revision, item.HeadRevisionID != nil && *item.HeadRevisionID == revision.ID, entry.ChangedFields})
+		current, err := t.currentHistoryNumber(ctx, id)
+		if err != nil {
+			return Page[RevisionView]{}, err
 		}
-		return Page[RevisionView]{Data: out, NextCursor: rows.NextCursor}, nil
+		out := make([]RevisionView, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, historyView(row, current))
+		}
+		return numberedPage(out, limit, func(v RevisionView) int { return v.RevisionNumber }), nil
 	})
 }
 
@@ -86,19 +106,18 @@ func (s *Service) Revision(ctx context.Context, subject, id string, number int) 
 		if item.Kind != resource.KindItem || number < 1 {
 			return RevisionView{}, ErrNotFound
 		}
-		v, err := t.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberEQ(number), itemrevision.HasHistory()).WithSchemaRevision().WithHistory().Only(ctx)
+		history, err := t.Client.ItemHistory.Query().Where(itemhistory.ItemIDEQ(id), itemhistory.NumberEQ(number)).WithRevision(func(q *ent.ItemRevisionQuery) { q.WithSchemaRevision() }).Only(ctx)
 		if ent.IsNotFound(err) {
 			return RevisionView{}, ErrNotFound
 		}
 		if err != nil {
 			return RevisionView{}, err
 		}
-		entry, err := v.Edges.HistoryOrErr()
+		current, err := t.currentHistoryNumber(ctx, id)
 		if err != nil {
 			return RevisionView{}, err
 		}
-		v.Edges.History = nil
-		return RevisionView{v, item.HeadRevisionID != nil && *item.HeadRevisionID == v.ID, entry.ChangedFields}, nil
+		return historyView(history, current), nil
 	})
 }
 
@@ -116,7 +135,7 @@ func (s *Service) RestoreRevision(ctx context.Context, subject, id string, numbe
 		if item.Version != version {
 			return ErrPreconditionFailed
 		}
-		old, err := t.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberEQ(number), itemrevision.HasHistory()).Only(ctx)
+		old, err := t.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.HasHistoryWith(itemhistory.NumberEQ(number))).Only(ctx)
 		if ent.IsNotFound(err) {
 			return ErrNotFound
 		}

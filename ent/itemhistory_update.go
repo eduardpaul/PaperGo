@@ -64,6 +64,9 @@ func (_u *ItemHistoryUpdate) check() error {
 	if _u.mutation.RevisionCleared() && len(_u.mutation.RevisionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "ItemHistory.revision"`)
 	}
+	if _u.mutation.ItemCleared() && len(_u.mutation.ItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ItemHistory.item"`)
+	}
 	return nil
 }
 
@@ -148,6 +151,9 @@ func (_u *ItemHistoryUpdateOne) ExecX(ctx context.Context) {
 func (_u *ItemHistoryUpdateOne) check() error {
 	if _u.mutation.RevisionCleared() && len(_u.mutation.RevisionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "ItemHistory.revision"`)
+	}
+	if _u.mutation.ItemCleared() && len(_u.mutation.ItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ItemHistory.item"`)
 	}
 	return nil
 }

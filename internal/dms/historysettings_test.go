@@ -16,7 +16,7 @@ func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
 			t.Fatal(c, err)
 		}
 		item := create(t, s, c.ID, "item", "Item", nil)
-		rows, err := s.Revisions(testContext, "alice", item.ID, 0, 10)
+		rows, err := s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
 		expected := 0
 		if tc.mode == "major" {
 			expected = 1
@@ -143,10 +143,10 @@ func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 		}
 	}
 	rows, err := s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
-	if err != nil || len(rows.Data) != 2 || rows.Data[0].RevisionNumber != 2 || !slices.Equal(rows.Data[0].ChangedFields, []string{"$name"}) {
+	if err != nil || len(rows.Data) != 2 || rows.Data[0].RevisionNumber != 3 || !slices.Equal(rows.Data[0].ChangedFields, []string{"$name"}) {
 		t.Fatal(rows, err)
 	}
-	if otherRows, e := s.Revisions(testContext, "alice", other.ID, 0, 10); e != nil || len(otherRows.Data) != 1 {
+	if otherRows, e := s.RevisionHistory(testContext, "alice", other.ID, 0, 10); e != nil || len(otherRows.Data) != 1 {
 		t.Fatal("retention affected another item", otherRows, e)
 	}
 	for _, fetch := range []func() error{
@@ -166,7 +166,7 @@ func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err = s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
-	if err != nil || len(rows.Data) != 2 || rows.Data[1].IsCurrent {
+	if err != nil || len(rows.Data) != 2 || !rows.Data[0].IsCurrent || rows.Data[1].IsCurrent {
 		t.Fatal(rows, err)
 	}
 	if _, err = s.Revision(testContext, "alice", item.ID, 4); !errors.Is(err, ErrNotFound) {
@@ -195,7 +195,7 @@ func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err = s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
-	if err != nil || len(rows.Data) != 1 || rows.Data[0].Name != "Resumed" || !rows.Data[0].IsCurrent {
+	if err != nil || len(rows.Data) != 1 || rows.Data[0].RevisionNumber != 4 || rows.Data[0].Name != "Resumed" || !rows.Data[0].IsCurrent {
 		t.Fatal(rows, err)
 	}
 	if _, err = s.Revision(testContext, "alice", item.ID, 2); !errors.Is(err, ErrNotFound) {

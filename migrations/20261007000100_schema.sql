@@ -61,9 +61,12 @@ CREATE TABLE item_revisions (
 CREATE TABLE item_histories (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
  revision_id TEXT NOT NULL REFERENCES item_revisions(id),
+ item_id TEXT NOT NULL REFERENCES resources(id), number INTEGER NOT NULL CHECK(number>0),
  changed_fields JSON NOT NULL CHECK(json_valid(changed_fields) AND json_type(changed_fields)='array')
 );
 CREATE UNIQUE INDEX itemhistory_revision_id ON item_histories(revision_id);
+CREATE UNIQUE INDEX itemhistory_item_id_number ON item_histories(item_id,number);
+CREATE TRIGGER item_history_ownership BEFORE INSERT ON item_histories BEGIN SELECT RAISE(ABORT,'invalid history ownership') WHERE NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.revision_id AND item_id=new.item_id);END;
 CREATE TRIGGER item_history_immutable BEFORE UPDATE ON item_histories BEGIN SELECT RAISE(ABORT,'item history is immutable'); END;
 CREATE TABLE item_surfaces (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, item_id TEXT NOT NULL REFERENCES resources(id),

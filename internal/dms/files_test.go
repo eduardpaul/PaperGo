@@ -181,7 +181,7 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 		if _, err := s.Get(testContext, "alice", id); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("deleted resource readable: %v", err)
 		}
-		if _, err := s.Revisions(testContext, "alice", id, 0, 10); !errors.Is(err, ErrNotFound) {
+		if _, err := s.RevisionHistory(testContext, "alice", id, 0, 10); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("deleted history readable: %v", err)
 		}
 	}

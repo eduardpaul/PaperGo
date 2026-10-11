@@ -3248,6 +3248,22 @@ func (c *ItemHistoryClient) QueryRevision(_m *ItemHistory) *ItemRevisionQuery {
 	return query
 }
 
+// QueryItem queries the item edge of a ItemHistory.
+func (c *ItemHistoryClient) QueryItem(_m *ItemHistory) *ResourceQuery {
+	query := (&ResourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(itemhistory.Table, itemhistory.FieldID, id),
+			sqlgraph.To(resource.Table, resource.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, itemhistory.ItemTable, itemhistory.ItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *ItemHistoryClient) Hooks() []Hook {
 	return c.hooks.ItemHistory

@@ -595,7 +595,9 @@ var (
 	ItemHistoriesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "number", Type: field.TypeInt},
 		{Name: "changed_fields", Type: field.TypeJSON},
+		{Name: "item_id", Type: field.TypeString, Size: 36},
 		{Name: "revision_id", Type: field.TypeString, Unique: true, Size: 36},
 	}
 	// ItemHistoriesTable holds the schema information for the "item_histories" table.
@@ -605,8 +607,14 @@ var (
 		PrimaryKey: []*schema.Column{ItemHistoriesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
+				Symbol:     "item_histories_resources_item",
+				Columns:    []*schema.Column{ItemHistoriesColumns[4]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
 				Symbol:     "item_histories_item_revisions_history",
-				Columns:    []*schema.Column{ItemHistoriesColumns[3]},
+				Columns:    []*schema.Column{ItemHistoriesColumns[5]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -615,7 +623,12 @@ var (
 			{
 				Name:    "itemhistory_revision_id",
 				Unique:  true,
-				Columns: []*schema.Column{ItemHistoriesColumns[3]},
+				Columns: []*schema.Column{ItemHistoriesColumns[5]},
+			},
+			{
+				Name:    "itemhistory_item_id_number",
+				Unique:  true,
+				Columns: []*schema.Column{ItemHistoriesColumns[4], ItemHistoriesColumns[2]},
 			},
 		},
 	}
@@ -1814,7 +1827,8 @@ func init() {
 	IdentityAssignmentsTable.ForeignKeys[0].RefTable = IdentityRolesTable
 	IdentityMembershipsTable.ForeignKeys[0].RefTable = IdentityGroupsTable
 	IdentityRestTokensTable.ForeignKeys[0].RefTable = IdentityUsersTable
-	ItemHistoriesTable.ForeignKeys[0].RefTable = ItemRevisionsTable
+	ItemHistoriesTable.ForeignKeys[0].RefTable = ResourcesTable
+	ItemHistoriesTable.ForeignKeys[1].RefTable = ItemRevisionsTable
 	ItemRevisionsTable.ForeignKeys[0].RefTable = BlobsTable
 	ItemRevisionsTable.ForeignKeys[1].RefTable = ResourcesTable
 	ItemRevisionsTable.ForeignKeys[2].RefTable = SchemaRevisionsTable

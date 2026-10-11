@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
+	"papergo/ent/resource"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -41,6 +42,18 @@ func (_c *ItemHistoryCreate) SetRevisionID(v string) *ItemHistoryCreate {
 	return _c
 }
 
+// SetItemID sets the "item_id" field.
+func (_c *ItemHistoryCreate) SetItemID(v string) *ItemHistoryCreate {
+	_c.mutation.SetItemID(v)
+	return _c
+}
+
+// SetNumber sets the "number" field.
+func (_c *ItemHistoryCreate) SetNumber(v int) *ItemHistoryCreate {
+	_c.mutation.SetNumber(v)
+	return _c
+}
+
 // SetChangedFields sets the "changed_fields" field.
 func (_c *ItemHistoryCreate) SetChangedFields(v []string) *ItemHistoryCreate {
 	_c.mutation.SetChangedFields(v)
@@ -64,6 +77,11 @@ func (_c *ItemHistoryCreate) SetNillableID(v *string) *ItemHistoryCreate {
 // SetRevision sets the "revision" edge to the ItemRevision entity.
 func (_c *ItemHistoryCreate) SetRevision(v *ItemRevision) *ItemHistoryCreate {
 	return _c.SetRevisionID(v.ID)
+}
+
+// SetItem sets the "item" edge to the Resource entity.
+func (_c *ItemHistoryCreate) SetItem(v *Resource) *ItemHistoryCreate {
+	return _c.SetItemID(v.ID)
 }
 
 // Mutation returns the ItemHistoryMutation object of the builder.
@@ -119,6 +137,17 @@ func (_c *ItemHistoryCreate) check() error {
 	if _, ok := _c.mutation.RevisionID(); !ok {
 		return &ValidationError{Name: "revision_id", err: errors.New(`ent: missing required field "ItemHistory.revision_id"`)}
 	}
+	if _, ok := _c.mutation.ItemID(); !ok {
+		return &ValidationError{Name: "item_id", err: errors.New(`ent: missing required field "ItemHistory.item_id"`)}
+	}
+	if _, ok := _c.mutation.Number(); !ok {
+		return &ValidationError{Name: "number", err: errors.New(`ent: missing required field "ItemHistory.number"`)}
+	}
+	if v, ok := _c.mutation.Number(); ok {
+		if err := itemhistory.NumberValidator(v); err != nil {
+			return &ValidationError{Name: "number", err: fmt.Errorf(`ent: validator failed for field "ItemHistory.number": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.ChangedFields(); !ok {
 		return &ValidationError{Name: "changed_fields", err: errors.New(`ent: missing required field "ItemHistory.changed_fields"`)}
 	}
@@ -129,6 +158,9 @@ func (_c *ItemHistoryCreate) check() error {
 	}
 	if len(_c.mutation.RevisionIDs()) == 0 {
 		return &ValidationError{Name: "revision", err: errors.New(`ent: missing required edge "ItemHistory.revision"`)}
+	}
+	if len(_c.mutation.ItemIDs()) == 0 {
+		return &ValidationError{Name: "item", err: errors.New(`ent: missing required edge "ItemHistory.item"`)}
 	}
 	return nil
 }
@@ -169,6 +201,10 @@ func (_c *ItemHistoryCreate) createSpec() (*ItemHistory, *sqlgraph.CreateSpec) {
 		_spec.SetField(itemhistory.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
+	if value, ok := _c.mutation.Number(); ok {
+		_spec.SetField(itemhistory.FieldNumber, field.TypeInt, value)
+		_node.Number = value
+	}
 	if value, ok := _c.mutation.ChangedFields(); ok {
 		_spec.SetField(itemhistory.FieldChangedFields, field.TypeJSON, value)
 		_node.ChangedFields = value
@@ -188,6 +224,23 @@ func (_c *ItemHistoryCreate) createSpec() (*ItemHistory, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.RevisionID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   itemhistory.ItemTable,
+			Columns: []string{itemhistory.ItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(resource.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.ItemID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

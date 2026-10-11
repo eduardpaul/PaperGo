@@ -441,23 +441,6 @@ func (s *Service) publishAllHeads(ctx context.Context, actor string, c *ent.Reso
 		after = rows[len(rows)-1].ID
 	}
 }
-func (s *Service) Revisions(ctx context.Context, subject, id string, after, limit int) (Page[*ent.ItemRevision], error) {
-	if !s.transaction {
-		return read(ctx, s, func(t *Service) (Page[*ent.ItemRevision], error) { return t.Revisions(ctx, subject, id, after, limit) })
-	}
-	r, err := s.authorize(ctx, subject, id, "read")
-	if err != nil {
-		return Page[*ent.ItemRevision]{}, err
-	}
-	if r.Kind != resource.KindItem {
-		return Page[*ent.ItemRevision]{}, invalid("revisions belong to items")
-	}
-	rows, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.RevisionNumberGT(after), itemrevision.HasHistory()).WithSchemaRevision().WithHistory().Order(ent.Asc(itemrevision.FieldRevisionNumber)).Limit(pageSize(limit) + 1).All(ctx)
-	if err != nil {
-		return Page[*ent.ItemRevision]{}, err
-	}
-	return numberedPage(rows, limit, func(v *ent.ItemRevision) int { return v.RevisionNumber }), nil
-}
 
 // ItemSchema exposes only the schema belonging to the caller's visible revision.
 

@@ -871,6 +871,10 @@ func init() {
 	itemhistoryDescCreatedAt := itemhistoryMixinFields0[1].Descriptor()
 	// itemhistory.DefaultCreatedAt holds the default value on creation for the created_at field.
 	itemhistory.DefaultCreatedAt = itemhistoryDescCreatedAt.Default.(func() time.Time)
+	// itemhistoryDescNumber is the schema descriptor for number field.
+	itemhistoryDescNumber := itemhistoryFields[2].Descriptor()
+	// itemhistory.NumberValidator is a validator for the "number" field. It is called by the builders before save.
+	itemhistory.NumberValidator = itemhistoryDescNumber.Validators[0].(func(int) error)
 	// itemhistoryDescID is the schema descriptor for id field.
 	itemhistoryDescID := itemhistoryMixinFields0[0].Descriptor()
 	// itemhistory.DefaultID holds the default value on creation for the id field.

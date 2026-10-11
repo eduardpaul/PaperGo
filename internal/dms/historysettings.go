@@ -4,7 +4,6 @@ import (
 	"context"
 	"papergo/ent"
 	"papergo/ent/itemhistory"
-	"papergo/ent/itemrevision"
 	"papergo/ent/resource"
 )
 
@@ -30,21 +29,16 @@ func (s *Service) retainHistory(ctx context.Context, collection *ent.Resource, r
 		if err != nil {
 			return err
 		}
-		if err = s.Client.ItemHistory.Create().SetRevisionID(revision.ID).SetChangedFields(changed).Exec(ctx); err != nil {
-			return err
-		}
-		retained, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(revision.ItemID), itemrevision.HasHistory()).Order(ent.Desc(itemrevision.FieldRevisionNumber)).Offset(collection.MaxVersions).All(ctx)
+		last, err := s.currentHistoryNumber(ctx, revision.ItemID)
 		if err != nil {
 			return err
 		}
-		ids := make([]string, 0, len(retained))
-		for _, old := range retained {
-			ids = append(ids, old.ID)
+		if err = s.Client.ItemHistory.Create().SetRevisionID(revision.ID).SetItemID(revision.ItemID).SetNumber(last + 1).SetChangedFields(changed).Exec(ctx); err != nil {
+			return err
 		}
-		if len(ids) > 0 {
-			if _, err = s.Client.ItemHistory.Delete().Where(itemhistory.RevisionIDIn(ids...)).Exec(ctx); err != nil {
-				return err
-			}
+		_, err = s.Client.ItemHistory.Delete().Where(itemhistory.ItemIDEQ(revision.ItemID), itemhistory.NumberLT(last+2-collection.MaxVersions)).Exec(ctx)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

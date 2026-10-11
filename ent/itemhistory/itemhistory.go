@@ -18,10 +18,16 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldRevisionID holds the string denoting the revision_id field in the database.
 	FieldRevisionID = "revision_id"
+	// FieldItemID holds the string denoting the item_id field in the database.
+	FieldItemID = "item_id"
+	// FieldNumber holds the string denoting the number field in the database.
+	FieldNumber = "number"
 	// FieldChangedFields holds the string denoting the changed_fields field in the database.
 	FieldChangedFields = "changed_fields"
 	// EdgeRevision holds the string denoting the revision edge name in mutations.
 	EdgeRevision = "revision"
+	// EdgeItem holds the string denoting the item edge name in mutations.
+	EdgeItem = "item"
 	// Table holds the table name of the itemhistory in the database.
 	Table = "item_histories"
 	// RevisionTable is the table that holds the revision relation/edge.
@@ -31,6 +37,13 @@ const (
 	RevisionInverseTable = "item_revisions"
 	// RevisionColumn is the table column denoting the revision relation/edge.
 	RevisionColumn = "revision_id"
+	// ItemTable is the table that holds the item relation/edge.
+	ItemTable = "item_histories"
+	// ItemInverseTable is the table name for the Resource entity.
+	// It exists in this package in order to avoid circular dependency with the "resource" package.
+	ItemInverseTable = "resources"
+	// ItemColumn is the table column denoting the item relation/edge.
+	ItemColumn = "item_id"
 )
 
 // Columns holds all SQL columns for itemhistory fields.
@@ -38,6 +51,8 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldRevisionID,
+	FieldItemID,
+	FieldNumber,
 	FieldChangedFields,
 }
 
@@ -54,6 +69,8 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// NumberValidator is a validator for the "number" field. It is called by the builders before save.
+	NumberValidator func(int) error
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() string
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -78,10 +95,27 @@ func ByRevisionID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRevisionID, opts...).ToFunc()
 }
 
+// ByItemID orders the results by the item_id field.
+func ByItemID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldItemID, opts...).ToFunc()
+}
+
+// ByNumber orders the results by the number field.
+func ByNumber(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNumber, opts...).ToFunc()
+}
+
 // ByRevisionField orders the results by revision field.
 func ByRevisionField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newRevisionStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByItemField orders the results by item field.
+func ByItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newItemStep(), sql.OrderByField(field, opts...))
 	}
 }
 func newRevisionStep() *sqlgraph.Step {
@@ -89,5 +123,12 @@ func newRevisionStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(RevisionInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2O, true, RevisionTable, RevisionColumn),
+	)
+}
+func newItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, ItemTable, ItemColumn),
 	)
 }
