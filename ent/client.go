@@ -24,6 +24,7 @@ import (
 	"papergo/ent/identityassignment"
 	"papergo/ent/identitygroup"
 	"papergo/ent/identitymembership"
+	"papergo/ent/identitypreference"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
 	"papergo/ent/itemhistory"
@@ -88,6 +89,8 @@ type Client struct {
 	IdentityGroup *IdentityGroupClient
 	// IdentityMembership is the client for interacting with the IdentityMembership builders.
 	IdentityMembership *IdentityMembershipClient
+	// IdentityPreference is the client for interacting with the IdentityPreference builders.
+	IdentityPreference *IdentityPreferenceClient
 	// IdentityRole is the client for interacting with the IdentityRole builders.
 	IdentityRole *IdentityRoleClient
 	// IdentityUser is the client for interacting with the IdentityUser builders.
@@ -160,6 +163,7 @@ func (c *Client) init() {
 	c.IdentityAssignment = NewIdentityAssignmentClient(c.config)
 	c.IdentityGroup = NewIdentityGroupClient(c.config)
 	c.IdentityMembership = NewIdentityMembershipClient(c.config)
+	c.IdentityPreference = NewIdentityPreferenceClient(c.config)
 	c.IdentityRole = NewIdentityRoleClient(c.config)
 	c.IdentityUser = NewIdentityUserClient(c.config)
 	c.ItemHistory = NewItemHistoryClient(c.config)
@@ -289,6 +293,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IdentityAssignment: NewIdentityAssignmentClient(cfg),
 		IdentityGroup:      NewIdentityGroupClient(cfg),
 		IdentityMembership: NewIdentityMembershipClient(cfg),
+		IdentityPreference: NewIdentityPreferenceClient(cfg),
 		IdentityRole:       NewIdentityRoleClient(cfg),
 		IdentityUser:       NewIdentityUserClient(cfg),
 		ItemHistory:        NewItemHistoryClient(cfg),
@@ -345,6 +350,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IdentityAssignment: NewIdentityAssignmentClient(cfg),
 		IdentityGroup:      NewIdentityGroupClient(cfg),
 		IdentityMembership: NewIdentityMembershipClient(cfg),
+		IdentityPreference: NewIdentityPreferenceClient(cfg),
 		IdentityRole:       NewIdentityRoleClient(cfg),
 		IdentityUser:       NewIdentityUserClient(cfg),
 		ItemHistory:        NewItemHistoryClient(cfg),
@@ -400,12 +406,13 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership, c.IdentityRole,
-		c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView,
-		c.Operation, c.OperationItem, c.Publication, c.Relationship,
-		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
-		c.SmartFolder, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
-		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
+		c.IdentityPreference, c.IdentityRole, c.IdentityUser, c.ItemHistory,
+		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.OperationItem,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -417,12 +424,13 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership, c.IdentityRole,
-		c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListView,
-		c.Operation, c.OperationItem, c.Publication, c.Relationship,
-		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
-		c.SmartFolder, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
-		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
+		c.IdentityPreference, c.IdentityRole, c.IdentityUser, c.ItemHistory,
+		c.ItemRevision, c.ItemSurface, c.ListView, c.Operation, c.OperationItem,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -457,6 +465,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdentityGroup.mutate(ctx, m)
 	case *IdentityMembershipMutation:
 		return c.IdentityMembership.mutate(ctx, m)
+	case *IdentityPreferenceMutation:
+		return c.IdentityPreference.mutate(ctx, m)
 	case *IdentityRoleMutation:
 		return c.IdentityRole.mutate(ctx, m)
 	case *IdentityUserMutation:
@@ -2380,6 +2390,139 @@ func (c *IdentityMembershipClient) mutate(ctx context.Context, m *IdentityMember
 		return (&IdentityMembershipDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown IdentityMembership mutation op: %q", m.Op())
+	}
+}
+
+// IdentityPreferenceClient is a client for the IdentityPreference schema.
+type IdentityPreferenceClient struct {
+	config
+}
+
+// NewIdentityPreferenceClient returns a client for the IdentityPreference from the given config.
+func NewIdentityPreferenceClient(c config) *IdentityPreferenceClient {
+	return &IdentityPreferenceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `identitypreference.Hooks(f(g(h())))`.
+func (c *IdentityPreferenceClient) Use(hooks ...Hook) {
+	c.hooks.IdentityPreference = append(c.hooks.IdentityPreference, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `identitypreference.Intercept(f(g(h())))`.
+func (c *IdentityPreferenceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IdentityPreference = append(c.inters.IdentityPreference, interceptors...)
+}
+
+// Create returns a builder for creating a IdentityPreference entity.
+func (c *IdentityPreferenceClient) Create() *IdentityPreferenceCreate {
+	mutation := newIdentityPreferenceMutation(c.config, OpCreate)
+	return &IdentityPreferenceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IdentityPreference entities.
+func (c *IdentityPreferenceClient) CreateBulk(builders ...*IdentityPreferenceCreate) *IdentityPreferenceCreateBulk {
+	return &IdentityPreferenceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IdentityPreferenceClient) MapCreateBulk(slice any, setFunc func(*IdentityPreferenceCreate, int)) *IdentityPreferenceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IdentityPreferenceCreateBulk{err: fmt.Errorf("calling to IdentityPreferenceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IdentityPreferenceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IdentityPreferenceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IdentityPreference.
+func (c *IdentityPreferenceClient) Update() *IdentityPreferenceUpdate {
+	mutation := newIdentityPreferenceMutation(c.config, OpUpdate)
+	return &IdentityPreferenceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IdentityPreferenceClient) UpdateOne(_m *IdentityPreference) *IdentityPreferenceUpdateOne {
+	mutation := newIdentityPreferenceMutation(c.config, OpUpdateOne, withIdentityPreference(_m))
+	return &IdentityPreferenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IdentityPreferenceClient) UpdateOneID(id string) *IdentityPreferenceUpdateOne {
+	mutation := newIdentityPreferenceMutation(c.config, OpUpdateOne, withIdentityPreferenceID(id))
+	return &IdentityPreferenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IdentityPreference.
+func (c *IdentityPreferenceClient) Delete() *IdentityPreferenceDelete {
+	mutation := newIdentityPreferenceMutation(c.config, OpDelete)
+	return &IdentityPreferenceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IdentityPreferenceClient) DeleteOne(_m *IdentityPreference) *IdentityPreferenceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IdentityPreferenceClient) DeleteOneID(id string) *IdentityPreferenceDeleteOne {
+	builder := c.Delete().Where(identitypreference.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IdentityPreferenceDeleteOne{builder}
+}
+
+// Query returns a query builder for IdentityPreference.
+func (c *IdentityPreferenceClient) Query() *IdentityPreferenceQuery {
+	return &IdentityPreferenceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIdentityPreference},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IdentityPreference entity by its id.
+func (c *IdentityPreferenceClient) Get(ctx context.Context, id string) (*IdentityPreference, error) {
+	return c.Query().Where(identitypreference.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IdentityPreferenceClient) GetX(ctx context.Context, id string) *IdentityPreference {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IdentityPreferenceClient) Hooks() []Hook {
+	return c.hooks.IdentityPreference
+}
+
+// Interceptors returns the client interceptors.
+func (c *IdentityPreferenceClient) Interceptors() []Interceptor {
+	return c.inters.IdentityPreference
+}
+
+func (c *IdentityPreferenceClient) mutate(ctx context.Context, m *IdentityPreferenceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IdentityPreferenceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IdentityPreferenceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IdentityPreferenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IdentityPreferenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IdentityPreference mutation op: %q", m.Op())
 	}
 }
 
@@ -6268,20 +6411,22 @@ type (
 	hooks struct {
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
 		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
-		IdentityGroup, IdentityMembership, IdentityRole, IdentityUser, ItemHistory,
-		ItemRevision, ItemSurface, ListView, Operation, OperationItem, Publication,
-		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
-		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Hook
+		IdentityGroup, IdentityMembership, IdentityPreference, IdentityRole,
+		IdentityUser, ItemHistory, ItemRevision, ItemSurface, ListView, Operation,
+		OperationItem, Publication, Relationship, RelationshipType, Resource,
+		SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup, TermSet,
+		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
 		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
-		IdentityGroup, IdentityMembership, IdentityRole, IdentityUser, ItemHistory,
-		ItemRevision, ItemSurface, ListView, Operation, OperationItem, Publication,
-		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
-		WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Interceptor
+		IdentityGroup, IdentityMembership, IdentityPreference, IdentityRole,
+		IdentityUser, ItemHistory, ItemRevision, ItemSurface, ListView, Operation,
+		OperationItem, Publication, Relationship, RelationshipType, Resource,
+		SchemaRevision, SchemaTemplate, SmartFolder, Term, TermGroup, TermSet,
+		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		WorkflowVersion []ent.Interceptor
 	}
 )
 

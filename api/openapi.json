@@ -12527,6 +12527,168 @@
           }
         }
       }
+    },
+    "/v1/identity/me/preferences": {
+      "get": {
+        "summary": "Read personal effective preferences",
+        "description": "Requires an active authenticated user. Resolves personal over organization over built-in defaults; inherited lists fields without an override. Version tracks this owner only.",
+        "responses": {
+          "200": {
+            "description": "Effective preferences and numeric ETag; initial version is zero",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Merge-patch personal preferences",
+        "description": "Strings set overrides; null resumes inheritance; omitted fields stay unchanged. Requires an active authenticated user and the current numeric If-Match (zero before first edit). Missing preconditions return 428; stale versions return 409. Changes only the authenticated user.",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesPatch"
+              }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Effective preferences and numeric ETag; initial version is zero",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": []
+      }
+    },
+    "/v1/organization/preferences": {
+      "get": {
+        "summary": "Read organization defaults",
+        "description": "Requires an active authenticated user. Resolves personal over organization over built-in defaults; inherited lists fields without an override. Version tracks this owner only.",
+        "responses": {
+          "200": {
+            "description": "Effective preferences and numeric ETag; initial version is zero",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Merge-patch organization defaults",
+        "description": "Strings set overrides; null resumes inheritance; omitted fields stay unchanged. Requires an active authenticated user and the current numeric If-Match (zero before first edit). Missing preconditions return 428; stale versions return 409. Requires organization.manage.",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesPatch"
+              }
+            },
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Effective preferences and numeric ETag; initial version is zero",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "organization.manage"
+        ]
+      }
     }
   },
   "components": {
@@ -17403,6 +17565,114 @@
             "items": {
               "$ref": "#/components/schemas/DuplicateDocument"
             }
+          }
+        }
+      },
+      "Preferences": {
+        "type": "object",
+        "required": [
+          "language",
+          "time_zone",
+          "date_format",
+          "time_format",
+          "number_format",
+          "theme",
+          "document_languages",
+          "inherited",
+          "version"
+        ],
+        "properties": {
+          "language": {
+            "type": "string"
+          },
+          "time_zone": {
+            "type": "string"
+          },
+          "date_format": {
+            "type": "string"
+          },
+          "time_format": {
+            "type": "string",
+            "enum": [
+              "12h",
+              "24h"
+            ]
+          },
+          "number_format": {
+            "type": "string"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ]
+          },
+          "document_languages": {
+            "type": "string"
+          },
+          "inherited": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "language",
+                "time_zone",
+                "date_format",
+                "time_format",
+                "number_format",
+                "theme",
+                "document_languages"
+              ]
+            }
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "PreferencesPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "type": "string",
+            "nullable": true
+          },
+          "time_zone": {
+            "type": "string",
+            "nullable": true
+          },
+          "date_format": {
+            "type": "string",
+            "nullable": true
+          },
+          "time_format": {
+            "type": "string",
+            "enum": [
+              "12h",
+              "24h"
+            ],
+            "nullable": true
+          },
+          "number_format": {
+            "type": "string",
+            "nullable": true
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ],
+            "nullable": true
+          },
+          "document_languages": {
+            "type": "string",
+            "nullable": true
           }
         }
       }

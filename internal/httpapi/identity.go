@@ -6,6 +6,7 @@ import (
 )
 
 func (a *API) registerIdentity(m *http.ServeMux) {
+	a.registerPreferences(m)
 	d := a.DMS.Directory()
 	m.HandleFunc("GET /v1/people", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.People(r.Context(), subject(r))

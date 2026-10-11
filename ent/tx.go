@@ -40,6 +40,8 @@ type Tx struct {
 	IdentityGroup *IdentityGroupClient
 	// IdentityMembership is the client for interacting with the IdentityMembership builders.
 	IdentityMembership *IdentityMembershipClient
+	// IdentityPreference is the client for interacting with the IdentityPreference builders.
+	IdentityPreference *IdentityPreferenceClient
 	// IdentityRole is the client for interacting with the IdentityRole builders.
 	IdentityRole *IdentityRoleClient
 	// IdentityUser is the client for interacting with the IdentityUser builders.
@@ -232,6 +234,7 @@ func (tx *Tx) init() {
 	tx.IdentityAssignment = NewIdentityAssignmentClient(tx.config)
 	tx.IdentityGroup = NewIdentityGroupClient(tx.config)
 	tx.IdentityMembership = NewIdentityMembershipClient(tx.config)
+	tx.IdentityPreference = NewIdentityPreferenceClient(tx.config)
 	tx.IdentityRole = NewIdentityRoleClient(tx.config)
 	tx.IdentityUser = NewIdentityUserClient(tx.config)
 	tx.ItemHistory = NewItemHistoryClient(tx.config)

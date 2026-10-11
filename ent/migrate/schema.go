@@ -450,6 +450,28 @@ var (
 			},
 		},
 	}
+	// IdentityPreferencesColumns holds the columns for the "identity_preferences" table.
+	IdentityPreferencesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "owner_type", Type: field.TypeEnum, Enums: []string{"user", "organization"}},
+		{Name: "owner_id", Type: field.TypeString, Size: 255},
+		{Name: "values", Type: field.TypeJSON},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+	}
+	// IdentityPreferencesTable holds the schema information for the "identity_preferences" table.
+	IdentityPreferencesTable = &schema.Table{
+		Name:       "identity_preferences",
+		Columns:    IdentityPreferencesColumns,
+		PrimaryKey: []*schema.Column{IdentityPreferencesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "identitypreference_owner_type_owner_id",
+				Unique:  true,
+				Columns: []*schema.Column{IdentityPreferencesColumns[2], IdentityPreferencesColumns[3]},
+			},
+		},
+	}
 	// IdentityRolesColumns holds the columns for the "identity_roles" table.
 	IdentityRolesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1522,6 +1544,7 @@ var (
 		IdentityAssignmentsTable,
 		IdentityGroupsTable,
 		IdentityMembershipsTable,
+		IdentityPreferencesTable,
 		IdentityRolesTable,
 		IdentityUsersTable,
 		ItemHistoriesTable,

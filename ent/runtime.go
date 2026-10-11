@@ -17,6 +17,7 @@ import (
 	"papergo/ent/identityassignment"
 	"papergo/ent/identitygroup"
 	"papergo/ent/identitymembership"
+	"papergo/ent/identitypreference"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
 	"papergo/ent/itemhistory"
@@ -642,6 +643,35 @@ func init() {
 	identitymembership.DefaultID = identitymembershipDescID.Default.(func() string)
 	// identitymembership.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	identitymembership.IDValidator = identitymembershipDescID.Validators[0].(func(string) error)
+	identitypreferenceMixin := schema.IdentityPreference{}.Mixin()
+	identitypreferenceMixinFields0 := identitypreferenceMixin[0].Fields()
+	_ = identitypreferenceMixinFields0
+	identitypreferenceFields := schema.IdentityPreference{}.Fields()
+	_ = identitypreferenceFields
+	// identitypreferenceDescCreatedAt is the schema descriptor for created_at field.
+	identitypreferenceDescCreatedAt := identitypreferenceMixinFields0[1].Descriptor()
+	// identitypreference.DefaultCreatedAt holds the default value on creation for the created_at field.
+	identitypreference.DefaultCreatedAt = identitypreferenceDescCreatedAt.Default.(func() time.Time)
+	// identitypreferenceDescOwnerID is the schema descriptor for owner_id field.
+	identitypreferenceDescOwnerID := identitypreferenceFields[1].Descriptor()
+	// identitypreference.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
+	identitypreference.OwnerIDValidator = identitypreferenceDescOwnerID.Validators[0].(func(string) error)
+	// identitypreferenceDescValues is the schema descriptor for values field.
+	identitypreferenceDescValues := identitypreferenceFields[2].Descriptor()
+	// identitypreference.DefaultValues holds the default value on creation for the values field.
+	identitypreference.DefaultValues = identitypreferenceDescValues.Default.(map[string]string)
+	// identitypreferenceDescVersion is the schema descriptor for version field.
+	identitypreferenceDescVersion := identitypreferenceFields[3].Descriptor()
+	// identitypreference.DefaultVersion holds the default value on creation for the version field.
+	identitypreference.DefaultVersion = identitypreferenceDescVersion.Default.(int)
+	// identitypreference.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	identitypreference.VersionValidator = identitypreferenceDescVersion.Validators[0].(func(int) error)
+	// identitypreferenceDescID is the schema descriptor for id field.
+	identitypreferenceDescID := identitypreferenceMixinFields0[0].Descriptor()
+	// identitypreference.DefaultID holds the default value on creation for the id field.
+	identitypreference.DefaultID = identitypreferenceDescID.Default.(func() string)
+	// identitypreference.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	identitypreference.IDValidator = identitypreferenceDescID.Validators[0].(func(string) error)
 	identityroleMixin := schema.IdentityRole{}.Mixin()
 	identityroleMixinFields0 := identityroleMixin[0].Fields()
 	_ = identityroleMixinFields0

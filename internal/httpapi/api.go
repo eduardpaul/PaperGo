@@ -265,8 +265,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 }
 func (a *API) decode(w http.ResponseWriter, r *http.Request, dst any) bool {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || media != "application/json" {
-		a.problem(w, r, 415, "unsupported_media_type", "Content-Type must be application/json")
+	if err != nil || (media != "application/json" && !(r.Method == http.MethodPatch && media == "application/merge-patch+json")) {
+		a.problem(w, r, 415, "unsupported_media_type", "Content-Type must be application/json, or application/merge-patch+json for PATCH")
 		return false
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 2*dms.MaxItemValuesBytes)

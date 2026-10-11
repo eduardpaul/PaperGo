@@ -35,6 +35,7 @@ var Catalog = []Scope{
 	{"contentType.read", true}, {"contentType.manage", false},
 	{"taxonomy.read", true}, {"taxonomy.manage", false},
 	{"identity.read", false}, {"identity.manage", false},
+	{"organization.manage", false},
 }
 
 type Querier interface {

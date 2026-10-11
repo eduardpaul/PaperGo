@@ -45,6 +45,9 @@ type IdentityGroup func(*sql.Selector)
 // IdentityMembership is the predicate function for identitymembership builders.
 type IdentityMembership func(*sql.Selector)
 
+// IdentityPreference is the predicate function for identitypreference builders.
+type IdentityPreference func(*sql.Selector)
+
 // IdentityRole is the predicate function for identityrole builders.
 type IdentityRole func(*sql.Selector)
 

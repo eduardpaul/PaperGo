@@ -164,6 +164,18 @@ func (f IdentityMembershipFunc) Mutate(ctx context.Context, m ent.Mutation) (ent
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityMembershipMutation", m)
 }
 
+// The IdentityPreferenceFunc type is an adapter to allow the use of ordinary
+// function as IdentityPreference mutator.
+type IdentityPreferenceFunc func(context.Context, *ent.IdentityPreferenceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IdentityPreferenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IdentityPreferenceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityPreferenceMutation", m)
+}
+
 // The IdentityRoleFunc type is an adapter to allow the use of ordinary
 // function as IdentityRole mutator.
 type IdentityRoleFunc func(context.Context, *ent.IdentityRoleMutation) (ent.Value, error)

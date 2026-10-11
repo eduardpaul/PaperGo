@@ -6,6 +6,15 @@
 -- runner launches; their names are reserved (docs/workflows.md).
 
 -- Tables
+CREATE TABLE identity_preferences (id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, owner_type TEXT NOT NULL CHECK(owner_type IN ('user','organization')), owner_id TEXT NOT NULL CHECK(length(owner_id)<=255 AND (owner_type='user' AND owner_id<>'' OR owner_type='organization' AND owner_id='')), `values` JSON NOT NULL DEFAULT '{}' CHECK(json_valid(`values`) AND json_type(`values`)='object'), version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
+CREATE UNIQUE INDEX identitypreference_owner_type_owner_id ON identity_preferences(owner_type,owner_id);
+CREATE TRIGGER identity_preference_owner BEFORE INSERT ON identity_preferences WHEN new.owner_type='user' BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM identity_users WHERE id=new.owner_id) THEN RAISE(ABORT,'preferences require an enrolled user') END;
+END;
+CREATE TRIGGER identity_preference_owner_immutable BEFORE UPDATE OF owner_type,owner_id ON identity_preferences BEGIN
+ SELECT RAISE(ABORT,'preference owner is immutable');
+END;
+
 CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NULL, `resource_id` text NULL, `subject` text NOT NULL, `action` text NOT NULL, `details` json NOT NULL, PRIMARY KEY (`id`));
 CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL, languages TEXT NOT NULL DEFAULT '' CHECK(length(languages)<=191), `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT NULL, `key` text NOT NULL, `label` text NOT NULL, `type` text NOT NULL, `required` bool NOT NULL DEFAULT (false), `choices` json NOT NULL, indexed BOOLEAN NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), index_status TEXT NOT NULL DEFAULT 'ready' CHECK(index_status IN ('ready','building','failed')), scale INTEGER NOT NULL DEFAULT 0, options JSON NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object'), PRIMARY KEY (`id`));
