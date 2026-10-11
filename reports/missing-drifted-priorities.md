@@ -1,6 +1,6 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 78 open comparisons: 51 missing, 14 partial, 13 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 77 open comparisons: 50 missing, 14 partial, 13 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
@@ -21,7 +21,7 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P1 · TSK-01 · Missing:** No task template, task-specific validation/assignment lifecycle or task views are registered. Person fields alone do not implement task behavior.
 - **P1 · TSK-04 · Missing:** Cannot port a personal task dashboard or document follow-up.
 
-## P2 (54)
+## P2 (53)
 
 - **P2 · TEN-01 · Drift:** Multi-organization hosting requires an explicit scope decision; workspace ACLs alone do not provide tenant isolation.
 - **P2 · TEN-02 · Missing:** Separate organizations cannot be provisioned and resolved by host in one service.
@@ -34,7 +34,6 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P2 · LST-30 · Missing:** Cannot query all receipt lines/amount-bearing edges across the workspace in one API request.
 - **P2 · LST-34 · Missing:** Offline clients cannot obtain equivalent incremental synchronization.
 - **P2 · DOC-03 · Drift:** Spoofed extensions/media types and arbitrary binary files have different acceptance behavior.
-- **P2 · DOC-05 · Missing:** Identical successful uploads are not deduplicated across items; periodic unreferenced-object collection is absent.
 - **P2 · DOC-09 · Missing:** Users must edit documents outside the app; server page manipulation is unavailable.
 - **P2 · DOC-11 · Partial:** Per-file language hints exist; library OCR defaults/inheritance and multilingual processing are absent.
 - **P2 · DOC-12 · Missing:** A human review of a generated replacement cannot be implemented with the same lifecycle.

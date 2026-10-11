@@ -414,8 +414,8 @@ CREATE TRIGGER publication_item_validate BEFORE INSERT ON publications BEGIN
 END;
 CREATE TRIGGER blob_item_validate BEFORE INSERT ON blobs BEGIN
   SELECT CASE WHEN EXISTS (SELECT 1 FROM blobs WHERE object_key=new.object_key
-    AND (item_id<>new.item_id OR sha256<>new.sha256 OR size<>new.size OR content_type<>new.content_type))
-    THEN RAISE(ABORT,'shared blob object must belong to the same item and content') END;
+    AND (sha256<>new.sha256 OR size<>new.size))
+    THEN RAISE(ABORT,'shared blob object must have identical bytes') END;
   SELECT CASE WHEN NOT EXISTS (
     SELECT 1 FROM resources i JOIN resources c ON c.id=i.container_id
     WHERE i.id=new.item_id AND i.kind='item' AND c.kind='library'

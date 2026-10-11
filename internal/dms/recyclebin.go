@@ -8,6 +8,7 @@ import (
 	"papergo/ent"
 	"papergo/ent/itemsurface"
 	"papergo/ent/resource"
+	"papergo/internal/storage"
 )
 
 type DeletedResource struct {
@@ -288,22 +289,50 @@ func (s *Service) CleanupPurgedBlobs(ctx context.Context, store objectDeleter) e
 		return err
 	}
 	for _, row := range rows {
-		if err = store.Delete(ctx, row.ObjectKey); err != nil {
-			return err
-		}
-		if err = s.write(ctx, func(t *Service) error { return t.Client.BlobDeletion.DeleteOneID(row.ID).Exec(ctx) }); err != nil {
+		if err = s.write(ctx, func(t *Service) error {
+			if err := t.deleteUnreferencedObject(ctx, store, row.ObjectKey); err != nil {
+				return err
+			}
+			return t.Client.BlobDeletion.DeleteOneID(row.ID).Exec(ctx)
+		}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *Service) RunBlobCleanup(ctx context.Context, store objectDeleter, log *slog.Logger) {
+func (s *Service) deleteUnreferencedObject(ctx context.Context, store objectDeleter, key string) error {
+	var referenced bool
+	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=?)`, key); err != nil {
+		return err
+	}
+	if referenced {
+		return nil
+	}
+	// Keep the SQLite writer lock through storage deletion. Upload attachment,
+	// file restoration and administrative backup cannot race this decision.
+	return store.Delete(ctx, key)
+}
+
+const ObjectGracePeriod = time.Hour
+
+// CollectObjects reconciles bytes left behind by interrupted uploads or commits.
+// New uploads remain untouched for a grace period, as in PaperDotNet's cleanup.
+func (s *Service) CollectObjects(ctx context.Context, store storage.Store, now time.Time) error {
+	return store.WalkObjects(ctx, now.Add(-ObjectGracePeriod), func(key string) error {
+		return s.write(ctx, func(t *Service) error { return t.deleteUnreferencedObject(ctx, store, key) })
+	})
+}
+
+func (s *Service) RunBlobCleanup(ctx context.Context, store storage.Store, log *slog.Logger) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
 		if err := s.CleanupPurgedBlobs(ctx, store); err != nil && ctx.Err() == nil {
 			log.Error("purged blob cleanup", "error", err)
+		}
+		if err := s.CollectObjects(ctx, store, time.Now().UTC()); err != nil && ctx.Err() == nil {
+			log.Error("unreferenced object cleanup", "error", err)
 		}
 		select {
 		case <-ctx.Done():

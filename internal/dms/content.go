@@ -266,6 +266,17 @@ func (s *Service) createBlob(ctx context.Context, subject, itemID string, in Blo
 			return nil, err
 		}
 	}
+	// Physical bytes are shared across the organization; filenames, media types,
+	// language hints and file-version permissions remain specific to each item.
+	stored, err := s.Client.Blob.Query().Where(blob.Sha256EQ(in.SHA256), blob.SizeEQ(in.Size)).Order(ent.Asc(blob.FieldID)).First(ctx)
+	if err == nil && stored.ObjectKey != in.ObjectKey {
+		if _, err = s.Client.BlobDeletion.Create().SetObjectKey(in.ObjectKey).Save(ctx); err != nil {
+			return nil, err
+		}
+		in.ObjectKey = stored.ObjectKey
+	} else if err != nil && !ent.IsNotFound(err) {
+		return nil, err
+	}
 	version := 1
 	last, err := s.Client.Blob.Query().Where(blob.ItemIDEQ(itemID)).Order(ent.Desc(blob.FieldVersion)).First(ctx)
 	if err == nil {

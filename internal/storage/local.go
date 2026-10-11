@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var ErrTooLarge = errors.New("blob exceeds upload limit")
@@ -26,6 +27,7 @@ type Store interface {
 	Put(context.Context, io.Reader, int64) (Object, error)
 	Open(context.Context, string) (ReadSeekCloser, error)
 	Delete(context.Context, string) error
+	WalkObjects(context.Context, time.Time, func(string) error) error
 }
 type Local struct{ root string }
 
@@ -98,6 +100,9 @@ func (s *Local) Open(ctx context.Context, key string) (ReadSeekCloser, error) {
 	return os.Open(p)
 }
 func (s *Local) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	p, err := s.path(key)
 	if err != nil {
 		return err
@@ -107,4 +112,40 @@ func (s *Local) Delete(ctx context.Context, key string) error {
 		return nil
 	}
 	return err
+}
+
+// WalkObjects visits completed objects older than before. Active upload files,
+// directories and symlinks are excluded. WalkDir reads one directory at a time.
+func (s *Local) WalkObjects(ctx context.Context, before time.Time, visit func(string) error) error {
+	return filepath.WalkDir(s.root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if path != s.root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if _, err = s.path(entry.Name()); err != nil {
+			return nil
+		}
+		info, err := entry.Info()
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() && info.ModTime().Before(before) {
+			return visit(entry.Name())
+		}
+		return nil
+	})
 }
