@@ -1,6 +1,6 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences (`e106a7a`) and folder metadata, PaperDotNet `96df412`. 82 open comparisons: 53 missing, 14 partial, 15 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 79 open comparisons: 51 missing, 14 partial, 14 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
@@ -21,7 +21,7 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences (`
 - **P1 · TSK-01 · Missing:** No task template, task-specific validation/assignment lifecycle or task views are registered. Person fields alone do not implement task behavior.
 - **P1 · TSK-04 · Missing:** Cannot port a personal task dashboard or document follow-up.
 
-## P2 (58)
+## P2 (55)
 
 - **P2 · TEN-01 · Drift:** Multi-organization hosting requires an explicit scope decision; workspace ACLs alone do not provide tenant isolation.
 - **P2 · TEN-02 · Missing:** Separate organizations cannot be provisioned and resolved by host in one service.
@@ -71,9 +71,6 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences (`
 - **P2 · PRV-02 · Missing:** Cannot transfer a complete set of items, file content and module state.
 - **P2 · MCP-01 · Missing:** Assistant/tool clients cannot use the same integration story.
 - **P2 · AUD-01 · Partial:** No unified organization log with entity/actor/time filters, changed-property/trace fields and newest-first merged paging.
-- **P2 · API-01 · Missing:** Clients cannot batch mixed read/write API calls with per-call results.
-- **P2 · API-02 · Missing:** No application-provided backup/restore workflow.
-- **P2 · API-03 · Drift:** Same underlying concurrency story exists, but API clients and error handling must be rewritten; no wire compatibility implied.
 - **P2 · ID-11 · Drift:** Cannot delegate group maintenance without user/role management, or grant metadata editing while independently denying file replacement.
 - **P2 · WS-05 · Drift:** An inactive subject can be added/promoted. Module access remains blocked until reactivation, but the accepted membership request differs.
 - **P2 · LST-43 · Drift:** A default listing omits inbound directed edges, and explicit directional filters return a different graph.

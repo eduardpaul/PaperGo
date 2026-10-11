@@ -17,6 +17,7 @@ import (
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -35,6 +36,11 @@ func run(log *slog.Logger) error {
 	}
 	startup, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	// Every SQLite handle, including the runner, uses the same canonical name.
+	c.DatabasePath, err = filepath.EvalSymlinks(c.DatabasePath)
+	if err != nil {
+		return fmt.Errorf("resolve database path (apply the Atlas schema before startup): %w", err)
+	}
 	dataLease, err := database.AcquireLease(c.DatabasePath, false)
 	if err != nil {
 		return err
