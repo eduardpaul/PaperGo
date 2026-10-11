@@ -1,18 +1,15 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-10; PaperGo selected P1 delivery through `64fed28`, PaperDotNet `96df412`. 87 open comparisons: 58 missing, 14 partial, 15 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-10; PaperGo selected document delivery through `8e19bcb`, PaperDotNet `96df412`. 84 open comparisons: 55 missing, 14 partial, 15 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
-## P1 (17)
+## P1 (14)
 
 - **P1 · ID-01 · Missing:** A user needs an external identity service for the production sign-in story.
 - **P1 · ID-04 · Partial:** Display name/email profiles, account deletion/anonymization and password management are absent. Production credentials remain external.
 - **P1 · ID-10 · Missing:** Clients cannot obtain the same signed-in user profile without an external identity service.
 - **P1 · LST-32 · Missing:** An everyday user's initial landing/storage locations are missing.
-- **P1 · DOC-02 · Partial:** No equivalent single REST multipart upload with metadata/content-type/folder/language inputs. This is a request-flow gap; upstream upload code also writes item and file state separately.
-- **P1 · DOC-04 · Missing:** Users cannot prevent/triage duplicate ingestion through library settings.
-- **P1 · DOC-06 · Missing:** Cannot promote an older file version in one API operation.
 - **P1 · DOC-07 · Missing:** Scanned documents cannot become searchable text through PaperGo.
 - **P1 · DOC-08 · Missing:** Preview and processing retry/status stories are missing.
 - **P1 · DOC-10 · Missing:** Shared intake and personal triage cannot be reproduced through the product API.
@@ -39,9 +36,9 @@ Current code/API analysis: 2026-10-10; PaperGo selected P1 delivery through `64f
 - **P2 · LST-30 · Missing:** Cannot query all receipt lines/amount-bearing edges across the workspace in one API request.
 - **P2 · LST-34 · Missing:** Offline clients cannot obtain equivalent incremental synchronization.
 - **P2 · DOC-03 · Drift:** Spoofed extensions/media types and arbitrary binary files have different acceptance behavior.
-- **P2 · DOC-05 · Missing:** Identical successful uploads are not deduplicated; no periodic orphan/retired-content collection service exists.
+- **P2 · DOC-05 · Missing:** Identical successful uploads are not deduplicated across items; periodic unreferenced-object collection is absent.
 - **P2 · DOC-09 · Missing:** Users must edit documents outside the app; server page manipulation is unavailable.
-- **P2 · DOC-11 · Missing:** Multilingual processing and inherited OCR defaults are absent.
+- **P2 · DOC-11 · Partial:** Per-file language hints exist; library OCR defaults/inheritance and multilingual processing are absent.
 - **P2 · DOC-12 · Missing:** A human review of a generated replacement cannot be implemented with the same lifecycle.
 - **P2 · SRC-01 · Partial:** Metadata search exists; one organization-wide search response across all source types does not.
 - **P2 · SRC-03 · Drift:** A query such as invoice OR receipt means different things and result order is not relevance.

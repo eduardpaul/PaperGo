@@ -2,6 +2,7 @@ package dms
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -67,6 +68,69 @@ func TestDuplicatePolicyAcrossWorkspacesAndVisibility(t *testing.T) {
 	out, err = s.AttachBlob(testContext, "alice", c.ID, c.Version, file())
 	if err != nil || len(out.Duplicates) != 0 {
 		t.Fatal(out, err)
+	}
+}
+
+func TestDuplicatePolicyPublishedVisibilityAndWebDAV(t *testing.T) {
+	s, w, _ := fixture(t)
+	if err := s.SetWorkspaceMember(testContext, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "visitor"}); err != nil {
+		t.Fatal(err)
+	}
+	source := create(t, s, w.ID, "library", "Source", nil)
+	item := create(t, s, source.ID, "item", "Source file", nil)
+	file := func(hash string) BlobInput {
+		return BlobInput{ObjectKey: uuid.NewString(), Filename: "file.txt", ContentType: "text/plain", Size: 1, SHA256: strings.Repeat(hash, 64)}
+	}
+	if _, err := s.AttachBlob(testContext, "alice", item.ID, 1, file("a")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Publish(testContext, "alice", item.ID, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AttachBlob(testContext, "alice", item.ID, 3, file("b")); err != nil {
+		t.Fatal(err)
+	}
+	destination := create(t, s, "", "workspace", "Destination", nil)
+	if err := s.SetWorkspaceMember(testContext, "alice", destination.ID, WorkspaceMember{Subject: "bob", Role: "owner"}); err != nil {
+		t.Fatal(err)
+	}
+	policy := "block"
+	lib, err := s.Create(testContext, "bob", destination.ID, CreateResource{Kind: "library", Name: "Files", DuplicatePolicy: &policy, WebDAVEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := s.Create(testContext, "bob", lib.ID, CreateResource{Kind: "item", Name: "Published copy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var duplicate *DuplicateError
+	if _, err = s.AttachBlob(testContext, "bob", a.ID, 1, file("a")); !errors.As(err, &duplicate) {
+		t.Fatal("published content did not block", err)
+	}
+	if _, err = s.AttachBlob(testContext, "bob", a.ID, 1, file("b")); err != nil {
+		t.Fatal("private draft disclosed", err)
+	}
+	// WebDAV creation uses the same transactional policy and rolls back the
+	// newly inserted metadata when the bytes duplicate a visible file.
+	before, err := s.Client.Resource.Query().Count(testContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = s.PutFile(testContext, "bob", lib.ID, []string{"copy.txt"}, PutFile{Blob: file("b")}); !errors.As(err, &duplicate) {
+		t.Fatal("WebDAV bypassed blocking", err)
+	}
+	if n, err := s.Client.Resource.Query().Count(testContext); err != nil || n != before {
+		t.Fatal("WebDAV duplicate left metadata", n, err)
+	}
+	if err = s.Delete(testContext, "alice", item.ID, 4, DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.Create(testContext, "bob", lib.ID, CreateResource{Kind: "item", Name: "Deleted copy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.AttachBlob(testContext, "bob", b.ID, 1, file("a")); err != nil {
+		t.Fatal("deleted content blocked", err)
 	}
 }
 

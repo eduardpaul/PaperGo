@@ -38,6 +38,9 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 | WebDAV access to libraries | Optional per library (`webdav_enabled`). Windows Explorer, macOS Finder and Office can browse, open, create, overwrite, rename, move, copy, lock and delete files and folders, with the same permissions, publishing and history as the REST API. |
 | Flexible SharePoint-style fields | Per-container typed fields and immutable schema revisions. Types: text/note/email/url/date/datetime, choice, number/integer/decimal, boolean, lookup, term and keywords (by term ID or label); defaults, bounds, length limits, and indexed multi-values. Unknown fields, wrong types and missing required values are rejected. |
 | Library as blob plus list item | A library item has the same metadata and permission behavior as a list item, plus immutable blob revisions stored outside SQLite. |
+| Create a document in one upload | Streaming multipart REST creation accepts a file and metadata, including type, folder, values, tags and language hints, and commits the first revision with content atomically. |
+| Control duplicate uploads | Libraries configure Allow/Warn/Block policies based on file hashes and current documents visible to the caller across workspaces. |
+| Restore an earlier file | Restore retained bytes and filename as a new file version while retaining current metadata and following publication settings. |
 | Unique permissions at every level | SharePoint-style inheritance: only the nearest exclusive scope supplies additive read/read_draft/write/publish/manage grants. Break, copy, or reset inheritance explicitly. Manage implies all actions; write/publish imply draft and published read. Denies are rejected. |
 | Typed item relationships | Every link has a workspace relationship type supplying its key, directed/symmetric policy, validated attributes, cardinality limits, and edge ETags. Indexed incoming/outgoing queries require visible, authorized endpoints before pagination. New cross-workspace links are rejected; item moves preserve existing links, which require readable live endpoints. |
 | Publish any list/library item | Publishing disabled by default: new items, edits and uploads are automatically published. With publishing enabled, changes create drafts and explicit publish/unpublish controls the published pointer. Ordinary readers see published revisions only. Library revisions pin their blob. |
@@ -77,9 +80,11 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | DELETE | `/v1/items/{id}/relationships/{linkID}` | Remove an outgoing relationship |
 | POST / GET | `/v1/items/{id}/publications` | Publish / read immutable snapshots; paginate with `after_version` |
 | POST | `/v1/items/{id}/unpublish` | Remove the published surface while retaining history |
-| GET | `/v1/items/{id}/revisions` | Draft-reader content history; paginate with `after_revision` |
+| GET | `/v1/items/{id}/revisions` | Retained content history for item readers; paginate with `after_revision` |
 | GET | `/v1/items/{id}/schema?surface=auto` | Immutable schema of the caller's visible content revision |
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |
+| POST | `/v1/resources/{id}/documents` | Create a library document using multipart `file` and optional `metadata` JSON; see [documents](docs/documents.md) |
+| POST | `/v1/items/{id}/content/versions/{number}/restore` | Restore an earlier file as a new version; requires current numeric `If-Match` |
 | GET | `/v1/workspaces/{id}/audit` | Workspace manager audit feed |
 | POST / GET | `/v1/webdav-credentials` | Issue / list the caller's WebDAV app passwords |
 | DELETE | `/v1/webdav-credentials/{id}` | Revoke one of the caller's WebDAV app passwords |
