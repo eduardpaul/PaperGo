@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	"papergo/internal/model"
 )
 
 type ItemRevision struct{ ent.Schema }
@@ -19,7 +20,7 @@ func (ItemRevision) Fields() []ent.Field {
 		field.String("schema_revision_id").Immutable(),
 		field.String("blob_id").Optional().Nillable().Immutable(),
 		field.Int("revision_number").Positive().Immutable(),
-		field.String("name").NotEmpty().MaxLen(255).Immutable(),
+		field.String("name").NotEmpty().MaxLen(4096).Validate(model.ValidateTitle).Immutable(),
 		field.JSON("tags", []string{}).Immutable(),
 		field.JSON("payload", json.RawMessage{}).Immutable(),
 		field.String("created_by").NotEmpty().Immutable(),

@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-func (s *Service) UnlinkVersion(ctx context.Context, subject, itemID, linkID string, version int) error {
+func (s *Service) Unlink(ctx context.Context, subject, itemID, linkID string) error {
 	return s.write(ctx, func(t *Service) error {
 		source, e := t.authorize(ctx, subject, itemID, "write")
 		if e != nil {
@@ -18,9 +18,6 @@ func (s *Service) UnlinkVersion(ctx context.Context, subject, itemID, linkID str
 			if _, e = t.authorize(ctx, subject, id, "write"); e != nil {
 				return e
 			}
-		}
-		if link.Version != version {
-			return ErrPreconditionFailed
 		}
 		if e = t.Client.Relationship.DeleteOne(link).Exec(ctx); e != nil {
 			return e

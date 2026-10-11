@@ -187,5 +187,5 @@ func (s *Service) itemLink(ctx context.Context, itemID, linkID string) (*ent.Rel
 // filenameValid accepts names usable as file names: no path separators,
 // control characters or dot segments.
 func filenameValid(name string) bool {
-	return strings.TrimSpace(name) != "" && len(name) <= 255 && !strings.ContainsAny(name, "/\\") && !strings.ContainsFunc(name, unicode.IsControl) && name != "." && name != ".."
+	return validateTitle(name) == nil && !strings.ContainsAny(name, "/\\") && !strings.ContainsFunc(name, unicode.IsControl) && name != "." && name != ".."
 }

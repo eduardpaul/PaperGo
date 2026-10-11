@@ -49,7 +49,7 @@ func TestRelationshipChangesTouchAndEmitForBothEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("updated", 3)
-	if err = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, edge.Version); err != nil {
+	if err = s.Unlink(testContext, "alice", a.ID, edge.ID); err != nil {
 		t.Fatal(err)
 	}
 	check("deleted", 4)

@@ -1,6 +1,6 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 64 open comparisons: 45 missing, 10 partial, 9 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-11; PaperDotNet `96df412`. 55 open comparisons: 43 missing, 9 partial, 3 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
@@ -20,13 +20,12 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P1 · TSK-01 · Missing:** No task template, task-specific validation/assignment lifecycle or task views are registered. Person fields alone do not implement task behavior.
 - **P1 · TSK-04 · Missing:** Cannot port a personal task dashboard or document follow-up.
 
-## P2 (41)
+## P2 (35)
 
 - **P2 · TEN-01 · Drift:** Multi-organization hosting requires an explicit scope decision; workspace ACLs alone do not provide tenant isolation.
 - **P2 · TEN-02 · Missing:** Separate organizations cannot be provisioned and resolved by host in one service.
 - **P2 · ID-02 · Missing:** Token consumption covers a different role from acting as the application's authorization server.
 - **P2 · ID-07 · Missing:** Third-party OAuth client onboarding is unavailable.
-- **P2 · LST-29 · Drift:** Rights and duplicate-add behavior align. Go requires a delete ETag while .NET removes by edge ID without one. Relationship events are tracked as LST-44.
 - **P2 · DOC-09 · Missing:** Users must edit documents outside the app; server page manipulation is unavailable.
 - **P2 · DOC-11 · Partial:** Per-file language hints exist; library OCR defaults/inheritance and multilingual processing are absent.
 - **P2 · DOC-12 · Missing:** A human review of a generated replacement cannot be implemented with the same lifecycle.
@@ -58,9 +57,8 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P2 · NTE-01 · Missing:** No built-in note template or automatic hashtag-to-keyword behavior.
 - **P2 · NTE-02 · Missing:** Linked knowledge-base navigation does not port.
 - **P2 · MCP-01 · Missing:** Assistant/tool clients cannot use the same integration story.
-- **P2 · LST-48 · Drift:** A 256-character item title accepted upstream fails in Go. Title limits remain different even though custom text-field limits align.
 
-## P3 (10)
+## P3 (7)
 
 - **P3 · ID-08 · Missing:** Existing proxy SSO cannot authenticate by trusted user/group headers.
 - **P3 · SRC-05 · Missing:** Meaning-based retrieval is missing; .NET support is configuration-dependent.
@@ -69,5 +67,3 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P3 · CAL-04 · Missing:** Cannot keep external calendars synchronized.
 - **P3 · EXT-01 · Missing:** Administrators cannot activate/configure packaged extensions.
 - **P3 · EXT-02 · Partial:** No equivalent contributed field/API/activity/job/trigger/MCP SDK and registration lifecycle. Template contribution covers only a subset.
-- **P3 · LST-45 · Drift:** A valid 101-person/choice/lookup/term array is rejected; even 101 identical inputs exceed the Go cap. Type categories themselves align (LST-40).
-- **P3 · LST-49 · Drift:** Deep hierarchies cannot be represented at the same depth. Boundary scenarios must account for workspace/collection levels in Go.

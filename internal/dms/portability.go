@@ -536,16 +536,42 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 		}
 		scopes[row["id"]] = scope
 	}
+	folderDepths := map[any]int{}
 	for _, row := range resources {
-		if err = validateName(fmt.Sprint(row["name"])); err != nil {
+		kind, name := fmt.Sprint(row["kind"]), fmt.Sprint(row["name"])
+		if err = validateResourceName(kind, name); err != nil {
 			return err
 		}
+		if kind == "workspace" || kind == "list" || kind == "library" {
+			if err = validateContainerMetadata(name, fmt.Sprint(row["description"])); err != nil {
+				return err
+			}
+		}
+		depth := folderDepths[row["parent_id"]]
+		if kind == "folder" {
+			depth++
+		}
+		if depth > MaxFolderDepth {
+			return invalid("package exceeds maximum folder depth")
+		}
+		folderDepths[row["id"]] = depth
 	}
+
 	for _, table := range packageTables {
 		if table == "resources" {
 			continue
 		}
 		rows := packageMaps(p.Tables[table])
+		for _, row := range rows {
+			if table == "item_revisions" {
+				if err = validateTitle(fmt.Sprint(row["name"])); err != nil {
+					return err
+				}
+			}
+			if table == "blobs" && !filenameValid(fmt.Sprint(row["filename"])) {
+				return invalid("package contains an invalid filename")
+			}
+		}
 		if table == "terms" {
 			rows, err = orderPackageParents(rows)
 			if err != nil {

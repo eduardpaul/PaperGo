@@ -1546,34 +1546,16 @@
         ]
       },
       "delete": {
-        "summary": "Delete an outgoing relationship",
+        "summary": "Delete an incident relationship",
         "responses": {
           "204": {
             "description": "Deleted"
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
-          },
-          "428": {
-            "description": "If-Match required"
           },
           "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
-        "parameters": [
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^\"[1-9][0-9]*\"$"
-            },
-            "description": "Required current quoted numeric ETag; weak W/\"n\" is accepted. Stale versions return 412."
-          }
-        ],
-        "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints and the edge If-Match. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
+        "description": "Either endpoint may remove a directed or symmetric edge. Requires write permission on both endpoints without an ETag precondition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
         "x-module-scopes": [
           "list.write"
         ]
@@ -14051,8 +14033,8 @@
           "name": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 255,
-            "description": "Library folders and items are file names: unique among live siblings ignoring case, without / \\ or control characters."
+            "maxLength": 1024,
+            "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
           },
           "tags": {
             "type": "array",
@@ -14196,7 +14178,8 @@
           "name": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 255
+            "maxLength": 1024,
+            "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
           },
           "tags": {
             "type": "array",
@@ -14294,7 +14277,8 @@
           "name": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 255
+            "maxLength": 1024,
+            "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
           },
           "tags": {
             "type": "array",
@@ -14474,7 +14458,8 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Unique, nonempty choice strings. No fixed entry-count limit."
           },
           "indexed": {
             "default": false,
@@ -14544,7 +14529,8 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Unique, nonempty choice strings. No fixed entry-count limit."
           },
           "created_at": {
             "type": "string",
@@ -14809,7 +14795,10 @@
             "description": "Immutable blob sequence number, independent of the resource lock version and content revision number."
           },
           "filename": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "Filename limited to 1024 UTF-16 units, without path separators or control characters."
           },
           "content_type": {
             "type": "string",
@@ -14964,7 +14953,9 @@
             "description": "Recorded history number. Increments only for recorded versions, independently of internal content snapshots."
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 1024,
+            "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
           },
           "tags": {
             "type": "array",

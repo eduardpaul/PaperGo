@@ -46,13 +46,13 @@ func TestRelationshipsRequireWritableEndpointsAndCanMutateFromEitherEnd(t *testi
 	if _, err = s.UpdateRelationship(testContext, "bob", source.ID, edge.ID, edge.Version, UpdateRelationship{Metadata: map[string]any{"note": "denied"}}); !errors.Is(err, ErrForbidden) {
 		t.Fatal("read-only target allowed patch", err)
 	}
-	if err = s.UnlinkVersion(testContext, "bob", source.ID, edge.ID, edge.Version); !errors.Is(err, ErrForbidden) {
+	if err = s.Unlink(testContext, "bob", source.ID, edge.ID); !errors.Is(err, ErrForbidden) {
 		t.Fatal("read-only target allowed unlink", err)
 	}
 	if _, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Grants: []Permission{{"user", "bob", "write", "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.UnlinkVersion(testContext, "bob", target.ID, edge.ID, edge.Version); err != nil {
+	if err = s.Unlink(testContext, "bob", target.ID, edge.ID); err != nil {
 		t.Fatal("target could not delete directed edge", err)
 	}
 }

@@ -110,7 +110,7 @@ func (s *Service) resolveRelationshipTerm(ctx context.Context, subject, value st
 		return nil, err
 	}
 	if v != nil {
-		for hops := 0; v.MergedIntoID != nil && hops < MaxDepth; hops++ {
+		for hops := 0; v.MergedIntoID != nil && hops < MaxTaxonomyDepth; hops++ {
 			v, err = s.Client.Term.Get(ctx, *v.MergedIntoID)
 			if err != nil {
 				return nil, err

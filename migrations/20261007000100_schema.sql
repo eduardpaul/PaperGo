@@ -81,7 +81,7 @@ CREATE TABLE item_surface_tags(surface_id TEXT NOT NULL REFERENCES item_surfaces
 CREATE TABLE "field_values" (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, surface_id TEXT NOT NULL REFERENCES item_surfaces(id),
  container_id TEXT NOT NULL, item_id TEXT NOT NULL, surface TEXT NOT NULL, field_key TEXT NOT NULL, field_type TEXT NOT NULL,
- scale INTEGER NOT NULL DEFAULT 0, ordinal INTEGER NOT NULL DEFAULT 0 CHECK(ordinal>=0 AND ordinal<100),
+ scale INTEGER NOT NULL DEFAULT 0, ordinal INTEGER NOT NULL DEFAULT 0 CHECK(ordinal>=0),
  value_text TEXT, value_integer INTEGER, value_boolean BOOLEAN,
  CHECK((value_text IS NOT NULL)+(value_integer IS NOT NULL)+(value_boolean IS NOT NULL)=1),
  CHECK((field_type IN ('text','note','email','url','date','lookup','person','term','keywords','choice','datetime') AND value_text IS NOT NULL)

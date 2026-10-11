@@ -299,7 +299,7 @@ func (s *Service) resolveFile(ctx context.Context, subject, libraryID string, pa
 	if lib.Kind != resource.KindLibrary || !lib.WebdavEnabled {
 		return nil, nil, ErrNotFound
 	}
-	if len(path) > MaxDepth {
+	if len(path) > MaxFolderDepth+1 {
 		return lib, nil, ErrNotFound
 	}
 	f := &File{Resource: lib}

@@ -549,11 +549,7 @@ func (a *API) relationships(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 200, out)
 }
 func (a *API) unlink(w http.ResponseWriter, r *http.Request) {
-	version, ok := a.version(w, r)
-	if !ok {
-		return
-	}
-	if err := a.DMS.UnlinkVersion(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"), version); err != nil {
+	if err := a.DMS.Unlink(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID")); err != nil {
 		a.failure(w, r, err)
 		return
 	}

@@ -5,6 +5,7 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	"papergo/internal/model"
 	"papergo/internal/storage"
 )
 
@@ -17,7 +18,7 @@ func (Blob) Fields() []ent.Field {
 		field.String("item_id").NotEmpty().Immutable().MaxLen(36),
 		field.Int("version").Positive().Immutable(),
 		field.String("object_key").NotEmpty().Immutable(),
-		field.String("filename").NotEmpty().MaxLen(255).Immutable(),
+		field.String("filename").NotEmpty().MaxLen(4096).Validate(model.ValidateTitle).Immutable(),
 		field.String("content_type").NotEmpty().MaxLen(255).Validate(storage.ValidateDocumentMediaType).Immutable(),
 		field.String("languages").Default("").MaxLen(191).Immutable(),
 		field.Int64("size").NonNegative().Immutable(),

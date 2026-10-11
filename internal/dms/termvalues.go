@@ -61,7 +61,7 @@ func (s *Service) resolveTermID(ctx context.Context, subject string, d *ent.Fiel
 		return "", e
 	}
 	if t != nil {
-		for hops := 0; t.MergedIntoID != nil && hops < MaxDepth; hops++ {
+		for hops := 0; t.MergedIntoID != nil && hops < MaxTaxonomyDepth; hops++ {
 			if t, e = s.Client.Term.Get(ctx, *t.MergedIntoID); e != nil {
 				return "", e
 			}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"papergo/ent"
+	"papergo/internal/model"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,6 +17,20 @@ var decimalPattern = regexp.MustCompile(`^-?[0-9]+(\.[0-9]+)?$`)
 
 // Allows a full million-unit note even when JSON escaping expands its bytes.
 const MaxItemValuesBytes = 8 * 1024 * 1024
+
+func validateTitle(name string) error {
+	if err := model.ValidateTitle(name); err != nil {
+		return invalid(err.Error())
+	}
+	return nil
+}
+
+func validateResourceName(kind, name string) error {
+	if kind == "item" || kind == "folder" {
+		return validateTitle(name)
+	}
+	return validateName(name)
+}
 
 func validateName(name string) error {
 	if strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 255 {

@@ -232,8 +232,11 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if in.AllowFolders != nil && !collection {
 		return nil, invalid("allow_folders belongs to lists and libraries")
 	}
-	if err := validateName(in.Name); err != nil {
+	if err := validateResourceName(in.Kind, in.Name); err != nil {
 		return nil, err
+	}
+	if in.Kind == "item" || in.Kind == "folder" {
+		in.Name = strings.TrimSpace(in.Name)
 	}
 	if err := validateTags(in.Tags); err != nil {
 		return nil, err
@@ -303,8 +306,8 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		if e != nil {
 			return nil, e
 		}
-		if depth >= MaxDepth {
-			return nil, invalid("maximum hierarchy depth reached")
+		if in.Kind == "folder" && depth >= MaxFolderDepth+2 {
+			return nil, invalid("maximum folder depth reached")
 		}
 	}
 	if in.Kind == "folder" && containerID != nil {
@@ -440,7 +443,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
 	depth := 1
 	for ; r.ParentID != nil; depth++ {
-		if depth > MaxDepth {
+		if depth > MaxResourceDepth {
 			return depth, invalid("invalid hierarchy depth")
 		}
 		var err error
@@ -480,11 +483,6 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	if !content && in.DuplicatePolicy == nil && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
 		return nil, invalid("at least one change is required")
 	}
-	if in.Name != nil {
-		if err := validateName(*in.Name); err != nil {
-			return nil, err
-		}
-	}
 	if in.Tags != nil {
 		if err := validateTags(*in.Tags); err != nil {
 			return nil, err
@@ -493,6 +491,15 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	r, e := s.authorize(ctx, subject, id, "write")
 	if e != nil {
 		return nil, e
+	}
+	if in.Name != nil {
+		if err := validateResourceName(string(r.Kind), *in.Name); err != nil {
+			return nil, err
+		}
+		if contentKind(r.Kind) {
+			name := strings.TrimSpace(*in.Name)
+			in.Name = &name
+		}
 	}
 	if err := validateDuplicatePolicy(string(r.Kind), in.DuplicatePolicy); err != nil {
 		return nil, err
@@ -697,7 +704,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 
 // checkMove validates moving r below parentID: both ends need write access,
 // the parent must belong to r's collection, and the subtree must stay within
-// MaxDepth without entering itself. Triggers repeat the containment rules.
+// MaxFolderDepth without entering itself. Triggers repeat the containment rules.
 func (s *Service) checkMove(ctx context.Context, subject string, r *ent.Resource, parentID string) error {
 	if r.Kind != resource.KindFolder && r.Kind != resource.KindItem {
 		return invalid("only folders and items can move")
@@ -715,27 +722,27 @@ func (s *Service) checkMove(ctx context.Context, subject string, r *ent.Resource
 		if a.ID == r.ID {
 			return invalid("a folder cannot move into itself")
 		}
-		if depth > MaxDepth {
+		if depth > MaxResourceDepth {
 			return invalid("invalid hierarchy depth")
 		}
 		if a, err = s.Client.Resource.Get(ctx, *a.ParentID); err != nil {
 			return err
 		}
 	}
-	height, err := s.subtreeHeight(ctx, r.ID)
+	height, err := s.subtreeFolderHeight(ctx, r.ID)
 	if err != nil {
 		return err
 	}
-	if depth+height > MaxDepth {
-		return invalid("maximum hierarchy depth reached")
+	if depth-2+height > MaxFolderDepth {
+		return invalid("maximum folder depth reached")
 	}
 	return nil
 }
 
-// subtreeHeight counts the levels of id and its live descendants.
-func (s *Service) subtreeHeight(ctx context.Context, id string) (int, error) {
+// subtreeFolderHeight counts folder levels, excluding a terminal item.
+func (s *Service) subtreeFolderHeight(ctx context.Context, id string) (int, error) {
 	var height int
-	err := s.scan(ctx, []any{&height}, `WITH RECURSIVE sub(id,depth) AS (SELECT ?,1 UNION ALL SELECT c.id,sub.depth+1 FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL AND sub.depth<=?) SELECT max(depth) FROM sub`, id, MaxDepth)
+	err := s.scan(ctx, []any{&height}, `WITH RECURSIVE sub(id,kind,depth) AS (SELECT id,kind,1 FROM resources WHERE id=? UNION ALL SELECT c.id,c.kind,sub.depth+1 FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL AND sub.depth<=?) SELECT max(CASE WHEN kind='folder' THEN depth ELSE depth-1 END) FROM sub`, id, MaxFolderDepth+1)
 	return height, err
 }
 
@@ -1106,7 +1113,7 @@ func (s *Service) Permissions(ctx context.Context, subject, id string) (Permissi
 }
 func (s *Service) effectivePermissions(ctx context.Context, r *ent.Resource) (string, []Permission, error) {
 	for depth := 0; r.InheritPermissions; depth++ {
-		if r.ParentID == nil || depth >= MaxDepth {
+		if r.ParentID == nil || depth >= MaxResourceDepth {
 			return "", nil, invalid("invalid permission ancestry")
 		}
 		parent, e := s.Client.Resource.Get(ctx, *r.ParentID)

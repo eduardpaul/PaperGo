@@ -81,7 +81,7 @@ func (s *Service) relocate(ctx context.Context, v *ent.Term, set *ent.TermSet, p
 	if slashes > 0 {
 		below = slashes - 1 - termLevels(v.Path)
 	}
-	if termLevels(path)+below > MaxDepth {
+	if termLevels(path)+below > MaxTaxonomyDepth {
 		return nil, invalid("term hierarchy depth exceeded")
 	}
 	old := v.Path

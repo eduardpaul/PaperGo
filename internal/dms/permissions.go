@@ -11,7 +11,11 @@ import (
 	"time"
 )
 
-const MaxDepth = 32
+const (
+	MaxFolderDepth   = 64
+	MaxResourceDepth = MaxFolderDepth + 3
+	MaxTaxonomyDepth = 32
+)
 
 func impliedActions(action string) []string {
 	switch action {

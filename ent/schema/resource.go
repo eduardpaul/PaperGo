@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	"papergo/internal/model"
 	"time"
 )
 
@@ -21,7 +22,7 @@ func (Resource) Fields() []ent.Field {
 		field.String("container_id").Optional().Nillable().MaxLen(36),
 		field.String("content_type_id").Optional().Nillable().MaxLen(36),
 		field.Enum("kind").Values("workspace", "list", "library", "folder", "item").Immutable(),
-		field.String("name").NotEmpty().MaxRuneLen(255),
+		field.String("name").NotEmpty().MaxLen(4096).Validate(model.ValidateTitle),
 		// Descriptive metadata of a workspace or collection.
 		field.String("description").Default("").MaxRuneLen(2000),
 		// Collections only: controls creation of physical folders.
@@ -49,7 +50,7 @@ func (Resource) Fields() []ent.Field {
 		field.String("scope_id").Optional().Nillable().MaxLen(36),
 		// Case-folded head name of a live library folder or item. Its unique index
 		// gives library siblings file-system names; other resources leave it null.
-		field.String("name_key").Optional().Nillable().MaxLen(1024).StructTag(`json:"-"`),
+		field.String("name_key").Optional().Nillable().MaxLen(4096).StructTag(`json:"-"`),
 		// Deleted resources are tombstones: hidden everywhere, their history retained.
 		field.Time("deleted_at").Optional().Nillable().StructTag(`json:"-"`),
 		field.String("deleted_by").Optional().Nillable().StructTag(`json:"-"`),
