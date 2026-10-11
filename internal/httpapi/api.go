@@ -60,6 +60,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("PATCH /v1/resources/{id}", a.update)
 	api.HandleFunc("DELETE /v1/resources/{id}", a.delete)
 	api.HandleFunc("GET /v1/resources/{id}/children", a.children)
+	api.HandleFunc("GET /v1/resources/{id}/delta", a.delta)
 	api.HandleFunc("POST /v1/resources/{id}/children", a.create)
 	api.HandleFunc("POST /v1/resources/{id}/documents", a.createDocument)
 	api.HandleFunc("GET /v1/resources/{id}/fields", a.fields)
@@ -273,6 +274,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(409, "last_workspace_owner", err.Error())
 	case errors.As(err, &validation):
 		problem(422, "validation_failed", validation.Error())
+	case errors.Is(err, dms.ErrDeltaExpired):
+		problem(410, "delta_expired", err.Error())
 	case errors.Is(err, dms.ErrNotFound) || errors.Is(err, identity.ErrNotFound):
 		problem(404, "not_found", "resource not found")
 	case errors.Is(err, dms.ErrForbidden) || errors.Is(err, identity.ErrForbidden):

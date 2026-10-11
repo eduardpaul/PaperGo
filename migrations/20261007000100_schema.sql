@@ -675,3 +675,15 @@ INSERT INTO term_groups(id,created_at,updated_at,name,description,is_system,vers
 VALUES('00000000-0000-4000-8000-000000000001',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'System','Term sets managed by PaperGo.',1,1);
 INSERT INTO term_sets(id,created_at,updated_at,group_id,key,name,description,is_open,is_keywords,version)
 VALUES('00000000-0000-4000-8000-000000000002',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'00000000-0000-4000-8000-000000000001','keywords','Keywords','Free keywords that people add while tagging items.',1,1,1);
+
+-- Durable per-caller visibility ranges and short-lived delta pages.
+CREATE TABLE sync_views(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,subject TEXT NOT NULL,container_id TEXT NOT NULL,sequence INTEGER NOT NULL DEFAULT 0 CHECK(sequence>=0));
+CREATE UNIQUE INDEX syncview_subject_container_id ON sync_views(subject,container_id);
+CREATE TABLE sync_states(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,view_id TEXT NOT NULL REFERENCES sync_views(id),item_id TEXT NOT NULL,from_sequence INTEGER NOT NULL CHECK(from_sequence>0),to_sequence INTEGER CHECK(to_sequence>from_sequence),fingerprint TEXT NOT NULL CHECK(length(fingerprint)=64));
+CREATE UNIQUE INDEX syncstate_view_id_item_id_from_sequence ON sync_states(view_id,item_id,from_sequence);
+CREATE UNIQUE INDEX syncstate_view_id_item_id ON sync_states(view_id,item_id) WHERE to_sequence IS NULL;
+CREATE INDEX syncstate_view_id_from_sequence_to_sequence ON sync_states(view_id,from_sequence,to_sequence);
+CREATE TABLE sync_tokens(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,view_id TEXT NOT NULL REFERENCES sync_views(id),sequence INTEGER NOT NULL CHECK(sequence>0),changes JSON NOT NULL DEFAULT '[]' CHECK(json_valid(changes) AND json_type(changes)='array'),page_expires_at DATETIME NOT NULL,expires_at DATETIME NOT NULL);
+CREATE INDEX synctoken_view_id_sequence ON sync_tokens(view_id,sequence);
+CREATE INDEX synctoken_expires_at ON sync_tokens(expires_at);
+CREATE INDEX synctoken_page_expires_at ON sync_tokens(page_expires_at);

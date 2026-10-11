@@ -36,6 +36,9 @@ import (
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
+	"papergo/ent/syncstate"
+	"papergo/ent/synctoken"
+	"papergo/ent/syncview"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
@@ -1492,6 +1495,181 @@ func init() {
 	smartfolder.DefaultID = smartfolderDescID.Default.(func() string)
 	// smartfolder.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	smartfolder.IDValidator = smartfolderDescID.Validators[0].(func(string) error)
+	syncstateMixin := schema.SyncState{}.Mixin()
+	syncstateMixinFields0 := syncstateMixin[0].Fields()
+	_ = syncstateMixinFields0
+	syncstateFields := schema.SyncState{}.Fields()
+	_ = syncstateFields
+	// syncstateDescCreatedAt is the schema descriptor for created_at field.
+	syncstateDescCreatedAt := syncstateMixinFields0[1].Descriptor()
+	// syncstate.DefaultCreatedAt holds the default value on creation for the created_at field.
+	syncstate.DefaultCreatedAt = syncstateDescCreatedAt.Default.(func() time.Time)
+	// syncstateDescViewID is the schema descriptor for view_id field.
+	syncstateDescViewID := syncstateFields[0].Descriptor()
+	// syncstate.ViewIDValidator is a validator for the "view_id" field. It is called by the builders before save.
+	syncstate.ViewIDValidator = func() func(string) error {
+		validators := syncstateDescViewID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(view string) error {
+			for _, fn := range fns {
+				if err := fn(view); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// syncstateDescItemID is the schema descriptor for item_id field.
+	syncstateDescItemID := syncstateFields[1].Descriptor()
+	// syncstate.ItemIDValidator is a validator for the "item_id" field. It is called by the builders before save.
+	syncstate.ItemIDValidator = func() func(string) error {
+		validators := syncstateDescItemID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(item_id string) error {
+			for _, fn := range fns {
+				if err := fn(item_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// syncstateDescFromSequence is the schema descriptor for from_sequence field.
+	syncstateDescFromSequence := syncstateFields[2].Descriptor()
+	// syncstate.FromSequenceValidator is a validator for the "from_sequence" field. It is called by the builders before save.
+	syncstate.FromSequenceValidator = syncstateDescFromSequence.Validators[0].(func(int64) error)
+	// syncstateDescToSequence is the schema descriptor for to_sequence field.
+	syncstateDescToSequence := syncstateFields[3].Descriptor()
+	// syncstate.ToSequenceValidator is a validator for the "to_sequence" field. It is called by the builders before save.
+	syncstate.ToSequenceValidator = syncstateDescToSequence.Validators[0].(func(int64) error)
+	// syncstateDescFingerprint is the schema descriptor for fingerprint field.
+	syncstateDescFingerprint := syncstateFields[4].Descriptor()
+	// syncstate.FingerprintValidator is a validator for the "fingerprint" field. It is called by the builders before save.
+	syncstate.FingerprintValidator = func() func(string) error {
+		validators := syncstateDescFingerprint.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(fingerprint string) error {
+			for _, fn := range fns {
+				if err := fn(fingerprint); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// syncstateDescID is the schema descriptor for id field.
+	syncstateDescID := syncstateMixinFields0[0].Descriptor()
+	// syncstate.DefaultID holds the default value on creation for the id field.
+	syncstate.DefaultID = syncstateDescID.Default.(func() string)
+	// syncstate.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	syncstate.IDValidator = syncstateDescID.Validators[0].(func(string) error)
+	synctokenMixin := schema.SyncToken{}.Mixin()
+	synctokenMixinFields0 := synctokenMixin[0].Fields()
+	_ = synctokenMixinFields0
+	synctokenFields := schema.SyncToken{}.Fields()
+	_ = synctokenFields
+	// synctokenDescCreatedAt is the schema descriptor for created_at field.
+	synctokenDescCreatedAt := synctokenMixinFields0[1].Descriptor()
+	// synctoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	synctoken.DefaultCreatedAt = synctokenDescCreatedAt.Default.(func() time.Time)
+	// synctokenDescViewID is the schema descriptor for view_id field.
+	synctokenDescViewID := synctokenFields[0].Descriptor()
+	// synctoken.ViewIDValidator is a validator for the "view_id" field. It is called by the builders before save.
+	synctoken.ViewIDValidator = func() func(string) error {
+		validators := synctokenDescViewID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(view string) error {
+			for _, fn := range fns {
+				if err := fn(view); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// synctokenDescSequence is the schema descriptor for sequence field.
+	synctokenDescSequence := synctokenFields[1].Descriptor()
+	// synctoken.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	synctoken.SequenceValidator = synctokenDescSequence.Validators[0].(func(int64) error)
+	// synctokenDescChanges is the schema descriptor for changes field.
+	synctokenDescChanges := synctokenFields[2].Descriptor()
+	// synctoken.DefaultChanges holds the default value on creation for the changes field.
+	synctoken.DefaultChanges = synctokenDescChanges.Default.(jsontext.Value)
+	// synctokenDescID is the schema descriptor for id field.
+	synctokenDescID := synctokenMixinFields0[0].Descriptor()
+	// synctoken.DefaultID holds the default value on creation for the id field.
+	synctoken.DefaultID = synctokenDescID.Default.(func() string)
+	// synctoken.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	synctoken.IDValidator = synctokenDescID.Validators[0].(func(string) error)
+	syncviewMixin := schema.SyncView{}.Mixin()
+	syncviewMixinFields0 := syncviewMixin[0].Fields()
+	_ = syncviewMixinFields0
+	syncviewFields := schema.SyncView{}.Fields()
+	_ = syncviewFields
+	// syncviewDescCreatedAt is the schema descriptor for created_at field.
+	syncviewDescCreatedAt := syncviewMixinFields0[1].Descriptor()
+	// syncview.DefaultCreatedAt holds the default value on creation for the created_at field.
+	syncview.DefaultCreatedAt = syncviewDescCreatedAt.Default.(func() time.Time)
+	// syncviewDescSubject is the schema descriptor for subject field.
+	syncviewDescSubject := syncviewFields[0].Descriptor()
+	// syncview.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	syncview.SubjectValidator = func() func(string) error {
+		validators := syncviewDescSubject.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(subject string) error {
+			for _, fn := range fns {
+				if err := fn(subject); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// syncviewDescContainerID is the schema descriptor for container_id field.
+	syncviewDescContainerID := syncviewFields[1].Descriptor()
+	// syncview.ContainerIDValidator is a validator for the "container_id" field. It is called by the builders before save.
+	syncview.ContainerIDValidator = func() func(string) error {
+		validators := syncviewDescContainerID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(container_id string) error {
+			for _, fn := range fns {
+				if err := fn(container_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// syncviewDescSequence is the schema descriptor for sequence field.
+	syncviewDescSequence := syncviewFields[2].Descriptor()
+	// syncview.DefaultSequence holds the default value on creation for the sequence field.
+	syncview.DefaultSequence = syncviewDescSequence.Default.(int64)
+	// syncview.SequenceValidator is a validator for the "sequence" field. It is called by the builders before save.
+	syncview.SequenceValidator = syncviewDescSequence.Validators[0].(func(int64) error)
+	// syncviewDescID is the schema descriptor for id field.
+	syncviewDescID := syncviewMixinFields0[0].Descriptor()
+	// syncview.DefaultID holds the default value on creation for the id field.
+	syncview.DefaultID = syncviewDescID.Default.(func() string)
+	// syncview.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	syncview.IDValidator = syncviewDescID.Validators[0].(func(string) error)
 	termMixin := schema.Term{}.Mixin()
 	termMixinFields0 := termMixin[0].Fields()
 	_ = termMixinFields0

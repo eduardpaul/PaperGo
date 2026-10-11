@@ -380,6 +380,42 @@ func (f SmartFolderFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SmartFolderMutation", m)
 }
 
+// The SyncStateFunc type is an adapter to allow the use of ordinary
+// function as SyncState mutator.
+type SyncStateFunc func(context.Context, *ent.SyncStateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SyncStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SyncStateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SyncStateMutation", m)
+}
+
+// The SyncTokenFunc type is an adapter to allow the use of ordinary
+// function as SyncToken mutator.
+type SyncTokenFunc func(context.Context, *ent.SyncTokenMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SyncTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SyncTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SyncTokenMutation", m)
+}
+
+// The SyncViewFunc type is an adapter to allow the use of ordinary
+// function as SyncView mutator.
+type SyncViewFunc func(context.Context, *ent.SyncViewMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SyncViewFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SyncViewMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SyncViewMutation", m)
+}
+
 // The TermFunc type is an adapter to allow the use of ordinary
 // function as Term mutator.
 type TermFunc func(context.Context, *ent.TermMutation) (ent.Value, error)

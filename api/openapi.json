@@ -547,7 +547,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -678,7 +678,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           },
           {
             "name": "workspace_id",
@@ -833,10 +833,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -875,10 +875,10 @@
           "204": {
             "description": "Deleted"
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -1063,7 +1063,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           },
           {
             "schema": {
@@ -1131,6 +1131,24 @@
       "post": {
         "summary": "Create a child resource",
         "responses": {
+          "200": {
+            "description": "Existing readable live item/folder, unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Quoted numeric resource lock version. Field updates use the container version.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Newly created resource",
             "content": {
@@ -1151,24 +1169,6 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
-          },
-          "200": {
-            "description": "Existing readable live item/folder, unchanged",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Resource"
-                }
-              }
-            },
-            "headers": {
-              "ETag": {
-                "description": "Quoted numeric resource lock version. Field updates use the container version.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
           }
         },
         "requestBody": {
@@ -1324,10 +1324,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -1424,14 +1424,18 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           },
           {
             "name": "direction",
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["both", "outgoing", "incoming"],
+              "enum": [
+                "both",
+                "outgoing",
+                "incoming"
+              ],
               "default": "both"
             }
           },
@@ -1547,13 +1551,13 @@
           "204": {
             "description": "Deleted"
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
           "428": {
             "description": "If-Match required"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -1674,6 +1678,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -1704,16 +1711,6 @@
               }
             }
           },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
           "428": {
             "description": "Request failed",
             "content": {
@@ -1724,8 +1721,15 @@
               }
             }
           },
-          "412": {
-            "$ref": "#/components/responses/Problem"
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -1782,10 +1786,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -1858,7 +1862,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "description": "Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
@@ -1900,10 +1904,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -2065,7 +2069,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ]
       }
@@ -2121,7 +2125,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -2250,10 +2254,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -2335,10 +2339,10 @@
             },
             "description": "Field removed"
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -2411,7 +2415,7 @@
               "default": 50
             },
             "name": "$top",
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50.",
             "in": "query"
           }
         ]
@@ -2481,7 +2485,7 @@
               "default": 50
             },
             "name": "$top",
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50.",
             "in": "query"
           }
         ],
@@ -2524,10 +2528,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -2629,7 +2633,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -3099,6 +3103,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -3129,16 +3136,6 @@
               }
             }
           },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
           "428": {
             "description": "Request failed",
             "content": {
@@ -3149,8 +3146,15 @@
               }
             }
           },
-          "412": {
-            "$ref": "#/components/responses/Problem"
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -3270,6 +3274,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -3300,16 +3307,6 @@
               }
             }
           },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
           "428": {
             "description": "Request failed",
             "content": {
@@ -3320,8 +3317,15 @@
               }
             }
           },
-          "412": {
-            "$ref": "#/components/responses/Problem"
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -3664,7 +3668,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -3920,7 +3924,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -4390,6 +4394,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -4420,16 +4427,6 @@
               }
             }
           },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
           "428": {
             "description": "Request failed",
             "content": {
@@ -4440,8 +4437,15 @@
               }
             }
           },
-          "412": {
-            "$ref": "#/components/responses/Problem"
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -4488,11 +4492,11 @@
           "409": {
             "description": "Stale version"
           },
-          "428": {
-            "description": "If-Match required"
-          },
           "412": {
             "$ref": "#/components/responses/Problem"
+          },
+          "428": {
+            "description": "If-Match required"
           }
         },
         "x-module-scopes": [
@@ -5083,10 +5087,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -5184,10 +5188,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -5242,7 +5246,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -5357,10 +5361,10 @@
             },
             "description": "Success"
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -5409,10 +5413,10 @@
           "204": {
             "description": "Deleted"
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -5568,6 +5572,23 @@
         },
         "operationId": "classifySmartFolder",
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "Item with current ETag",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "201": {
             "content": {
               "application/json": {
@@ -5587,23 +5608,6 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
-          },
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Resource"
-                }
-              }
-            },
-            "description": "Item with current ETag",
-            "headers": {
-              "ETag": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
           }
         },
         "summary": "Classify or create an item in a smart folder",
@@ -5645,10 +5649,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -5797,10 +5801,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -6398,6 +6402,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -6437,9 +6444,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         }
       },
@@ -6521,6 +6525,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -6560,9 +6567,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7044,6 +7048,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -7083,9 +7090,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         }
       }
@@ -7286,7 +7290,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -7773,7 +7777,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -8245,6 +8249,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -8284,9 +8291,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -8371,6 +8375,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -8410,9 +8417,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -8585,7 +8589,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -9057,6 +9061,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -9096,9 +9103,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -9183,6 +9187,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -9222,9 +9229,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -9292,7 +9296,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -9895,6 +9899,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -9934,9 +9941,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -10048,6 +10052,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -10087,9 +10094,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -10201,6 +10205,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -10240,9 +10247,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -10275,7 +10279,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -10400,6 +10404,16 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Existing keyword",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Term"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Created",
             "content": {
@@ -10414,16 +10428,6 @@
                 "description": "Current entity version",
                 "schema": {
                   "type": "string"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "Existing keyword",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Term"
                 }
               }
             }
@@ -10754,6 +10758,9 @@
               }
             }
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "413": {
             "description": "Request failed",
             "content": {
@@ -10793,9 +10800,6 @@
                 }
               }
             }
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "x-module-scopes": [
@@ -11245,10 +11249,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -11507,14 +11511,14 @@
           "409": {
             "description": "Duplicate, stale version, built-in role, or last administrator conflict"
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
           },
           "428": {
             "description": "If-Match required"
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -11564,14 +11568,14 @@
           "409": {
             "description": "Duplicate, stale version, built-in role, or last administrator conflict"
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
           },
           "428": {
             "description": "If-Match required"
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -11843,14 +11847,14 @@
           "409": {
             "description": "Duplicate, stale version, built-in role, or last administrator conflict"
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
           },
           "428": {
             "description": "If-Match required"
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -11900,14 +11904,14 @@
           "409": {
             "description": "Duplicate, stale version, built-in role, or last administrator conflict"
           },
+          "412": {
+            "$ref": "#/components/responses/Problem"
+          },
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
           },
           "428": {
             "description": "If-Match required"
-          },
-          "412": {
-            "$ref": "#/components/responses/Problem"
           }
         },
         "parameters": [
@@ -12141,7 +12145,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "operationId": "taxonomyAudit",
@@ -12313,10 +12317,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -12379,10 +12383,10 @@
             },
             "description": "Field removed"
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -12447,7 +12451,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "operationId": "contentTypeAudit",
@@ -12590,7 +12594,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -12984,7 +12988,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -13153,10 +13157,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -13205,10 +13209,10 @@
           "204": {
             "description": "Detached; ETag contains the updated collection version"
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         }
@@ -13268,10 +13272,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -13433,10 +13437,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -13517,10 +13521,10 @@
               }
             }
           },
-          "default": {
+          "412": {
             "$ref": "#/components/responses/Problem"
           },
-          "412": {
+          "default": {
             "$ref": "#/components/responses/Problem"
           }
         },
@@ -13558,6 +13562,73 @@
             "$ref": "#/components/responses/Problem"
           }
         }
+      }
+    },
+    "/v1/resources/{id}/delta": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Synchronize the caller’s visible collection",
+        "description": "Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.",
+        "parameters": [
+          {
+            "name": "$deltatoken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque token supplied by @odata.deltaLink; mutually exclusive with $skiptoken."
+          },
+          {
+            "name": "$skiptoken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visible changes, with a continuation or durable delta link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeltaPage"
+                }
+              }
+            }
+          },
+          "410": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ]
       }
     }
   },
@@ -13682,16 +13753,25 @@
           {
             "type": "object",
             "properties": {
-              "organization_id": {"type":"string","format":"uuid"},
-          "organization_identifier": {"type":"string"},
-          "scopes": {
+              "organization_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "organization_identifier": {
+                "type": "string"
+              },
+              "scopes": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               }
             },
-            "required": ["organization_id", "organization_identifier", "scopes"]
+            "required": [
+              "organization_id",
+              "organization_identifier",
+              "scopes"
+            ]
           }
         ]
       },
@@ -17813,7 +17893,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Ids from the root to the term: /root/\u2026/term/."
+            "description": "Ids from the root to the term: /root/…/term/."
           },
           "labels": {
             "type": "object",
@@ -18018,7 +18098,7 @@
       },
       "TermCSV": {
         "type": "string",
-        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term \u2026 Level 7 Term."
+        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term … Level 7 Term."
       },
       "PortableTerm": {
         "type": "object",
@@ -18740,7 +18820,7 @@
           "languages": {
             "type": "string",
             "maxLength": 191,
-            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2\u201331 letters/underscores."
+            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
           }
         }
       },
@@ -18966,6 +19046,60 @@
                 }
               }
             }
+          }
+        }
+      },
+      "DeltaPage": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Resource"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "@removed"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "@removed": {
+                      "type": "object",
+                      "required": [
+                        "reason"
+                      ],
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "deleted",
+                            "changed"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "@odata.nextLink": {
+            "type": "string",
+            "format": "uri"
+          },
+          "@odata.deltaLink": {
+            "type": "string",
+            "format": "uri"
           }
         }
       }

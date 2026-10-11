@@ -99,6 +99,15 @@ type SchemaTemplate func(*sql.Selector)
 // SmartFolder is the predicate function for smartfolder builders.
 type SmartFolder func(*sql.Selector)
 
+// SyncState is the predicate function for syncstate builders.
+type SyncState func(*sql.Selector)
+
+// SyncToken is the predicate function for synctoken builders.
+type SyncToken func(*sql.Selector)
+
+// SyncView is the predicate function for syncview builders.
+type SyncView func(*sql.Selector)
+
 // Term is the predicate function for term builders.
 type Term func(*sql.Selector)
 

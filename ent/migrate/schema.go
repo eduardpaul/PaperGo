@@ -1227,6 +1227,112 @@ var (
 			},
 		},
 	}
+	// SyncStatesColumns holds the columns for the "sync_states" table.
+	SyncStatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "item_id", Type: field.TypeString, Size: 36},
+		{Name: "from_sequence", Type: field.TypeInt64},
+		{Name: "to_sequence", Type: field.TypeInt64, Nullable: true},
+		{Name: "fingerprint", Type: field.TypeString, Size: 64},
+		{Name: "view_id", Type: field.TypeString, Size: 36},
+	}
+	// SyncStatesTable holds the schema information for the "sync_states" table.
+	SyncStatesTable = &schema.Table{
+		Name:       "sync_states",
+		Columns:    SyncStatesColumns,
+		PrimaryKey: []*schema.Column{SyncStatesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "sync_states_sync_views_view",
+				Columns:    []*schema.Column{SyncStatesColumns[6]},
+				RefColumns: []*schema.Column{SyncViewsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "syncstate_view_id_item_id_from_sequence",
+				Unique:  true,
+				Columns: []*schema.Column{SyncStatesColumns[6], SyncStatesColumns[2], SyncStatesColumns[3]},
+			},
+			{
+				Name:    "syncstate_view_id_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{SyncStatesColumns[6], SyncStatesColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "to_sequence IS NULL",
+				},
+			},
+			{
+				Name:    "syncstate_view_id_from_sequence_to_sequence",
+				Unique:  false,
+				Columns: []*schema.Column{SyncStatesColumns[6], SyncStatesColumns[3], SyncStatesColumns[4]},
+			},
+		},
+	}
+	// SyncTokensColumns holds the columns for the "sync_tokens" table.
+	SyncTokensColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "sequence", Type: field.TypeInt64},
+		{Name: "changes", Type: field.TypeJSON},
+		{Name: "page_expires_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "view_id", Type: field.TypeString, Size: 36},
+	}
+	// SyncTokensTable holds the schema information for the "sync_tokens" table.
+	SyncTokensTable = &schema.Table{
+		Name:       "sync_tokens",
+		Columns:    SyncTokensColumns,
+		PrimaryKey: []*schema.Column{SyncTokensColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "sync_tokens_sync_views_view",
+				Columns:    []*schema.Column{SyncTokensColumns[6]},
+				RefColumns: []*schema.Column{SyncViewsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "synctoken_view_id_sequence",
+				Unique:  false,
+				Columns: []*schema.Column{SyncTokensColumns[6], SyncTokensColumns[2]},
+			},
+			{
+				Name:    "synctoken_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{SyncTokensColumns[5]},
+			},
+			{
+				Name:    "synctoken_page_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{SyncTokensColumns[4]},
+			},
+		},
+	}
+	// SyncViewsColumns holds the columns for the "sync_views" table.
+	SyncViewsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "subject", Type: field.TypeString, Size: 255},
+		{Name: "container_id", Type: field.TypeString, Size: 36},
+		{Name: "sequence", Type: field.TypeInt64, Default: 0},
+	}
+	// SyncViewsTable holds the schema information for the "sync_views" table.
+	SyncViewsTable = &schema.Table{
+		Name:       "sync_views",
+		Columns:    SyncViewsColumns,
+		PrimaryKey: []*schema.Column{SyncViewsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "syncview_subject_container_id",
+				Unique:  true,
+				Columns: []*schema.Column{SyncViewsColumns[2], SyncViewsColumns[3]},
+			},
+		},
+	}
 	// TermsColumns holds the columns for the "terms" table.
 	TermsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1628,6 +1734,9 @@ var (
 		SchemaRevisionsTable,
 		SchemaTemplatesTable,
 		SmartFoldersTable,
+		SyncStatesTable,
+		SyncTokensTable,
+		SyncViewsTable,
 		TermsTable,
 		TermGroupsTable,
 		TermSetsTable,
@@ -1673,6 +1782,8 @@ func init() {
 	SchemaRevisionsTable.ForeignKeys[0].RefTable = ResourcesTable
 	SchemaTemplatesTable.ForeignKeys[0].RefTable = ResourcesTable
 	SmartFoldersTable.ForeignKeys[0].RefTable = ResourcesTable
+	SyncStatesTable.ForeignKeys[0].RefTable = SyncViewsTable
+	SyncTokensTable.ForeignKeys[0].RefTable = SyncViewsTable
 	TermsTable.ForeignKeys[0].RefTable = TermsTable
 	TermsTable.ForeignKeys[1].RefTable = TermsTable
 	TermsTable.ForeignKeys[2].RefTable = TermSetsTable

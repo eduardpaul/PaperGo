@@ -101,6 +101,7 @@ func run(log *slog.Logger) error {
 	// Background operations (index builds) resume from their persisted progress.
 	go service.RunOperations(ctx, log)
 	go service.RunBlobCleanup(ctx, store, log)
+	go service.RunDeltaCleanup(ctx, log)
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
 	log.Info("api listening", "address", c.Address, "environment", c.Env)

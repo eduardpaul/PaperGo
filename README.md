@@ -79,10 +79,13 @@ Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints a
 | PATCH | `/v1/resources/{id}/fields/{fieldID}` | Evolve label, choices, required or indexed; uses the container ETag |
 | GET | `/v1/resources/{id}/schemas` | Manager-only schema history; paginate with `$skiptoken` |
 | PUT / GET | `/v1/resources/{id}/permissions` | Replace / read explicit ACLs and inheritance setting |
-| POST / GET | `/v1/items/{id}/relationships` | Create / query named edges; filter by `direction=incoming` or `outgoing` and `name` |
+| POST / GET | `/v1/items/{id}/relationships` | Create / query typed or untyped edges across readable workspaces; default and `both` include all incident edges, `incoming` / `outgoing` select directed edges |
+| GET / PATCH | `/v1/items/{id}/relationships/{linkID}` | Read a located peer and edge ETag / update attributes |
+| GET | `/v1/workspaces/{id}/relationships` | Query edges with readable endpoints, direction and scalar attribute filters |
 | DELETE | `/v1/items/{id}/relationships/{linkID}` | Remove an outgoing relationship |
 | POST / GET | `/v1/items/{id}/publications` | Publish / read immutable snapshots; paginate with `$skiptoken` |
 | POST | `/v1/items/{id}/unpublish` | Remove the published surface while retaining history |
+| GET | `/v1/resources/{id}/delta` | Synchronize visible items/folders with durable caller-bound delta links, removals and access changes; anchors last 30 days, continuations five minutes; expired tokens return 410 |
 | GET | `/v1/items/{id}/revisions` | Retained content history for item readers; paginate with `$skiptoken` |
 | GET | `/v1/items/{id}/schema?surface=auto` | Immutable schema of the caller's visible content revision |
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |

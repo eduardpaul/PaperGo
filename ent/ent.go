@@ -37,6 +37,9 @@ import (
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
+	"papergo/ent/syncstate"
+	"papergo/ent/synctoken"
+	"papergo/ent/syncview"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
@@ -143,6 +146,9 @@ func checkColumn(t, c string) error {
 			schemarevision.Table:       schemarevision.ValidColumn,
 			schematemplate.Table:       schematemplate.ValidColumn,
 			smartfolder.Table:          smartfolder.ValidColumn,
+			syncstate.Table:            syncstate.ValidColumn,
+			synctoken.Table:            synctoken.ValidColumn,
+			syncview.Table:             syncview.ValidColumn,
 			term.Table:                 term.ValidColumn,
 			termgroup.Table:            termgroup.ValidColumn,
 			termset.Table:              termset.ValidColumn,

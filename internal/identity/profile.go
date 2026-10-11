@@ -180,6 +180,9 @@ func (d Directory) DeleteUser(ctx context.Context, actor, subject string) error 
 			"DELETE FROM grants WHERE principal_type='user' AND principal_id=?",
 			"DELETE FROM webdav_credentials WHERE subject=?",
 			"DELETE FROM identity_rest_tokens WHERE subject=?",
+			"DELETE FROM sync_tokens WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
+			"DELETE FROM sync_states WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
+			"DELETE FROM sync_views WHERE subject=?",
 		} {
 			if _, err = tx.ExecContext(ctx, query, subject); err != nil {
 				return err
