@@ -58,6 +58,9 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
 Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints are public. IDs are UUID strings. Lists of resources and relationships return `{ "data": [...], "next_cursor": "..." }`; pass `after` to continue. Default page size is 50, maximum 100.
 
+`POST /v1/$batch` executes 1–20 independent HTTP calls in order. Send `{"requests":[{"id":"list","method":"GET","url":"workspaces"}]}`. Each `responses` entry contains its ID, status, headers and optional body. Calls inherit authentication and may override request headers. `dependsOn` names earlier calls; failures skip dependents with 424. Successful writes persist independently. Relative API URLs only; nested batches and path traversal are rejected. Non-JSON string bodies become raw text; binary responses become base64 strings, with a 16 MiB limit per result.
+
+
 | Method | Route | Purpose |
 | --- | --- | --- |
 | POST / GET | `/v1/workspaces` | Create a workspace / list accessible workspaces |

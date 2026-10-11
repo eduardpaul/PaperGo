@@ -12710,6 +12710,37 @@
           "organization.manage"
         ]
       }
+    },
+    "/v1/$batch": {
+      "post": {
+        "summary": "Execute independent HTTP API requests in one batch",
+        "description": "Ordered execution, no shared transaction. Every call authenticates independently using inherited or overridden Authorization. Up to 20 calls; dependencies reference earlier IDs. Transport headers cannot be overridden. Content transfers are supported; JSON string bodies with non-JSON Content-Type are sent as raw text. Each result includes Content-Type, ETag, Location, Retry-After and X-Request-ID when present.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Independent results in request order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -17697,6 +17728,101 @@
           "document_languages": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "BatchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requests"
+        ],
+        "properties": {
+          "requests": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "method",
+                "url"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE"
+                  ]
+                },
+                "url": {
+                  "type": "string",
+                  "description": "Relative /v1 API path, with optional query. The /v1 prefix can be omitted. Absolute URLs, traversal and nested batches are rejected."
+                },
+                "headers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "body": {},
+                "dependsOn": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "IDs of earlier requests. Failed dependencies skip this call with status 424."
+                }
+              }
+            }
+          }
+        }
+      },
+      "BatchResponse": {
+        "type": "object",
+        "required": [
+          "responses"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "responses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "status",
+                "headers"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                },
+                "headers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "body": {
+                  "description": "JSON bodies remain JSON; text bodies are strings; binary bodies are base64 strings. Each subresponse is limited to 16 MiB."
+                }
+              }
+            }
           }
         }
       }
