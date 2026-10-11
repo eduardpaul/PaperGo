@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -120,7 +121,7 @@ func TestBatchMixedContentAndRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := fmt.Sprintf(`{"requests":[{"id":"upload","method":"PUT","url":"items/%s/content","headers":{"If-Match":"\"1\"","Content-Type":"text/plain","X-Filename":"note.txt"},"body":"hello"},{"id":"download","method":"GET","url":"items/%s/content","dependsOn":["upload"]}]}`, item.ID, item.ID)
+	body := fmt.Sprintf(`{"requests":[{"id":"upload","method":"PUT","url":"items/%s/content","headers":{"If-Match":"\"1\"","Content-Type":"text/plain","X-Filename":"note.pdf"},"body":"%%PDF-hello"},{"id":"download","method":"GET","url":"items/%s/content","dependsOn":["upload"]}]}`, item.ID, item.ID)
 	w := request(h, http.MethodPost, "/v1/$batch", body, testToken, "", "application/json")
 	var out struct {
 		Responses []batchResponse `json:"responses"`
@@ -128,7 +129,16 @@ func TestBatchMixedContentAndRead(t *testing.T) {
 	if err = json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	if w.Code != 200 || len(out.Responses) != 2 || out.Responses[0].Status != 201 || out.Responses[1].Status != 200 || out.Responses[1].Body != "hello" {
+	if w.Code != 200 || len(out.Responses) != 2 || out.Responses[0].Status != 201 || out.Responses[1].Status != 200 {
 		t.Fatal(w.Code, w.Body.String())
 	}
+	encoded, ok := out.Responses[1].Body.(string)
+	if !ok {
+		t.Fatal("binary response must be base64", out.Responses[1].Body)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || string(decoded) != "%PDF-hello" || out.Responses[1].Headers["Content-Type"] != "application/pdf" {
+		t.Fatal("binary download", string(decoded), err, out.Responses[1].Headers)
+	}
+
 }
