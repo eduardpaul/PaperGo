@@ -39,7 +39,7 @@ func TestMetadataEditorCannotReplaceFileWithoutDocumentWrite(t *testing.T) {
 	if response.Code != 200 {
 		t.Fatal("metadata edit denied", response.Code, response.Body.String())
 	}
-	response = request(h, "PUT", "/v1/items/"+item.ID+"/content", "replacement", testToken, response.Header().Get("ETag"), "text/plain")
+	response = request(h, "PUT", "/v1/items/"+item.ID+"/content", "%PDF-replacement", testToken, response.Header().Get("ETag"), "text/plain")
 	if response.Code != 403 {
 		t.Fatal("file replacement accepted without document.write", response.Code, response.Body.String())
 	}

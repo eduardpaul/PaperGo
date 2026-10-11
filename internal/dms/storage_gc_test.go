@@ -33,9 +33,9 @@ func TestIdenticalBytesShareStorageAcrossItemsAndPurgeChecksReferences(t *testin
 		}
 		return out
 	}
-	a := upload(first.ID, first.Version, "one.txt", "text/plain")
-	b := upload(second.ID, second.Version, "two.bin", "application/octet-stream")
-	if a.ObjectKey != b.ObjectKey || b.Filename != "two.bin" || b.ContentType != "application/octet-stream" {
+	a := upload(first.ID, first.Version, "one.txt", "application/pdf")
+	b := upload(second.ID, second.Version, "two.bin", "application/pdf")
+	if a.ObjectKey != b.ObjectKey || b.Filename != "two.bin" || b.ContentType != "application/pdf" {
 		t.Fatal("bytes or per-item metadata were not preserved", a, b)
 	}
 	if err = s.CleanupPurgedBlobs(testContext, store); err != nil {
@@ -91,7 +91,7 @@ func TestObjectCollectionHonorsGraceAndFileVersions(t *testing.T) {
 		}
 	}
 	referenced := objects[0]
-	if _, err = s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: referenced.Key, Size: referenced.Size, SHA256: referenced.SHA256, Filename: "file.txt", ContentType: "text/plain"}); err != nil {
+	if _, err = s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: referenced.Key, Size: referenced.Size, SHA256: referenced.SHA256, Filename: "file.txt", ContentType: "application/pdf"}); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.CollectObjects(testContext, store, now); err != nil {

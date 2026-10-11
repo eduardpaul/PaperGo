@@ -135,7 +135,7 @@ POST the library's `/children`:
 {"kind":"item","name":"Supplier agreement","values":{"status":"draft"},"tags":["supplier"]}
 ```
 
-Upload bytes to the item's `/content` with `Content-Type: application/pdf`, `X-Filename: agreement.pdf`, and `If-Match: "1"`. Upload returns blob metadata and the new item ETag; GET supports Range requests and always sends an attachment disposition. Publish with POST `/publications` and the new `If-Match` value.
+Upload bytes to the item's `/content` with `Content-Type: application/pdf`, `X-Filename: agreement.pdf`, and `If-Match: "1"`. PDF, TIFF, JPEG, PNG and WebP are accepted by their actual byte signatures; filenames and declared media types do not select the stored type. Unsupported content returns 415 without a new revision. The same policy applies to multipart creation, WebDAV PUT and package import. Upload returns blob metadata and the new item ETag; GET supports Range requests and always sends an attachment disposition. Publish with POST `/publications` and the new `If-Match` value.
 
 When publishing is disabled, library metadata is visible immediately, including before the first upload; downloading returns 404 until a blob exists. Explicit publication in an enabled library requires a blob. Enabling publishing keeps existing published content and makes future changes drafts. Disabling it requires manage access and publishes all current heads atomically, advancing affected item lock versions.
 

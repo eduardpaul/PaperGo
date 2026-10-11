@@ -126,7 +126,7 @@ func TestPurgeCleanupRetries(t *testing.T) {
 	if err = s.Client.WorkflowRunItem.Create().SetID("run:0").SetRunID("run").SetItemID(item.ID).SetPosition(0).Exec(testContext); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "object", Filename: "file", ContentType: "text/plain", Size: 1, SHA256: emptySHA256})
+	_, err = s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "object", Filename: "file", ContentType: "application/pdf", Size: 1, SHA256: emptySHA256})
 	if err != nil {
 		t.Fatal(err)
 	}

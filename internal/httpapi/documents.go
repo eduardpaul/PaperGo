@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"mime"
 	"net/http"
 	"path"
 	"strconv"
@@ -82,17 +81,7 @@ func (a *API) createDocument(w http.ResponseWriter, r *http.Request) {
 				a.problem(w, r, 400, "invalid_upload", "file must have a filename")
 				return
 			}
-			media = part.Header.Get("Content-Type")
-			if media == "" {
-				media = "application/octet-stream"
-			}
-			media, _, err = mime.ParseMediaType(media)
-			if err != nil {
-				part.Close()
-				a.problem(w, r, 400, "invalid_upload", "invalid file Content-Type")
-				return
-			}
-			object, err = a.Storage.Put(r.Context(), part, a.MaxUpload)
+			object, media, err = storage.PutDocument(r.Context(), a.Storage, part, a.MaxUpload)
 			if err != nil {
 				if errors.Is(err, io.ErrUnexpectedEOF) {
 					a.problem(w, r, 400, "invalid_upload", "invalid multipart file")

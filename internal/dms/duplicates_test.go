@@ -15,7 +15,7 @@ func TestDuplicatePolicyAcrossWorkspacesAndVisibility(t *testing.T) {
 	lib := create(t, s, w.ID, "library", "Files", nil)
 	a := create(t, s, lib.ID, "item", "Original", nil)
 	file := func() BlobInput {
-		return BlobInput{ObjectKey: uuid.NewString(), Filename: "file.txt", ContentType: "text/plain", Size: 1, SHA256: emptySHA256}
+		return BlobInput{ObjectKey: uuid.NewString(), Filename: "file.txt", ContentType: "application/pdf", Size: 1, SHA256: emptySHA256}
 	}
 	if _, err := s.AttachBlob(testContext, "alice", a.ID, a.Version, file()); err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestDuplicatePolicyPublishedVisibilityAndWebDAV(t *testing.T) {
 	source := create(t, s, w.ID, "library", "Source", nil)
 	item := create(t, s, source.ID, "item", "Source file", nil)
 	file := func(hash string) BlobInput {
-		return BlobInput{ObjectKey: uuid.NewString(), Filename: "file.txt", ContentType: "text/plain", Size: 1, SHA256: strings.Repeat(hash, 64)}
+		return BlobInput{ObjectKey: uuid.NewString(), Filename: "file.txt", ContentType: "application/pdf", Size: 1, SHA256: strings.Repeat(hash, 64)}
 	}
 	if _, err := s.AttachBlob(testContext, "alice", item.ID, 1, file("a")); err != nil {
 		t.Fatal(err)
@@ -149,7 +149,7 @@ func TestDuplicateBlockSerializesConcurrentUploads(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := s.AttachBlob(testContext, "alice", id, 1, BlobInput{ObjectKey: uuid.NewString(), Filename: "f", ContentType: "text/plain", Size: 1, SHA256: emptySHA256})
+			_, err := s.AttachBlob(testContext, "alice", id, 1, BlobInput{ObjectKey: uuid.NewString(), Filename: "f", ContentType: "application/pdf", Size: 1, SHA256: emptySHA256})
 			results <- err
 		}()
 	}

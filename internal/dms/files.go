@@ -143,6 +143,37 @@ type PutFile struct {
 	ContentTypeID string
 }
 
+// MakeEmptyFile maps a WebDAV lock URL or copies an item with no content.
+// Empty items have no blob; file uploads still require a supported signature.
+func (s *Service) MakeEmptyFile(ctx context.Context, subject, libraryID string, path []string, in CreateResource, cond FileConditions) (out *File, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		if err := t.RequireScope(ctx, subject, "document.write"); err != nil {
+			return err
+		}
+		_, parent, existing, err := t.target(ctx, subject, libraryID, path, cond)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			if existing.Collection() {
+				return ErrExists
+			}
+			if err = t.delete(ctx, subject, existing.ID, existing.Version, true); err != nil {
+				return err
+			}
+		}
+		in.Kind = "item"
+		in.Name = path[len(path)-1]
+		item, err := t.create(ctx, subject, parent.ID, in, nil)
+		if err != nil {
+			return err
+		}
+		out, err = t.fileByID(ctx, subject, item.ID)
+		return err
+	})
+	return
+}
+
 // PutFile stores content at path in one transaction: it creates the item with
 // its first revision, or adds a content revision to the existing file.
 func (s *Service) PutFile(ctx context.Context, subject, libraryID string, path []string, in PutFile) (out *File, created bool, err error) {

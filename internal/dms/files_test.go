@@ -22,7 +22,7 @@ func davLibrary(t *testing.T, s *Service, w *ent.Resource, publishing bool) *ent
 	return lib
 }
 func content(name string) BlobInput {
-	return BlobInput{ObjectKey: uuid.NewString(), Filename: name, ContentType: "text/plain", Size: 1, SHA256: strings.Repeat("a", 64)}
+	return BlobInput{ObjectKey: uuid.NewString(), Filename: name, ContentType: "application/pdf", Size: 1, SHA256: strings.Repeat("a", 64)}
 }
 func revisionCount(t *testing.T, s *Service, id string) int {
 	t.Helper()

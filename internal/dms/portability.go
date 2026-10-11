@@ -2,6 +2,7 @@ package dms
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -345,6 +346,7 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	}
 	objectKeys := map[string]string{}
 	objects := map[string]packageObject{}
+	objectTypes := map[string]string{}
 	for _, obj := range p.Objects {
 		if _, err = uuid.Parse(obj.Key); err != nil || len(obj.Key) != 36 || obj.Size < 0 || len(obj.SHA256) != 64 || objects[obj.Key].Key != "" {
 			return result, invalid("invalid package object descriptor")
@@ -358,8 +360,15 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		if err != nil {
 			return result, err
 		}
+		header := make([]byte, 12)
+		headerSize, e := io.ReadFull(reader, header)
+		if e != nil && !errors.Is(e, io.EOF) && !errors.Is(e, io.ErrUnexpectedEOF) {
+			reader.Close()
+			return result, e
+		}
+		objectTypes[obj.Key] = storage.DocumentType(header[:headerSize])
 		h := sha256.New()
-		n, err := io.Copy(h, io.LimitReader(reader, obj.Size+1))
+		n, err := io.Copy(h, io.LimitReader(io.MultiReader(bytes.NewReader(header[:headerSize]), reader), obj.Size+1))
 		reader.Close()
 		if err != nil || n != obj.Size || hex.EncodeToString(h.Sum(nil)) != obj.SHA256 {
 			return result, invalid("package object checksum mismatch")
@@ -411,6 +420,9 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		obj, ok := objects[key]
 		if !ok || blob["size"] != obj.Size || blob["sha256"] != obj.SHA256 {
 			return result, invalid("blob metadata does not match packaged bytes")
+		}
+		if objectTypes[key] == "" || objectTypes[key] != blob["content_type"] {
+			return result, invalid("packaged file signature does not match its supported media type")
 		}
 	}
 	if err = validatePackageGroups(p); err != nil {

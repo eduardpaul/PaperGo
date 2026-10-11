@@ -220,7 +220,7 @@ func TestBulkLibraryConflictsAndPublication(t *testing.T) {
 	)
 	attach := func(item BulkResult) {
 		t.Helper()
-		_, err := s.AttachBlob(testContext, "alice", item.ID, 1, BlobInput{ObjectKey: uuid.NewString(), Filename: "file.txt", ContentType: "text/plain", Size: 5, SHA256: strings.Repeat("a", 64)})
+		_, err := s.AttachBlob(testContext, "alice", item.ID, 1, BlobInput{ObjectKey: uuid.NewString(), Filename: "file.txt", ContentType: "application/pdf", Size: 5, SHA256: strings.Repeat("a", 64)})
 		if err != nil {
 			t.Fatal(err)
 		}

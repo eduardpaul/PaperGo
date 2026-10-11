@@ -28,7 +28,7 @@ func TestRestoreFileVersionAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	endpoint := "/v1/items/" + item.ID + "/content"
-	res := request(h, "PUT", endpoint, "old content", testToken, `"1"`, "text/plain")
+	res := request(h, "PUT", endpoint, "%PDF-old content", testToken, `"1"`, "text/plain")
 	var original ent.Blob
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &original) != nil {
 		t.Fatal(res.Code, res.Body.String())
@@ -36,7 +36,7 @@ func TestRestoreFileVersionAPI(t *testing.T) {
 	if _, err = s.Publish(ctx, "alice", item.ID, 2); err != nil {
 		t.Fatal(err)
 	}
-	res = request(h, "PUT", endpoint, "new content", testToken, `"3"`, "text/plain")
+	res = request(h, "PUT", endpoint, "%PDF-new content", testToken, `"3"`, "text/plain")
 	if res.Code != 201 {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -79,7 +79,7 @@ func TestRestoreFileVersionAPI(t *testing.T) {
 		t.Fatal("restore unexpectedly published", published, err)
 	}
 	res = request(h, "GET", endpoint, "", testToken, "", "")
-	if res.Code != 200 || res.Body.String() != "old content" {
+	if res.Code != 200 || res.Body.String() != "%PDF-old content" {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	files, err := os.ReadDir(path)
@@ -123,11 +123,11 @@ func TestDocumentDuplicatePolicyAPI(t *testing.T) {
 	}
 	first := "/v1/items/" + a.ID + "/content"
 	second := "/v1/items/" + b.ID + "/content"
-	res := request(h, "PUT", first, "same bytes", testToken, `"1"`, "text/plain")
+	res := request(h, "PUT", first, "%PDF-same bytes", testToken, `"1"`, "text/plain")
 	if res.Code != 201 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	res = request(h, "PUT", second, "same bytes", testToken, `"1"`, "text/plain")
+	res = request(h, "PUT", second, "%PDF-same bytes", testToken, `"1"`, "text/plain")
 	var upload struct {
 		Duplicates []dms.DuplicateDocument `json:"duplicates"`
 	}
@@ -138,7 +138,7 @@ func TestDocumentDuplicatePolicyAPI(t *testing.T) {
 	if res.Code != 200 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	res = request(h, "PUT", second, "same bytes", testToken, `"2"`, "text/plain")
+	res = request(h, "PUT", second, "%PDF-same bytes", testToken, `"2"`, "text/plain")
 	if res.Code != 409 || !strings.Contains(res.Body.String(), `"code":"duplicate_file"`) {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -146,12 +146,12 @@ func TestDocumentDuplicatePolicyAPI(t *testing.T) {
 	if err != nil || len(files) != 2 {
 		t.Fatal("rejected duplicate left an object", len(files), err)
 	}
-	res = request(h, "PUT", second, "new bytes", testToken, `"2"`, "text/plain")
+	res = request(h, "PUT", second, "%PDF-new bytes", testToken, `"2"`, "text/plain")
 	if res.Code != 201 {
 		t.Fatal("failed upload consumed version", res.Code, res.Body.String())
 	}
 	// Historical bytes in B no longer block a replacement of A by itself.
-	res = request(h, "PUT", first, "same bytes", testToken, `"2"`, "text/plain")
+	res = request(h, "PUT", first, "%PDF-same bytes", testToken, `"2"`, "text/plain")
 	if res.Code != 201 {
 		t.Fatal("self/historical duplicate", res.Code, res.Body.String())
 	}

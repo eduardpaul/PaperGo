@@ -27,7 +27,6 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P2 · ID-02 · Missing:** Token consumption covers a different role from acting as the application's authorization server.
 - **P2 · ID-07 · Missing:** Third-party OAuth client onboarding is unavailable.
 - **P2 · LST-29 · Drift:** Rights and duplicate-add behavior align. Go requires a delete ETag while .NET removes by edge ID without one. Relationship events are tracked as LST-44.
-- **P2 · DOC-03 · Drift:** Spoofed extensions/media types and arbitrary binary files have different acceptance behavior.
 - **P2 · DOC-09 · Missing:** Users must edit documents outside the app; server page manipulation is unavailable.
 - **P2 · DOC-11 · Partial:** Per-file language hints exist; library OCR defaults/inheritance and multilingual processing are absent.
 - **P2 · DOC-12 · Missing:** A human review of a generated replacement cannot be implemented with the same lifecycle.

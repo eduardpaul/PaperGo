@@ -22,7 +22,7 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	s, w, _ := fixture(t)
 	source := create(t, s, w.ID, "library", "Source", nil)
 	item := create(t, s, source.ID, "item", "File", nil)
-	if _, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "bytes", Filename: "file", ContentType: "text/plain", Size: 5, SHA256: emptySHA256}); err != nil {
+	if _, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "bytes", Filename: "file", ContentType: "application/pdf", Size: 5, SHA256: emptySHA256}); err != nil {
 		t.Fatal(err)
 	}
 	item = latest(t, s, item.ID)

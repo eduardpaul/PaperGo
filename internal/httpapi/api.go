@@ -300,6 +300,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(412, "precondition_failed", "resource changed; read its current ETag before retrying")
 	case errors.Is(err, dms.ErrConflict) || identity.IsConstraint(err):
 		problem(409, "conflict", "resource conflicts with existing state")
+	case errors.Is(err, storage.ErrUnsupportedFile):
+		a.problem(w, r, 415, "unsupported_file_type", err.Error())
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &max):
 		problem(413, "payload_too_large", "request body exceeds size limit")
 	case errors.Is(err, context.DeadlineExceeded) && errors.Is(r.Context().Err(), context.DeadlineExceeded):
@@ -588,7 +590,7 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filename := r.Header.Get("X-Filename")
-	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	_, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || filename == "" {
 		a.problem(w, r, 400, "invalid_upload", "Content-Type and X-Filename are required")
 		return
@@ -598,12 +600,12 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUpload)
-	object, err := a.Storage.Put(r.Context(), transfer.Reader(r.Body, w), a.MaxUpload)
+	object, detected, err := storage.PutDocument(r.Context(), a.Storage, transfer.Reader(r.Body, w), a.MaxUpload)
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	out, err := a.DMS.AttachBlob(r.Context(), subject(r), r.PathValue("id"), version, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256, Languages: strings.TrimSpace(r.Header.Get("X-OCR-Languages"))})
+	out, err := a.DMS.AttachBlob(r.Context(), subject(r), r.PathValue("id"), version, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: detected, Size: object.Size, SHA256: object.SHA256, Languages: strings.TrimSpace(r.Header.Get("X-OCR-Languages"))})
 	if err != nil {
 		if cleanupErr := a.Storage.Delete(context.Background(), object.Key); cleanupErr != nil {
 			a.Logger.Error("orphan cleanup failed", "object_key", object.Key, "error", cleanupErr)

@@ -84,7 +84,7 @@ func TestDocumentMultipartCreateAtomicMetadataAndContent(t *testing.T) {
 	endpoint := "/v1/resources/" + lib.ID + "/documents"
 	// Metadata may follow the file; no item is created until the full multipart
 	// body has been parsed and validated.
-	res := documentRequest(t, h, endpoint, documentPart{"file", `C:\inbox\invoice.txt`, "invoice bytes"}, documentPart{"metadata", "", metadata})
+	res := documentRequest(t, h, endpoint, documentPart{"file", `C:\inbox\invoice.txt`, "%PDF-invoice bytes"}, documentPart{"metadata", "", metadata})
 	var result struct {
 		Item       ent.Resource            `json:"item"`
 		File       ent.Blob                `json:"file"`
@@ -100,12 +100,12 @@ func TestDocumentMultipartCreateAtomicMetadataAndContent(t *testing.T) {
 		t.Fatal("metadata-only intermediate revision", n, err)
 	}
 	res = request(h, "GET", "/v1/items/"+result.Item.ID+"/content", "", testToken, "", "")
-	if res.Code != 200 || res.Body.String() != "invoice bytes" {
+	if res.Code != 200 || res.Body.String() != "%PDF-invoice bytes" {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	// A second multipart upload reports the same warnings as replacement.
 	metadata = strings.Replace(metadata, `"Invoice"`, `"Copy"`, 1)
-	res = documentRequest(t, h, endpoint, documentPart{"metadata", "", metadata}, documentPart{"file", "copy.txt", "invoice bytes"})
+	res = documentRequest(t, h, endpoint, documentPart{"metadata", "", metadata}, documentPart{"file", "copy.txt", "%PDF-invoice bytes"})
 	if res.Code != 201 || json.Unmarshal(res.Body.Bytes(), &result) != nil || len(result.Duplicates) != 1 {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -127,7 +127,7 @@ func TestDocumentMultipartFailuresLeaveNoItemOrBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	endpoint := "/v1/resources/" + lib.ID + "/documents"
-	file := documentPart{"file", "file.txt", "bytes"}
+	file := documentPart{"file", "file.txt", "%PDF-bytes"}
 	valid := documentPart{"metadata", "", `{"values":{"required":"yes"}}`}
 	before, err := s.Client.Resource.Query().Count(ctx)
 	if err != nil {
@@ -170,7 +170,7 @@ func TestDocumentMultipartFailuresLeaveNoItemOrBytes(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	// Different names do not bypass byte identity under Block policy.
-	res = documentRequest(t, h, endpoint, documentPart{"file", "another.txt", "bytes"}, valid)
+	res = documentRequest(t, h, endpoint, documentPart{"file", "another.txt", "%PDF-bytes"}, valid)
 	if res.Code != 409 {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -190,7 +190,7 @@ func TestDocumentMultipartAuthorizationBeforeReading(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := documentRequest(t, h, "/v1/resources/"+w.ID+"/documents", documentPart{"file", "f", "bytes"})
+	res := documentRequest(t, h, "/v1/resources/"+w.ID+"/documents", documentPart{"file", "f", "%PDF-bytes"})
 	if res.Code != 422 {
 		t.Fatal(res.Code, res.Body.String())
 	}
@@ -232,7 +232,7 @@ func TestDocumentMultipartDatabaseFailureRollsBackAndCleansStorage(t *testing.T)
 	if _, err = s.Client.ExecContext(ctx, `CREATE TRIGGER reject_document_blob BEFORE INSERT ON blobs BEGIN SELECT RAISE(ABORT,'injected blob failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	res := documentRequest(t, h, "/v1/resources/"+lib.ID+"/documents", documentPart{"file", "doc.txt", "bytes"})
+	res := documentRequest(t, h, "/v1/resources/"+lib.ID+"/documents", documentPart{"file", "doc.txt", "%PDF-bytes"})
 	if res.Code != 409 {
 		t.Fatal(res.Code, res.Body.String())
 	}

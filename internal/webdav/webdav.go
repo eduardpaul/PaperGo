@@ -224,6 +224,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, errTooManyLocks):
 		w.Header().Set("Retry-After", "60")
 		h.status(w, http.StatusServiceUnavailable, "too many active locks")
+	case errors.Is(err, storage.ErrUnsupportedFile):
+		h.status(w, http.StatusUnsupportedMediaType, err.Error())
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &tooLarge):
 		h.status(w, http.StatusRequestEntityTooLarge, "file exceeds the upload limit")
 	case errors.Is(err, context.DeadlineExceeded) && errors.Is(r.Context().Err(), context.DeadlineExceeded):
