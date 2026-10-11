@@ -4,11 +4,52 @@ import (
 	"errors"
 	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
+	"papergo/ent/grant"
 	"papergo/ent/resource"
 	"papergo/internal/identity"
 	"sync"
 	"testing"
 )
+
+func TestHomeIdentityAndMembershipDatabaseConstraints(t *testing.T) {
+	s, w, _ := fixture(t)
+	ctx := t.Context()
+	home, err := s.Home(ctx, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Client.Resource.UpdateOneID(home.WorkspaceID).SetPersonalOwnerID("bob").Exec(ctx); err == nil {
+		t.Fatal("owner identity changed")
+	}
+	if err = s.Client.Resource.UpdateOneID(home.InboxLibraryID).ClearSystemKey().Exec(ctx); err == nil {
+		t.Fatal("system identity cleared")
+	}
+	if err = s.Client.Resource.UpdateOneID(home.InboxLibraryID).SetParentID(w.ID).SetWorkspaceID(w.ID).Exec(ctx); err == nil {
+		t.Fatal("system library moved out of Home")
+	}
+	if err = s.Client.Grant.Create().SetResourceID(home.WorkspaceID).SetPrincipalType(grant.PrincipalTypeUser).SetPrincipalID("bob").SetAction(grant.ActionManage).SetEffect(grant.EffectAllow).Exec(ctx); err == nil {
+		t.Fatal("extra Home owner inserted")
+	}
+	owner, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(home.WorkspaceID)).Only(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Client.Grant.UpdateOne(owner).SetAction(grant.ActionRead).Exec(ctx); err == nil {
+		t.Fatal("Home owner demoted")
+	}
+	if err = s.Client.Grant.DeleteOne(owner).Exec(ctx); err == nil {
+		t.Fatal("Home owner removed")
+	}
+	if err = s.Client.Resource.Create().SetWorkspaceID(w.ID).SetParentID(w.ID).SetKind(resource.KindLibrary).SetName("Wrong workspace").SetSystemKey("home.inbox").Exec(ctx); err == nil {
+		t.Fatal("system library outside Home accepted")
+	}
+	if err = s.Client.Resource.Create().SetID("00000000-0000-4000-8000-000000000099").SetWorkspaceID("00000000-0000-4000-8000-000000000099").SetInheritPermissions(false).SetKind(resource.KindWorkspace).SetName("Another Home").SetPersonalOwnerID("alice").Exec(ctx); err == nil {
+		t.Fatal("second Home accepted")
+	}
+	if err = s.Client.GroupInbox.Create().SetGroupID("missing group").SetLibraryID(home.InboxLibraryID).Exec(ctx); err == nil {
+		t.Fatal("unknown group accepted")
+	}
+}
 
 func TestHomeConcurrentProvisioningAndProtection(t *testing.T) {
 	s, _, _ := fixture(t)

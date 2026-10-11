@@ -139,6 +139,10 @@ func (r *Runner) Launch(ctx context.Context) error {
 	if err := dbos.Launch(r.ctx); err != nil {
 		return fmt.Errorf("launch the runner: %w", err)
 	}
+	if err := r.protectRunPayloads(ctx); err != nil {
+		return err
+	}
+	r.dms.RegisterRunPurger(r.purgeHomeRunPayloads)
 	if err := dbos.ApplySchedules(r.ctx, []dbos.ScheduleSpec{
 		{ScheduleName: tickName, Schedule: r.cfg.TickSchedule, Workflow: r.tick},
 		{ScheduleName: purgeName, Schedule: "0 30 3 * * *", Workflow: r.purge},

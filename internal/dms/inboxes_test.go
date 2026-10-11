@@ -2,6 +2,7 @@ package dms
 
 import (
 	"errors"
+	"papergo/ent/groupinbox"
 	"papergo/internal/identity"
 	"testing"
 )
@@ -27,6 +28,23 @@ func TestGroupInboxPermissionsNestedDiscoveryAndCommitChecks(t *testing.T) {
 	if err = d.SetMember(ctx, admin, child.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = s.SetGroupInbox(ctx, "alice", child.ID, GroupInboxInput{LibraryID: lib.ID}); err != nil {
+		t.Fatal(err)
+	}
+	hidden, err := d.SaveGroup(ctx, admin, "", 0, identity.GroupInput{Name: "Hidden"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetMember(ctx, admin, hidden.ID, identity.Principal{Type: "user", ID: "bob"}, false); err != nil {
+		t.Fatal(err)
+	}
+	personal, err := s.Home(ctx, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SetGroupInbox(ctx, "alice", hidden.ID, GroupInboxInput{LibraryID: personal.DocumentsLibraryID}); err != nil {
+		t.Fatal(err)
+	}
 	// Alice owns the library but has no group administration role or membership.
 	if _, err = s.SetGroupInbox(ctx, "alice", parent.ID, GroupInboxInput{LibraryID: lib.ID}); err != nil {
 		t.Fatal(err)
@@ -41,7 +59,7 @@ func TestGroupInboxPermissionsNestedDiscoveryAndCommitChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	inboxes, err := s.Inboxes(ctx, "bob")
-	if err != nil || len(inboxes) != 2 || inboxes[0].Kind != "personal" || *inboxes[1].GroupID != parent.ID {
+	if err != nil || len(inboxes) != 3 || inboxes[0].Kind != "personal" || *inboxes[1].GroupID != child.ID || *inboxes[2].GroupID != parent.ID || inboxes[1].LibraryID != inboxes[2].LibraryID {
 		t.Fatal(inboxes, err)
 	}
 	if _, err = s.InboxUploadDestination(ctx, "bob", parent.ID); !errors.Is(err, ErrForbidden) {
@@ -90,7 +108,7 @@ func TestGroupInboxPermissionsNestedDiscoveryAndCommitChecks(t *testing.T) {
 	if err = d.DeleteGroup(ctx, admin, parent.ID, parent.Version); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := s.Client.GroupInbox.Query().Count(ctx); err != nil || n != 0 {
+	if n, err := s.Client.GroupInbox.Query().Where(groupinbox.GroupIDEQ(parent.ID)).Count(ctx); err != nil || n != 0 {
 		t.Fatal("group binding survived deletion", n, err)
 	}
 }

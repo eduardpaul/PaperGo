@@ -190,6 +190,7 @@ func DeleteUserInTx(ctx context.Context, tx *sql.Tx, actor, subject string, purg
 			"DELETE FROM identity_memberships WHERE principal_type='user' AND principal_id=?",
 			"DELETE FROM identity_assignments WHERE principal_type='user' AND principal_id=?",
 			"DELETE FROM identity_preferences WHERE owner_type='user' AND owner_id=?",
+			"DELETE FROM smart_folders WHERE owner_id=?",
 			"DELETE FROM grants WHERE principal_type='user' AND principal_id=?",
 			"DELETE FROM webdav_credentials WHERE subject=?",
 			"DELETE FROM identity_rest_tokens WHERE subject=?",

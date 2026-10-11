@@ -2,9 +2,11 @@ package dms
 
 import (
 	"context"
+	"database/sql"
 	"papergo/ent"
 	"papergo/ent/relationship"
 	"papergo/ent/resource"
+	"papergo/ent/workflowrun"
 	"papergo/internal/identity"
 	"sort"
 	"time"
@@ -30,11 +32,7 @@ func (s *Service) purgePersonalHome(ctx context.Context, actor, subject string) 
 	if err != nil {
 		return err
 	}
-	ids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		ids = append(ids, row.ID)
-	}
-	links, err := s.Client.Relationship.Query().Where(relationship.Or(relationship.SourceIDIn(ids...), relationship.TargetIDIn(ids...))).All(ctx)
+	links, err := s.Client.Relationship.Query().Where(relationship.Or(relationship.HasSourceWith(resource.WorkspaceIDEQ(w.ID)), relationship.HasTargetWith(resource.WorkspaceIDEQ(w.ID)))).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -45,6 +43,20 @@ func (s *Service) purgePersonalHome(ctx context.Context, actor, subject string) 
 	}
 	if _, err = s.tx.ExecContext(ctx, "DELETE FROM relationships WHERE source_id IN (SELECT id FROM resources WHERE workspace_id=?) OR target_id IN (SELECT id FROM resources WHERE workspace_id=?)", w.ID, w.ID); err != nil {
 		return err
+	}
+	runRows, err := s.Client.WorkflowRun.Query().Where(workflowrun.WorkspaceIDEQ(w.ID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, run := range runRows {
+		if err = s.Client.AuditEvent.Create().SetSubject(actor).SetAction("run.purge").SetEntityType("workflow_run").SetEntityID(run.ID).SetWorkspaceID(w.ID).SetProperties([]string{}).SetTraceID(s.traceID).SetDetails(map[string]any{}).Exec(ctx); err != nil {
+			return err
+		}
+	}
+	if s.runPurger != nil {
+		if err = s.runPurger(ctx, s.tx, w.ID); err != nil {
+			return err
+		}
 	}
 	// Tombstones release retention and last-owner guards during this transaction.
 	now := time.Now().UTC()
@@ -119,4 +131,10 @@ func (s *Service) purgePersonalHome(ctx context.Context, actor, subject string) 
 	}
 
 	return nil
+}
+
+// RegisterRunPurger attaches the runner's transactional runtime-payload cleanup.
+// Register it before serving requests.
+func (s *Service) RegisterRunPurger(purge func(context.Context, *sql.Tx, string) error) {
+	s.runPurger = purge
 }

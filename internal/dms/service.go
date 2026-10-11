@@ -34,6 +34,7 @@ type Service struct {
 	auditProperties     map[string]map[string]bool
 	traceID             string
 	operationHandlers   map[string]OperationHandler
+	runPurger           func(context.Context, *sql.Tx, string) error
 }
 
 // NewService serves the PaperGo database db.
@@ -95,7 +96,7 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
 	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
-	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers}
+	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, runPurger: s.runPurger}
 	t.traceID = requestmeta.Trace(ctx)
 	t.captureAuditProperties()
 	if err := fn(t); err != nil {
