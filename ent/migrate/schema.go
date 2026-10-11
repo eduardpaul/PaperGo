@@ -42,7 +42,7 @@ var (
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "version", Type: field.TypeInt},
-		{Name: "object_key", Type: field.TypeString, Unique: true},
+		{Name: "object_key", Type: field.TypeString},
 		{Name: "filename", Type: field.TypeString, Size: 255},
 		{Name: "content_type", Type: field.TypeString, Size: 255},
 		{Name: "size", Type: field.TypeInt64},
@@ -67,6 +67,11 @@ var (
 				Name:    "blob_item_id_version",
 				Unique:  true,
 				Columns: []*schema.Column{BlobsColumns[8], BlobsColumns[2]},
+			},
+			{
+				Name:    "blob_object_key",
+				Unique:  false,
+				Columns: []*schema.Column{BlobsColumns[3]},
 			},
 		},
 	}

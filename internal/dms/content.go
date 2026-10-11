@@ -186,6 +186,10 @@ func (s *Service) AttachBlob(ctx context.Context, subject, id string, version in
 
 // attachBlob records a new content revision pinning the blob, inside a write transaction.
 func (s *Service) attachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (*ent.Blob, error) {
+	return s.writeBlob(ctx, subject, id, version, in, "blob.attach", nil)
+}
+
+func (s *Service) writeBlob(ctx context.Context, subject, id string, version int, in BlobInput, action string, sourceVersion *int) (*ent.Blob, error) {
 	if e := s.CanUpload(ctx, subject, id, version); e != nil {
 		return nil, e
 	}
@@ -211,7 +215,31 @@ func (s *Service) attachBlob(ctx context.Context, subject, id string, version in
 	if _, e = s.recordRevision(ctx, subject, r, &out.ID, true); e != nil {
 		return nil, e
 	}
-	return out, s.audit(ctx, subject, "blob.attach", r, map[string]any{"blob_id": out.ID, "size": in.Size, "sha256": in.SHA256})
+	details := map[string]any{"blob_id": out.ID, "size": in.Size, "sha256": in.SHA256}
+	if sourceVersion != nil {
+		details["source_version"] = *sourceVersion
+	}
+	return out, s.audit(ctx, subject, action, r, details)
+}
+
+// RestoreBlob creates a new file version from immutable earlier content, keeping
+// the current metadata and applying the collection's publication rules.
+func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, version int) (out *ent.Blob, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		if e := t.CanUpload(ctx, subject, id, version); e != nil {
+			return e
+		}
+		source, e := t.Client.Blob.Query().Where(blob.ItemIDEQ(id), blob.VersionEQ(number)).Only(ctx)
+		if ent.IsNotFound(e) {
+			return ErrNotFound
+		}
+		if e != nil {
+			return e
+		}
+		out, e = t.writeBlob(ctx, subject, id, version, BlobInput{ObjectKey: source.ObjectKey, Filename: source.Filename, ContentType: source.ContentType, Size: source.Size, SHA256: source.Sha256}, "blob.restore", &number)
+		return e
+	})
+	return
 }
 
 // createBlob stores the metadata of the item's next blob version.

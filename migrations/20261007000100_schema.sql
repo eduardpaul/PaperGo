@@ -199,7 +199,7 @@ CREATE VIRTUAL TABLE item_surface_search USING fts5(id UNINDEXED,name,tags,paylo
 -- Indexes
 CREATE INDEX `auditevent_workspace_id_created_at` ON `audit_events` (`workspace_id`, `created_at`);
 CREATE INDEX `auditevent_resource_id_created_at` ON `audit_events` (`resource_id`, `created_at`);
-CREATE UNIQUE INDEX `blobs_object_key_key` ON `blobs` (`object_key`);
+CREATE INDEX `blob_object_key` ON `blobs` (`object_key`);
 CREATE UNIQUE INDEX `blob_item_id_version` ON `blobs` (`item_id`, `version`);
 CREATE INDEX fielddefinition_key ON field_definitions(key);
 CREATE UNIQUE INDEX `grant_resource_id_principal_type_principal_id_action` ON `grants` (`resource_id`, `principal_type`, `principal_id`, `action`);
@@ -403,6 +403,9 @@ CREATE TRIGGER publication_item_validate BEFORE INSERT ON publications BEGIN
     THEN RAISE(ABORT,'publication requires item') END;
 END;
 CREATE TRIGGER blob_item_validate BEFORE INSERT ON blobs BEGIN
+  SELECT CASE WHEN EXISTS (SELECT 1 FROM blobs WHERE object_key=new.object_key
+    AND (item_id<>new.item_id OR sha256<>new.sha256 OR size<>new.size OR content_type<>new.content_type))
+    THEN RAISE(ABORT,'shared blob object must belong to the same item and content') END;
   SELECT CASE WHEN NOT EXISTS (
     SELECT 1 FROM resources i JOIN resources c ON c.id=i.container_id
     WHERE i.id=new.item_id AND i.kind='item' AND c.kind='library'

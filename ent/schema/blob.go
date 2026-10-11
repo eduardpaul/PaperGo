@@ -15,7 +15,7 @@ func (Blob) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("item_id").NotEmpty().Immutable().MaxLen(36),
 		field.Int("version").Positive().Immutable(),
-		field.String("object_key").NotEmpty().Unique().Immutable(),
+		field.String("object_key").NotEmpty().Immutable(),
 		field.String("filename").NotEmpty().MaxLen(255).Immutable(),
 		field.String("content_type").NotEmpty().MaxLen(255).Immutable(),
 		field.Int64("size").NonNegative().Immutable(),
@@ -25,4 +25,6 @@ func (Blob) Fields() []ent.Field {
 func (Blob) Edges() []ent.Edge {
 	return []ent.Edge{edge.From("item", Resource.Type).Ref("blobs").Field("item_id").Unique().Required().Immutable()}
 }
-func (Blob) Indexes() []ent.Index { return []ent.Index{index.Fields("item_id", "version").Unique()} }
+func (Blob) Indexes() []ent.Index {
+	return []ent.Index{index.Fields("item_id", "version").Unique(), index.Fields("object_key")}
+}

@@ -82,6 +82,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("GET /v1/items/{id}/schema", a.itemSchema)
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)
+	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
 	api.HandleFunc("GET /v1/workspaces/{id}/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
 	api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
