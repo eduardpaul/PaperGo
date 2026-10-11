@@ -23,11 +23,11 @@ func TestWebDAVResolvesGroupACLAndRevokedModuleScopes(t *testing.T) {
 	if _, err = e.s.SetPermissions(ctx, "alice", lib.ID, lib.Version, dms.Permissions{Grants: []dms.Permission{{PrincipalType: "group", PrincipalID: g.ID, Action: "write"}}}); err != nil {
 		t.Fatal(err)
 	}
-	e.expect(e.do("PUT", e.root+"/group.txt", "bob-token", "Created by group"), 201)
+	e.expect(e.do("PUT", e.root+"/group.txt", "bob-token", "%PDF-Created by group"), 201)
 	if err = d.SetAssignment(ctx, "alice", identity.MemberRole, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}
-	role, err := d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Library reader", Scopes: []string{"list.read"}})
+	role, err := d.SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Library reader", Scopes: []string{"list.read", "document.read"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestWebDAVResolvesGroupACLAndRevokedModuleScopes(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.expect(e.do("GET", e.root+"/group.txt", "bob-token", ""), 200)
-	e.expect(e.do("PUT", e.root+"/blocked.txt", "bob-token", "Denied by scope"), 403)
+	e.expect(e.do("PUT", e.root+"/blocked.txt", "bob-token", "%PDF-Denied by scope"), 403)
 	if err = d.SetMember(ctx, "alice", g.ID, identity.Principal{Type: "user", ID: "bob"}, true); err != nil {
 		t.Fatal(err)
 	}

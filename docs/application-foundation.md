@@ -15,7 +15,7 @@ Use PUT `/v1/resources/{id}/permissions` for collections and content with the re
 - Reset to inherit: `{"inherit":true,"grants":[]}`. Local grants are removed.
 - Inherited resources cannot contain local grants. Changes that remove the caller's manage access roll back.
 
-GET permissions requires manage access and returns `inherit`, local `grants`, the effective `scope_id`, and `effective_grants`. Read, read_draft, write, publish, and manage retain their existing capability implications. Current item and file reads select published content for ordinary readers. Metadata history list/get requires ordinary item read and list.read scope and includes all retained revisions, including unpublished revisions, with frozen schemas. Current head reads require read_draft, and restoring a revision requires write. Collections configure `versioning` (`off` or `major`) and `max_versions` (1–500, default 50) on create/PATCH. Lists default off and libraries major. Off stops new history entries; retained entries remain readable/restorable. Each recorded change trims the item to its configured count. Retention governs exposed history, while immutable content snapshots remain for durable events, publishing and audit.
+GET permissions requires manage access and returns `inherit`, local `grants`, the effective `scope_id`, and `effective_grants`. Read, read_draft, write, publish, and manage retain their existing capability implications. Current item and file reads select published content for ordinary readers. Metadata history list/get requires ordinary item read and list.read scope and includes all retained revisions, including unpublished revisions, with frozen schemas. Current head reads require read_draft, and restoring a revision requires write. Collections configure `versioning` (`off` or `major`) and `max_versions` (1–500, default 50) on create/PATCH. Lists default off and libraries major. Off stops new history entries; retained entries remain readable/restorable. Each recorded change trims the item to its configured count. Retention removes unused metadata snapshots after workflow event dispatch. Head, published and retained-history revisions remain; queued events temporarily retain their revision and its predecessor for term-change triggers. Publication audit records retain independent immutable snapshots.
 
 Principals are `user`, `group`, `workspace_visitor`, `workspace_member` or `workspace_owner`. Workspace role principals identify the resource's workspace; owner grants must allow manage. Copying the workspace scope preserves its three role principals. Resetting inheritance restores the current parent scope and leaves nested exclusive scopes intact. [Module scopes](identity.md) apply independently: `list.read` permits list access and permission management, while `list.write` permits item/folder mutations and publishing. Content-type/schema curation requires `contentType.manage`; organization taxonomy operations require `taxonomy.read` or `taxonomy.manage`, independently of workspace membership and resource ACLs. REST, WebDAV and transactional workflow item actions resolve persisted memberships and roles.
 
@@ -44,7 +44,7 @@ Field creation retains key, label, type, required, choices, indexed, and decimal
 
 Options include description, default_value (a JSON value), max_length, minimum/maximum (exact numeric strings), multiple, lookup_container_id, term_set_id, currency_code, and unique. Only choice/person/lookup/term/keywords fields can have multiple values; arrays contain at most 100 non-null members and duplicate normalized values are removed. Required arrays must remain nonempty.
 
-Text/email values default to 255 UTF-16 code units, URLs to 2048 and notes to 100000. `options.max_length` permits 1..4000 for text/email/URL and 1..1000000 for notes. Non-BMP characters count as two units. The encoded field-value budget is 8 MiB and JSON request-body budget is 16 MiB, allowing a full-size note. Email fields accept a plain address; URL fields accept an absolute HTTP(S) URL, including credentials and case-insensitive schemes; date fields use YYYY-MM-DD; datetimes normalize to UTC. Defaults fill absent fields when creating an item. Item PATCH merges supplied fields into current values; omitted keys remain, and null removes an optional field without reapplying its default. Defaults are validated before saving field definitions. Required fields can be added to populated collections when they have a valid default, without rewriting old revisions.
+Text/email values default to 255 UTF-16 code units, URLs to 2048 and notes to 100000. `options.max_length` permits 1..4000 for text/email/URL and 1..1000000 for notes. Non-BMP characters count as two units. Multi-value arrays normalize and deduplicate every member without a fixed member-count cap. Choice definitions accept unique, nonempty values without a fixed entry-count cap. The encoded field-value budget is 8 MiB and JSON request-body budget is 16 MiB, allowing a full-size note. Email fields accept a plain address; URL fields accept an absolute HTTP(S) URL, including credentials and case-insensitive schemes; date fields use YYYY-MM-DD; datetimes normalize to UTC. Defaults fill absent fields when creating an item. Item PATCH merges supplied fields into current values; omitted keys remain, and null removes an optional field without reapplying its default. Defaults are validated before saving field definitions. Required fields can be added to populated collections when they have a valid default, without rewriting old revisions.
 
 Integer and decimal bounds, defaults, history, and indexed comparisons preserve exact precision. Decimal content is a canonical fixed-scale string; its index is signed 64-bit scaled units. `number` and `currency` use exact JSON decimals with a 96-bit coefficient and scale 0..28, ranging from -79228162514264337593543950335 to 79228162514264337593543950335. Excess fractional precision rounds to nearest, with midpoint ties to even; very small values round to zero. Currency fields require `options.currency_code` containing three uppercase letters (for example EUR). Numeric bounds, filters, sorting, grouping and pagination use exact values. SQLite indexes store a fixed-width numeric ordering key without conversion to floating point.
 
@@ -78,7 +78,7 @@ Content types and field definitions form an organization catalog. Types referenc
 
 | Method | Route | Concurrency |
 | --- | --- | --- |
-| GET | /v1/content-types/audit | Catalog curation audit; contentType.manage |
+| GET | /v1/audit | Organization audit feed; audit.read |
 | GET / POST | /v1/content-types | Organization catalog; creation needs no collection ETag |
 | GET / PUT | /v1/content-types/{id} | Replacement requires content type If-Match |
 | GET / POST | /v1/fields | Organization field catalog |
@@ -196,7 +196,7 @@ Run `go test ./internal/dms -run '^$' -bench BenchmarkItemUpdates -benchmem` to 
 | GET / POST | /v1/keywords | Suggest keywords, or get or add one |
 | GET | /v1/keywords/popular | Most used keywords |
 | POST | /v1/keywords/{id}/promote | Promote a keyword into a managed set |
-| GET | /v1/taxonomy/audit | Organization curation audit (taxonomy.manage) |
+
 | GET | /v1/taxonomy/export | Export the taxonomy as a package |
 | POST | /v1/taxonomy/import | Import a taxonomy package |
 
@@ -214,7 +214,7 @@ Listing `GET /v1/term-sets/{id}/terms` returns the root terms, or the children o
 
 **Packages.** `GET /v1/taxonomy/export` returns the taxonomy by name, for setting it up in another organization deployment: `groups` (the system group marked `system`) with their `sets` (key, name, description, `is_open`) and nested `terms` (name, description, color, sort order, labels, synonyms, deprecation, `available_as_keyword`, `children`). Merged terms are left out; IDs never appear. `POST /v1/taxonomy/import` (manage) is additive and atomic: groups match by name (the system group by role), sets by key and terms by name under the same parent; what exists stays as it is and what is missing is created. It reports `groups_created`, `sets_created` and `terms_created`. Smart folder packages refer to terms by set key and path, so importing the taxonomy first makes them portable.
 
-Curation, closed-set creation, imports, popularity counts and audit reads require `taxonomy.manage`; reads and open-set contributions require `taxonomy.read`. Workspace membership and resource ACLs do not govern the term store. `GET /v1/taxonomy/audit` lists organization taxonomy mutations. Popularity counts span indexed content across all live workspaces. PUT, move, merge, promote and DELETE require the entity's ETag. Labels resolve from the current taxonomy; term definitions themselves are not immutable content-history snapshots. Free tags are separate plain-text labels.
+Curation, closed-set creation, imports and popularity counts require `taxonomy.manage`; reads and open-set contributions require `taxonomy.read`. Workspace membership and resource ACLs do not govern the term store. `GET /v1/audit` requires `audit.read` and lists organization identity, configuration and content mutations newest first. Filter by actor, entity type/ID, workspace and inclusive `from` / exclusive `to` dates. Changed property names and trace IDs support investigation without retaining prior values. Popularity counts span indexed content across all live workspaces. PUT, move, merge, promote and DELETE require the entity's ETag. Labels resolve from the current taxonomy; term definitions themselves are not immutable content-history snapshots. Free tags are separate plain-text labels.
 
 ## Typed relationships
 
@@ -226,7 +226,7 @@ Curation, closed-set creation, imports, popularity counts and audit reads requir
 
 A relationship type's ID is a term ID in the organization Relationships/Types vocabulary (`relationship_types`). Its name, localized labels, synonyms and deprecation are curated through taxonomy. POST accepts `name` (label or term ID), inverse_label, directed, optional max_incoming/max_outgoing (1..1000) and attributes. Reads require `list.read` and `taxonomy.read`; ensure requires `list.write` and `taxonomy.read`. Unknown labels contribute terms to the open set. Attributes use unindexed scalar field definitions, including defaults and validation. Reference/multiple attributes are rejected. An empty attribute schema permits no custom keys.
 
-Directed=false creates symmetric links: endpoints are stored in canonical order, reverse retries return the existing edge, and incoming/outgoing queries include either endpoint. Symmetric types cannot have directional cardinality or inverse labels.
+Directed=false creates symmetric links: endpoints are stored in canonical order, reverse retries return the existing edge, and an omitted direction or `both` includes either endpoint. Explicit `incoming`/`outgoing` filters select directed edges only. Symmetric types cannot have directional cardinality or inverse labels.
 
 POST an item's existing relationships endpoint with:
 
@@ -236,7 +236,9 @@ POST an item's existing relationships endpoint with:
 
 Link creation resolves a term ID, name, localized label or synonym and ensures a new label when allowed. New predicates default to symmetric; optional `directed` must match an existing policy. Typed attributes are validated and cardinality allocation is transactional. Ensuring an existing policy is a no-op when semantics match and rejects changed behavior. Taxonomy term renames retain identity. Compatible term merges retarget edges and consolidate duplicates; conflicting attributes or semantics and used cardinality-bound predicates reject the entire merge.
 
-Every relationship requires a type. Links stay within one workspace. Creating, editing or removing an edge requires write permission on both endpoints. Either endpoint may edit or remove directed and symmetric edges. Repeating creation returns the existing edge without changing its attributes, version or audit history; the retry succeeds even when a cardinality limit is full. Query visibility still requires both endpoints to have authorized visible content.
+Per-item relationship pages include a `related_item` with the peer’s selected content, workspace name and collection location. `GET /v1/items/{id}/relationships/{linkID}` reads one incident edge and returns its ETag. `GET /v1/workspaces/{id}/relationships` lists edges touching that workspace with both located endpoints. It accepts `type`, `directed`, `$top`, `$skiptoken` and `$filter`; all filters and paging run after checking visibility of both endpoints. `$filter` supports `attributes/key`, `id`, `directed`, scalar literals, `eq/ne`, numeric `gt/ge/lt/le`, `and/or/not` and parentheses. For example, `attributes/amount gt 100`. Filters are limited to 4096 bytes, 32 nodes and depth 6; nested attributes and functions are rejected.
+
+Links may connect items across workspaces within this deployment. `type` is optional; untyped links default to symmetric, while `directed: true` creates distinct ordered edges. Untyped attributes allow up to 64 keys matching `[A-Za-z_][A-Za-z0-9_]*` (maximum 128 characters) and 16 KiB of JSON. Values must be strings, finite numbers or booleans; null removes a key. Typed links use their predicate policy and validated field schema. Creating, editing or removing an edge requires write permission on both endpoints. Either endpoint may edit or remove directed and symmetric edges. Repeating creation returns the existing edge without changing its attributes, version or audit history; the retry succeeds even when a cardinality limit is full. Query visibility still requires both endpoints to have authorized visible content.
 
 Creation returns an edge ETag. PATCH and DELETE require the edge If-Match. PATCH merges supplied metadata keys; omitted keys remain, and null removes a key. The resulting metadata still satisfies the relationship type. Edge versions are independent of item lock versions. Edges remain live and are not frozen by item publication.
 
@@ -249,3 +251,33 @@ Tests cover foreign-key/integrity checks, exact defaults and filters, schema pai
 
 Queries, grouping and saved views accept $created_at, $created_by, $modified_at, and $modified_by alongside $id, $name and $tags. Modification time and actor describe the selected immutable content revision: readers cannot infer draft actors or times. Creation metadata describes item creation. Times accept RFC3339 values and normalize to UTC with nanosecond precision. Dedicated collection/surface indexes cover these metadata fields; no custom field configuration is needed.
 
+
+## Background operations
+
+Operations dispatch through handlers registered at startup. Each handler validates its payload, declares its module scope, and commits bounded batches with durable progress or a final result. Field indexing and filtered bulk edits use this registry. Other handlers can follow the same contract. Queued personal-token work retains its granted scopes and fails if the credential is revoked or expires; current account, role and resource permissions are rechecked between batches. Index maintenance completes the configuration change that scheduled it.
+
+`GET /v1/operations/{id}` returns status, progress, result, trace ID and start/completion timestamps. Collection index jobs are visible to collection readers; other operations belong to their initiator, and organization jobs require `organization.manage`. Terminal records and results expire after 30 days without an update. Hourly maintenance collects these records and expired delta data; pending operations remain available for restart recovery.
+
+## Live API updates
+
+`GET /v1/events` streams server-sent events using the usual bearer authentication. `item`, `operation` and `run` frames contain the current authorized view; operation payloads and run inputs/results are private. Item removal frames contain only an ID already delivered on that connection. Changes to access emit a `resync` frame without entity details. Clients reconcile item state with the delta API and refresh operation/run lists after `connected` or `resync`.
+
+Each frame carries a durable numeric `id`. Reconnect with `Last-Event-ID` to replay retained changes; the journal retains seven days and an expired cursor returns 410. A new connection starts at the current position. Repeated changes to the same entity may be coalesced, so this stream is a notification API, not an audit feed. Keepalive frames advance the cursor even when intervening changes are hidden by permissions.
+
+Streams use a separate admission pool (four per user, 64 per process), send keepalives and close after 30 minutes for reconnect. Inactive accounts and revoked or expired personal REST tokens receive `reauthenticate` and disconnect. Live run status is reconciled by the workflow dispatcher.
+
+## Core configuration and content packages
+
+`POST /v1/portability/exports` starts an organization-wide export. Poll the operation in `Location`; a successful result contains `package_url`, size, SHA256 and expiry. Only its starter with `organization.manage` can download the ZIP, for seven days. Exported objects stay referenced during that period and are then collected.
+
+The package contains the organization profile, users, groups, nested memberships, roles, assignments and preferences; taxonomy and relationship policies; field/content-type catalogs, schemas and templates; workspaces, collections, folders, items and permissions; views, smart folders and workflow definitions/triggers; retained revisions, history, publication snapshots and all file versions. Physical file bytes appear once. Credential secrets, audit records, delta/live cursors and job/run execution state belong to the installation. Deployment backup/restore preserves that installation state.
+
+Send the ZIP as `application/zip` to `POST /v1/portability/imports?dry_run=true` to validate it without applying changes, then import with `dry_run=false`. Both require `organization.manage` and run as durable operations. Imports require an instance with no resources, preserve entity IDs, reconcile built-ins and the initial administrator, and reject other conflicts. They retain the importing administrator and use the same database constraints for the plan and application. All metadata applies atomically; file objects are checksummed and copied to local storage, and typed search indexes are rebuilt. Failed or dry-run imports leave no applied configuration/content. Unreferenced staged objects are collected.
+
+Limits are 100000 core records, a 64 MiB manifest and 4 GiB compressed package/uncompressed content. ZIP entries must exactly match the manifest; duplicate entries, unexpected paths, links, unsupported contracts and checksum/size mismatches are rejected. Packages use the current PaperGo core contract.
+
+## Supported document files
+
+REST raw uploads, multipart creation, WebDAV PUT and content-package imports accept PDF (`%PDF-`), TIFF (both byte orders), JPEG, PNG and WebP (RIFF/WEBP). The first 12 bytes decide the canonical stored media type, independently of the filename and declared MIME type. Empty, unsupported or truncated signatures return 415. Size limits apply while streaming, before signature acceptance, and rejected uploads create no metadata/revision and remove their temporary bytes. WebDAV LOCK can create an empty item with no blob; its later PUT must contain a supported file.
+
+Relationship DELETE identifies the incident edge by ID and requires write access to both endpoints without an ETag precondition. Relationship PATCH continues to require the current edge ETag.

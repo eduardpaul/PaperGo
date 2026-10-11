@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
+	"papergo/internal/identity"
 	"papergo/internal/storage"
 	"strings"
 )
@@ -70,6 +71,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		scope = "list.read"
 	}
 	if err = h.DMS.RequireScope(r.Context(), subject, scope); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	documentScope := "document.write"
+	if scope == "list.read" {
+		documentScope = "document.read"
+	}
+	if err = h.DMS.RequireScope(r.Context(), subject, documentScope); err != nil {
 		h.fail(w, r, err)
 		return
 	}
@@ -130,6 +139,9 @@ func (h *Handler) authenticate(r *http.Request) (string, error) {
 		}
 		if err = h.DMS.Directory().EnsureUser(r.Context(), subject); err != nil {
 			return "", err
+		}
+		if err = identity.RequireActive(r.Context(), h.DMS.Directory().DB, subject); err != nil {
+			return "", dms.ErrForbidden
 		}
 		return subject, nil
 	case strings.EqualFold(scheme, "Basic"):
@@ -212,6 +224,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, errTooManyLocks):
 		w.Header().Set("Retry-After", "60")
 		h.status(w, http.StatusServiceUnavailable, "too many active locks")
+	case errors.Is(err, storage.ErrUnsupportedFile):
+		h.status(w, http.StatusUnsupportedMediaType, err.Error())
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &tooLarge):
 		h.status(w, http.StatusRequestEntityTooLarge, "file exceeds the upload limit")
 	case errors.Is(err, context.DeadlineExceeded) && errors.Is(r.Context().Err(), context.DeadlineExceeded):

@@ -82,6 +82,7 @@ export interface WithLinkItemRequestBuilder extends BaseRequestBuilder<WithLinkI
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -92,6 +93,25 @@ export interface WithLinkItemRequestBuilder extends BaseRequestBuilder<WithLinkI
      */
      delete(body: WithLinkDeleteRequestBody, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<UntypedNode | undefined>;
     /**
+     * GET /v1/items/{id}/relationships/{linkID}
+     * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+     * @returns {Promise<UntypedNode>}
+     * @throws {Problem} error when the service returns a 400 status code
+     * @throws {Problem} error when the service returns a 401 status code
+     * @throws {Problem} error when the service returns a 403 status code
+     * @throws {Problem} error when the service returns a 404 status code
+     * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
+     * @throws {Problem} error when the service returns a 412 status code
+     * @throws {Problem} error when the service returns a 413 status code
+     * @throws {Problem} error when the service returns a 415 status code
+     * @throws {Problem} error when the service returns a 422 status code
+     * @throws {Problem} error when the service returns a 428 status code
+     * @throws {Problem} error when the service returns a 500 status code
+     * @throws {Problem} error when the service returns a 503 status code
+     */
+     get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<UntypedNode | undefined>;
+    /**
      * PATCH /v1/items/{id}/relationships/{linkID}
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -101,6 +121,7 @@ export interface WithLinkItemRequestBuilder extends BaseRequestBuilder<WithLinkI
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -117,6 +138,12 @@ export interface WithLinkItemRequestBuilder extends BaseRequestBuilder<WithLinkI
      * @returns {RequestInformation}
      */
      toDeleteRequestInformation(body: WithLinkDeleteRequestBody, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
+    /**
+     * GET /v1/items/{id}/relationships/{linkID}
+     * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
+     * @returns {RequestInformation}
+     */
+     toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
     /**
      * PATCH /v1/items/{id}/relationships/{linkID}
      * @param body The request body
@@ -144,6 +171,7 @@ export const WithLinkItemRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
@@ -158,6 +186,27 @@ export const WithLinkItemRequestBuilderRequestsMetadata: RequestsMetadata = {
         requestBodySerializer: serializeWithLinkDeleteRequestBody,
         requestInformationContentSetMethod: "setContentFromParsable",
     },
+    get: {
+        uriTemplate: WithLinkItemRequestBuilderUriTemplate,
+        responseBodyContentType: "application/json",
+        errorMappings: {
+            400: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            401: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            422: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            428: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            500: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            503: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+        },
+        adapterMethodName: "send",
+        responseBodyFactory:  createUntypedNodeFromDiscriminatorValue,
+    },
     patch: {
         uriTemplate: WithLinkItemRequestBuilderUriTemplate,
         responseBodyContentType: "application/json",
@@ -167,6 +216,7 @@ export const WithLinkItemRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,

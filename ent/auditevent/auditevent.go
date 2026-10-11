@@ -23,6 +23,14 @@ const (
 	FieldSubject = "subject"
 	// FieldAction holds the string denoting the action field in the database.
 	FieldAction = "action"
+	// FieldEntityType holds the string denoting the entity_type field in the database.
+	FieldEntityType = "entity_type"
+	// FieldEntityID holds the string denoting the entity_id field in the database.
+	FieldEntityID = "entity_id"
+	// FieldProperties holds the string denoting the properties field in the database.
+	FieldProperties = "properties"
+	// FieldTraceID holds the string denoting the trace_id field in the database.
+	FieldTraceID = "trace_id"
 	// FieldDetails holds the string denoting the details field in the database.
 	FieldDetails = "details"
 	// Table holds the table name of the auditevent in the database.
@@ -37,6 +45,10 @@ var Columns = []string{
 	FieldResourceID,
 	FieldSubject,
 	FieldAction,
+	FieldEntityType,
+	FieldEntityID,
+	FieldProperties,
+	FieldTraceID,
 	FieldDetails,
 }
 
@@ -61,6 +73,12 @@ var (
 	SubjectValidator func(string) error
 	// ActionValidator is a validator for the "action" field. It is called by the builders before save.
 	ActionValidator func(string) error
+	// EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	EntityTypeValidator func(string) error
+	// DefaultProperties holds the default value on creation for the "properties" field.
+	DefaultProperties []string
+	// TraceIDValidator is a validator for the "trace_id" field. It is called by the builders before save.
+	TraceIDValidator func(string) error
 	// DefaultDetails holds the default value on creation for the "details" field.
 	DefaultDetails map[string]interface{}
 	// DefaultID holds the default value on creation for the "id" field.
@@ -100,4 +118,19 @@ func BySubject(opts ...sql.OrderTermOption) OrderOption {
 // ByAction orders the results by the action field.
 func ByAction(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAction, opts...).ToFunc()
+}
+
+// ByEntityType orders the results by the entity_type field.
+func ByEntityType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntityType, opts...).ToFunc()
+}
+
+// ByEntityID orders the results by the entity_id field.
+func ByEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntityID, opts...).ToFunc()
+}
+
+// ByTraceID orders the results by the trace_id field.
+func ByTraceID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTraceID, opts...).ToFunc()
 }

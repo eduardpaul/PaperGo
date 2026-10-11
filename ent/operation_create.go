@@ -43,6 +43,14 @@ func (_c *OperationCreate) SetContainerID(v string) *OperationCreate {
 	return _c
 }
 
+// SetNillableContainerID sets the "container_id" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableContainerID(v *string) *OperationCreate {
+	if v != nil {
+		_c.SetContainerID(*v)
+	}
+	return _c
+}
+
 // SetFieldID sets the "field_id" field.
 func (_c *OperationCreate) SetFieldID(v string) *OperationCreate {
 	_c.mutation.SetFieldID(v)
@@ -58,8 +66,76 @@ func (_c *OperationCreate) SetNillableFieldID(v *string) *OperationCreate {
 }
 
 // SetKind sets the "kind" field.
-func (_c *OperationCreate) SetKind(v operation.Kind) *OperationCreate {
+func (_c *OperationCreate) SetKind(v string) *OperationCreate {
 	_c.mutation.SetKind(v)
+	return _c
+}
+
+// SetTraceID sets the "trace_id" field.
+func (_c *OperationCreate) SetTraceID(v string) *OperationCreate {
+	_c.mutation.SetTraceID(v)
+	return _c
+}
+
+// SetNillableTraceID sets the "trace_id" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableTraceID(v *string) *OperationCreate {
+	if v != nil {
+		_c.SetTraceID(*v)
+	}
+	return _c
+}
+
+// SetCredentialID sets the "credential_id" field.
+func (_c *OperationCreate) SetCredentialID(v string) *OperationCreate {
+	_c.mutation.SetCredentialID(v)
+	return _c
+}
+
+// SetNillableCredentialID sets the "credential_id" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableCredentialID(v *string) *OperationCreate {
+	if v != nil {
+		_c.SetCredentialID(*v)
+	}
+	return _c
+}
+
+// SetCredentialScopes sets the "credential_scopes" field.
+func (_c *OperationCreate) SetCredentialScopes(v []string) *OperationCreate {
+	_c.mutation.SetCredentialScopes(v)
+	return _c
+}
+
+// SetResult sets the "result" field.
+func (_c *OperationCreate) SetResult(v jsontext.Value) *OperationCreate {
+	_c.mutation.SetResult(v)
+	return _c
+}
+
+// SetStartedAt sets the "started_at" field.
+func (_c *OperationCreate) SetStartedAt(v time.Time) *OperationCreate {
+	_c.mutation.SetStartedAt(v)
+	return _c
+}
+
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableStartedAt(v *time.Time) *OperationCreate {
+	if v != nil {
+		_c.SetStartedAt(*v)
+	}
+	return _c
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (_c *OperationCreate) SetCompletedAt(v time.Time) *OperationCreate {
+	_c.mutation.SetCompletedAt(v)
+	return _c
+}
+
+// SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
+func (_c *OperationCreate) SetNillableCompletedAt(v *time.Time) *OperationCreate {
+	if v != nil {
+		_c.SetCompletedAt(*v)
+	}
 	return _c
 }
 
@@ -297,6 +373,18 @@ func (_c *OperationCreate) defaults() {
 		v := operation.DefaultFieldID
 		_c.mutation.SetFieldID(v)
 	}
+	if _, ok := _c.mutation.TraceID(); !ok {
+		v := operation.DefaultTraceID()
+		_c.mutation.SetTraceID(v)
+	}
+	if _, ok := _c.mutation.CredentialScopes(); !ok {
+		v := operation.DefaultCredentialScopes
+		_c.mutation.SetCredentialScopes(v)
+	}
+	if _, ok := _c.mutation.Result(); !ok {
+		v := operation.DefaultResult
+		_c.mutation.SetResult(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := operation.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -360,9 +448,6 @@ func (_c *OperationCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Operation.created_at"`)}
 	}
-	if _, ok := _c.mutation.ContainerID(); !ok {
-		return &ValidationError{Name: "container_id", err: errors.New(`ent: missing required field "Operation.container_id"`)}
-	}
 	if _, ok := _c.mutation.FieldID(); !ok {
 		return &ValidationError{Name: "field_id", err: errors.New(`ent: missing required field "Operation.field_id"`)}
 	}
@@ -373,6 +458,15 @@ func (_c *OperationCreate) check() error {
 		if err := operation.KindValidator(v); err != nil {
 			return &ValidationError{Name: "kind", err: fmt.Errorf(`ent: validator failed for field "Operation.kind": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.TraceID(); !ok {
+		return &ValidationError{Name: "trace_id", err: errors.New(`ent: missing required field "Operation.trace_id"`)}
+	}
+	if _, ok := _c.mutation.CredentialScopes(); !ok {
+		return &ValidationError{Name: "credential_scopes", err: errors.New(`ent: missing required field "Operation.credential_scopes"`)}
+	}
+	if _, ok := _c.mutation.Result(); !ok {
+		return &ValidationError{Name: "result", err: errors.New(`ent: missing required field "Operation.result"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Operation.status"`)}
@@ -456,9 +550,6 @@ func (_c *OperationCreate) check() error {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "Operation.id": %w`, err)}
 		}
 	}
-	if len(_c.mutation.ContainerIDs()) == 0 {
-		return &ValidationError{Name: "container", err: errors.New(`ent: missing required edge "Operation.container"`)}
-	}
 	return nil
 }
 
@@ -503,8 +594,32 @@ func (_c *OperationCreate) createSpec() (*Operation, *sqlgraph.CreateSpec) {
 		_node.FieldID = value
 	}
 	if value, ok := _c.mutation.Kind(); ok {
-		_spec.SetField(operation.FieldKind, field.TypeEnum, value)
+		_spec.SetField(operation.FieldKind, field.TypeString, value)
 		_node.Kind = value
+	}
+	if value, ok := _c.mutation.TraceID(); ok {
+		_spec.SetField(operation.FieldTraceID, field.TypeString, value)
+		_node.TraceID = value
+	}
+	if value, ok := _c.mutation.CredentialID(); ok {
+		_spec.SetField(operation.FieldCredentialID, field.TypeString, value)
+		_node.CredentialID = value
+	}
+	if value, ok := _c.mutation.CredentialScopes(); ok {
+		_spec.SetField(operation.FieldCredentialScopes, field.TypeJSON, value)
+		_node.CredentialScopes = value
+	}
+	if value, ok := _c.mutation.Result(); ok {
+		_spec.SetField(operation.FieldResult, field.TypeJSON, value)
+		_node.Result = value
+	}
+	if value, ok := _c.mutation.StartedAt(); ok {
+		_spec.SetField(operation.FieldStartedAt, field.TypeTime, value)
+		_node.StartedAt = &value
+	}
+	if value, ok := _c.mutation.CompletedAt(); ok {
+		_spec.SetField(operation.FieldCompletedAt, field.TypeTime, value)
+		_node.CompletedAt = &value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(operation.FieldStatus, field.TypeEnum, value)

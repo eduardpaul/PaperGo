@@ -779,6 +779,10 @@ func termsChanged(ctx context.Context, t *dms.Service, tr Trigger, e dms.Event) 
 	if err != nil {
 		return false, err
 	}
+	if e.Data["relationship_id"] != nil {
+		// A relationship write changes no metadata terms.
+		previous = current
+	}
 	now, err := t.MatchTerms(ctx, tr.Terms, current)
 	if err != nil {
 		return false, err

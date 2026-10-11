@@ -33,6 +33,9 @@ func (r *Runner) dispatchLoop(ctx context.Context) {
 		if _, err := r.Dispatch(ctx); err != nil && ctx.Err() == nil {
 			r.log.Error("dispatch workflow events", "error", err)
 		}
+		if err := r.SyncLiveRuns(ctx); err != nil && ctx.Err() == nil {
+			r.log.Error("observe workflow statuses", "error", err)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -128,6 +131,9 @@ func (r *Runner) dispatchBatch(ctx context.Context) (int, []string, error) {
 			}
 		}
 		if err = t.Client.DomainEvent.Update().Where(domainevent.IDIn(ids...)).SetDispatchedAt(time.Now().UTC()).Exec(ctx); err != nil {
+			return err
+		}
+		if err = t.CollectRevisions(ctx); err != nil {
 			return err
 		}
 		n = len(rows)

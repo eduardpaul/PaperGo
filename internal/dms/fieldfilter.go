@@ -76,7 +76,7 @@ func (s *Service) fieldFilter(ctx context.Context, subject string, in Browse) (f
 	candidate := `SELECT f.item_id FROM field_values f WHERE f.container_id=? AND f.surface IN ('head','published') AND f.field_key=? AND f.` + column + op + `?`
 	candidateArgs := []any{container, in.FilterField, value}
 	return func(sel *entsql.Selector) {
-		selected, args := surfaceSQL(sel.C(resource.FieldID), subject, in.Surface)
+		selected, args := surfaceSQL(ctx, sel.C(resource.FieldID), subject, in.Surface)
 		query := `EXISTS (SELECT 1 FROM field_values f WHERE f.container_id=? AND f.item_id=` + sel.C(resource.FieldID) + ` AND f.surface=` + selected + ` AND f.field_key=? AND f.field_type=? AND f.scale=? AND f.` + column + op + `?)`
 		values := []any{container}
 		values = append(values, args...)

@@ -449,7 +449,7 @@ func TestCrashRecovery(t *testing.T) {
 	if runs[0].Status != "completed" {
 		t.Fatalf("recovered run: %+v", runs[0])
 	}
-	revisions, err := g.dms.Revisions(ctx, "alice", *runs[0].ItemID, 0, 100)
+	revisions, err := g.dms.RevisionHistory(ctx, "alice", *runs[0].ItemID, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,7 +9,6 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/itemsurface"
 	"papergo/ent/operation"
-	"papergo/ent/operationitem"
 	"time"
 )
 
@@ -23,7 +22,7 @@ import (
 // enqueueFieldIndex supersedes the field's earlier operation and queues one
 // that converges its index rows. A collection without items needs no rows.
 func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *ent.FieldDefinition) error {
-	if _, err := s.Client.Operation.Update().Where(operation.FieldIDEQ(d.ID), operation.StatusEQ(operation.StatusPending)).SetStatus(operation.StatusSuperseded).Save(ctx); err != nil {
+	if _, err := s.Client.Operation.Update().Where(operation.FieldIDEQ(d.ID), operation.StatusEQ(operation.StatusPending)).SetStatus(operation.StatusSuperseded).SetCompletedAt(time.Now().UTC()).Save(ctx); err != nil {
 		return err
 	}
 	collections, err := s.fieldCollections(ctx, d.ID)
@@ -39,7 +38,7 @@ func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *ent.
 		if !populated {
 			continue
 		}
-		if e = s.Client.Operation.Create().SetContainerID(c.ID).SetFieldID(d.ID).SetKind(operation.KindFieldIndex).SetCreatedBy(subject).Exec(ctx); e != nil {
+		if e = s.Client.Operation.Create().SetContainerID(c.ID).SetFieldID(d.ID).SetKind(OperationKindFieldIndex).SetCreatedBy(subject).SetTraceID(s.traceID).Exec(ctx); e != nil {
 			return e
 		}
 		queued = true
@@ -63,7 +62,20 @@ func (s *Service) enqueueFieldIndex(ctx context.Context, subject string, d *ent.
 // RunOperations processes pending operations until ctx ends, resuming any left
 // by an earlier process.
 func (s *Service) RunOperations(ctx context.Context, log *slog.Logger) {
+	nextCleanup := time.Time{}
 	for {
+		if now := time.Now().UTC(); !now.Before(nextCleanup) {
+			if err := s.CollectExpiredOperations(ctx, now); err != nil && ctx.Err() == nil {
+				log.Error("operation cleanup failed", "error", err)
+			}
+			if err := s.CollectExpiredDeltas(ctx, now); err != nil && ctx.Err() == nil {
+				log.Error("delta cleanup failed", "error", err)
+			}
+			if err := s.CollectExpiredLiveChanges(ctx, now); err != nil && ctx.Err() == nil {
+				log.Error("live change cleanup failed", "error", err)
+			}
+			nextCleanup = now.Add(time.Hour)
+		}
 		worked, err := s.operationStep(ctx)
 		if ctx.Err() != nil {
 			return
@@ -113,28 +125,50 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 		if e != nil {
 			return e
 		}
-		if op.Kind == operation.KindBulkUpdate {
-			return t.bulkUpdateStep(ctx, op)
+		handler, exists := t.operationHandlers[op.Kind]
+		if !exists {
+			return errUnknownOperation
 		}
-		return t.fieldIndexBatch(ctx, op)
+		ctx, e = t.operationContext(ctx, op)
+		if e != nil {
+			return e
+		}
+		t.traceID = op.TraceID
+		if op.Kind != OperationKindFieldIndex {
+			if e = t.operationPermission(ctx, op.CreatedBy, op.ContainerID, handler.Scope); e != nil {
+				return e
+			}
+		}
+		if op.StartedAt == nil {
+			op, e = t.Client.Operation.UpdateOne(op).SetStartedAt(time.Now().UTC()).Save(ctx)
+			if e != nil {
+				return e
+			}
+		}
+		previousState := operationCheckpoint(op)
+		if e = executeOperation(ctx, t, handler, op); e != nil {
+			return e
+		}
+		current, e := t.Client.Operation.Get(ctx, op.ID)
+		if e != nil {
+			return e
+		}
+		if current.Status != operation.StatusPending {
+			b := t.Client.Operation.UpdateOne(current).SetCompletedAt(time.Now().UTC())
+			if current.Status == operation.StatusSucceeded {
+				b.SetProgress(100)
+			}
+			return b.Exec(ctx)
+		}
+		if operationCheckpoint(current) == previousState {
+			return invalid("operation handler did not persist progress")
+		}
+		return nil
 	})
 	if op == nil || err == nil || ctx.Err() != nil {
 		return op != nil, err
 	}
-	failed := s.write(ctx, func(t *Service) error {
-		if e := t.Client.Operation.UpdateOneID(op.ID).Where(operation.StatusEQ(operation.StatusPending)).SetStatus(operation.StatusFailed).SetError(err.Error()).Exec(ctx); e != nil {
-			return e
-		}
-		if op.Kind == operation.KindBulkUpdate {
-			_, e := t.Client.OperationItem.Delete().Where(operationitem.OperationIDEQ(op.ID)).Exec(ctx)
-			return e
-		}
-		e := t.Client.FieldDefinition.UpdateOneID(op.FieldID).SetIndexStatus(fielddefinition.IndexStatusFailed).Exec(ctx)
-		if ent.IsNotFound(e) {
-			return nil
-		}
-		return e
-	})
+	failed := s.failOperation(ctx, op, err)
 	return true, errors.Join(err, failed)
 }
 
@@ -190,7 +224,7 @@ func (s *Service) Operations(ctx context.Context, subject, containerID, after st
 			return Page[*ent.Operation]{}, e
 		}
 		rows, e := t.Client.Operation.Query().Where(operation.ContainerIDEQ(containerID), operation.IDGT(after), func(q *sql.Selector) {
-			q.Where(sql.Or(sql.NEQ(q.C(operation.FieldKind), "bulk_update"), sql.EQ(q.C(operation.FieldCreatedBy), subject)))
+			q.Where(sql.Or(sql.EQ(q.C(operation.FieldKind), OperationKindFieldIndex), sql.EQ(q.C(operation.FieldCreatedBy), subject)))
 		}).Order(ent.Asc(operation.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
 		return entityPage(rows, limit, func(v *ent.Operation) string { return v.ID }), e
 	})
@@ -206,8 +240,14 @@ func (s *Service) Operation(ctx context.Context, subject, id string) (*ent.Opera
 		if e != nil {
 			return nil, e
 		}
-		if op.Kind == operation.KindBulkUpdate && op.CreatedBy != subject {
+		if op.Kind != OperationKindFieldIndex && op.CreatedBy != subject {
 			return nil, ErrNotFound
+		}
+		if op.ContainerID == "" {
+			if e = t.RequireScope(ctx, subject, "organization.manage"); e != nil {
+				return nil, e
+			}
+			return op, nil
 		}
 		if _, e = t.authorize(ctx, subject, op.ContainerID, "read"); e != nil {
 			return nil, e

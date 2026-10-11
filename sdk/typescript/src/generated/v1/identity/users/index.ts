@@ -4,7 +4,7 @@
 // @ts-ignore
 import { createProblemFromDiscriminatorValue, type Problem } from '../../../models/index.js';
 // @ts-ignore
-import { type WithSubjectItemRequestBuilder, WithSubjectItemRequestBuilderNavigationMetadata } from './item/index.js';
+import { type WithSubjectItemRequestBuilder, WithSubjectItemRequestBuilderNavigationMetadata, WithSubjectItemRequestBuilderRequestsMetadata } from './item/index.js';
 // @ts-ignore
 import { createUntypedNodeFromDiscriminatorValue, type AdditionalDataHolder, type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type ParseNode, type RequestConfiguration, type RequestInformation, type RequestsMetadata, type SerializationWriter, type UntypedNode } from '@microsoft/kiota-abstractions';
 
@@ -59,6 +59,7 @@ export interface UsersRequestBuilder extends BaseRequestBuilder<UsersRequestBuil
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -78,6 +79,7 @@ export interface UsersRequestBuilder extends BaseRequestBuilder<UsersRequestBuil
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -110,6 +112,7 @@ export const UsersRequestBuilderUriTemplate = "{+baseurl}/v1/identity/users";
  */
 export const UsersRequestBuilderNavigationMetadata: Record<Exclude<keyof UsersRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
     bySubject: {
+        requestsMetadata: WithSubjectItemRequestBuilderRequestsMetadata,
         navigationMetadata: WithSubjectItemRequestBuilderNavigationMetadata,
         pathParametersMappings: ["subject"],
     },
@@ -127,6 +130,7 @@ export const UsersRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
@@ -147,6 +151,7 @@ export const UsersRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,

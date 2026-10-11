@@ -418,29 +418,6 @@ func HasItemWith(preds ...predicate.Resource) predicate.Publication {
 	})
 }
 
-// HasRevision applies the HasEdge predicate on the "revision" edge.
-func HasRevision() predicate.Publication {
-	return predicate.Publication(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, RevisionTable, RevisionColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasRevisionWith applies the HasEdge predicate on the "revision" edge with a given conditions (other predicates).
-func HasRevisionWith(preds ...predicate.ItemRevision) predicate.Publication {
-	return predicate.Publication(func(s *sql.Selector) {
-		step := newRevisionStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Publication) predicate.Publication {
 	return predicate.Publication(sql.AndPredicates(predicates...))

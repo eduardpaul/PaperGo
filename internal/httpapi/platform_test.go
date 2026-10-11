@@ -88,8 +88,8 @@ func TestRESTPlatformCatalogQueriesAndPreconditions(t *testing.T) {
 	path := "/v1/items/" + item.ID + "/relationships/" + edge.ID
 	send("PATCH", path, `{"metadata":{"note":"Changed"}}`, "", 428)
 	send("PATCH", path, `{"metadata":{"note":"Changed"}}`, `"1"`, 200)
-	send("DELETE", path, "", `"1"`, 412)
-	send("DELETE", path, "", `"2"`, 204)
+	send("DELETE", path, "", "", 204)
+	send("DELETE", path, "", "", 404)
 	send("PUT", "/v1/terms/"+term.ID, `{"name":"Renamed","deprecated":true}`, `"1"`, 200)
 	send("GET", "/v1/terms/"+term.ID, "", "", 200)
 	send("GET", "/v1/term-sets", "", "", 200)

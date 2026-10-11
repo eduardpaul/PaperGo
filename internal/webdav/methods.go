@@ -11,7 +11,6 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
-	"path"
 	"slices"
 	"strings"
 )
@@ -67,7 +66,7 @@ func (h *Handler) put(w http.ResponseWriter, r *request) error {
 		return storage.ErrTooLarge
 	}
 	body := transfer.Reader(http.MaxBytesReader(w, r.Body, h.MaxUpload), w)
-	f, created, err := h.store(r, r.path, body, contentType(r.path[len(r.path)-1], r.Header.Get("Content-Type")), cond, nil, nil, "")
+	f, created, err := h.store(r, r.path, body, cond, nil, nil, "")
 	if err != nil {
 		return err
 	}
@@ -82,8 +81,8 @@ func (h *Handler) put(w http.ResponseWriter, r *request) error {
 
 // store writes body to blob storage, then commits it as the file at path.
 // Bytes of a rejected commit are removed again.
-func (h *Handler) store(r *request, path []string, body io.Reader, mediaType string, cond dms.FileConditions, tags []string, values map[string]any, typeID string) (*dms.File, bool, error) {
-	object, err := h.Storage.Put(r.Context(), body, h.MaxUpload)
+func (h *Handler) store(r *request, path []string, body io.Reader, cond dms.FileConditions, tags []string, values map[string]any, typeID string) (*dms.File, bool, error) {
+	object, mediaType, err := storage.PutDocument(r.Context(), h.Storage, body, h.MaxUpload)
 	if err != nil {
 		return nil, false, err
 	}
@@ -96,16 +95,6 @@ func (h *Handler) store(r *request, path []string, body io.Reader, mediaType str
 		return nil, false, err
 	}
 	return f, created, nil
-}
-
-// contentType prefers the file extension: clients rarely declare a precise type.
-func contentType(name, declared string) string {
-	for _, candidate := range []string{mime.TypeByExtension(path.Ext(name)), declared} {
-		if media, _, err := mime.ParseMediaType(candidate); err == nil && len(media) <= 255 {
-			return media
-		}
-	}
-	return "application/octet-stream"
 }
 
 func (h *Handler) mkcol(w http.ResponseWriter, r *request) error {
@@ -271,7 +260,11 @@ func (h *Handler) copyTree(r *request, f *dms.File, from, to []string, infinite 
 	}
 	*budget--
 	if !f.Collection() {
-		var content io.Reader = bytes.NewReader(nil)
+		if f.Blob == nil {
+			_, err := h.DMS.MakeEmptyFile(r.Context(), r.subject, r.library, to, dms.CreateResource{Tags: f.Tags, Values: f.Values, ContentTypeID: *f.ContentTypeID}, dms.FileConditions{})
+			return err
+		}
+		var content io.Reader
 		if f.Blob != nil {
 			file, err := h.Storage.Open(r.Context(), f.Blob.ObjectKey)
 			if err != nil {
@@ -298,7 +291,7 @@ func (h *Handler) copyTree(r *request, f *dms.File, from, to []string, infinite 
 				values[key] = value
 			}
 		}
-		_, _, err = h.store(r, to, content, f.ContentType(), dms.FileConditions{}, f.Tags, values, typ.ID)
+		_, _, err = h.store(r, to, content, dms.FileConditions{}, f.Tags, values, typ.ID)
 		return err
 	}
 	if _, err := h.DMS.MakeFolder(r.Context(), r.subject, r.library, to); err != nil {

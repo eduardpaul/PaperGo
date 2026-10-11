@@ -75,6 +75,31 @@ func ContainerID(v string) predicate.Operation {
 	return predicate.Operation(sql.FieldEQ(FieldContainerID, v))
 }
 
+// Kind applies equality check predicate on the "kind" field. It's identical to KindEQ.
+func Kind(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldKind, v))
+}
+
+// TraceID applies equality check predicate on the "trace_id" field. It's identical to TraceIDEQ.
+func TraceID(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldTraceID, v))
+}
+
+// CredentialID applies equality check predicate on the "credential_id" field. It's identical to CredentialIDEQ.
+func CredentialID(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldCredentialID, v))
+}
+
+// StartedAt applies equality check predicate on the "started_at" field. It's identical to StartedAtEQ.
+func StartedAt(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldStartedAt, v))
+}
+
+// CompletedAt applies equality check predicate on the "completed_at" field. It's identical to CompletedAtEQ.
+func CompletedAt(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldCompletedAt, v))
+}
+
 // AfterItemID applies equality check predicate on the "after_item_id" field. It's identical to AfterItemIDEQ.
 func AfterItemID(v string) predicate.Operation {
 	return predicate.Operation(sql.FieldEQ(FieldAfterItemID, v))
@@ -220,6 +245,16 @@ func ContainerIDHasSuffix(v string) predicate.Operation {
 	return predicate.Operation(sql.FieldHasSuffix(FieldContainerID, v))
 }
 
+// ContainerIDIsNil applies the IsNil predicate on the "container_id" field.
+func ContainerIDIsNil() predicate.Operation {
+	return predicate.Operation(sql.FieldIsNull(FieldContainerID))
+}
+
+// ContainerIDNotNil applies the NotNil predicate on the "container_id" field.
+func ContainerIDNotNil() predicate.Operation {
+	return predicate.Operation(sql.FieldNotNull(FieldContainerID))
+}
+
 // ContainerIDEqualFold applies the EqualFold predicate on the "container_id" field.
 func ContainerIDEqualFold(v string) predicate.Operation {
 	return predicate.Operation(sql.FieldEqualFold(FieldContainerID, v))
@@ -296,23 +331,308 @@ func FieldIDContainsFold(v string) predicate.Operation {
 }
 
 // KindEQ applies the EQ predicate on the "kind" field.
-func KindEQ(v Kind) predicate.Operation {
+func KindEQ(v string) predicate.Operation {
 	return predicate.Operation(sql.FieldEQ(FieldKind, v))
 }
 
 // KindNEQ applies the NEQ predicate on the "kind" field.
-func KindNEQ(v Kind) predicate.Operation {
+func KindNEQ(v string) predicate.Operation {
 	return predicate.Operation(sql.FieldNEQ(FieldKind, v))
 }
 
 // KindIn applies the In predicate on the "kind" field.
-func KindIn(vs ...Kind) predicate.Operation {
+func KindIn(vs ...string) predicate.Operation {
 	return predicate.Operation(sql.FieldIn(FieldKind, vs...))
 }
 
 // KindNotIn applies the NotIn predicate on the "kind" field.
-func KindNotIn(vs ...Kind) predicate.Operation {
+func KindNotIn(vs ...string) predicate.Operation {
 	return predicate.Operation(sql.FieldNotIn(FieldKind, vs...))
+}
+
+// KindGT applies the GT predicate on the "kind" field.
+func KindGT(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldGT(FieldKind, v))
+}
+
+// KindGTE applies the GTE predicate on the "kind" field.
+func KindGTE(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldGTE(FieldKind, v))
+}
+
+// KindLT applies the LT predicate on the "kind" field.
+func KindLT(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldLT(FieldKind, v))
+}
+
+// KindLTE applies the LTE predicate on the "kind" field.
+func KindLTE(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldLTE(FieldKind, v))
+}
+
+// KindContains applies the Contains predicate on the "kind" field.
+func KindContains(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldContains(FieldKind, v))
+}
+
+// KindHasPrefix applies the HasPrefix predicate on the "kind" field.
+func KindHasPrefix(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldHasPrefix(FieldKind, v))
+}
+
+// KindHasSuffix applies the HasSuffix predicate on the "kind" field.
+func KindHasSuffix(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldHasSuffix(FieldKind, v))
+}
+
+// KindEqualFold applies the EqualFold predicate on the "kind" field.
+func KindEqualFold(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldEqualFold(FieldKind, v))
+}
+
+// KindContainsFold applies the ContainsFold predicate on the "kind" field.
+func KindContainsFold(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldContainsFold(FieldKind, v))
+}
+
+// TraceIDEQ applies the EQ predicate on the "trace_id" field.
+func TraceIDEQ(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldTraceID, v))
+}
+
+// TraceIDNEQ applies the NEQ predicate on the "trace_id" field.
+func TraceIDNEQ(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldNEQ(FieldTraceID, v))
+}
+
+// TraceIDIn applies the In predicate on the "trace_id" field.
+func TraceIDIn(vs ...string) predicate.Operation {
+	return predicate.Operation(sql.FieldIn(FieldTraceID, vs...))
+}
+
+// TraceIDNotIn applies the NotIn predicate on the "trace_id" field.
+func TraceIDNotIn(vs ...string) predicate.Operation {
+	return predicate.Operation(sql.FieldNotIn(FieldTraceID, vs...))
+}
+
+// TraceIDGT applies the GT predicate on the "trace_id" field.
+func TraceIDGT(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldGT(FieldTraceID, v))
+}
+
+// TraceIDGTE applies the GTE predicate on the "trace_id" field.
+func TraceIDGTE(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldGTE(FieldTraceID, v))
+}
+
+// TraceIDLT applies the LT predicate on the "trace_id" field.
+func TraceIDLT(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldLT(FieldTraceID, v))
+}
+
+// TraceIDLTE applies the LTE predicate on the "trace_id" field.
+func TraceIDLTE(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldLTE(FieldTraceID, v))
+}
+
+// TraceIDContains applies the Contains predicate on the "trace_id" field.
+func TraceIDContains(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldContains(FieldTraceID, v))
+}
+
+// TraceIDHasPrefix applies the HasPrefix predicate on the "trace_id" field.
+func TraceIDHasPrefix(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldHasPrefix(FieldTraceID, v))
+}
+
+// TraceIDHasSuffix applies the HasSuffix predicate on the "trace_id" field.
+func TraceIDHasSuffix(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldHasSuffix(FieldTraceID, v))
+}
+
+// TraceIDEqualFold applies the EqualFold predicate on the "trace_id" field.
+func TraceIDEqualFold(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldEqualFold(FieldTraceID, v))
+}
+
+// TraceIDContainsFold applies the ContainsFold predicate on the "trace_id" field.
+func TraceIDContainsFold(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldContainsFold(FieldTraceID, v))
+}
+
+// CredentialIDEQ applies the EQ predicate on the "credential_id" field.
+func CredentialIDEQ(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldCredentialID, v))
+}
+
+// CredentialIDNEQ applies the NEQ predicate on the "credential_id" field.
+func CredentialIDNEQ(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldNEQ(FieldCredentialID, v))
+}
+
+// CredentialIDIn applies the In predicate on the "credential_id" field.
+func CredentialIDIn(vs ...string) predicate.Operation {
+	return predicate.Operation(sql.FieldIn(FieldCredentialID, vs...))
+}
+
+// CredentialIDNotIn applies the NotIn predicate on the "credential_id" field.
+func CredentialIDNotIn(vs ...string) predicate.Operation {
+	return predicate.Operation(sql.FieldNotIn(FieldCredentialID, vs...))
+}
+
+// CredentialIDGT applies the GT predicate on the "credential_id" field.
+func CredentialIDGT(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldGT(FieldCredentialID, v))
+}
+
+// CredentialIDGTE applies the GTE predicate on the "credential_id" field.
+func CredentialIDGTE(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldGTE(FieldCredentialID, v))
+}
+
+// CredentialIDLT applies the LT predicate on the "credential_id" field.
+func CredentialIDLT(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldLT(FieldCredentialID, v))
+}
+
+// CredentialIDLTE applies the LTE predicate on the "credential_id" field.
+func CredentialIDLTE(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldLTE(FieldCredentialID, v))
+}
+
+// CredentialIDContains applies the Contains predicate on the "credential_id" field.
+func CredentialIDContains(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldContains(FieldCredentialID, v))
+}
+
+// CredentialIDHasPrefix applies the HasPrefix predicate on the "credential_id" field.
+func CredentialIDHasPrefix(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldHasPrefix(FieldCredentialID, v))
+}
+
+// CredentialIDHasSuffix applies the HasSuffix predicate on the "credential_id" field.
+func CredentialIDHasSuffix(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldHasSuffix(FieldCredentialID, v))
+}
+
+// CredentialIDIsNil applies the IsNil predicate on the "credential_id" field.
+func CredentialIDIsNil() predicate.Operation {
+	return predicate.Operation(sql.FieldIsNull(FieldCredentialID))
+}
+
+// CredentialIDNotNil applies the NotNil predicate on the "credential_id" field.
+func CredentialIDNotNil() predicate.Operation {
+	return predicate.Operation(sql.FieldNotNull(FieldCredentialID))
+}
+
+// CredentialIDEqualFold applies the EqualFold predicate on the "credential_id" field.
+func CredentialIDEqualFold(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldEqualFold(FieldCredentialID, v))
+}
+
+// CredentialIDContainsFold applies the ContainsFold predicate on the "credential_id" field.
+func CredentialIDContainsFold(v string) predicate.Operation {
+	return predicate.Operation(sql.FieldContainsFold(FieldCredentialID, v))
+}
+
+// StartedAtEQ applies the EQ predicate on the "started_at" field.
+func StartedAtEQ(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldStartedAt, v))
+}
+
+// StartedAtNEQ applies the NEQ predicate on the "started_at" field.
+func StartedAtNEQ(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldNEQ(FieldStartedAt, v))
+}
+
+// StartedAtIn applies the In predicate on the "started_at" field.
+func StartedAtIn(vs ...time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldIn(FieldStartedAt, vs...))
+}
+
+// StartedAtNotIn applies the NotIn predicate on the "started_at" field.
+func StartedAtNotIn(vs ...time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldNotIn(FieldStartedAt, vs...))
+}
+
+// StartedAtGT applies the GT predicate on the "started_at" field.
+func StartedAtGT(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldGT(FieldStartedAt, v))
+}
+
+// StartedAtGTE applies the GTE predicate on the "started_at" field.
+func StartedAtGTE(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldGTE(FieldStartedAt, v))
+}
+
+// StartedAtLT applies the LT predicate on the "started_at" field.
+func StartedAtLT(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldLT(FieldStartedAt, v))
+}
+
+// StartedAtLTE applies the LTE predicate on the "started_at" field.
+func StartedAtLTE(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldLTE(FieldStartedAt, v))
+}
+
+// StartedAtIsNil applies the IsNil predicate on the "started_at" field.
+func StartedAtIsNil() predicate.Operation {
+	return predicate.Operation(sql.FieldIsNull(FieldStartedAt))
+}
+
+// StartedAtNotNil applies the NotNil predicate on the "started_at" field.
+func StartedAtNotNil() predicate.Operation {
+	return predicate.Operation(sql.FieldNotNull(FieldStartedAt))
+}
+
+// CompletedAtEQ applies the EQ predicate on the "completed_at" field.
+func CompletedAtEQ(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldEQ(FieldCompletedAt, v))
+}
+
+// CompletedAtNEQ applies the NEQ predicate on the "completed_at" field.
+func CompletedAtNEQ(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldNEQ(FieldCompletedAt, v))
+}
+
+// CompletedAtIn applies the In predicate on the "completed_at" field.
+func CompletedAtIn(vs ...time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldIn(FieldCompletedAt, vs...))
+}
+
+// CompletedAtNotIn applies the NotIn predicate on the "completed_at" field.
+func CompletedAtNotIn(vs ...time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldNotIn(FieldCompletedAt, vs...))
+}
+
+// CompletedAtGT applies the GT predicate on the "completed_at" field.
+func CompletedAtGT(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldGT(FieldCompletedAt, v))
+}
+
+// CompletedAtGTE applies the GTE predicate on the "completed_at" field.
+func CompletedAtGTE(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldGTE(FieldCompletedAt, v))
+}
+
+// CompletedAtLT applies the LT predicate on the "completed_at" field.
+func CompletedAtLT(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldLT(FieldCompletedAt, v))
+}
+
+// CompletedAtLTE applies the LTE predicate on the "completed_at" field.
+func CompletedAtLTE(v time.Time) predicate.Operation {
+	return predicate.Operation(sql.FieldLTE(FieldCompletedAt, v))
+}
+
+// CompletedAtIsNil applies the IsNil predicate on the "completed_at" field.
+func CompletedAtIsNil() predicate.Operation {
+	return predicate.Operation(sql.FieldIsNull(FieldCompletedAt))
+}
+
+// CompletedAtNotNil applies the NotNil predicate on the "completed_at" field.
+func CompletedAtNotNil() predicate.Operation {
+	return predicate.Operation(sql.FieldNotNull(FieldCompletedAt))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

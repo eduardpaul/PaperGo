@@ -36,6 +36,9 @@ type FieldValue func(*sql.Selector)
 // Grant is the predicate function for grant builders.
 type Grant func(*sql.Selector)
 
+// GroupInbox is the predicate function for groupinbox builders.
+type GroupInbox func(*sql.Selector)
+
 // IdentityAssignment is the predicate function for identityassignment builders.
 type IdentityAssignment func(*sql.Selector)
 
@@ -45,8 +48,14 @@ type IdentityGroup func(*sql.Selector)
 // IdentityMembership is the predicate function for identitymembership builders.
 type IdentityMembership func(*sql.Selector)
 
+// IdentityOrganization is the predicate function for identityorganization builders.
+type IdentityOrganization func(*sql.Selector)
+
 // IdentityPreference is the predicate function for identitypreference builders.
 type IdentityPreference func(*sql.Selector)
+
+// IdentityRESTToken is the predicate function for identityresttoken builders.
+type IdentityRESTToken func(*sql.Selector)
 
 // IdentityRole is the predicate function for identityrole builders.
 type IdentityRole func(*sql.Selector)
@@ -65,6 +74,9 @@ type ItemSurface func(*sql.Selector)
 
 // ListView is the predicate function for listview builders.
 type ListView func(*sql.Selector)
+
+// LiveChange is the predicate function for livechange builders.
+type LiveChange func(*sql.Selector)
 
 // Operation is the predicate function for operation builders.
 type Operation func(*sql.Selector)
@@ -92,6 +104,15 @@ type SchemaTemplate func(*sql.Selector)
 
 // SmartFolder is the predicate function for smartfolder builders.
 type SmartFolder func(*sql.Selector)
+
+// SyncState is the predicate function for syncstate builders.
+type SyncState func(*sql.Selector)
+
+// SyncToken is the predicate function for synctoken builders.
+type SyncToken func(*sql.Selector)
+
+// SyncView is the predicate function for syncview builders.
+type SyncView func(*sql.Selector)
 
 // Term is the predicate function for term builders.
 type Term func(*sql.Selector)

@@ -75,6 +75,16 @@ func WorkspaceID(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldWorkspaceID, v))
 }
 
+// PersonalOwnerID applies equality check predicate on the "personal_owner_id" field. It's identical to PersonalOwnerIDEQ.
+func PersonalOwnerID(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldPersonalOwnerID, v))
+}
+
+// SystemKey applies equality check predicate on the "system_key" field. It's identical to SystemKeyEQ.
+func SystemKey(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldSystemKey, v))
+}
+
 // ParentID applies equality check predicate on the "parent_id" field. It's identical to ParentIDEQ.
 func ParentID(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldParentID, v))
@@ -288,6 +298,156 @@ func WorkspaceIDEqualFold(v string) predicate.Resource {
 // WorkspaceIDContainsFold applies the ContainsFold predicate on the "workspace_id" field.
 func WorkspaceIDContainsFold(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldContainsFold(FieldWorkspaceID, v))
+}
+
+// PersonalOwnerIDEQ applies the EQ predicate on the "personal_owner_id" field.
+func PersonalOwnerIDEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDNEQ applies the NEQ predicate on the "personal_owner_id" field.
+func PersonalOwnerIDNEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDIn applies the In predicate on the "personal_owner_id" field.
+func PersonalOwnerIDIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldPersonalOwnerID, vs...))
+}
+
+// PersonalOwnerIDNotIn applies the NotIn predicate on the "personal_owner_id" field.
+func PersonalOwnerIDNotIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldPersonalOwnerID, vs...))
+}
+
+// PersonalOwnerIDGT applies the GT predicate on the "personal_owner_id" field.
+func PersonalOwnerIDGT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDGTE applies the GTE predicate on the "personal_owner_id" field.
+func PersonalOwnerIDGTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDLT applies the LT predicate on the "personal_owner_id" field.
+func PersonalOwnerIDLT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDLTE applies the LTE predicate on the "personal_owner_id" field.
+func PersonalOwnerIDLTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDContains applies the Contains predicate on the "personal_owner_id" field.
+func PersonalOwnerIDContains(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContains(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDHasPrefix applies the HasPrefix predicate on the "personal_owner_id" field.
+func PersonalOwnerIDHasPrefix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasPrefix(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDHasSuffix applies the HasSuffix predicate on the "personal_owner_id" field.
+func PersonalOwnerIDHasSuffix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasSuffix(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDIsNil applies the IsNil predicate on the "personal_owner_id" field.
+func PersonalOwnerIDIsNil() predicate.Resource {
+	return predicate.Resource(sql.FieldIsNull(FieldPersonalOwnerID))
+}
+
+// PersonalOwnerIDNotNil applies the NotNil predicate on the "personal_owner_id" field.
+func PersonalOwnerIDNotNil() predicate.Resource {
+	return predicate.Resource(sql.FieldNotNull(FieldPersonalOwnerID))
+}
+
+// PersonalOwnerIDEqualFold applies the EqualFold predicate on the "personal_owner_id" field.
+func PersonalOwnerIDEqualFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEqualFold(FieldPersonalOwnerID, v))
+}
+
+// PersonalOwnerIDContainsFold applies the ContainsFold predicate on the "personal_owner_id" field.
+func PersonalOwnerIDContainsFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContainsFold(FieldPersonalOwnerID, v))
+}
+
+// SystemKeyEQ applies the EQ predicate on the "system_key" field.
+func SystemKeyEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldSystemKey, v))
+}
+
+// SystemKeyNEQ applies the NEQ predicate on the "system_key" field.
+func SystemKeyNEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldSystemKey, v))
+}
+
+// SystemKeyIn applies the In predicate on the "system_key" field.
+func SystemKeyIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldSystemKey, vs...))
+}
+
+// SystemKeyNotIn applies the NotIn predicate on the "system_key" field.
+func SystemKeyNotIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldSystemKey, vs...))
+}
+
+// SystemKeyGT applies the GT predicate on the "system_key" field.
+func SystemKeyGT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldSystemKey, v))
+}
+
+// SystemKeyGTE applies the GTE predicate on the "system_key" field.
+func SystemKeyGTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldSystemKey, v))
+}
+
+// SystemKeyLT applies the LT predicate on the "system_key" field.
+func SystemKeyLT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldSystemKey, v))
+}
+
+// SystemKeyLTE applies the LTE predicate on the "system_key" field.
+func SystemKeyLTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldSystemKey, v))
+}
+
+// SystemKeyContains applies the Contains predicate on the "system_key" field.
+func SystemKeyContains(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContains(FieldSystemKey, v))
+}
+
+// SystemKeyHasPrefix applies the HasPrefix predicate on the "system_key" field.
+func SystemKeyHasPrefix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasPrefix(FieldSystemKey, v))
+}
+
+// SystemKeyHasSuffix applies the HasSuffix predicate on the "system_key" field.
+func SystemKeyHasSuffix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasSuffix(FieldSystemKey, v))
+}
+
+// SystemKeyIsNil applies the IsNil predicate on the "system_key" field.
+func SystemKeyIsNil() predicate.Resource {
+	return predicate.Resource(sql.FieldIsNull(FieldSystemKey))
+}
+
+// SystemKeyNotNil applies the NotNil predicate on the "system_key" field.
+func SystemKeyNotNil() predicate.Resource {
+	return predicate.Resource(sql.FieldNotNull(FieldSystemKey))
+}
+
+// SystemKeyEqualFold applies the EqualFold predicate on the "system_key" field.
+func SystemKeyEqualFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEqualFold(FieldSystemKey, v))
+}
+
+// SystemKeyContainsFold applies the ContainsFold predicate on the "system_key" field.
+func SystemKeyContainsFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContainsFold(FieldSystemKey, v))
 }
 
 // ParentIDEQ applies the EQ predicate on the "parent_id" field.
@@ -1550,6 +1710,29 @@ func HasChildren() predicate.Resource {
 func HasChildrenWith(preds ...predicate.Resource) predicate.Resource {
 	return predicate.Resource(func(s *sql.Selector) {
 		step := newChildrenStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasPersonalOwner applies the HasEdge predicate on the "personal_owner" edge.
+func HasPersonalOwner() predicate.Resource {
+	return predicate.Resource(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, PersonalOwnerTable, PersonalOwnerColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasPersonalOwnerWith applies the HasEdge predicate on the "personal_owner" edge with a given conditions (other predicates).
+func HasPersonalOwnerWith(preds ...predicate.IdentityUser) predicate.Resource {
+	return predicate.Resource(func(s *sql.Selector) {
+		step := newPersonalOwnerStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

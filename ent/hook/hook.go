@@ -128,6 +128,18 @@ func (f GrantFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GrantMutation", m)
 }
 
+// The GroupInboxFunc type is an adapter to allow the use of ordinary
+// function as GroupInbox mutator.
+type GroupInboxFunc func(context.Context, *ent.GroupInboxMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f GroupInboxFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.GroupInboxMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GroupInboxMutation", m)
+}
+
 // The IdentityAssignmentFunc type is an adapter to allow the use of ordinary
 // function as IdentityAssignment mutator.
 type IdentityAssignmentFunc func(context.Context, *ent.IdentityAssignmentMutation) (ent.Value, error)
@@ -164,6 +176,18 @@ func (f IdentityMembershipFunc) Mutate(ctx context.Context, m ent.Mutation) (ent
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityMembershipMutation", m)
 }
 
+// The IdentityOrganizationFunc type is an adapter to allow the use of ordinary
+// function as IdentityOrganization mutator.
+type IdentityOrganizationFunc func(context.Context, *ent.IdentityOrganizationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IdentityOrganizationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IdentityOrganizationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityOrganizationMutation", m)
+}
+
 // The IdentityPreferenceFunc type is an adapter to allow the use of ordinary
 // function as IdentityPreference mutator.
 type IdentityPreferenceFunc func(context.Context, *ent.IdentityPreferenceMutation) (ent.Value, error)
@@ -174,6 +198,18 @@ func (f IdentityPreferenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityPreferenceMutation", m)
+}
+
+// The IdentityRESTTokenFunc type is an adapter to allow the use of ordinary
+// function as IdentityRESTToken mutator.
+type IdentityRESTTokenFunc func(context.Context, *ent.IdentityRESTTokenMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IdentityRESTTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IdentityRESTTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityRESTTokenMutation", m)
 }
 
 // The IdentityRoleFunc type is an adapter to allow the use of ordinary
@@ -246,6 +282,18 @@ func (f ListViewFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ListViewMutation", m)
+}
+
+// The LiveChangeFunc type is an adapter to allow the use of ordinary
+// function as LiveChange mutator.
+type LiveChangeFunc func(context.Context, *ent.LiveChangeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LiveChangeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LiveChangeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LiveChangeMutation", m)
 }
 
 // The OperationFunc type is an adapter to allow the use of ordinary
@@ -354,6 +402,42 @@ func (f SmartFolderFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SmartFolderMutation", m)
+}
+
+// The SyncStateFunc type is an adapter to allow the use of ordinary
+// function as SyncState mutator.
+type SyncStateFunc func(context.Context, *ent.SyncStateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SyncStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SyncStateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SyncStateMutation", m)
+}
+
+// The SyncTokenFunc type is an adapter to allow the use of ordinary
+// function as SyncToken mutator.
+type SyncTokenFunc func(context.Context, *ent.SyncTokenMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SyncTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SyncTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SyncTokenMutation", m)
+}
+
+// The SyncViewFunc type is an adapter to allow the use of ordinary
+// function as SyncView mutator.
+type SyncViewFunc func(context.Context, *ent.SyncViewMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SyncViewFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SyncViewMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SyncViewMutation", m)
 }
 
 // The TermFunc type is an adapter to allow the use of ordinary

@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	"papergo/internal/model"
 	"time"
 )
 
@@ -16,12 +17,14 @@ func (Resource) Mixin() []ent.Mixin { return []ent.Mixin{Identity{}} }
 func (Resource) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("workspace_id").NotEmpty().MaxLen(36),
+		field.String("personal_owner_id").Optional().Nillable().MaxLen(255),
+		field.String("system_key").Optional().Nillable().MaxLen(32),
 		// Folders and items can move within their collection; triggers keep containment valid.
 		field.String("parent_id").Optional().Nillable().MaxLen(36),
 		field.String("container_id").Optional().Nillable().MaxLen(36),
 		field.String("content_type_id").Optional().Nillable().MaxLen(36),
 		field.Enum("kind").Values("workspace", "list", "library", "folder", "item").Immutable(),
-		field.String("name").NotEmpty().MaxRuneLen(255),
+		field.String("name").NotEmpty().MaxLen(4096).Validate(model.ValidateTitle),
 		// Descriptive metadata of a workspace or collection.
 		field.String("description").Default("").MaxRuneLen(2000),
 		// Collections only: controls creation of physical folders.
@@ -49,7 +52,7 @@ func (Resource) Fields() []ent.Field {
 		field.String("scope_id").Optional().Nillable().MaxLen(36),
 		// Case-folded head name of a live library folder or item. Its unique index
 		// gives library siblings file-system names; other resources leave it null.
-		field.String("name_key").Optional().Nillable().MaxLen(1024).StructTag(`json:"-"`),
+		field.String("name_key").Optional().Nillable().MaxLen(4096).StructTag(`json:"-"`),
 		// Deleted resources are tombstones: hidden everywhere, their history retained.
 		field.Time("deleted_at").Optional().Nillable().StructTag(`json:"-"`),
 		field.String("deleted_by").Optional().Nillable().StructTag(`json:"-"`),
@@ -58,6 +61,7 @@ func (Resource) Fields() []ent.Field {
 func (Resource) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("children", Resource.Type),
+		edge.To("personal_owner", IdentityUser.Type).Field("personal_owner_id").Unique().Annotations(entsql.OnDelete(entsql.NoAction)),
 		edge.From("parent", Resource.Type).Ref("children").Field("parent_id").Unique(),
 		edge.To("contained_items", Resource.Type),
 		edge.From("container", Resource.Type).Ref("contained_items").Field("container_id").Unique(),
@@ -76,6 +80,8 @@ func (Resource) Edges() []ent.Edge {
 func (Resource) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("workspace_id", "kind", "id"),
+		index.Fields("personal_owner_id").Unique().Annotations(entsql.IndexWhere("personal_owner_id IS NOT NULL")),
+		index.Fields("workspace_id", "system_key").Unique().Annotations(entsql.IndexWhere("system_key IS NOT NULL")),
 		index.Fields("kind", "id", "workspace_id", "scope_id"),
 		// scope_id makes these covering for permission checks, so rows a subject
 		// cannot read are rejected without loading them.

@@ -41,7 +41,7 @@ func (s *Service) StartBulkUpdate(ctx context.Context, subject, collectionID str
 		if e != nil {
 			return e
 		}
-		out, e = t.Client.Operation.Create().SetContainerID(c.ID).SetKind(operation.KindBulkUpdate).SetCreatedBy(subject).SetPayload(payload).Save(ctx)
+		out, e = operationCredentials(ctx, t.Client.Operation.Create().SetContainerID(c.ID).SetKind(OperationKindBulkUpdate).SetCreatedBy(subject).SetPayload(payload).SetTraceID(t.traceID)).Save(ctx)
 		if e != nil {
 			return e
 		}

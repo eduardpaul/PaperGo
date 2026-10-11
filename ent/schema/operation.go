@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	"github.com/google/uuid"
 	"papergo/internal/model"
 	"time"
 )
@@ -18,9 +19,15 @@ type Operation struct{ ent.Schema }
 func (Operation) Mixin() []ent.Mixin { return []ent.Mixin{Identity{}} }
 func (Operation) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("container_id").Immutable(),
+		field.String("container_id").Optional().Immutable(),
 		field.String("field_id").Default("").Immutable(),
-		field.Enum("kind").Values("field_index", "bulk_update").Immutable(),
+		field.String("kind").NotEmpty().MaxLen(64).Immutable(),
+		field.String("trace_id").DefaultFunc(uuid.NewString).Immutable(),
+		field.String("credential_id").Optional().Immutable().StructTag(`json:"-"`),
+		field.JSON("credential_scopes", []string{}).Default([]string{}).Immutable().StructTag(`json:"-"`),
+		field.JSON("result", json.RawMessage{}).Default(json.RawMessage(`{}`)),
+		field.Time("started_at").Optional().Nillable(),
+		field.Time("completed_at").Optional().Nillable(),
 		field.Enum("status").Values("pending", "succeeded", "failed", "superseded").Default("pending"),
 		field.Enum("surface").Values("head", "published").Default("head").StructTag(`json:"-"`),
 		field.String("after_item_id").Default("").StructTag(`json:"-"`),
@@ -34,12 +41,12 @@ func (Operation) Fields() []ent.Field {
 		field.JSON("failures", []model.OperationFailure{}).Default([]model.OperationFailure{}),
 		field.String("error").Default(""),
 		field.String("created_by").Immutable(),
-		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
+		field.Time("updated_at").Default(func() time.Time { return time.Now().UTC() }).UpdateDefault(func() time.Time { return time.Now().UTC() }),
 	}
 }
 func (Operation) Edges() []ent.Edge {
-	return []ent.Edge{edge.To("container", Resource.Type).Field("container_id").Unique().Required().Immutable()}
+	return []ent.Edge{edge.To("container", Resource.Type).Field("container_id").Unique().Immutable()}
 }
 func (Operation) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("status", "created_at"), index.Fields("container_id", "id")}
+	return []ent.Index{index.Fields("status", "created_at"), index.Fields("container_id", "id"), index.Fields("status", "updated_at")}
 }

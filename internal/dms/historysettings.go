@@ -4,7 +4,6 @@ import (
 	"context"
 	"papergo/ent"
 	"papergo/ent/itemhistory"
-	"papergo/ent/itemrevision"
 	"papergo/ent/resource"
 )
 
@@ -30,24 +29,37 @@ func (s *Service) retainHistory(ctx context.Context, collection *ent.Resource, r
 		if err != nil {
 			return err
 		}
-		if err = s.Client.ItemHistory.Create().SetRevisionID(revision.ID).SetChangedFields(changed).Exec(ctx); err != nil {
-			return err
-		}
-		retained, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(revision.ItemID), itemrevision.HasHistory()).Order(ent.Desc(itemrevision.FieldRevisionNumber)).Offset(collection.MaxVersions).All(ctx)
+		last, err := s.currentHistoryNumber(ctx, revision.ItemID)
 		if err != nil {
 			return err
 		}
-		ids := make([]string, 0, len(retained))
-		for _, old := range retained {
-			ids = append(ids, old.ID)
+		if err = s.Client.ItemHistory.Create().SetRevisionID(revision.ID).SetItemID(revision.ItemID).SetNumber(last + 1).SetChangedFields(changed).Exec(ctx); err != nil {
+			return err
 		}
-		if len(ids) > 0 {
-			if _, err = s.Client.ItemHistory.Delete().Where(itemhistory.RevisionIDIn(ids...)).Exec(ctx); err != nil {
-				return err
-			}
+		_, err = s.Client.ItemHistory.Delete().Where(itemhistory.ItemIDEQ(revision.ItemID), itemhistory.NumberLT(last+2-collection.MaxVersions)).Exec(ctx)
+		if err != nil {
+			return err
 		}
 	}
-	// Durable item events and publication audit reference immutable content
-	// snapshots independently of user history; retention removes history entries.
 	return nil
+}
+
+// CollectRevisions removes snapshots with no live surface, retained history or
+// queued event. Publication records contain their own immutable snapshots.
+// Queued events also keep the preceding revision for term-change triggers.
+func (s *Service) CollectRevisions(ctx context.Context) error {
+	return s.write(ctx, func(t *Service) error { return t.collectRevisions(ctx, "") })
+}
+
+func (s *Service) collectRevisions(ctx context.Context, itemID string) error {
+	_, err := s.Client.ExecContext(ctx, `DELETE FROM item_revisions AS v
+WHERE (?='' OR v.item_id=?)
+AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.head_revision_id=v.id OR r.published_revision_id=v.id)
+AND NOT EXISTS (SELECT 1 FROM item_surfaces p WHERE p.revision_id=v.id)
+AND NOT EXISTS (SELECT 1 FROM item_histories h WHERE h.revision_id=v.id)
+AND NOT EXISTS (SELECT 1 FROM domain_events e JOIN item_revisions event_revision
+ ON event_revision.id=json_extract(e.data,'$.revision_id')
+ WHERE e.dispatched_at IS NULL AND event_revision.item_id=v.item_id
+ AND (event_revision.id=v.id OR event_revision.revision_number=v.revision_number+1))`, itemID, itemID)
+	return err
 }

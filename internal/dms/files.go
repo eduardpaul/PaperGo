@@ -110,6 +110,9 @@ func (s *Service) LibraryFolder(ctx context.Context, subject, libraryID string, 
 // before storing any bytes; PutFile repeats every check transactionally.
 func (s *Service) WriteTarget(ctx context.Context, subject, libraryID string, path []string, cond FileConditions) (*File, error) {
 	return read(ctx, s, func(t *Service) (*File, error) {
+		if err := t.RequireScope(ctx, subject, "document.write"); err != nil {
+			return nil, err
+		}
 		if len(path) == 0 {
 			_, lib, err := t.resolveFile(ctx, subject, libraryID, nil)
 			if err == nil {
@@ -138,6 +141,37 @@ type PutFile struct {
 	Tags          []string
 	Values        map[string]any
 	ContentTypeID string
+}
+
+// MakeEmptyFile maps a WebDAV lock URL or copies an item with no content.
+// Empty items have no blob; file uploads still require a supported signature.
+func (s *Service) MakeEmptyFile(ctx context.Context, subject, libraryID string, path []string, in CreateResource, cond FileConditions) (out *File, err error) {
+	err = s.write(ctx, func(t *Service) error {
+		if err := t.RequireScope(ctx, subject, "document.write"); err != nil {
+			return err
+		}
+		_, parent, existing, err := t.target(ctx, subject, libraryID, path, cond)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			if existing.Collection() {
+				return ErrExists
+			}
+			if err = t.delete(ctx, subject, existing.ID, existing.Version, true); err != nil {
+				return err
+			}
+		}
+		in.Kind = "item"
+		in.Name = path[len(path)-1]
+		item, err := t.create(ctx, subject, parent.ID, in, nil)
+		if err != nil {
+			return err
+		}
+		out, err = t.fileByID(ctx, subject, item.ID)
+		return err
+	})
+	return
 }
 
 // PutFile stores content at path in one transaction: it creates the item with
@@ -265,7 +299,7 @@ func (s *Service) resolveFile(ctx context.Context, subject, libraryID string, pa
 	if lib.Kind != resource.KindLibrary || !lib.WebdavEnabled {
 		return nil, nil, ErrNotFound
 	}
-	if len(path) > MaxDepth {
+	if len(path) > MaxFolderDepth+1 {
 		return lib, nil, ErrNotFound
 	}
 	f := &File{Resource: lib}
@@ -351,8 +385,8 @@ func (s *Service) fileByID(ctx context.Context, subject, id string) (*File, erro
 // visibleFiles loads the live, readable, visible resources of q in ID order,
 // with each item's visible surface and the blob of its visible revision.
 func (s *Service) visibleFiles(ctx context.Context, subject string, q *ent.ResourceQuery) ([]*File, error) {
-	rows, err := q.Where(resource.DeletedAtIsNil(), permissionPredicate(subject, "read"), func(sel *entsql.Selector) {
-		text, args := visibleSQL(sel.C(resource.FieldID), subject, "auto")
+	rows, err := q.Where(resource.DeletedAtIsNil(), permissionPredicate(ctx, subject, "read"), func(sel *entsql.Selector) {
+		text, args := visibleSQL(ctx, sel.C(resource.FieldID), subject, "auto")
 		sel.Where(entsql.ExprP(text, args...))
 	}).Order(ent.Asc(resource.FieldID)).Limit(MaxFolderEntries + 1).All(ctx)
 	if err != nil {

@@ -84,7 +84,7 @@ func TestOrdinaryReaderHistoryAPI(t *testing.T) {
 	}
 	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "reader"}, Logger: slog.Default()}).Handler()
 	path := "/v1/items/" + item.ID + "/revisions"
-	res := request(h, "GET", path+"?$skiptoken=1&$top=1", "", testToken, "", "")
+	res := request(h, "GET", path+"?$skiptoken=2&$top=1", "", testToken, "", "")
 	if res.Code != 200 {
 		t.Fatal(res.Code, res.Body.String())
 	}

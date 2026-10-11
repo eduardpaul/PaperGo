@@ -171,7 +171,7 @@ func (s *Service) smartFolder(ctx context.Context, subject, id string, manage bo
 
 func (s *Service) auditSmartFolder(ctx context.Context, subject, action string, f *ent.SmartFolder) error {
 	if f.WorkspaceID == nil || f.OwnerID != nil {
-		return nil
+		return s.auditCatalog(ctx, subject, action, map[string]any{"smart_folder_id": f.ID})
 	}
 	if err := s.Client.Resource.UpdateOneID(*f.WorkspaceID).SetUpdatedBy(subject).AddVersion(1).Exec(ctx); err != nil {
 		return err
@@ -230,7 +230,7 @@ func (s *Service) SmartFolders(ctx context.Context, subject, workspace, after st
 		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
 			return Page[*ent.SmartFolder]{}, err
 		}
-		acl, args := permissionSQL("smart_folders.workspace_id", subject, "read")
+		acl, args := permissionSQL(ctx, "smart_folders.workspace_id", subject, "read")
 		q := t.Client.SmartFolder.Query().Where(smartfolder.IDGT(after), func(sel *entsql.Selector) {
 			sel.Where(entsql.ExprP("(owner_id=? OR (owner_id IS NULL AND "+acl+"))", append([]any{subject}, args...)...))
 		})

@@ -15,10 +15,14 @@ func (ItemHistory) Mixin() []ent.Mixin { return []ent.Mixin{Identity{}} }
 func (ItemHistory) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("revision_id").Immutable(),
+		field.String("item_id").Immutable(),
+		field.Int("number").Positive().Immutable(),
 		field.JSON("changed_fields", []string{}).Immutable(),
 	}
 }
 func (ItemHistory) Edges() []ent.Edge {
-	return []ent.Edge{edge.From("revision", ItemRevision.Type).Ref("history").Field("revision_id").Unique().Required().Immutable()}
+	return []ent.Edge{edge.From("revision", ItemRevision.Type).Ref("history").Field("revision_id").Unique().Required().Immutable(), edge.To("item", Resource.Type).Field("item_id").Unique().Required().Immutable()}
 }
-func (ItemHistory) Indexes() []ent.Index { return []ent.Index{index.Fields("revision_id").Unique()} }
+func (ItemHistory) Indexes() []ent.Index {
+	return []ent.Index{index.Fields("revision_id").Unique(), index.Fields("item_id", "number").Unique()}
+}

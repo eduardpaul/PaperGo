@@ -22,7 +22,7 @@ func davLibrary(t *testing.T, s *Service, w *ent.Resource, publishing bool) *ent
 	return lib
 }
 func content(name string) BlobInput {
-	return BlobInput{ObjectKey: uuid.NewString(), Filename: name, ContentType: "text/plain", Size: 1, SHA256: strings.Repeat("a", 64)}
+	return BlobInput{ObjectKey: uuid.NewString(), Filename: name, ContentType: "application/pdf", Size: 1, SHA256: strings.Repeat("a", 64)}
 }
 func revisionCount(t *testing.T, s *Service, id string) int {
 	t.Helper()
@@ -181,7 +181,7 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 		if _, err := s.Get(testContext, "alice", id); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("deleted resource readable: %v", err)
 		}
-		if _, err := s.Revisions(testContext, "alice", id, 0, 10); !errors.Is(err, ErrNotFound) {
+		if _, err := s.RevisionHistory(testContext, "alice", id, 0, 10); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("deleted history readable: %v", err)
 		}
 	}
@@ -199,7 +199,7 @@ func TestDeleteFolderTreeRequiresExplicitIntentAndPermissions(t *testing.T) {
 	if n, err := s.Client.Relationship.Query().Where(relationship.TargetIDEQ(inner.ID)).Count(testContext); err != nil || n != 1 {
 		t.Fatalf("relationship not retained for recovery: %d %v", n, err)
 	}
-	if links, err := s.Relationships(testContext, "alice", outside.ID, "outgoing", "", "", 50); err != nil || len(links.Data) != 0 {
+	if links, err := s.Relationships(testContext, "alice", outside.ID, "both", "", "", 50); err != nil || len(links.Data) != 0 {
 		t.Fatalf("deleted relationship exposed: %+v %v", links, err)
 	}
 	event, err := s.Client.AuditEvent.Query().Where(auditevent.ResourceIDEQ(folder.ID), auditevent.ActionEQ("resource.delete")).Only(testContext)

@@ -108,6 +108,9 @@ func conformant(t *testing.T, h http.Handler) http.Handler {
 			}
 			return
 		}
+		if !strings.Contains(media, "json") {
+			return
+		}
 		decoder := json.NewDecoder(&rec.body)
 		decoder.UseNumber()
 		var body any
@@ -179,5 +182,5 @@ func TestRESTCatalogMatchesContract(t *testing.T) {
 	send("GET", "/v1/resources/"+list+"/views", "", "", 200)
 	send("GET", "/v1/views/"+view, "", "", 200)
 	send("POST", "/v1/views/"+view+"/query/groups", `{}`, "", 200)
-	send("GET", "/v1/workspaces/"+ws+"/audit?$top=5", "", "", 200)
+	send("GET", "/v1/audit?$top=5", "", "", 200)
 }

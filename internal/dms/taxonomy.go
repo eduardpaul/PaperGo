@@ -416,7 +416,7 @@ func (s *Service) insertTerm(ctx context.Context, set *ent.TermSet, parent *ent.
 		}
 		path, parentID = parent.Path+id+"/", &parent.ID
 	}
-	if termLevels(path) > MaxDepth {
+	if termLevels(path) > MaxTaxonomyDepth {
 		return nil, invalid("term hierarchy depth exceeded")
 	}
 	if in.AvailableAsKeyword && set.IsKeywords {

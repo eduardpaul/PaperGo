@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"mime"
 	"net/http"
 	"path"
 	"strconv"
@@ -24,7 +23,25 @@ func blobResponse(b *ent.Blob, resourceVersion int) map[string]any {
 const documentMetadataLimit int64 = 64 << 10
 
 func (a *API) createDocument(w http.ResponseWriter, r *http.Request) {
-	if err := a.DMS.CanCreateDocument(r.Context(), subject(r), r.PathValue("id")); err != nil {
+	a.createDocumentTo(w, r, "", false)
+}
+func (a *API) createPersonalInboxDocument(w http.ResponseWriter, r *http.Request) {
+	a.createDocumentTo(w, r, "", true)
+}
+func (a *API) createGroupInboxDocument(w http.ResponseWriter, r *http.Request) {
+	a.createDocumentTo(w, r, r.PathValue("id"), true)
+}
+func (a *API) createDocumentTo(w http.ResponseWriter, r *http.Request, groupID string, inbox bool) {
+	libraryID := r.PathValue("id")
+	if inbox {
+		var err error
+		libraryID, err = a.DMS.InboxUploadDestination(r.Context(), subject(r), groupID)
+		if err != nil {
+			a.failure(w, r, err)
+			return
+		}
+	}
+	if err := a.DMS.CanCreateDocument(r.Context(), subject(r), libraryID); err != nil {
 		a.failure(w, r, err)
 		return
 	}
@@ -82,17 +99,7 @@ func (a *API) createDocument(w http.ResponseWriter, r *http.Request) {
 				a.problem(w, r, 400, "invalid_upload", "file must have a filename")
 				return
 			}
-			media = part.Header.Get("Content-Type")
-			if media == "" {
-				media = "application/octet-stream"
-			}
-			media, _, err = mime.ParseMediaType(media)
-			if err != nil {
-				part.Close()
-				a.problem(w, r, 400, "invalid_upload", "invalid file Content-Type")
-				return
-			}
-			object, err = a.Storage.Put(r.Context(), part, a.MaxUpload)
+			object, media, err = storage.PutDocument(r.Context(), a.Storage, part, a.MaxUpload)
 			if err != nil {
 				if errors.Is(err, io.ErrUnexpectedEOF) {
 					a.problem(w, r, 400, "invalid_upload", "invalid multipart file")
@@ -133,6 +140,19 @@ func (a *API) createDocument(w http.ResponseWriter, r *http.Request) {
 				a.problem(w, r, 400, "invalid_upload", "metadata must be one JSON object")
 				return
 			}
+			if inbox {
+				var fields map[string]json.RawMessage
+				if err = json.Unmarshal(raw, &fields); err != nil {
+					a.problem(w, r, 400, "invalid_upload", "metadata must be a JSON object")
+					return
+				}
+				_, folderOverride := fields["folder_id"]
+				_, typeOverride := fields["content_type_id"]
+				if folderOverride || typeOverride {
+					a.failure(w, r, &dms.ValidationError{Message: "Inbox uploads use the library root and default content type"})
+					return
+				}
+			}
 			if strings.TrimSpace(string(raw)) == "null" {
 				a.problem(w, r, 400, "invalid_upload", "metadata must be a JSON object")
 				return
@@ -147,7 +167,13 @@ func (a *API) createDocument(w http.ResponseWriter, r *http.Request) {
 		a.problem(w, r, 400, "invalid_upload", "a file part is required")
 		return
 	}
-	out, err := a.DMS.CreateDocument(r.Context(), subject(r), r.PathValue("id"), metadata, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256})
+	content := dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256}
+	var out *dms.DocumentUpload
+	if inbox {
+		out, err = a.DMS.CreateInboxDocument(r.Context(), subject(r), groupID, libraryID, metadata, content)
+	} else {
+		out, err = a.DMS.CreateDocument(r.Context(), subject(r), libraryID, metadata, content)
+	}
 	if err != nil {
 		a.failure(w, r, err)
 		return

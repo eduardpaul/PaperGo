@@ -16,16 +16,20 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/fieldvalue"
 	"papergo/ent/grant"
+	"papergo/ent/groupinbox"
 	"papergo/ent/identityassignment"
 	"papergo/ent/identitygroup"
 	"papergo/ent/identitymembership"
+	"papergo/ent/identityorganization"
 	"papergo/ent/identitypreference"
+	"papergo/ent/identityresttoken"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
 	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
+	"papergo/ent/livechange"
 	"papergo/ent/operation"
 	"papergo/ent/operationitem"
 	"papergo/ent/publication"
@@ -35,6 +39,9 @@ import (
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
+	"papergo/ent/syncstate"
+	"papergo/ent/synctoken"
+	"papergo/ent/syncview"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
@@ -110,44 +117,51 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			auditevent.Table:         auditevent.ValidColumn,
-			blob.Table:               blob.ValidColumn,
-			blobdeletion.Table:       blobdeletion.ValidColumn,
-			businesskey.Table:        businesskey.ValidColumn,
-			collectiontype.Table:     collectiontype.ValidColumn,
-			contenttype.Table:        contenttype.ValidColumn,
-			domainevent.Table:        domainevent.ValidColumn,
-			fielddefinition.Table:    fielddefinition.ValidColumn,
-			fieldvalue.Table:         fieldvalue.ValidColumn,
-			grant.Table:              grant.ValidColumn,
-			identityassignment.Table: identityassignment.ValidColumn,
-			identitygroup.Table:      identitygroup.ValidColumn,
-			identitymembership.Table: identitymembership.ValidColumn,
-			identitypreference.Table: identitypreference.ValidColumn,
-			identityrole.Table:       identityrole.ValidColumn,
-			identityuser.Table:       identityuser.ValidColumn,
-			itemhistory.Table:        itemhistory.ValidColumn,
-			itemrevision.Table:       itemrevision.ValidColumn,
-			itemsurface.Table:        itemsurface.ValidColumn,
-			listview.Table:           listview.ValidColumn,
-			operation.Table:          operation.ValidColumn,
-			operationitem.Table:      operationitem.ValidColumn,
-			publication.Table:        publication.ValidColumn,
-			relationship.Table:       relationship.ValidColumn,
-			relationshiptype.Table:   relationshiptype.ValidColumn,
-			resource.Table:           resource.ValidColumn,
-			schemarevision.Table:     schemarevision.ValidColumn,
-			schematemplate.Table:     schematemplate.ValidColumn,
-			smartfolder.Table:        smartfolder.ValidColumn,
-			term.Table:               term.ValidColumn,
-			termgroup.Table:          termgroup.ValidColumn,
-			termset.Table:            termset.ValidColumn,
-			webdavcredential.Table:   webdavcredential.ValidColumn,
-			workflow.Table:           workflow.ValidColumn,
-			workflowrun.Table:        workflowrun.ValidColumn,
-			workflowrunitem.Table:    workflowrunitem.ValidColumn,
-			workflowtrigger.Table:    workflowtrigger.ValidColumn,
-			workflowversion.Table:    workflowversion.ValidColumn,
+			auditevent.Table:           auditevent.ValidColumn,
+			blob.Table:                 blob.ValidColumn,
+			blobdeletion.Table:         blobdeletion.ValidColumn,
+			businesskey.Table:          businesskey.ValidColumn,
+			collectiontype.Table:       collectiontype.ValidColumn,
+			contenttype.Table:          contenttype.ValidColumn,
+			domainevent.Table:          domainevent.ValidColumn,
+			fielddefinition.Table:      fielddefinition.ValidColumn,
+			fieldvalue.Table:           fieldvalue.ValidColumn,
+			grant.Table:                grant.ValidColumn,
+			groupinbox.Table:           groupinbox.ValidColumn,
+			identityassignment.Table:   identityassignment.ValidColumn,
+			identitygroup.Table:        identitygroup.ValidColumn,
+			identitymembership.Table:   identitymembership.ValidColumn,
+			identityorganization.Table: identityorganization.ValidColumn,
+			identitypreference.Table:   identitypreference.ValidColumn,
+			identityresttoken.Table:    identityresttoken.ValidColumn,
+			identityrole.Table:         identityrole.ValidColumn,
+			identityuser.Table:         identityuser.ValidColumn,
+			itemhistory.Table:          itemhistory.ValidColumn,
+			itemrevision.Table:         itemrevision.ValidColumn,
+			itemsurface.Table:          itemsurface.ValidColumn,
+			listview.Table:             listview.ValidColumn,
+			livechange.Table:           livechange.ValidColumn,
+			operation.Table:            operation.ValidColumn,
+			operationitem.Table:        operationitem.ValidColumn,
+			publication.Table:          publication.ValidColumn,
+			relationship.Table:         relationship.ValidColumn,
+			relationshiptype.Table:     relationshiptype.ValidColumn,
+			resource.Table:             resource.ValidColumn,
+			schemarevision.Table:       schemarevision.ValidColumn,
+			schematemplate.Table:       schematemplate.ValidColumn,
+			smartfolder.Table:          smartfolder.ValidColumn,
+			syncstate.Table:            syncstate.ValidColumn,
+			synctoken.Table:            synctoken.ValidColumn,
+			syncview.Table:             syncview.ValidColumn,
+			term.Table:                 term.ValidColumn,
+			termgroup.Table:            termgroup.ValidColumn,
+			termset.Table:              termset.ValidColumn,
+			webdavcredential.Table:     webdavcredential.ValidColumn,
+			workflow.Table:             workflow.ValidColumn,
+			workflowrun.Table:          workflowrun.ValidColumn,
+			workflowrunitem.Table:      workflowrunitem.ValidColumn,
+			workflowtrigger.Table:      workflowtrigger.ValidColumn,
+			workflowversion.Table:      workflowversion.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

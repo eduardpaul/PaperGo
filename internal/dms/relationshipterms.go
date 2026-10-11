@@ -11,7 +11,7 @@ import (
 // A taxonomy merge also merges predicate policies and edges. Cardinality-bound
 // predicates cannot merge while used, and conflicting semantics or attributes
 // reject the whole curation transaction.
-func (s *Service) mergeRelationshipTerms(ctx context.Context, source, target *ent.Term) error {
+func (s *Service) mergeRelationshipTerms(ctx context.Context, subject string, source, target *ent.Term) error {
 	a, err := s.Client.RelationshipType.Get(ctx, source.ID)
 	if ent.IsNotFound(err) {
 		return nil
@@ -75,9 +75,12 @@ func (s *Service) mergeRelationshipTerms(ctx context.Context, source, target *en
 			return err
 		}
 		if duplicate == nil {
-			if err = s.Client.Relationship.Create().SetID(edge.ID).SetCreatedAt(edge.CreatedAt).SetWorkspaceID(edge.WorkspaceID).SetSourceID(edge.SourceID).SetTargetID(edge.TargetID).SetTypeID(target.ID).SetDirected(edge.Directed).SetMetadata(edge.Metadata).SetVersion(edge.Version + 1).Exec(ctx); err != nil {
+			if err = s.Client.Relationship.Create().SetID(edge.ID).SetCreatedAt(edge.CreatedAt).SetSourceID(edge.SourceID).SetTargetID(edge.TargetID).SetTypeID(target.ID).SetDirected(edge.Directed).SetMetadata(edge.Metadata).SetVersion(edge.Version + 1).Exec(ctx); err != nil {
 				return err
 			}
+		}
+		if err = s.touchRelationship(ctx, subject, edge, "updated"); err != nil {
+			return err
 		}
 	}
 	return s.Client.RelationshipType.DeleteOne(a).Exec(ctx)

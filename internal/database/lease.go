@@ -16,6 +16,11 @@ func AcquireLease(path string, exclusive bool) (*os.File, error) {
 	if err = os.MkdirAll(filepath.Dir(abs), 0700); err != nil {
 		return nil, err
 	}
+	if resolved, e := filepath.EvalSymlinks(abs); e == nil {
+		abs = resolved
+	} else if !os.IsNotExist(e) {
+		return nil, e
+	}
 	parent, err := filepath.EvalSymlinks(filepath.Dir(abs))
 	if err != nil {
 		return nil, err

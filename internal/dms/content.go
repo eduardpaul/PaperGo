@@ -9,6 +9,7 @@ import (
 	"papergo/ent/itemsurface"
 	"papergo/ent/publication"
 	"papergo/ent/resource"
+	"papergo/internal/storage"
 	"time"
 )
 
@@ -163,6 +164,9 @@ type BlobInput struct {
 }
 
 func (s *Service) CanUpload(ctx context.Context, subject, id string, version int) error {
+	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
+		return err
+	}
 	r, err := s.authorize(ctx, subject, id, "write")
 	if err != nil {
 		return err
@@ -255,16 +259,33 @@ func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, v
 
 // createBlob stores the metadata of the item's next blob version.
 func (s *Service) createBlob(ctx context.Context, subject, itemID string, in BlobInput, checkDuplicates bool) (*ent.Blob, error) {
+	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
+		return nil, err
+	}
 	if err := ValidateDocumentLanguages(in.Languages); err != nil {
 		return nil, err
 	}
 	if !filenameValid(in.Filename) || in.Size < 0 || len(in.SHA256) != 64 || len(in.ContentType) > 255 || in.ContentType == "" || in.ObjectKey == "" {
 		return nil, invalid("invalid blob metadata")
 	}
+	if !storage.SupportedDocumentType(in.ContentType) {
+		return nil, storage.ErrUnsupportedFile
+	}
 	if checkDuplicates {
 		if _, err := s.checkDuplicatePolicy(ctx, subject, itemID, in.SHA256); err != nil {
 			return nil, err
 		}
+	}
+	// Physical bytes are shared across the organization; filenames, media types,
+	// language hints and file-version permissions remain specific to each item.
+	stored, err := s.Client.Blob.Query().Where(blob.Sha256EQ(in.SHA256), blob.SizeEQ(in.Size)).Order(ent.Asc(blob.FieldID)).First(ctx)
+	if err == nil && stored.ObjectKey != in.ObjectKey {
+		if _, err = s.Client.BlobDeletion.Create().SetObjectKey(in.ObjectKey).Save(ctx); err != nil {
+			return nil, err
+		}
+		in.ObjectKey = stored.ObjectKey
+	} else if err != nil && !ent.IsNotFound(err) {
+		return nil, err
 	}
 	version := 1
 	last, err := s.Client.Blob.Query().Where(blob.ItemIDEQ(itemID)).Order(ent.Desc(blob.FieldVersion)).First(ctx)
@@ -278,6 +299,9 @@ func (s *Service) createBlob(ctx context.Context, subject, itemID string, in Blo
 func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent.Blob, error) {
 	if !s.transaction {
 		return read(ctx, s, func(t *Service) (*ent.Blob, error) { return t.GetBlob(ctx, subject, id, blobID) })
+	}
+	if err := s.RequireScope(ctx, subject, "document.read"); err != nil {
+		return nil, err
 	}
 	r, err := s.Get(ctx, subject, id)
 	if err != nil {

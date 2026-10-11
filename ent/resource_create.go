@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"papergo/ent/blob"
 	"papergo/ent/grant"
+	"papergo/ent/identityuser"
 	"papergo/ent/itemrevision"
 	"papergo/ent/publication"
 	"papergo/ent/relationship"
@@ -43,6 +44,34 @@ func (_c *ResourceCreate) SetNillableCreatedAt(v *time.Time) *ResourceCreate {
 // SetWorkspaceID sets the "workspace_id" field.
 func (_c *ResourceCreate) SetWorkspaceID(v string) *ResourceCreate {
 	_c.mutation.SetWorkspaceID(v)
+	return _c
+}
+
+// SetPersonalOwnerID sets the "personal_owner_id" field.
+func (_c *ResourceCreate) SetPersonalOwnerID(v string) *ResourceCreate {
+	_c.mutation.SetPersonalOwnerID(v)
+	return _c
+}
+
+// SetNillablePersonalOwnerID sets the "personal_owner_id" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillablePersonalOwnerID(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetPersonalOwnerID(*v)
+	}
+	return _c
+}
+
+// SetSystemKey sets the "system_key" field.
+func (_c *ResourceCreate) SetSystemKey(v string) *ResourceCreate {
+	_c.mutation.SetSystemKey(v)
+	return _c
+}
+
+// SetNillableSystemKey sets the "system_key" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableSystemKey(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetSystemKey(*v)
+	}
 	return _c
 }
 
@@ -427,6 +456,11 @@ func (_c *ResourceCreate) AddChildren(v ...*Resource) *ResourceCreate {
 	return _c.AddChildIDs(ids...)
 }
 
+// SetPersonalOwner sets the "personal_owner" edge to the IdentityUser entity.
+func (_c *ResourceCreate) SetPersonalOwner(v *IdentityUser) *ResourceCreate {
+	return _c.SetPersonalOwnerID(v.ID)
+}
+
 // SetParent sets the "parent" edge to the Resource entity.
 func (_c *ResourceCreate) SetParent(v *Resource) *ResourceCreate {
 	return _c.SetParentID(v.ID)
@@ -694,6 +728,16 @@ func (_c *ResourceCreate) check() error {
 			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "Resource.workspace_id": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.PersonalOwnerID(); ok {
+		if err := resource.PersonalOwnerIDValidator(v); err != nil {
+			return &ValidationError{Name: "personal_owner_id", err: fmt.Errorf(`ent: validator failed for field "Resource.personal_owner_id": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.SystemKey(); ok {
+		if err := resource.SystemKeyValidator(v); err != nil {
+			return &ValidationError{Name: "system_key", err: fmt.Errorf(`ent: validator failed for field "Resource.system_key": %w`, err)}
+		}
+	}
 	if v, ok := _c.mutation.ParentID(); ok {
 		if err := resource.ParentIDValidator(v); err != nil {
 			return &ValidationError{Name: "parent_id", err: fmt.Errorf(`ent: validator failed for field "Resource.parent_id": %w`, err)}
@@ -861,6 +905,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 		_spec.SetField(resource.FieldWorkspaceID, field.TypeString, value)
 		_node.WorkspaceID = value
 	}
+	if value, ok := _c.mutation.SystemKey(); ok {
+		_spec.SetField(resource.FieldSystemKey, field.TypeString, value)
+		_node.SystemKey = &value
+	}
 	if value, ok := _c.mutation.ContentTypeID(); ok {
 		_spec.SetField(resource.FieldContentTypeID, field.TypeString, value)
 		_node.ContentTypeID = &value
@@ -967,6 +1015,23 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.PersonalOwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   resource.PersonalOwnerTable,
+			Columns: []string{resource.PersonalOwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(identityuser.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.PersonalOwnerID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.ParentIDs(); len(nodes) > 0 {

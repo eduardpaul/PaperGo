@@ -12,6 +12,7 @@ import (
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"papergo/internal/requestmeta"
 	"papergo/internal/runner"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
@@ -43,6 +44,8 @@ type requestKey struct{}
 func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
 func (a *API) Handler() http.Handler {
 	api := http.NewServeMux()
+	api.HandleFunc("GET /v1/events", a.events)
+	a.registerPortability(api)
 	a.registerIdentity(api)
 	a.registerFoundation(api)
 	a.registerSmartFolders(api)
@@ -60,6 +63,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("PATCH /v1/resources/{id}", a.update)
 	api.HandleFunc("DELETE /v1/resources/{id}", a.delete)
 	api.HandleFunc("GET /v1/resources/{id}/children", a.children)
+	api.HandleFunc("GET /v1/resources/{id}/delta", a.delta)
 	api.HandleFunc("POST /v1/resources/{id}/children", a.create)
 	api.HandleFunc("POST /v1/resources/{id}/documents", a.createDocument)
 	api.HandleFunc("GET /v1/resources/{id}/fields", a.fields)
@@ -87,7 +91,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
-	api.HandleFunc("GET /v1/workspaces/{id}/audit", a.audit)
+	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
 	api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
 	api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
@@ -113,6 +117,7 @@ func (a *API) Handler() http.Handler {
 		respond(w, r, 200, map[string]string{"status": "ok"})
 	})
 	limit := a.limiter()
+	root.Handle("GET /v1/events", a.authenticate(a.streamLimiter(http.HandlerFunc(a.events))))
 	root.Handle("/", a.authenticate(limit(api)))
 	if a.WebDAV != nil {
 		dav := limit(a.WebDAV)
@@ -202,9 +207,15 @@ func readRequest(r *http.Request) bool {
 // transferRequest reports requests that stream a body: blob downloads and
 // uploads, and WebDAV file GET/PUT. COPY and every other method do database work.
 func transferRequest(r *http.Request) bool {
+	if (r.Method == http.MethodPost && r.URL.Path == "/v1/portability/imports") || (r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/portability/exports/") && strings.HasSuffix(r.URL.Path, "/package")) {
+		return true
+	}
+	if r.Method == http.MethodGet && r.URL.Path == "/v1/events" {
+		return true
+	}
 	if r.Method == http.MethodPost {
 		parts := strings.Split(r.URL.Path, "/")
-		return len(parts) == 5 && parts[1] == "v1" && parts[2] == "resources" && parts[4] == "documents"
+		return (len(parts) == 5 && parts[1] == "v1" && parts[2] == "resources" && parts[4] == "documents") || r.URL.Path == "/v1/identity/me/inbox/documents" || (len(parts) == 7 && parts[1] == "v1" && parts[2] == "identity" && parts[3] == "groups" && parts[5] == "inbox" && parts[6] == "documents")
 	}
 	switch r.Method {
 	case http.MethodGet, http.MethodHead, http.MethodPut:
@@ -295,12 +306,22 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(422, "validation_failed", identityValidation.Error())
 	case errors.Is(err, identity.ErrLastAdministrator):
 		problem(409, "last_administrator", "An organization needs at least one administrator.")
+	case errors.Is(err, identity.ErrCannotDeleteSelf):
+		problem(409, "cannot_delete_self", err.Error())
+	case errors.Is(err, identity.ErrLastWorkspaceOwner):
+		problem(409, "last_workspace_owner", err.Error())
 	case errors.As(err, &validation):
 		problem(422, "validation_failed", validation.Error())
+	case errors.Is(err, dms.ErrLiveExpired):
+		problem(410, "live_cursor_expired", err.Error())
+	case errors.Is(err, dms.ErrDeltaExpired):
+		problem(410, "delta_expired", err.Error())
 	case errors.Is(err, dms.ErrNotFound) || errors.Is(err, identity.ErrNotFound):
 		problem(404, "not_found", "resource not found")
 	case errors.Is(err, dms.ErrForbidden) || errors.Is(err, identity.ErrForbidden):
 		problem(403, "forbidden", "access denied")
+	case errors.Is(err, dms.ErrProtectedHome):
+		problem(409, "protected_home", err.Error())
 	case errors.Is(err, dms.ErrLastOwner):
 		problem(409, "last_owner", "A workspace needs at least one owner. Make someone else an owner first.")
 	case errors.Is(err, dms.ErrFolderNotEmpty):
@@ -309,6 +330,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(412, "precondition_failed", "resource changed; read its current ETag before retrying")
 	case errors.Is(err, dms.ErrConflict) || identity.IsConstraint(err):
 		problem(409, "conflict", "resource conflicts with existing state")
+	case errors.Is(err, storage.ErrUnsupportedFile):
+		a.problem(w, r, 415, "unsupported_file_type", err.Error())
 	case errors.Is(err, storage.ErrTooLarge) || errors.As(err, &max):
 		problem(413, "payload_too_large", "request body exceeds size limit")
 	case errors.Is(err, context.DeadlineExceeded) && errors.Is(r.Context().Err(), context.DeadlineExceeded):
@@ -558,11 +581,7 @@ func (a *API) relationships(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, 200, out)
 }
 func (a *API) unlink(w http.ResponseWriter, r *http.Request) {
-	version, ok := a.version(w, r)
-	if !ok {
-		return
-	}
-	if err := a.DMS.UnlinkVersion(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"), version); err != nil {
+	if err := a.DMS.Unlink(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID")); err != nil {
 		a.failure(w, r, err)
 		return
 	}
@@ -599,7 +618,7 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filename := r.Header.Get("X-Filename")
-	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	_, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || filename == "" {
 		a.problem(w, r, 400, "invalid_upload", "Content-Type and X-Filename are required")
 		return
@@ -609,12 +628,12 @@ func (a *API) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUpload)
-	object, err := a.Storage.Put(r.Context(), transfer.Reader(r.Body, w), a.MaxUpload)
+	object, detected, err := storage.PutDocument(r.Context(), a.Storage, transfer.Reader(r.Body, w), a.MaxUpload)
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	out, err := a.DMS.AttachBlob(r.Context(), subject(r), r.PathValue("id"), version, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: media, Size: object.Size, SHA256: object.SHA256, Languages: strings.TrimSpace(r.Header.Get("X-OCR-Languages"))})
+	out, err := a.DMS.AttachBlob(r.Context(), subject(r), r.PathValue("id"), version, dms.BlobInput{ObjectKey: object.Key, Filename: filename, ContentType: detected, Size: object.Size, SHA256: object.SHA256, Languages: strings.TrimSpace(r.Header.Get("X-OCR-Languages"))})
 	if err != nil {
 		if cleanupErr := a.Storage.Delete(context.Background(), object.Key); cleanupErr != nil {
 			a.Logger.Error("orphan cleanup failed", "object_key", object.Key, "error", cleanupErr)
@@ -644,24 +663,33 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", strconv.Quote(b.Sha256))
 	http.ServeContent(transfer.Writer(w), r, b.Filename, b.CreatedAt, file)
 }
-func (a *API) audit(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.Audit(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
-	if err != nil {
-		a.failure(w, r, err)
-		return
-	}
-	respond(w, r, 200, out)
-}
 
 func (a *API) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, err := auth.Authenticate(r, a.Auth)
+		var id string
+		var err error
+		parts := strings.Fields(r.Header.Get("Authorization"))
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.RESTTokenPrefix) {
+			token, e := a.DMS.Directory().AuthenticateRESTToken(r.Context(), parts[1])
+			if e != nil {
+				err = e
+			} else {
+				id = token.Subject
+				r = r.WithContext(identity.WithRESTToken(r.Context(), token))
+			}
+		} else {
+			id, err = auth.Authenticate(r, a.Auth)
+		}
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			a.problem(w, r, 401, "unauthorized", "valid bearer authentication is required")
 			return
 		}
 		if err = a.DMS.Directory().EnsureUser(r.Context(), id); err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		if err = identity.RequireActive(r.Context(), a.DMS.Directory().DB, id); err != nil {
 			a.failure(w, r, err)
 			return
 		}
@@ -690,7 +718,7 @@ func (w *responseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter 
 func (a *API) observe(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := uuid.NewString()
-		r = r.WithContext(context.WithValue(r.Context(), requestKey{}, id))
+		r = r.WithContext(requestmeta.WithTrace(context.WithValue(r.Context(), requestKey{}, id), id))
 		w.Header().Set("X-Request-ID", id)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "private, no-store")

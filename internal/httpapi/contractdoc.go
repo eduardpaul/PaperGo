@@ -39,6 +39,22 @@ func (a *API) OpenAPI() *huma.OpenAPI {
 			item.Put.RequestBody = &huma.RequestBody{Required: true, Description: "File bytes. Content-Type is the stored media type and X-Filename is required.", Content: map[string]*huma.MediaType{"application/octet-stream": binary}}
 		}
 	}
+	if item := doc.Paths["/v1/events"]; item != nil && item.Get != nil {
+		item.Get.Responses["200"] = &huma.Response{Description: "Server-sent events. Each frame is an id, an event name and one JSON data line.", Content: map[string]*huma.MediaType{"text/event-stream": {Schema: &huma.Schema{Type: "string"}}}}
+		delete(item.Get.Responses, "201")
+		delete(item.Get.Responses, "202")
+		delete(item.Get.Responses, "204")
+	}
+	if item := doc.Paths["/v1/portability/exports/{id}/package"]; item != nil && item.Get != nil {
+		item.Get.Responses["200"] = &huma.Response{Description: "Core package", Content: map[string]*huma.MediaType{"application/zip": binary}}
+		item.Get.Responses["206"] = &huma.Response{Description: "Partial package", Content: map[string]*huma.MediaType{"application/zip": binary}}
+		delete(item.Get.Responses, "201")
+		delete(item.Get.Responses, "202")
+		delete(item.Get.Responses, "204")
+	}
+	if item := doc.Paths["/v1/portability/imports"]; item != nil && item.Post != nil {
+		item.Post.RequestBody = &huma.RequestBody{Required: true, Description: "Core package. Content-Type must be application/zip.", Content: map[string]*huma.MediaType{"application/zip": binary}}
+	}
 	if item := doc.Paths["/openapi.json"]; item != nil && item.Get != nil {
 		if res := item.Get.Responses["200"]; res != nil && res.Content["application/json"] != nil {
 			res.Content["application/openapi+json"] = res.Content["application/json"]
@@ -91,7 +107,7 @@ func documentRoute(api huma.API, method, path string) {
 		Path:          path,
 		Summary:       method + " " + path,
 		DefaultStatus: 200,
-		Errors:        []int{400, 401, 403, 404, 409, 412, 413, 415, 422, 428, 503},
+		Errors:        []int{400, 401, 403, 404, 409, 410, 412, 413, 415, 422, 428, 503},
 		Responses: map[string]*huma.Response{
 			"201": {Description: "Created", Content: map[string]*huma.MediaType{"application/json": {Schema: &huma.Schema{}}}},
 			"202": {Description: "Accepted", Content: map[string]*huma.MediaType{"application/json": {Schema: &huma.Schema{}}}},
@@ -153,6 +169,7 @@ var documentedRoutes = [][2]string{
 	{"PATCH", "/v1/resources/{id}"},
 	{"DELETE", "/v1/resources/{id}"},
 	{"GET", "/v1/resources/{id}/children"},
+	{"GET", "/v1/resources/{id}/delta"},
 	{"POST", "/v1/resources/{id}/children"},
 	{"POST", "/v1/resources/{id}/documents"},
 	{"GET", "/v1/resources/{id}/fields"},
@@ -178,7 +195,8 @@ var documentedRoutes = [][2]string{
 	{"PUT", "/v1/items/{id}/content"},
 	{"GET", "/v1/items/{id}/content"},
 	{"POST", "/v1/items/{id}/content/versions/{number}/restore"},
-	{"GET", "/v1/workspaces/{id}/audit"},
+	{"GET", "/v1/audit"},
+	{"GET", "/v1/events"},
 	{"GET", "/v1/workspaces/{id}/tags"},
 	{"GET", "/v1/webdav-credentials"},
 	{"POST", "/v1/webdav-credentials"},
@@ -187,7 +205,6 @@ var documentedRoutes = [][2]string{
 	{"GET", "/health/live"},
 	{"GET", "/health/ready"},
 	{"GET", "/v1/collection-templates"},
-	{"GET", "/v1/content-types/audit"},
 	{"GET", "/v1/content-types"},
 	{"POST", "/v1/content-types"},
 	{"GET", "/v1/fields"},
@@ -220,9 +237,31 @@ var documentedRoutes = [][2]string{
 	{"GET", "/v1/relationship-types"},
 	{"POST", "/v1/relationship-types"},
 	{"GET", "/v1/relationship-types/{id}"},
+	{"GET", "/v1/items/{id}/relationships/{linkID}"},
+	{"GET", "/v1/workspaces/{id}/relationships"},
 	{"PATCH", "/v1/items/{id}/relationships/{linkID}"},
 	{"DELETE", "/v1/views/{id}"},
+	{"GET", "/v1/identity/me/tokens"},
+	{"POST", "/v1/identity/me/tokens"},
+	{"DELETE", "/v1/identity/me/tokens/{id}"},
+	{"GET", "/v1/organization"},
+	{"PATCH", "/v1/organization"},
 	{"GET", "/v1/people"},
+	{"GET", "/v1/identity/me"},
+	{"PATCH", "/v1/identity/me"},
+	{"GET", "/v1/identity/users/{subject}"},
+	{"PATCH", "/v1/identity/users/{subject}"},
+	{"DELETE", "/v1/identity/users/{subject}"},
+	{"GET", "/v1/identity/me/home"},
+	{"GET", "/v1/identity/me/inboxes"},
+	{"POST", "/v1/identity/me/inbox/documents"},
+	{"GET", "/v1/identity/groups/{id}/inbox"},
+	{"PUT", "/v1/identity/groups/{id}/inbox"},
+	{"DELETE", "/v1/identity/groups/{id}/inbox"},
+	{"POST", "/v1/identity/groups/{id}/inbox/documents"},
+	{"POST", "/v1/portability/exports"},
+	{"POST", "/v1/portability/imports"},
+	{"GET", "/v1/portability/exports/{id}/package"},
 	{"GET", "/v1/identity/users/{subject}/status"},
 	{"PUT", "/v1/identity/users/{subject}/status"},
 	{"GET", "/v1/identity/scopes"},
@@ -250,7 +289,6 @@ var documentedRoutes = [][2]string{
 	{"GET", "/v1/smart-folders/{id}"},
 	{"PUT", "/v1/smart-folders/{id}"},
 	{"DELETE", "/v1/smart-folders/{id}"},
-	{"GET", "/v1/taxonomy/audit"},
 	{"GET", "/v1/term-groups"},
 	{"POST", "/v1/term-groups"},
 	{"GET", "/v1/term-groups/{id}"},

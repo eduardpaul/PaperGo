@@ -113,7 +113,7 @@ func TestBlobStreamingRevisionAndLimits(t *testing.T) {
 		t.Fatal(err)
 	}
 	endpoint := "/v1/items/" + item.ID + "/content"
-	response := request(h, "PUT", endpoint, "signed contract", testToken, `"1"`, "text/plain")
+	response := request(h, "PUT", endpoint, "%PDF-signed contract", testToken, `"1"`, "text/plain")
 	if response.Code != 201 {
 		t.Fatal(response.Code, response.Body.String())
 	}
@@ -132,17 +132,17 @@ func TestBlobStreamingRevisionAndLimits(t *testing.T) {
 	if snapshot["blob_id"] != blob.ID {
 		t.Fatal("publication omitted blob revision")
 	}
-	response = request(h, "PUT", endpoint, "new contract", testToken, `"3"`, "text/plain")
+	response = request(h, "PUT", endpoint, "%PDF-new contract", testToken, `"3"`, "text/plain")
 	if response.Code != 201 {
 		t.Fatal(response.Body.String())
 	}
 	response = request(h, "GET", endpoint+"?blob_id="+blob.ID, "", testToken, "", "")
-	if response.Code != 200 || response.Body.String() != "signed contract" {
+	if response.Code != 200 || response.Body.String() != "%PDF-signed contract" {
 		t.Fatal("old blob not retained", response.Body.String())
 	}
 	r := httptest.NewRequest("GET", endpoint, nil)
 	r.Header.Set("Authorization", "Bearer "+testToken)
-	r.Header.Set("Range", "bytes=0-2")
+	r.Header.Set("Range", "bytes=5-7")
 	ranged := httptest.NewRecorder()
 	h.ServeHTTP(ranged, r)
 	if ranged.Code != 206 || !bytes.Equal(ranged.Body.Bytes(), []byte("new")) {

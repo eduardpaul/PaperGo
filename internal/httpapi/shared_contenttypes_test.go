@@ -16,7 +16,7 @@ import (
 func TestOrganizationContentTypeAPISharingAndScopeRevocation(t *testing.T) {
 	h, s, _ := setup(t)
 	ctx := context.Background()
-	role, e := s.Directory().SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Catalog curator", Scopes: []string{"contentType.read", "contentType.manage"}})
+	role, e := s.Directory().SaveRole(ctx, "alice", "", 0, identity.RoleInput{Name: "Catalog curator", Scopes: []string{"contentType.read", "contentType.manage", "audit.read"}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -82,19 +82,19 @@ func TestOrganizationContentTypeAPISharingAndScopeRevocation(t *testing.T) {
 	if res.Code != 200 || !strings.Contains(res.Body.String(), `"is_default":true`) || !strings.Contains(res.Body.String(), typ.ID) {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	res = request(curator, "GET", "/v1/content-types/audit", "", testToken, "", "")
+	res = request(curator, "GET", "/v1/audit", "", testToken, "", "")
 	if res.Code != 200 || !strings.Contains(res.Body.String(), `"field.update"`) {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	res = request(h, "GET", "/v1/taxonomy/audit", "", testToken, "", "")
-	if res.Code != 200 || strings.Contains(res.Body.String(), `"field.`) || strings.Contains(res.Body.String(), `"content_type.`) {
-		t.Fatal("catalog events leaked into taxonomy feed", res.Code, res.Body.String())
+	res = request(h, "GET", "/v1/audit", "", testToken, "", "")
+	if res.Code != 200 || !strings.Contains(res.Body.String(), `"field.`) || !strings.Contains(res.Body.String(), `"content_type.`) {
+		t.Fatal("organization feed missing catalog events", res.Code, res.Body.String())
 	}
 	// Current role assignments are checked on every request, including catalog reads.
 	if e = s.Directory().SetAssignment(ctx, "alice", role.ID, identity.Principal{Type: "user", ID: "carol"}, true); e != nil {
 		t.Fatal(e)
 	}
-	for _, path := range []string{"/v1/content-types", "/v1/fields", "/v1/content-types/" + typ.ID, "/v1/content-types/audit"} {
+	for _, path := range []string{"/v1/content-types", "/v1/fields", "/v1/content-types/" + typ.ID, "/v1/audit"} {
 		res = request(curator, "GET", path, "", testToken, "", "")
 		if res.Code != 403 {
 			t.Fatal(path, res.Code, res.Body.String())

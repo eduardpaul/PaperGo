@@ -109,6 +109,16 @@ func Actor(v string) predicate.WorkflowRun {
 	return predicate.WorkflowRun(sql.FieldEQ(FieldActor, v))
 }
 
+// LiveStatus applies equality check predicate on the "live_status" field. It's identical to LiveStatusEQ.
+func LiveStatus(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldEQ(FieldLiveStatus, v))
+}
+
+// LiveUpdatedAt applies equality check predicate on the "live_updated_at" field. It's identical to LiveUpdatedAtEQ.
+func LiveUpdatedAt(v int64) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldEQ(FieldLiveUpdatedAt, v))
+}
+
 // RetryOf applies equality check predicate on the "retry_of" field. It's identical to RetryOfEQ.
 func RetryOf(v string) predicate.WorkflowRun {
 	return predicate.WorkflowRun(sql.FieldEQ(FieldRetryOf, v))
@@ -632,6 +642,111 @@ func ActorEqualFold(v string) predicate.WorkflowRun {
 // ActorContainsFold applies the ContainsFold predicate on the "actor" field.
 func ActorContainsFold(v string) predicate.WorkflowRun {
 	return predicate.WorkflowRun(sql.FieldContainsFold(FieldActor, v))
+}
+
+// LiveStatusEQ applies the EQ predicate on the "live_status" field.
+func LiveStatusEQ(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldEQ(FieldLiveStatus, v))
+}
+
+// LiveStatusNEQ applies the NEQ predicate on the "live_status" field.
+func LiveStatusNEQ(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldNEQ(FieldLiveStatus, v))
+}
+
+// LiveStatusIn applies the In predicate on the "live_status" field.
+func LiveStatusIn(vs ...string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldIn(FieldLiveStatus, vs...))
+}
+
+// LiveStatusNotIn applies the NotIn predicate on the "live_status" field.
+func LiveStatusNotIn(vs ...string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldNotIn(FieldLiveStatus, vs...))
+}
+
+// LiveStatusGT applies the GT predicate on the "live_status" field.
+func LiveStatusGT(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldGT(FieldLiveStatus, v))
+}
+
+// LiveStatusGTE applies the GTE predicate on the "live_status" field.
+func LiveStatusGTE(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldGTE(FieldLiveStatus, v))
+}
+
+// LiveStatusLT applies the LT predicate on the "live_status" field.
+func LiveStatusLT(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldLT(FieldLiveStatus, v))
+}
+
+// LiveStatusLTE applies the LTE predicate on the "live_status" field.
+func LiveStatusLTE(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldLTE(FieldLiveStatus, v))
+}
+
+// LiveStatusContains applies the Contains predicate on the "live_status" field.
+func LiveStatusContains(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldContains(FieldLiveStatus, v))
+}
+
+// LiveStatusHasPrefix applies the HasPrefix predicate on the "live_status" field.
+func LiveStatusHasPrefix(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldHasPrefix(FieldLiveStatus, v))
+}
+
+// LiveStatusHasSuffix applies the HasSuffix predicate on the "live_status" field.
+func LiveStatusHasSuffix(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldHasSuffix(FieldLiveStatus, v))
+}
+
+// LiveStatusEqualFold applies the EqualFold predicate on the "live_status" field.
+func LiveStatusEqualFold(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldEqualFold(FieldLiveStatus, v))
+}
+
+// LiveStatusContainsFold applies the ContainsFold predicate on the "live_status" field.
+func LiveStatusContainsFold(v string) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldContainsFold(FieldLiveStatus, v))
+}
+
+// LiveUpdatedAtEQ applies the EQ predicate on the "live_updated_at" field.
+func LiveUpdatedAtEQ(v int64) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldEQ(FieldLiveUpdatedAt, v))
+}
+
+// LiveUpdatedAtNEQ applies the NEQ predicate on the "live_updated_at" field.
+func LiveUpdatedAtNEQ(v int64) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldNEQ(FieldLiveUpdatedAt, v))
+}
+
+// LiveUpdatedAtIn applies the In predicate on the "live_updated_at" field.
+func LiveUpdatedAtIn(vs ...int64) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldIn(FieldLiveUpdatedAt, vs...))
+}
+
+// LiveUpdatedAtNotIn applies the NotIn predicate on the "live_updated_at" field.
+func LiveUpdatedAtNotIn(vs ...int64) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldNotIn(FieldLiveUpdatedAt, vs...))
+}
+
+// LiveUpdatedAtGT applies the GT predicate on the "live_updated_at" field.
+func LiveUpdatedAtGT(v int64) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldGT(FieldLiveUpdatedAt, v))
+}
+
+// LiveUpdatedAtGTE applies the GTE predicate on the "live_updated_at" field.
+func LiveUpdatedAtGTE(v int64) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldGTE(FieldLiveUpdatedAt, v))
+}
+
+// LiveUpdatedAtLT applies the LT predicate on the "live_updated_at" field.
+func LiveUpdatedAtLT(v int64) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldLT(FieldLiveUpdatedAt, v))
+}
+
+// LiveUpdatedAtLTE applies the LTE predicate on the "live_updated_at" field.
+func LiveUpdatedAtLTE(v int64) predicate.WorkflowRun {
+	return predicate.WorkflowRun(sql.FieldLTE(FieldLiveUpdatedAt, v))
 }
 
 // RetryOfEQ applies the EQ predicate on the "retry_of" field.

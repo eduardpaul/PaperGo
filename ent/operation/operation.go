@@ -25,6 +25,18 @@ const (
 	FieldFieldID = "field_id"
 	// FieldKind holds the string denoting the kind field in the database.
 	FieldKind = "kind"
+	// FieldTraceID holds the string denoting the trace_id field in the database.
+	FieldTraceID = "trace_id"
+	// FieldCredentialID holds the string denoting the credential_id field in the database.
+	FieldCredentialID = "credential_id"
+	// FieldCredentialScopes holds the string denoting the credential_scopes field in the database.
+	FieldCredentialScopes = "credential_scopes"
+	// FieldResult holds the string denoting the result field in the database.
+	FieldResult = "result"
+	// FieldStartedAt holds the string denoting the started_at field in the database.
+	FieldStartedAt = "started_at"
+	// FieldCompletedAt holds the string denoting the completed_at field in the database.
+	FieldCompletedAt = "completed_at"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldSurface holds the string denoting the surface field in the database.
@@ -73,6 +85,12 @@ var Columns = []string{
 	FieldContainerID,
 	FieldFieldID,
 	FieldKind,
+	FieldTraceID,
+	FieldCredentialID,
+	FieldCredentialScopes,
+	FieldResult,
+	FieldStartedAt,
+	FieldCompletedAt,
 	FieldStatus,
 	FieldSurface,
 	FieldAfterItemID,
@@ -104,6 +122,14 @@ var (
 	DefaultCreatedAt func() time.Time
 	// DefaultFieldID holds the default value on creation for the "field_id" field.
 	DefaultFieldID string
+	// KindValidator is a validator for the "kind" field. It is called by the builders before save.
+	KindValidator func(string) error
+	// DefaultTraceID holds the default value on creation for the "trace_id" field.
+	DefaultTraceID func() string
+	// DefaultCredentialScopes holds the default value on creation for the "credential_scopes" field.
+	DefaultCredentialScopes []string
+	// DefaultResult holds the default value on creation for the "result" field.
+	DefaultResult jsontext.Value
 	// DefaultAfterItemID holds the default value on creation for the "after_item_id" field.
 	DefaultAfterItemID string
 	// DefaultProcessed holds the default value on creation for the "processed" field.
@@ -143,29 +169,6 @@ var (
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
-
-// Kind defines the type for the "kind" enum field.
-type Kind string
-
-// Kind values.
-const (
-	KindFieldIndex Kind = "field_index"
-	KindBulkUpdate Kind = "bulk_update"
-)
-
-func (k Kind) String() string {
-	return string(k)
-}
-
-// KindValidator is a validator for the "kind" field enum values. It is called by the builders before save.
-func KindValidator(k Kind) error {
-	switch k {
-	case KindFieldIndex, KindBulkUpdate:
-		return nil
-	default:
-		return fmt.Errorf("operation: invalid enum value for kind field: %q", k)
-	}
-}
 
 // Status defines the type for the "status" enum field.
 type Status string
@@ -247,6 +250,26 @@ func ByFieldID(opts ...sql.OrderTermOption) OrderOption {
 // ByKind orders the results by the kind field.
 func ByKind(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldKind, opts...).ToFunc()
+}
+
+// ByTraceID orders the results by the trace_id field.
+func ByTraceID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTraceID, opts...).ToFunc()
+}
+
+// ByCredentialID orders the results by the credential_id field.
+func ByCredentialID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCredentialID, opts...).ToFunc()
+}
+
+// ByStartedAt orders the results by the started_at field.
+func ByStartedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStartedAt, opts...).ToFunc()
+}
+
+// ByCompletedAt orders the results by the completed_at field.
+func ByCompletedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCompletedAt, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

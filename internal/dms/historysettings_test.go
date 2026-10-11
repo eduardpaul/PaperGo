@@ -5,6 +5,7 @@ import (
 	"papergo/ent/resource"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
@@ -15,7 +16,7 @@ func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
 			t.Fatal(c, err)
 		}
 		item := create(t, s, c.ID, "item", "Item", nil)
-		rows, err := s.Revisions(testContext, "alice", item.ID, 0, 10)
+		rows, err := s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
 		expected := 0
 		if tc.mode == "major" {
 			expected = 1
@@ -53,6 +54,77 @@ func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
 	}
 }
 
+func TestSnapshotCollectionKeepsHistorySurfacesAndQueuedEvents(t *testing.T) {
+	s, w, _ := fixture(t)
+	c, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Retention", Versioning: ptr("major"), MaxVersions: ptr(2), PublishingEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := create(t, s, c.ID, "item", "Published", nil)
+	publication, err := s.Publish(testContext, "alice", item.ID, item.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item = latest(t, s, item.ID)
+	for _, name := range []string{"Second", "Third", "Fourth", "Fifth"} {
+		item, err = s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: &name})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 5 {
+		t.Fatal("queued event snapshots were removed", err)
+	}
+	// The dispatcher consumes term-change snapshots before releasing them.
+	if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 3 {
+		t.Fatal("snapshots exceed history plus published surface", err)
+	}
+	if current, e := s.GetSurface(testContext, "alice", item.ID, "published"); e != nil || current.Name != "Published" {
+		t.Fatal(current, e)
+	}
+	if _, err = s.Unpublish(testContext, "alice", item.ID, item.Version); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 2 {
+		t.Fatal("unpublished snapshot was retained", err)
+	}
+	if recorded, e := s.Client.Publication.Get(testContext, publication.ID); e != nil || string(recorded.Snapshot) != string(publication.Snapshot) {
+		t.Fatal("publication audit snapshot changed", recorded, e)
+	}
+	// Foreign keys still prevent collecting the live head directly.
+	if err = s.Client.ItemRevision.DeleteOneID(*item.HeadRevisionID).Exec(testContext); err == nil {
+		t.Fatal("live head was deleted")
+	}
+}
+
+func TestHistoryOffSnapshotsDoNotAccumulateAfterDispatch(t *testing.T) {
+	s, w, _ := fixture(t)
+	c, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Off"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := create(t, s, c.ID, "item", "First", nil)
+	for _, name := range []string{"Second", "Third", "Fourth"} {
+		var err error
+		item, err = s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: &name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+			t.Fatal(err)
+		}
+		if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, item.ID) != 1 {
+			t.Fatal("history-off snapshots accumulated", err)
+		}
+	}
+}
+
 func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 	s, w, _ := fixture(t)
 	c, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "History", Versioning: ptr("major"), MaxVersions: ptr(2), PublishingEnabled: true})
@@ -71,10 +143,10 @@ func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 		}
 	}
 	rows, err := s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
-	if err != nil || len(rows.Data) != 2 || rows.Data[0].RevisionNumber != 2 || !slices.Equal(rows.Data[0].ChangedFields, []string{"$name"}) {
+	if err != nil || len(rows.Data) != 2 || rows.Data[0].RevisionNumber != 3 || !slices.Equal(rows.Data[0].ChangedFields, []string{"$name"}) {
 		t.Fatal(rows, err)
 	}
-	if otherRows, e := s.Revisions(testContext, "alice", other.ID, 0, 10); e != nil || len(otherRows.Data) != 1 {
+	if otherRows, e := s.RevisionHistory(testContext, "alice", other.ID, 0, 10); e != nil || len(otherRows.Data) != 1 {
 		t.Fatal("retention affected another item", otherRows, e)
 	}
 	for _, fetch := range []func() error{
@@ -94,7 +166,7 @@ func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err = s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
-	if err != nil || len(rows.Data) != 2 || rows.Data[1].IsCurrent {
+	if err != nil || len(rows.Data) != 2 || !rows.Data[0].IsCurrent || rows.Data[1].IsCurrent {
 		t.Fatal(rows, err)
 	}
 	if _, err = s.Revision(testContext, "alice", item.ID, 4); !errors.Is(err, ErrNotFound) {
@@ -123,7 +195,7 @@ func TestHistoryRetentionDisableResumeAndPublishedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err = s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
-	if err != nil || len(rows.Data) != 1 || rows.Data[0].Name != "Resumed" || !rows.Data[0].IsCurrent {
+	if err != nil || len(rows.Data) != 1 || rows.Data[0].RevisionNumber != 4 || rows.Data[0].Name != "Resumed" || !rows.Data[0].IsCurrent {
 		t.Fatal(rows, err)
 	}
 	if _, err = s.Revision(testContext, "alice", item.ID, 2); !errors.Is(err, ErrNotFound) {

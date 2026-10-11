@@ -2,47 +2,69 @@ package dms
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"github.com/google/uuid"
 	"papergo/ent"
 	"papergo/ent/auditevent"
-	"papergo/ent/resource"
+	"time"
 )
 
-// TaxonomyAudit exposes organization curation without requiring workspace access.
-func (s *Service) TaxonomyAudit(ctx context.Context, subject, after string, limit int) (Page[*ent.AuditEvent], error) {
+type AuditQuery struct {
+	Actor, EntityType, EntityID, WorkspaceID, After string
+	From, To                                        *time.Time
+	Limit                                           int
+}
+type auditCursor struct {
+	At time.Time
+	ID string
+}
+
+func (s *Service) OrganizationAudit(ctx context.Context, subject string, in AuditQuery) (Page[*ent.AuditEvent], error) {
 	return read(ctx, s, func(t *Service) (Page[*ent.AuditEvent], error) {
-		if err := t.requireTaxonomy(ctx, subject, "manage"); err != nil {
+		if err := t.RequireScope(ctx, subject, "audit.read"); err != nil {
 			return Page[*ent.AuditEvent]{}, err
 		}
-		rows, err := t.Client.AuditEvent.Query().Where(auditevent.WorkspaceIDIsNil(), auditevent.ResourceIDIsNil(), auditevent.Or(auditevent.ActionHasPrefix("term."), auditevent.ActionHasPrefix("term_group."), auditevent.ActionHasPrefix("term_set."), auditevent.ActionHasPrefix("keyword."), auditevent.ActionHasPrefix("taxonomy.")), auditevent.IDGT(after)).Order(ent.Asc(auditevent.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-		return entityPage(rows, limit, func(v *ent.AuditEvent) string { return v.ID }), err
-	})
-}
-
-func (s *Service) ContentTypeAudit(ctx context.Context, subject, after string, limit int) (Page[*ent.AuditEvent], error) {
-	return read(ctx, s, func(t *Service) (Page[*ent.AuditEvent], error) {
-		if e := t.RequireScope(ctx, subject, "contentType.manage"); e != nil {
-			return Page[*ent.AuditEvent]{}, e
+		if in.From != nil && in.To != nil && !in.From.Before(*in.To) {
+			return Page[*ent.AuditEvent]{}, invalid("from must precede to")
 		}
-		rows, e := t.Client.AuditEvent.Query().Where(auditevent.WorkspaceIDIsNil(), auditevent.ResourceIDIsNil(), auditevent.Or(auditevent.ActionHasPrefix("content_type."), auditevent.ActionHasPrefix("field.")), auditevent.IDGT(after)).Order(ent.Asc(auditevent.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-		return entityPage(rows, limit, func(v *ent.AuditEvent) string { return v.ID }), e
+		q := t.Client.AuditEvent.Query()
+		if in.Actor != "" {
+			q.Where(auditevent.SubjectEQ(in.Actor))
+		}
+		if in.EntityType != "" {
+			q.Where(auditevent.EntityTypeEQ(in.EntityType))
+		}
+		if in.EntityID != "" {
+			q.Where(auditevent.EntityIDEQ(in.EntityID))
+		}
+		if in.WorkspaceID != "" {
+			q.Where(auditevent.WorkspaceIDEQ(in.WorkspaceID))
+		}
+		if in.From != nil {
+			q.Where(auditevent.CreatedAtGTE(in.From.UTC()))
+		}
+		if in.To != nil {
+			q.Where(auditevent.CreatedAtLT(in.To.UTC()))
+		}
+		if in.After != "" {
+			var cursor auditCursor
+			raw, err := base64.RawURLEncoding.DecodeString(in.After)
+			if err != nil || len(raw) > 256 || json.Unmarshal(raw, &cursor) != nil || cursor.At.IsZero() {
+				return Page[*ent.AuditEvent]{}, invalid("invalid audit continuation")
+			}
+			if _, err = uuid.Parse(cursor.ID); err != nil {
+				return Page[*ent.AuditEvent]{}, invalid("invalid audit continuation")
+			}
+			q.Where(auditevent.Or(auditevent.CreatedAtLT(cursor.At.UTC()), auditevent.And(auditevent.CreatedAtEQ(cursor.At.UTC()), auditevent.IDLT(cursor.ID))))
+		}
+		rows, err := q.Order(ent.Desc(auditevent.FieldCreatedAt), ent.Desc(auditevent.FieldID)).Limit(pageSize(in.Limit) + 1).All(ctx)
+		if err != nil {
+			return Page[*ent.AuditEvent]{}, err
+		}
+		return entityPage(rows, in.Limit, func(v *ent.AuditEvent) string {
+			raw, _ := json.Marshal(auditCursor{At: v.CreatedAt.UTC(), ID: v.ID})
+			return base64.RawURLEncoding.EncodeToString(raw)
+		}), nil
 	})
-}
-
-func (s *Service) Audit(ctx context.Context, subject, id, after string, limit int) (Page[*ent.AuditEvent], error) {
-	if !s.transaction {
-		return read(ctx, s, func(t *Service) (Page[*ent.AuditEvent], error) { return t.Audit(ctx, subject, id, after, limit) })
-	}
-	root, err := s.authorize(ctx, subject, id, "manage")
-	if err != nil {
-		return Page[*ent.AuditEvent]{}, err
-	}
-	if root.Kind != resource.KindWorkspace {
-		return Page[*ent.AuditEvent]{}, invalid("audit scope must be a workspace")
-	}
-	q := s.Client.AuditEvent.Query().Where(auditevent.WorkspaceIDEQ(id))
-	if after != "" {
-		q.Where(auditevent.IDGT(after))
-	}
-	rows, err := q.Order(ent.Asc(auditevent.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-	return entityPage(rows, limit, func(v *ent.AuditEvent) string { return v.ID }), err
 }

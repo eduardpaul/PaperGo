@@ -77,7 +77,7 @@ func TestTaxonomyScopesIndependentOfWorkspaceAccess(t *testing.T) {
 		},
 		"package imports": func() error { _, e := s.ImportTaxonomy(ctx, "bob", TaxonomyPackage{}); return e },
 		"popularity":      func() error { _, e := s.PopularKeywords(ctx, "bob", 10); return e },
-		"audit":           func() error { _, e := s.TaxonomyAudit(ctx, "bob", "", 10); return e },
+		"audit":           func() error { _, e := s.OrganizationAudit(ctx, "bob", AuditQuery{Limit: 10}); return e },
 		"promotion": func() error {
 			_, e := s.PromoteKeyword(ctx, "bob", kw.ID, kw.Version, PromoteKeywordInput{TermSetID: closed.ID})
 			return e
@@ -104,13 +104,13 @@ func TestTaxonomyScopesIndependentOfWorkspaceAccess(t *testing.T) {
 	if _, err = s.PromoteKeyword(ctx, "carol", kw.ID, kw.Version, PromoteKeywordInput{TermSetID: closed.ID}); err != nil {
 		t.Fatal(err)
 	}
-	audit, err := s.TaxonomyAudit(ctx, "carol", "", 100)
+	audit, err := s.OrganizationAudit(ctx, "alice", AuditQuery{Limit: 100})
 	if err != nil || len(audit.Data) == 0 {
 		t.Fatal(audit, err)
 	}
 	for _, e := range audit.Data {
-		if e.WorkspaceID != "" || e.ResourceID != "" {
-			t.Fatal("curation was attributed to a workspace", e)
+		if e.TraceID == "" {
+			t.Fatal("audit event lacks a trace", e)
 		}
 	}
 	w := create(t, s, "", "workspace", "Private", nil)

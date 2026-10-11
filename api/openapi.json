@@ -31,6 +31,16 @@
         },
         "description": "The caller lacks the required permission (forbidden)."
       },
+      "Gone": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "description": "The live cursor or delta token expired (live_cursor_expired, delta_expired)."
+      },
       "InternalServerError": {
         "content": {
           "application/problem+json": {
@@ -254,6 +264,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -326,6 +339,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -397,6 +413,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -480,6 +499,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -503,6 +525,80 @@
           }
         },
         "summary": "POST /v1/$batch"
+      }
+    },
+    "/v1/audit": {
+      "get": {
+        "operationId": "getV1Audit",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/audit"
       }
     },
     "/v1/collection-templates": {
@@ -550,6 +646,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -621,6 +720,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -702,6 +804,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -725,77 +830,6 @@
           }
         },
         "summary": "POST /v1/content-types"
-      }
-    },
-    "/v1/content-types/audit": {
-      "get": {
-        "operationId": "getV1ContentTypesAudit",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "OK"
-          },
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Created"
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Accepted"
-          },
-          "204": {
-            "description": "No content"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "$ref": "#/components/responses/Conflict"
-          },
-          "412": {
-            "$ref": "#/components/responses/PreconditionFailed"
-          },
-          "413": {
-            "$ref": "#/components/responses/RequestEntityTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "422": {
-            "$ref": "#/components/responses/UnprocessableEntity"
-          },
-          "428": {
-            "$ref": "#/components/responses/PreconditionRequired"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          },
-          "503": {
-            "$ref": "#/components/responses/ServiceUnavailable"
-          }
-        },
-        "summary": "GET /v1/content-types/audit"
       }
     },
     "/v1/content-types/{id}": {
@@ -843,6 +877,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -924,6 +961,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -947,6 +987,63 @@
           }
         },
         "summary": "PUT /v1/content-types/{id}"
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "getV1Events",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-sent events. Each frame is an id, an event name and one JSON data line."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/events"
       }
     },
     "/v1/fields": {
@@ -994,6 +1091,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -1074,6 +1174,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -1157,6 +1260,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -1237,6 +1343,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -1307,6 +1416,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -1387,6 +1499,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -1470,6 +1585,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -1550,6 +1668,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -1573,6 +1694,331 @@
           }
         },
         "summary": "PUT /v1/identity/groups/{id}"
+      }
+    },
+    "/v1/identity/groups/{id}/inbox": {
+      "delete": {
+        "operationId": "deleteV1IdentityGroupsIdInbox",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "DELETE /v1/identity/groups/{id}/inbox"
+      },
+      "get": {
+        "operationId": "getV1IdentityGroupsIdInbox",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/identity/groups/{id}/inbox"
+      },
+      "put": {
+        "operationId": "putV1IdentityGroupsIdInbox",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "PUT /v1/identity/groups/{id}/inbox"
+      }
+    },
+    "/v1/identity/groups/{id}/inbox/documents": {
+      "post": {
+        "operationId": "postV1IdentityGroupsIdInboxDocuments",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "POST /v1/identity/groups/{id}/inbox/documents"
       }
     },
     "/v1/identity/groups/{id}/members": {
@@ -1620,6 +2066,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -1703,6 +2152,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -1783,6 +2235,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -1806,6 +2261,396 @@
           }
         },
         "summary": "PUT /v1/identity/groups/{id}/members/{principalType}/{principalID}"
+      }
+    },
+    "/v1/identity/me": {
+      "get": {
+        "operationId": "getV1IdentityMe",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/identity/me"
+      },
+      "patch": {
+        "operationId": "patchV1IdentityMe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "PATCH /v1/identity/me"
+      }
+    },
+    "/v1/identity/me/home": {
+      "get": {
+        "operationId": "getV1IdentityMeHome",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/identity/me/home"
+      }
+    },
+    "/v1/identity/me/inbox/documents": {
+      "post": {
+        "operationId": "postV1IdentityMeInboxDocuments",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "POST /v1/identity/me/inbox/documents"
+      }
+    },
+    "/v1/identity/me/inboxes": {
+      "get": {
+        "operationId": "getV1IdentityMeInboxes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/identity/me/inboxes"
       }
     },
     "/v1/identity/me/preferences": {
@@ -1853,6 +2698,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -1934,6 +2782,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -2005,6 +2856,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -2028,6 +2882,248 @@
           }
         },
         "summary": "GET /v1/identity/me/scopes"
+      }
+    },
+    "/v1/identity/me/tokens": {
+      "get": {
+        "operationId": "getV1IdentityMeTokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/identity/me/tokens"
+      },
+      "post": {
+        "operationId": "postV1IdentityMeTokens",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "POST /v1/identity/me/tokens"
+      }
+    },
+    "/v1/identity/me/tokens/{id}": {
+      "delete": {
+        "operationId": "deleteV1IdentityMeTokensId",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "DELETE /v1/identity/me/tokens/{id}"
       }
     },
     "/v1/identity/roles": {
@@ -2075,6 +3171,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -2155,6 +3254,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -2238,6 +3340,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -2318,6 +3423,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -2388,6 +3496,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -2471,6 +3582,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -2551,6 +3665,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -2622,6 +3739,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -2692,6 +3812,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -2773,6 +3896,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -2796,6 +3922,246 @@
           }
         },
         "summary": "POST /v1/identity/users"
+      }
+    },
+    "/v1/identity/users/{subject}": {
+      "delete": {
+        "operationId": "deleteV1IdentityUsersSubject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "DELETE /v1/identity/users/{subject}"
+      },
+      "get": {
+        "operationId": "getV1IdentityUsersSubject",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/identity/users/{subject}"
+      },
+      "patch": {
+        "operationId": "patchV1IdentityUsersSubject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "PATCH /v1/identity/users/{subject}"
       }
     },
     "/v1/identity/users/{subject}/status": {
@@ -2843,6 +4209,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -2924,6 +4293,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -2991,6 +4363,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -3074,6 +4449,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -3155,6 +4533,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -3238,6 +4619,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -3308,6 +4692,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -3389,6 +4776,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -3459,6 +4849,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -3539,6 +4932,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -3622,6 +5018,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -3645,6 +5044,78 @@
           }
         },
         "summary": "DELETE /v1/items/{id}/relationships/{linkID}"
+      },
+      "get": {
+        "operationId": "getV1ItemsIdRelationshipsLinkID",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/items/{id}/relationships/{linkID}"
       },
       "patch": {
         "operationId": "patchV1ItemsIdRelationshipsLinkID",
@@ -3701,6 +5172,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -3773,6 +5247,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -3843,6 +5320,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -3926,6 +5406,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -3996,6 +5479,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -4079,6 +5565,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -4149,6 +5638,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -4230,6 +5722,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -4300,6 +5795,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -4383,6 +5881,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -4454,6 +5955,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -4477,6 +5981,163 @@
           }
         },
         "summary": "GET /v1/operations/{id}"
+      }
+    },
+    "/v1/organization": {
+      "get": {
+        "operationId": "getV1Organization",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/organization"
+      },
+      "patch": {
+        "operationId": "patchV1Organization",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "PATCH /v1/organization"
       }
     },
     "/v1/organization/preferences": {
@@ -4524,6 +6185,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -4605,6 +6269,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -4676,6 +6343,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -4699,6 +6369,249 @@
           }
         },
         "summary": "GET /v1/people"
+      }
+    },
+    "/v1/portability/exports": {
+      "post": {
+        "operationId": "postV1PortabilityExports",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "POST /v1/portability/exports"
+      }
+    },
+    "/v1/portability/exports/{id}/package": {
+      "get": {
+        "operationId": "getV1PortabilityExportsIdPackage",
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Core package"
+          },
+          "206": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Partial package"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/portability/exports/{id}/package"
+      }
+    },
+    "/v1/portability/imports": {
+      "post": {
+        "operationId": "postV1PortabilityImports",
+        "requestBody": {
+          "content": {
+            "application/zip": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "Core package. Content-Type must be application/zip.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "POST /v1/portability/imports"
       }
     },
     "/v1/relationship-types": {
@@ -4746,6 +6659,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -4827,6 +6743,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -4898,6 +6817,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -4968,6 +6890,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -5051,6 +6976,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -5119,6 +7047,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -5199,6 +7130,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -5314,6 +7248,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -5396,6 +7333,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -5466,6 +7406,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -5547,6 +7490,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -5617,6 +7563,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -5697,6 +7646,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -5780,6 +7732,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -5803,6 +7758,80 @@
           }
         },
         "summary": "DELETE /v1/resources/{id}/content-types/{typeID}"
+      }
+    },
+    "/v1/resources/{id}/delta": {
+      "get": {
+        "operationId": "getV1ResourcesIdDelta",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/resources/{id}/delta"
       }
     },
     "/v1/resources/{id}/documents": {
@@ -5861,6 +7890,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -5932,6 +7964,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -6012,6 +8047,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -6095,6 +8133,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -6175,6 +8216,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -6246,6 +8290,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -6316,6 +8363,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -6396,6 +8446,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -6479,6 +8532,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -6561,6 +8617,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -6631,6 +8690,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -6714,6 +8776,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -6796,6 +8861,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -6866,6 +8934,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -6949,6 +9020,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -7019,6 +9093,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -7100,6 +9177,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -7170,6 +9250,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -7250,6 +9333,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -7333,6 +9419,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -7401,6 +9490,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -7481,6 +9573,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -7564,6 +9659,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -7645,6 +9743,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -7728,6 +9829,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -7810,6 +9914,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -7833,77 +9940,6 @@
           }
         },
         "summary": "POST /v1/smart-folders/{id}/query/groups"
-      }
-    },
-    "/v1/taxonomy/audit": {
-      "get": {
-        "operationId": "getV1TaxonomyAudit",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "OK"
-          },
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Created"
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Accepted"
-          },
-          "204": {
-            "description": "No content"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "$ref": "#/components/responses/Conflict"
-          },
-          "412": {
-            "$ref": "#/components/responses/PreconditionFailed"
-          },
-          "413": {
-            "$ref": "#/components/responses/RequestEntityTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "422": {
-            "$ref": "#/components/responses/UnprocessableEntity"
-          },
-          "428": {
-            "$ref": "#/components/responses/PreconditionRequired"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          },
-          "503": {
-            "$ref": "#/components/responses/ServiceUnavailable"
-          }
-        },
-        "summary": "GET /v1/taxonomy/audit"
       }
     },
     "/v1/taxonomy/export": {
@@ -7951,6 +9987,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -8034,6 +10073,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -8104,6 +10146,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -8185,6 +10230,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -8255,6 +10303,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -8335,6 +10386,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -8418,6 +10472,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -8486,6 +10543,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -8566,6 +10626,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -8649,6 +10712,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -8719,6 +10785,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -8799,6 +10868,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -8882,6 +10954,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -8950,6 +11025,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -9031,6 +11109,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -9101,6 +11182,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -9182,6 +11266,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -9253,6 +11340,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -9323,6 +11413,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -9403,6 +11496,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -9486,6 +11582,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -9567,6 +11666,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -9650,6 +11752,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -9718,6 +11823,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -9798,6 +11906,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -9881,6 +11992,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -9963,6 +12077,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -10033,6 +12150,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -10113,6 +12233,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -10196,6 +12319,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -10267,6 +12393,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -10337,6 +12466,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -10420,6 +12552,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -10501,6 +12636,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -10584,6 +12722,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -10652,6 +12793,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -10732,6 +12876,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -10815,6 +12962,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -10886,6 +13036,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -10956,6 +13109,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -11037,6 +13193,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -11060,77 +13219,6 @@
           }
         },
         "summary": "POST /v1/workspaces"
-      }
-    },
-    "/v1/workspaces/{id}/audit": {
-      "get": {
-        "operationId": "getV1WorkspacesIdAudit",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "OK"
-          },
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Created"
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Accepted"
-          },
-          "204": {
-            "description": "No content"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "$ref": "#/components/responses/Conflict"
-          },
-          "412": {
-            "$ref": "#/components/responses/PreconditionFailed"
-          },
-          "413": {
-            "$ref": "#/components/responses/RequestEntityTooLarge"
-          },
-          "415": {
-            "$ref": "#/components/responses/UnsupportedMediaType"
-          },
-          "422": {
-            "$ref": "#/components/responses/UnprocessableEntity"
-          },
-          "428": {
-            "$ref": "#/components/responses/PreconditionRequired"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          },
-          "503": {
-            "$ref": "#/components/responses/ServiceUnavailable"
-          }
-        },
-        "summary": "GET /v1/workspaces/{id}/audit"
       }
     },
     "/v1/workspaces/{id}/members": {
@@ -11178,6 +13266,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -11258,6 +13349,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -11341,6 +13435,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -11364,6 +13461,80 @@
           }
         },
         "summary": "DELETE /v1/workspaces/{id}/members/{member}"
+      }
+    },
+    "/v1/workspaces/{id}/relationships": {
+      "get": {
+        "operationId": "getV1WorkspacesIdRelationships",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Accepted"
+          },
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "413": {
+            "$ref": "#/components/responses/RequestEntityTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "summary": "GET /v1/workspaces/{id}/relationships"
       }
     },
     "/v1/workspaces/{id}/smart-folders/export": {
@@ -11411,6 +13582,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -11494,6 +13668,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -11565,6 +13742,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -11635,6 +13815,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -11716,6 +13899,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -11786,6 +13972,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -11869,6 +14058,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -11951,6 +14143,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -12022,6 +14217,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
           },
@@ -12092,6 +14290,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"
@@ -12172,6 +14373,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           },
           "412": {
             "$ref": "#/components/responses/PreconditionFailed"

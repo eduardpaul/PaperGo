@@ -22,8 +22,6 @@ type Relationship struct {
 	ID string `json:"id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
-	// WorkspaceID holds the value of the "workspace_id" field.
-	WorkspaceID string `json:"workspace_id,omitempty"`
 	// SourceID holds the value of the "source_id" field.
 	SourceID string `json:"source_id,omitempty"`
 	// TargetID holds the value of the "target_id" field.
@@ -99,7 +97,7 @@ func (*Relationship) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case relationship.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case relationship.FieldID, relationship.FieldWorkspaceID, relationship.FieldSourceID, relationship.FieldTargetID, relationship.FieldTypeID:
+		case relationship.FieldID, relationship.FieldSourceID, relationship.FieldTargetID, relationship.FieldTypeID:
 			values[i] = new(sql.NullString)
 		case relationship.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -129,12 +127,6 @@ func (_m *Relationship) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
-			}
-		case relationship.FieldWorkspaceID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field workspace_id", values[i])
-			} else if value.Valid {
-				_m.WorkspaceID = value.String
 			}
 		case relationship.FieldSourceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -227,9 +219,6 @@ func (_m *Relationship) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("workspace_id=")
-	builder.WriteString(_m.WorkspaceID)
 	builder.WriteString(", ")
 	builder.WriteString("source_id=")
 	builder.WriteString(_m.SourceID)

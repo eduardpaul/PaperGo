@@ -58,8 +58,11 @@ func (s *Service) CreateWebDAVCredential(ctx context.Context, subject string, in
 			b.SetExpiresAt(in.ExpiresAt.UTC())
 		}
 		c, e := b.Save(ctx)
+		if e != nil {
+			return e
+		}
 		out = &NewWebDAVCredential{WebDAVCredential: c, Password: password}
-		return e
+		return t.auditCatalog(ctx, subject, "webdav_credential.create", map[string]any{"webdav_credential_id": c.ID})
 	})
 	return
 }
@@ -76,7 +79,10 @@ func (s *Service) RevokeWebDAVCredential(ctx context.Context, subject, id string
 		if e == nil && n == 0 {
 			e = ErrNotFound
 		}
-		return e
+		if e != nil {
+			return e
+		}
+		return t.auditCatalog(ctx, subject, "webdav_credential.delete", map[string]any{"webdav_credential_id": id})
 	})
 }
 

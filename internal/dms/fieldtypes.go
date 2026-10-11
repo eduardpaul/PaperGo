@@ -244,9 +244,6 @@ func normalizeField(d *ent.FieldDefinition, v any) (any, error) {
 	if !ok {
 		return nil, invalid("expected an array")
 	}
-	if len(list) > 100 {
-		return nil, invalid("at most 100 values per field")
-	}
 	result := []any{}
 	seen := map[string]bool{}
 	for _, x := range list {
@@ -295,8 +292,12 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 		if len(d.Choices) == 0 {
 			return invalid("choice field requires choices")
 		}
-		if e := validateTags(d.Choices); e != nil {
-			return e
+		seen := map[string]bool{}
+		for _, choice := range d.Choices {
+			if strings.TrimSpace(choice) == "" || seen[choice] {
+				return invalid("choices must be unique, nonempty strings")
+			}
+			seen[choice] = true
 		}
 	} else if len(d.Choices) > 0 {
 		return invalid("choices belong to choice fields")

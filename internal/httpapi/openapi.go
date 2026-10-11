@@ -62,6 +62,7 @@ var problemResponses = map[int]string{
 	403: "The caller lacks the required permission (forbidden).",
 	404: "The entity does not exist or is not visible to the caller (not_found).",
 	409: "Duplicate name or key, or another state constraint (conflict).",
+	410: "The live cursor or delta token expired (live_cursor_expired, delta_expired).",
 	412: "Stale If-Match version (precondition_failed).",
 	413: "Request body exceeds the size limit (payload_too_large).",
 	415: "Request body is not JSON (unsupported_media_type).",

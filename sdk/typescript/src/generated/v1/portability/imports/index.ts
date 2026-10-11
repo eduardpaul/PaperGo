@@ -7,11 +7,12 @@ import { createProblemFromDiscriminatorValue, type Problem } from '../../../mode
 import { createUntypedNodeFromDiscriminatorValue, type BaseRequestBuilder, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata, type UntypedNode } from '@microsoft/kiota-abstractions';
 
 /**
- * Builds and executes requests for operations under /v1/content-types/audit
+ * Builds and executes requests for operations under /v1/portability/imports
  */
-export interface AuditRequestBuilder extends BaseRequestBuilder<AuditRequestBuilder> {
+export interface ImportsRequestBuilder extends BaseRequestBuilder<ImportsRequestBuilder> {
     /**
-     * GET /v1/content-types/audit
+     * POST /v1/portability/imports
+     * @param body Binary request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<UntypedNode>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -19,6 +20,7 @@ export interface AuditRequestBuilder extends BaseRequestBuilder<AuditRequestBuil
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -27,24 +29,25 @@ export interface AuditRequestBuilder extends BaseRequestBuilder<AuditRequestBuil
      * @throws {Problem} error when the service returns a 500 status code
      * @throws {Problem} error when the service returns a 503 status code
      */
-     get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<UntypedNode | undefined>;
+     post(body: ArrayBuffer | undefined, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<UntypedNode | undefined>;
     /**
-     * GET /v1/content-types/audit
+     * POST /v1/portability/imports
+     * @param body Binary request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
-     toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
+     toPostRequestInformation(body: ArrayBuffer | undefined, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
 /**
  * Uri template for the request builder.
  */
-export const AuditRequestBuilderUriTemplate = "{+baseurl}/v1/content-types/audit";
+export const ImportsRequestBuilderUriTemplate = "{+baseurl}/v1/portability/imports";
 /**
  * Metadata for all the requests in the request builder.
  */
-export const AuditRequestBuilderRequestsMetadata: RequestsMetadata = {
-    get: {
-        uriTemplate: AuditRequestBuilderUriTemplate,
+export const ImportsRequestBuilderRequestsMetadata: RequestsMetadata = {
+    post: {
+        uriTemplate: ImportsRequestBuilderUriTemplate,
         responseBodyContentType: "application/json",
         errorMappings: {
             400: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
@@ -52,6 +55,7 @@ export const AuditRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
@@ -62,6 +66,8 @@ export const AuditRequestBuilderRequestsMetadata: RequestsMetadata = {
         },
         adapterMethodName: "send",
         responseBodyFactory:  createUntypedNodeFromDiscriminatorValue,
+        requestBodyContentType: "application/zip",
+        requestInformationContentSetMethod: "setStreamContent",
     },
 };
 /* tslint:enable */

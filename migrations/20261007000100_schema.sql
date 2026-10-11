@@ -15,14 +15,14 @@ CREATE TRIGGER identity_preference_owner_immutable BEFORE UPDATE OF owner_type,o
  SELECT RAISE(ABORT,'preference owner is immutable');
 END;
 
-CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NULL, `resource_id` text NULL, `subject` text NOT NULL, `action` text NOT NULL, `details` json NOT NULL, PRIMARY KEY (`id`));
-CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL, languages TEXT NOT NULL DEFAULT '' CHECK(length(languages)<=191), `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
+CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NULL, `resource_id` text NULL, `subject` text NOT NULL, `action` text NOT NULL, entity_type TEXT NOT NULL CHECK(length(entity_type)>0), entity_id TEXT NULL, properties JSON NOT NULL DEFAULT '[]' CHECK(json_valid(properties) AND json_type(properties)='array'), trace_id TEXT NOT NULL CHECK(length(trace_id)>0), `details` json NOT NULL, PRIMARY KEY (`id`));
+CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL CHECK(content_type IN ('application/pdf','image/tiff','image/jpeg','image/png','image/webp')), languages TEXT NOT NULL DEFAULT '' CHECK(length(languages)<=191), `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT NULL, `key` text NOT NULL, `label` text NOT NULL, `type` text NOT NULL, `required` bool NOT NULL DEFAULT (false), `choices` json NOT NULL, indexed BOOLEAN NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), index_status TEXT NOT NULL DEFAULT 'ready' CHECK(index_status IN ('ready','building','failed')), scale INTEGER NOT NULL DEFAULT 0, options JSON NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object'), PRIMARY KEY (`id`));
 CREATE TABLE blob_deletions (id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, object_key TEXT NOT NULL UNIQUE);
 CREATE TABLE `grants` (`id` text NOT NULL, `created_at` datetime NOT NULL, `principal_type` text NOT NULL CHECK(principal_type IN ('user','group','workspace_visitor','workspace_member','workspace_owner')), `principal_id` text NOT NULL, `action` text NOT NULL, `effect` text NOT NULL, `resource_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `grants_resources_grants` FOREIGN KEY (`resource_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT REFERENCES item_revisions(id), PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT NOT NULL REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, `kind` text NOT NULL, `name` text NOT NULL, `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind IN ('workspace','list','library') OR description='')), allow_folders BOOLEAN NOT NULL DEFAULT 1 CHECK(allow_folders IN (0,1) AND (kind IN ('list','library') OR allow_folders=1)), `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, versioning TEXT NOT NULL DEFAULT 'off' CHECK(versioning IN ('off','major') AND (kind IN ('list','library') OR versioning='off')), max_versions INTEGER NOT NULL DEFAULT 50 CHECK(max_versions BETWEEN 1 AND 500 AND (kind IN ('list','library') OR max_versions=50)), webdav_enabled BOOLEAN NOT NULL DEFAULT 0, duplicate_policy TEXT NOT NULL DEFAULT 'warn' CHECK(duplicate_policy IN ('allow','warn','block') AND (kind='library' OR duplicate_policy='warn')), name_key TEXT NULL, deleted_at DATETIME NULL, deleted_by TEXT NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind IN ('item','folder'))=(content_type_id IS NOT NULL)), FOREIGN KEY(content_type_id) REFERENCES content_types(id));
+CREATE TABLE `publications` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `published_by` text NOT NULL, `snapshot` json NOT NULL, `item_id` text NOT NULL, action TEXT NOT NULL DEFAULT 'publish', revision_id TEXT, PRIMARY KEY (`id`), CONSTRAINT `publications_resources_publications` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
+CREATE TABLE `relationships` (`id` text NOT NULL, `created_at` datetime NOT NULL, `metadata` json NOT NULL, `source_id` text NOT NULL, `target_id` text NOT NULL, type_id TEXT REFERENCES relationship_types(id), directed BOOLEAN NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), PRIMARY KEY (`id`), CONSTRAINT `relationships_resources_outgoing` FOREIGN KEY (`source_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION, CONSTRAINT `relationships_resources_incoming` FOREIGN KEY (`target_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, personal_owner_id TEXT REFERENCES identity_users(id) CHECK(personal_owner_id IS NULL OR kind='workspace'), system_key TEXT CHECK(system_key IS NULL OR (kind='library' AND system_key IN ('home.documents','home.inbox'))), `kind` text NOT NULL, `name` text NOT NULL, `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind IN ('workspace','list','library') OR description='')), allow_folders BOOLEAN NOT NULL DEFAULT 1 CHECK(allow_folders IN (0,1) AND (kind IN ('list','library') OR allow_folders=1)), `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, versioning TEXT NOT NULL DEFAULT 'off' CHECK(versioning IN ('off','major') AND (kind IN ('list','library') OR versioning='off')), max_versions INTEGER NOT NULL DEFAULT 50 CHECK(max_versions BETWEEN 1 AND 500 AND (kind IN ('list','library') OR max_versions=50)), webdav_enabled BOOLEAN NOT NULL DEFAULT 0, duplicate_policy TEXT NOT NULL DEFAULT 'warn' CHECK(duplicate_policy IN ('allow','warn','block') AND (kind='library' OR duplicate_policy='warn')), name_key TEXT NULL, deleted_at DATETIME NULL, deleted_by TEXT NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind IN ('item','folder'))=(content_type_id IS NOT NULL)), FOREIGN KEY(content_type_id) REFERENCES content_types(id));
 CREATE TABLE resource_tags (
   resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
   tag TEXT NOT NULL,
@@ -61,9 +61,12 @@ CREATE TABLE item_revisions (
 CREATE TABLE item_histories (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
  revision_id TEXT NOT NULL REFERENCES item_revisions(id),
+ item_id TEXT NOT NULL REFERENCES resources(id), number INTEGER NOT NULL CHECK(number>0),
  changed_fields JSON NOT NULL CHECK(json_valid(changed_fields) AND json_type(changed_fields)='array')
 );
 CREATE UNIQUE INDEX itemhistory_revision_id ON item_histories(revision_id);
+CREATE UNIQUE INDEX itemhistory_item_id_number ON item_histories(item_id,number);
+CREATE TRIGGER item_history_ownership BEFORE INSERT ON item_histories BEGIN SELECT RAISE(ABORT,'invalid history ownership') WHERE NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.revision_id AND item_id=new.item_id);END;
 CREATE TRIGGER item_history_immutable BEFORE UPDATE ON item_histories BEGIN SELECT RAISE(ABORT,'item history is immutable'); END;
 CREATE TABLE item_surfaces (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, item_id TEXT NOT NULL REFERENCES resources(id),
@@ -78,7 +81,7 @@ CREATE TABLE item_surface_tags(surface_id TEXT NOT NULL REFERENCES item_surfaces
 CREATE TABLE "field_values" (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, surface_id TEXT NOT NULL REFERENCES item_surfaces(id),
  container_id TEXT NOT NULL, item_id TEXT NOT NULL, surface TEXT NOT NULL, field_key TEXT NOT NULL, field_type TEXT NOT NULL,
- scale INTEGER NOT NULL DEFAULT 0, ordinal INTEGER NOT NULL DEFAULT 0 CHECK(ordinal>=0 AND ordinal<100),
+ scale INTEGER NOT NULL DEFAULT 0, ordinal INTEGER NOT NULL DEFAULT 0 CHECK(ordinal>=0),
  value_text TEXT, value_integer INTEGER, value_boolean BOOLEAN,
  CHECK((value_text IS NOT NULL)+(value_integer IS NOT NULL)+(value_boolean IS NOT NULL)=1),
  CHECK((field_type IN ('text','note','email','url','date','lookup','person','term','keywords','choice','datetime') AND value_text IS NOT NULL)
@@ -121,8 +124,10 @@ CREATE TABLE list_views (
  is_default BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
 );
 CREATE TABLE operations (
- id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,container_id TEXT NOT NULL REFERENCES resources(id),
- field_id TEXT NOT NULL DEFAULT '',kind TEXT NOT NULL CHECK(kind IN ('field_index','bulk_update')),
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,container_id TEXT REFERENCES resources(id),
+ field_id TEXT NOT NULL DEFAULT '',kind TEXT NOT NULL CHECK(length(kind) BETWEEN 1 AND 64),
+ trace_id TEXT NOT NULL,credential_id TEXT,credential_scopes JSON NOT NULL DEFAULT '[]' CHECK(json_valid(credential_scopes) AND json_type(credential_scopes)='array'),
+ result JSON NOT NULL DEFAULT '{}' CHECK(json_valid(result)),started_at DATETIME,completed_at DATETIME,
  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','succeeded','failed','superseded')),
  surface TEXT NOT NULL DEFAULT 'head' CHECK(surface IN ('head','published')),after_item_id TEXT NOT NULL DEFAULT '',
  processed INTEGER NOT NULL DEFAULT 0 CHECK(processed>=0),error TEXT NOT NULL DEFAULT '',created_by TEXT NOT NULL,
@@ -187,7 +192,8 @@ CREATE TABLE workflow_runs (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, workflow_id TEXT NOT NULL REFERENCES workflows(id),
  workflow_version INTEGER NOT NULL CHECK(workflow_version>0), workspace_id TEXT NOT NULL REFERENCES resources(id),
  item_id TEXT, event_id TEXT NOT NULL, event_type TEXT NOT NULL,
- depth INTEGER NOT NULL CHECK(depth>=0), actor TEXT NOT NULL, retry_of TEXT
+ depth INTEGER NOT NULL CHECK(depth>=0), actor TEXT NOT NULL, retry_of TEXT,
+ live_status TEXT NOT NULL DEFAULT 'queued',live_updated_at INTEGER NOT NULL DEFAULT 0 CHECK(live_updated_at>=0)
 );
 CREATE TABLE workflow_run_items (
  id TEXT PRIMARY KEY NOT NULL, run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
@@ -272,7 +278,8 @@ CREATE INDEX listview_container_id_id ON list_views(container_id,id);
 CREATE INDEX operation_status_created_at ON operations(status,created_at);
 CREATE INDEX operation_container_id_id ON operations(container_id,id);
 CREATE UNIQUE INDEX listview_one_default ON list_views(container_id) WHERE is_default=1;
-CREATE UNIQUE INDEX relationship_type_id_source_id_target_id ON relationships(type_id,source_id,target_id);
+CREATE UNIQUE INDEX relationship_type_id_source_id_target_id_directed ON relationships(type_id,source_id,target_id,directed);
+CREATE UNIQUE INDEX relationship_source_id_target_id_directed ON relationships(source_id,target_id,directed) WHERE type_id IS NULL;
 CREATE INDEX relationship_type_id_target_id ON relationships(type_id,target_id);
 
 CREATE INDEX domainevent_created_at_id ON domain_events(created_at,id) WHERE dispatched_at IS NULL;
@@ -401,11 +408,11 @@ CREATE TRIGGER relationship_validate_insert BEFORE INSERT ON relationships BEGIN
   SELECT CASE WHEN new.source_id=new.target_id OR NOT EXISTS (
     SELECT 1 FROM resources s JOIN resources t ON t.id=new.target_id
     WHERE s.id=new.source_id AND s.kind='item' AND t.kind='item'
-      AND s.workspace_id=t.workspace_id AND s.workspace_id=new.workspace_id
+      AND s.deleted_at IS NULL AND t.deleted_at IS NULL
   ) THEN RAISE(ABORT,'invalid relationship endpoints') END;
 END;
-CREATE TRIGGER relationship_immutable_endpoints BEFORE UPDATE OF source_id,target_id,workspace_id ON relationships BEGIN
-  SELECT CASE WHEN new.source_id IS NOT old.source_id OR new.target_id IS NOT old.target_id OR new.workspace_id IS NOT old.workspace_id
+CREATE TRIGGER relationship_immutable_endpoints BEFORE UPDATE OF source_id,target_id ON relationships BEGIN
+  SELECT CASE WHEN new.source_id IS NOT old.source_id OR new.target_id IS NOT old.target_id
     THEN RAISE(ABORT,'relationship endpoints are immutable') END;
 END;
 CREATE TRIGGER publication_item_validate BEFORE INSERT ON publications BEGIN
@@ -414,8 +421,8 @@ CREATE TRIGGER publication_item_validate BEFORE INSERT ON publications BEGIN
 END;
 CREATE TRIGGER blob_item_validate BEFORE INSERT ON blobs BEGIN
   SELECT CASE WHEN EXISTS (SELECT 1 FROM blobs WHERE object_key=new.object_key
-    AND (item_id<>new.item_id OR sha256<>new.sha256 OR size<>new.size OR content_type<>new.content_type))
-    THEN RAISE(ABORT,'shared blob object must belong to the same item and content') END;
+    AND (sha256<>new.sha256 OR size<>new.size))
+    THEN RAISE(ABORT,'shared blob object must have identical bytes') END;
   SELECT CASE WHEN NOT EXISTS (
     SELECT 1 FROM resources i JOIN resources c ON c.id=i.container_id
     WHERE i.id=new.item_id AND i.kind='item' AND c.kind='library'
@@ -450,7 +457,7 @@ CREATE TRIGGER schema_revision_validate BEFORE INSERT ON schema_revisions BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.container_id AND kind IN ('list','library')) THEN RAISE(ABORT,'invalid schema container') END;
 END;
 CREATE TRIGGER schema_revision_immutable BEFORE UPDATE ON schema_revisions BEGIN SELECT RAISE(ABORT,'schema revision is immutable'); END;
-CREATE TRIGGER schema_revision_retained BEFORE DELETE ON schema_revisions BEGIN SELECT RAISE(ABORT,'schema revisions are retained'); END;
+CREATE TRIGGER schema_revision_retained BEFORE DELETE ON schema_revisions WHEN NOT EXISTS(SELECT 1 FROM resources c JOIN resources w ON w.id=c.workspace_id WHERE c.id=old.container_id AND w.personal_owner_id IS NOT NULL AND w.deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'schema revisions are retained'); END;
 CREATE TRIGGER item_revision_validate BEFORE INSERT ON item_revisions BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.item_id AND kind IN ('item','folder') AND container_id=new.container_id AND content_type_id=new.content_type_id)
  OR NOT EXISTS(SELECT 1 FROM schema_revisions s, json_each(s.definition,'$.content_types') t WHERE s.id=new.schema_revision_id AND json_extract(t.value,'$.id')=new.content_type_id)
@@ -473,7 +480,6 @@ CREATE TRIGGER business_key_validate BEFORE INSERT ON business_keys BEGIN
 END;
 CREATE TRIGGER business_key_immutable BEFORE UPDATE ON business_keys BEGIN SELECT RAISE(ABORT,'business key claims are immutable'); END;
 CREATE TRIGGER item_revision_immutable BEFORE UPDATE ON item_revisions BEGIN SELECT RAISE(ABORT,'item revision is immutable'); END;
-CREATE TRIGGER item_revision_retained BEFORE DELETE ON item_revisions WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=old.item_id AND deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'live item revisions are retained'); END;
 CREATE TRIGGER resource_revision_pointers BEFORE UPDATE OF head_revision_id,published_revision_id,schema_head_id,publishing_enabled,webdav_enabled ON resources BEGIN
  SELECT CASE WHEN (new.head_revision_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.head_revision_id AND item_id=new.id))
  OR (new.published_revision_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.published_revision_id AND item_id=new.id))
@@ -482,7 +488,7 @@ CREATE TRIGGER resource_revision_pointers BEFORE UPDATE OF head_revision_id,publ
  THEN RAISE(ABORT,'invalid revision pointer') END;
 END;
 CREATE TRIGGER publication_revision_validate BEFORE INSERT ON publications BEGIN
- SELECT CASE WHEN new.revision_id IS NULL OR new.action NOT IN ('publish','unpublish') OR NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.revision_id AND item_id=new.item_id)
+ SELECT CASE WHEN new.revision_id IS NULL OR new.action NOT IN ('publish','unpublish')
  THEN RAISE(ABORT,'invalid publication revision') END;
 END;
 CREATE TRIGGER publication_retained BEFORE DELETE ON publications WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=old.item_id AND deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'live publication events are retained'); END;
@@ -567,7 +573,7 @@ CREATE TRIGGER relationship_types_term_validate BEFORE INSERT ON relationship_ty
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM terms t JOIN term_sets s ON s.id=t.term_set_id WHERE t.id=new.id AND s.key='relationship_types' AND t.deprecated=0 AND t.merged_into_id IS NULL) THEN RAISE(ABORT,'relationship type requires an active predicate term') END;
 END;
 CREATE TRIGGER relationship_type_validate BEFORE INSERT ON relationships BEGIN
- SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM relationship_types p JOIN terms t ON t.id=p.id WHERE p.id=new.type_id AND p.directed=new.directed AND t.deprecated=0 AND t.merged_into_id IS NULL)
+ SELECT CASE WHEN (new.type_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM relationship_types p JOIN terms t ON t.id=p.id WHERE p.id=new.type_id AND p.directed=new.directed AND t.deprecated=0 AND t.merged_into_id IS NULL))
  OR (new.directed=0 AND new.source_id>=new.target_id) THEN RAISE(ABORT,'invalid typed relationship') END;
  SELECT CASE WHEN EXISTS(SELECT 1 FROM relationship_types t WHERE t.id=new.type_id AND
  ((t.max_outgoing IS NOT NULL AND (SELECT count(*) FROM relationships WHERE type_id=t.id AND source_id=new.source_id)>=t.max_outgoing)
@@ -597,10 +603,10 @@ CREATE TRIGGER workflow_validate BEFORE INSERT ON workflows BEGIN
 END;
 CREATE TRIGGER workflow_identity BEFORE UPDATE OF id,workspace_id,key,builtin_key,collection_id,created_by ON workflows BEGIN SELECT RAISE(ABORT,'workflow identity is immutable'); END;
 CREATE TRIGGER workflow_tombstone BEFORE UPDATE ON workflows WHEN old.deleted_at IS NOT NULL BEGIN SELECT RAISE(ABORT,'deleted workflows are final'); END;
-CREATE TRIGGER workflow_retained BEFORE DELETE ON workflows BEGIN SELECT RAISE(ABORT,'workflows are retained; delete sets deleted_at'); END;
+CREATE TRIGGER workflow_retained BEFORE DELETE ON workflows WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=old.workspace_id AND personal_owner_id IS NOT NULL AND deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'workflows are retained; delete sets deleted_at'); END;
 CREATE TRIGGER domain_event_immutable BEFORE UPDATE OF id,created_at,type,workspace_id,collection_id,resource_id,actor,data,depth,cause_run_id ON domain_events BEGIN SELECT RAISE(ABORT,'domain events are immutable'); END;
 CREATE TRIGGER workflow_version_immutable BEFORE UPDATE ON workflow_versions BEGIN SELECT RAISE(ABORT,'workflow versions are immutable'); END;
-CREATE TRIGGER workflow_version_retained BEFORE DELETE ON workflow_versions BEGIN SELECT RAISE(ABORT,'workflow versions are retained'); END;
+CREATE TRIGGER workflow_version_retained BEFORE DELETE ON workflow_versions WHEN NOT EXISTS(SELECT 1 FROM workflows f JOIN resources w ON w.id=f.workspace_id WHERE f.id=old.workflow_id AND w.personal_owner_id IS NOT NULL AND w.deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'workflow versions are retained'); END;
 CREATE TRIGGER workflow_run_immutable BEFORE UPDATE OF id,created_at,workflow_id,workflow_version,item_id,event_id,event_type,depth,actor,retry_of ON workflow_runs BEGIN SELECT RAISE(ABORT,'workflow run identity and inputs are immutable'); END;
 CREATE TRIGGER workflow_run_item_immutable BEFORE UPDATE ON workflow_run_items BEGIN SELECT RAISE(ABORT,'run membership is immutable'); END;
 
@@ -627,8 +633,13 @@ WHEN old.action='manage' AND EXISTS(SELECT 1 FROM resources WHERE id=old.resourc
  THEN RAISE(ABORT,'a workspace needs at least one owner') END;
 END;
 
--- Organization directory, nested groups and module-scoped roles.
-CREATE TABLE identity_users (id TEXT NOT NULL PRIMARY KEY CHECK(length(id) BETWEEN 1 AND 255 AND id=trim(id)), created_at datetime NOT NULL, active BOOLEAN NOT NULL DEFAULT 1 CHECK(active IN (0,1)));
+-- Organization identity, directory, nested groups and module-scoped roles.
+CREATE TABLE identity_organizations (id TEXT NOT NULL PRIMARY KEY, created_at DATETIME NOT NULL, singleton BOOLEAN NOT NULL DEFAULT 1 CHECK(singleton=1), identifier TEXT NOT NULL CHECK(length(identifier) BETWEEN 1 AND 128), display_name TEXT NOT NULL CHECK(length(display_name) BETWEEN 1 AND 200), description TEXT NOT NULL DEFAULT '' CHECK(length(description)<=2000), version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
+CREATE UNIQUE INDEX identityorganization_singleton ON identity_organizations(singleton);
+CREATE TABLE identity_users (id TEXT NOT NULL PRIMARY KEY CHECK(length(id) BETWEEN 1 AND 255 AND id=trim(id)), created_at datetime NOT NULL, active BOOLEAN NOT NULL DEFAULT 1 CHECK(active IN (0,1)), display_name TEXT NOT NULL DEFAULT '' CHECK(length(display_name)<=200), email TEXT NOT NULL DEFAULT '' CHECK(length(email)<=256), deleted_at DATETIME, CHECK(deleted_at IS NULL OR (active=0 AND display_name='Deleted user' AND email='')));
+CREATE TABLE identity_rest_tokens(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,subject TEXT NOT NULL REFERENCES identity_users(id),name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 200),prefix TEXT NOT NULL,secret_hash TEXT NOT NULL CHECK(length(secret_hash)=64),scopes JSON NOT NULL CHECK(json_valid(scopes) AND json_type(scopes)='array' AND json_array_length(scopes)>0),expires_at DATETIME NOT NULL,last_used_at DATETIME,revoked_at DATETIME);
+CREATE UNIQUE INDEX identityresttoken_secret_hash ON identity_rest_tokens(secret_hash);
+CREATE INDEX identityresttoken_subject_id ON identity_rest_tokens(subject,id);
 CREATE TABLE identity_groups (id TEXT NOT NULL PRIMARY KEY, created_at datetime NOT NULL, name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 200), description TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
 CREATE UNIQUE INDEX identitygroup_name ON identity_groups(name);
 CREATE TABLE identity_roles (id TEXT NOT NULL PRIMARY KEY, created_at datetime NOT NULL, name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 200), description TEXT NOT NULL DEFAULT '', scopes JSON NOT NULL DEFAULT '[]' CHECK(json_valid(scopes) AND json_type(scopes)='array'), builtin bool NOT NULL DEFAULT false, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
@@ -670,3 +681,52 @@ INSERT INTO term_groups(id,created_at,updated_at,name,description,is_system,vers
 VALUES('00000000-0000-4000-8000-000000000001',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'System','Term sets managed by PaperGo.',1,1);
 INSERT INTO term_sets(id,created_at,updated_at,group_id,key,name,description,is_open,is_keywords,version)
 VALUES('00000000-0000-4000-8000-000000000002',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'00000000-0000-4000-8000-000000000001','keywords','Keywords','Free keywords that people add while tagging items.',1,1,1);
+
+-- Durable per-caller visibility ranges and short-lived delta pages.
+CREATE TABLE sync_views(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,subject TEXT NOT NULL,container_id TEXT NOT NULL,sequence INTEGER NOT NULL DEFAULT 0 CHECK(sequence>=0));
+CREATE UNIQUE INDEX syncview_subject_container_id ON sync_views(subject,container_id);
+CREATE TABLE sync_states(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,view_id TEXT NOT NULL REFERENCES sync_views(id),item_id TEXT NOT NULL,from_sequence INTEGER NOT NULL CHECK(from_sequence>0),to_sequence INTEGER CHECK(to_sequence>from_sequence),fingerprint TEXT NOT NULL CHECK(length(fingerprint)=64));
+CREATE UNIQUE INDEX syncstate_view_id_item_id_from_sequence ON sync_states(view_id,item_id,from_sequence);
+CREATE UNIQUE INDEX syncstate_view_id_item_id ON sync_states(view_id,item_id) WHERE to_sequence IS NULL;
+CREATE INDEX syncstate_view_id_from_sequence_to_sequence ON sync_states(view_id,from_sequence,to_sequence);
+CREATE TABLE sync_tokens(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,view_id TEXT NOT NULL REFERENCES sync_views(id),sequence INTEGER NOT NULL CHECK(sequence>0),changes JSON NOT NULL DEFAULT '[]' CHECK(json_valid(changes) AND json_type(changes)='array'),page_expires_at DATETIME NOT NULL,expires_at DATETIME NOT NULL);
+CREATE INDEX synctoken_view_id_sequence ON sync_tokens(view_id,sequence);
+CREATE INDEX synctoken_expires_at ON sync_tokens(expires_at);
+CREATE INDEX synctoken_page_expires_at ON sync_tokens(page_expires_at);
+
+CREATE INDEX auditevent_created_at_id ON audit_events(created_at,id);
+CREATE INDEX auditevent_subject_created_at ON audit_events(subject,created_at);
+CREATE INDEX auditevent_entity_type_entity_id_created_at ON audit_events(entity_type,entity_id,created_at);
+
+CREATE INDEX operation_status_updated_at ON operations(status,updated_at);
+
+-- Notification positions contain no retained content.
+CREATE TABLE live_changes(id INTEGER PRIMARY KEY AUTOINCREMENT,created_at DATETIME NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('item','operation','run','access')),entity_id TEXT NOT NULL CHECK(length(entity_id) BETWEEN 1 AND 200),action TEXT NOT NULL);
+CREATE INDEX livechange_created_at ON live_changes(created_at);
+CREATE TRIGGER live_item_create AFTER INSERT ON resources WHEN new.kind IN ('item','folder') BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'item',new.id,'created');END;
+CREATE TRIGGER live_item_update AFTER UPDATE ON resources WHEN new.kind IN ('item','folder') AND (old.version<>new.version OR old.deleted_at IS NOT new.deleted_at) BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'item',new.id,CASE WHEN new.deleted_at IS NOT NULL THEN 'deleted' ELSE 'updated' END);END;
+CREATE TRIGGER live_item_purge AFTER DELETE ON resources WHEN old.kind IN ('item','folder') BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'item',old.id,'deleted');END;
+CREATE TRIGGER live_operation_create AFTER INSERT ON operations BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'operation',new.id,'created');END;
+CREATE TRIGGER live_operation_update AFTER UPDATE ON operations BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'operation',new.id,'updated');END;
+CREATE TRIGGER live_run_create AFTER INSERT ON workflow_runs BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'run',new.id,'created');END;
+CREATE TRIGGER live_run_update AFTER UPDATE OF live_status,live_updated_at,workspace_id ON workflow_runs WHEN old.live_status<>new.live_status OR old.live_updated_at<>new.live_updated_at OR old.workspace_id<>new.workspace_id BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'run',new.id,'updated');END;
+CREATE TRIGGER live_access_change AFTER INSERT ON audit_events WHEN new.action IN ('permissions.replace','workspace.member.set','workspace.member.remove','group.member','role.assignment','role.update','role.delete','user.status','user.delete','resource.delete','resource.purge') BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'access',new.id,'changed');END;
+
+-- Personal Home identity and protected membership.
+CREATE UNIQUE INDEX resource_personal_owner_id ON resources(personal_owner_id) WHERE personal_owner_id IS NOT NULL;
+CREATE UNIQUE INDEX resource_workspace_id_system_key ON resources(workspace_id,system_key) WHERE system_key IS NOT NULL;
+CREATE TRIGGER personal_resource_insert BEFORE INSERT ON resources BEGIN
+ SELECT RAISE(ABORT,'personal owner must be an active user') WHERE new.personal_owner_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM identity_users WHERE id=new.personal_owner_id AND active=1 AND deleted_at IS NULL);
+ SELECT RAISE(ABORT,'system libraries belong to Home') WHERE new.system_key IS NOT NULL AND NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND personal_owner_id IS NOT NULL AND new.parent_id=id);
+END;
+CREATE TRIGGER personal_resource_identity BEFORE UPDATE OF personal_owner_id,system_key,workspace_id,parent_id ON resources WHEN old.personal_owner_id IS NOT new.personal_owner_id OR old.system_key IS NOT new.system_key OR (old.system_key IS NOT NULL AND (old.workspace_id IS NOT new.workspace_id OR old.parent_id IS NOT new.parent_id)) BEGIN SELECT RAISE(ABORT,'personal resource identity is immutable'); END;
+CREATE TRIGGER personal_member_insert BEFORE INSERT ON grants WHEN EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND personal_owner_id IS NOT NULL) BEGIN
+ SELECT RAISE(ABORT,'Home membership is fixed') WHERE NOT EXISTS(SELECT 1 FROM resources WHERE id=new.resource_id AND personal_owner_id=new.principal_id AND new.principal_type='user' AND new.action='manage' AND new.effect='allow');
+END;
+CREATE TRIGGER personal_member_update BEFORE UPDATE ON grants WHEN EXISTS(SELECT 1 FROM resources WHERE id=old.resource_id AND personal_owner_id IS NOT NULL) BEGIN SELECT RAISE(ABORT,'Home membership is fixed'); END;
+CREATE TRIGGER personal_member_delete BEFORE DELETE ON grants WHEN EXISTS(SELECT 1 FROM resources WHERE id=old.resource_id AND personal_owner_id IS NOT NULL AND deleted_at IS NULL) BEGIN SELECT RAISE(ABORT,'Home membership is fixed'); END;
+CREATE TABLE group_inboxes(id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,group_id TEXT NOT NULL REFERENCES identity_groups(id) ON DELETE CASCADE,library_id TEXT NOT NULL REFERENCES resources(id));
+CREATE UNIQUE INDEX groupinbox_group_id ON group_inboxes(group_id);
+CREATE INDEX groupinbox_library_id ON group_inboxes(library_id);
+CREATE TRIGGER group_inbox_insert BEFORE INSERT ON group_inboxes BEGIN SELECT RAISE(ABORT,'Inbox must be a library') WHERE NOT EXISTS(SELECT 1 FROM resources WHERE id=new.library_id AND kind='library' AND deleted_at IS NULL);END;
+CREATE TRIGGER group_inbox_update BEFORE UPDATE OF library_id ON group_inboxes BEGIN SELECT RAISE(ABORT,'Inbox must be a library') WHERE NOT EXISTS(SELECT 1 FROM resources WHERE id=new.library_id AND kind='library' AND deleted_at IS NULL);END;

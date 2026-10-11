@@ -4,7 +4,7 @@
 // @ts-ignore
 import { GroupsRequestBuilderNavigationMetadata, GroupsRequestBuilderRequestsMetadata, type GroupsRequestBuilder } from './groups/index.js';
 // @ts-ignore
-import { MeRequestBuilderNavigationMetadata, type MeRequestBuilder } from './me/index.js';
+import { MeRequestBuilderNavigationMetadata, MeRequestBuilderRequestsMetadata, type MeRequestBuilder } from './me/index.js';
 // @ts-ignore
 import { RolesRequestBuilderNavigationMetadata, RolesRequestBuilderRequestsMetadata, type RolesRequestBuilder } from './roles/index.js';
 // @ts-ignore
@@ -52,6 +52,7 @@ export const IdentityRequestBuilderNavigationMetadata: Record<Exclude<keyof Iden
         navigationMetadata: GroupsRequestBuilderNavigationMetadata,
     },
     me: {
+        requestsMetadata: MeRequestBuilderRequestsMetadata,
         navigationMetadata: MeRequestBuilderNavigationMetadata,
     },
     roles: {

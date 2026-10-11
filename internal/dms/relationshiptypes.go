@@ -110,7 +110,7 @@ func (s *Service) resolveRelationshipTerm(ctx context.Context, subject, value st
 		return nil, err
 	}
 	if v != nil {
-		for hops := 0; v.MergedIntoID != nil && hops < MaxDepth; hops++ {
+		for hops := 0; v.MergedIntoID != nil && hops < MaxTaxonomyDepth; hops++ {
 			v, err = s.Client.Term.Get(ctx, *v.MergedIntoID)
 			if err != nil {
 				return nil, err
@@ -294,15 +294,23 @@ func (s *Service) UpdateRelationship(ctx context.Context, subject, itemID, linkI
 		if b, e := json.Marshal(values); e != nil || len(b) > 16*1024 {
 			return invalid("metadata exceeds 16 KiB")
 		}
-		typ, e := t.Client.RelationshipType.Get(ctx, old.TypeID)
-		if e != nil {
+		if e = validateRelationshipAttributes(values); e != nil {
 			return e
 		}
-		if e = normalizeMetadata(typ.Attributes, values, old.Metadata); e != nil {
-			return e
+		if old.TypeID != "" {
+			typ, e := t.Client.RelationshipType.Get(ctx, old.TypeID)
+			if e != nil {
+				return e
+			}
+			if e = normalizeMetadata(typ.Attributes, values, old.Metadata); e != nil {
+				return e
+			}
 		}
 		out, e = t.Client.Relationship.UpdateOne(old).SetMetadata(values).AddVersion(1).Save(ctx)
 		if e != nil {
+			return e
+		}
+		if e = t.touchRelationship(ctx, subject, out, "updated"); e != nil {
 			return e
 		}
 		return t.audit(ctx, subject, "relationship.update", source, map[string]any{"relationship_id": linkID, "version": out.Version})

@@ -20,6 +20,48 @@ type IdentityUserCreate struct {
 	hooks    []Hook
 }
 
+// SetDisplayName sets the "display_name" field.
+func (_c *IdentityUserCreate) SetDisplayName(v string) *IdentityUserCreate {
+	_c.mutation.SetDisplayName(v)
+	return _c
+}
+
+// SetNillableDisplayName sets the "display_name" field if the given value is not nil.
+func (_c *IdentityUserCreate) SetNillableDisplayName(v *string) *IdentityUserCreate {
+	if v != nil {
+		_c.SetDisplayName(*v)
+	}
+	return _c
+}
+
+// SetEmail sets the "email" field.
+func (_c *IdentityUserCreate) SetEmail(v string) *IdentityUserCreate {
+	_c.mutation.SetEmail(v)
+	return _c
+}
+
+// SetNillableEmail sets the "email" field if the given value is not nil.
+func (_c *IdentityUserCreate) SetNillableEmail(v *string) *IdentityUserCreate {
+	if v != nil {
+		_c.SetEmail(*v)
+	}
+	return _c
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (_c *IdentityUserCreate) SetDeletedAt(v time.Time) *IdentityUserCreate {
+	_c.mutation.SetDeletedAt(v)
+	return _c
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_c *IdentityUserCreate) SetNillableDeletedAt(v *time.Time) *IdentityUserCreate {
+	if v != nil {
+		_c.SetDeletedAt(*v)
+	}
+	return _c
+}
+
 // SetActive sets the "active" field.
 func (_c *IdentityUserCreate) SetActive(v bool) *IdentityUserCreate {
 	_c.mutation.SetActive(v)
@@ -89,6 +131,14 @@ func (_c *IdentityUserCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *IdentityUserCreate) defaults() {
+	if _, ok := _c.mutation.DisplayName(); !ok {
+		v := identityuser.DefaultDisplayName
+		_c.mutation.SetDisplayName(v)
+	}
+	if _, ok := _c.mutation.Email(); !ok {
+		v := identityuser.DefaultEmail
+		_c.mutation.SetEmail(v)
+	}
 	if _, ok := _c.mutation.Active(); !ok {
 		v := identityuser.DefaultActive
 		_c.mutation.SetActive(v)
@@ -101,6 +151,12 @@ func (_c *IdentityUserCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *IdentityUserCreate) check() error {
+	if _, ok := _c.mutation.DisplayName(); !ok {
+		return &ValidationError{Name: "display_name", err: errors.New(`ent: missing required field "IdentityUser.display_name"`)}
+	}
+	if _, ok := _c.mutation.Email(); !ok {
+		return &ValidationError{Name: "email", err: errors.New(`ent: missing required field "IdentityUser.email"`)}
+	}
 	if _, ok := _c.mutation.Active(); !ok {
 		return &ValidationError{Name: "active", err: errors.New(`ent: missing required field "IdentityUser.active"`)}
 	}
@@ -146,6 +202,18 @@ func (_c *IdentityUserCreate) createSpec() (*IdentityUser, *sqlgraph.CreateSpec)
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.DisplayName(); ok {
+		_spec.SetField(identityuser.FieldDisplayName, field.TypeString, value)
+		_node.DisplayName = value
+	}
+	if value, ok := _c.mutation.Email(); ok {
+		_spec.SetField(identityuser.FieldEmail, field.TypeString, value)
+		_node.Email = value
+	}
+	if value, ok := _c.mutation.DeletedAt(); ok {
+		_spec.SetField(identityuser.FieldDeletedAt, field.TypeTime, value)
+		_node.DeletedAt = &value
 	}
 	if value, ok := _c.mutation.Active(); ok {
 		_spec.SetField(identityuser.FieldActive, field.TypeBool, value)

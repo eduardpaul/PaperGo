@@ -28,6 +28,14 @@ type AuditEvent struct {
 	Subject string `json:"subject,omitempty"`
 	// Action holds the value of the "action" field.
 	Action string `json:"action,omitempty"`
+	// EntityType holds the value of the "entity_type" field.
+	EntityType string `json:"entity_type,omitempty"`
+	// EntityID holds the value of the "entity_id" field.
+	EntityID string `json:"entity_id,omitempty"`
+	// Properties holds the value of the "properties" field.
+	Properties []string `json:"properties,omitempty"`
+	// TraceID holds the value of the "trace_id" field.
+	TraceID string `json:"trace_id,omitempty"`
 	// Details holds the value of the "details" field.
 	Details      map[string]interface{} `json:"details,omitempty"`
 	selectValues sql.SelectValues
@@ -38,9 +46,9 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case auditevent.FieldDetails:
+		case auditevent.FieldProperties, auditevent.FieldDetails:
 			values[i] = new([]byte)
-		case auditevent.FieldID, auditevent.FieldWorkspaceID, auditevent.FieldResourceID, auditevent.FieldSubject, auditevent.FieldAction:
+		case auditevent.FieldID, auditevent.FieldWorkspaceID, auditevent.FieldResourceID, auditevent.FieldSubject, auditevent.FieldAction, auditevent.FieldEntityType, auditevent.FieldEntityID, auditevent.FieldTraceID:
 			values[i] = new(sql.NullString)
 		case auditevent.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -94,6 +102,32 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field action", values[i])
 			} else if value.Valid {
 				_m.Action = value.String
+			}
+		case auditevent.FieldEntityType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
+			} else if value.Valid {
+				_m.EntityType = value.String
+			}
+		case auditevent.FieldEntityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
+			} else if value.Valid {
+				_m.EntityID = value.String
+			}
+		case auditevent.FieldProperties:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field properties", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Properties); err != nil {
+					return fmt.Errorf("unmarshal field properties: %w", err)
+				}
+			}
+		case auditevent.FieldTraceID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field trace_id", values[i])
+			} else if value.Valid {
+				_m.TraceID = value.String
 			}
 		case auditevent.FieldDetails:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -153,6 +187,18 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("action=")
 	builder.WriteString(_m.Action)
+	builder.WriteString(", ")
+	builder.WriteString("entity_type=")
+	builder.WriteString(_m.EntityType)
+	builder.WriteString(", ")
+	builder.WriteString("entity_id=")
+	builder.WriteString(_m.EntityID)
+	builder.WriteString(", ")
+	builder.WriteString("properties=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Properties))
+	builder.WriteString(", ")
+	builder.WriteString("trace_id=")
+	builder.WriteString(_m.TraceID)
 	builder.WriteString(", ")
 	builder.WriteString("details=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Details))

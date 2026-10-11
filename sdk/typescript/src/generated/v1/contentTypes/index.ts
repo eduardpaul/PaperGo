@@ -4,8 +4,6 @@
 // @ts-ignore
 import { createProblemFromDiscriminatorValue, type Problem } from '../../models/index.js';
 // @ts-ignore
-import { AuditRequestBuilderRequestsMetadata, type AuditRequestBuilder } from './audit/index.js';
-// @ts-ignore
 import { ContentTypesItemRequestBuilderRequestsMetadata, type ContentTypesItemRequestBuilder } from './item/index.js';
 // @ts-ignore
 import { createUntypedNodeFromDiscriminatorValue, type AdditionalDataHolder, type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type ParseNode, type RequestConfiguration, type RequestInformation, type RequestsMetadata, type SerializationWriter, type UntypedNode } from '@microsoft/kiota-abstractions';
@@ -16,10 +14,6 @@ export interface ContentTypesPostRequestBody extends AdditionalDataHolder, Parsa
  * Builds and executes requests for operations under /v1/content-types
  */
 export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTypesRequestBuilder> {
-    /**
-     * The audit property
-     */
-    get audit(): AuditRequestBuilder;
     /**
      * Gets an item from the papergo.v1.contentTypes.item collection
      * @param id Unique identifier of the item
@@ -35,6 +29,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -54,6 +49,7 @@ export interface ContentTypesRequestBuilder extends BaseRequestBuilder<ContentTy
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -119,9 +115,6 @@ export const ContentTypesRequestBuilderNavigationMetadata: Record<Exclude<keyof 
         requestsMetadata: ContentTypesItemRequestBuilderRequestsMetadata,
         pathParametersMappings: ["id"],
     },
-    audit: {
-        requestsMetadata: AuditRequestBuilderRequestsMetadata,
-    },
 };
 /**
  * Metadata for all the requests in the request builder.
@@ -136,6 +129,7 @@ export const ContentTypesRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
@@ -156,6 +150,7 @@ export const ContentTypesRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,

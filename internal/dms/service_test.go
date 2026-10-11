@@ -169,7 +169,7 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.SetPermissions(testContext, "alice", target.ID, target.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}}})
+	_, err = s.SetPermissions(testContext, "alice", target.ID, latest(t, s, target.ID).Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,12 +180,11 @@ func TestDirectionalRelationshipsAndHiddenTargets(t *testing.T) {
 	w2 := create(t, s, "", "workspace", "Other", nil)
 	l2 := create(t, s, w2.ID, "list", "Other list", nil)
 	i2 := create(t, s, l2.ID, "item", "Other item", nil)
-	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: i2.ID}); err == nil {
-		t.Fatal("cross-workspace link accepted")
+	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{Type: typ.ID, TargetID: i2.ID}); err != nil {
+		t.Fatal("cross-workspace link rejected", err)
 	}
-	var validation *ValidationError
-	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TargetID: target.ID}); !errors.As(err, &validation) {
-		t.Fatal("untyped relationship accepted", err)
+	if _, err = s.Link(testContext, "alice", source.ID, CreateRelationship{TargetID: target.ID}); err != nil {
+		t.Fatal("untyped relationship rejected", err)
 	}
 }
 func TestConcurrentUpdatesHaveOneWinner(t *testing.T) {

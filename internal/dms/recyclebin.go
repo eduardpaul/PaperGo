@@ -7,7 +7,9 @@ import (
 
 	"papergo/ent"
 	"papergo/ent/itemsurface"
+	"papergo/ent/relationship"
 	"papergo/ent/resource"
+	"papergo/internal/storage"
 )
 
 type DeletedResource struct {
@@ -23,7 +25,7 @@ func (s *Service) RecycleBin(ctx context.Context, subject, collection, after str
 		if _, err := t.recycleCollection(ctx, subject, collection); err != nil {
 			return out, err
 		}
-		q := t.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.DeletedAtNotNil(), permissionPredicate(subject, "write"))
+		q := t.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.DeletedAtNotNil(), permissionPredicate(ctx, subject, "write"))
 		if after != "" {
 			q.Where(resource.IDGT(after))
 		}
@@ -69,7 +71,7 @@ func (s *Service) deletedResource(ctx context.Context, subject, collection, id, 
 	if _, err := s.recycleCollection(ctx, subject, collection); err != nil {
 		return nil, err
 	}
-	r, err := s.Client.Resource.Query().Where(resource.IDEQ(id), resource.ContainerIDEQ(collection), resource.DeletedAtNotNil(), permissionPredicate(subject, "write")).Only(ctx)
+	r, err := s.Client.Resource.Query().Where(resource.IDEQ(id), resource.ContainerIDEQ(collection), resource.DeletedAtNotNil(), permissionPredicate(ctx, subject, "write")).Only(ctx)
 	if ent.IsNotFound(err) {
 		return nil, ErrNotFound
 	}
@@ -254,6 +256,15 @@ func (s *Service) PurgeDeleted(ctx context.Context, subject, collection, id stri
 			if err = t.Client.Resource.UpdateOne(row).ClearHeadRevisionID().ClearPublishedRevisionID().Exec(ctx); err != nil {
 				return err
 			}
+			links, err := t.Client.Relationship.Query().Where(relationship.Or(relationship.SourceIDEQ(row.ID), relationship.TargetIDEQ(row.ID))).All(ctx)
+			if err != nil {
+				return err
+			}
+			for _, link := range links {
+				if err = t.touchRelationship(ctx, subject, link, "deleted"); err != nil {
+					return err
+				}
+			}
 			for _, statement := range []string{
 				`DELETE FROM field_values WHERE item_id=?`, `DELETE FROM business_keys WHERE item_id=?`, `DELETE FROM item_surfaces WHERE item_id=?`,
 				`DELETE FROM publications WHERE item_id=?`, `DELETE FROM item_histories WHERE revision_id IN (SELECT id FROM item_revisions WHERE item_id=?)`,
@@ -288,22 +299,50 @@ func (s *Service) CleanupPurgedBlobs(ctx context.Context, store objectDeleter) e
 		return err
 	}
 	for _, row := range rows {
-		if err = store.Delete(ctx, row.ObjectKey); err != nil {
-			return err
-		}
-		if err = s.write(ctx, func(t *Service) error { return t.Client.BlobDeletion.DeleteOneID(row.ID).Exec(ctx) }); err != nil {
+		if err = s.write(ctx, func(t *Service) error {
+			if err := t.deleteUnreferencedObject(ctx, store, row.ObjectKey); err != nil {
+				return err
+			}
+			return t.Client.BlobDeletion.DeleteOneID(row.ID).Exec(ctx)
+		}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *Service) RunBlobCleanup(ctx context.Context, store objectDeleter, log *slog.Logger) {
+func (s *Service) deleteUnreferencedObject(ctx context.Context, store objectDeleter, key string) error {
+	var referenced bool
+	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=?) OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now')))`, key, OperationKindImport, key, OperationKindExport, key); err != nil {
+		return err
+	}
+	if referenced {
+		return nil
+	}
+	// Keep the SQLite writer lock through storage deletion. Upload attachment,
+	// file restoration and administrative backup cannot race this decision.
+	return store.Delete(ctx, key)
+}
+
+const ObjectGracePeriod = time.Hour
+
+// CollectObjects reconciles bytes left behind by interrupted uploads or commits.
+// New uploads remain untouched for a grace period, as in PaperDotNet's cleanup.
+func (s *Service) CollectObjects(ctx context.Context, store storage.Store, now time.Time) error {
+	return store.WalkObjects(ctx, now.Add(-ObjectGracePeriod), func(key string) error {
+		return s.write(ctx, func(t *Service) error { return t.deleteUnreferencedObject(ctx, store, key) })
+	})
+}
+
+func (s *Service) RunBlobCleanup(ctx context.Context, store storage.Store, log *slog.Logger) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
 		if err := s.CleanupPurgedBlobs(ctx, store); err != nil && ctx.Err() == nil {
 			log.Error("purged blob cleanup", "error", err)
+		}
+		if err := s.CollectObjects(ctx, store, time.Now().UTC()); err != nil && ctx.Err() == nil {
+			log.Error("unreferenced object cleanup", "error", err)
 		}
 		select {
 		case <-ctx.Done():

@@ -7,11 +7,11 @@ import { createProblemFromDiscriminatorValue, type Problem } from '../../../../m
 import { createUntypedNodeFromDiscriminatorValue, type BaseRequestBuilder, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata, type UntypedNode } from '@microsoft/kiota-abstractions';
 
 /**
- * Builds and executes requests for operations under /v1/workspaces/{id}/audit
+ * Builds and executes requests for operations under /v1/resources/{id}/delta
  */
-export interface AuditRequestBuilder extends BaseRequestBuilder<AuditRequestBuilder> {
+export interface DeltaRequestBuilder extends BaseRequestBuilder<DeltaRequestBuilder> {
     /**
-     * GET /v1/workspaces/{id}/audit
+     * GET /v1/resources/{id}/delta
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<UntypedNode>}
      * @throws {Problem} error when the service returns a 400 status code
@@ -19,6 +19,7 @@ export interface AuditRequestBuilder extends BaseRequestBuilder<AuditRequestBuil
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -29,7 +30,7 @@ export interface AuditRequestBuilder extends BaseRequestBuilder<AuditRequestBuil
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<UntypedNode | undefined>;
     /**
-     * GET /v1/workspaces/{id}/audit
+     * GET /v1/resources/{id}/delta
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
@@ -38,13 +39,13 @@ export interface AuditRequestBuilder extends BaseRequestBuilder<AuditRequestBuil
 /**
  * Uri template for the request builder.
  */
-export const AuditRequestBuilderUriTemplate = "{+baseurl}/v1/workspaces/{id}/audit";
+export const DeltaRequestBuilderUriTemplate = "{+baseurl}/v1/resources/{id}/delta";
 /**
  * Metadata for all the requests in the request builder.
  */
-export const AuditRequestBuilderRequestsMetadata: RequestsMetadata = {
+export const DeltaRequestBuilderRequestsMetadata: RequestsMetadata = {
     get: {
-        uriTemplate: AuditRequestBuilderUriTemplate,
+        uriTemplate: DeltaRequestBuilderUriTemplate,
         responseBodyContentType: "application/json",
         errorMappings: {
             400: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
@@ -52,6 +53,7 @@ export const AuditRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,

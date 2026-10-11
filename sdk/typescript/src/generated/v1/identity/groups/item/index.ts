@@ -4,6 +4,8 @@
 // @ts-ignore
 import { createProblemFromDiscriminatorValue, type Problem } from '../../../../models/index.js';
 // @ts-ignore
+import { InboxRequestBuilderNavigationMetadata, InboxRequestBuilderRequestsMetadata, type InboxRequestBuilder } from './inbox/index.js';
+// @ts-ignore
 import { MembersRequestBuilderNavigationMetadata, MembersRequestBuilderRequestsMetadata, type MembersRequestBuilder } from './members/index.js';
 // @ts-ignore
 import { createUntypedNodeFromDiscriminatorValue, type AdditionalDataHolder, type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type ParseNode, type RequestConfiguration, type RequestInformation, type RequestsMetadata, type SerializationWriter, type UntypedNode } from '@microsoft/kiota-abstractions';
@@ -53,6 +55,10 @@ export interface GroupsDeleteRequestBody extends AdditionalDataHolder, Parsable 
  */
 export interface GroupsItemRequestBuilder extends BaseRequestBuilder<GroupsItemRequestBuilder> {
     /**
+     * The inbox property
+     */
+    get inbox(): InboxRequestBuilder;
+    /**
      * The members property
      */
     get members(): MembersRequestBuilder;
@@ -66,6 +72,7 @@ export interface GroupsItemRequestBuilder extends BaseRequestBuilder<GroupsItemR
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -85,6 +92,7 @@ export interface GroupsItemRequestBuilder extends BaseRequestBuilder<GroupsItemR
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -141,6 +149,10 @@ export const GroupsItemRequestBuilderUriTemplate = "{+baseurl}/v1/identity/group
  * Metadata for all the navigation properties in the request builder.
  */
 export const GroupsItemRequestBuilderNavigationMetadata: Record<Exclude<keyof GroupsItemRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+    inbox: {
+        requestsMetadata: InboxRequestBuilderRequestsMetadata,
+        navigationMetadata: InboxRequestBuilderNavigationMetadata,
+    },
     members: {
         requestsMetadata: MembersRequestBuilderRequestsMetadata,
         navigationMetadata: MembersRequestBuilderNavigationMetadata,
@@ -159,6 +171,7 @@ export const GroupsItemRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
@@ -182,6 +195,7 @@ export const GroupsItemRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,

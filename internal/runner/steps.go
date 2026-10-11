@@ -41,6 +41,13 @@ func stepTx(ctx dbos.Context, r *Runner, name string, fn func(context.Context, *
 			return nil, err
 		}
 		defer tx.Rollback()
+		var exists bool
+		if err = tx.QueryRowContext(stepCtx, "SELECT EXISTS(SELECT 1 FROM audit_events WHERE entity_type='workflow_run' AND entity_id=? AND action='run.purge')", runID).Scan(&exists); err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, dms.ErrNotFound
+		}
 		var (
 			stored     []byte
 			storedName string

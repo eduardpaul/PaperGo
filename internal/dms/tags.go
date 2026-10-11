@@ -58,8 +58,8 @@ func (s *Service) Tags(ctx context.Context, subject, workspaceID string, in Tags
 		match += " AND t.tag>?"
 		matchArgs = append(matchArgs, in.After)
 	}
-	readable, readArgs := permissionSQL("r.id", subject, "read")
-	selected, selectedArgs := surfaceSQL("r.id", subject, "auto")
+	readable, readArgs := permissionSQL(ctx, "r.id", subject, "read")
+	selected, selectedArgs := surfaceSQL(ctx, "r.id", subject, "auto")
 	query := `SELECT tag, count(*) FROM (
 		SELECT t.tag AS tag FROM resource_tags t JOIN resources r ON r.id=t.resource_id
 		WHERE ` + match + ` AND r.kind NOT IN ('item','folder') AND r.deleted_at IS NULL AND ` + scope + ` AND ` + readable + `

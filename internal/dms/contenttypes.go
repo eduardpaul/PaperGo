@@ -176,7 +176,8 @@ func (s *Service) GetContentType(ctx context.Context, subject, id string) (*ent.
 	})
 }
 func (s *Service) auditCatalog(ctx context.Context, subject, action string, details map[string]any) error {
-	return s.Client.AuditEvent.Create().SetSubject(subject).SetAction(action).SetDetails(details).Exec(ctx)
+	typ, id := auditEntity(action, nil, details)
+	return s.Client.AuditEvent.Create().SetSubject(subject).SetAction(action).SetEntityType(typ).SetEntityID(id).SetProperties(s.changedProperties(id, action)).SetTraceID(s.traceID).SetDetails(details).Exec(ctx)
 }
 func (s *Service) attachedCollections(ctx context.Context, ids []string) ([]*ent.Resource, error) {
 	return s.Client.Resource.Query().Where(resource.DeletedAtIsNil(), func(q *entsql.Selector) {

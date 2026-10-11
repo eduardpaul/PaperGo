@@ -43,6 +43,8 @@ func foundationMutation[T any](a *API, status int, precondition bool, fn func(*h
 }
 func entityETag(w http.ResponseWriter, v any) {
 	switch x := v.(type) {
+	case identity.Organization:
+		etag(w, x.Version)
 	case identity.Group:
 		etag(w, x.Version)
 	case identity.Role:
@@ -71,6 +73,8 @@ func entityETag(w http.ResponseWriter, v any) {
 		etag(w, x.Version)
 	case *ent.Relationship:
 		etag(w, x.Version)
+	case dms.RelationshipView:
+		etag(w, x.Version)
 	}
 }
 func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFunc {
@@ -87,9 +91,6 @@ func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFun
 func (a *API) registerFoundation(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/collection-templates", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.CollectionTemplates(r.Context(), subject(r))
-	}))
-	m.HandleFunc("GET /v1/content-types/audit", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.ContentTypeAudit(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))
 	m.HandleFunc("GET /v1/content-types", foundationRead(a, func(r *http.Request) (any, error) { return a.DMS.CatalogContentTypes(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/content-types", foundationMutation(a, 201, false, func(r *http.Request, in dms.ContentTypeInput, v int) (any, error) {
@@ -216,6 +217,10 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/relationship-types/{id}", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.RelationshipType(r.Context(), subject(r), r.PathValue("id"))
 	}))
+	m.HandleFunc("GET /v1/items/{id}/relationships/{linkID}", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.Relationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"))
+	}))
+	m.HandleFunc("GET /v1/workspaces/{id}/relationships", a.workspaceRelationships)
 	m.HandleFunc("PATCH /v1/items/{id}/relationships/{linkID}", foundationMutation(a, 200, true, func(r *http.Request, in dms.UpdateRelationship, v int) (any, error) {
 		return a.DMS.UpdateRelationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"), v, in)
 	}))

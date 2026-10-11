@@ -13,6 +13,12 @@ const (
 	Label = "identity_user"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldDisplayName holds the string denoting the display_name field in the database.
+	FieldDisplayName = "display_name"
+	// FieldEmail holds the string denoting the email field in the database.
+	FieldEmail = "email"
+	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
+	FieldDeletedAt = "deleted_at"
 	// FieldActive holds the string denoting the active field in the database.
 	FieldActive = "active"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -24,6 +30,9 @@ const (
 // Columns holds all SQL columns for identityuser fields.
 var Columns = []string{
 	FieldID,
+	FieldDisplayName,
+	FieldEmail,
+	FieldDeletedAt,
 	FieldActive,
 	FieldCreatedAt,
 }
@@ -39,6 +48,10 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultDisplayName holds the default value on creation for the "display_name" field.
+	DefaultDisplayName string
+	// DefaultEmail holds the default value on creation for the "email" field.
+	DefaultEmail string
 	// DefaultActive holds the default value on creation for the "active" field.
 	DefaultActive bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -53,6 +66,21 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByDisplayName orders the results by the display_name field.
+func ByDisplayName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDisplayName, opts...).ToFunc()
+}
+
+// ByEmail orders the results by the email field.
+func ByEmail(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEmail, opts...).ToFunc()
+}
+
+// ByDeletedAt orders the results by the deleted_at field.
+func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
 }
 
 // ByActive orders the results by the active field.

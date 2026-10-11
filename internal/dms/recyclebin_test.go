@@ -23,7 +23,7 @@ func TestRecycleBinRestoreTreeAndPurge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Publish(testContext, "alice", item.ID, item.Version); err != nil {
+	if _, err := s.Publish(testContext, "alice", item.ID, latest(t, s, item.ID).Version); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{Recursive: true}); err != nil {
@@ -43,7 +43,7 @@ func TestRecycleBinRestoreTreeAndPurge(t *testing.T) {
 	if err != nil || *live.ParentID != folder.ID {
 		t.Fatalf("restored child: %+v %v", live, err)
 	}
-	links, err := s.Relationships(testContext, "alice", peer.ID, "outgoing", "", "", 50)
+	links, err := s.Relationships(testContext, "alice", peer.ID, "both", "", "", 50)
 	if err != nil || len(links.Data) != 1 || links.Data[0].ID != edge.ID {
 		t.Fatalf("restored relationships: %+v %v", links, err)
 	}
@@ -126,7 +126,7 @@ func TestPurgeCleanupRetries(t *testing.T) {
 	if err = s.Client.WorkflowRunItem.Create().SetID("run:0").SetRunID("run").SetItemID(item.ID).SetPosition(0).Exec(testContext); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "object", Filename: "file", ContentType: "text/plain", Size: 1, SHA256: emptySHA256})
+	_, err = s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "object", Filename: "file", ContentType: "application/pdf", Size: 1, SHA256: emptySHA256})
 	if err != nil {
 		t.Fatal(err)
 	}

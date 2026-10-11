@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"papergo/ent/itemrevision"
 	"papergo/ent/predicate"
 	"papergo/ent/publication"
 	"papergo/ent/resource"
@@ -20,12 +19,11 @@ import (
 // PublicationQuery is the builder for querying Publication entities.
 type PublicationQuery struct {
 	config
-	ctx          *QueryContext
-	order        []publication.OrderOption
-	inters       []Interceptor
-	predicates   []predicate.Publication
-	withItem     *ResourceQuery
-	withRevision *ItemRevisionQuery
+	ctx        *QueryContext
+	order      []publication.OrderOption
+	inters     []Interceptor
+	predicates []predicate.Publication
+	withItem   *ResourceQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -77,28 +75,6 @@ func (_q *PublicationQuery) QueryItem() *ResourceQuery {
 			sqlgraph.From(publication.Table, publication.FieldID, selector),
 			sqlgraph.To(resource.Table, resource.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, publication.ItemTable, publication.ItemColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryRevision chains the current query on the "revision" edge.
-func (_q *PublicationQuery) QueryRevision() *ItemRevisionQuery {
-	query := (&ItemRevisionClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(publication.Table, publication.FieldID, selector),
-			sqlgraph.To(itemrevision.Table, itemrevision.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, publication.RevisionTable, publication.RevisionColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -293,13 +269,12 @@ func (_q *PublicationQuery) Clone() *PublicationQuery {
 		return nil
 	}
 	return &PublicationQuery{
-		config:       _q.config,
-		ctx:          _q.ctx.Clone(),
-		order:        append([]publication.OrderOption{}, _q.order...),
-		inters:       append([]Interceptor{}, _q.inters...),
-		predicates:   append([]predicate.Publication{}, _q.predicates...),
-		withItem:     _q.withItem.Clone(),
-		withRevision: _q.withRevision.Clone(),
+		config:     _q.config,
+		ctx:        _q.ctx.Clone(),
+		order:      append([]publication.OrderOption{}, _q.order...),
+		inters:     append([]Interceptor{}, _q.inters...),
+		predicates: append([]predicate.Publication{}, _q.predicates...),
+		withItem:   _q.withItem.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -314,17 +289,6 @@ func (_q *PublicationQuery) WithItem(opts ...func(*ResourceQuery)) *PublicationQ
 		opt(query)
 	}
 	_q.withItem = query
-	return _q
-}
-
-// WithRevision tells the query-builder to eager-load the nodes that are connected to
-// the "revision" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *PublicationQuery) WithRevision(opts ...func(*ItemRevisionQuery)) *PublicationQuery {
-	query := (&ItemRevisionClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withRevision = query
 	return _q
 }
 
@@ -406,9 +370,8 @@ func (_q *PublicationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	var (
 		nodes       = []*Publication{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [1]bool{
 			_q.withItem != nil,
-			_q.withRevision != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -432,12 +395,6 @@ func (_q *PublicationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	if query := _q.withItem; query != nil {
 		if err := _q.loadItem(ctx, query, nodes, nil,
 			func(n *Publication, e *Resource) { n.Edges.Item = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := _q.withRevision; query != nil {
-		if err := _q.loadRevision(ctx, query, nodes, nil,
-			func(n *Publication, e *ItemRevision) { n.Edges.Revision = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -473,38 +430,6 @@ func (_q *PublicationQuery) loadItem(ctx context.Context, query *ResourceQuery, 
 	}
 	return nil
 }
-func (_q *PublicationQuery) loadRevision(ctx context.Context, query *ItemRevisionQuery, nodes []*Publication, init func(*Publication), assign func(*Publication, *ItemRevision)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*Publication)
-	for i := range nodes {
-		if nodes[i].RevisionID == nil {
-			continue
-		}
-		fk := *nodes[i].RevisionID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(itemrevision.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "revision_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
 
 func (_q *PublicationQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
@@ -533,9 +458,6 @@ func (_q *PublicationQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if _q.withItem != nil {
 			_spec.Node.AddColumnOnce(publication.FieldItemID)
-		}
-		if _q.withRevision != nil {
-			_spec.Node.AddColumnOnce(publication.FieldRevisionID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

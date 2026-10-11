@@ -98,6 +98,8 @@ func (WorkflowRun) Fields() []ent.Field {
 		field.String("event_type").NotEmpty().Immutable(),
 		field.Int("depth").NonNegative().Immutable(),
 		field.String("actor").Immutable(),
+		field.String("live_status").Default("queued").StructTag(`json:"-"`),
+		field.Int64("live_updated_at").Default(0).NonNegative().StructTag(`json:"-"`),
 		field.String("retry_of").Optional().Nillable().Immutable(),
 	}
 }

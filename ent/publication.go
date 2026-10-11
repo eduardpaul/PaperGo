@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"encoding/json/jsontext"
 	"fmt"
-	"papergo/ent/itemrevision"
 	"papergo/ent/publication"
 	"papergo/ent/resource"
 	"strings"
@@ -45,11 +44,9 @@ type Publication struct {
 type PublicationEdges struct {
 	// Item holds the value of the item edge.
 	Item *Resource `json:"item,omitempty"`
-	// Revision holds the value of the revision edge.
-	Revision *ItemRevision `json:"revision,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [1]bool
 }
 
 // ItemOrErr returns the Item value or an error if the edge
@@ -61,17 +58,6 @@ func (e PublicationEdges) ItemOrErr() (*Resource, error) {
 		return nil, &NotFoundError{label: resource.Label}
 	}
 	return nil, &NotLoadedError{edge: "item"}
-}
-
-// RevisionOrErr returns the Revision value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e PublicationEdges) RevisionOrErr() (*ItemRevision, error) {
-	if e.Revision != nil {
-		return e.Revision, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: itemrevision.Label}
-	}
-	return nil, &NotLoadedError{edge: "revision"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -169,11 +155,6 @@ func (_m *Publication) Value(name string) (ent.Value, error) {
 // QueryItem queries the "item" edge of the Publication entity.
 func (_m *Publication) QueryItem() *ResourceQuery {
 	return NewPublicationClient(_m.config).QueryItem(_m)
-}
-
-// QueryRevision queries the "revision" edge of the Publication entity.
-func (_m *Publication) QueryRevision() *ItemRevisionQuery {
-	return NewPublicationClient(_m.config).QueryRevision(_m)
 }
 
 // Update returns a builder for updating this Publication.

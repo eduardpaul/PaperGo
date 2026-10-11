@@ -125,10 +125,10 @@ test('content uploads and downloads bytes', async () => {
   const workspace = jsonValue(await api.v1.workspaces.post(body({ name: 'Files' })));
   const library = jsonValue(await api.v1.resources.byId(workspace.id).children.post(body({ kind: 'library', name: 'Contracts' })));
   const item = jsonValue(await api.v1.resources.byId(library.id).children.post(body({ kind: 'item', name: 'contract.txt' })));
-  const bytes = new TextEncoder().encode('signed contract');
+  const bytes = new TextEncoder().encode('%PDF-signed contract');
   const blob = jsonValue(await api.v1.items.byId(item.id).content.put(bytes.buffer, { headers: { ...ifMatch(item.version).headers, 'Content-Type': 'text/plain', 'X-Filename': 'contract.txt' } }));
   assert.equal(blob?.size, bytes.length);
-  assert.equal(blob?.content_type, 'text/plain');
+  assert.equal(blob?.content_type, 'application/pdf');
   const downloaded = await api.v1.items.byId(item.id).content.get();
-  assert.equal(new TextDecoder().decode(downloaded), 'signed contract');
+  assert.equal(new TextDecoder().decode(downloaded), '%PDF-signed contract');
 });

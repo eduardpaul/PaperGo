@@ -34,14 +34,20 @@ type Tx struct {
 	FieldValue *FieldValueClient
 	// Grant is the client for interacting with the Grant builders.
 	Grant *GrantClient
+	// GroupInbox is the client for interacting with the GroupInbox builders.
+	GroupInbox *GroupInboxClient
 	// IdentityAssignment is the client for interacting with the IdentityAssignment builders.
 	IdentityAssignment *IdentityAssignmentClient
 	// IdentityGroup is the client for interacting with the IdentityGroup builders.
 	IdentityGroup *IdentityGroupClient
 	// IdentityMembership is the client for interacting with the IdentityMembership builders.
 	IdentityMembership *IdentityMembershipClient
+	// IdentityOrganization is the client for interacting with the IdentityOrganization builders.
+	IdentityOrganization *IdentityOrganizationClient
 	// IdentityPreference is the client for interacting with the IdentityPreference builders.
 	IdentityPreference *IdentityPreferenceClient
+	// IdentityRESTToken is the client for interacting with the IdentityRESTToken builders.
+	IdentityRESTToken *IdentityRESTTokenClient
 	// IdentityRole is the client for interacting with the IdentityRole builders.
 	IdentityRole *IdentityRoleClient
 	// IdentityUser is the client for interacting with the IdentityUser builders.
@@ -54,6 +60,8 @@ type Tx struct {
 	ItemSurface *ItemSurfaceClient
 	// ListView is the client for interacting with the ListView builders.
 	ListView *ListViewClient
+	// LiveChange is the client for interacting with the LiveChange builders.
+	LiveChange *LiveChangeClient
 	// Operation is the client for interacting with the Operation builders.
 	Operation *OperationClient
 	// OperationItem is the client for interacting with the OperationItem builders.
@@ -72,6 +80,12 @@ type Tx struct {
 	SchemaTemplate *SchemaTemplateClient
 	// SmartFolder is the client for interacting with the SmartFolder builders.
 	SmartFolder *SmartFolderClient
+	// SyncState is the client for interacting with the SyncState builders.
+	SyncState *SyncStateClient
+	// SyncToken is the client for interacting with the SyncToken builders.
+	SyncToken *SyncTokenClient
+	// SyncView is the client for interacting with the SyncView builders.
+	SyncView *SyncViewClient
 	// Term is the client for interacting with the Term builders.
 	Term *TermClient
 	// TermGroup is the client for interacting with the TermGroup builders.
@@ -231,16 +245,20 @@ func (tx *Tx) init() {
 	tx.FieldDefinition = NewFieldDefinitionClient(tx.config)
 	tx.FieldValue = NewFieldValueClient(tx.config)
 	tx.Grant = NewGrantClient(tx.config)
+	tx.GroupInbox = NewGroupInboxClient(tx.config)
 	tx.IdentityAssignment = NewIdentityAssignmentClient(tx.config)
 	tx.IdentityGroup = NewIdentityGroupClient(tx.config)
 	tx.IdentityMembership = NewIdentityMembershipClient(tx.config)
+	tx.IdentityOrganization = NewIdentityOrganizationClient(tx.config)
 	tx.IdentityPreference = NewIdentityPreferenceClient(tx.config)
+	tx.IdentityRESTToken = NewIdentityRESTTokenClient(tx.config)
 	tx.IdentityRole = NewIdentityRoleClient(tx.config)
 	tx.IdentityUser = NewIdentityUserClient(tx.config)
 	tx.ItemHistory = NewItemHistoryClient(tx.config)
 	tx.ItemRevision = NewItemRevisionClient(tx.config)
 	tx.ItemSurface = NewItemSurfaceClient(tx.config)
 	tx.ListView = NewListViewClient(tx.config)
+	tx.LiveChange = NewLiveChangeClient(tx.config)
 	tx.Operation = NewOperationClient(tx.config)
 	tx.OperationItem = NewOperationItemClient(tx.config)
 	tx.Publication = NewPublicationClient(tx.config)
@@ -250,6 +268,9 @@ func (tx *Tx) init() {
 	tx.SchemaRevision = NewSchemaRevisionClient(tx.config)
 	tx.SchemaTemplate = NewSchemaTemplateClient(tx.config)
 	tx.SmartFolder = NewSmartFolderClient(tx.config)
+	tx.SyncState = NewSyncStateClient(tx.config)
+	tx.SyncToken = NewSyncTokenClient(tx.config)
+	tx.SyncView = NewSyncViewClient(tx.config)
 	tx.Term = NewTermClient(tx.config)
 	tx.TermGroup = NewTermGroupClient(tx.config)
 	tx.TermSet = NewTermSetClient(tx.config)

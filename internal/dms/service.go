@@ -13,6 +13,7 @@ import (
 	"papergo/ent/resource"
 	"papergo/internal/identity"
 	"papergo/internal/model"
+	"papergo/internal/requestmeta"
 	"strings"
 	"time"
 )
@@ -22,17 +23,23 @@ type Service struct {
 	db          *sql.DB
 	writeMu     chan struct{}
 	transaction bool
+	// Set only while provisioning the caller's fixed Home resources.
+	homeProvisioning bool
 	// operations wakes RunOperations when work is queued.
 	operations          chan struct{}
 	onCommit            func()
 	tx                  *sql.Tx
 	pending             *[]Event
 	collectionTemplates map[string]CollectionTemplate
+	auditProperties     map[string]map[string]bool
+	traceID             string
+	operationHandlers   map[string]OperationHandler
+	runPurger           func(context.Context, *sql.Tx, string) error
 }
 
 // NewService serves the PaperGo database db.
 func NewService(db *sql.DB) *Service {
-	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates()}
+	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates(), operationHandlers: builtInOperationHandlers()}
 }
 
 // OnCommit calls f after each committed write that recorded domain events,
@@ -87,12 +94,27 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 // raised in the domain event log, so they commit or roll back with its
 // writes. It returns how many events it recorded.
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
+	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
-	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates}
+	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, runPurger: s.runPurger}
+	t.traceID = requestmeta.Trace(ctx)
+	t.captureAuditProperties()
 	if err := fn(t); err != nil {
 		return 0, err
 	}
-	return len(pending), recordEvents(ctx, tx, pending)
+	if err := recordEvents(ctx, tx, pending); err != nil {
+		return 0, err
+	}
+	seen := map[string]bool{}
+	for _, event := range pending {
+		if event.ResourceID != "" && !seen[event.ResourceID] {
+			if err := t.collectRevisions(ctx, event.ResourceID); err != nil {
+				return 0, err
+			}
+			seen[event.ResourceID] = true
+		}
+	}
+	return len(pending), nil
 }
 
 // WriteTx runs fn as one write inside tx, which the caller owns and commits.
@@ -113,7 +135,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates})
+	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers})
 	if err != nil {
 		return out, err
 	}
@@ -121,8 +143,8 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 	return out, err
 }
 func (s *Service) audit(ctx context.Context, subject, action string, r *ent.Resource, details map[string]any) error {
-	_, err := s.Client.AuditEvent.Create().SetWorkspaceID(r.WorkspaceID).SetResourceID(r.ID).SetSubject(subject).SetAction(action).SetDetails(details).Save(ctx)
-	return err
+	typ, id := auditEntity(action, r, details)
+	return s.Client.AuditEvent.Create().SetWorkspaceID(r.WorkspaceID).SetResourceID(r.ID).SetSubject(subject).SetAction(action).SetEntityType(typ).SetEntityID(id).SetProperties(s.changedProperties(id, action)).SetTraceID(s.traceID).SetDetails(details).Exec(ctx)
 }
 func (s *Service) Get(ctx context.Context, subject, id string) (*ent.Resource, error) {
 	return s.GetSurface(ctx, subject, id, "auto")
@@ -213,8 +235,11 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if in.AllowFolders != nil && !collection {
 		return nil, invalid("allow_folders belongs to lists and libraries")
 	}
-	if err := validateName(in.Name); err != nil {
+	if err := validateResourceName(in.Kind, in.Name); err != nil {
 		return nil, err
+	}
+	if in.Kind == "item" || in.Kind == "folder" {
+		in.Name = strings.TrimSpace(in.Name)
 	}
 	if err := validateTags(in.Tags); err != nil {
 		return nil, err
@@ -284,8 +309,8 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		if e != nil {
 			return nil, e
 		}
-		if depth >= MaxDepth {
-			return nil, invalid("maximum hierarchy depth reached")
+		if in.Kind == "folder" && depth >= MaxFolderDepth+2 {
+			return nil, invalid("maximum folder depth reached")
 		}
 	}
 	if in.Kind == "folder" && containerID != nil {
@@ -332,6 +357,14 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, e
 		}
 		builder.SetTemplateKeys([]string{template.Key})
+	}
+	if s.homeProvisioning {
+		if in.Kind == "workspace" {
+			builder.SetPersonalOwnerID(subject)
+		}
+		if collection {
+			builder.SetSystemKey("home." + strings.ToLower(in.Name))
+		}
 	}
 	builder.SetCreatedBy(subject).SetUpdatedBy(subject)
 	builder.SetVersioning(resource.Versioning(versioning)).SetNillableMaxVersions(in.MaxVersions)
@@ -421,7 +454,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
 	depth := 1
 	for ; r.ParentID != nil; depth++ {
-		if depth > MaxDepth {
+		if depth > MaxResourceDepth {
 			return depth, invalid("invalid hierarchy depth")
 		}
 		var err error
@@ -461,11 +494,6 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	if !content && in.DuplicatePolicy == nil && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
 		return nil, invalid("at least one change is required")
 	}
-	if in.Name != nil {
-		if err := validateName(*in.Name); err != nil {
-			return nil, err
-		}
-	}
 	if in.Tags != nil {
 		if err := validateTags(*in.Tags); err != nil {
 			return nil, err
@@ -474,6 +502,15 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	r, e := s.authorize(ctx, subject, id, "write")
 	if e != nil {
 		return nil, e
+	}
+	if in.Name != nil {
+		if err := validateResourceName(string(r.Kind), *in.Name); err != nil {
+			return nil, err
+		}
+		if contentKind(r.Kind) {
+			name := strings.TrimSpace(*in.Name)
+			in.Name = &name
+		}
 	}
 	if err := validateDuplicatePolicy(string(r.Kind), in.DuplicatePolicy); err != nil {
 		return nil, err
@@ -678,7 +715,7 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 
 // checkMove validates moving r below parentID: both ends need write access,
 // the parent must belong to r's collection, and the subtree must stay within
-// MaxDepth without entering itself. Triggers repeat the containment rules.
+// MaxFolderDepth without entering itself. Triggers repeat the containment rules.
 func (s *Service) checkMove(ctx context.Context, subject string, r *ent.Resource, parentID string) error {
 	if r.Kind != resource.KindFolder && r.Kind != resource.KindItem {
 		return invalid("only folders and items can move")
@@ -696,27 +733,27 @@ func (s *Service) checkMove(ctx context.Context, subject string, r *ent.Resource
 		if a.ID == r.ID {
 			return invalid("a folder cannot move into itself")
 		}
-		if depth > MaxDepth {
+		if depth > MaxResourceDepth {
 			return invalid("invalid hierarchy depth")
 		}
 		if a, err = s.Client.Resource.Get(ctx, *a.ParentID); err != nil {
 			return err
 		}
 	}
-	height, err := s.subtreeHeight(ctx, r.ID)
+	height, err := s.subtreeFolderHeight(ctx, r.ID)
 	if err != nil {
 		return err
 	}
-	if depth+height > MaxDepth {
-		return invalid("maximum hierarchy depth reached")
+	if depth-2+height > MaxFolderDepth {
+		return invalid("maximum folder depth reached")
 	}
 	return nil
 }
 
-// subtreeHeight counts the levels of id and its live descendants.
-func (s *Service) subtreeHeight(ctx context.Context, id string) (int, error) {
+// subtreeFolderHeight counts folder levels, excluding a terminal item.
+func (s *Service) subtreeFolderHeight(ctx context.Context, id string) (int, error) {
 	var height int
-	err := s.scan(ctx, []any{&height}, `WITH RECURSIVE sub(id,depth) AS (SELECT ?,1 UNION ALL SELECT c.id,sub.depth+1 FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL AND sub.depth<=?) SELECT max(depth) FROM sub`, id, MaxDepth)
+	err := s.scan(ctx, []any{&height}, `WITH RECURSIVE sub(id,kind,depth) AS (SELECT id,kind,1 FROM resources WHERE id=? UNION ALL SELECT c.id,c.kind,sub.depth+1 FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL AND sub.depth<=?) SELECT max(CASE WHEN kind='folder' THEN depth ELSE depth-1 END) FROM sub`, id, MaxFolderDepth+1)
 	return height, err
 }
 
@@ -755,6 +792,9 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 	if err != nil {
 		return err
 	}
+	if r.PersonalOwnerID != nil || r.SystemKey != nil {
+		return ErrProtectedHome
+	}
 	collection := r.Kind == resource.KindList || r.Kind == resource.KindLibrary
 	if r.Kind == resource.KindWorkspace || collection {
 		if _, err = s.authorize(ctx, subject, id, "manage"); err != nil {
@@ -774,7 +814,7 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 		}
 	}
 	subtree := `WITH RECURSIVE sub(id) AS (SELECT ? UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at IS NULL) SELECT id FROM sub`
-	writable, args := permissionSQL("r.id", subject, "write")
+	writable, args := permissionSQL(ctx, "r.id", subject, "write")
 	var total, allowed int
 	if err = s.scan(ctx, []any{&total, &allowed}, `SELECT count(*), coalesce(sum(CASE WHEN `+writable+` THEN 1 ELSE 0 END),0) FROM resources r WHERE r.id IN (`+subtree+`)`, append(args, id)...); err != nil {
 		return err
@@ -878,7 +918,7 @@ func (s *Service) CreateField(ctx context.Context, subject, containerID string, 
 		if e = t.refreshCollections(ctx, subject, collections); e != nil {
 			return e
 		}
-		return t.audit(ctx, subject, "field.create", c, map[string]any{"key": in.Key})
+		return t.audit(ctx, subject, "field.create", c, map[string]any{"key": in.Key, "field_id": out.ID})
 	})
 	return
 }
@@ -1087,7 +1127,7 @@ func (s *Service) Permissions(ctx context.Context, subject, id string) (Permissi
 }
 func (s *Service) effectivePermissions(ctx context.Context, r *ent.Resource) (string, []Permission, error) {
 	for depth := 0; r.InheritPermissions; depth++ {
-		if r.ParentID == nil || depth >= MaxDepth {
+		if r.ParentID == nil || depth >= MaxResourceDepth {
 			return "", nil, invalid("invalid permission ancestry")
 		}
 		parent, e := s.Client.Resource.Get(ctx, *r.ParentID)

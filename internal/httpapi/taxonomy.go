@@ -11,9 +11,6 @@ import (
 )
 
 func (a *API) registerTaxonomy(m *http.ServeMux) {
-	m.HandleFunc("GET /v1/taxonomy/audit", foundationRead(a, func(r *http.Request) (any, error) {
-		return a.DMS.TaxonomyAudit(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
-	}))
 	m.HandleFunc("GET /v1/term-groups", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.TermGroups(r.Context(), subject(r), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
 	}))

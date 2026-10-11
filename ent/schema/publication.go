@@ -23,7 +23,7 @@ func (Publication) Fields() []ent.Field {
 	}
 }
 func (Publication) Edges() []ent.Edge {
-	return []ent.Edge{edge.From("item", Resource.Type).Ref("publications").Field("item_id").Unique().Required().Immutable(), edge.To("revision", ItemRevision.Type).Field("revision_id").Unique().Immutable()}
+	return []ent.Edge{edge.From("item", Resource.Type).Ref("publications").Field("item_id").Unique().Required().Immutable()}
 }
 func (Publication) Indexes() []ent.Index {
 	return []ent.Index{index.Fields("item_id", "version", "action").Unique()}

@@ -17,6 +17,10 @@ var (
 		{Name: "resource_id", Type: field.TypeString, Nullable: true},
 		{Name: "subject", Type: field.TypeString},
 		{Name: "action", Type: field.TypeString},
+		{Name: "entity_type", Type: field.TypeString},
+		{Name: "entity_id", Type: field.TypeString, Nullable: true},
+		{Name: "properties", Type: field.TypeJSON},
+		{Name: "trace_id", Type: field.TypeString},
 		{Name: "details", Type: field.TypeJSON},
 	}
 	// AuditEventsTable holds the schema information for the "audit_events" table.
@@ -35,6 +39,21 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{AuditEventsColumns[3], AuditEventsColumns[1]},
 			},
+			{
+				Name:    "auditevent_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[1], AuditEventsColumns[0]},
+			},
+			{
+				Name:    "auditevent_subject_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[4], AuditEventsColumns[1]},
+			},
+			{
+				Name:    "auditevent_entity_type_entity_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuditEventsColumns[6], AuditEventsColumns[7], AuditEventsColumns[1]},
+			},
 		},
 	}
 	// BlobsColumns holds the columns for the "blobs" table.
@@ -43,7 +62,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "version", Type: field.TypeInt},
 		{Name: "object_key", Type: field.TypeString},
-		{Name: "filename", Type: field.TypeString, Size: 255},
+		{Name: "filename", Type: field.TypeString, Size: 4096},
 		{Name: "content_type", Type: field.TypeString, Size: 255},
 		{Name: "languages", Type: field.TypeString, Size: 191, Default: ""},
 		{Name: "size", Type: field.TypeInt64},
@@ -361,6 +380,45 @@ var (
 			},
 		},
 	}
+	// GroupInboxesColumns holds the columns for the "group_inboxes" table.
+	GroupInboxesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "group_id", Type: field.TypeString, Size: 36},
+		{Name: "library_id", Type: field.TypeString, Size: 36},
+	}
+	// GroupInboxesTable holds the schema information for the "group_inboxes" table.
+	GroupInboxesTable = &schema.Table{
+		Name:       "group_inboxes",
+		Columns:    GroupInboxesColumns,
+		PrimaryKey: []*schema.Column{GroupInboxesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "group_inboxes_identity_groups_group",
+				Columns:    []*schema.Column{GroupInboxesColumns[2]},
+				RefColumns: []*schema.Column{IdentityGroupsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "group_inboxes_resources_library",
+				Columns:    []*schema.Column{GroupInboxesColumns[3]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "groupinbox_group_id",
+				Unique:  true,
+				Columns: []*schema.Column{GroupInboxesColumns[2]},
+			},
+			{
+				Name:    "groupinbox_library_id",
+				Unique:  false,
+				Columns: []*schema.Column{GroupInboxesColumns[3]},
+			},
+		},
+	}
 	// IdentityAssignmentsColumns holds the columns for the "identity_assignments" table.
 	IdentityAssignmentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -450,6 +508,29 @@ var (
 			},
 		},
 	}
+	// IdentityOrganizationsColumns holds the columns for the "identity_organizations" table.
+	IdentityOrganizationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "singleton", Type: field.TypeBool, Default: true},
+		{Name: "identifier", Type: field.TypeString},
+		{Name: "display_name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+	}
+	// IdentityOrganizationsTable holds the schema information for the "identity_organizations" table.
+	IdentityOrganizationsTable = &schema.Table{
+		Name:       "identity_organizations",
+		Columns:    IdentityOrganizationsColumns,
+		PrimaryKey: []*schema.Column{IdentityOrganizationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "identityorganization_singleton",
+				Unique:  true,
+				Columns: []*schema.Column{IdentityOrganizationsColumns[2]},
+			},
+		},
+	}
 	// IdentityPreferencesColumns holds the columns for the "identity_preferences" table.
 	IdentityPreferencesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -469,6 +550,45 @@ var (
 				Name:    "identitypreference_owner_type_owner_id",
 				Unique:  true,
 				Columns: []*schema.Column{IdentityPreferencesColumns[2], IdentityPreferencesColumns[3]},
+			},
+		},
+	}
+	// IdentityRestTokensColumns holds the columns for the "identity_rest_tokens" table.
+	IdentityRestTokensColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString},
+		{Name: "prefix", Type: field.TypeString},
+		{Name: "secret_hash", Type: field.TypeString},
+		{Name: "scopes", Type: field.TypeJSON},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "last_used_at", Type: field.TypeTime, Nullable: true},
+		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "subject", Type: field.TypeString, Size: 255},
+	}
+	// IdentityRestTokensTable holds the schema information for the "identity_rest_tokens" table.
+	IdentityRestTokensTable = &schema.Table{
+		Name:       "identity_rest_tokens",
+		Columns:    IdentityRestTokensColumns,
+		PrimaryKey: []*schema.Column{IdentityRestTokensColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "identity_rest_tokens_identity_users_user",
+				Columns:    []*schema.Column{IdentityRestTokensColumns[9]},
+				RefColumns: []*schema.Column{IdentityUsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "identityresttoken_secret_hash",
+				Unique:  true,
+				Columns: []*schema.Column{IdentityRestTokensColumns[4]},
+			},
+			{
+				Name:    "identityresttoken_subject_id",
+				Unique:  false,
+				Columns: []*schema.Column{IdentityRestTokensColumns[9], IdentityRestTokensColumns[0]},
 			},
 		},
 	}
@@ -498,6 +618,9 @@ var (
 	// IdentityUsersColumns holds the columns for the "identity_users" table.
 	IdentityUsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 255},
+		{Name: "display_name", Type: field.TypeString, Default: ""},
+		{Name: "email", Type: field.TypeString, Default: ""},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "active", Type: field.TypeBool, Default: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}
@@ -511,7 +634,9 @@ var (
 	ItemHistoriesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "number", Type: field.TypeInt},
 		{Name: "changed_fields", Type: field.TypeJSON},
+		{Name: "item_id", Type: field.TypeString, Size: 36},
 		{Name: "revision_id", Type: field.TypeString, Unique: true, Size: 36},
 	}
 	// ItemHistoriesTable holds the schema information for the "item_histories" table.
@@ -521,8 +646,14 @@ var (
 		PrimaryKey: []*schema.Column{ItemHistoriesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
+				Symbol:     "item_histories_resources_item",
+				Columns:    []*schema.Column{ItemHistoriesColumns[4]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
 				Symbol:     "item_histories_item_revisions_history",
-				Columns:    []*schema.Column{ItemHistoriesColumns[3]},
+				Columns:    []*schema.Column{ItemHistoriesColumns[5]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -531,7 +662,12 @@ var (
 			{
 				Name:    "itemhistory_revision_id",
 				Unique:  true,
-				Columns: []*schema.Column{ItemHistoriesColumns[3]},
+				Columns: []*schema.Column{ItemHistoriesColumns[5]},
+			},
+			{
+				Name:    "itemhistory_item_id_number",
+				Unique:  true,
+				Columns: []*schema.Column{ItemHistoriesColumns[4], ItemHistoriesColumns[2]},
 			},
 		},
 	}
@@ -542,7 +678,7 @@ var (
 		{Name: "container_id", Type: field.TypeString},
 		{Name: "content_type_id", Type: field.TypeString},
 		{Name: "revision_number", Type: field.TypeInt},
-		{Name: "name", Type: field.TypeString, Size: 255},
+		{Name: "name", Type: field.TypeString, Size: 4096},
 		{Name: "tags", Type: field.TypeJSON},
 		{Name: "payload", Type: field.TypeJSON},
 		{Name: "created_by", Type: field.TypeString},
@@ -707,12 +843,39 @@ var (
 			},
 		},
 	}
+	// LiveChangesColumns holds the columns for the "live_changes" table.
+	LiveChangesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "kind", Type: field.TypeEnum, Enums: []string{"item", "operation", "run", "access"}},
+		{Name: "entity_id", Type: field.TypeString, Size: 200},
+		{Name: "action", Type: field.TypeString},
+	}
+	// LiveChangesTable holds the schema information for the "live_changes" table.
+	LiveChangesTable = &schema.Table{
+		Name:       "live_changes",
+		Columns:    LiveChangesColumns,
+		PrimaryKey: []*schema.Column{LiveChangesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "livechange_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{LiveChangesColumns[1]},
+			},
+		},
+	}
 	// OperationsColumns holds the columns for the "operations" table.
 	OperationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "field_id", Type: field.TypeString, Default: ""},
-		{Name: "kind", Type: field.TypeEnum, Enums: []string{"field_index", "bulk_update"}},
+		{Name: "kind", Type: field.TypeString, Size: 64},
+		{Name: "trace_id", Type: field.TypeString},
+		{Name: "credential_id", Type: field.TypeString, Nullable: true},
+		{Name: "credential_scopes", Type: field.TypeJSON},
+		{Name: "result", Type: field.TypeJSON},
+		{Name: "started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "succeeded", "failed", "superseded"}, Default: "pending"},
 		{Name: "surface", Type: field.TypeEnum, Enums: []string{"head", "published"}, Default: "head"},
 		{Name: "after_item_id", Type: field.TypeString, Default: ""},
@@ -727,7 +890,7 @@ var (
 		{Name: "error", Type: field.TypeString, Default: ""},
 		{Name: "created_by", Type: field.TypeString},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "container_id", Type: field.TypeString, Size: 36},
+		{Name: "container_id", Type: field.TypeString, Nullable: true, Size: 36},
 	}
 	// OperationsTable holds the schema information for the "operations" table.
 	OperationsTable = &schema.Table{
@@ -737,21 +900,26 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "operations_resources_container",
-				Columns:    []*schema.Column{OperationsColumns[18]},
+				Columns:    []*schema.Column{OperationsColumns[24]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.SetNull,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "operation_status_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{OperationsColumns[4], OperationsColumns[1]},
+				Columns: []*schema.Column{OperationsColumns[10], OperationsColumns[1]},
 			},
 			{
 				Name:    "operation_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{OperationsColumns[18], OperationsColumns[0]},
+				Columns: []*schema.Column{OperationsColumns[24], OperationsColumns[0]},
+			},
+			{
+				Name:    "operation_status_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{OperationsColumns[10], OperationsColumns[23]},
 			},
 		},
 	}
@@ -795,9 +963,9 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "version", Type: field.TypeInt},
 		{Name: "action", Type: field.TypeEnum, Enums: []string{"publish", "unpublish"}, Default: "publish"},
+		{Name: "revision_id", Type: field.TypeString, Nullable: true},
 		{Name: "published_by", Type: field.TypeString, Size: 255},
 		{Name: "snapshot", Type: field.TypeJSON},
-		{Name: "revision_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "item_id", Type: field.TypeString, Size: 36},
 	}
 	// PublicationsTable holds the schema information for the "publications" table.
@@ -806,12 +974,6 @@ var (
 		Columns:    PublicationsColumns,
 		PrimaryKey: []*schema.Column{PublicationsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "publications_item_revisions_revision",
-				Columns:    []*schema.Column{PublicationsColumns[6]},
-				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
 			{
 				Symbol:     "publications_resources_publications",
 				Columns:    []*schema.Column{PublicationsColumns[7]},
@@ -831,11 +993,10 @@ var (
 	RelationshipsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "workspace_id", Type: field.TypeString, Size: 36},
-		{Name: "directed", Type: field.TypeBool, Default: true},
+		{Name: "directed", Type: field.TypeBool, Default: false},
 		{Name: "version", Type: field.TypeInt, Default: 1},
 		{Name: "metadata", Type: field.TypeJSON},
-		{Name: "type_id", Type: field.TypeString, Size: 36},
+		{Name: "type_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "source_id", Type: field.TypeString, Size: 36},
 		{Name: "target_id", Type: field.TypeString, Size: 36},
 	}
@@ -847,53 +1008,61 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "relationships_relationship_types_relationships",
-				Columns:    []*schema.Column{RelationshipsColumns[6]},
+				Columns:    []*schema.Column{RelationshipsColumns[5]},
 				RefColumns: []*schema.Column{RelationshipTypesColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "relationships_resources_outgoing",
-				Columns:    []*schema.Column{RelationshipsColumns[7]},
+				Columns:    []*schema.Column{RelationshipsColumns[6]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "relationships_resources_incoming",
-				Columns:    []*schema.Column{RelationshipsColumns[8]},
+				Columns:    []*schema.Column{RelationshipsColumns[7]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "relationship_type_id_source_id_target_id",
+				Name:    "relationship_type_id_source_id_target_id_directed",
 				Unique:  true,
-				Columns: []*schema.Column{RelationshipsColumns[6], RelationshipsColumns[7], RelationshipsColumns[8]},
+				Columns: []*schema.Column{RelationshipsColumns[5], RelationshipsColumns[6], RelationshipsColumns[7], RelationshipsColumns[2]},
+			},
+			{
+				Name:    "relationship_source_id_target_id_directed",
+				Unique:  true,
+				Columns: []*schema.Column{RelationshipsColumns[6], RelationshipsColumns[7], RelationshipsColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "type_id IS NULL",
+				},
 			},
 			{
 				Name:    "relationship_type_id_target_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[6], RelationshipsColumns[8]},
+				Columns: []*schema.Column{RelationshipsColumns[5], RelationshipsColumns[7]},
 			},
 			{
 				Name:    "relationship_source_id_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[6], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[6], RelationshipsColumns[5], RelationshipsColumns[0]},
 			},
 			{
 				Name:    "relationship_source_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[6], RelationshipsColumns[0]},
 			},
 			{
 				Name:    "relationship_target_id_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[6], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[5], RelationshipsColumns[0]},
 			},
 			{
 				Name:    "relationship_target_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{RelationshipsColumns[8], RelationshipsColumns[0]},
+				Columns: []*schema.Column{RelationshipsColumns[7], RelationshipsColumns[0]},
 			},
 		},
 	}
@@ -920,9 +1089,10 @@ var (
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "workspace_id", Type: field.TypeString, Size: 36},
+		{Name: "system_key", Type: field.TypeString, Nullable: true, Size: 32},
 		{Name: "content_type_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "kind", Type: field.TypeEnum, Enums: []string{"workspace", "list", "library", "folder", "item"}},
-		{Name: "name", Type: field.TypeString, Size: 255},
+		{Name: "name", Type: field.TypeString, Size: 4096},
 		{Name: "description", Type: field.TypeString, Size: 2000, Default: ""},
 		{Name: "allow_folders", Type: field.TypeBool, Default: true},
 		{Name: "tags", Type: field.TypeJSON},
@@ -940,10 +1110,11 @@ var (
 		{Name: "created_by", Type: field.TypeString, Default: ""},
 		{Name: "updated_by", Type: field.TypeString, Default: ""},
 		{Name: "scope_id", Type: field.TypeString, Nullable: true, Size: 36},
-		{Name: "name_key", Type: field.TypeString, Nullable: true, Size: 1024},
+		{Name: "name_key", Type: field.TypeString, Nullable: true, Size: 4096},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "deleted_by", Type: field.TypeString, Nullable: true},
 		{Name: "parent_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "personal_owner_id", Type: field.TypeString, Nullable: true, Size: 255},
 		{Name: "container_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "head_revision_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "published_revision_id", Type: field.TypeString, Nullable: true, Size: 36},
@@ -957,31 +1128,37 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[26]},
-				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "resources_resources_contained_items",
 				Columns:    []*schema.Column{ResourcesColumns[27]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_item_revisions_head_revision",
+				Symbol:     "resources_identity_users_personal_owner",
 				Columns:    []*schema.Column{ResourcesColumns[28]},
+				RefColumns: []*schema.Column{IdentityUsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "resources_resources_contained_items",
+				Columns:    []*schema.Column{ResourcesColumns[29]},
+				RefColumns: []*schema.Column{ResourcesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "resources_item_revisions_head_revision",
+				Columns:    []*schema.Column{ResourcesColumns[30]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_item_revisions_published_revision",
-				Columns:    []*schema.Column{ResourcesColumns[29]},
+				Columns:    []*schema.Column{ResourcesColumns[31]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_schema_revisions_schema_head",
-				Columns:    []*schema.Column{ResourcesColumns[30]},
+				Columns:    []*schema.Column{ResourcesColumns[32]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -990,42 +1167,58 @@ var (
 			{
 				Name:    "resource_workspace_id_kind_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[4], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[5], ResourcesColumns[0]},
+			},
+			{
+				Name:    "resource_personal_owner_id",
+				Unique:  true,
+				Columns: []*schema.Column{ResourcesColumns[28]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "personal_owner_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "resource_workspace_id_system_key",
+				Unique:  true,
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "system_key IS NOT NULL",
+				},
 			},
 			{
 				Name:    "resource_kind_id_workspace_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[4], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[5], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[23]},
 			},
 			{
 				Name:    "resource_workspace_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[23]},
 			},
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[0], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[0], ResourcesColumns[23]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_content_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[3], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[4], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[22]},
+				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[23]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[26], ResourcesColumns[23]},
+				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[24]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
 				},
@@ -1158,6 +1351,112 @@ var (
 				Annotation: &entsql.IndexAnnotation{
 					Where: "workspace_id IS NULL",
 				},
+			},
+		},
+	}
+	// SyncStatesColumns holds the columns for the "sync_states" table.
+	SyncStatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "item_id", Type: field.TypeString, Size: 36},
+		{Name: "from_sequence", Type: field.TypeInt64},
+		{Name: "to_sequence", Type: field.TypeInt64, Nullable: true},
+		{Name: "fingerprint", Type: field.TypeString, Size: 64},
+		{Name: "view_id", Type: field.TypeString, Size: 36},
+	}
+	// SyncStatesTable holds the schema information for the "sync_states" table.
+	SyncStatesTable = &schema.Table{
+		Name:       "sync_states",
+		Columns:    SyncStatesColumns,
+		PrimaryKey: []*schema.Column{SyncStatesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "sync_states_sync_views_view",
+				Columns:    []*schema.Column{SyncStatesColumns[6]},
+				RefColumns: []*schema.Column{SyncViewsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "syncstate_view_id_item_id_from_sequence",
+				Unique:  true,
+				Columns: []*schema.Column{SyncStatesColumns[6], SyncStatesColumns[2], SyncStatesColumns[3]},
+			},
+			{
+				Name:    "syncstate_view_id_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{SyncStatesColumns[6], SyncStatesColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "to_sequence IS NULL",
+				},
+			},
+			{
+				Name:    "syncstate_view_id_from_sequence_to_sequence",
+				Unique:  false,
+				Columns: []*schema.Column{SyncStatesColumns[6], SyncStatesColumns[3], SyncStatesColumns[4]},
+			},
+		},
+	}
+	// SyncTokensColumns holds the columns for the "sync_tokens" table.
+	SyncTokensColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "sequence", Type: field.TypeInt64},
+		{Name: "changes", Type: field.TypeJSON},
+		{Name: "page_expires_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "view_id", Type: field.TypeString, Size: 36},
+	}
+	// SyncTokensTable holds the schema information for the "sync_tokens" table.
+	SyncTokensTable = &schema.Table{
+		Name:       "sync_tokens",
+		Columns:    SyncTokensColumns,
+		PrimaryKey: []*schema.Column{SyncTokensColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "sync_tokens_sync_views_view",
+				Columns:    []*schema.Column{SyncTokensColumns[6]},
+				RefColumns: []*schema.Column{SyncViewsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "synctoken_view_id_sequence",
+				Unique:  false,
+				Columns: []*schema.Column{SyncTokensColumns[6], SyncTokensColumns[2]},
+			},
+			{
+				Name:    "synctoken_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{SyncTokensColumns[5]},
+			},
+			{
+				Name:    "synctoken_page_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{SyncTokensColumns[4]},
+			},
+		},
+	}
+	// SyncViewsColumns holds the columns for the "sync_views" table.
+	SyncViewsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "subject", Type: field.TypeString, Size: 255},
+		{Name: "container_id", Type: field.TypeString, Size: 36},
+		{Name: "sequence", Type: field.TypeInt64, Default: 0},
+	}
+	// SyncViewsTable holds the schema information for the "sync_views" table.
+	SyncViewsTable = &schema.Table{
+		Name:       "sync_views",
+		Columns:    SyncViewsColumns,
+		PrimaryKey: []*schema.Column{SyncViewsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "syncview_subject_container_id",
+				Unique:  true,
+				Columns: []*schema.Column{SyncViewsColumns[2], SyncViewsColumns[3]},
 			},
 		},
 	}
@@ -1405,6 +1704,8 @@ var (
 		{Name: "event_type", Type: field.TypeString},
 		{Name: "depth", Type: field.TypeInt},
 		{Name: "actor", Type: field.TypeString},
+		{Name: "live_status", Type: field.TypeString, Default: "queued"},
+		{Name: "live_updated_at", Type: field.TypeInt64, Default: 0},
 		{Name: "retry_of", Type: field.TypeString, Nullable: true},
 	}
 	// WorkflowRunsTable holds the schema information for the "workflow_runs" table.
@@ -1541,16 +1842,20 @@ var (
 		FieldDefinitionsTable,
 		FieldValuesTable,
 		GrantsTable,
+		GroupInboxesTable,
 		IdentityAssignmentsTable,
 		IdentityGroupsTable,
 		IdentityMembershipsTable,
+		IdentityOrganizationsTable,
 		IdentityPreferencesTable,
+		IdentityRestTokensTable,
 		IdentityRolesTable,
 		IdentityUsersTable,
 		ItemHistoriesTable,
 		ItemRevisionsTable,
 		ItemSurfacesTable,
 		ListViewsTable,
+		LiveChangesTable,
 		OperationsTable,
 		OperationItemsTable,
 		PublicationsTable,
@@ -1560,6 +1865,9 @@ var (
 		SchemaRevisionsTable,
 		SchemaTemplatesTable,
 		SmartFoldersTable,
+		SyncStatesTable,
+		SyncTokensTable,
+		SyncViewsTable,
 		TermsTable,
 		TermGroupsTable,
 		TermSetsTable,
@@ -1580,9 +1888,13 @@ func init() {
 	CollectionTypesTable.ForeignKeys[1].RefTable = ContentTypesTable
 	FieldValuesTable.ForeignKeys[0].RefTable = ItemSurfacesTable
 	GrantsTable.ForeignKeys[0].RefTable = ResourcesTable
+	GroupInboxesTable.ForeignKeys[0].RefTable = IdentityGroupsTable
+	GroupInboxesTable.ForeignKeys[1].RefTable = ResourcesTable
 	IdentityAssignmentsTable.ForeignKeys[0].RefTable = IdentityRolesTable
 	IdentityMembershipsTable.ForeignKeys[0].RefTable = IdentityGroupsTable
-	ItemHistoriesTable.ForeignKeys[0].RefTable = ItemRevisionsTable
+	IdentityRestTokensTable.ForeignKeys[0].RefTable = IdentityUsersTable
+	ItemHistoriesTable.ForeignKeys[0].RefTable = ResourcesTable
+	ItemHistoriesTable.ForeignKeys[1].RefTable = ItemRevisionsTable
 	ItemRevisionsTable.ForeignKeys[0].RefTable = BlobsTable
 	ItemRevisionsTable.ForeignKeys[1].RefTable = ResourcesTable
 	ItemRevisionsTable.ForeignKeys[2].RefTable = SchemaRevisionsTable
@@ -1592,19 +1904,21 @@ func init() {
 	OperationsTable.ForeignKeys[0].RefTable = ResourcesTable
 	OperationItemsTable.ForeignKeys[0].RefTable = OperationsTable
 	OperationItemsTable.ForeignKeys[1].RefTable = ResourcesTable
-	PublicationsTable.ForeignKeys[0].RefTable = ItemRevisionsTable
-	PublicationsTable.ForeignKeys[1].RefTable = ResourcesTable
+	PublicationsTable.ForeignKeys[0].RefTable = ResourcesTable
 	RelationshipsTable.ForeignKeys[0].RefTable = RelationshipTypesTable
 	RelationshipsTable.ForeignKeys[1].RefTable = ResourcesTable
 	RelationshipsTable.ForeignKeys[2].RefTable = ResourcesTable
 	ResourcesTable.ForeignKeys[0].RefTable = ResourcesTable
-	ResourcesTable.ForeignKeys[1].RefTable = ResourcesTable
-	ResourcesTable.ForeignKeys[2].RefTable = ItemRevisionsTable
+	ResourcesTable.ForeignKeys[1].RefTable = IdentityUsersTable
+	ResourcesTable.ForeignKeys[2].RefTable = ResourcesTable
 	ResourcesTable.ForeignKeys[3].RefTable = ItemRevisionsTable
-	ResourcesTable.ForeignKeys[4].RefTable = SchemaRevisionsTable
+	ResourcesTable.ForeignKeys[4].RefTable = ItemRevisionsTable
+	ResourcesTable.ForeignKeys[5].RefTable = SchemaRevisionsTable
 	SchemaRevisionsTable.ForeignKeys[0].RefTable = ResourcesTable
 	SchemaTemplatesTable.ForeignKeys[0].RefTable = ResourcesTable
 	SmartFoldersTable.ForeignKeys[0].RefTable = ResourcesTable
+	SyncStatesTable.ForeignKeys[0].RefTable = SyncViewsTable
+	SyncTokensTable.ForeignKeys[0].RefTable = SyncViewsTable
 	TermsTable.ForeignKeys[0].RefTable = TermsTable
 	TermsTable.ForeignKeys[1].RefTable = TermsTable
 	TermsTable.ForeignKeys[2].RefTable = TermSetsTable

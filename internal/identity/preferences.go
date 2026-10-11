@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	_ "time/tzdata"
@@ -39,17 +40,6 @@ type Preferences struct {
 	DocumentLanguages string   `json:"document_languages"`
 	Inherited         []string `json:"inherited"`
 	Version           int      `json:"version"`
-}
-
-func requireActiveUser(ctx context.Context, q Querier, subject string) error {
-	var active bool
-	if err := q.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=? AND active=1)", subject).Scan(&active); err != nil {
-		return err
-	}
-	if !active {
-		return ErrForbidden
-	}
-	return nil
 }
 
 func preferenceOwner(subject string, organization bool) (string, string) {
@@ -106,7 +96,7 @@ func readPreferences(ctx context.Context, q Querier, subject string, organizatio
 
 func (d Directory) Preferences(ctx context.Context, subject string, organization bool) (out Preferences, err error) {
 	err = d.transaction(ctx, func(tx *sql.Tx) error {
-		if err := requireActiveUser(ctx, tx, subject); err != nil {
+		if err := RequireActive(ctx, tx, subject); err != nil {
 			return err
 		}
 		var e error
@@ -172,7 +162,7 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 		patch[k] = &value
 	}
 	err = d.transaction(ctx, func(tx *sql.Tx) error {
-		if e := requireActiveUser(ctx, tx, subject); e != nil {
+		if e := RequireActive(ctx, tx, subject); e != nil {
 			return e
 		}
 		if organization {
@@ -188,6 +178,14 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 		if version != current {
 			return ErrPreconditionFailed
 		}
+		properties := []string{}
+		for k, v := range patch {
+			old, exists := own[k]
+			if v == nil && exists || v != nil && (!exists || old != *v) {
+				properties = append(properties, k)
+			}
+		}
+		sort.Strings(properties)
 		for k, v := range patch {
 			if v == nil {
 				delete(own, k)

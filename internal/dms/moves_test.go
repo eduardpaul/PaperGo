@@ -22,7 +22,7 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	s, w, _ := fixture(t)
 	source := create(t, s, w.ID, "library", "Source", nil)
 	item := create(t, s, source.ID, "item", "File", nil)
-	if _, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "bytes", Filename: "file", ContentType: "text/plain", Size: 5, SHA256: emptySHA256}); err != nil {
+	if _, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: "bytes", Filename: "file", ContentType: "application/pdf", Size: 5, SHA256: emptySHA256}); err != nil {
 		t.Fatal(err)
 	}
 	item = latest(t, s, item.ID)
@@ -36,7 +36,7 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err = s.SetPermissions(testContext, "alice", item.ID, item.Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}, {"user", "bob", "write", "allow"}}})
+	item, err = s.SetPermissions(testContext, "alice", item.ID, latest(t, s, item.ID).Version, Permissions{Inherit: false, Grants: []Permission{{"user", "alice", "manage", "allow"}, {"user", "bob", "write", "allow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,10 +75,10 @@ func TestMoveItemAcrossWorkspacesPreservesContentAndResetsACL(t *testing.T) {
 	if n, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(item.ID)).Count(testContext); err != nil || n != 0 {
 		t.Fatal("source grants kept", n, err)
 	}
-	if links, err := s.Relationships(testContext, "alice", item.ID, "outgoing", "", "", 50); err != nil || len(links.Data) != 1 || links.Data[0].ID != edge.ID {
+	if links, err := s.Relationships(testContext, "alice", item.ID, "both", "", "", 50); err != nil || len(links.Data) != 1 || links.Data[0].ID != edge.ID {
 		t.Fatal("links lost", links, err)
 	}
-	if links, err := s.Relationships(testContext, "carol", item.ID, "outgoing", "", "", 50); err != nil || len(links.Data) != 0 {
+	if links, err := s.Relationships(testContext, "carol", item.ID, "both", "", "", 50); err != nil || len(links.Data) != 0 {
 		t.Fatal("source peer disclosed", links, err)
 	}
 	for _, collection := range []string{source.ID, dest.ID} {

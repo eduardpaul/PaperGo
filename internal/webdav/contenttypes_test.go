@@ -27,7 +27,7 @@ func TestCopyPreservesContentTypeAndPrunesRemovedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.expect(e.do("PUT", e.root+"/original.txt", "alice-token", "data"), 204)
+	e.expect(e.do("PUT", e.root+"/original.txt", "alice-token", "%PDF-data"), 204)
 	lib, err = e.s.Get(ctx, "alice", e.library)
 	if err != nil {
 		t.Fatal(err)

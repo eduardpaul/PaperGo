@@ -35,6 +35,10 @@ type WorkflowRun struct {
 	Depth int `json:"depth,omitempty"`
 	// Actor holds the value of the "actor" field.
 	Actor string `json:"actor,omitempty"`
+	// LiveStatus holds the value of the "live_status" field.
+	LiveStatus string `json:"-"`
+	// LiveUpdatedAt holds the value of the "live_updated_at" field.
+	LiveUpdatedAt int64 `json:"-"`
 	// RetryOf holds the value of the "retry_of" field.
 	RetryOf      *string `json:"retry_of,omitempty"`
 	selectValues sql.SelectValues
@@ -45,9 +49,9 @@ func (*WorkflowRun) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case workflowrun.FieldWorkflowVersion, workflowrun.FieldDepth:
+		case workflowrun.FieldWorkflowVersion, workflowrun.FieldDepth, workflowrun.FieldLiveUpdatedAt:
 			values[i] = new(sql.NullInt64)
-		case workflowrun.FieldID, workflowrun.FieldWorkflowID, workflowrun.FieldWorkspaceID, workflowrun.FieldItemID, workflowrun.FieldEventID, workflowrun.FieldEventType, workflowrun.FieldActor, workflowrun.FieldRetryOf:
+		case workflowrun.FieldID, workflowrun.FieldWorkflowID, workflowrun.FieldWorkspaceID, workflowrun.FieldItemID, workflowrun.FieldEventID, workflowrun.FieldEventType, workflowrun.FieldActor, workflowrun.FieldLiveStatus, workflowrun.FieldRetryOf:
 			values[i] = new(sql.NullString)
 		case workflowrun.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -127,6 +131,18 @@ func (_m *WorkflowRun) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Actor = value.String
 			}
+		case workflowrun.FieldLiveStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field live_status", values[i])
+			} else if value.Valid {
+				_m.LiveStatus = value.String
+			}
+		case workflowrun.FieldLiveUpdatedAt:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field live_updated_at", values[i])
+			} else if value.Valid {
+				_m.LiveUpdatedAt = value.Int64
+			}
 		case workflowrun.FieldRetryOf:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field retry_of", values[i])
@@ -198,6 +214,12 @@ func (_m *WorkflowRun) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("actor=")
 	builder.WriteString(_m.Actor)
+	builder.WriteString(", ")
+	builder.WriteString("live_status=")
+	builder.WriteString(_m.LiveStatus)
+	builder.WriteString(", ")
+	builder.WriteString("live_updated_at=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LiveUpdatedAt))
 	builder.WriteString(", ")
 	if v := _m.RetryOf; v != nil {
 		builder.WriteString("retry_of=")

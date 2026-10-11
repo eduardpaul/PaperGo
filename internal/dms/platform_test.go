@@ -389,10 +389,7 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 	if _, e = s.UpdateRelationship(testContext, "alice", a.ID, edge.ID, edge.Version, UpdateRelationship{Metadata: map[string]any{"weight": "3.00"}}); !errors.Is(e, ErrPreconditionFailed) {
 		t.Fatal("stale edge update")
 	}
-	if e = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, edge.Version); !errors.Is(e, ErrPreconditionFailed) {
-		t.Fatal("stale edge delete")
-	}
-	if e = s.UnlinkVersion(testContext, "alice", a.ID, edge.ID, updated.Version); e != nil {
+	if e = s.Unlink(testContext, "alice", a.ID, edge.ID); e != nil {
 		t.Fatal(e)
 	}
 	sym, e := s.CreateRelationshipType(testContext, "alice", RelationshipTypeInput{Name: "Related"})
@@ -410,7 +407,7 @@ func TestTypedRelationshipsConcurrencySymmetryAndCardinality(t *testing.T) {
 		t.Fatal("symmetric retry", again, e)
 	}
 	for _, id := range []string{a.ID, b.ID} {
-		for _, direction := range []string{"incoming", "outgoing"} {
+		for _, direction := range []string{"", "both"} {
 			p, e := s.Relationships(testContext, "alice", id, direction, "related", "", 50)
 			if e != nil || len(p.Data) != 1 {
 				t.Fatal("symmetric query", id, direction, p, e)

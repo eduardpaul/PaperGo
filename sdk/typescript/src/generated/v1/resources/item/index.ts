@@ -12,6 +12,8 @@ import { ChildrenRequestBuilderRequestsMetadata, type ChildrenRequestBuilder } f
 // @ts-ignore
 import { ContentTypesRequestBuilderNavigationMetadata, ContentTypesRequestBuilderRequestsMetadata, type ContentTypesRequestBuilder } from './contentTypes/index.js';
 // @ts-ignore
+import { DeltaRequestBuilderRequestsMetadata, type DeltaRequestBuilder } from './delta/index.js';
+// @ts-ignore
 import { DocumentsRequestBuilderRequestsMetadata, type DocumentsRequestBuilder } from './documents/index.js';
 // @ts-ignore
 import { FieldsRequestBuilderNavigationMetadata, FieldsRequestBuilderRequestsMetadata, type FieldsRequestBuilder } from './fields/index.js';
@@ -93,6 +95,10 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      */
     get contentTypes(): ContentTypesRequestBuilder;
     /**
+     * The delta property
+     */
+    get delta(): DeltaRequestBuilder;
+    /**
      * The documents property
      */
     get documents(): DocumentsRequestBuilder;
@@ -138,6 +144,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -156,6 +163,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -175,6 +183,7 @@ export interface ResourcesItemRequestBuilder extends BaseRequestBuilder<Resource
      * @throws {Problem} error when the service returns a 403 status code
      * @throws {Problem} error when the service returns a 404 status code
      * @throws {Problem} error when the service returns a 409 status code
+     * @throws {Problem} error when the service returns a 410 status code
      * @throws {Problem} error when the service returns a 412 status code
      * @throws {Problem} error when the service returns a 413 status code
      * @throws {Problem} error when the service returns a 415 status code
@@ -250,6 +259,9 @@ export const ResourcesItemRequestBuilderNavigationMetadata: Record<Exclude<keyof
         requestsMetadata: ContentTypesRequestBuilderRequestsMetadata,
         navigationMetadata: ContentTypesRequestBuilderNavigationMetadata,
     },
+    delta: {
+        requestsMetadata: DeltaRequestBuilderRequestsMetadata,
+    },
     documents: {
         requestsMetadata: DocumentsRequestBuilderRequestsMetadata,
     },
@@ -294,6 +306,7 @@ export const ResourcesItemRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
@@ -317,6 +330,7 @@ export const ResourcesItemRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
@@ -337,6 +351,7 @@ export const ResourcesItemRequestBuilderRequestsMetadata: RequestsMetadata = {
             403: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             412: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             413: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createProblemFromDiscriminatorValue as ParsableFactory<Parsable>,

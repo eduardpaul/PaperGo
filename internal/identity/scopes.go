@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 )
 
 var (
@@ -32,10 +33,13 @@ type Scope struct {
 var Catalog = []Scope{
 	{"workspace.read", true}, {"workspace.create", true}, {"workspace.manage", false},
 	{"list.read", true}, {"list.write", true},
+	{"document.read", true}, {"document.write", true},
 	{"contentType.read", true}, {"contentType.manage", false},
 	{"taxonomy.read", true}, {"taxonomy.manage", false},
-	{"identity.read", false}, {"identity.manage", false},
-	{"organization.manage", false},
+	{"user.read", true}, {"user.manage", false},
+	{"group.read", true}, {"group.manage", false},
+	{"role.read", false}, {"role.manage", false},
+	{"organization.manage", false}, {"audit.read", false},
 }
 
 type Querier interface {
@@ -58,19 +62,37 @@ func PrincipalSQL(alias string, subject string) (string, []any) {
 	return `((` + alias + `.principal_type='user' AND ` + alias + `.principal_id=?) OR (` + alias + `.principal_type='group' AND ` + alias + `.principal_id IN (` + GroupIDsSQL + `)))`, []any{subject, subject}
 }
 
-func ScopeSQL(subject, scope string) (string, []any) {
-	query, args := ScopeExpressionSQL(subject, "?")
+func ScopeSQL(ctx context.Context, subject, scope string) (string, []any) {
+	if !credentialAllows(ctx, scope) {
+		return "0", nil
+	}
+	query, args := ScopeExpressionSQL(ctx, subject, "?")
 	return query, append(args, scope)
 }
 
 // ScopeExpressionSQL accepts only a trusted SQL expression built by the caller.
-func ScopeExpressionSQL(subject, expression string) (string, []any) {
+func ScopeExpressionSQL(ctx context.Context, subject, expression string) (string, []any) {
 	principal, args := PrincipalSQL("a", subject)
-	return `(EXISTS (SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + ` AND sc.value=` + expression + `))`, append([]any{subject}, args...)
+	restriction := ""
+	if token, limited := ctx.Value(restTokenContextKey{}).(RESTTokenIdentity); limited {
+		if len(token.Scopes) == 0 {
+			return "0", nil
+		}
+		marks := make([]string, len(token.Scopes))
+		for i, scope := range token.Scopes {
+			marks[i] = "?"
+			args = append(args, scope)
+		}
+		restriction = " AND sc.value IN (" + strings.Join(marks, ",") + ")"
+	}
+	return `(EXISTS (SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + restriction + ` AND sc.value=` + expression + `))`, append([]any{subject}, args...)
 }
 
 func RequireScope(ctx context.Context, q Querier, subject, scope string) error {
-	filter, args := ScopeSQL(subject, scope)
+	if !credentialAllows(ctx, scope) {
+		return ErrForbidden
+	}
+	filter, args := ScopeSQL(ctx, subject, scope)
 	var allowed bool
 	if err := q.QueryRowContext(ctx, "SELECT "+filter, args...).Scan(&allowed); err != nil {
 		return err
@@ -94,7 +116,9 @@ func EffectiveScopes(ctx context.Context, q Querier, subject string) ([]string, 
 		if err = rows.Scan(&scope); err != nil {
 			return nil, err
 		}
-		out = append(out, scope)
+		if credentialAllows(ctx, scope) {
+			out = append(out, scope)
+		}
 	}
 	return out, rows.Err()
 }

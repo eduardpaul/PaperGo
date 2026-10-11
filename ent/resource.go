@@ -5,6 +5,7 @@ package ent
 import (
 	"encoding/json"
 	"fmt"
+	"papergo/ent/identityuser"
 	"papergo/ent/itemrevision"
 	"papergo/ent/resource"
 	"papergo/ent/schemarevision"
@@ -24,6 +25,10 @@ type Resource struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// WorkspaceID holds the value of the "workspace_id" field.
 	WorkspaceID string `json:"workspace_id,omitempty"`
+	// PersonalOwnerID holds the value of the "personal_owner_id" field.
+	PersonalOwnerID *string `json:"personal_owner_id,omitempty"`
+	// SystemKey holds the value of the "system_key" field.
+	SystemKey *string `json:"system_key,omitempty"`
 	// ParentID holds the value of the "parent_id" field.
 	ParentID *string `json:"parent_id,omitempty"`
 	// ContainerID holds the value of the "container_id" field.
@@ -90,6 +95,8 @@ type Resource struct {
 type ResourceEdges struct {
 	// Children holds the value of the children edge.
 	Children []*Resource `json:"children,omitempty"`
+	// PersonalOwner holds the value of the personal_owner edge.
+	PersonalOwner *IdentityUser `json:"personal_owner,omitempty"`
 	// Parent holds the value of the parent edge.
 	Parent *Resource `json:"parent,omitempty"`
 	// ContainedItems holds the value of the contained_items edge.
@@ -118,7 +125,7 @@ type ResourceEdges struct {
 	SchemaHead *SchemaRevision `json:"schema_head,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [14]bool
+	loadedTypes [15]bool
 }
 
 // ChildrenOrErr returns the Children value or an error if the edge
@@ -130,12 +137,23 @@ func (e ResourceEdges) ChildrenOrErr() ([]*Resource, error) {
 	return nil, &NotLoadedError{edge: "children"}
 }
 
+// PersonalOwnerOrErr returns the PersonalOwner value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ResourceEdges) PersonalOwnerOrErr() (*IdentityUser, error) {
+	if e.PersonalOwner != nil {
+		return e.PersonalOwner, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: identityuser.Label}
+	}
+	return nil, &NotLoadedError{edge: "personal_owner"}
+}
+
 // ParentOrErr returns the Parent value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
 func (e ResourceEdges) ParentOrErr() (*Resource, error) {
 	if e.Parent != nil {
 		return e.Parent, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[2] {
 		return nil, &NotFoundError{label: resource.Label}
 	}
 	return nil, &NotLoadedError{edge: "parent"}
@@ -144,7 +162,7 @@ func (e ResourceEdges) ParentOrErr() (*Resource, error) {
 // ContainedItemsOrErr returns the ContainedItems value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) ContainedItemsOrErr() ([]*Resource, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[3] {
 		return e.ContainedItems, nil
 	}
 	return nil, &NotLoadedError{edge: "contained_items"}
@@ -155,7 +173,7 @@ func (e ResourceEdges) ContainedItemsOrErr() ([]*Resource, error) {
 func (e ResourceEdges) ContainerOrErr() (*Resource, error) {
 	if e.Container != nil {
 		return e.Container, nil
-	} else if e.loadedTypes[3] {
+	} else if e.loadedTypes[4] {
 		return nil, &NotFoundError{label: resource.Label}
 	}
 	return nil, &NotLoadedError{edge: "container"}
@@ -164,7 +182,7 @@ func (e ResourceEdges) ContainerOrErr() (*Resource, error) {
 // GrantsOrErr returns the Grants value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) GrantsOrErr() ([]*Grant, error) {
-	if e.loadedTypes[4] {
+	if e.loadedTypes[5] {
 		return e.Grants, nil
 	}
 	return nil, &NotLoadedError{edge: "grants"}
@@ -173,7 +191,7 @@ func (e ResourceEdges) GrantsOrErr() ([]*Grant, error) {
 // OutgoingOrErr returns the Outgoing value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) OutgoingOrErr() ([]*Relationship, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[6] {
 		return e.Outgoing, nil
 	}
 	return nil, &NotLoadedError{edge: "outgoing"}
@@ -182,7 +200,7 @@ func (e ResourceEdges) OutgoingOrErr() ([]*Relationship, error) {
 // IncomingOrErr returns the Incoming value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) IncomingOrErr() ([]*Relationship, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[7] {
 		return e.Incoming, nil
 	}
 	return nil, &NotLoadedError{edge: "incoming"}
@@ -191,7 +209,7 @@ func (e ResourceEdges) IncomingOrErr() ([]*Relationship, error) {
 // PublicationsOrErr returns the Publications value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) PublicationsOrErr() ([]*Publication, error) {
-	if e.loadedTypes[7] {
+	if e.loadedTypes[8] {
 		return e.Publications, nil
 	}
 	return nil, &NotLoadedError{edge: "publications"}
@@ -200,7 +218,7 @@ func (e ResourceEdges) PublicationsOrErr() ([]*Publication, error) {
 // BlobsOrErr returns the Blobs value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) BlobsOrErr() ([]*Blob, error) {
-	if e.loadedTypes[8] {
+	if e.loadedTypes[9] {
 		return e.Blobs, nil
 	}
 	return nil, &NotLoadedError{edge: "blobs"}
@@ -209,7 +227,7 @@ func (e ResourceEdges) BlobsOrErr() ([]*Blob, error) {
 // RevisionsOrErr returns the Revisions value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) RevisionsOrErr() ([]*ItemRevision, error) {
-	if e.loadedTypes[9] {
+	if e.loadedTypes[10] {
 		return e.Revisions, nil
 	}
 	return nil, &NotLoadedError{edge: "revisions"}
@@ -218,7 +236,7 @@ func (e ResourceEdges) RevisionsOrErr() ([]*ItemRevision, error) {
 // SchemaRevisionsOrErr returns the SchemaRevisions value or an error if the edge
 // was not loaded in eager-loading.
 func (e ResourceEdges) SchemaRevisionsOrErr() ([]*SchemaRevision, error) {
-	if e.loadedTypes[10] {
+	if e.loadedTypes[11] {
 		return e.SchemaRevisions, nil
 	}
 	return nil, &NotLoadedError{edge: "schema_revisions"}
@@ -229,7 +247,7 @@ func (e ResourceEdges) SchemaRevisionsOrErr() ([]*SchemaRevision, error) {
 func (e ResourceEdges) HeadRevisionOrErr() (*ItemRevision, error) {
 	if e.HeadRevision != nil {
 		return e.HeadRevision, nil
-	} else if e.loadedTypes[11] {
+	} else if e.loadedTypes[12] {
 		return nil, &NotFoundError{label: itemrevision.Label}
 	}
 	return nil, &NotLoadedError{edge: "head_revision"}
@@ -240,7 +258,7 @@ func (e ResourceEdges) HeadRevisionOrErr() (*ItemRevision, error) {
 func (e ResourceEdges) PublishedRevisionOrErr() (*ItemRevision, error) {
 	if e.PublishedRevision != nil {
 		return e.PublishedRevision, nil
-	} else if e.loadedTypes[12] {
+	} else if e.loadedTypes[13] {
 		return nil, &NotFoundError{label: itemrevision.Label}
 	}
 	return nil, &NotLoadedError{edge: "published_revision"}
@@ -251,7 +269,7 @@ func (e ResourceEdges) PublishedRevisionOrErr() (*ItemRevision, error) {
 func (e ResourceEdges) SchemaHeadOrErr() (*SchemaRevision, error) {
 	if e.SchemaHead != nil {
 		return e.SchemaHead, nil
-	} else if e.loadedTypes[13] {
+	} else if e.loadedTypes[14] {
 		return nil, &NotFoundError{label: schemarevision.Label}
 	}
 	return nil, &NotLoadedError{edge: "schema_head"}
@@ -268,7 +286,7 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case resource.FieldVersion, resource.FieldNextRevisionNumber, resource.FieldMaxVersions:
 			values[i] = new(sql.NullInt64)
-		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldDuplicatePolicy, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey, resource.FieldDeletedBy:
+		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldPersonalOwnerID, resource.FieldSystemKey, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldDuplicatePolicy, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey, resource.FieldDeletedBy:
 			values[i] = new(sql.NullString)
 		case resource.FieldCreatedAt, resource.FieldUpdatedAt, resource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -304,6 +322,20 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field workspace_id", values[i])
 			} else if value.Valid {
 				_m.WorkspaceID = value.String
+			}
+		case resource.FieldPersonalOwnerID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field personal_owner_id", values[i])
+			} else if value.Valid {
+				_m.PersonalOwnerID = new(string)
+				*_m.PersonalOwnerID = value.String
+			}
+		case resource.FieldSystemKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field system_key", values[i])
+			} else if value.Valid {
+				_m.SystemKey = new(string)
+				*_m.SystemKey = value.String
 			}
 		case resource.FieldParentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -507,6 +539,11 @@ func (_m *Resource) QueryChildren() *ResourceQuery {
 	return NewResourceClient(_m.config).QueryChildren(_m)
 }
 
+// QueryPersonalOwner queries the "personal_owner" edge of the Resource entity.
+func (_m *Resource) QueryPersonalOwner() *IdentityUserQuery {
+	return NewResourceClient(_m.config).QueryPersonalOwner(_m)
+}
+
 // QueryParent queries the "parent" edge of the Resource entity.
 func (_m *Resource) QueryParent() *ResourceQuery {
 	return NewResourceClient(_m.config).QueryParent(_m)
@@ -600,6 +637,16 @@ func (_m *Resource) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("workspace_id=")
 	builder.WriteString(_m.WorkspaceID)
+	builder.WriteString(", ")
+	if v := _m.PersonalOwnerID; v != nil {
+		builder.WriteString("personal_owner_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.SystemKey; v != nil {
+		builder.WriteString("system_key=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	if v := _m.ParentID; v != nil {
 		builder.WriteString("parent_id=")

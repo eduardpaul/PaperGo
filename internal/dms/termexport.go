@@ -201,7 +201,7 @@ func (p TaxonomyPackage) validate() error {
 	keys := map[string]bool{}
 	var count func([]PortableTerm, int) error
 	count = func(nodes []PortableTerm, depth int) error {
-		if depth > MaxDepth && len(nodes) > 0 {
+		if depth > MaxTaxonomyDepth && len(nodes) > 0 {
 			return invalid("term hierarchy depth exceeded")
 		}
 		names := map[string]bool{}
