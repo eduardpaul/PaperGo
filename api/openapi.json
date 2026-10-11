@@ -1910,8 +1910,9 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 255
-            }
+              "maxLength": 1024
+            },
+            "description": "Filename limited to 1024 UTF-16 units without path separators or control characters."
           },
           {
             "name": "X-OCR-Languages",
@@ -15894,7 +15895,8 @@
           "name": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 255
+            "maxLength": 1024,
+            "description": "Item or folder title. Limited to 1024 UTF-16 units before trimming."
           },
           "tags": {
             "type": "array",
@@ -15925,7 +15927,8 @@
           "name": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 255
+            "maxLength": 1024,
+            "description": "Item or folder title. Limited to 1024 UTF-16 units before trimming."
           },
           "tags": {
             "type": "array",
@@ -18913,8 +18916,8 @@
         "properties": {
           "name": {
             "type": "string",
-            "maxLength": 255,
-            "description": "Item name; defaults to the uploaded filename."
+            "maxLength": 1024,
+            "description": "Item name; defaults to the uploaded filename. Limited to 1024 UTF-16 units before trimming."
           },
           "content_type_id": {
             "type": "string",
