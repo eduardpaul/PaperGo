@@ -90,6 +90,34 @@ func (_c *WorkflowRunCreate) SetActor(v string) *WorkflowRunCreate {
 	return _c
 }
 
+// SetLiveStatus sets the "live_status" field.
+func (_c *WorkflowRunCreate) SetLiveStatus(v string) *WorkflowRunCreate {
+	_c.mutation.SetLiveStatus(v)
+	return _c
+}
+
+// SetNillableLiveStatus sets the "live_status" field if the given value is not nil.
+func (_c *WorkflowRunCreate) SetNillableLiveStatus(v *string) *WorkflowRunCreate {
+	if v != nil {
+		_c.SetLiveStatus(*v)
+	}
+	return _c
+}
+
+// SetLiveUpdatedAt sets the "live_updated_at" field.
+func (_c *WorkflowRunCreate) SetLiveUpdatedAt(v int64) *WorkflowRunCreate {
+	_c.mutation.SetLiveUpdatedAt(v)
+	return _c
+}
+
+// SetNillableLiveUpdatedAt sets the "live_updated_at" field if the given value is not nil.
+func (_c *WorkflowRunCreate) SetNillableLiveUpdatedAt(v *int64) *WorkflowRunCreate {
+	if v != nil {
+		_c.SetLiveUpdatedAt(*v)
+	}
+	return _c
+}
+
 // SetRetryOf sets the "retry_of" field.
 func (_c *WorkflowRunCreate) SetRetryOf(v string) *WorkflowRunCreate {
 	_c.mutation.SetRetryOf(v)
@@ -148,6 +176,14 @@ func (_c *WorkflowRunCreate) defaults() {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := workflowrun.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.LiveStatus(); !ok {
+		v := workflowrun.DefaultLiveStatus
+		_c.mutation.SetLiveStatus(v)
+	}
+	if _, ok := _c.mutation.LiveUpdatedAt(); !ok {
+		v := workflowrun.DefaultLiveUpdatedAt
+		_c.mutation.SetLiveUpdatedAt(v)
 	}
 }
 
@@ -211,6 +247,17 @@ func (_c *WorkflowRunCreate) check() error {
 	}
 	if _, ok := _c.mutation.Actor(); !ok {
 		return &ValidationError{Name: "actor", err: errors.New(`ent: missing required field "WorkflowRun.actor"`)}
+	}
+	if _, ok := _c.mutation.LiveStatus(); !ok {
+		return &ValidationError{Name: "live_status", err: errors.New(`ent: missing required field "WorkflowRun.live_status"`)}
+	}
+	if _, ok := _c.mutation.LiveUpdatedAt(); !ok {
+		return &ValidationError{Name: "live_updated_at", err: errors.New(`ent: missing required field "WorkflowRun.live_updated_at"`)}
+	}
+	if v, ok := _c.mutation.LiveUpdatedAt(); ok {
+		if err := workflowrun.LiveUpdatedAtValidator(v); err != nil {
+			return &ValidationError{Name: "live_updated_at", err: fmt.Errorf(`ent: validator failed for field "WorkflowRun.live_updated_at": %w`, err)}
+		}
 	}
 	return nil
 }
@@ -282,6 +329,14 @@ func (_c *WorkflowRunCreate) createSpec() (*WorkflowRun, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Actor(); ok {
 		_spec.SetField(workflowrun.FieldActor, field.TypeString, value)
 		_node.Actor = value
+	}
+	if value, ok := _c.mutation.LiveStatus(); ok {
+		_spec.SetField(workflowrun.FieldLiveStatus, field.TypeString, value)
+		_node.LiveStatus = value
+	}
+	if value, ok := _c.mutation.LiveUpdatedAt(); ok {
+		_spec.SetField(workflowrun.FieldLiveUpdatedAt, field.TypeInt64, value)
+		_node.LiveUpdatedAt = value
 	}
 	if value, ok := _c.mutation.RetryOf(); ok {
 		_spec.SetField(workflowrun.FieldRetryOf, field.TypeString, value)

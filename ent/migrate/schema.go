@@ -791,6 +791,27 @@ var (
 			},
 		},
 	}
+	// LiveChangesColumns holds the columns for the "live_changes" table.
+	LiveChangesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "kind", Type: field.TypeEnum, Enums: []string{"item", "operation", "run", "access"}},
+		{Name: "entity_id", Type: field.TypeString, Size: 200},
+		{Name: "action", Type: field.TypeString},
+	}
+	// LiveChangesTable holds the schema information for the "live_changes" table.
+	LiveChangesTable = &schema.Table{
+		Name:       "live_changes",
+		Columns:    LiveChangesColumns,
+		PrimaryKey: []*schema.Column{LiveChangesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "livechange_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{LiveChangesColumns[1]},
+			},
+		},
+	}
 	// OperationsColumns holds the columns for the "operations" table.
 	OperationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1607,6 +1628,8 @@ var (
 		{Name: "event_type", Type: field.TypeString},
 		{Name: "depth", Type: field.TypeInt},
 		{Name: "actor", Type: field.TypeString},
+		{Name: "live_status", Type: field.TypeString, Default: "queued"},
+		{Name: "live_updated_at", Type: field.TypeInt64, Default: 0},
 		{Name: "retry_of", Type: field.TypeString, Nullable: true},
 	}
 	// WorkflowRunsTable holds the schema information for the "workflow_runs" table.
@@ -1755,6 +1778,7 @@ var (
 		ItemRevisionsTable,
 		ItemSurfacesTable,
 		ListViewsTable,
+		LiveChangesTable,
 		OperationsTable,
 		OperationItemsTable,
 		PublicationsTable,

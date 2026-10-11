@@ -44,6 +44,7 @@ type requestKey struct{}
 func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
 func (a *API) Handler() http.Handler {
 	api := http.NewServeMux()
+	api.HandleFunc("GET /v1/events", a.events)
 	a.registerIdentity(api)
 	a.registerFoundation(api)
 	a.registerSmartFolders(api)
@@ -107,6 +108,7 @@ func (a *API) Handler() http.Handler {
 		respond(w, r, 200, map[string]string{"status": "ok"})
 	})
 	limit := a.limiter()
+	root.Handle("GET /v1/events", a.authenticate(a.streamLimiter(http.HandlerFunc(a.events))))
 	root.Handle("/", a.authenticate(limit(api)))
 	if a.WebDAV != nil {
 		dav := limit(a.WebDAV)
@@ -196,6 +198,9 @@ func readRequest(r *http.Request) bool {
 // transferRequest reports requests that stream a body: blob downloads and
 // uploads, and WebDAV file GET/PUT. COPY and every other method do database work.
 func transferRequest(r *http.Request) bool {
+	if r.Method == http.MethodGet && r.URL.Path == "/v1/events" {
+		return true
+	}
 	if r.Method == http.MethodPost {
 		parts := strings.Split(r.URL.Path, "/")
 		return len(parts) == 5 && parts[1] == "v1" && parts[2] == "resources" && parts[4] == "documents"
@@ -275,6 +280,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(409, "last_workspace_owner", err.Error())
 	case errors.As(err, &validation):
 		problem(422, "validation_failed", validation.Error())
+	case errors.Is(err, dms.ErrLiveExpired):
+		problem(410, "live_cursor_expired", err.Error())
 	case errors.Is(err, dms.ErrDeltaExpired):
 		problem(410, "delta_expired", err.Error())
 	case errors.Is(err, dms.ErrNotFound) || errors.Is(err, identity.ErrNotFound):

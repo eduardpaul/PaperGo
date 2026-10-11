@@ -257,3 +257,11 @@ Queries, grouping and saved views accept $created_at, $created_by, $modified_at,
 Operations dispatch through handlers registered at startup. Each handler validates its payload, declares its module scope, and commits bounded batches with durable progress or a final result. Field indexing and filtered bulk edits use this registry. Other handlers can follow the same contract. Queued personal-token work retains its granted scopes and fails if the credential is revoked or expires; current account, role and resource permissions are rechecked between batches. Index maintenance completes the configuration change that scheduled it.
 
 `GET /v1/operations/{id}` returns status, progress, result, trace ID and start/completion timestamps. Collection index jobs are visible to collection readers; other operations belong to their initiator, and organization jobs require `organization.manage`. Terminal records and results expire after 30 days without an update. Hourly maintenance collects these records and expired delta data; pending operations remain available for restart recovery.
+
+## Live API updates
+
+`GET /v1/events` streams server-sent events using the usual bearer authentication. `item`, `operation` and `run` frames contain the current authorized view; operation payloads and run inputs/results are private. Item removal frames contain only an ID already delivered on that connection. Changes to access emit a `resync` frame without entity details. Clients reconcile item state with the delta API and refresh operation/run lists after `connected` or `resync`.
+
+Each frame carries a durable numeric `id`. Reconnect with `Last-Event-ID` to replay retained changes; the journal retains seven days and an expired cursor returns 410. A new connection starts at the current position. Repeated changes to the same entity may be coalesced, so this stream is a notification API, not an audit feed. Keepalive frames advance the cursor even when intervening changes are hidden by permissions.
+
+Streams use a separate admission pool (four per user, 64 per process), send keepalives and close after 30 minutes for reconnect. Inactive accounts and revoked or expired personal REST tokens receive `reauthenticate` and disconnect. Live run status is reconciled by the workflow dispatcher.

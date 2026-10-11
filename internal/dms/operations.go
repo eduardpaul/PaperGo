@@ -71,6 +71,9 @@ func (s *Service) RunOperations(ctx context.Context, log *slog.Logger) {
 			if err := s.CollectExpiredDeltas(ctx, now); err != nil && ctx.Err() == nil {
 				log.Error("delta cleanup failed", "error", err)
 			}
+			if err := s.CollectExpiredLiveChanges(ctx, now); err != nil && ctx.Err() == nil {
+				log.Error("live change cleanup failed", "error", err)
+			}
 			nextCleanup = now.Add(time.Hour)
 		}
 		worked, err := s.operationStep(ctx)

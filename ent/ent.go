@@ -28,6 +28,7 @@ import (
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
+	"papergo/ent/livechange"
 	"papergo/ent/operation"
 	"papergo/ent/operationitem"
 	"papergo/ent/publication"
@@ -137,6 +138,7 @@ func checkColumn(t, c string) error {
 			itemrevision.Table:         itemrevision.ValidColumn,
 			itemsurface.Table:          itemsurface.ValidColumn,
 			listview.Table:             listview.ValidColumn,
+			livechange.Table:           livechange.ValidColumn,
 			operation.Table:            operation.ValidColumn,
 			operationitem.Table:        operationitem.ValidColumn,
 			publication.Table:          publication.ValidColumn,

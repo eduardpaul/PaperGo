@@ -58,6 +58,8 @@ type Tx struct {
 	ItemSurface *ItemSurfaceClient
 	// ListView is the client for interacting with the ListView builders.
 	ListView *ListViewClient
+	// LiveChange is the client for interacting with the LiveChange builders.
+	LiveChange *LiveChangeClient
 	// Operation is the client for interacting with the Operation builders.
 	Operation *OperationClient
 	// OperationItem is the client for interacting with the OperationItem builders.
@@ -253,6 +255,7 @@ func (tx *Tx) init() {
 	tx.ItemRevision = NewItemRevisionClient(tx.config)
 	tx.ItemSurface = NewItemSurfaceClient(tx.config)
 	tx.ListView = NewListViewClient(tx.config)
+	tx.LiveChange = NewLiveChangeClient(tx.config)
 	tx.Operation = NewOperationClient(tx.config)
 	tx.OperationItem = NewOperationItemClient(tx.config)
 	tx.Publication = NewPublicationClient(tx.config)

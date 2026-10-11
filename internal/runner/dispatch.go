@@ -33,6 +33,9 @@ func (r *Runner) dispatchLoop(ctx context.Context) {
 		if _, err := r.Dispatch(ctx); err != nil && ctx.Err() == nil {
 			r.log.Error("dispatch workflow events", "error", err)
 		}
+		if err := r.SyncLiveRuns(ctx); err != nil && ctx.Err() == nil {
+			r.log.Error("observe workflow statuses", "error", err)
+		}
 		select {
 		case <-ctx.Done():
 			return

@@ -272,6 +272,18 @@ func (f ListViewFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ListViewMutation", m)
 }
 
+// The LiveChangeFunc type is an adapter to allow the use of ordinary
+// function as LiveChange mutator.
+type LiveChangeFunc func(context.Context, *ent.LiveChangeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LiveChangeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LiveChangeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LiveChangeMutation", m)
+}
+
 // The OperationFunc type is an adapter to allow the use of ordinary
 // function as Operation mutator.
 type OperationFunc func(context.Context, *ent.OperationMutation) (ent.Value, error)

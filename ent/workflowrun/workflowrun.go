@@ -31,6 +31,10 @@ const (
 	FieldDepth = "depth"
 	// FieldActor holds the string denoting the actor field in the database.
 	FieldActor = "actor"
+	// FieldLiveStatus holds the string denoting the live_status field in the database.
+	FieldLiveStatus = "live_status"
+	// FieldLiveUpdatedAt holds the string denoting the live_updated_at field in the database.
+	FieldLiveUpdatedAt = "live_updated_at"
 	// FieldRetryOf holds the string denoting the retry_of field in the database.
 	FieldRetryOf = "retry_of"
 	// Table holds the table name of the workflowrun in the database.
@@ -49,6 +53,8 @@ var Columns = []string{
 	FieldEventType,
 	FieldDepth,
 	FieldActor,
+	FieldLiveStatus,
+	FieldLiveUpdatedAt,
 	FieldRetryOf,
 }
 
@@ -79,6 +85,12 @@ var (
 	EventTypeValidator func(string) error
 	// DepthValidator is a validator for the "depth" field. It is called by the builders before save.
 	DepthValidator func(int) error
+	// DefaultLiveStatus holds the default value on creation for the "live_status" field.
+	DefaultLiveStatus string
+	// DefaultLiveUpdatedAt holds the default value on creation for the "live_updated_at" field.
+	DefaultLiveUpdatedAt int64
+	// LiveUpdatedAtValidator is a validator for the "live_updated_at" field. It is called by the builders before save.
+	LiveUpdatedAtValidator func(int64) error
 )
 
 // OrderOption defines the ordering options for the WorkflowRun queries.
@@ -132,6 +144,16 @@ func ByDepth(opts ...sql.OrderTermOption) OrderOption {
 // ByActor orders the results by the actor field.
 func ByActor(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActor, opts...).ToFunc()
+}
+
+// ByLiveStatus orders the results by the live_status field.
+func ByLiveStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLiveStatus, opts...).ToFunc()
+}
+
+// ByLiveUpdatedAt orders the results by the live_updated_at field.
+func ByLiveUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLiveUpdatedAt, opts...).ToFunc()
 }
 
 // ByRetryOf orders the results by the retry_of field.

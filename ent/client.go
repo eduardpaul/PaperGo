@@ -33,6 +33,7 @@ import (
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
+	"papergo/ent/livechange"
 	"papergo/ent/operation"
 	"papergo/ent/operationitem"
 	"papergo/ent/publication"
@@ -112,6 +113,8 @@ type Client struct {
 	ItemSurface *ItemSurfaceClient
 	// ListView is the client for interacting with the ListView builders.
 	ListView *ListViewClient
+	// LiveChange is the client for interacting with the LiveChange builders.
+	LiveChange *LiveChangeClient
 	// Operation is the client for interacting with the Operation builders.
 	Operation *OperationClient
 	// OperationItem is the client for interacting with the OperationItem builders.
@@ -187,6 +190,7 @@ func (c *Client) init() {
 	c.ItemRevision = NewItemRevisionClient(c.config)
 	c.ItemSurface = NewItemSurfaceClient(c.config)
 	c.ListView = NewListViewClient(c.config)
+	c.LiveChange = NewLiveChangeClient(c.config)
 	c.Operation = NewOperationClient(c.config)
 	c.OperationItem = NewOperationItemClient(c.config)
 	c.Publication = NewPublicationClient(c.config)
@@ -322,6 +326,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ItemRevision:         NewItemRevisionClient(cfg),
 		ItemSurface:          NewItemSurfaceClient(cfg),
 		ListView:             NewListViewClient(cfg),
+		LiveChange:           NewLiveChangeClient(cfg),
 		Operation:            NewOperationClient(cfg),
 		OperationItem:        NewOperationItemClient(cfg),
 		Publication:          NewPublicationClient(cfg),
@@ -384,6 +389,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ItemRevision:         NewItemRevisionClient(cfg),
 		ItemSurface:          NewItemSurfaceClient(cfg),
 		ListView:             NewListViewClient(cfg),
+		LiveChange:           NewLiveChangeClient(cfg),
 		Operation:            NewOperationClient(cfg),
 		OperationItem:        NewOperationItemClient(cfg),
 		Publication:          NewPublicationClient(cfg),
@@ -439,11 +445,11 @@ func (c *Client) Use(hooks ...Hook) {
 		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
 		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
 		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
-		c.ListView, c.Operation, c.OperationItem, c.Publication, c.Relationship,
-		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
-		c.SmartFolder, c.SyncState, c.SyncToken, c.SyncView, c.Term, c.TermGroup,
-		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
+		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
+		c.SchemaTemplate, c.SmartFolder, c.SyncState, c.SyncToken, c.SyncView, c.Term,
+		c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun,
+		c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -458,11 +464,11 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
 		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
 		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
-		c.ListView, c.Operation, c.OperationItem, c.Publication, c.Relationship,
-		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
-		c.SmartFolder, c.SyncState, c.SyncToken, c.SyncView, c.Term, c.TermGroup,
-		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
+		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
+		c.SchemaTemplate, c.SmartFolder, c.SyncState, c.SyncToken, c.SyncView, c.Term,
+		c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun,
+		c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -515,6 +521,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ItemSurface.mutate(ctx, m)
 	case *ListViewMutation:
 		return c.ListView.mutate(ctx, m)
+	case *LiveChangeMutation:
+		return c.LiveChange.mutate(ctx, m)
 	case *OperationMutation:
 		return c.Operation.mutate(ctx, m)
 	case *OperationItemMutation:
@@ -3773,6 +3781,139 @@ func (c *ListViewClient) mutate(ctx context.Context, m *ListViewMutation) (Value
 		return (&ListViewDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ListView mutation op: %q", m.Op())
+	}
+}
+
+// LiveChangeClient is a client for the LiveChange schema.
+type LiveChangeClient struct {
+	config
+}
+
+// NewLiveChangeClient returns a client for the LiveChange from the given config.
+func NewLiveChangeClient(c config) *LiveChangeClient {
+	return &LiveChangeClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `livechange.Hooks(f(g(h())))`.
+func (c *LiveChangeClient) Use(hooks ...Hook) {
+	c.hooks.LiveChange = append(c.hooks.LiveChange, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `livechange.Intercept(f(g(h())))`.
+func (c *LiveChangeClient) Intercept(interceptors ...Interceptor) {
+	c.inters.LiveChange = append(c.inters.LiveChange, interceptors...)
+}
+
+// Create returns a builder for creating a LiveChange entity.
+func (c *LiveChangeClient) Create() *LiveChangeCreate {
+	mutation := newLiveChangeMutation(c.config, OpCreate)
+	return &LiveChangeCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of LiveChange entities.
+func (c *LiveChangeClient) CreateBulk(builders ...*LiveChangeCreate) *LiveChangeCreateBulk {
+	return &LiveChangeCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *LiveChangeClient) MapCreateBulk(slice any, setFunc func(*LiveChangeCreate, int)) *LiveChangeCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &LiveChangeCreateBulk{err: fmt.Errorf("calling to LiveChangeClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*LiveChangeCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &LiveChangeCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for LiveChange.
+func (c *LiveChangeClient) Update() *LiveChangeUpdate {
+	mutation := newLiveChangeMutation(c.config, OpUpdate)
+	return &LiveChangeUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *LiveChangeClient) UpdateOne(_m *LiveChange) *LiveChangeUpdateOne {
+	mutation := newLiveChangeMutation(c.config, OpUpdateOne, withLiveChange(_m))
+	return &LiveChangeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *LiveChangeClient) UpdateOneID(id int64) *LiveChangeUpdateOne {
+	mutation := newLiveChangeMutation(c.config, OpUpdateOne, withLiveChangeID(id))
+	return &LiveChangeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for LiveChange.
+func (c *LiveChangeClient) Delete() *LiveChangeDelete {
+	mutation := newLiveChangeMutation(c.config, OpDelete)
+	return &LiveChangeDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *LiveChangeClient) DeleteOne(_m *LiveChange) *LiveChangeDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *LiveChangeClient) DeleteOneID(id int64) *LiveChangeDeleteOne {
+	builder := c.Delete().Where(livechange.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &LiveChangeDeleteOne{builder}
+}
+
+// Query returns a query builder for LiveChange.
+func (c *LiveChangeClient) Query() *LiveChangeQuery {
+	return &LiveChangeQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeLiveChange},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a LiveChange entity by its id.
+func (c *LiveChangeClient) Get(ctx context.Context, id int64) (*LiveChange, error) {
+	return c.Query().Where(livechange.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *LiveChangeClient) GetX(ctx context.Context, id int64) *LiveChange {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *LiveChangeClient) Hooks() []Hook {
+	return c.hooks.LiveChange
+}
+
+// Interceptors returns the client interceptors.
+func (c *LiveChangeClient) Interceptors() []Interceptor {
+	return c.inters.LiveChange
+}
+
+func (c *LiveChangeClient) mutate(ctx context.Context, m *LiveChangeMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&LiveChangeCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&LiveChangeUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&LiveChangeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&LiveChangeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown LiveChange mutation op: %q", m.Op())
 	}
 }
 
@@ -7152,10 +7293,10 @@ type (
 		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
 		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
 		IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
-		ItemSurface, ListView, Operation, OperationItem, Publication, Relationship,
-		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder,
-		SyncState, SyncToken, SyncView, Term, TermGroup, TermSet, WebDAVCredential,
-		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		ItemSurface, ListView, LiveChange, Operation, OperationItem, Publication,
+		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
+		SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup, TermSet,
+		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
 		WorkflowVersion []ent.Hook
 	}
 	inters struct {
@@ -7163,10 +7304,10 @@ type (
 		DomainEvent, FieldDefinition, FieldValue, Grant, IdentityAssignment,
 		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
 		IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory, ItemRevision,
-		ItemSurface, ListView, Operation, OperationItem, Publication, Relationship,
-		RelationshipType, Resource, SchemaRevision, SchemaTemplate, SmartFolder,
-		SyncState, SyncToken, SyncView, Term, TermGroup, TermSet, WebDAVCredential,
-		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		ItemSurface, ListView, LiveChange, Operation, OperationItem, Publication,
+		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
+		SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup, TermSet,
+		WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
 		WorkflowVersion []ent.Interceptor
 	}
 )

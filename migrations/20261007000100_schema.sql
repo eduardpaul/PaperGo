@@ -189,7 +189,8 @@ CREATE TABLE workflow_runs (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, workflow_id TEXT NOT NULL REFERENCES workflows(id),
  workflow_version INTEGER NOT NULL CHECK(workflow_version>0), workspace_id TEXT NOT NULL REFERENCES resources(id),
  item_id TEXT, event_id TEXT NOT NULL, event_type TEXT NOT NULL,
- depth INTEGER NOT NULL CHECK(depth>=0), actor TEXT NOT NULL, retry_of TEXT
+ depth INTEGER NOT NULL CHECK(depth>=0), actor TEXT NOT NULL, retry_of TEXT,
+ live_status TEXT NOT NULL DEFAULT 'queued',live_updated_at INTEGER NOT NULL DEFAULT 0 CHECK(live_updated_at>=0)
 );
 CREATE TABLE workflow_run_items (
  id TEXT PRIMARY KEY NOT NULL, run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
@@ -695,3 +696,15 @@ CREATE INDEX auditevent_subject_created_at ON audit_events(subject,created_at);
 CREATE INDEX auditevent_entity_type_entity_id_created_at ON audit_events(entity_type,entity_id,created_at);
 
 CREATE INDEX operation_status_updated_at ON operations(status,updated_at);
+
+-- Notification positions contain no retained content.
+CREATE TABLE live_changes(id INTEGER PRIMARY KEY AUTOINCREMENT,created_at DATETIME NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('item','operation','run','access')),entity_id TEXT NOT NULL CHECK(length(entity_id) BETWEEN 1 AND 200),action TEXT NOT NULL);
+CREATE INDEX livechange_created_at ON live_changes(created_at);
+CREATE TRIGGER live_item_create AFTER INSERT ON resources WHEN new.kind IN ('item','folder') BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'item',new.id,'created');END;
+CREATE TRIGGER live_item_update AFTER UPDATE ON resources WHEN new.kind IN ('item','folder') AND (old.version<>new.version OR old.deleted_at IS NOT new.deleted_at) BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'item',new.id,CASE WHEN new.deleted_at IS NOT NULL THEN 'deleted' ELSE 'updated' END);END;
+CREATE TRIGGER live_item_purge AFTER DELETE ON resources WHEN old.kind IN ('item','folder') BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'item',old.id,'deleted');END;
+CREATE TRIGGER live_operation_create AFTER INSERT ON operations BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'operation',new.id,'created');END;
+CREATE TRIGGER live_operation_update AFTER UPDATE ON operations BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'operation',new.id,'updated');END;
+CREATE TRIGGER live_run_create AFTER INSERT ON workflow_runs BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'run',new.id,'created');END;
+CREATE TRIGGER live_run_update AFTER UPDATE OF live_status,live_updated_at,workspace_id ON workflow_runs WHEN old.live_status<>new.live_status OR old.live_updated_at<>new.live_updated_at OR old.workspace_id<>new.workspace_id BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'run',new.id,'updated');END;
+CREATE TRIGGER live_access_change AFTER INSERT ON audit_events WHEN new.action IN ('permissions.replace','workspace.member.set','workspace.member.remove','group.member','role.assignment','role.update','role.delete','user.status','user.delete','resource.delete','resource.purge') BEGIN INSERT INTO live_changes(created_at,kind,entity_id,action) VALUES(strftime('%Y-%m-%d %H:%M:%f+00:00','now'),'access',new.id,'changed');END;

@@ -35,7 +35,6 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P2 · SRC-03 · Drift:** A query such as invoice OR receipt means different things and result order is not relevance.
 - **P2 · SRC-04 · Missing:** Metadata grouping does not replace ranked document/page search navigation.
 - **P2 · SRC-06 · Missing:** Administrators cannot run the same repair/rebuild workflow.
-- **P2 · JOB-03 · Missing:** Clients must poll and cannot receive equivalent live updates.
 - **P2 · JOB-04 · Partial:** Custom synchronous cancellation/transformation and general subscriber extension stories are absent.
 - **P2 · WF-03 · Partial:** Cron is available; date-per-item deduplication, module trigger families and webhook ingress are missing.
 - **P2 · WF-04 · Missing:** Cannot express 'only when status changes from X to Y' with the same trigger contract.

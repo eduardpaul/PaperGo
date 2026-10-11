@@ -72,6 +72,9 @@ type ItemSurface func(*sql.Selector)
 // ListView is the predicate function for listview builders.
 type ListView func(*sql.Selector)
 
+// LiveChange is the predicate function for livechange builders.
+type LiveChange func(*sql.Selector)
+
 // Operation is the predicate function for operation builders.
 type Operation func(*sql.Selector)
 

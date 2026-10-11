@@ -26,6 +26,7 @@ import (
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/listview"
+	"papergo/ent/livechange"
 	"papergo/ent/operation"
 	"papergo/ent/operationitem"
 	"papergo/ent/publication"
@@ -974,6 +975,38 @@ func init() {
 	listview.DefaultID = listviewDescID.Default.(func() string)
 	// listview.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	listview.IDValidator = listviewDescID.Validators[0].(func(string) error)
+	livechangeFields := schema.LiveChange{}.Fields()
+	_ = livechangeFields
+	// livechangeDescCreatedAt is the schema descriptor for created_at field.
+	livechangeDescCreatedAt := livechangeFields[1].Descriptor()
+	// livechange.DefaultCreatedAt holds the default value on creation for the created_at field.
+	livechange.DefaultCreatedAt = livechangeDescCreatedAt.Default.(func() time.Time)
+	// livechangeDescEntityID is the schema descriptor for entity_id field.
+	livechangeDescEntityID := livechangeFields[3].Descriptor()
+	// livechange.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	livechange.EntityIDValidator = func() func(string) error {
+		validators := livechangeDescEntityID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(entity_id string) error {
+			for _, fn := range fns {
+				if err := fn(entity_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// livechangeDescAction is the schema descriptor for action field.
+	livechangeDescAction := livechangeFields[4].Descriptor()
+	// livechange.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	livechange.ActionValidator = livechangeDescAction.Validators[0].(func(string) error)
+	// livechangeDescID is the schema descriptor for id field.
+	livechangeDescID := livechangeFields[0].Descriptor()
+	// livechange.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	livechange.IDValidator = livechangeDescID.Validators[0].(func(int64) error)
 	operationMixin := schema.Operation{}.Mixin()
 	operationMixinFields0 := operationMixin[0].Fields()
 	_ = operationMixinFields0
@@ -2067,6 +2100,16 @@ func init() {
 	workflowrunDescDepth := workflowrunFields[8].Descriptor()
 	// workflowrun.DepthValidator is a validator for the "depth" field. It is called by the builders before save.
 	workflowrun.DepthValidator = workflowrunDescDepth.Validators[0].(func(int) error)
+	// workflowrunDescLiveStatus is the schema descriptor for live_status field.
+	workflowrunDescLiveStatus := workflowrunFields[10].Descriptor()
+	// workflowrun.DefaultLiveStatus holds the default value on creation for the live_status field.
+	workflowrun.DefaultLiveStatus = workflowrunDescLiveStatus.Default.(string)
+	// workflowrunDescLiveUpdatedAt is the schema descriptor for live_updated_at field.
+	workflowrunDescLiveUpdatedAt := workflowrunFields[11].Descriptor()
+	// workflowrun.DefaultLiveUpdatedAt holds the default value on creation for the live_updated_at field.
+	workflowrun.DefaultLiveUpdatedAt = workflowrunDescLiveUpdatedAt.Default.(int64)
+	// workflowrun.LiveUpdatedAtValidator is a validator for the "live_updated_at" field. It is called by the builders before save.
+	workflowrun.LiveUpdatedAtValidator = workflowrunDescLiveUpdatedAt.Validators[0].(func(int64) error)
 	workflowrunitemFields := schema.WorkflowRunItem{}.Fields()
 	_ = workflowrunitemFields
 	// workflowrunitemDescRunID is the schema descriptor for run_id field.

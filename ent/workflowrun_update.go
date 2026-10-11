@@ -41,6 +41,41 @@ func (_u *WorkflowRunUpdate) SetNillableWorkspaceID(v *string) *WorkflowRunUpdat
 	return _u
 }
 
+// SetLiveStatus sets the "live_status" field.
+func (_u *WorkflowRunUpdate) SetLiveStatus(v string) *WorkflowRunUpdate {
+	_u.mutation.SetLiveStatus(v)
+	return _u
+}
+
+// SetNillableLiveStatus sets the "live_status" field if the given value is not nil.
+func (_u *WorkflowRunUpdate) SetNillableLiveStatus(v *string) *WorkflowRunUpdate {
+	if v != nil {
+		_u.SetLiveStatus(*v)
+	}
+	return _u
+}
+
+// SetLiveUpdatedAt sets the "live_updated_at" field.
+func (_u *WorkflowRunUpdate) SetLiveUpdatedAt(v int64) *WorkflowRunUpdate {
+	_u.mutation.ResetLiveUpdatedAt()
+	_u.mutation.SetLiveUpdatedAt(v)
+	return _u
+}
+
+// SetNillableLiveUpdatedAt sets the "live_updated_at" field if the given value is not nil.
+func (_u *WorkflowRunUpdate) SetNillableLiveUpdatedAt(v *int64) *WorkflowRunUpdate {
+	if v != nil {
+		_u.SetLiveUpdatedAt(*v)
+	}
+	return _u
+}
+
+// AddLiveUpdatedAt adds value to the "live_updated_at" field.
+func (_u *WorkflowRunUpdate) AddLiveUpdatedAt(v int64) *WorkflowRunUpdate {
+	_u.mutation.AddLiveUpdatedAt(v)
+	return _u
+}
+
 // Mutation returns the WorkflowRunMutation object of the builder.
 func (_u *WorkflowRunUpdate) Mutation() *WorkflowRunMutation {
 	return _u.mutation
@@ -80,6 +115,11 @@ func (_u *WorkflowRunUpdate) check() error {
 			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowRun.workspace_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.LiveUpdatedAt(); ok {
+		if err := workflowrun.LiveUpdatedAtValidator(v); err != nil {
+			return &ValidationError{Name: "live_updated_at", err: fmt.Errorf(`ent: validator failed for field "WorkflowRun.live_updated_at": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -100,6 +140,15 @@ func (_u *WorkflowRunUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.ItemIDCleared() {
 		_spec.ClearField(workflowrun.FieldItemID, field.TypeString)
+	}
+	if value, ok := _u.mutation.LiveStatus(); ok {
+		_spec.SetField(workflowrun.FieldLiveStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LiveUpdatedAt(); ok {
+		_spec.SetField(workflowrun.FieldLiveUpdatedAt, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedLiveUpdatedAt(); ok {
+		_spec.AddField(workflowrun.FieldLiveUpdatedAt, field.TypeInt64, value)
 	}
 	if _u.mutation.RetryOfCleared() {
 		_spec.ClearField(workflowrun.FieldRetryOf, field.TypeString)
@@ -135,6 +184,41 @@ func (_u *WorkflowRunUpdateOne) SetNillableWorkspaceID(v *string) *WorkflowRunUp
 	if v != nil {
 		_u.SetWorkspaceID(*v)
 	}
+	return _u
+}
+
+// SetLiveStatus sets the "live_status" field.
+func (_u *WorkflowRunUpdateOne) SetLiveStatus(v string) *WorkflowRunUpdateOne {
+	_u.mutation.SetLiveStatus(v)
+	return _u
+}
+
+// SetNillableLiveStatus sets the "live_status" field if the given value is not nil.
+func (_u *WorkflowRunUpdateOne) SetNillableLiveStatus(v *string) *WorkflowRunUpdateOne {
+	if v != nil {
+		_u.SetLiveStatus(*v)
+	}
+	return _u
+}
+
+// SetLiveUpdatedAt sets the "live_updated_at" field.
+func (_u *WorkflowRunUpdateOne) SetLiveUpdatedAt(v int64) *WorkflowRunUpdateOne {
+	_u.mutation.ResetLiveUpdatedAt()
+	_u.mutation.SetLiveUpdatedAt(v)
+	return _u
+}
+
+// SetNillableLiveUpdatedAt sets the "live_updated_at" field if the given value is not nil.
+func (_u *WorkflowRunUpdateOne) SetNillableLiveUpdatedAt(v *int64) *WorkflowRunUpdateOne {
+	if v != nil {
+		_u.SetLiveUpdatedAt(*v)
+	}
+	return _u
+}
+
+// AddLiveUpdatedAt adds value to the "live_updated_at" field.
+func (_u *WorkflowRunUpdateOne) AddLiveUpdatedAt(v int64) *WorkflowRunUpdateOne {
+	_u.mutation.AddLiveUpdatedAt(v)
 	return _u
 }
 
@@ -190,6 +274,11 @@ func (_u *WorkflowRunUpdateOne) check() error {
 			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowRun.workspace_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.LiveUpdatedAt(); ok {
+		if err := workflowrun.LiveUpdatedAtValidator(v); err != nil {
+			return &ValidationError{Name: "live_updated_at", err: fmt.Errorf(`ent: validator failed for field "WorkflowRun.live_updated_at": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -227,6 +316,15 @@ func (_u *WorkflowRunUpdateOne) sqlSave(ctx context.Context) (_node *WorkflowRun
 	}
 	if _u.mutation.ItemIDCleared() {
 		_spec.ClearField(workflowrun.FieldItemID, field.TypeString)
+	}
+	if value, ok := _u.mutation.LiveStatus(); ok {
+		_spec.SetField(workflowrun.FieldLiveStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LiveUpdatedAt(); ok {
+		_spec.SetField(workflowrun.FieldLiveUpdatedAt, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedLiveUpdatedAt(); ok {
+		_spec.AddField(workflowrun.FieldLiveUpdatedAt, field.TypeInt64, value)
 	}
 	if _u.mutation.RetryOfCleared() {
 		_spec.ClearField(workflowrun.FieldRetryOf, field.TypeString)
