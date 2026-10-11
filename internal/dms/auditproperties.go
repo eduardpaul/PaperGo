@@ -160,7 +160,7 @@ func (s *Service) changedProperties(id, action string) []string {
 
 func auditEntity(action string, r *ent.Resource, details map[string]any) (string, string) {
 	prefix := strings.Split(action, ".")[0]
-	keys := map[string]string{"term": "term_id", "keyword": "term_id", "term_set": "term_set_id", "term_group": "term_group_id", "relationship": "relationship_id", "relationship_type": "relationship_type_id", "field": "field_id", "content_type": "content_type_id", "view": "view_id", "template": "template_id", "smart_folder": "smart_folder_id", "workflow": "workflow_id", "bulk_update": "operation_id", "webdav_credential": "webdav_credential_id"}
+	keys := map[string]string{"term": "term_id", "keyword": "term_id", "term_set": "term_set_id", "term_group": "term_group_id", "relationship": "relationship_id", "relationship_type": "relationship_type_id", "field": "field_id", "content_type": "content_type_id", "view": "view_id", "template": "template_id", "smart_folder": "smart_folder_id", "workflow": "workflow_id", "bulk_update": "operation_id", "webdav_credential": "webdav_credential_id", "operation": "operation_id"}
 	if key := keys[prefix]; key != "" {
 		if id, ok := details[key].(string); ok && id != "" {
 			return prefix, id

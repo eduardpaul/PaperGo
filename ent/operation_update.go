@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"papergo/ent/operation"
@@ -27,6 +28,58 @@ type OperationUpdate struct {
 // Where appends a list predicates to the OperationUpdate builder.
 func (_u *OperationUpdate) Where(ps ...predicate.Operation) *OperationUpdate {
 	_u.mutation.Where(ps...)
+	return _u
+}
+
+// SetResult sets the "result" field.
+func (_u *OperationUpdate) SetResult(v jsontext.Value) *OperationUpdate {
+	_u.mutation.SetResult(v)
+	return _u
+}
+
+// AppendResult appends value to the "result" field.
+func (_u *OperationUpdate) AppendResult(v jsontext.Value) *OperationUpdate {
+	_u.mutation.AppendResult(v)
+	return _u
+}
+
+// SetStartedAt sets the "started_at" field.
+func (_u *OperationUpdate) SetStartedAt(v time.Time) *OperationUpdate {
+	_u.mutation.SetStartedAt(v)
+	return _u
+}
+
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (_u *OperationUpdate) SetNillableStartedAt(v *time.Time) *OperationUpdate {
+	if v != nil {
+		_u.SetStartedAt(*v)
+	}
+	return _u
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (_u *OperationUpdate) ClearStartedAt() *OperationUpdate {
+	_u.mutation.ClearStartedAt()
+	return _u
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (_u *OperationUpdate) SetCompletedAt(v time.Time) *OperationUpdate {
+	_u.mutation.SetCompletedAt(v)
+	return _u
+}
+
+// SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
+func (_u *OperationUpdate) SetNillableCompletedAt(v *time.Time) *OperationUpdate {
+	if v != nil {
+		_u.SetCompletedAt(*v)
+	}
+	return _u
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (_u *OperationUpdate) ClearCompletedAt() *OperationUpdate {
+	_u.mutation.ClearCompletedAt()
 	return _u
 }
 
@@ -301,9 +354,6 @@ func (_u *OperationUpdate) check() error {
 			return &ValidationError{Name: "progress", err: fmt.Errorf(`ent: validator failed for field "Operation.progress": %w`, err)}
 		}
 	}
-	if _u.mutation.ContainerCleared() && len(_u.mutation.ContainerIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Operation.container"`)
-	}
 	return nil
 }
 
@@ -318,6 +368,29 @@ func (_u *OperationUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.CredentialIDCleared() {
+		_spec.ClearField(operation.FieldCredentialID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Result(); ok {
+		_spec.SetField(operation.FieldResult, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedResult(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, operation.FieldResult, value)
+		})
+	}
+	if value, ok := _u.mutation.StartedAt(); ok {
+		_spec.SetField(operation.FieldStartedAt, field.TypeTime, value)
+	}
+	if _u.mutation.StartedAtCleared() {
+		_spec.ClearField(operation.FieldStartedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CompletedAt(); ok {
+		_spec.SetField(operation.FieldCompletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CompletedAtCleared() {
+		_spec.ClearField(operation.FieldCompletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(operation.FieldStatus, field.TypeEnum, value)
@@ -393,6 +466,58 @@ type OperationUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *OperationMutation
+}
+
+// SetResult sets the "result" field.
+func (_u *OperationUpdateOne) SetResult(v jsontext.Value) *OperationUpdateOne {
+	_u.mutation.SetResult(v)
+	return _u
+}
+
+// AppendResult appends value to the "result" field.
+func (_u *OperationUpdateOne) AppendResult(v jsontext.Value) *OperationUpdateOne {
+	_u.mutation.AppendResult(v)
+	return _u
+}
+
+// SetStartedAt sets the "started_at" field.
+func (_u *OperationUpdateOne) SetStartedAt(v time.Time) *OperationUpdateOne {
+	_u.mutation.SetStartedAt(v)
+	return _u
+}
+
+// SetNillableStartedAt sets the "started_at" field if the given value is not nil.
+func (_u *OperationUpdateOne) SetNillableStartedAt(v *time.Time) *OperationUpdateOne {
+	if v != nil {
+		_u.SetStartedAt(*v)
+	}
+	return _u
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (_u *OperationUpdateOne) ClearStartedAt() *OperationUpdateOne {
+	_u.mutation.ClearStartedAt()
+	return _u
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (_u *OperationUpdateOne) SetCompletedAt(v time.Time) *OperationUpdateOne {
+	_u.mutation.SetCompletedAt(v)
+	return _u
+}
+
+// SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
+func (_u *OperationUpdateOne) SetNillableCompletedAt(v *time.Time) *OperationUpdateOne {
+	if v != nil {
+		_u.SetCompletedAt(*v)
+	}
+	return _u
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (_u *OperationUpdateOne) ClearCompletedAt() *OperationUpdateOne {
+	_u.mutation.ClearCompletedAt()
+	return _u
 }
 
 // SetStatus sets the "status" field.
@@ -679,9 +804,6 @@ func (_u *OperationUpdateOne) check() error {
 			return &ValidationError{Name: "progress", err: fmt.Errorf(`ent: validator failed for field "Operation.progress": %w`, err)}
 		}
 	}
-	if _u.mutation.ContainerCleared() && len(_u.mutation.ContainerIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Operation.container"`)
-	}
 	return nil
 }
 
@@ -713,6 +835,29 @@ func (_u *OperationUpdateOne) sqlSave(ctx context.Context) (_node *Operation, er
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.CredentialIDCleared() {
+		_spec.ClearField(operation.FieldCredentialID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Result(); ok {
+		_spec.SetField(operation.FieldResult, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedResult(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, operation.FieldResult, value)
+		})
+	}
+	if value, ok := _u.mutation.StartedAt(); ok {
+		_spec.SetField(operation.FieldStartedAt, field.TypeTime, value)
+	}
+	if _u.mutation.StartedAtCleared() {
+		_spec.ClearField(operation.FieldStartedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CompletedAt(); ok {
+		_spec.SetField(operation.FieldCompletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CompletedAtCleared() {
+		_spec.ClearField(operation.FieldCompletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(operation.FieldStatus, field.TypeEnum, value)

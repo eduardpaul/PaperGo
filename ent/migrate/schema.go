@@ -796,7 +796,13 @@ var (
 		{Name: "id", Type: field.TypeString, Size: 36},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "field_id", Type: field.TypeString, Default: ""},
-		{Name: "kind", Type: field.TypeEnum, Enums: []string{"field_index", "bulk_update"}},
+		{Name: "kind", Type: field.TypeString, Size: 64},
+		{Name: "trace_id", Type: field.TypeString},
+		{Name: "credential_id", Type: field.TypeString, Nullable: true},
+		{Name: "credential_scopes", Type: field.TypeJSON},
+		{Name: "result", Type: field.TypeJSON},
+		{Name: "started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "succeeded", "failed", "superseded"}, Default: "pending"},
 		{Name: "surface", Type: field.TypeEnum, Enums: []string{"head", "published"}, Default: "head"},
 		{Name: "after_item_id", Type: field.TypeString, Default: ""},
@@ -811,7 +817,7 @@ var (
 		{Name: "error", Type: field.TypeString, Default: ""},
 		{Name: "created_by", Type: field.TypeString},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "container_id", Type: field.TypeString, Size: 36},
+		{Name: "container_id", Type: field.TypeString, Nullable: true, Size: 36},
 	}
 	// OperationsTable holds the schema information for the "operations" table.
 	OperationsTable = &schema.Table{
@@ -821,21 +827,26 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "operations_resources_container",
-				Columns:    []*schema.Column{OperationsColumns[18]},
+				Columns:    []*schema.Column{OperationsColumns[24]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.SetNull,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "operation_status_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{OperationsColumns[4], OperationsColumns[1]},
+				Columns: []*schema.Column{OperationsColumns[10], OperationsColumns[1]},
 			},
 			{
 				Name:    "operation_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{OperationsColumns[18], OperationsColumns[0]},
+				Columns: []*schema.Column{OperationsColumns[24], OperationsColumns[0]},
+			},
+			{
+				Name:    "operation_status_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{OperationsColumns[10], OperationsColumns[23]},
 			},
 		},
 	}

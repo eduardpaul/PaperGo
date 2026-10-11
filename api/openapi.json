@@ -3569,7 +3569,7 @@
     "/v1/resources/{id}/operations": {
       "get": {
         "summary": "Operations",
-        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access.",
+        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage.",
         "operationId": "operations",
         "parameters": [
           {
@@ -3820,7 +3820,7 @@
             }
           }
         },
-        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access."
+        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access. Terminal records and results expire 30 days after their last update; pending work survives restarts. Collection index operations are readable with collection access; other kinds require the initiating user. Organization operations additionally require organization.manage."
       }
     },
     "/v1/resources/{id}/views": {
@@ -15546,7 +15546,7 @@
       },
       "Operation": {
         "type": "object",
-        "description": "Tracked field_index or bulk_update background operation. Indexing converges one field in short batches; later field changes supersede it. Filtered updates commit each item independently, survive restarts, and report failures without rolling back successful edits. Bulk details require the starter and collection read access.",
+        "description": "Tracked operation executed by a registered handler in bounded transactional batches. Field indexing and filtered bulk edits are built in. Payloads and credential constraints are private; progress and results are visible through operation reads. Terminal records expire after 30 days without an update. Pending work resumes after restart; handlers must be registered before workers start.",
         "properties": {
           "id": {
             "type": "string"
@@ -15568,10 +15568,9 @@
           },
           "kind": {
             "type": "string",
-            "enum": [
-              "field_index",
-              "bulk_update"
-            ]
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Registered operation kind; field_index and bulk_update are built in."
           },
           "status": {
             "type": "string",
@@ -15619,11 +15618,24 @@
             "items": {
               "$ref": "#/components/schemas/OperationFailure"
             }
+          },
+          "result": {
+            "description": "Handler result; handlers may expose partial results before completion."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "trace_id": {
+            "type": "string"
           }
         },
         "required": [
           "id",
-          "container_id",
           "field_id",
           "kind",
           "status"

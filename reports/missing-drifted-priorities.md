@@ -1,6 +1,6 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 65 open comparisons: 45 missing, 11 partial, 9 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 64 open comparisons: 45 missing, 10 partial, 9 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
@@ -20,7 +20,7 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P1 · TSK-01 · Missing:** No task template, task-specific validation/assignment lifecycle or task views are registered. Person fields alone do not implement task behavior.
 - **P1 · TSK-04 · Missing:** Cannot port a personal task dashboard or document follow-up.
 
-## P2 (42)
+## P2 (41)
 
 - **P2 · TEN-01 · Drift:** Multi-organization hosting requires an explicit scope decision; workspace ACLs alone do not provide tenant isolation.
 - **P2 · TEN-02 · Missing:** Separate organizations cannot be provisioned and resolved by host in one service.
@@ -35,7 +35,6 @@ Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, f
 - **P2 · SRC-03 · Drift:** A query such as invoice OR receipt means different things and result order is not relevance.
 - **P2 · SRC-04 · Missing:** Metadata grouping does not replace ranked document/page search navigation.
 - **P2 · SRC-06 · Missing:** Administrators cannot run the same repair/rebuild workflow.
-- **P2 · JOB-02 · Partial:** No general operation-handler registry or equivalent document/search/provisioning operation families and expiry cleanup.
 - **P2 · JOB-03 · Missing:** Clients must poll and cannot receive equivalent live updates.
 - **P2 · JOB-04 · Partial:** Custom synchronous cancellation/transformation and general subscriber extension stories are absent.
 - **P2 · WF-03 · Partial:** Cron is available; date-per-item deduplication, module trigger families and webhook ingress are missing.

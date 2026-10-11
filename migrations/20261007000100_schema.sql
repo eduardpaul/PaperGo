@@ -121,8 +121,10 @@ CREATE TABLE list_views (
  is_default BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
 );
 CREATE TABLE operations (
- id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,container_id TEXT NOT NULL REFERENCES resources(id),
- field_id TEXT NOT NULL DEFAULT '',kind TEXT NOT NULL CHECK(kind IN ('field_index','bulk_update')),
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,container_id TEXT REFERENCES resources(id),
+ field_id TEXT NOT NULL DEFAULT '',kind TEXT NOT NULL CHECK(length(kind) BETWEEN 1 AND 64),
+ trace_id TEXT NOT NULL,credential_id TEXT,credential_scopes JSON NOT NULL DEFAULT '[]' CHECK(json_valid(credential_scopes) AND json_type(credential_scopes)='array'),
+ result JSON NOT NULL DEFAULT '{}' CHECK(json_valid(result)),started_at DATETIME,completed_at DATETIME,
  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','succeeded','failed','superseded')),
  surface TEXT NOT NULL DEFAULT 'head' CHECK(surface IN ('head','published')),after_item_id TEXT NOT NULL DEFAULT '',
  processed INTEGER NOT NULL DEFAULT 0 CHECK(processed>=0),error TEXT NOT NULL DEFAULT '',created_by TEXT NOT NULL,
@@ -691,3 +693,5 @@ CREATE INDEX synctoken_page_expires_at ON sync_tokens(page_expires_at);
 CREATE INDEX auditevent_created_at_id ON audit_events(created_at,id);
 CREATE INDEX auditevent_subject_created_at ON audit_events(subject,created_at);
 CREATE INDEX auditevent_entity_type_entity_id_created_at ON audit_events(entity_type,entity_id,created_at);
+
+CREATE INDEX operation_status_updated_at ON operations(status,updated_at);

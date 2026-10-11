@@ -251,3 +251,9 @@ Tests cover foreign-key/integrity checks, exact defaults and filters, schema pai
 
 Queries, grouping and saved views accept $created_at, $created_by, $modified_at, and $modified_by alongside $id, $name and $tags. Modification time and actor describe the selected immutable content revision: readers cannot infer draft actors or times. Creation metadata describes item creation. Times accept RFC3339 values and normalize to UTC with nanosecond precision. Dedicated collection/surface indexes cover these metadata fields; no custom field configuration is needed.
 
+
+## Background operations
+
+Operations dispatch through handlers registered at startup. Each handler validates its payload, declares its module scope, and commits bounded batches with durable progress or a final result. Field indexing and filtered bulk edits use this registry. Other handlers can follow the same contract. Queued personal-token work retains its granted scopes and fails if the credential is revoked or expires; current account, role and resource permissions are rechecked between batches. Index maintenance completes the configuration change that scheduled it.
+
+`GET /v1/operations/{id}` returns status, progress, result, trace ID and start/completion timestamps. Collection index jobs are visible to collection readers; other operations belong to their initiator, and organization jobs require `organization.manage`. Terminal records and results expire after 30 days without an update. Hourly maintenance collects these records and expired delta data; pending operations remain available for restart recovery.

@@ -28,7 +28,19 @@ type Operation struct {
 	// FieldID holds the value of the "field_id" field.
 	FieldID string `json:"field_id,omitempty"`
 	// Kind holds the value of the "kind" field.
-	Kind operation.Kind `json:"kind,omitempty"`
+	Kind string `json:"kind,omitempty"`
+	// TraceID holds the value of the "trace_id" field.
+	TraceID string `json:"trace_id,omitempty"`
+	// CredentialID holds the value of the "credential_id" field.
+	CredentialID string `json:"-"`
+	// CredentialScopes holds the value of the "credential_scopes" field.
+	CredentialScopes []string `json:"-"`
+	// Result holds the value of the "result" field.
+	Result jsontext.Value `json:"result,omitempty"`
+	// StartedAt holds the value of the "started_at" field.
+	StartedAt *time.Time `json:"started_at,omitempty"`
+	// CompletedAt holds the value of the "completed_at" field.
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	// Status holds the value of the "status" field.
 	Status operation.Status `json:"status,omitempty"`
 	// Surface holds the value of the "surface" field.
@@ -88,15 +100,15 @@ func (*Operation) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case operation.FieldPayload, operation.FieldFailures:
+		case operation.FieldCredentialScopes, operation.FieldResult, operation.FieldPayload, operation.FieldFailures:
 			values[i] = new([]byte)
 		case operation.FieldPrepared:
 			values[i] = new(sql.NullBool)
 		case operation.FieldProcessed, operation.FieldMatched, operation.FieldUpdated, operation.FieldFailed, operation.FieldProgress:
 			values[i] = new(sql.NullInt64)
-		case operation.FieldID, operation.FieldContainerID, operation.FieldFieldID, operation.FieldKind, operation.FieldStatus, operation.FieldSurface, operation.FieldAfterItemID, operation.FieldError, operation.FieldCreatedBy:
+		case operation.FieldID, operation.FieldContainerID, operation.FieldFieldID, operation.FieldKind, operation.FieldTraceID, operation.FieldCredentialID, operation.FieldStatus, operation.FieldSurface, operation.FieldAfterItemID, operation.FieldError, operation.FieldCreatedBy:
 			values[i] = new(sql.NullString)
-		case operation.FieldCreatedAt, operation.FieldUpdatedAt:
+		case operation.FieldCreatedAt, operation.FieldStartedAt, operation.FieldCompletedAt, operation.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -141,7 +153,49 @@ func (_m *Operation) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field kind", values[i])
 			} else if value.Valid {
-				_m.Kind = operation.Kind(value.String)
+				_m.Kind = value.String
+			}
+		case operation.FieldTraceID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field trace_id", values[i])
+			} else if value.Valid {
+				_m.TraceID = value.String
+			}
+		case operation.FieldCredentialID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field credential_id", values[i])
+			} else if value.Valid {
+				_m.CredentialID = value.String
+			}
+		case operation.FieldCredentialScopes:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field credential_scopes", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CredentialScopes); err != nil {
+					return fmt.Errorf("unmarshal field credential_scopes: %w", err)
+				}
+			}
+		case operation.FieldResult:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field result", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Result); err != nil {
+					return fmt.Errorf("unmarshal field result: %w", err)
+				}
+			}
+		case operation.FieldStartedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field started_at", values[i])
+			} else if value.Valid {
+				_m.StartedAt = new(time.Time)
+				*_m.StartedAt = value.Time
+			}
+		case operation.FieldCompletedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field completed_at", values[i])
+			} else if value.Valid {
+				_m.CompletedAt = new(time.Time)
+				*_m.CompletedAt = value.Time
 			}
 		case operation.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -282,7 +336,29 @@ func (_m *Operation) String() string {
 	builder.WriteString(_m.FieldID)
 	builder.WriteString(", ")
 	builder.WriteString("kind=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Kind))
+	builder.WriteString(_m.Kind)
+	builder.WriteString(", ")
+	builder.WriteString("trace_id=")
+	builder.WriteString(_m.TraceID)
+	builder.WriteString(", ")
+	builder.WriteString("credential_id=")
+	builder.WriteString(_m.CredentialID)
+	builder.WriteString(", ")
+	builder.WriteString("credential_scopes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CredentialScopes))
+	builder.WriteString(", ")
+	builder.WriteString("result=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Result))
+	builder.WriteString(", ")
+	if v := _m.StartedAt; v != nil {
+		builder.WriteString("started_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.CompletedAt; v != nil {
+		builder.WriteString("completed_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Status))

@@ -16716,39 +16716,47 @@ func (m *ListViewMutation) ResetEdge(name string) error {
 // OperationMutation represents an operation that mutates the Operation nodes in the graph.
 type OperationMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *string
-	created_at       *time.Time
-	field_id         *string
-	kind             *operation.Kind
-	status           *operation.Status
-	surface          *operation.Surface
-	after_item_id    *string
-	processed        *int
-	addprocessed     *int
-	payload          *jsontext.Value
-	appendpayload    jsontext.Value
-	prepared         *bool
-	matched          *int
-	addmatched       *int
-	updated          *int
-	addupdated       *int
-	failed           *int
-	addfailed        *int
-	progress         *int
-	addprogress      *int
-	failures         *[]model.OperationFailure
-	appendfailures   []model.OperationFailure
-	error            *string
-	created_by       *string
-	updated_at       *time.Time
-	clearedFields    map[string]struct{}
-	container        *string
-	clearedcontainer bool
-	done             bool
-	oldValue         func(context.Context) (*Operation, error)
-	predicates       []predicate.Operation
+	op                      Op
+	typ                     string
+	id                      *string
+	created_at              *time.Time
+	field_id                *string
+	kind                    *string
+	trace_id                *string
+	credential_id           *string
+	credential_scopes       *[]string
+	appendcredential_scopes []string
+	result                  *jsontext.Value
+	appendresult            jsontext.Value
+	started_at              *time.Time
+	completed_at            *time.Time
+	status                  *operation.Status
+	surface                 *operation.Surface
+	after_item_id           *string
+	processed               *int
+	addprocessed            *int
+	payload                 *jsontext.Value
+	appendpayload           jsontext.Value
+	prepared                *bool
+	matched                 *int
+	addmatched              *int
+	updated                 *int
+	addupdated              *int
+	failed                  *int
+	addfailed               *int
+	progress                *int
+	addprogress             *int
+	failures                *[]model.OperationFailure
+	appendfailures          []model.OperationFailure
+	error                   *string
+	created_by              *string
+	updated_at              *time.Time
+	clearedFields           map[string]struct{}
+	container               *string
+	clearedcontainer        bool
+	done                    bool
+	oldValue                func(context.Context) (*Operation, error)
+	predicates              []predicate.Operation
 }
 
 var _ ent.Mutation = (*OperationMutation)(nil)
@@ -16922,9 +16930,22 @@ func (m *OperationMutation) OldContainerID(ctx context.Context) (v string, err e
 	return oldValue.ContainerID, nil
 }
 
+// ClearContainerID clears the value of the "container_id" field.
+func (m *OperationMutation) ClearContainerID() {
+	m.container = nil
+	m.clearedFields[operation.FieldContainerID] = struct{}{}
+}
+
+// ContainerIDCleared returns if the "container_id" field was cleared in this mutation.
+func (m *OperationMutation) ContainerIDCleared() bool {
+	_, ok := m.clearedFields[operation.FieldContainerID]
+	return ok
+}
+
 // ResetContainerID resets all changes to the "container_id" field.
 func (m *OperationMutation) ResetContainerID() {
 	m.container = nil
+	delete(m.clearedFields, operation.FieldContainerID)
 }
 
 // SetFieldID sets the "field_id" field.
@@ -16964,12 +16985,12 @@ func (m *OperationMutation) ResetFieldID() {
 }
 
 // SetKind sets the "kind" field.
-func (m *OperationMutation) SetKind(o operation.Kind) {
-	m.kind = &o
+func (m *OperationMutation) SetKind(s string) {
+	m.kind = &s
 }
 
 // Kind returns the value of the "kind" field in the mutation.
-func (m *OperationMutation) Kind() (r operation.Kind, exists bool) {
+func (m *OperationMutation) Kind() (r string, exists bool) {
 	v := m.kind
 	if v == nil {
 		return
@@ -16980,7 +17001,7 @@ func (m *OperationMutation) Kind() (r operation.Kind, exists bool) {
 // OldKind returns the old "kind" field's value of the Operation entity.
 // If the Operation object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *OperationMutation) OldKind(ctx context.Context) (v operation.Kind, err error) {
+func (m *OperationMutation) OldKind(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldKind is only allowed on UpdateOne operations")
 	}
@@ -16997,6 +17018,291 @@ func (m *OperationMutation) OldKind(ctx context.Context) (v operation.Kind, err 
 // ResetKind resets all changes to the "kind" field.
 func (m *OperationMutation) ResetKind() {
 	m.kind = nil
+}
+
+// SetTraceID sets the "trace_id" field.
+func (m *OperationMutation) SetTraceID(s string) {
+	m.trace_id = &s
+}
+
+// TraceID returns the value of the "trace_id" field in the mutation.
+func (m *OperationMutation) TraceID() (r string, exists bool) {
+	v := m.trace_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTraceID returns the old "trace_id" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldTraceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTraceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTraceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTraceID: %w", err)
+	}
+	return oldValue.TraceID, nil
+}
+
+// ResetTraceID resets all changes to the "trace_id" field.
+func (m *OperationMutation) ResetTraceID() {
+	m.trace_id = nil
+}
+
+// SetCredentialID sets the "credential_id" field.
+func (m *OperationMutation) SetCredentialID(s string) {
+	m.credential_id = &s
+}
+
+// CredentialID returns the value of the "credential_id" field in the mutation.
+func (m *OperationMutation) CredentialID() (r string, exists bool) {
+	v := m.credential_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCredentialID returns the old "credential_id" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldCredentialID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCredentialID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCredentialID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCredentialID: %w", err)
+	}
+	return oldValue.CredentialID, nil
+}
+
+// ClearCredentialID clears the value of the "credential_id" field.
+func (m *OperationMutation) ClearCredentialID() {
+	m.credential_id = nil
+	m.clearedFields[operation.FieldCredentialID] = struct{}{}
+}
+
+// CredentialIDCleared returns if the "credential_id" field was cleared in this mutation.
+func (m *OperationMutation) CredentialIDCleared() bool {
+	_, ok := m.clearedFields[operation.FieldCredentialID]
+	return ok
+}
+
+// ResetCredentialID resets all changes to the "credential_id" field.
+func (m *OperationMutation) ResetCredentialID() {
+	m.credential_id = nil
+	delete(m.clearedFields, operation.FieldCredentialID)
+}
+
+// SetCredentialScopes sets the "credential_scopes" field.
+func (m *OperationMutation) SetCredentialScopes(s []string) {
+	m.credential_scopes = &s
+	m.appendcredential_scopes = nil
+}
+
+// CredentialScopes returns the value of the "credential_scopes" field in the mutation.
+func (m *OperationMutation) CredentialScopes() (r []string, exists bool) {
+	v := m.credential_scopes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCredentialScopes returns the old "credential_scopes" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldCredentialScopes(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCredentialScopes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCredentialScopes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCredentialScopes: %w", err)
+	}
+	return oldValue.CredentialScopes, nil
+}
+
+// AppendCredentialScopes adds s to the "credential_scopes" field.
+func (m *OperationMutation) AppendCredentialScopes(s []string) {
+	m.appendcredential_scopes = append(m.appendcredential_scopes, s...)
+}
+
+// AppendedCredentialScopes returns the list of values that were appended to the "credential_scopes" field in this mutation.
+func (m *OperationMutation) AppendedCredentialScopes() ([]string, bool) {
+	if len(m.appendcredential_scopes) == 0 {
+		return nil, false
+	}
+	return m.appendcredential_scopes, true
+}
+
+// ResetCredentialScopes resets all changes to the "credential_scopes" field.
+func (m *OperationMutation) ResetCredentialScopes() {
+	m.credential_scopes = nil
+	m.appendcredential_scopes = nil
+}
+
+// SetResult sets the "result" field.
+func (m *OperationMutation) SetResult(j jsontext.Value) {
+	m.result = &j
+	m.appendresult = nil
+}
+
+// Result returns the value of the "result" field in the mutation.
+func (m *OperationMutation) Result() (r jsontext.Value, exists bool) {
+	v := m.result
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResult returns the old "result" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldResult(ctx context.Context) (v jsontext.Value, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResult is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResult requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResult: %w", err)
+	}
+	return oldValue.Result, nil
+}
+
+// AppendResult adds j to the "result" field.
+func (m *OperationMutation) AppendResult(j jsontext.Value) {
+	m.appendresult = append(m.appendresult, j...)
+}
+
+// AppendedResult returns the list of values that were appended to the "result" field in this mutation.
+func (m *OperationMutation) AppendedResult() (jsontext.Value, bool) {
+	if len(m.appendresult) == 0 {
+		return nil, false
+	}
+	return m.appendresult, true
+}
+
+// ResetResult resets all changes to the "result" field.
+func (m *OperationMutation) ResetResult() {
+	m.result = nil
+	m.appendresult = nil
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *OperationMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *OperationMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldStartedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (m *OperationMutation) ClearStartedAt() {
+	m.started_at = nil
+	m.clearedFields[operation.FieldStartedAt] = struct{}{}
+}
+
+// StartedAtCleared returns if the "started_at" field was cleared in this mutation.
+func (m *OperationMutation) StartedAtCleared() bool {
+	_, ok := m.clearedFields[operation.FieldStartedAt]
+	return ok
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *OperationMutation) ResetStartedAt() {
+	m.started_at = nil
+	delete(m.clearedFields, operation.FieldStartedAt)
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (m *OperationMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *OperationMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedAt returns the old "completed_at" field's value of the Operation entity.
+// If the Operation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OperationMutation) OldCompletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (m *OperationMutation) ClearCompletedAt() {
+	m.completed_at = nil
+	m.clearedFields[operation.FieldCompletedAt] = struct{}{}
+}
+
+// CompletedAtCleared returns if the "completed_at" field was cleared in this mutation.
+func (m *OperationMutation) CompletedAtCleared() bool {
+	_, ok := m.clearedFields[operation.FieldCompletedAt]
+	return ok
+}
+
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *OperationMutation) ResetCompletedAt() {
+	m.completed_at = nil
+	delete(m.clearedFields, operation.FieldCompletedAt)
 }
 
 // SetStatus sets the "status" field.
@@ -17641,7 +17947,7 @@ func (m *OperationMutation) ClearContainer() {
 
 // ContainerCleared reports if the "container" edge to the Resource entity was cleared.
 func (m *OperationMutation) ContainerCleared() bool {
-	return m.clearedcontainer
+	return m.ContainerIDCleared() || m.clearedcontainer
 }
 
 // ContainerIDs returns the "container" edge IDs in the mutation.
@@ -17694,7 +18000,7 @@ func (m *OperationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *OperationMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 24)
 	if m.created_at != nil {
 		fields = append(fields, operation.FieldCreatedAt)
 	}
@@ -17706,6 +18012,24 @@ func (m *OperationMutation) Fields() []string {
 	}
 	if m.kind != nil {
 		fields = append(fields, operation.FieldKind)
+	}
+	if m.trace_id != nil {
+		fields = append(fields, operation.FieldTraceID)
+	}
+	if m.credential_id != nil {
+		fields = append(fields, operation.FieldCredentialID)
+	}
+	if m.credential_scopes != nil {
+		fields = append(fields, operation.FieldCredentialScopes)
+	}
+	if m.result != nil {
+		fields = append(fields, operation.FieldResult)
+	}
+	if m.started_at != nil {
+		fields = append(fields, operation.FieldStartedAt)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, operation.FieldCompletedAt)
 	}
 	if m.status != nil {
 		fields = append(fields, operation.FieldStatus)
@@ -17765,6 +18089,18 @@ func (m *OperationMutation) Field(name string) (ent.Value, bool) {
 		return m.FieldID()
 	case operation.FieldKind:
 		return m.Kind()
+	case operation.FieldTraceID:
+		return m.TraceID()
+	case operation.FieldCredentialID:
+		return m.CredentialID()
+	case operation.FieldCredentialScopes:
+		return m.CredentialScopes()
+	case operation.FieldResult:
+		return m.Result()
+	case operation.FieldStartedAt:
+		return m.StartedAt()
+	case operation.FieldCompletedAt:
+		return m.CompletedAt()
 	case operation.FieldStatus:
 		return m.Status()
 	case operation.FieldSurface:
@@ -17810,6 +18146,18 @@ func (m *OperationMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldFieldID(ctx)
 	case operation.FieldKind:
 		return m.OldKind(ctx)
+	case operation.FieldTraceID:
+		return m.OldTraceID(ctx)
+	case operation.FieldCredentialID:
+		return m.OldCredentialID(ctx)
+	case operation.FieldCredentialScopes:
+		return m.OldCredentialScopes(ctx)
+	case operation.FieldResult:
+		return m.OldResult(ctx)
+	case operation.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case operation.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
 	case operation.FieldStatus:
 		return m.OldStatus(ctx)
 	case operation.FieldSurface:
@@ -17869,11 +18217,53 @@ func (m *OperationMutation) SetField(name string, value ent.Value) error {
 		m.SetFieldID(v)
 		return nil
 	case operation.FieldKind:
-		v, ok := value.(operation.Kind)
+		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetKind(v)
+		return nil
+	case operation.FieldTraceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTraceID(v)
+		return nil
+	case operation.FieldCredentialID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCredentialID(v)
+		return nil
+	case operation.FieldCredentialScopes:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCredentialScopes(v)
+		return nil
+	case operation.FieldResult:
+		v, ok := value.(jsontext.Value)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResult(v)
+		return nil
+	case operation.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case operation.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
 		return nil
 	case operation.FieldStatus:
 		v, ok := value.(operation.Status)
@@ -18065,7 +18455,20 @@ func (m *OperationMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *OperationMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(operation.FieldContainerID) {
+		fields = append(fields, operation.FieldContainerID)
+	}
+	if m.FieldCleared(operation.FieldCredentialID) {
+		fields = append(fields, operation.FieldCredentialID)
+	}
+	if m.FieldCleared(operation.FieldStartedAt) {
+		fields = append(fields, operation.FieldStartedAt)
+	}
+	if m.FieldCleared(operation.FieldCompletedAt) {
+		fields = append(fields, operation.FieldCompletedAt)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -18078,6 +18481,20 @@ func (m *OperationMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *OperationMutation) ClearField(name string) error {
+	switch name {
+	case operation.FieldContainerID:
+		m.ClearContainerID()
+		return nil
+	case operation.FieldCredentialID:
+		m.ClearCredentialID()
+		return nil
+	case operation.FieldStartedAt:
+		m.ClearStartedAt()
+		return nil
+	case operation.FieldCompletedAt:
+		m.ClearCompletedAt()
+		return nil
+	}
 	return fmt.Errorf("unknown Operation nullable field %s", name)
 }
 
@@ -18096,6 +18513,24 @@ func (m *OperationMutation) ResetField(name string) error {
 		return nil
 	case operation.FieldKind:
 		m.ResetKind()
+		return nil
+	case operation.FieldTraceID:
+		m.ResetTraceID()
+		return nil
+	case operation.FieldCredentialID:
+		m.ResetCredentialID()
+		return nil
+	case operation.FieldCredentialScopes:
+		m.ResetCredentialScopes()
+		return nil
+	case operation.FieldResult:
+		m.ResetResult()
+		return nil
+	case operation.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case operation.FieldCompletedAt:
+		m.ResetCompletedAt()
 		return nil
 	case operation.FieldStatus:
 		m.ResetStatus()

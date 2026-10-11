@@ -31,11 +31,12 @@ type Service struct {
 	collectionTemplates map[string]CollectionTemplate
 	auditProperties     map[string]map[string]bool
 	traceID             string
+	operationHandlers   map[string]OperationHandler
 }
 
 // NewService serves the PaperGo database db.
 func NewService(db *sql.DB) *Service {
-	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates()}
+	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates(), operationHandlers: builtInOperationHandlers()}
 }
 
 // OnCommit calls f after each committed write that recorded domain events,
@@ -92,7 +93,7 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
 	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
-	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates}
+	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers}
 	t.traceID = requestmeta.Trace(ctx)
 	t.captureAuditProperties()
 	if err := fn(t); err != nil {
@@ -131,7 +132,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates})
+	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers})
 	if err != nil {
 		return out, err
 	}

@@ -46,6 +46,28 @@ type restTokenContextKey struct{}
 func WithRESTToken(ctx context.Context, token RESTTokenIdentity) context.Context {
 	return context.WithValue(ctx, restTokenContextKey{}, token)
 }
+
+func RESTTokenContext(ctx context.Context) (RESTTokenIdentity, bool) {
+	token, limited := ctx.Value(restTokenContextKey{}).(RESTTokenIdentity)
+	return token, limited
+}
+
+// Revalidate long-lived requests and queued work without retaining the secret.
+func RequireCredential(ctx context.Context, q Querier, subject string) error {
+	if err := RequireActive(ctx, q, subject); err != nil {
+		return err
+	}
+	if token, limited := RESTTokenContext(ctx); limited {
+		var valid bool
+		if err := q.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_rest_tokens WHERE id=? AND subject=? AND revoked_at IS NULL AND expires_at>?)", token.ID, subject, time.Now().UTC()).Scan(&valid); err != nil {
+			return err
+		}
+		if !valid {
+			return ErrInvalidRESTToken
+		}
+	}
+	return nil
+}
 func credentialAllows(ctx context.Context, scope string) bool {
 	token, limited := ctx.Value(restTokenContextKey{}).(RESTTokenIdentity)
 	if !limited {

@@ -9,7 +9,6 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"errors"
 	"github.com/google/uuid"
-	"log/slog"
 	"papergo/ent"
 	"papergo/ent/resource"
 	"papergo/ent/syncstate"
@@ -312,19 +311,4 @@ func (s *Service) CollectExpiredDeltas(ctx context.Context, now time.Time) error
 
 func sortDelta(entries []DeltaEntry) {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
-}
-
-func (s *Service) RunDeltaCleanup(ctx context.Context, log *slog.Logger) {
-	ticker := time.NewTicker(time.Hour)
-	defer ticker.Stop()
-	for {
-		if err := s.CollectExpiredDeltas(ctx, time.Now().UTC()); err != nil && ctx.Err() == nil {
-			log.Error("delta cleanup failed", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
 }

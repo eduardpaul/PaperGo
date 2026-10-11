@@ -987,44 +987,74 @@ func init() {
 	operationDescFieldID := operationFields[1].Descriptor()
 	// operation.DefaultFieldID holds the default value on creation for the field_id field.
 	operation.DefaultFieldID = operationDescFieldID.Default.(string)
+	// operationDescKind is the schema descriptor for kind field.
+	operationDescKind := operationFields[2].Descriptor()
+	// operation.KindValidator is a validator for the "kind" field. It is called by the builders before save.
+	operation.KindValidator = func() func(string) error {
+		validators := operationDescKind.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(kind string) error {
+			for _, fn := range fns {
+				if err := fn(kind); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// operationDescTraceID is the schema descriptor for trace_id field.
+	operationDescTraceID := operationFields[3].Descriptor()
+	// operation.DefaultTraceID holds the default value on creation for the trace_id field.
+	operation.DefaultTraceID = operationDescTraceID.Default.(func() string)
+	// operationDescCredentialScopes is the schema descriptor for credential_scopes field.
+	operationDescCredentialScopes := operationFields[5].Descriptor()
+	// operation.DefaultCredentialScopes holds the default value on creation for the credential_scopes field.
+	operation.DefaultCredentialScopes = operationDescCredentialScopes.Default.([]string)
+	// operationDescResult is the schema descriptor for result field.
+	operationDescResult := operationFields[6].Descriptor()
+	// operation.DefaultResult holds the default value on creation for the result field.
+	operation.DefaultResult = operationDescResult.Default.(jsontext.Value)
 	// operationDescAfterItemID is the schema descriptor for after_item_id field.
-	operationDescAfterItemID := operationFields[5].Descriptor()
+	operationDescAfterItemID := operationFields[11].Descriptor()
 	// operation.DefaultAfterItemID holds the default value on creation for the after_item_id field.
 	operation.DefaultAfterItemID = operationDescAfterItemID.Default.(string)
 	// operationDescProcessed is the schema descriptor for processed field.
-	operationDescProcessed := operationFields[6].Descriptor()
+	operationDescProcessed := operationFields[12].Descriptor()
 	// operation.DefaultProcessed holds the default value on creation for the processed field.
 	operation.DefaultProcessed = operationDescProcessed.Default.(int)
 	// operation.ProcessedValidator is a validator for the "processed" field. It is called by the builders before save.
 	operation.ProcessedValidator = operationDescProcessed.Validators[0].(func(int) error)
 	// operationDescPayload is the schema descriptor for payload field.
-	operationDescPayload := operationFields[7].Descriptor()
+	operationDescPayload := operationFields[13].Descriptor()
 	// operation.DefaultPayload holds the default value on creation for the payload field.
 	operation.DefaultPayload = operationDescPayload.Default.(jsontext.Value)
 	// operationDescPrepared is the schema descriptor for prepared field.
-	operationDescPrepared := operationFields[8].Descriptor()
+	operationDescPrepared := operationFields[14].Descriptor()
 	// operation.DefaultPrepared holds the default value on creation for the prepared field.
 	operation.DefaultPrepared = operationDescPrepared.Default.(bool)
 	// operationDescMatched is the schema descriptor for matched field.
-	operationDescMatched := operationFields[9].Descriptor()
+	operationDescMatched := operationFields[15].Descriptor()
 	// operation.DefaultMatched holds the default value on creation for the matched field.
 	operation.DefaultMatched = operationDescMatched.Default.(int)
 	// operation.MatchedValidator is a validator for the "matched" field. It is called by the builders before save.
 	operation.MatchedValidator = operationDescMatched.Validators[0].(func(int) error)
 	// operationDescUpdated is the schema descriptor for updated field.
-	operationDescUpdated := operationFields[10].Descriptor()
+	operationDescUpdated := operationFields[16].Descriptor()
 	// operation.DefaultUpdated holds the default value on creation for the updated field.
 	operation.DefaultUpdated = operationDescUpdated.Default.(int)
 	// operation.UpdatedValidator is a validator for the "updated" field. It is called by the builders before save.
 	operation.UpdatedValidator = operationDescUpdated.Validators[0].(func(int) error)
 	// operationDescFailed is the schema descriptor for failed field.
-	operationDescFailed := operationFields[11].Descriptor()
+	operationDescFailed := operationFields[17].Descriptor()
 	// operation.DefaultFailed holds the default value on creation for the failed field.
 	operation.DefaultFailed = operationDescFailed.Default.(int)
 	// operation.FailedValidator is a validator for the "failed" field. It is called by the builders before save.
 	operation.FailedValidator = operationDescFailed.Validators[0].(func(int) error)
 	// operationDescProgress is the schema descriptor for progress field.
-	operationDescProgress := operationFields[12].Descriptor()
+	operationDescProgress := operationFields[18].Descriptor()
 	// operation.DefaultProgress holds the default value on creation for the progress field.
 	operation.DefaultProgress = operationDescProgress.Default.(int)
 	// operation.ProgressValidator is a validator for the "progress" field. It is called by the builders before save.
@@ -1044,15 +1074,15 @@ func init() {
 		}
 	}()
 	// operationDescFailures is the schema descriptor for failures field.
-	operationDescFailures := operationFields[13].Descriptor()
+	operationDescFailures := operationFields[19].Descriptor()
 	// operation.DefaultFailures holds the default value on creation for the failures field.
 	operation.DefaultFailures = operationDescFailures.Default.([]model.OperationFailure)
 	// operationDescError is the schema descriptor for error field.
-	operationDescError := operationFields[14].Descriptor()
+	operationDescError := operationFields[20].Descriptor()
 	// operation.DefaultError holds the default value on creation for the error field.
 	operation.DefaultError = operationDescError.Default.(string)
 	// operationDescUpdatedAt is the schema descriptor for updated_at field.
-	operationDescUpdatedAt := operationFields[16].Descriptor()
+	operationDescUpdatedAt := operationFields[22].Descriptor()
 	// operation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	operation.DefaultUpdatedAt = operationDescUpdatedAt.Default.(func() time.Time)
 	// operation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
