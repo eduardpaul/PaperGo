@@ -1035,26 +1035,8 @@ func init() {
 	relationshipDescCreatedAt := relationshipMixinFields0[1].Descriptor()
 	// relationship.DefaultCreatedAt holds the default value on creation for the created_at field.
 	relationship.DefaultCreatedAt = relationshipDescCreatedAt.Default.(func() time.Time)
-	// relationshipDescWorkspaceID is the schema descriptor for workspace_id field.
-	relationshipDescWorkspaceID := relationshipFields[0].Descriptor()
-	// relationship.WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
-	relationship.WorkspaceIDValidator = func() func(string) error {
-		validators := relationshipDescWorkspaceID.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(workspace_id string) error {
-			for _, fn := range fns {
-				if err := fn(workspace_id); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
 	// relationshipDescSourceID is the schema descriptor for source_id field.
-	relationshipDescSourceID := relationshipFields[1].Descriptor()
+	relationshipDescSourceID := relationshipFields[0].Descriptor()
 	// relationship.SourceIDValidator is a validator for the "source_id" field. It is called by the builders before save.
 	relationship.SourceIDValidator = func() func(string) error {
 		validators := relationshipDescSourceID.Validators
@@ -1072,7 +1054,7 @@ func init() {
 		}
 	}()
 	// relationshipDescTargetID is the schema descriptor for target_id field.
-	relationshipDescTargetID := relationshipFields[2].Descriptor()
+	relationshipDescTargetID := relationshipFields[1].Descriptor()
 	// relationship.TargetIDValidator is a validator for the "target_id" field. It is called by the builders before save.
 	relationship.TargetIDValidator = func() func(string) error {
 		validators := relationshipDescTargetID.Validators
@@ -1090,21 +1072,21 @@ func init() {
 		}
 	}()
 	// relationshipDescTypeID is the schema descriptor for type_id field.
-	relationshipDescTypeID := relationshipFields[3].Descriptor()
+	relationshipDescTypeID := relationshipFields[2].Descriptor()
 	// relationship.TypeIDValidator is a validator for the "type_id" field. It is called by the builders before save.
 	relationship.TypeIDValidator = relationshipDescTypeID.Validators[0].(func(string) error)
 	// relationshipDescDirected is the schema descriptor for directed field.
-	relationshipDescDirected := relationshipFields[4].Descriptor()
+	relationshipDescDirected := relationshipFields[3].Descriptor()
 	// relationship.DefaultDirected holds the default value on creation for the directed field.
 	relationship.DefaultDirected = relationshipDescDirected.Default.(bool)
 	// relationshipDescVersion is the schema descriptor for version field.
-	relationshipDescVersion := relationshipFields[5].Descriptor()
+	relationshipDescVersion := relationshipFields[4].Descriptor()
 	// relationship.DefaultVersion holds the default value on creation for the version field.
 	relationship.DefaultVersion = relationshipDescVersion.Default.(int)
 	// relationship.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	relationship.VersionValidator = relationshipDescVersion.Validators[0].(func(int) error)
 	// relationshipDescMetadata is the schema descriptor for metadata field.
-	relationshipDescMetadata := relationshipFields[6].Descriptor()
+	relationshipDescMetadata := relationshipFields[5].Descriptor()
 	// relationship.DefaultMetadata holds the default value on creation for the metadata field.
 	relationship.DefaultMetadata = relationshipDescMetadata.Default.(map[string]interface{})
 	// relationshipDescID is the schema descriptor for id field.

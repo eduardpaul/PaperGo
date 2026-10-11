@@ -17577,7 +17577,6 @@ type RelationshipMutation struct {
 	typ                      string
 	id                       *string
 	created_at               *time.Time
-	workspace_id             *string
 	directed                 *bool
 	version                  *int
 	addversion               *int
@@ -17734,42 +17733,6 @@ func (m *RelationshipMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
-// SetWorkspaceID sets the "workspace_id" field.
-func (m *RelationshipMutation) SetWorkspaceID(s string) {
-	m.workspace_id = &s
-}
-
-// WorkspaceID returns the value of the "workspace_id" field in the mutation.
-func (m *RelationshipMutation) WorkspaceID() (r string, exists bool) {
-	v := m.workspace_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWorkspaceID returns the old "workspace_id" field's value of the Relationship entity.
-// If the Relationship object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RelationshipMutation) OldWorkspaceID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWorkspaceID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWorkspaceID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWorkspaceID: %w", err)
-	}
-	return oldValue.WorkspaceID, nil
-}
-
-// ResetWorkspaceID resets all changes to the "workspace_id" field.
-func (m *RelationshipMutation) ResetWorkspaceID() {
-	m.workspace_id = nil
-}
-
 // SetSourceID sets the "source_id" field.
 func (m *RelationshipMutation) SetSourceID(s string) {
 	m.source = &s
@@ -17873,9 +17836,22 @@ func (m *RelationshipMutation) OldTypeID(ctx context.Context) (v string, err err
 	return oldValue.TypeID, nil
 }
 
+// ClearTypeID clears the value of the "type_id" field.
+func (m *RelationshipMutation) ClearTypeID() {
+	m.relationship_type = nil
+	m.clearedFields[relationship.FieldTypeID] = struct{}{}
+}
+
+// TypeIDCleared returns if the "type_id" field was cleared in this mutation.
+func (m *RelationshipMutation) TypeIDCleared() bool {
+	_, ok := m.clearedFields[relationship.FieldTypeID]
+	return ok
+}
+
 // ResetTypeID resets all changes to the "type_id" field.
 func (m *RelationshipMutation) ResetTypeID() {
 	m.relationship_type = nil
+	delete(m.clearedFields, relationship.FieldTypeID)
 }
 
 // SetDirected sets the "directed" field.
@@ -18019,7 +17995,7 @@ func (m *RelationshipMutation) ClearRelationshipType() {
 
 // RelationshipTypeCleared reports if the "relationship_type" edge to the RelationshipType entity was cleared.
 func (m *RelationshipMutation) RelationshipTypeCleared() bool {
-	return m.clearedrelationship_type
+	return m.TypeIDCleared() || m.clearedrelationship_type
 }
 
 // RelationshipTypeID returns the "relationship_type" edge ID in the mutation.
@@ -18134,12 +18110,9 @@ func (m *RelationshipMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RelationshipMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 7)
 	if m.created_at != nil {
 		fields = append(fields, relationship.FieldCreatedAt)
-	}
-	if m.workspace_id != nil {
-		fields = append(fields, relationship.FieldWorkspaceID)
 	}
 	if m.source != nil {
 		fields = append(fields, relationship.FieldSourceID)
@@ -18169,8 +18142,6 @@ func (m *RelationshipMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case relationship.FieldCreatedAt:
 		return m.CreatedAt()
-	case relationship.FieldWorkspaceID:
-		return m.WorkspaceID()
 	case relationship.FieldSourceID:
 		return m.SourceID()
 	case relationship.FieldTargetID:
@@ -18194,8 +18165,6 @@ func (m *RelationshipMutation) OldField(ctx context.Context, name string) (ent.V
 	switch name {
 	case relationship.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
-	case relationship.FieldWorkspaceID:
-		return m.OldWorkspaceID(ctx)
 	case relationship.FieldSourceID:
 		return m.OldSourceID(ctx)
 	case relationship.FieldTargetID:
@@ -18223,13 +18192,6 @@ func (m *RelationshipMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCreatedAt(v)
-		return nil
-	case relationship.FieldWorkspaceID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWorkspaceID(v)
 		return nil
 	case relationship.FieldSourceID:
 		v, ok := value.(string)
@@ -18317,7 +18279,11 @@ func (m *RelationshipMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *RelationshipMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(relationship.FieldTypeID) {
+		fields = append(fields, relationship.FieldTypeID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -18330,6 +18296,11 @@ func (m *RelationshipMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *RelationshipMutation) ClearField(name string) error {
+	switch name {
+	case relationship.FieldTypeID:
+		m.ClearTypeID()
+		return nil
+	}
 	return fmt.Errorf("unknown Relationship nullable field %s", name)
 }
 
@@ -18339,9 +18310,6 @@ func (m *RelationshipMutation) ResetField(name string) error {
 	switch name {
 	case relationship.FieldCreatedAt:
 		m.ResetCreatedAt()
-		return nil
-	case relationship.FieldWorkspaceID:
-		m.ResetWorkspaceID()
 		return nil
 	case relationship.FieldSourceID:
 		m.ResetSourceID()

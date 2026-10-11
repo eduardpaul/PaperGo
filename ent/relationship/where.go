@@ -70,11 +70,6 @@ func CreatedAt(v time.Time) predicate.Relationship {
 	return predicate.Relationship(sql.FieldEQ(FieldCreatedAt, v))
 }
 
-// WorkspaceID applies equality check predicate on the "workspace_id" field. It's identical to WorkspaceIDEQ.
-func WorkspaceID(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldEQ(FieldWorkspaceID, v))
-}
-
 // SourceID applies equality check predicate on the "source_id" field. It's identical to SourceIDEQ.
 func SourceID(v string) predicate.Relationship {
 	return predicate.Relationship(sql.FieldEQ(FieldSourceID, v))
@@ -138,71 +133,6 @@ func CreatedAtLT(v time.Time) predicate.Relationship {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.Relationship {
 	return predicate.Relationship(sql.FieldLTE(FieldCreatedAt, v))
-}
-
-// WorkspaceIDEQ applies the EQ predicate on the "workspace_id" field.
-func WorkspaceIDEQ(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldEQ(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDNEQ applies the NEQ predicate on the "workspace_id" field.
-func WorkspaceIDNEQ(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldNEQ(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDIn applies the In predicate on the "workspace_id" field.
-func WorkspaceIDIn(vs ...string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldIn(FieldWorkspaceID, vs...))
-}
-
-// WorkspaceIDNotIn applies the NotIn predicate on the "workspace_id" field.
-func WorkspaceIDNotIn(vs ...string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldNotIn(FieldWorkspaceID, vs...))
-}
-
-// WorkspaceIDGT applies the GT predicate on the "workspace_id" field.
-func WorkspaceIDGT(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldGT(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDGTE applies the GTE predicate on the "workspace_id" field.
-func WorkspaceIDGTE(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldGTE(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDLT applies the LT predicate on the "workspace_id" field.
-func WorkspaceIDLT(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldLT(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDLTE applies the LTE predicate on the "workspace_id" field.
-func WorkspaceIDLTE(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldLTE(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDContains applies the Contains predicate on the "workspace_id" field.
-func WorkspaceIDContains(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldContains(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDHasPrefix applies the HasPrefix predicate on the "workspace_id" field.
-func WorkspaceIDHasPrefix(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldHasPrefix(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDHasSuffix applies the HasSuffix predicate on the "workspace_id" field.
-func WorkspaceIDHasSuffix(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldHasSuffix(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDEqualFold applies the EqualFold predicate on the "workspace_id" field.
-func WorkspaceIDEqualFold(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldEqualFold(FieldWorkspaceID, v))
-}
-
-// WorkspaceIDContainsFold applies the ContainsFold predicate on the "workspace_id" field.
-func WorkspaceIDContainsFold(v string) predicate.Relationship {
-	return predicate.Relationship(sql.FieldContainsFold(FieldWorkspaceID, v))
 }
 
 // SourceIDEQ applies the EQ predicate on the "source_id" field.
@@ -388,6 +318,16 @@ func TypeIDHasPrefix(v string) predicate.Relationship {
 // TypeIDHasSuffix applies the HasSuffix predicate on the "type_id" field.
 func TypeIDHasSuffix(v string) predicate.Relationship {
 	return predicate.Relationship(sql.FieldHasSuffix(FieldTypeID, v))
+}
+
+// TypeIDIsNil applies the IsNil predicate on the "type_id" field.
+func TypeIDIsNil() predicate.Relationship {
+	return predicate.Relationship(sql.FieldIsNull(FieldTypeID))
+}
+
+// TypeIDNotNil applies the NotNil predicate on the "type_id" field.
+func TypeIDNotNil() predicate.Relationship {
+	return predicate.Relationship(sql.FieldNotNull(FieldTypeID))
 }
 
 // TypeIDEqualFold applies the EqualFold predicate on the "type_id" field.

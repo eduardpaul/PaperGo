@@ -36,12 +36,6 @@ func (_c *RelationshipCreate) SetNillableCreatedAt(v *time.Time) *RelationshipCr
 	return _c
 }
 
-// SetWorkspaceID sets the "workspace_id" field.
-func (_c *RelationshipCreate) SetWorkspaceID(v string) *RelationshipCreate {
-	_c.mutation.SetWorkspaceID(v)
-	return _c
-}
-
 // SetSourceID sets the "source_id" field.
 func (_c *RelationshipCreate) SetSourceID(v string) *RelationshipCreate {
 	_c.mutation.SetSourceID(v)
@@ -57,6 +51,14 @@ func (_c *RelationshipCreate) SetTargetID(v string) *RelationshipCreate {
 // SetTypeID sets the "type_id" field.
 func (_c *RelationshipCreate) SetTypeID(v string) *RelationshipCreate {
 	_c.mutation.SetTypeID(v)
+	return _c
+}
+
+// SetNillableTypeID sets the "type_id" field if the given value is not nil.
+func (_c *RelationshipCreate) SetNillableTypeID(v *string) *RelationshipCreate {
+	if v != nil {
+		_c.SetTypeID(*v)
+	}
 	return _c
 }
 
@@ -111,6 +113,14 @@ func (_c *RelationshipCreate) SetNillableID(v *string) *RelationshipCreate {
 // SetRelationshipTypeID sets the "relationship_type" edge to the RelationshipType entity by ID.
 func (_c *RelationshipCreate) SetRelationshipTypeID(id string) *RelationshipCreate {
 	_c.mutation.SetRelationshipTypeID(id)
+	return _c
+}
+
+// SetNillableRelationshipTypeID sets the "relationship_type" edge to the RelationshipType entity by ID if the given value is not nil.
+func (_c *RelationshipCreate) SetNillableRelationshipTypeID(id *string) *RelationshipCreate {
+	if id != nil {
+		_c = _c.SetRelationshipTypeID(*id)
+	}
 	return _c
 }
 
@@ -191,14 +201,6 @@ func (_c *RelationshipCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Relationship.created_at"`)}
 	}
-	if _, ok := _c.mutation.WorkspaceID(); !ok {
-		return &ValidationError{Name: "workspace_id", err: errors.New(`ent: missing required field "Relationship.workspace_id"`)}
-	}
-	if v, ok := _c.mutation.WorkspaceID(); ok {
-		if err := relationship.WorkspaceIDValidator(v); err != nil {
-			return &ValidationError{Name: "workspace_id", err: fmt.Errorf(`ent: validator failed for field "Relationship.workspace_id": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.SourceID(); !ok {
 		return &ValidationError{Name: "source_id", err: errors.New(`ent: missing required field "Relationship.source_id"`)}
 	}
@@ -214,9 +216,6 @@ func (_c *RelationshipCreate) check() error {
 		if err := relationship.TargetIDValidator(v); err != nil {
 			return &ValidationError{Name: "target_id", err: fmt.Errorf(`ent: validator failed for field "Relationship.target_id": %w`, err)}
 		}
-	}
-	if _, ok := _c.mutation.TypeID(); !ok {
-		return &ValidationError{Name: "type_id", err: errors.New(`ent: missing required field "Relationship.type_id"`)}
 	}
 	if v, ok := _c.mutation.TypeID(); ok {
 		if err := relationship.TypeIDValidator(v); err != nil {
@@ -241,9 +240,6 @@ func (_c *RelationshipCreate) check() error {
 		if err := relationship.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "Relationship.id": %w`, err)}
 		}
-	}
-	if len(_c.mutation.RelationshipTypeIDs()) == 0 {
-		return &ValidationError{Name: "relationship_type", err: errors.New(`ent: missing required edge "Relationship.relationship_type"`)}
 	}
 	if len(_c.mutation.SourceIDs()) == 0 {
 		return &ValidationError{Name: "source", err: errors.New(`ent: missing required edge "Relationship.source"`)}
@@ -289,10 +285,6 @@ func (_c *RelationshipCreate) createSpec() (*Relationship, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(relationship.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
-	}
-	if value, ok := _c.mutation.WorkspaceID(); ok {
-		_spec.SetField(relationship.FieldWorkspaceID, field.TypeString, value)
-		_node.WorkspaceID = value
 	}
 	if value, ok := _c.mutation.Directed(); ok {
 		_spec.SetField(relationship.FieldDirected, field.TypeBool, value)

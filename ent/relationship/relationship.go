@@ -16,8 +16,6 @@ const (
 	FieldID = "id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
-	// FieldWorkspaceID holds the string denoting the workspace_id field in the database.
-	FieldWorkspaceID = "workspace_id"
 	// FieldSourceID holds the string denoting the source_id field in the database.
 	FieldSourceID = "source_id"
 	// FieldTargetID holds the string denoting the target_id field in the database.
@@ -65,7 +63,6 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
-	FieldWorkspaceID,
 	FieldSourceID,
 	FieldTargetID,
 	FieldTypeID,
@@ -87,8 +84,6 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
-	// WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
-	WorkspaceIDValidator func(string) error
 	// SourceIDValidator is a validator for the "source_id" field. It is called by the builders before save.
 	SourceIDValidator func(string) error
 	// TargetIDValidator is a validator for the "target_id" field. It is called by the builders before save.
@@ -120,11 +115,6 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
-}
-
-// ByWorkspaceID orders the results by the workspace_id field.
-func ByWorkspaceID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWorkspaceID, opts...).ToFunc()
 }
 
 // BySourceID orders the results by the source_id field.

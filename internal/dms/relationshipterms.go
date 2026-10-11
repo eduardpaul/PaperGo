@@ -75,7 +75,7 @@ func (s *Service) mergeRelationshipTerms(ctx context.Context, subject string, so
 			return err
 		}
 		if duplicate == nil {
-			if err = s.Client.Relationship.Create().SetID(edge.ID).SetCreatedAt(edge.CreatedAt).SetWorkspaceID(edge.WorkspaceID).SetSourceID(edge.SourceID).SetTargetID(edge.TargetID).SetTypeID(target.ID).SetDirected(edge.Directed).SetMetadata(edge.Metadata).SetVersion(edge.Version + 1).Exec(ctx); err != nil {
+			if err = s.Client.Relationship.Create().SetID(edge.ID).SetCreatedAt(edge.CreatedAt).SetSourceID(edge.SourceID).SetTargetID(edge.TargetID).SetTypeID(target.ID).SetDirected(edge.Directed).SetMetadata(edge.Metadata).SetVersion(edge.Version + 1).Exec(ctx); err != nil {
 				return err
 			}
 		}

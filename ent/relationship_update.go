@@ -93,9 +93,6 @@ func (_u *RelationshipUpdate) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Relationship.version": %w`, err)}
 		}
 	}
-	if _u.mutation.RelationshipTypeCleared() && len(_u.mutation.RelationshipTypeIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Relationship.relationship_type"`)
-	}
 	if _u.mutation.SourceCleared() && len(_u.mutation.SourceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Relationship.source"`)
 	}
@@ -224,9 +221,6 @@ func (_u *RelationshipUpdateOne) check() error {
 		if err := relationship.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Relationship.version": %w`, err)}
 		}
-	}
-	if _u.mutation.RelationshipTypeCleared() && len(_u.mutation.RelationshipTypeIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Relationship.relationship_type"`)
 	}
 	if _u.mutation.SourceCleared() && len(_u.mutation.SourceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Relationship.source"`)

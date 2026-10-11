@@ -294,12 +294,17 @@ func (s *Service) UpdateRelationship(ctx context.Context, subject, itemID, linkI
 		if b, e := json.Marshal(values); e != nil || len(b) > 16*1024 {
 			return invalid("metadata exceeds 16 KiB")
 		}
-		typ, e := t.Client.RelationshipType.Get(ctx, old.TypeID)
-		if e != nil {
+		if e = validateRelationshipAttributes(values); e != nil {
 			return e
 		}
-		if e = normalizeMetadata(typ.Attributes, values, old.Metadata); e != nil {
-			return e
+		if old.TypeID != "" {
+			typ, e := t.Client.RelationshipType.Get(ctx, old.TypeID)
+			if e != nil {
+				return e
+			}
+			if e = normalizeMetadata(typ.Attributes, values, old.Metadata); e != nil {
+				return e
+			}
 		}
 		out, e = t.Client.Relationship.UpdateOne(old).SetMetadata(values).AddVersion(1).Save(ctx)
 		if e != nil {

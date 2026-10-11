@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -12,25 +13,25 @@ type Relationship struct{ ent.Schema }
 func (Relationship) Mixin() []ent.Mixin { return []ent.Mixin{Identity{}} }
 func (Relationship) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("workspace_id").NotEmpty().Immutable().MaxLen(36),
 		field.String("source_id").NotEmpty().Immutable().MaxLen(36),
 		field.String("target_id").NotEmpty().Immutable().MaxLen(36),
-		field.String("type_id").NotEmpty().Immutable(),
-		field.Bool("directed").Default(true).Immutable(),
+		field.String("type_id").NotEmpty().Optional().Immutable(),
+		field.Bool("directed").Default(false).Immutable(),
 		field.Int("version").Default(1).Positive(),
 		field.JSON("metadata", map[string]any{}).Default(map[string]any{}),
 	}
 }
 func (Relationship) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.From("relationship_type", RelationshipType.Type).Ref("relationships").Field("type_id").Unique().Required().Immutable(),
+		edge.From("relationship_type", RelationshipType.Type).Ref("relationships").Field("type_id").Unique().Immutable(),
 		edge.From("source", Resource.Type).Ref("outgoing").Field("source_id").Unique().Required().Immutable(),
 		edge.From("target", Resource.Type).Ref("incoming").Field("target_id").Unique().Required().Immutable(),
 	}
 }
 func (Relationship) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("type_id", "source_id", "target_id").Unique(),
+		index.Fields("type_id", "source_id", "target_id", "directed").Unique(),
+		index.Fields("source_id", "target_id", "directed").Unique().Annotations(entsql.IndexWhere("type_id IS NULL")),
 		index.Fields("type_id", "target_id"),
 		index.Fields("source_id", "type_id", "id"),
 		index.Fields("source_id", "id"),

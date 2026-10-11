@@ -1109,7 +1109,7 @@
         "description": " Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply."
       },
       "post": {
-        "summary": "Create a named directional relationship",
+        "summary": "Create a typed or untyped relationship",
         "responses": {
           "201": {
             "description": "Success",
@@ -1143,7 +1143,7 @@
             }
           }
         },
-        "description": "Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
+        "description": "Endpoints may belong to different workspaces. Type is optional; untyped links default to symmetric and allow at most 64 scalar attributes and 16 KiB of JSON. Requires write permission on both endpoints. Ensures one edge for the type and endpoints; repeating creation returns the existing edge without changing metadata, version or audit history, even at a cardinality limit. Symmetric endpoints use canonical ordering. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Relationship changes advance both endpoint item ETags and modification timestamps and emit item.updated for both endpoints. Duplicate creates are no-ops.",
         "x-module-scopes": [
           "list.write"
         ]
@@ -14043,15 +14043,14 @@
           },
           "type": {
             "type": "string",
-            "description": "Active relationship term ID, name, localized label or synonym; new labels are ensured in the open set. Requires taxonomy.read."
+            "description": "Optional active relationship term ID, name, localized label or synonym. New labels are ensured in the open set. Typed links require taxonomy.read. Omit for an untyped link."
           },
           "directed": {
             "type": "boolean",
-            "description": "Optional direction when creating a predicate; must match an existing policy. New predicates default to symmetric."
+            "description": "Untyped links and new predicates default to symmetric. Explicit direction must match an existing typed policy."
           }
         },
         "required": [
-          "type",
           "target_id"
         ],
         "additionalProperties": false
@@ -14060,9 +14059,6 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
-          },
-          "workspace_id": {
             "type": "string"
           },
           "source_id": {

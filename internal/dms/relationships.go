@@ -2,7 +2,6 @@ package dms
 
 import (
 	"context"
-	"encoding/json"
 	"papergo/ent"
 	"papergo/ent/relationship"
 	"papergo/ent/resource"
@@ -10,28 +9,25 @@ import (
 	"unicode"
 )
 
-// Every relationship has a type; its name, direction, attributes and
-// cardinality all come from that type.
+// A typed relationship takes its direction, attributes and cardinality from its policy.
+// Untyped relationships accept a bounded scalar property bag.
 type CreateRelationship struct {
-	Type     string         `json:"type"`
+	Type     string         `json:"type,omitempty"`
 	Directed *bool          `json:"directed,omitempty"`
 	TargetID string         `json:"target_id"`
 	Metadata map[string]any `json:"metadata"`
 }
 
 func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateRelationship) (out *ent.Relationship, err error) {
-	if in.Type == "" {
-		return nil, invalid("type is required")
-	}
 	if sourceID == in.TargetID {
 		return nil, invalid("self relationships are not supported")
 	}
 	if in.Metadata == nil {
 		in.Metadata = map[string]any{}
 	}
-	encoded, e := json.Marshal(in.Metadata)
-	if e != nil || len(encoded) > 16*1024 {
-		return nil, invalid("relationship metadata is limited to 16 KiB")
+	in.Metadata = patchValues(map[string]any{}, in.Metadata)
+	if e := validateRelationshipAttributes(in.Metadata); e != nil {
+		return nil, e
 	}
 	err = s.write(ctx, func(t *Service) error {
 		source, e := t.authorize(ctx, subject, sourceID, "write")
@@ -45,32 +41,39 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 		if source.Kind != resource.KindItem || target.Kind != resource.KindItem {
 			return invalid("relationships connect items")
 		}
-		if source.WorkspaceID != target.WorkspaceID {
-			return invalid("relationships must remain within one workspace")
+		var typ *ent.RelationshipType
+		directed := false
+		if in.Directed != nil {
+			directed = *in.Directed
 		}
-		predicate, e := t.resolveRelationshipTerm(ctx, subject, in.Type, true)
-		if e != nil {
-			return e
-		}
-		typ, e := t.Client.RelationshipType.Get(ctx, predicate.ID)
-		if ent.IsNotFound(e) {
-			directed := false
-			if in.Directed != nil {
-				directed = *in.Directed
+		if in.Type != "" {
+			predicate, e := t.resolveRelationshipTerm(ctx, subject, in.Type, true)
+			if e != nil {
+				return e
 			}
-			typ, e = t.ensureRelationshipPolicy(ctx, subject, RelationshipTypeInput{Name: predicate.ID, Directed: directed})
-		}
-		if e != nil {
-			return e
-		}
-		if in.Directed != nil && *in.Directed != typ.Directed {
-			return invalid("direction differs from the relationship type")
+			typ, e = t.Client.RelationshipType.Get(ctx, predicate.ID)
+			if ent.IsNotFound(e) {
+				typ, e = t.ensureRelationshipPolicy(ctx, subject, RelationshipTypeInput{Name: predicate.ID, Directed: directed})
+			}
+			if e != nil {
+				return e
+			}
+			if in.Directed != nil && *in.Directed != typ.Directed {
+				return invalid("direction differs from the relationship type")
+			}
+			directed = typ.Directed
 		}
 		sourceKey, targetKey := sourceID, in.TargetID
-		if !typ.Directed && sourceKey > targetKey {
+		if !directed && sourceKey > targetKey {
 			sourceKey, targetKey = targetKey, sourceKey
 		}
-		existing, e := t.Client.Relationship.Query().Where(relationship.TypeIDEQ(typ.ID), relationship.SourceIDEQ(sourceKey), relationship.TargetIDEQ(targetKey)).Only(ctx)
+		q := t.Client.Relationship.Query().Where(relationship.SourceIDEQ(sourceKey), relationship.TargetIDEQ(targetKey), relationship.DirectedEQ(directed))
+		if typ == nil {
+			q.Where(relationship.TypeIDIsNil())
+		} else {
+			q.Where(relationship.TypeIDEQ(typ.ID))
+		}
+		existing, e := q.Only(ctx)
 		if e == nil {
 			out = existing
 			return nil
@@ -78,28 +81,34 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 		if !ent.IsNotFound(e) {
 			return e
 		}
-		if e = normalizeMetadata(typ.Attributes, in.Metadata, nil); e != nil {
-			return e
-		}
-		for i, max := range []*int{typ.MaxOutgoing, typ.MaxIncoming} {
-			if max == nil {
-				continue
-			}
-			q := t.Client.Relationship.Query().Where(relationship.TypeIDEQ(typ.ID))
-			if i == 0 {
-				q.Where(relationship.SourceIDEQ(sourceKey))
-			} else {
-				q.Where(relationship.TargetIDEQ(targetKey))
-			}
-			n, e := q.Count(ctx)
-			if e != nil {
+		if typ != nil {
+			if e = normalizeMetadata(typ.Attributes, in.Metadata, nil); e != nil {
 				return e
 			}
-			if n >= *max {
-				return ErrConflict
+			for i, max := range []*int{typ.MaxOutgoing, typ.MaxIncoming} {
+				if max == nil {
+					continue
+				}
+				q := t.Client.Relationship.Query().Where(relationship.TypeIDEQ(typ.ID))
+				if i == 0 {
+					q.Where(relationship.SourceIDEQ(sourceKey))
+				} else {
+					q.Where(relationship.TargetIDEQ(targetKey))
+				}
+				n, e := q.Count(ctx)
+				if e != nil {
+					return e
+				}
+				if n >= *max {
+					return ErrConflict
+				}
 			}
 		}
-		out, e = t.Client.Relationship.Create().SetWorkspaceID(source.WorkspaceID).SetSourceID(sourceKey).SetTargetID(targetKey).SetTypeID(typ.ID).SetMetadata(in.Metadata).SetDirected(typ.Directed).Save(ctx)
+		builder := t.Client.Relationship.Create().SetSourceID(sourceKey).SetTargetID(targetKey).SetMetadata(in.Metadata).SetDirected(directed)
+		if typ != nil {
+			builder.SetTypeID(typ.ID)
+		}
+		out, e = builder.Save(ctx)
 		if e != nil {
 			return e
 		}
