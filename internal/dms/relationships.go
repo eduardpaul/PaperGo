@@ -3,7 +3,6 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	entsql "entgo.io/ent/dialect/sql"
 	"papergo/ent"
 	"papergo/ent/relationship"
 	"papergo/ent/resource"
@@ -111,14 +110,14 @@ func (s *Service) Link(ctx context.Context, subject, sourceID string, in CreateR
 	})
 	return
 }
-func (s *Service) Relationships(ctx context.Context, subject, itemID, direction, typeValue, after string, limit int) (Page[*ent.Relationship], error) {
+func (s *Service) Relationships(ctx context.Context, subject, itemID, direction, typeValue, after string, limit int) (Page[RelationshipView], error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) (Page[*ent.Relationship], error) {
+		return read(ctx, s, func(t *Service) (Page[RelationshipView], error) {
 			return t.Relationships(ctx, subject, itemID, direction, typeValue, after, limit)
 		})
 	}
 	if _, err := s.Get(ctx, subject, itemID); err != nil {
-		return Page[*ent.Relationship]{}, err
+		return Page[RelationshipView]{}, err
 	}
 	q := s.Client.Relationship.Query()
 	switch direction {
@@ -129,32 +128,36 @@ func (s *Service) Relationships(ctx context.Context, subject, itemID, direction,
 	case "incoming":
 		q.Where(relationship.DirectedEQ(true), relationship.TargetIDEQ(itemID))
 	default:
-		return Page[*ent.Relationship]{}, invalid("direction must be both, outgoing or incoming")
+		return Page[RelationshipView]{}, invalid("direction must be both, outgoing or incoming")
 	}
 	if typeValue != "" {
 		predicate, err := s.resolveRelationshipTerm(ctx, subject, typeValue, false)
 		if err != nil {
-			return Page[*ent.Relationship]{}, err
+			return Page[RelationshipView]{}, err
 		}
 		if predicate == nil {
-			return Page[*ent.Relationship]{Data: []*ent.Relationship{}}, nil
+			return Page[RelationshipView]{Data: []RelationshipView{}}, nil
 		}
 		q.Where(relationship.TypeIDEQ(predicate.ID))
 	}
 	if after != "" {
 		q.Where(relationship.IDGT(after))
 	}
-	q.Where(func(sel *entsql.Selector) {
-		for _, field := range []string{relationship.FieldSourceID, relationship.FieldTargetID} {
-			id := sel.C(field)
-			acl, args := permissionSQL(id, subject, "read")
-			visible, visibleArgs := visibleSQL(id, subject, "auto")
-			args = append(args, visibleArgs...)
-			sel.Where(entsql.ExprP(acl+" AND "+visible, args...))
-		}
-	})
+	q.Where(relationshipVisibility(subject))
 	rows, err := q.Order(ent.Asc(relationship.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
-	return entityPage(rows, limit, func(v *ent.Relationship) string { return v.ID }), err
+	if err != nil {
+		return Page[RelationshipView]{}, err
+	}
+	page := entityPage(rows, limit, func(v *ent.Relationship) string { return v.ID })
+	out := Page[RelationshipView]{Data: []RelationshipView{}, NextCursor: page.NextCursor}
+	for _, edge := range page.Data {
+		view, err := s.relationshipView(ctx, subject, itemID, edge)
+		if err != nil {
+			return out, err
+		}
+		out.Data = append(out.Data, view)
+	}
+	return out, nil
 }
 
 // itemLink loads a relationship the item participates in at either endpoint.

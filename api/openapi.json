@@ -16,6 +16,85 @@
     }
   ],
   "paths": {
+    "/v1/workspaces/{id}/relationships": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Query visible edges incident to a workspace",
+        "description": "Both endpoints must be readable and visible. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.",
+        "parameters": [
+          {
+            "name": "$skiptoken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Relationship term ID or label, including synonyms and localized labels."
+          },
+          {
+            "name": "directed",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "$filter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRelationshipPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ]
+      }
+    },
     "/health/live": {
       "get": {
         "summary": "Process liveness",
@@ -963,7 +1042,7 @@
                     "value": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/Relationship"
+                        "$ref": "#/components/schemas/RelationshipView"
                       }
                     },
                     "@odata.nextLink": {
@@ -1091,6 +1170,36 @@
           }
         }
       ],
+      "get": {
+        "summary": "Read one edge with its located peer",
+        "description": "The item must participate in the edge and both endpoints must be visible. Required module scope: list.read.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipView"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Edge version; send it as If-Match when updating metadata."
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ]
+      },
       "delete": {
         "summary": "Delete an outgoing relationship",
         "responses": {
@@ -13113,6 +13222,95 @@
       }
     },
     "schemas": {
+      "WorkspaceRelationshipPage": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceRelationshipView"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
+        },
+        "required": [
+          "value",
+          "@odata.nextLink"
+        ]
+      },
+      "WorkspaceRelationshipView": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "source_item": {
+                "$ref": "#/components/schemas/LocatedItem"
+              },
+              "target_item": {
+                "$ref": "#/components/schemas/LocatedItem"
+              }
+            },
+            "required": [
+              "source_item",
+              "target_item"
+            ]
+          }
+        ]
+      },
+      "RelationshipView": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "related_item": {
+                "$ref": "#/components/schemas/LocatedItem"
+              }
+            },
+            "required": [
+              "related_item"
+            ]
+          }
+        ]
+      },
+      "LocatedItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "workspace_name": {
+                "type": "string"
+              },
+              "collection_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "collection_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "workspace_name",
+              "collection_id",
+              "collection_name"
+            ]
+          }
+        ]
+      },
       "Problem": {
         "type": "object",
         "properties": {

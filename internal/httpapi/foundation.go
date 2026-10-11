@@ -71,6 +71,8 @@ func entityETag(w http.ResponseWriter, v any) {
 		etag(w, x.Version)
 	case *ent.Relationship:
 		etag(w, x.Version)
+	case dms.RelationshipView:
+		etag(w, x.Version)
 	}
 }
 func foundationRead(a *API, fn func(*http.Request) (any, error)) http.HandlerFunc {
@@ -216,6 +218,10 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 	m.HandleFunc("GET /v1/relationship-types/{id}", foundationRead(a, func(r *http.Request) (any, error) {
 		return a.DMS.RelationshipType(r.Context(), subject(r), r.PathValue("id"))
 	}))
+	m.HandleFunc("GET /v1/items/{id}/relationships/{linkID}", foundationRead(a, func(r *http.Request) (any, error) {
+		return a.DMS.Relationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"))
+	}))
+	m.HandleFunc("GET /v1/workspaces/{id}/relationships", a.workspaceRelationships)
 	m.HandleFunc("PATCH /v1/items/{id}/relationships/{linkID}", foundationMutation(a, 200, true, func(r *http.Request, in dms.UpdateRelationship, v int) (any, error) {
 		return a.DMS.UpdateRelationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"), v, in)
 	}))
