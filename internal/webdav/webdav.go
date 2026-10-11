@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
+	"papergo/internal/identity"
 	"papergo/internal/storage"
 	"strings"
 )
@@ -138,6 +139,9 @@ func (h *Handler) authenticate(r *http.Request) (string, error) {
 		}
 		if err = h.DMS.Directory().EnsureUser(r.Context(), subject); err != nil {
 			return "", err
+		}
+		if err = identity.RequireActive(r.Context(), h.DMS.Directory().DB, subject); err != nil {
+			return "", dms.ErrForbidden
 		}
 		return subject, nil
 	case strings.EqualFold(scheme, "Basic"):

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"papergo/ent/identityuser"
 	"papergo/ent/predicate"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -24,6 +25,54 @@ type IdentityUserUpdate struct {
 // Where appends a list predicates to the IdentityUserUpdate builder.
 func (_u *IdentityUserUpdate) Where(ps ...predicate.IdentityUser) *IdentityUserUpdate {
 	_u.mutation.Where(ps...)
+	return _u
+}
+
+// SetDisplayName sets the "display_name" field.
+func (_u *IdentityUserUpdate) SetDisplayName(v string) *IdentityUserUpdate {
+	_u.mutation.SetDisplayName(v)
+	return _u
+}
+
+// SetNillableDisplayName sets the "display_name" field if the given value is not nil.
+func (_u *IdentityUserUpdate) SetNillableDisplayName(v *string) *IdentityUserUpdate {
+	if v != nil {
+		_u.SetDisplayName(*v)
+	}
+	return _u
+}
+
+// SetEmail sets the "email" field.
+func (_u *IdentityUserUpdate) SetEmail(v string) *IdentityUserUpdate {
+	_u.mutation.SetEmail(v)
+	return _u
+}
+
+// SetNillableEmail sets the "email" field if the given value is not nil.
+func (_u *IdentityUserUpdate) SetNillableEmail(v *string) *IdentityUserUpdate {
+	if v != nil {
+		_u.SetEmail(*v)
+	}
+	return _u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *IdentityUserUpdate) SetDeletedAt(v time.Time) *IdentityUserUpdate {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *IdentityUserUpdate) SetNillableDeletedAt(v *time.Time) *IdentityUserUpdate {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *IdentityUserUpdate) ClearDeletedAt() *IdentityUserUpdate {
+	_u.mutation.ClearDeletedAt()
 	return _u
 }
 
@@ -82,6 +131,18 @@ func (_u *IdentityUserUpdate) sqlSave(ctx context.Context) (_node int, err error
 			}
 		}
 	}
+	if value, ok := _u.mutation.DisplayName(); ok {
+		_spec.SetField(identityuser.FieldDisplayName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Email(); ok {
+		_spec.SetField(identityuser.FieldEmail, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(identityuser.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(identityuser.FieldDeletedAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.Active(); ok {
 		_spec.SetField(identityuser.FieldActive, field.TypeBool, value)
 	}
@@ -103,6 +164,54 @@ type IdentityUserUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *IdentityUserMutation
+}
+
+// SetDisplayName sets the "display_name" field.
+func (_u *IdentityUserUpdateOne) SetDisplayName(v string) *IdentityUserUpdateOne {
+	_u.mutation.SetDisplayName(v)
+	return _u
+}
+
+// SetNillableDisplayName sets the "display_name" field if the given value is not nil.
+func (_u *IdentityUserUpdateOne) SetNillableDisplayName(v *string) *IdentityUserUpdateOne {
+	if v != nil {
+		_u.SetDisplayName(*v)
+	}
+	return _u
+}
+
+// SetEmail sets the "email" field.
+func (_u *IdentityUserUpdateOne) SetEmail(v string) *IdentityUserUpdateOne {
+	_u.mutation.SetEmail(v)
+	return _u
+}
+
+// SetNillableEmail sets the "email" field if the given value is not nil.
+func (_u *IdentityUserUpdateOne) SetNillableEmail(v *string) *IdentityUserUpdateOne {
+	if v != nil {
+		_u.SetEmail(*v)
+	}
+	return _u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *IdentityUserUpdateOne) SetDeletedAt(v time.Time) *IdentityUserUpdateOne {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *IdentityUserUpdateOne) SetNillableDeletedAt(v *time.Time) *IdentityUserUpdateOne {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *IdentityUserUpdateOne) ClearDeletedAt() *IdentityUserUpdateOne {
+	_u.mutation.ClearDeletedAt()
+	return _u
 }
 
 // SetActive sets the "active" field.
@@ -189,6 +298,18 @@ func (_u *IdentityUserUpdateOne) sqlSave(ctx context.Context) (_node *IdentityUs
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.DisplayName(); ok {
+		_spec.SetField(identityuser.FieldDisplayName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Email(); ok {
+		_spec.SetField(identityuser.FieldEmail, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(identityuser.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(identityuser.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Active(); ok {
 		_spec.SetField(identityuser.FieldActive, field.TypeBool, value)

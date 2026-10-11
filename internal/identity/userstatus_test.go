@@ -12,34 +12,34 @@ func TestInactiveUserScopesAndLastActiveAdministrator(t *testing.T) {
 	d := identity.Directory{DB: testutil.Database(t).SQL}
 	ctx := context.Background()
 	admin := "organization-admin"
-	if err := d.CreateUser(ctx, admin, "member"); err != nil {
+	if _, err := d.CreateUser(ctx, admin, identity.UserInput{Subject: "status-member"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.SetUserActive(ctx, admin, admin, false); !errors.Is(err, identity.ErrLastAdministrator) {
 		t.Fatal(err)
 	}
-	if _, err := d.SetUserActive(ctx, "member", admin, false); !errors.Is(err, identity.ErrForbidden) {
+	if _, err := d.SetUserActive(ctx, "status-member", admin, false); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatal(err)
 	}
-	if _, err := d.SetUserActive(ctx, admin, "member", false); err != nil {
+	if _, err := d.SetUserActive(ctx, admin, "status-member", false); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.EnsureUser(ctx, "member"); err != nil {
+	if err := d.EnsureUser(ctx, "status-member"); err != nil {
 		t.Fatal(err)
 	}
-	if err := identity.RequireScope(ctx, d.DB, "member", "list.read"); !errors.Is(err, identity.ErrForbidden) {
+	if err := identity.RequireScope(ctx, d.DB, "status-member", "list.read"); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatal("inactive user authorized", err)
 	}
-	if scopes, err := identity.EffectiveScopes(ctx, d.DB, "member"); err != nil || len(scopes) != 0 {
+	if scopes, err := identity.EffectiveScopes(ctx, d.DB, "status-member"); err != nil || len(scopes) != 0 {
 		t.Fatal(scopes, err)
 	}
 	if _, err := d.SetUserActive(ctx, admin, "missing", true); !errors.Is(err, identity.ErrNotFound) {
 		t.Fatal(err)
 	}
-	if _, err := d.SetUserActive(ctx, admin, "member", true); err != nil {
+	if _, err := d.SetUserActive(ctx, admin, "status-member", true); err != nil {
 		t.Fatal(err)
 	}
-	if err := identity.RequireScope(ctx, d.DB, "member", "list.read"); err != nil {
+	if err := identity.RequireScope(ctx, d.DB, "status-member", "list.read"); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -16,6 +16,151 @@
     }
   ],
   "paths": {
+    "/v1/identity/users/{subject}": {
+      "parameters": [
+        {
+          "name": "subject",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Read user profile including anonymized authors",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "user.read"
+        ]
+      },
+      "patch": {
+        "summary": "Edit user display name and email",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "display_name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "user.manage"
+        ]
+      },
+      "delete": {
+        "summary": "Delete and anonymize an account",
+        "description": "Retains the subject for author/person references, clears display name/email, disables authentication, removes grants, roles, groups, preferences and WebDAV credentials. Self deletion, last administrator deletion and deletion of the last active workspace owner return 409. Deleted accounts cannot be reactivated.",
+        "responses": {
+          "204": {
+            "description": "Account anonymized"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "user.manage"
+        ]
+      }
+    },
+    "/v1/identity/me": {
+      "get": {
+        "summary": "Read current user profile and effective scopes",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeProfile"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Edit current user display name",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "display_name": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeProfile"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
     "/v1/workspaces/{id}/relationships": {
       "parameters": [
         {
@@ -10983,7 +11128,7 @@
     "/v1/identity/users": {
       "get": {
         "operationId": "listIdentityUsers",
-        "summary": "List enrolled subjects (user.read)",
+        "summary": "List active user profiles",
         "responses": {
           "200": {
             "description": "Success",
@@ -10992,7 +11137,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/UserProfile"
                   }
                 }
               }
@@ -11011,7 +11156,7 @@
         "x-module-scopes": [
           "user.read"
         ],
-        "description": "List active directory subjects. Requires user.read."
+        "description": "List active profiles with display names and email. Requires user.read."
       },
       "post": {
         "operationId": "createIdentityUser",
@@ -11022,7 +11167,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdentityUserInput"
+                  "$ref": "#/components/schemas/UserProfile"
                 }
               }
             }
@@ -11042,7 +11187,26 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IdentityUserInput"
+                "type": "object",
+                "properties": {
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "display_name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "subject"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -13222,6 +13386,61 @@
       }
     },
     "schemas": {
+      "MeProfile": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/UserProfile"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "scopes"
+            ]
+          }
+        ]
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "subject",
+          "display_name",
+          "email",
+          "active",
+          "created_at"
+        ]
+      },
       "WorkspaceRelationshipPage": {
         "type": "object",
         "properties": {

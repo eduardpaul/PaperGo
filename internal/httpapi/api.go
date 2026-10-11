@@ -267,6 +267,10 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(422, "validation_failed", identityValidation.Error())
 	case errors.Is(err, identity.ErrLastAdministrator):
 		problem(409, "last_administrator", "An organization needs at least one administrator.")
+	case errors.Is(err, identity.ErrCannotDeleteSelf):
+		problem(409, "cannot_delete_self", err.Error())
+	case errors.Is(err, identity.ErrLastWorkspaceOwner):
+		problem(409, "last_workspace_owner", err.Error())
 	case errors.As(err, &validation):
 		problem(422, "validation_failed", validation.Error())
 	case errors.Is(err, dms.ErrNotFound) || errors.Is(err, identity.ErrNotFound):
@@ -632,6 +636,10 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			return
 		}
 		if err = a.DMS.Directory().EnsureUser(r.Context(), id); err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		if err = identity.RequireActive(r.Context(), a.DMS.Directory().DB, id); err != nil {
 			a.failure(w, r, err)
 			return
 		}

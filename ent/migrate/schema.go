@@ -498,6 +498,9 @@ var (
 	// IdentityUsersColumns holds the columns for the "identity_users" table.
 	IdentityUsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 255},
+		{Name: "display_name", Type: field.TypeString, Default: ""},
+		{Name: "email", Type: field.TypeString, Default: ""},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "active", Type: field.TypeBool, Default: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}

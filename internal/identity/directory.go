@@ -186,28 +186,55 @@ func ensureUser(ctx context.Context, tx *sql.Tx, subject string) error {
 	_, err = tx.ExecContext(ctx, "INSERT INTO identity_assignments(id,role_id,principal_type,principal_id,created_at) VALUES(?,?,'user',?,CURRENT_TIMESTAMP)", uuid.NewString(), MemberRole, subject)
 	return err
 }
-func (d Directory) CreateUser(ctx context.Context, actor, subject string) error {
-	if err := ValidateSubject(subject); err != nil {
-		return err
+func (d Directory) CreateUser(ctx context.Context, actor string, in UserInput) (UserProfile, error) {
+	var out UserProfile
+	if err := ValidateSubject(in.Subject); err != nil {
+		return out, err
 	}
-	return d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error { return ensureUser(ctx, tx, subject) })
+	in.DisplayName = strings.TrimSpace(in.DisplayName)
+	in.Email = strings.TrimSpace(in.Email)
+	if err := validateProfile(in.DisplayName, in.Email); err != nil {
+		return out, err
+	}
+	err := d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error {
+		var exists bool
+		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=?)", in.Subject).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			return invalid("user already exists")
+		}
+		if err := ensureUser(ctx, tx, in.Subject); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "UPDATE identity_users SET display_name=?,email=? WHERE id=?", in.DisplayName, in.Email, in.Subject); err != nil {
+			return err
+		}
+		var err error
+		out, err = userProfile(ctx, tx, in.Subject)
+		return err
+	})
+	return out, err
 }
-func (d Directory) Users(ctx context.Context, actor string) ([]string, error) {
+func (d Directory) Users(ctx context.Context, actor string) ([]UserProfile, error) {
 	if err := RequireScope(ctx, d.DB, actor, "user.read"); err != nil {
 		return nil, err
 	}
-	rows, err := d.DB.QueryContext(ctx, "SELECT id FROM identity_users WHERE active=1 ORDER BY id")
+	rows, err := d.DB.QueryContext(ctx, "SELECT id,display_name,email,active,created_at FROM identity_users WHERE active=1 AND deleted_at IS NULL ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []string{}
+	out := []UserProfile{}
 	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
+		var user UserProfile
+		if err = rows.Scan(&user.Subject, &user.DisplayName, &user.Email, &user.Active, &user.CreatedAt); err != nil {
 			return nil, err
 		}
-		out = append(out, id)
+		if user.DisplayName == "" {
+			user.DisplayName = user.Subject
+		}
+		out = append(out, user)
 	}
 	return out, rows.Err()
 }

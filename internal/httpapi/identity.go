@@ -30,10 +30,23 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 	}))
 	m.HandleFunc("GET /v1/identity/me/scopes", foundationRead(a, func(r *http.Request) (any, error) { return identity.EffectiveScopes(r.Context(), d.DB, subject(r)) }))
 	m.HandleFunc("GET /v1/identity/users", foundationRead(a, func(r *http.Request) (any, error) { return d.Users(r.Context(), subject(r)) }))
-	m.HandleFunc("POST /v1/identity/users", foundationMutation(a, 201, false, func(r *http.Request, in struct {
-		Subject string `json:"subject"`
-	}, _ int) (any, error) {
-		return map[string]string{"subject": in.Subject}, d.CreateUser(r.Context(), subject(r), in.Subject)
+	m.HandleFunc("GET /v1/identity/me", foundationRead(a, func(r *http.Request) (any, error) { return d.Me(r.Context(), subject(r)) }))
+	m.HandleFunc("PATCH /v1/identity/me", foundationMutation(a, 200, false, func(r *http.Request, in struct {
+		DisplayName *string `json:"display_name"`
+	}, _ int) (any, error) { return d.UpdateMe(r.Context(), subject(r), in.DisplayName) }))
+	m.HandleFunc("GET /v1/identity/users/{subject}", foundationRead(a, func(r *http.Request) (any, error) { return d.User(r.Context(), subject(r), r.PathValue("subject")) }))
+	m.HandleFunc("PATCH /v1/identity/users/{subject}", foundationMutation(a, 200, false, func(r *http.Request, in identity.UserUpdate, _ int) (any, error) {
+		return d.UpdateUser(r.Context(), subject(r), r.PathValue("subject"), in)
+	}))
+	m.HandleFunc("DELETE /v1/identity/users/{subject}", func(w http.ResponseWriter, r *http.Request) {
+		if err := d.DeleteUser(r.Context(), subject(r), r.PathValue("subject")); err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		w.WriteHeader(204)
+	})
+	m.HandleFunc("POST /v1/identity/users", foundationMutation(a, 201, false, func(r *http.Request, in identity.UserInput, _ int) (any, error) {
+		return d.CreateUser(r.Context(), subject(r), in)
 	}))
 	m.HandleFunc("GET /v1/identity/groups", foundationRead(a, func(r *http.Request) (any, error) { return d.Groups(r.Context(), subject(r)) }))
 	m.HandleFunc("POST /v1/identity/groups", foundationMutation(a, 201, false, func(r *http.Request, in identity.GroupInput, _ int) (any, error) {

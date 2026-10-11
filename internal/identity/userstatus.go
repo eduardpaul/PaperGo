@@ -28,7 +28,7 @@ func (d Directory) SetUserActive(ctx context.Context, actor, subject string, act
 		return UserStatus{}, err
 	}
 	err := d.write(ctx, actor, "user.manage", func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, "UPDATE identity_users SET active=? WHERE id=?", active, subject)
+		result, err := tx.ExecContext(ctx, "UPDATE identity_users SET active=? WHERE id=? AND deleted_at IS NULL", active, subject)
 		if err != nil {
 			return err
 		}

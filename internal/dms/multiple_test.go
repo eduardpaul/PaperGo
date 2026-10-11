@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
+	"papergo/internal/identity"
 	"papergo/internal/model"
 	"testing"
 )
@@ -57,7 +58,7 @@ func TestMultipleScalarDefinitionsRejectedEveryProvisioningPath(t *testing.T) {
 func TestMultiplePersonValuesDefaultsQueriesAndInactiveAssignments(t *testing.T) {
 	s, _, c := fixture(t)
 	for _, id := range []string{"assignee", "reviewer"} {
-		if err := s.Directory().CreateUser(testContext, "alice", id); err != nil {
+		if _, err := s.Directory().CreateUser(testContext, "alice", identity.UserInput{Subject: id}); err != nil {
 			t.Fatal(err)
 		}
 	}

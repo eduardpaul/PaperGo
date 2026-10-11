@@ -85,7 +85,7 @@ func TestGroupAdministratorCannotManageUsersOrRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, action := range []func() error{
-		func() error { return d.CreateUser(ctx, "bob", "new-user") },
+		func() error { _, err := d.CreateUser(ctx, "bob", identity.UserInput{Subject: "new-user"}); return err },
 		func() error { _, err := d.SetUserActive(ctx, "bob", "carol", false); return err },
 		func() error {
 			_, err := d.SaveRole(ctx, "bob", "", 0, identity.RoleInput{Name: "Escalation", Scopes: []string{"role.manage"}})

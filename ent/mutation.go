@@ -10633,6 +10633,9 @@ type IdentityUserMutation struct {
 	op            Op
 	typ           string
 	id            *string
+	display_name  *string
+	email         *string
+	deleted_at    *time.Time
 	active        *bool
 	created_at    *time.Time
 	clearedFields map[string]struct{}
@@ -10745,6 +10748,127 @@ func (m *IdentityUserMutation) IDs(ctx context.Context) ([]string, error) {
 	}
 }
 
+// SetDisplayName sets the "display_name" field.
+func (m *IdentityUserMutation) SetDisplayName(s string) {
+	m.display_name = &s
+}
+
+// DisplayName returns the value of the "display_name" field in the mutation.
+func (m *IdentityUserMutation) DisplayName() (r string, exists bool) {
+	v := m.display_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDisplayName returns the old "display_name" field's value of the IdentityUser entity.
+// If the IdentityUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityUserMutation) OldDisplayName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDisplayName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDisplayName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDisplayName: %w", err)
+	}
+	return oldValue.DisplayName, nil
+}
+
+// ResetDisplayName resets all changes to the "display_name" field.
+func (m *IdentityUserMutation) ResetDisplayName() {
+	m.display_name = nil
+}
+
+// SetEmail sets the "email" field.
+func (m *IdentityUserMutation) SetEmail(s string) {
+	m.email = &s
+}
+
+// Email returns the value of the "email" field in the mutation.
+func (m *IdentityUserMutation) Email() (r string, exists bool) {
+	v := m.email
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEmail returns the old "email" field's value of the IdentityUser entity.
+// If the IdentityUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityUserMutation) OldEmail(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEmail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEmail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEmail: %w", err)
+	}
+	return oldValue.Email, nil
+}
+
+// ResetEmail resets all changes to the "email" field.
+func (m *IdentityUserMutation) ResetEmail() {
+	m.email = nil
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (m *IdentityUserMutation) SetDeletedAt(t time.Time) {
+	m.deleted_at = &t
+}
+
+// DeletedAt returns the value of the "deleted_at" field in the mutation.
+func (m *IdentityUserMutation) DeletedAt() (r time.Time, exists bool) {
+	v := m.deleted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedAt returns the old "deleted_at" field's value of the IdentityUser entity.
+// If the IdentityUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityUserMutation) OldDeletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedAt: %w", err)
+	}
+	return oldValue.DeletedAt, nil
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (m *IdentityUserMutation) ClearDeletedAt() {
+	m.deleted_at = nil
+	m.clearedFields[identityuser.FieldDeletedAt] = struct{}{}
+}
+
+// DeletedAtCleared returns if the "deleted_at" field was cleared in this mutation.
+func (m *IdentityUserMutation) DeletedAtCleared() bool {
+	_, ok := m.clearedFields[identityuser.FieldDeletedAt]
+	return ok
+}
+
+// ResetDeletedAt resets all changes to the "deleted_at" field.
+func (m *IdentityUserMutation) ResetDeletedAt() {
+	m.deleted_at = nil
+	delete(m.clearedFields, identityuser.FieldDeletedAt)
+}
+
 // SetActive sets the "active" field.
 func (m *IdentityUserMutation) SetActive(b bool) {
 	m.active = &b
@@ -10851,7 +10975,16 @@ func (m *IdentityUserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IdentityUserMutation) Fields() []string {
-	fields := make([]string, 0, 2)
+	fields := make([]string, 0, 5)
+	if m.display_name != nil {
+		fields = append(fields, identityuser.FieldDisplayName)
+	}
+	if m.email != nil {
+		fields = append(fields, identityuser.FieldEmail)
+	}
+	if m.deleted_at != nil {
+		fields = append(fields, identityuser.FieldDeletedAt)
+	}
 	if m.active != nil {
 		fields = append(fields, identityuser.FieldActive)
 	}
@@ -10866,6 +10999,12 @@ func (m *IdentityUserMutation) Fields() []string {
 // schema.
 func (m *IdentityUserMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case identityuser.FieldDisplayName:
+		return m.DisplayName()
+	case identityuser.FieldEmail:
+		return m.Email()
+	case identityuser.FieldDeletedAt:
+		return m.DeletedAt()
 	case identityuser.FieldActive:
 		return m.Active()
 	case identityuser.FieldCreatedAt:
@@ -10879,6 +11018,12 @@ func (m *IdentityUserMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *IdentityUserMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case identityuser.FieldDisplayName:
+		return m.OldDisplayName(ctx)
+	case identityuser.FieldEmail:
+		return m.OldEmail(ctx)
+	case identityuser.FieldDeletedAt:
+		return m.OldDeletedAt(ctx)
 	case identityuser.FieldActive:
 		return m.OldActive(ctx)
 	case identityuser.FieldCreatedAt:
@@ -10892,6 +11037,27 @@ func (m *IdentityUserMutation) OldField(ctx context.Context, name string) (ent.V
 // type.
 func (m *IdentityUserMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case identityuser.FieldDisplayName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDisplayName(v)
+		return nil
+	case identityuser.FieldEmail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEmail(v)
+		return nil
+	case identityuser.FieldDeletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedAt(v)
+		return nil
 	case identityuser.FieldActive:
 		v, ok := value.(bool)
 		if !ok {
@@ -10935,7 +11101,11 @@ func (m *IdentityUserMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *IdentityUserMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(identityuser.FieldDeletedAt) {
+		fields = append(fields, identityuser.FieldDeletedAt)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -10948,6 +11118,11 @@ func (m *IdentityUserMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *IdentityUserMutation) ClearField(name string) error {
+	switch name {
+	case identityuser.FieldDeletedAt:
+		m.ClearDeletedAt()
+		return nil
+	}
 	return fmt.Errorf("unknown IdentityUser nullable field %s", name)
 }
 
@@ -10955,6 +11130,15 @@ func (m *IdentityUserMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *IdentityUserMutation) ResetField(name string) error {
 	switch name {
+	case identityuser.FieldDisplayName:
+		m.ResetDisplayName()
+		return nil
+	case identityuser.FieldEmail:
+		m.ResetEmail()
+		return nil
+	case identityuser.FieldDeletedAt:
+		m.ResetDeletedAt()
+		return nil
 	case identityuser.FieldActive:
 		m.ResetActive()
 		return nil

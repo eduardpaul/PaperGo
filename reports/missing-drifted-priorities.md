@@ -1,14 +1,13 @@
 # Missing, partial and drifted features by priority
 
-Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 70 open comparisons: 48 missing, 13 partial, 9 drifted. Covered stories and accepted recursive deletion are excluded.
+Current code/API analysis: 2026-10-10; PaperGo includes inherited preferences, folder metadata, HTTP batches, administrative backup/restore and aligned concurrency/pagination; PaperDotNet `96df412`. 69 open comparisons: 47 missing, 13 partial, 9 drifted. Covered stories and accepted recursive deletion are excluded.
 
 [Full per-module comparison and source evidence](C:/Users/eduapaul/Documents/PaperGo/reports/code-api-parity.md). Priorities are proposed implementation ordering; local sign-in and multi-tenancy depend on the intended product boundary.
 
-## P1 (14)
+## P1 (13)
 
 - **P1 · ID-01 · Missing:** A user needs an external identity service for the production sign-in story.
-- **P1 · ID-04 · Partial:** Display name/email profiles, account deletion/anonymization and password management are absent. Production credentials remain external.
-- **P1 · ID-10 · Missing:** Clients cannot obtain the same signed-in user profile without an external identity service.
+- **P1 · ID-04 · Partial:** User profiles and account anonymization are implemented; password management remains with the external identity provider.
 - **P1 · LST-32 · Missing:** An everyday user's initial landing/storage locations are missing.
 - **P1 · DOC-07 · Missing:** Scanned documents cannot become searchable text through PaperGo.
 - **P1 · DOC-08 · Missing:** Preview and processing retry/status stories are missing.
