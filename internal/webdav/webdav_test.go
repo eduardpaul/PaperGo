@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
 	"papergo/internal/model"
@@ -25,11 +26,11 @@ var ctx = context.Background()
 // principals maps bearer tokens to subjects.
 type principals map[string]string
 
-func (p principals) Verify(_ context.Context, token string) (string, error) {
+func (p principals) Verify(_ context.Context, token string) (auth.Identity, error) {
 	if subject, ok := p[token]; ok {
-		return subject, nil
+		return auth.Identity{Subject: subject}, nil
 	}
-	return "", errors.New("invalid token")
+	return auth.Identity{}, errors.New("invalid token")
 }
 
 type testLog struct{ t *testing.T }
@@ -50,6 +51,12 @@ type env struct {
 
 func setup(t *testing.T) *env {
 	t.Helper()
+	return setupWith(t, func(*httpapi.API) {})
+}
+
+// setupWith lets a test adjust the API before it serves requests.
+func setupWith(t *testing.T, configure func(*httpapi.API)) *env {
+	t.Helper()
 	db := testutil.Database(t)
 	blobs := t.TempDir()
 	store, err := storage.NewLocal(blobs)
@@ -60,6 +67,7 @@ func setup(t *testing.T) *env {
 	verifier := principals{"alice-token": "alice", "bob-token": "bob"}
 	logger := slog.New(slog.NewJSONHandler(testLog{t}, nil))
 	a := &httpapi.API{DMS: s, Auth: verifier, Storage: store, Logger: logger, Ready: db.SQL.PingContext, MaxUpload: 64, MaxInFlight: 4, WebDAV: webdav.New(s, verifier, store, logger, 64)}
+	configure(a)
 	w, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Team"})
 	if err != nil {
 		t.Fatal(err)
@@ -425,6 +433,17 @@ func TestLockOwnersAndParentLocks(t *testing.T) {
 	e.expect(e.do("LOCK", e.root+"/Folder/new.txt", alice, lockBody), 423)
 	e.expect(e.do("PROPFIND", e.root+"/Folder/new.txt", alice, "", "Depth", "0"), 404)
 	e.expect(e.do("LOCK", e.root+"/Folder/new.txt", alice, lockBody, "If", "("+token+")"), 201)
+}
+
+// Behind a reverse proxy that rewrites Host, clients still name the public host.
+func TestDestinationAcceptsPublicHost(t *testing.T) {
+	e := setupWith(t, func(a *httpapi.API) { a.WebDAV.PublicHost = "docs.example.com" })
+	alice := "alice-token"
+	e.expect(e.do("MKCOL", e.root+"/Docs", alice, ""), 201)
+	e.expect(e.do("PUT", e.root+"/Docs/a.txt", alice, "%PDF-hello"), 201)
+	e.expect(e.do("MOVE", e.root+"/Docs/a.txt", alice, "", "Destination", "https://DOCS.example.com"+e.root+"/Docs/b.txt"), 201)
+	e.expect(e.do("COPY", e.root+"/Docs/b.txt", alice, "", "Destination", "http://example.com"+e.root+"/Docs/c.txt"), 201)
+	e.expect(e.do("MOVE", e.root+"/Docs/b.txt", alice, "", "Destination", "https://other.example.com"+e.root+"/Docs/d.txt"), 502)
 }
 
 func TestWebDAVRejectsUnsupportedBytesAndDetectsFormat(t *testing.T) {

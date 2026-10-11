@@ -11,6 +11,44 @@ import (
 	"testing"
 )
 
+func TestRESTTokenPreservesOIDCProfileAndMemberships(t *testing.T) {
+	h, s, _ := setup(t)
+	ctx := t.Context()
+	d := s.Directory()
+	u := identity.UserIdentity{Subject: "bob", Name: "Bob Builder", Email: "bob@example.com", Groups: []string{"developers"}, SyncGroups: true}
+	if err := d.SyncUser(ctx, u); err != nil {
+		t.Fatal(err)
+	}
+	credential, err := d.CreateRESTToken(ctx, "bob", identity.RESTTokenInput{Name: "Reader", Scopes: []string{"list.read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hashBefore string
+	if err := d.DB.QueryRowContext(ctx, "SELECT sync_hash FROM identity_users WHERE id='bob'").Scan(&hashBefore); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		r := request(h, "GET", "/v1/identity/me", "", credential.Secret, "", "")
+		if r.Code != 200 {
+			t.Fatal(r.Code, r.Body.String())
+		}
+		var me identity.MeProfile
+		if err := json.Unmarshal(r.Body.Bytes(), &me); err != nil {
+			t.Fatal(err)
+		}
+		if me.DisplayName != u.Name || me.Email != u.Email || len(me.Groups) != 1 || me.Groups[0] != "developers" {
+			t.Fatalf("personal token changed OIDC identity: %+v", me)
+		}
+	}
+	var hashAfter string
+	if err := d.DB.QueryRowContext(ctx, "SELECT sync_hash FROM identity_users WHERE id='bob'").Scan(&hashAfter); err != nil {
+		t.Fatal(err)
+	}
+	if hashAfter != hashBefore {
+		t.Fatal("personal token invalidated the OIDC sync hash")
+	}
+}
+
 func TestRESTProfilesAndAccountDeletion(t *testing.T) {
 	h, s, _ := setup(t)
 	ctx := context.Background()

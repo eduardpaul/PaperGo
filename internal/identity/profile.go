@@ -31,6 +31,7 @@ type MeProfile struct {
 	OrganizationID         string `json:"organization_id"`
 	OrganizationIdentifier string `json:"organization_identifier"`
 	UserProfile
+	Groups []string `json:"groups"`
 	Scopes []string `json:"scopes"`
 }
 
@@ -99,7 +100,23 @@ func (d Directory) Me(ctx context.Context, subject string) (MeProfile, error) {
 		out.OrganizationID = org.ID
 		out.OrganizationIdentifier = org.Identifier
 		out.Scopes, err = EffectiveScopes(ctx, tx, subject)
-		return err
+		if err != nil {
+			return err
+		}
+		rows, err := tx.QueryContext(ctx, "SELECT g.name FROM identity_groups g JOIN identity_memberships m ON g.id=m.group_id WHERE m.principal_type='user' AND m.principal_id=? ORDER BY g.name", subject)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		out.Groups = []string{}
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				return err
+			}
+			out.Groups = append(out.Groups, name)
+		}
+		return rows.Err()
 	})
 	return out, err
 }

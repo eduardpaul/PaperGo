@@ -74,6 +74,11 @@ func Email(v string) predicate.IdentityUser {
 	return predicate.IdentityUser(sql.FieldEQ(FieldEmail, v))
 }
 
+// SyncHash applies equality check predicate on the "sync_hash" field. It's identical to SyncHashEQ.
+func SyncHash(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldEQ(FieldSyncHash, v))
+}
+
 // DeletedAt applies equality check predicate on the "deleted_at" field. It's identical to DeletedAtEQ.
 func DeletedAt(v time.Time) predicate.IdentityUser {
 	return predicate.IdentityUser(sql.FieldEQ(FieldDeletedAt, v))
@@ -217,6 +222,71 @@ func EmailEqualFold(v string) predicate.IdentityUser {
 // EmailContainsFold applies the ContainsFold predicate on the "email" field.
 func EmailContainsFold(v string) predicate.IdentityUser {
 	return predicate.IdentityUser(sql.FieldContainsFold(FieldEmail, v))
+}
+
+// SyncHashEQ applies the EQ predicate on the "sync_hash" field.
+func SyncHashEQ(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldEQ(FieldSyncHash, v))
+}
+
+// SyncHashNEQ applies the NEQ predicate on the "sync_hash" field.
+func SyncHashNEQ(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldNEQ(FieldSyncHash, v))
+}
+
+// SyncHashIn applies the In predicate on the "sync_hash" field.
+func SyncHashIn(vs ...string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldIn(FieldSyncHash, vs...))
+}
+
+// SyncHashNotIn applies the NotIn predicate on the "sync_hash" field.
+func SyncHashNotIn(vs ...string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldNotIn(FieldSyncHash, vs...))
+}
+
+// SyncHashGT applies the GT predicate on the "sync_hash" field.
+func SyncHashGT(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldGT(FieldSyncHash, v))
+}
+
+// SyncHashGTE applies the GTE predicate on the "sync_hash" field.
+func SyncHashGTE(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldGTE(FieldSyncHash, v))
+}
+
+// SyncHashLT applies the LT predicate on the "sync_hash" field.
+func SyncHashLT(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldLT(FieldSyncHash, v))
+}
+
+// SyncHashLTE applies the LTE predicate on the "sync_hash" field.
+func SyncHashLTE(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldLTE(FieldSyncHash, v))
+}
+
+// SyncHashContains applies the Contains predicate on the "sync_hash" field.
+func SyncHashContains(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldContains(FieldSyncHash, v))
+}
+
+// SyncHashHasPrefix applies the HasPrefix predicate on the "sync_hash" field.
+func SyncHashHasPrefix(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldHasPrefix(FieldSyncHash, v))
+}
+
+// SyncHashHasSuffix applies the HasSuffix predicate on the "sync_hash" field.
+func SyncHashHasSuffix(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldHasSuffix(FieldSyncHash, v))
+}
+
+// SyncHashEqualFold applies the EqualFold predicate on the "sync_hash" field.
+func SyncHashEqualFold(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldEqualFold(FieldSyncHash, v))
+}
+
+// SyncHashContainsFold applies the ContainsFold predicate on the "sync_hash" field.
+func SyncHashContainsFold(v string) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldContainsFold(FieldSyncHash, v))
 }
 
 // DeletedAtEQ applies the EQ predicate on the "deleted_at" field.

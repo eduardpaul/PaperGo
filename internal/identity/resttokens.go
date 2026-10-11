@@ -88,7 +88,7 @@ func (d Directory) CreateRESTToken(ctx context.Context, subject string, in RESTT
 	var out CreatedRESTToken
 	tokenID := uuid.NewString()
 	in.Name = strings.TrimSpace(in.Name)
-	if err := validateName(in.Name, ""); err != nil {
+	if err := ValidateName(in.Name, ""); err != nil {
 		return out, err
 	}
 	if len(in.Scopes) == 0 || len(in.Scopes) > len(Catalog) {

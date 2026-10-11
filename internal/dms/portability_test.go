@@ -30,7 +30,7 @@ func emptyPackageTarget(t *testing.T) *Service {
 		}
 	}
 	s := NewService(db.SQL)
-	if err = s.Directory().Initialize(t.Context(), "organization-admin"); err != nil {
+	if err = s.Directory().Initialize(t.Context(), "organization-admin", ""); err != nil {
 		t.Fatal(err)
 	}
 	return s

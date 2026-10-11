@@ -56,6 +56,20 @@ func (_u *IdentityUserUpdate) SetNillableEmail(v *string) *IdentityUserUpdate {
 	return _u
 }
 
+// SetSyncHash sets the "sync_hash" field.
+func (_u *IdentityUserUpdate) SetSyncHash(v string) *IdentityUserUpdate {
+	_u.mutation.SetSyncHash(v)
+	return _u
+}
+
+// SetNillableSyncHash sets the "sync_hash" field if the given value is not nil.
+func (_u *IdentityUserUpdate) SetNillableSyncHash(v *string) *IdentityUserUpdate {
+	if v != nil {
+		_u.SetSyncHash(*v)
+	}
+	return _u
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (_u *IdentityUserUpdate) SetDeletedAt(v time.Time) *IdentityUserUpdate {
 	_u.mutation.SetDeletedAt(v)
@@ -137,6 +151,9 @@ func (_u *IdentityUserUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(identityuser.FieldEmail, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.SyncHash(); ok {
+		_spec.SetField(identityuser.FieldSyncHash, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.DeletedAt(); ok {
 		_spec.SetField(identityuser.FieldDeletedAt, field.TypeTime, value)
 	}
@@ -190,6 +207,20 @@ func (_u *IdentityUserUpdateOne) SetEmail(v string) *IdentityUserUpdateOne {
 func (_u *IdentityUserUpdateOne) SetNillableEmail(v *string) *IdentityUserUpdateOne {
 	if v != nil {
 		_u.SetEmail(*v)
+	}
+	return _u
+}
+
+// SetSyncHash sets the "sync_hash" field.
+func (_u *IdentityUserUpdateOne) SetSyncHash(v string) *IdentityUserUpdateOne {
+	_u.mutation.SetSyncHash(v)
+	return _u
+}
+
+// SetNillableSyncHash sets the "sync_hash" field if the given value is not nil.
+func (_u *IdentityUserUpdateOne) SetNillableSyncHash(v *string) *IdentityUserUpdateOne {
+	if v != nil {
+		_u.SetSyncHash(*v)
 	}
 	return _u
 }
@@ -304,6 +335,9 @@ func (_u *IdentityUserUpdateOne) sqlSave(ctx context.Context) (_node *IdentityUs
 	}
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(identityuser.FieldEmail, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SyncHash(); ok {
+		_spec.SetField(identityuser.FieldSyncHash, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.DeletedAt(); ok {
 		_spec.SetField(identityuser.FieldDeletedAt, field.TypeTime, value)

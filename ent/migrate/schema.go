@@ -459,6 +459,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "name", Type: field.TypeString, Size: 200},
 		{Name: "description", Type: field.TypeString, Size: 2000, Default: ""},
+		{Name: "source", Type: field.TypeEnum, Enums: []string{"local", "oidc"}, Default: "local"},
 		{Name: "version", Type: field.TypeInt, Default: 1},
 	}
 	// IdentityGroupsTable holds the schema information for the "identity_groups" table.
@@ -620,6 +621,7 @@ var (
 		{Name: "id", Type: field.TypeString, Size: 255},
 		{Name: "display_name", Type: field.TypeString, Default: ""},
 		{Name: "email", Type: field.TypeString, Default: ""},
+		{Name: "sync_hash", Type: field.TypeString, Default: ""},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "active", Type: field.TypeBool, Default: true},
 		{Name: "created_at", Type: field.TypeTime},

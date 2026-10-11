@@ -55,6 +55,20 @@ func (_u *IdentityGroupUpdate) SetNillableDescription(v *string) *IdentityGroupU
 	return _u
 }
 
+// SetSource sets the "source" field.
+func (_u *IdentityGroupUpdate) SetSource(v identitygroup.Source) *IdentityGroupUpdate {
+	_u.mutation.SetSource(v)
+	return _u
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_u *IdentityGroupUpdate) SetNillableSource(v *identitygroup.Source) *IdentityGroupUpdate {
+	if v != nil {
+		_u.SetSource(*v)
+	}
+	return _u
+}
+
 // SetVersion sets the "version" field.
 func (_u *IdentityGroupUpdate) SetVersion(v int) *IdentityGroupUpdate {
 	_u.mutation.ResetVersion()
@@ -120,6 +134,11 @@ func (_u *IdentityGroupUpdate) check() error {
 			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "IdentityGroup.description": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Source(); ok {
+		if err := identitygroup.SourceValidator(v); err != nil {
+			return &ValidationError{Name: "source", err: fmt.Errorf(`ent: validator failed for field "IdentityGroup.source": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := identitygroup.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "IdentityGroup.version": %w`, err)}
@@ -145,6 +164,9 @@ func (_u *IdentityGroupUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(identitygroup.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Source(); ok {
+		_spec.SetField(identitygroup.FieldSource, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(identitygroup.FieldVersion, field.TypeInt, value)
@@ -196,6 +218,20 @@ func (_u *IdentityGroupUpdateOne) SetDescription(v string) *IdentityGroupUpdateO
 func (_u *IdentityGroupUpdateOne) SetNillableDescription(v *string) *IdentityGroupUpdateOne {
 	if v != nil {
 		_u.SetDescription(*v)
+	}
+	return _u
+}
+
+// SetSource sets the "source" field.
+func (_u *IdentityGroupUpdateOne) SetSource(v identitygroup.Source) *IdentityGroupUpdateOne {
+	_u.mutation.SetSource(v)
+	return _u
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_u *IdentityGroupUpdateOne) SetNillableSource(v *identitygroup.Source) *IdentityGroupUpdateOne {
+	if v != nil {
+		_u.SetSource(*v)
 	}
 	return _u
 }
@@ -278,6 +314,11 @@ func (_u *IdentityGroupUpdateOne) check() error {
 			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "IdentityGroup.description": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Source(); ok {
+		if err := identitygroup.SourceValidator(v); err != nil {
+			return &ValidationError{Name: "source", err: fmt.Errorf(`ent: validator failed for field "IdentityGroup.source": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := identitygroup.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "IdentityGroup.version": %w`, err)}
@@ -320,6 +361,9 @@ func (_u *IdentityGroupUpdateOne) sqlSave(ctx context.Context) (_node *IdentityG
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(identitygroup.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Source(); ok {
+		_spec.SetField(identitygroup.FieldSource, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(identitygroup.FieldVersion, field.TypeInt, value)

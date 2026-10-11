@@ -32,7 +32,10 @@ type Handler struct {
 	Storage   storage.Store
 	Logger    *slog.Logger
 	MaxUpload int64
-	locks     *lockTable
+	// PublicHost is the host clients use behind a reverse proxy; Destination
+	// headers may name it as well as the request's Host.
+	PublicHost string
+	locks      *lockTable
 }
 
 func New(service *dms.Service, verifier auth.Verifier, store storage.Store, logger *slog.Logger, maxUpload int64) *Handler {
@@ -133,17 +136,24 @@ func (h *Handler) authenticate(r *http.Request) (string, error) {
 	scheme, _, _ := strings.Cut(strings.TrimSpace(r.Header.Get("Authorization")), " ")
 	switch {
 	case strings.EqualFold(scheme, "Bearer"):
-		subject, err := auth.Authenticate(r, h.Auth)
+		ident, err := auth.Authenticate(r, h.Auth)
 		if err != nil {
 			return "", dms.ErrForbidden
 		}
-		if err = h.DMS.Directory().EnsureUser(r.Context(), subject); err != nil {
+		if err = h.DMS.Directory().SyncUser(r.Context(), identity.UserIdentity{
+			Subject:           ident.Subject,
+			Name:              ident.Name,
+			PreferredUsername: ident.PreferredUsername,
+			Email:             ident.Email,
+			Groups:            ident.Groups,
+			SyncGroups:        ident.SyncGroups,
+		}); err != nil {
 			return "", err
 		}
-		if err = identity.RequireActive(r.Context(), h.DMS.Directory().DB, subject); err != nil {
+		if err = identity.RequireActive(r.Context(), h.DMS.Directory().DB, ident.Subject); err != nil {
 			return "", dms.ErrForbidden
 		}
-		return subject, nil
+		return ident.Subject, nil
 	case strings.EqualFold(scheme, "Basic"):
 		_, password, ok := r.BasicAuth()
 		if !ok {

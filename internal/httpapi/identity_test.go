@@ -7,6 +7,7 @@ import (
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"strings"
 	"testing"
 )
 
@@ -97,5 +98,145 @@ func TestHTTPGroupPermissionsAndModuleScopeRevocation(t *testing.T) {
 	resp = request(h, "PUT", "/v1/resources/"+list.ID+"/permissions", `{"grants":[{"subject":"alice","action":"manage"}]}`, testToken, `"2"`, "application/json")
 	if resp.Code != 400 {
 		t.Fatal(resp.Code, resp.Body.String())
+	}
+}
+
+func TestIdentityMeEndpoint(t *testing.T) {
+	_, s, _ := setup(t)
+	bobAuth := auth.Development{
+		Token:             testToken,
+		Subject:           "bob",
+		Name:              "Bob Builder",
+		PreferredUsername: "bob",
+		Email:             "bob@example.com",
+		Groups:            []string{"developers", "contractors"},
+	}
+	bobAPI := (&API{DMS: s, Auth: bobAuth, Logger: slog.Default()}).Handler()
+	resp := request(bobAPI, "GET", "/v1/identity/me", "", testToken, "", "")
+	if resp.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var me identity.MeProfile
+	if err := json.Unmarshal(resp.Body.Bytes(), &me); err != nil {
+		t.Fatal(err)
+	}
+	if me.Subject != "bob" {
+		t.Fatalf("expected subject bob, got %s", me.Subject)
+	}
+	if me.DisplayName != "Bob Builder" || me.Email != "bob@example.com" {
+		t.Fatalf("unexpected profile: %+v", me)
+	}
+	if len(me.Groups) != 2 || me.Groups[0] != "contractors" || me.Groups[1] != "developers" {
+		t.Fatalf("unexpected groups: %+v", me.Groups)
+	}
+	if len(me.Scopes) == 0 {
+		t.Fatal("expected scopes to be populated")
+	}
+}
+
+func TestIdentityUsersAndPeopleEndpointsReturnProfiles(t *testing.T) {
+	h, s, _ := setup(t)
+	// Bob signs in via custom dev auth to sync profile
+	bobAuth := auth.Development{
+		Token:             testToken,
+		Subject:           "bob",
+		Name:              "Bob Builder",
+		PreferredUsername: "bob",
+		Email:             "bob@example.com",
+	}
+	bobAPI := (&API{DMS: s, Auth: bobAuth, Logger: slog.Default()}).Handler()
+	_ = request(bobAPI, "GET", "/v1/identity/me", "", testToken, "", "")
+
+	// Organization admin reads GET /v1/identity/users
+	resp := request(h, "GET", "/v1/identity/users", "", testToken, "", "")
+	if resp.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var users []identity.UserProfile
+	if err := json.Unmarshal(resp.Body.Bytes(), &users); err != nil {
+		t.Fatal(err)
+	}
+	var bobFound *identity.UserProfile
+	for i := range users {
+		if users[i].Subject == "bob" {
+			bobFound = &users[i]
+			break
+		}
+	}
+	if bobFound == nil || bobFound.DisplayName != "Bob Builder" || bobFound.Email != "bob@example.com" {
+		t.Fatalf("unexpected bob in users: %+v", bobFound)
+	}
+
+	// Organization admin reads GET /v1/people
+	resp = request(h, "GET", "/v1/people", "", testToken, "", "")
+	if resp.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var people []string
+	if err := json.Unmarshal(resp.Body.Bytes(), &people); err != nil {
+		t.Fatal(err)
+	}
+	var foundBob bool
+	for _, id := range people {
+		if id == "bob" {
+			foundBob = true
+			break
+		}
+	}
+	if !foundBob {
+		t.Fatalf("expected bob in people: %+v", people)
+	}
+}
+
+func TestOIDCGroupMemberAPIReturnsConflict(t *testing.T) {
+	h, s, _ := setup(t)
+	// Sync user carol with an oidc group
+	carolAuth := auth.Development{
+		Token:   testToken,
+		Subject: "carol",
+		Groups:  []string{"oidc-admins"},
+	}
+	carolAPI := (&API{DMS: s, Auth: carolAuth, Logger: slog.Default()}).Handler()
+	_ = request(carolAPI, "GET", "/v1/identity/me", "", testToken, "", "")
+
+	// List groups to find oidc-admins ID
+	resp := request(h, "GET", "/v1/identity/groups", "", testToken, "", "")
+	if resp.Code != 200 {
+		t.Fatal(resp.Code, resp.Body.String())
+	}
+	var groups []identity.Group
+	if err := json.Unmarshal(resp.Body.Bytes(), &groups); err != nil {
+		t.Fatal(err)
+	}
+	var oidcGrpID string
+	for _, g := range groups {
+		if g.Name == "oidc-admins" {
+			oidcGrpID = g.ID
+			if g.Source != "oidc" {
+				t.Fatalf("expected source oidc, got %s", g.Source)
+			}
+			break
+		}
+	}
+	if oidcGrpID == "" {
+		t.Fatal("oidc-admins group not found")
+	}
+
+	// Attempt PUT /v1/identity/groups/{id}/members/user/bob -> should fail with 409
+	resp = request(h, "PUT", "/v1/identity/groups/"+oidcGrpID+"/members/user/bob", "", testToken, "", "")
+	if resp.Code != 409 {
+		t.Fatalf("expected 409 for member add to oidc group, got %d: %s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), "group_managed_by_identity_provider") {
+		t.Fatalf("expected group_managed_by_identity_provider problem code, got %s", resp.Body.String())
+	}
+
+	// Attempt DELETE /v1/identity/groups/{id}/members/user/carol -> should fail with 409
+	resp = request(h, "DELETE", "/v1/identity/groups/"+oidcGrpID+"/members/user/carol", "", testToken, "", "")
+	if resp.Code != 409 {
+		t.Fatalf("expected 409 for member remove from oidc group, got %d: %s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), "group_managed_by_identity_provider") {
+		t.Fatalf("expected group_managed_by_identity_provider problem code, got %s", resp.Body.String())
 	}
 }

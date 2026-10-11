@@ -89,3 +89,31 @@ func TestUserProfilesAndAccountAnonymization(t *testing.T) {
 		t.Fatal("deleted profile active", err)
 	}
 }
+
+func TestMePropagatesGroupReadErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		breakRead []string
+	}{
+		{"query", []string{"ALTER TABLE identity_groups RENAME COLUMN name TO unavailable_name"}},
+		{"scan", []string{"ALTER TABLE identity_groups RENAME TO stored_groups", "CREATE VIEW identity_groups AS SELECT id,NULL AS name FROM stored_groups"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testutil.Database(t)
+			d := identity.Directory{DB: db.SQL}
+			ctx := t.Context()
+			if err := d.SyncUser(ctx, identity.UserIdentity{Subject: "me-read-error", Groups: []string{"me-error-group"}, SyncGroups: true}); err != nil {
+				t.Fatal(err)
+			}
+			// Inject a broken database read without changing the application schema.
+			for _, statement := range tc.breakRead {
+				if _, err := db.SQL.ExecContext(ctx, statement); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := d.Me(ctx, "me-read-error"); err == nil {
+				t.Fatal("Me returned success for a failed group read")
+			}
+		})
+	}
+}

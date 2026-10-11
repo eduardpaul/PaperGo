@@ -34,7 +34,7 @@ func DatabaseAt(t testing.TB, path string) *database.Database {
 		t.Fatalf("foreign keys disabled: %d %v", foreignKeys, err)
 	}
 	directory := identity.Directory{DB: db.SQL}
-	if err = directory.Initialize(context.Background(), "organization-admin"); err != nil {
+	if err = directory.Initialize(context.Background(), "organization-admin", ""); err != nil {
 		t.Fatal(err)
 	}
 	// Content fixtures exercise ACL ownership independently of organization-wide

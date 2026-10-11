@@ -254,6 +254,26 @@ func DescriptionContainsFold(v string) predicate.IdentityGroup {
 	return predicate.IdentityGroup(sql.FieldContainsFold(FieldDescription, v))
 }
 
+// SourceEQ applies the EQ predicate on the "source" field.
+func SourceEQ(v Source) predicate.IdentityGroup {
+	return predicate.IdentityGroup(sql.FieldEQ(FieldSource, v))
+}
+
+// SourceNEQ applies the NEQ predicate on the "source" field.
+func SourceNEQ(v Source) predicate.IdentityGroup {
+	return predicate.IdentityGroup(sql.FieldNEQ(FieldSource, v))
+}
+
+// SourceIn applies the In predicate on the "source" field.
+func SourceIn(vs ...Source) predicate.IdentityGroup {
+	return predicate.IdentityGroup(sql.FieldIn(FieldSource, vs...))
+}
+
+// SourceNotIn applies the NotIn predicate on the "source" field.
+func SourceNotIn(vs ...Source) predicate.IdentityGroup {
+	return predicate.IdentityGroup(sql.FieldNotIn(FieldSource, vs...))
+}
+
 // VersionEQ applies the EQ predicate on the "version" field.
 func VersionEQ(v int) predicate.IdentityGroup {
 	return predicate.IdentityGroup(sql.FieldEQ(FieldVersion, v))

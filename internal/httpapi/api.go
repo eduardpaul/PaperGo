@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
@@ -37,9 +38,13 @@ type API struct {
 	RequestTimeout time.Duration
 	// WebDAV serves WebDAV-enabled libraries under webdav.Prefix with its own authentication.
 	WebDAV *webdav.Handler
+	// PublicURL, when set, supplies the scheme and host of absolute links, so
+	// they are correct behind a TLS-terminating reverse proxy.
+	PublicURL *url.URL
 }
 type subjectKey struct{}
 type requestKey struct{}
+type publicURLKey struct{}
 
 func subject(r *http.Request) string { v, _ := r.Context().Value(subjectKey{}).(string); return v }
 func (a *API) Handler() http.Handler {
@@ -231,6 +236,9 @@ func respond(w http.ResponseWriter, r *http.Request, status int, body any) {
 			query := next.Query()
 			query.Set("$skiptoken", cursor)
 			next.RawQuery = query.Encode()
+			if public, ok := r.Context().Value(publicURLKey{}).(*url.URL); ok {
+				next.Scheme, next.Host = public.Scheme, public.Host
+			}
 			if next.Scheme == "" {
 				next.Scheme = "http"
 				if r.TLS != nil {
@@ -276,6 +284,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(409, "duplicate_file", duplicate.Error()+"; matching item "+duplicate.Documents[0].ItemID)
 	case errors.As(err, &identityValidation):
 		problem(422, "validation_failed", identityValidation.Error())
+	case errors.Is(err, identity.ErrGroupManagedByIdentityProvider):
+		problem(409, "group_managed_by_identity_provider", "group membership is managed by the identity provider")
 	case errors.Is(err, identity.ErrLastAdministrator):
 		problem(409, "last_administrator", "An organization needs at least one administrator.")
 	case errors.Is(err, identity.ErrCannotDeleteSelf):
@@ -636,7 +646,7 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var id string
+		var ident auth.Identity
 		var err error
 		parts := strings.Fields(r.Header.Get("Authorization"))
 		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.RESTTokenPrefix) {
@@ -644,26 +654,36 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			if e != nil {
 				err = e
 			} else {
-				id = token.Subject
+				ident = auth.Identity{Subject: token.Subject}
 				r = r.WithContext(identity.WithRESTToken(r.Context(), token))
 			}
 		} else {
-			id, err = auth.Authenticate(r, a.Auth)
+			ident, err = auth.Authenticate(r, a.Auth)
 		}
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			a.problem(w, r, 401, "unauthorized", "valid bearer authentication is required")
 			return
 		}
-		if err = a.DMS.Directory().EnsureUser(r.Context(), id); err != nil {
+		if _, personal := identity.RESTTokenContext(r.Context()); !personal {
+			if err = a.DMS.Directory().SyncUser(r.Context(), identity.UserIdentity{
+				Subject:           ident.Subject,
+				Name:              ident.Name,
+				PreferredUsername: ident.PreferredUsername,
+				Email:             ident.Email,
+				Groups:            ident.Groups,
+				SyncGroups:        ident.SyncGroups,
+			}); err != nil {
+				a.failure(w, r, err)
+				return
+			}
+		}
+		if err = identity.RequireActive(r.Context(), a.DMS.Directory().DB, ident.Subject); err != nil {
 			a.failure(w, r, err)
 			return
 		}
-		if err = identity.RequireActive(r.Context(), a.DMS.Directory().DB, id); err != nil {
-			a.failure(w, r, err)
-			return
-		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), subjectKey{}, id)))
+		ctx := context.WithValue(r.Context(), subjectKey{}, ident.Subject)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -688,7 +708,11 @@ func (w *responseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter 
 func (a *API) observe(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := uuid.NewString()
-		r = r.WithContext(requestmeta.WithTrace(context.WithValue(r.Context(), requestKey{}, id), id))
+		ctx := requestmeta.WithTrace(context.WithValue(r.Context(), requestKey{}, id), id)
+		if a.PublicURL != nil {
+			ctx = context.WithValue(ctx, publicURLKey{}, a.PublicURL)
+		}
+		r = r.WithContext(ctx)
 		w.Header().Set("X-Request-ID", id)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "private, no-store")

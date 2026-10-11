@@ -2,14 +2,21 @@ package identity
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"net/mail"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
+
+var ErrGroupManagedByIdentityProvider = errors.New("group membership is managed by the identity provider")
 
 type Directory struct{ DB *sql.DB }
 type Principal struct {
@@ -20,7 +27,16 @@ type Group struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Source      string `json:"source"`
 	Version     int    `json:"version"`
+}
+type UserIdentity struct {
+	Subject           string
+	Name              string
+	PreferredUsername string
+	Email             string
+	Groups            []string
+	SyncGroups        bool
 }
 type Role struct {
 	ID          string   `json:"id"`
@@ -65,14 +81,14 @@ func ValidatePrincipal(ctx context.Context, q Querier, p Principal) error {
 	}
 	return nil
 }
-func validateName(name, description string) error {
+func ValidateName(name, description string) error {
 	if name == "" || name != strings.TrimSpace(name) || len(name) > 200 || !utf8.ValidString(name) || len(description) > 2000 || !utf8.ValidString(description) {
 		return invalid("name must contain 1 to 200 bytes; description is limited to 2000 bytes")
 	}
 	return nil
 }
 func validateRole(in RoleInput) error {
-	if err := validateName(in.Name, in.Description); err != nil {
+	if err := ValidateName(in.Name, in.Description); err != nil {
 		return err
 	}
 	known := map[string]bool{}
@@ -114,10 +130,19 @@ func (d Directory) write(ctx context.Context, actor, scope string, fn func(*sql.
 }
 
 // Initialize provisions built-in roles and the configured first administrator
-// exactly once. A later configuration change never creates another administrator.
-func (d Directory) Initialize(ctx context.Context, administrator string) error {
-	if err := ValidateSubject(administrator); err != nil {
-		return err
+// (by subject or by group) exactly once. A later configuration change never
+// creates another administrator.
+func (d Directory) Initialize(ctx context.Context, administrator, adminGroup string) error {
+	if administrator != "" {
+		if err := ValidateSubject(administrator); err != nil {
+			return err
+		}
+	} else if adminGroup != "" {
+		if err := ValidateName(adminGroup, ""); err != nil {
+			return err
+		}
+	} else {
+		return errors.New("administrator subject or admin group is required")
 	}
 	return d.transaction(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "INSERT INTO identity_organizations(id,created_at,singleton,identifier,display_name,description,version) VALUES(?,CURRENT_TIMESTAMP,1,'papergo','PaperGo','',1) ON CONFLICT(singleton) DO NOTHING", uuid.NewString()); err != nil {
@@ -143,10 +168,18 @@ func (d Directory) Initialize(ctx context.Context, administrator string) error {
 				return err
 			}
 		}
-		if err := ensureUser(ctx, tx, administrator); err != nil {
+		if administrator != "" {
+			if err := ensureUser(ctx, tx, administrator); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, "INSERT INTO identity_assignments(id,role_id,principal_type,principal_id,created_at) VALUES(?,?,'user',?,CURRENT_TIMESTAMP)", uuid.NewString(), AdministratorRole, administrator)
 			return err
 		}
-		_, err := tx.ExecContext(ctx, "INSERT INTO identity_assignments(id,role_id,principal_type,principal_id,created_at) VALUES(?,?,'user',?,CURRENT_TIMESTAMP)", uuid.NewString(), AdministratorRole, administrator)
+		groupID := uuid.NewString()
+		if _, err := tx.ExecContext(ctx, "INSERT INTO identity_groups(id,name,description,source,version,created_at) VALUES(?,?,'','oidc',1,CURRENT_TIMESTAMP)", groupID, adminGroup); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "INSERT INTO identity_assignments(id,role_id,principal_type,principal_id,created_at) VALUES(?,?,'group',?,CURRENT_TIMESTAMP)", uuid.NewString(), AdministratorRole, groupID)
 		return err
 	})
 }
@@ -154,18 +187,210 @@ func (d Directory) Initialize(ctx context.Context, administrator string) error {
 // EnsureUser enrolls a verified OIDC subject with the Member role on first use.
 // Existing users keep their assignments, including an intentionally empty set.
 func (d Directory) EnsureUser(ctx context.Context, subject string) error {
-	if err := ValidateSubject(subject); err != nil {
-		return err
-	}
-	var exists bool
-	if err := d.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=?)", subject).Scan(&exists); err != nil {
-		return err
-	}
-	if exists {
-		return nil
-	}
-	return d.transaction(ctx, func(tx *sql.Tx) error { return ensureUser(ctx, tx, subject) })
+	return d.SyncUser(ctx, UserIdentity{Subject: subject})
 }
+
+// SyncUser enrolls or updates an OIDC user, synchronizing profile claims and
+// memberships in oidc groups when groups were claimed in the token.
+func (d Directory) SyncUser(ctx context.Context, u UserIdentity) error {
+	if err := ValidateSubject(u.Subject); err != nil {
+		return err
+	}
+	var validGroups []string
+	if u.SyncGroups {
+		seen := make(map[string]bool)
+		for _, g := range u.Groups {
+			if len(validGroups) >= 100 {
+				slog.Warn("token groups exceed limit of 100, truncated", "subject", u.Subject)
+				break
+			}
+			if err := ValidateName(g, ""); err != nil {
+				continue
+			}
+			if !seen[g] {
+				seen[g] = true
+				validGroups = append(validGroups, g)
+			}
+		}
+		slices.Sort(validGroups)
+	}
+	displayName := strings.TrimSpace(u.Name)
+	if displayName == "" {
+		displayName = strings.TrimSpace(u.PreferredUsername)
+	}
+	if displayName == "" {
+		displayName = u.Subject
+	}
+	if len([]rune(displayName)) > 200 {
+		runes := []rune(displayName)
+		displayName = string(runes[:200])
+	}
+	email := strings.TrimSpace(u.Email)
+	if len(email) > 256 {
+		email = ""
+	}
+	if email != "" {
+		if addr, err := mail.ParseAddress(email); err != nil || addr.Address != email {
+			email = ""
+		}
+	}
+	h := sha256.New()
+	h.Write([]byte(displayName))
+	h.Write([]byte{0})
+	h.Write([]byte(email))
+	h.Write([]byte{0})
+	if u.SyncGroups {
+		h.Write([]byte{1})
+		for _, g := range validGroups {
+			h.Write([]byte(g))
+			h.Write([]byte{0})
+		}
+	} else {
+		h.Write([]byte{0})
+	}
+	currentHash := hex.EncodeToString(h.Sum(nil))
+
+	var active bool
+	var storedHash string
+	var deletedAt sql.NullTime
+	err := d.DB.QueryRowContext(ctx, "SELECT active, sync_hash, deleted_at FROM identity_users WHERE id=?", u.Subject).Scan(&active, &storedHash, &deletedAt)
+	if err == nil {
+		if deletedAt.Valid {
+			return nil
+		}
+		if storedHash == currentHash {
+			return nil
+		}
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+
+	return d.transaction(ctx, func(tx *sql.Tx) error {
+		var userDeleted sql.NullTime
+		err := tx.QueryRowContext(ctx, "SELECT deleted_at FROM identity_users WHERE id=?", u.Subject).Scan(&userDeleted)
+		if err == nil && userDeleted.Valid {
+			return nil
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		create := errors.Is(err, sql.ErrNoRows)
+		if err = auditedIdentity(ctx, tx, u.Subject, "user.update", "user", u.Subject, func() error {
+			if !create {
+				_, err := tx.ExecContext(ctx, "UPDATE identity_users SET display_name=?,email=?,sync_hash=? WHERE id=? AND deleted_at IS NULL", displayName, email, currentHash, u.Subject)
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, "INSERT INTO identity_users(id,display_name,email,sync_hash,created_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)", u.Subject, displayName, email, currentHash); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, "INSERT INTO identity_assignments(id,role_id,principal_type,principal_id,created_at) VALUES(?,?,'user',?,CURRENT_TIMESTAMP)", uuid.NewString(), MemberRole, u.Subject)
+			return err
+		}); err != nil {
+			return err
+		}
+		if !u.SyncGroups {
+			return nil
+		}
+
+		desiredOIDCGroupIDs := make(map[string]bool)
+		for _, g := range validGroups {
+			var groupID, source string
+			err := tx.QueryRowContext(ctx, "SELECT id, source FROM identity_groups WHERE name=?", g).Scan(&groupID, &source)
+			if errors.Is(err, sql.ErrNoRows) {
+				groupID = uuid.NewString()
+				err = auditedIdentity(ctx, tx, u.Subject, "group.create", "group", groupID, func() error {
+					_, err := tx.ExecContext(ctx, "INSERT INTO identity_groups(id,name,description,source,version,created_at) VALUES(?,?,?,'oidc',1,CURRENT_TIMESTAMP)", groupID, g, "")
+					return err
+				})
+				if err != nil {
+					return err
+				}
+				desiredOIDCGroupIDs[groupID] = true
+			} else if err != nil {
+				return err
+			} else if source == "local" {
+				slog.Warn("group claim matches local group, skipping", "group", g, "subject", u.Subject)
+			} else {
+				desiredOIDCGroupIDs[groupID] = true
+			}
+		}
+
+		type membershipRow struct {
+			id      string
+			groupID string
+		}
+		rows, err := tx.QueryContext(ctx, "SELECT m.id, m.group_id FROM identity_memberships m JOIN identity_groups g ON g.id=m.group_id WHERE m.principal_type='user' AND m.principal_id=? AND g.source='oidc'", u.Subject)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var currentMemberships []membershipRow
+		currentGroupIDs := make(map[string]bool)
+		for rows.Next() {
+			var m membershipRow
+			if err = rows.Scan(&m.id, &m.groupID); err != nil {
+				return err
+			}
+			currentMemberships = append(currentMemberships, m)
+			currentGroupIDs[m.groupID] = true
+		}
+		if err = rows.Err(); err != nil {
+			return err
+		}
+
+		hasActiveAdmin := func() (bool, error) {
+			principal, _ := PrincipalSQL("a", "unused")
+			principal = strings.ReplaceAll(principal, "?", "u.id")
+			var exists bool
+			err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM identity_users u WHERE u.active=1 AND EXISTS(SELECT 1 FROM identity_assignments a WHERE a.role_id='administrator' AND `+principal+`))`).Scan(&exists)
+			return exists, err
+		}
+
+		syncComplete := true
+		for _, m := range currentMemberships {
+			if !desiredOIDCGroupIDs[m.groupID] {
+				if err = auditedIdentity(ctx, tx, u.Subject, "group.member", "group", m.groupID, func() error {
+					if _, err := tx.ExecContext(ctx, "DELETE FROM identity_memberships WHERE id=?", m.id); err != nil {
+						return err
+					}
+					hasAdmin, err := hasActiveAdmin()
+					if err != nil {
+						return err
+					}
+					if !hasAdmin {
+						if _, err = tx.ExecContext(ctx, "INSERT INTO identity_memberships(id,group_id,principal_type,principal_id,created_at) VALUES(?,?, 'user',?,CURRENT_TIMESTAMP)", m.id, m.groupID, u.Subject); err != nil {
+							return err
+						}
+						syncComplete = false
+						slog.Warn("keeping administrator membership to prevent zero active administrators", "subject", u.Subject, "group_id", m.groupID)
+					}
+					return nil
+				}); err != nil {
+					return err
+				}
+			}
+		}
+
+		for groupID := range desiredOIDCGroupIDs {
+			if !currentGroupIDs[groupID] {
+				err = auditedIdentity(ctx, tx, u.Subject, "group.member", "group", groupID, func() error {
+					_, err := tx.ExecContext(ctx, "INSERT INTO identity_memberships(id,group_id,principal_type,principal_id,created_at) VALUES(?,?, 'user',?,CURRENT_TIMESTAMP) ON CONFLICT(group_id,principal_type,principal_id) DO NOTHING", uuid.NewString(), groupID, u.Subject)
+					return err
+				})
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if !syncComplete {
+			// Retry deferred removals even if the next token has identical claims.
+			_, err = tx.ExecContext(ctx, "UPDATE identity_users SET sync_hash='' WHERE id=?", u.Subject)
+			return err
+		}
+		return nil
+	})
+}
+
 func ensureUser(ctx context.Context, tx *sql.Tx, subject string) error {
 	result, err := tx.ExecContext(ctx, "INSERT INTO identity_users(id,created_at) VALUES(?,CURRENT_TIMESTAMP) ON CONFLICT(id) DO NOTHING", subject)
 	if err != nil {
@@ -236,7 +461,7 @@ func (d Directory) Groups(ctx context.Context, actor string) ([]Group, error) {
 	if err := RequireScope(ctx, d.DB, actor, "group.read"); err != nil {
 		return nil, err
 	}
-	rows, err := d.DB.QueryContext(ctx, "SELECT id,name,description,version FROM identity_groups ORDER BY name,id")
+	rows, err := d.DB.QueryContext(ctx, "SELECT id,name,description,source,version FROM identity_groups ORDER BY name,id")
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +469,7 @@ func (d Directory) Groups(ctx context.Context, actor string) ([]Group, error) {
 	out := []Group{}
 	for rows.Next() {
 		var g Group
-		if err = rows.Scan(&g.ID, &g.Name, &g.Description, &g.Version); err != nil {
+		if err = rows.Scan(&g.ID, &g.Name, &g.Description, &g.Source, &g.Version); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
@@ -252,7 +477,7 @@ func (d Directory) Groups(ctx context.Context, actor string) ([]Group, error) {
 	return out, rows.Err()
 }
 func (d Directory) SaveGroup(ctx context.Context, actor, id string, version int, in GroupInput) (Group, error) {
-	if err := validateName(in.Name, in.Description); err != nil {
+	if err := ValidateName(in.Name, in.Description); err != nil {
 		return Group{}, err
 	}
 	create := id == ""
@@ -260,17 +485,22 @@ func (d Directory) SaveGroup(ctx context.Context, actor, id string, version int,
 		id = uuid.NewString()
 		version = 0
 	}
+	var source string
 	err := d.write(ctx, actor, "group.manage", func(tx *sql.Tx) error {
 		return auditedIdentity(ctx, tx, actor, "group.update", "group", id, func() error {
 			if create {
-				_, err := tx.ExecContext(ctx, "INSERT INTO identity_groups(id,name,description,version,created_at) VALUES(?,?,?,1,CURRENT_TIMESTAMP)", id, in.Name, in.Description)
+				source = "local"
+				_, err := tx.ExecContext(ctx, "INSERT INTO identity_groups(id,name,description,source,version,created_at) VALUES(?,?,?,'local',1,CURRENT_TIMESTAMP)", id, in.Name, in.Description)
+				return err
+			}
+			if err := tx.QueryRowContext(ctx, "SELECT source FROM identity_groups WHERE id=?", id).Scan(&source); err != nil {
 				return err
 			}
 			result, err := tx.ExecContext(ctx, "UPDATE identity_groups SET name=?,description=?,version=version+1 WHERE id=? AND version=?", in.Name, in.Description, id, version)
 			return changed(result, err)
 		})
 	})
-	return Group{ID: id, Name: in.Name, Description: in.Description, Version: version + 1}, err
+	return Group{ID: id, Name: in.Name, Description: in.Description, Source: source, Version: version + 1}, err
 }
 func changed(result sql.Result, err error) error {
 	if err != nil {
@@ -321,6 +551,13 @@ func (d Directory) SetMember(ctx context.Context, actor, groupID string, p Princ
 		return auditedIdentity(ctx, tx, actor, "group.member", "group", groupID, func() error {
 			if err := ValidatePrincipal(ctx, tx, Principal{"group", groupID}); err != nil {
 				return err
+			}
+			var source string
+			if err := tx.QueryRowContext(ctx, "SELECT source FROM identity_groups WHERE id=?", groupID).Scan(&source); err != nil {
+				return err
+			}
+			if source == "oidc" {
+				return ErrGroupManagedByIdentityProvider
 			}
 			if err := ValidatePrincipal(ctx, tx, p); err != nil {
 				return err

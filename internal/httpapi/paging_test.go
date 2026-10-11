@@ -2,12 +2,16 @@ package httpapi
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
+	"papergo/internal/auth"
 	"papergo/internal/dms"
+	"papergo/internal/storage"
+	"papergo/internal/testutil"
 )
 
 func TestNextLinksPreserveFiltersAndTerminate(t *testing.T) {
@@ -167,5 +171,43 @@ func TestPageSizeContract(t *testing.T) {
 		if got := queryInt(r, "$top"); got != want {
 			t.Fatal(raw, got, want)
 		}
+	}
+}
+
+// Behind a TLS-terminating proxy the request is plain HTTP on an internal
+// host; next links must still use the address clients know.
+func TestNextLinksUsePublicURL(t *testing.T) {
+	db := testutil.Database(t)
+	store, err := storage.NewLocal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := dms.NewService(db.SQL)
+	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Storage: store, Logger: slog.New(slog.NewJSONHandler(testLog{t}, nil)), Ready: db.SQL.PingContext, MaxUpload: 32, PublicURL: &url.URL{Scheme: "https", Host: "docs.example.com"}}
+	h := a.Handler()
+	ctx := t.Context()
+	for _, name := range []string{"One", "Two"} {
+		if _, err = s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := httptest.NewRequest("GET", "http://papergo:8080/v1/workspaces?$top=1", nil)
+	r.Header.Set("Authorization", "Bearer "+testToken)
+	res := httptest.NewRecorder()
+	h.ServeHTTP(res, r)
+	var body struct {
+		NextLink *string `json:"@odata.nextLink"`
+	}
+	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &body) != nil || body.NextLink == nil || !strings.HasPrefix(*body.NextLink, "https://docs.example.com/v1/workspaces?") {
+		t.Fatal(res.Code, res.Body.String())
+	}
+	// Batch subrequests build their links the same way.
+	r = httptest.NewRequest("POST", "http://papergo:8080/v1/$batch", strings.NewReader(`{"requests":[{"id":"a","method":"GET","url":"workspaces?$top=1"}]}`))
+	r.Header.Set("Authorization", "Bearer "+testToken)
+	r.Header.Set("Content-Type", "application/json")
+	res = httptest.NewRecorder()
+	h.ServeHTTP(res, r)
+	if res.Code != 200 || !strings.Contains(res.Body.String(), `"@odata.nextLink":"https://docs.example.com/v1/workspaces?`) {
+		t.Fatal(res.Code, res.Body.String())
 	}
 }

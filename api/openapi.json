@@ -11571,7 +11571,7 @@
             "description": "Required identity scope is missing"
           },
           "409": {
-            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+            "description": "Duplicate, stale version, built-in role, last administrator conflict, or group managed by identity provider"
           },
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
@@ -11623,7 +11623,7 @@
             "description": "Required identity scope is missing"
           },
           "409": {
-            "description": "Duplicate, stale version, built-in role, or last administrator conflict"
+            "description": "Duplicate, stale version, built-in role, last administrator conflict, or group managed by identity provider"
           },
           "422": {
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
@@ -14110,6 +14110,12 @@
               "organization_identifier": {
                 "type": "string"
               },
+              "groups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "scopes": {
                 "type": "array",
                 "items": {
@@ -14120,6 +14126,7 @@
             "required": [
               "organization_id",
               "organization_identifier",
+              "groups",
               "scopes"
             ]
           }
@@ -18778,6 +18785,13 @@
           "id": {
             "type": "string"
           },
+          "source": {
+            "type": "string",
+            "enum": [
+              "local",
+              "oidc"
+            ]
+          },
           "version": {
             "type": "integer",
             "minimum": 1
@@ -18787,6 +18801,7 @@
           "id",
           "name",
           "description",
+          "source",
           "version"
         ],
         "additionalProperties": false
@@ -18856,20 +18871,6 @@
           "scopes",
           "version",
           "builtin"
-        ],
-        "additionalProperties": false
-      },
-      "IdentityUserInput": {
-        "type": "object",
-        "properties": {
-          "subject": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 255
-          }
-        },
-        "required": [
-          "subject"
         ],
         "additionalProperties": false
       },

@@ -59,3 +59,71 @@ func TestOIDCRequiresExplicitFirstAdministrator(t *testing.T) {
 		t.Fatal(c, err)
 	}
 }
+
+func TestOIDCAdminGroupValidation(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("AUTH_MODE", "oidc")
+	t.Setenv("OIDC_ISSUER", "https://issuer.example")
+	t.Setenv("OIDC_AUDIENCE", "papergo")
+
+	// Both ADMIN_SUBJECT and ADMIN_GROUP set -> error
+	t.Setenv("ADMIN_SUBJECT", "configured-admin")
+	t.Setenv("ADMIN_GROUP", "papergo-admins")
+	t.Setenv("OIDC_GROUPS_CLAIM", "groups")
+	if _, err := Load(); err == nil {
+		t.Fatal("accepted both ADMIN_SUBJECT and ADMIN_GROUP")
+	}
+
+	// ADMIN_GROUP without OIDC_GROUPS_CLAIM -> error
+	t.Setenv("ADMIN_SUBJECT", "")
+	t.Setenv("ADMIN_GROUP", "papergo-admins")
+	t.Setenv("OIDC_GROUPS_CLAIM", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("accepted ADMIN_GROUP without OIDC_GROUPS_CLAIM")
+	}
+
+	// Valid ADMIN_GROUP with OIDC_GROUPS_CLAIM -> success
+	t.Setenv("OIDC_GROUPS_CLAIM", "groups")
+	t.Setenv("ADMIN_GROUP", "papergo-admins")
+	c, err := Load()
+	if err != nil || c.AdminGroup != "papergo-admins" || c.AdminSubject != "" {
+		t.Fatalf("valid ADMIN_GROUP rejected: %v, config: %+v", err, c)
+	}
+}
+
+func TestPublicURLIsAnOrigin(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("AUTH_MODE", "development")
+	t.Setenv("DEV_TOKEN", "0123456789abcdef0123456789abcdef")
+	c, err := Load()
+	if err != nil || c.PublicURL != nil {
+		t.Fatalf("default: %+v %v", c.PublicURL, err)
+	}
+	for _, bad := range []string{"docs.example.com", "ftp://docs.example.com", "https://", "https://docs.example.com/papergo", "https://docs.example.com/?a=1", "https://user@docs.example.com", "https://docs.example.com/#x"} {
+		t.Run(bad, func(t *testing.T) {
+			t.Setenv("PUBLIC_URL", bad)
+			if _, err := Load(); err == nil {
+				t.Fatalf("PUBLIC_URL=%s accepted", bad)
+			}
+		})
+	}
+	t.Setenv("PUBLIC_URL", "https://docs.example.com:8443/")
+	if c, err = Load(); err != nil || c.PublicURL.String() != "https://docs.example.com:8443" {
+		t.Fatalf("origin: %v %v", c.PublicURL, err)
+	}
+}
+func TestProductionPublicURLRequiresHTTPS(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("AUTH_MODE", "oidc")
+	t.Setenv("OIDC_ISSUER", "https://issuer.example")
+	t.Setenv("OIDC_AUDIENCE", "papergo")
+	t.Setenv("ADMIN_SUBJECT", "configured-admin")
+	t.Setenv("PUBLIC_URL", "http://docs.example.com")
+	if _, err := Load(); err == nil {
+		t.Fatal("production accepted an http PUBLIC_URL")
+	}
+	t.Setenv("PUBLIC_URL", "https://docs.example.com")
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
+}

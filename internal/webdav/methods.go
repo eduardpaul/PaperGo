@@ -133,7 +133,7 @@ func (h *Handler) delete(w http.ResponseWriter, r *request) error {
 }
 
 func (h *Handler) copyMove(w http.ResponseWriter, r *request) error {
-	dst, err := destination(r)
+	dst, err := h.destination(r)
 	if err != nil {
 		return err
 	}
@@ -195,8 +195,9 @@ func (h *Handler) copyMove(w http.ResponseWriter, r *request) error {
 	return nil
 }
 
-// destination parses the Destination header, which must name the same library.
-func destination(r *request) ([]string, error) {
+// destination parses the Destination header, which must name the same library
+// on this server: the request's host or, behind a proxy, the public host.
+func (h *Handler) destination(r *request) ([]string, error) {
 	raw := r.Header.Get("Destination")
 	if raw == "" {
 		return nil, badRequest("Destination is required")
@@ -205,7 +206,7 @@ func destination(r *request) ([]string, error) {
 	if err != nil {
 		return nil, badRequest("invalid Destination")
 	}
-	if u.Host != "" && !strings.EqualFold(u.Host, r.Host) || !strings.HasPrefix(u.EscapedPath(), Prefix) {
+	if u.Host != "" && !strings.EqualFold(u.Host, r.Host) && !strings.EqualFold(u.Host, h.PublicHost) || !strings.HasPrefix(u.EscapedPath(), Prefix) {
 		return nil, errBadGateway
 	}
 	library, dst, ok := parsePath(u.EscapedPath())

@@ -68,7 +68,7 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("initialize authentication: %w", err)
 	}
 	service := dms.NewService(db.SQL)
-	if err = service.Directory().Initialize(startup, c.AdminSubject); err != nil {
+	if err = service.Directory().Initialize(startup, c.AdminSubject, c.AdminGroup); err != nil {
 		return fmt.Errorf("initialize organization directory: %w", err)
 	}
 	if err = service.RegisterPortability(store); err != nil {
@@ -96,7 +96,10 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		return db.CheckSchema(ctx)
-	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload)}
+	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL}
+	if c.PublicURL != nil {
+		a.WebDAV.PublicHost = c.PublicURL.Host
+	}
 	// Content uploads/downloads extend these deadlines while data keeps flowing.
 	server := &http.Server{Addr: c.Address, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

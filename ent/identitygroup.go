@@ -23,6 +23,8 @@ type IdentityGroup struct {
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
+	// Source holds the value of the "source" field.
+	Source identitygroup.Source `json:"source,omitempty"`
 	// Version holds the value of the "version" field.
 	Version      int `json:"version,omitempty"`
 	selectValues sql.SelectValues
@@ -35,7 +37,7 @@ func (*IdentityGroup) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case identitygroup.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case identitygroup.FieldID, identitygroup.FieldName, identitygroup.FieldDescription:
+		case identitygroup.FieldID, identitygroup.FieldName, identitygroup.FieldDescription, identitygroup.FieldSource:
 			values[i] = new(sql.NullString)
 		case identitygroup.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -77,6 +79,12 @@ func (_m *IdentityGroup) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
 				_m.Description = value.String
+			}
+		case identitygroup.FieldSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source", values[i])
+			} else if value.Valid {
+				_m.Source = identitygroup.Source(value.String)
 			}
 		case identitygroup.FieldVersion:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -128,6 +136,9 @@ func (_m *IdentityGroup) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)
+	builder.WriteString(", ")
+	builder.WriteString("source=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Source))
 	builder.WriteString(", ")
 	builder.WriteString("version=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Version))

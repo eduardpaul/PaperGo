@@ -273,7 +273,7 @@ func TestBuiltInExpiryOnSchedule(t *testing.T) {
 		t.Fatal("built-in definition was edited in place")
 	}
 	// Make the schedule due and tick.
-	if _, err = f.db.Client.WorkflowTrigger.Update().Where(workflowtrigger.WorkflowIDEQ(w.ID)).SetNextAt(time.Now().Add(-time.Minute)).Save(ctx); err != nil {
+	if _, err = f.db.Client.WorkflowTrigger.Update().Where(workflowtrigger.WorkflowIDEQ(w.ID)).SetNextAt(time.Now().UTC().Add(-time.Minute)).Save(ctx); err != nil {
 		t.Fatal(err)
 	}
 	raised, err := f.r.Tick(ctx)

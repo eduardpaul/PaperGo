@@ -27,7 +27,7 @@ Tests use temporary SQLite files and apply the actual versioned migrations, incl
 
 The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
-[Organization groups and roles](docs/identity.md) are managed under `/v1/identity`. OIDC deployments require `ADMIN_SUBJECT` for the first administrator; development defaults to `DEV_SUBJECT`. Verified subjects enroll with the Member role on first authentication. User profiles, guarded anonymization, organization metadata and scoped personal REST tokens are exposed by these APIs. Module scopes and resource ACLs apply independently, including to owners and workflow item actions.
+[Organization groups and roles](docs/identity.md) are managed under `/v1/identity`. OIDC deployments require `ADMIN_SUBJECT` or `ADMIN_GROUP` for the first administrator; development defaults to `DEV_SUBJECT`. Verified subjects enroll with the Member role on first authentication. User profiles, guarded anonymization, organization metadata and scoped personal REST tokens are exposed by these APIs. Module scopes and resource ACLs apply independently, including to owners and workflow item actions.
 
 ## Data model and requirements
 
@@ -208,6 +208,8 @@ Back up SQLite with its online backup API or `VACUUM INTO` and back up the refer
 This is an initial backend foundation, not a completed enterprise certification or deployment. S3 storage, antivirus scanning, quotas, approval and task activities, notifications, document text extraction and tracing/metrics export remain future extensions. Benchmarks cover query latency and allocations, writer wait during index builds and WAL growth on configurable collection sizes; concurrent upload throughput, multi-client load and SLOs still need a target workload.
 
 The [runner plan](docs/plans/runner.md) describes the embedded runner and the next workflow phases; notifications and tasks build on workflows as activities and built-in workflows.
+
+The [reverse proxy guide](docs/reverse-proxies.md) covers running PaperGo behind Nginx Proxy Manager and other proxies, and syncing identity-provider users and groups.
 
 To scale later, retain the service and API boundaries, introduce a PostgreSQL connection adapter, regenerate/review database-specific Atlas migrations, replace FTS5 and tag SQL, and use a shared object-store implementation of the storage port. A database migration is required; changing the connection string alone is insufficient.
 

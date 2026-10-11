@@ -9125,6 +9125,7 @@ type IdentityGroupMutation struct {
 	created_at    *time.Time
 	name          *string
 	description   *string
+	source        *identitygroup.Source
 	version       *int
 	addversion    *int
 	clearedFields map[string]struct{}
@@ -9345,6 +9346,42 @@ func (m *IdentityGroupMutation) ResetDescription() {
 	m.description = nil
 }
 
+// SetSource sets the "source" field.
+func (m *IdentityGroupMutation) SetSource(i identitygroup.Source) {
+	m.source = &i
+}
+
+// Source returns the value of the "source" field in the mutation.
+func (m *IdentityGroupMutation) Source() (r identitygroup.Source, exists bool) {
+	v := m.source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSource returns the old "source" field's value of the IdentityGroup entity.
+// If the IdentityGroup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityGroupMutation) OldSource(ctx context.Context) (v identitygroup.Source, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSource: %w", err)
+	}
+	return oldValue.Source, nil
+}
+
+// ResetSource resets all changes to the "source" field.
+func (m *IdentityGroupMutation) ResetSource() {
+	m.source = nil
+}
+
 // SetVersion sets the "version" field.
 func (m *IdentityGroupMutation) SetVersion(i int) {
 	m.version = &i
@@ -9435,7 +9472,7 @@ func (m *IdentityGroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IdentityGroupMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.created_at != nil {
 		fields = append(fields, identitygroup.FieldCreatedAt)
 	}
@@ -9444,6 +9481,9 @@ func (m *IdentityGroupMutation) Fields() []string {
 	}
 	if m.description != nil {
 		fields = append(fields, identitygroup.FieldDescription)
+	}
+	if m.source != nil {
+		fields = append(fields, identitygroup.FieldSource)
 	}
 	if m.version != nil {
 		fields = append(fields, identitygroup.FieldVersion)
@@ -9462,6 +9502,8 @@ func (m *IdentityGroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case identitygroup.FieldDescription:
 		return m.Description()
+	case identitygroup.FieldSource:
+		return m.Source()
 	case identitygroup.FieldVersion:
 		return m.Version()
 	}
@@ -9479,6 +9521,8 @@ func (m *IdentityGroupMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldName(ctx)
 	case identitygroup.FieldDescription:
 		return m.OldDescription(ctx)
+	case identitygroup.FieldSource:
+		return m.OldSource(ctx)
 	case identitygroup.FieldVersion:
 		return m.OldVersion(ctx)
 	}
@@ -9510,6 +9554,13 @@ func (m *IdentityGroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDescription(v)
+		return nil
+	case identitygroup.FieldSource:
+		v, ok := value.(identitygroup.Source)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSource(v)
 		return nil
 	case identitygroup.FieldVersion:
 		v, ok := value.(int)
@@ -9590,6 +9641,9 @@ func (m *IdentityGroupMutation) ResetField(name string) error {
 		return nil
 	case identitygroup.FieldDescription:
 		m.ResetDescription()
+		return nil
+	case identitygroup.FieldSource:
+		m.ResetSource()
 		return nil
 	case identitygroup.FieldVersion:
 		m.ResetVersion()
@@ -12966,6 +13020,7 @@ type IdentityUserMutation struct {
 	id            *string
 	display_name  *string
 	email         *string
+	sync_hash     *string
 	deleted_at    *time.Time
 	active        *bool
 	created_at    *time.Time
@@ -13151,6 +13206,42 @@ func (m *IdentityUserMutation) ResetEmail() {
 	m.email = nil
 }
 
+// SetSyncHash sets the "sync_hash" field.
+func (m *IdentityUserMutation) SetSyncHash(s string) {
+	m.sync_hash = &s
+}
+
+// SyncHash returns the value of the "sync_hash" field in the mutation.
+func (m *IdentityUserMutation) SyncHash() (r string, exists bool) {
+	v := m.sync_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSyncHash returns the old "sync_hash" field's value of the IdentityUser entity.
+// If the IdentityUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityUserMutation) OldSyncHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncHash: %w", err)
+	}
+	return oldValue.SyncHash, nil
+}
+
+// ResetSyncHash resets all changes to the "sync_hash" field.
+func (m *IdentityUserMutation) ResetSyncHash() {
+	m.sync_hash = nil
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (m *IdentityUserMutation) SetDeletedAt(t time.Time) {
 	m.deleted_at = &t
@@ -13306,12 +13397,15 @@ func (m *IdentityUserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IdentityUserMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.display_name != nil {
 		fields = append(fields, identityuser.FieldDisplayName)
 	}
 	if m.email != nil {
 		fields = append(fields, identityuser.FieldEmail)
+	}
+	if m.sync_hash != nil {
+		fields = append(fields, identityuser.FieldSyncHash)
 	}
 	if m.deleted_at != nil {
 		fields = append(fields, identityuser.FieldDeletedAt)
@@ -13334,6 +13428,8 @@ func (m *IdentityUserMutation) Field(name string) (ent.Value, bool) {
 		return m.DisplayName()
 	case identityuser.FieldEmail:
 		return m.Email()
+	case identityuser.FieldSyncHash:
+		return m.SyncHash()
 	case identityuser.FieldDeletedAt:
 		return m.DeletedAt()
 	case identityuser.FieldActive:
@@ -13353,6 +13449,8 @@ func (m *IdentityUserMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldDisplayName(ctx)
 	case identityuser.FieldEmail:
 		return m.OldEmail(ctx)
+	case identityuser.FieldSyncHash:
+		return m.OldSyncHash(ctx)
 	case identityuser.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
 	case identityuser.FieldActive:
@@ -13381,6 +13479,13 @@ func (m *IdentityUserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEmail(v)
+		return nil
+	case identityuser.FieldSyncHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncHash(v)
 		return nil
 	case identityuser.FieldDeletedAt:
 		v, ok := value.(time.Time)
@@ -13466,6 +13571,9 @@ func (m *IdentityUserMutation) ResetField(name string) error {
 		return nil
 	case identityuser.FieldEmail:
 		m.ResetEmail()
+		return nil
+	case identityuser.FieldSyncHash:
+		m.ResetSyncHash()
 		return nil
 	case identityuser.FieldDeletedAt:
 		m.ResetDeletedAt()

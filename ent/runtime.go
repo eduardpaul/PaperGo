@@ -653,7 +653,7 @@ func init() {
 	// identitygroup.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
 	identitygroup.DescriptionValidator = identitygroupDescDescription.Validators[0].(func(string) error)
 	// identitygroupDescVersion is the schema descriptor for version field.
-	identitygroupDescVersion := identitygroupFields[2].Descriptor()
+	identitygroupDescVersion := identitygroupFields[3].Descriptor()
 	// identitygroup.DefaultVersion holds the default value on creation for the version field.
 	identitygroup.DefaultVersion = identitygroupDescVersion.Default.(int)
 	// identitygroup.VersionValidator is a validator for the "version" field. It is called by the builders before save.
@@ -889,16 +889,20 @@ func init() {
 	identityuserDescEmail := identityuserFields[1].Descriptor()
 	// identityuser.DefaultEmail holds the default value on creation for the email field.
 	identityuser.DefaultEmail = identityuserDescEmail.Default.(string)
+	// identityuserDescSyncHash is the schema descriptor for sync_hash field.
+	identityuserDescSyncHash := identityuserFields[2].Descriptor()
+	// identityuser.DefaultSyncHash holds the default value on creation for the sync_hash field.
+	identityuser.DefaultSyncHash = identityuserDescSyncHash.Default.(string)
 	// identityuserDescActive is the schema descriptor for active field.
-	identityuserDescActive := identityuserFields[3].Descriptor()
+	identityuserDescActive := identityuserFields[4].Descriptor()
 	// identityuser.DefaultActive holds the default value on creation for the active field.
 	identityuser.DefaultActive = identityuserDescActive.Default.(bool)
 	// identityuserDescCreatedAt is the schema descriptor for created_at field.
-	identityuserDescCreatedAt := identityuserFields[5].Descriptor()
+	identityuserDescCreatedAt := identityuserFields[6].Descriptor()
 	// identityuser.DefaultCreatedAt holds the default value on creation for the created_at field.
 	identityuser.DefaultCreatedAt = identityuserDescCreatedAt.Default.(func() time.Time)
 	// identityuserDescID is the schema descriptor for id field.
-	identityuserDescID := identityuserFields[4].Descriptor()
+	identityuserDescID := identityuserFields[5].Descriptor()
 	// identityuser.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	identityuser.IDValidator = func() func(string) error {
 		validators := identityuserDescID.Validators

@@ -38,7 +38,7 @@ func TestRESTOrganizationIdentityAndProfile(t *testing.T) {
 		t.Fatal(r.Code, r.Body.String())
 	}
 	// Initializing the directory again never changes the organization identity/profile.
-	if err := s.Directory().Initialize(t.Context(), "organization-admin"); err != nil {
+	if err := s.Directory().Initialize(t.Context(), "organization-admin", ""); err != nil {
 		t.Fatal(err)
 	}
 	current, err := s.Directory().Organization(t.Context(), "alice")

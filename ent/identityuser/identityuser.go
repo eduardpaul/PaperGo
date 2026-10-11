@@ -17,6 +17,8 @@ const (
 	FieldDisplayName = "display_name"
 	// FieldEmail holds the string denoting the email field in the database.
 	FieldEmail = "email"
+	// FieldSyncHash holds the string denoting the sync_hash field in the database.
+	FieldSyncHash = "sync_hash"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
 	// FieldActive holds the string denoting the active field in the database.
@@ -32,6 +34,7 @@ var Columns = []string{
 	FieldID,
 	FieldDisplayName,
 	FieldEmail,
+	FieldSyncHash,
 	FieldDeletedAt,
 	FieldActive,
 	FieldCreatedAt,
@@ -52,6 +55,8 @@ var (
 	DefaultDisplayName string
 	// DefaultEmail holds the default value on creation for the "email" field.
 	DefaultEmail string
+	// DefaultSyncHash holds the default value on creation for the "sync_hash" field.
+	DefaultSyncHash string
 	// DefaultActive holds the default value on creation for the "active" field.
 	DefaultActive bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -76,6 +81,11 @@ func ByDisplayName(opts ...sql.OrderTermOption) OrderOption {
 // ByEmail orders the results by the email field.
 func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEmail, opts...).ToFunc()
+}
+
+// BySyncHash orders the results by the sync_hash field.
+func BySyncHash(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSyncHash, opts...).ToFunc()
 }
 
 // ByDeletedAt orders the results by the deleted_at field.

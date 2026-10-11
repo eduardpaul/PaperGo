@@ -54,6 +54,20 @@ func (_c *IdentityGroupCreate) SetNillableDescription(v *string) *IdentityGroupC
 	return _c
 }
 
+// SetSource sets the "source" field.
+func (_c *IdentityGroupCreate) SetSource(v identitygroup.Source) *IdentityGroupCreate {
+	_c.mutation.SetSource(v)
+	return _c
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_c *IdentityGroupCreate) SetNillableSource(v *identitygroup.Source) *IdentityGroupCreate {
+	if v != nil {
+		_c.SetSource(*v)
+	}
+	return _c
+}
+
 // SetVersion sets the "version" field.
 func (_c *IdentityGroupCreate) SetVersion(v int) *IdentityGroupCreate {
 	_c.mutation.SetVersion(v)
@@ -125,6 +139,10 @@ func (_c *IdentityGroupCreate) defaults() {
 		v := identitygroup.DefaultDescription
 		_c.mutation.SetDescription(v)
 	}
+	if _, ok := _c.mutation.Source(); !ok {
+		v := identitygroup.DefaultSource
+		_c.mutation.SetSource(v)
+	}
 	if _, ok := _c.mutation.Version(); !ok {
 		v := identitygroup.DefaultVersion
 		_c.mutation.SetVersion(v)
@@ -154,6 +172,14 @@ func (_c *IdentityGroupCreate) check() error {
 	if v, ok := _c.mutation.Description(); ok {
 		if err := identitygroup.DescriptionValidator(v); err != nil {
 			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "IdentityGroup.description": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Source(); !ok {
+		return &ValidationError{Name: "source", err: errors.New(`ent: missing required field "IdentityGroup.source"`)}
+	}
+	if v, ok := _c.mutation.Source(); ok {
+		if err := identitygroup.SourceValidator(v); err != nil {
+			return &ValidationError{Name: "source", err: fmt.Errorf(`ent: validator failed for field "IdentityGroup.source": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Version(); !ok {
@@ -215,6 +241,10 @@ func (_c *IdentityGroupCreate) createSpec() (*IdentityGroup, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(identitygroup.FieldDescription, field.TypeString, value)
 		_node.Description = value
+	}
+	if value, ok := _c.mutation.Source(); ok {
+		_spec.SetField(identitygroup.FieldSource, field.TypeEnum, value)
+		_node.Source = value
 	}
 	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(identitygroup.FieldVersion, field.TypeInt, value)
