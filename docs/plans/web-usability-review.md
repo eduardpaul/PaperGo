@@ -18,20 +18,16 @@ This plan records how the workspace, list and library screens are meant to work 
 | --- | --- | --- |
 | Workspace | `/w/$workspaceId` | Open a list or library (icon, description, last update), create one from a blank list, blank library or template, open Tags and Settings |
 | Workspace settings | `/w/$workspaceId/settings/*` | Rename, delete (confirmed); members with a people picker, role changes in place and confirmed removal; workflows; runs |
-| List or library | `/w/$workspaceId/l/$listId` | Views as tabs, search as you type, sort by column headers, folders with breadcrumbs, table with select all, bulk field edit and confirmed delete; upload by button or drag and drop into the current folder |
-| Item panel | `…?item=$itemId&tab=` | Details with a sticky Save/Discard bar; File, Versions, Links, Permissions and (with publishing on) Publishing tabs; Move (folder browser), Add to smart folder, Field definitions and Delete in the "…" menu |
+| List or library | `/w/$workspaceId/l/$listId` | Views as tabs, search as you type (`/` focuses it), sort by column headers, choose and order columns (and save them to a view), folders with breadcrumbs, table with select all and keyboard use (arrows, Home/End, Enter, x), bulk field edit and confirmed delete; upload by button or drag and drop into the current folder |
+| Item panel | `…?item=$itemId&tab=` | Details with a sticky Save/Discard bar and tags as chips with suggestions; File (file versions with download and restore), Versions, Links, Permissions and (with publishing on) Publishing tabs; Move (folder browser), Add to smart folder, Field definitions and Delete in the "…" menu |
 | List settings | `/w/$workspaceId/l/$listId/settings/*` | General (folders, version history, publishing, duplicates and network drive for libraries, delete), Columns and content types, Views, Permissions, Background work |
+| Upload tray | everywhere | Uploads from libraries and inboxes run two at a time with progress, cancel, retry of network and server failures, duplicate warnings and Open; it stays while people move around |
 | Recycle bin | `/w/$workspaceId/l/$listId/recycle-bin` | Restore, or delete permanently after confirming |
 
 ## Open work
 
 Ordered by how much it helps people.
 
-1. **Tags as chips.** Tags are typed comma separated. Use a chip input with suggestions from `GET /v1/workspaces/{id}/tags`.
-2. **File versions list (API).** The File tab restores by typing a version number because there is no list endpoint. Add `GET /v1/items/{id}/content/versions` and show a list with dates, sizes and Restore.
-3. **Document preview.** Libraries show no thumbnail or preview; the File tab only downloads. Add an inline PDF/image preview from `GET /v1/items/{id}/content` and thumbnails when the API offers them.
-4. **Keyboard use of lists.** Arrow keys to move between rows, Enter to open, `x` to select, as in PaperDotNet.
-5. **Folder listing in Move.** Each level shows folders among its first 200 children. A folder filter on children (`kind=folder`) would make large libraries reliable.
-6. **Edit views from the list.** A "Save as view" or column picker on the list page, so people do not need settings to change what they see.
-7. **Live upload tray.** Several uploads run one after another with one toast at the end. Show per-file progress, duplicates and links as PaperDotNet's upload tray does.
-8. **Search by word start (API).** List search matches whole words, so typing "lap" finds nothing until "laptops" is complete. Prefix matching on the last word (FTS5 `"lap"*`) would make search as you type useful.
+1. **Document preview.** Libraries show no thumbnail or preview; the File tab only downloads. Add an inline PDF/image preview from `GET /v1/items/{id}/content` and thumbnails when the API offers them.
+2. **Search by word start (API).** List search matches whole words, so typing "lap" finds nothing until "laptops" is complete. Prefix matching on the last word (FTS5 `"lap"*`) would make search as you type useful.
+3. **Folder listing in Move.** Each level shows folders among its first 200 children. A folder filter on children (`kind=folder`) would make large libraries reliable.

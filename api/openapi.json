@@ -2007,6 +2007,82 @@
         ]
       }
     },
+    "/v1/items/{id}/content/versions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "summary": "List retained file versions",
+        "operationId": "listFileVersions",
+        "description": "Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version. Restore one with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.",
+        "parameters": [
+          {
+            "name": "$skiptoken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/FileVersion"
+                      }
+                    },
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "@odata.nextLink"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "list.read",
+          "document.read"
+        ]
+      }
+    },
     "/v1/workspaces/{id}/tags": {
       "get": {
         "summary": "Tags",
@@ -19778,6 +19854,58 @@
             }
           }
         ]
+      },
+      "FileVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "filename",
+          "content_type",
+          "size",
+          "sha256",
+          "created_at",
+          "created_by",
+          "is_current"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Blob id, as in revision blob_id."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "File version number used by restore."
+          },
+          "filename": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Subject that uploaded or restored this version."
+          },
+          "is_current": {
+            "type": "boolean"
+          }
+        }
       }
     }
   }

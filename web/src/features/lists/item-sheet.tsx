@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
 import { keys, resourceQuery, revisions } from '@/api/queries';
-import type { ContentType, FieldDefinition, Resource, Revision } from '@/api/types';
+import { useApiPages } from '@/api/pages';
+import type { ContentType, FieldDefinition, FileVersion, Resource, Revision } from '@/api/types';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/feedback';
@@ -18,11 +20,13 @@ import {
 } from '@/components/ui/menu';
 import { Select } from '@/components/ui/select';
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { TagInput } from '@/components/tag-input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { downloadContent, replaceContent } from '@/features/documents/transfer';
 import { FieldEditor } from '@/features/fields/editor';
 import { usePeopleNames } from '@/features/fields/people';
 import { valuesPatch } from '@/features/fields/values';
+import { QueryFeedback } from '@/features/admin/common';
 import { ConfirmDialog } from '@/features/settings/section';
 import { AddToSmartFolder } from '@/features/smart-folders/classification';
 import { useFormat } from '@/lib/preferences';
@@ -258,7 +262,7 @@ function Details({
 }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(item.name);
-  const [tags, setTags] = useState((item.tags ?? []).join(', '));
+  const [tags, setTags] = useState<string[]>(item.tags ?? []);
   const [contentTypeId, setContentTypeId] = useState(item.content_type_id ?? '');
   const visible = fieldsForType(fields, contentTypes, contentTypeId || item.content_type_id);
   const [values, setValues] = useState<Record<string, unknown>>({ ...(item.values ?? {}) });
@@ -266,15 +270,7 @@ function Details({
   const body = () => {
     const changes: Record<string, unknown> = {};
     if (name.trim() !== item.name) changes.name = name.trim();
-    const nextTags = [
-      ...new Set(
-        tags
-          .split(',')
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-      ),
-    ];
-    if (nextTags.join('\n') !== (item.tags ?? []).join('\n')) changes.tags = nextTags;
+    if (tags.join('\n') !== (item.tags ?? []).join('\n')) changes.tags = tags;
     if (contentTypeId && contentTypeId !== (item.content_type_id ?? '')) changes.content_type_id = contentTypeId;
     const patch = valuesPatch(visible, item.values, values);
     if (patch) changes.values = patch;
@@ -327,12 +323,7 @@ function Details({
           />
         ))}
         <Label htmlFor="item-tags">Tags</Label>
-        <Input
-          id="item-tags"
-          value={tags}
-          onChange={(event) => setTags(event.target.value)}
-          placeholder="Separate tags with commas"
-        />
+        <TagInput id="item-tags" value={tags} onChange={setTags} workspaceId={item.workspace_id} disabled={readOnly} />
       </fieldset>
       {!readOnly && (
       <footer className="flex shrink-0 items-center justify-end gap-2 border-t bg-surface px-4 py-3">
@@ -342,7 +333,7 @@ function Details({
           disabled={!dirty || save.isPending}
           onClick={() => {
             setName(item.name);
-            setTags((item.tags ?? []).join(', '));
+            setTags(item.tags ?? []);
             setContentTypeId(item.content_type_id ?? '');
             setValues({ ...(item.values ?? {}) });
           }}
@@ -360,13 +351,15 @@ function Details({
 
 function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
   const queryClient = useQueryClient();
+  const format = useFormat();
+  const names = usePeopleNames();
   const input = useRef<HTMLInputElement>(null);
-  const [fileVersion, setFileVersion] = useState('');
-  const [restoring, setRestoring] = useState<number>();
+  const [restoring, setRestoring] = useState<FileVersion>();
+  const versions = useApiPages<FileVersion>(['resources', item.id, 'file-versions'], `/v1/items/${item.id}/content/versions`);
   const restore = useMutation({
     meta: { silent: true },
-    mutationFn: (number: number) =>
-      api(`/v1/items/${item.id}/content/versions/${number}/restore`, { method: 'POST', ifMatch: item.version }),
+    mutationFn: (version: FileVersion) =>
+      api(`/v1/items/${item.id}/content/versions/${version.version}/restore`, { method: 'POST', ifMatch: item.version }),
     onSuccess: async () => {
       setRestoring(undefined);
       await queryClient.invalidateQueries({ queryKey: keys.resources });
@@ -411,42 +404,58 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
       {canWrite && (
         <p className="text-xs text-muted">Replacing the file keeps the name, tags and columns, and adds a new file version.</p>
       )}
-      {canWrite && (
-      <details className="rounded-md border p-3">
-        <summary className="cursor-pointer text-[13px] font-medium">Restore an earlier file version</summary>
-        <form
-          className="mt-3 grid gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setRestoring(Number(fileVersion));
-          }}
-        >
-          <Label htmlFor="restore-file-version">File version number</Label>
-          <Input
-            id="restore-file-version"
-            type="number"
-            required
-            min={1}
-            step={1}
-            value={fileVersion}
-            onChange={(event) => setFileVersion(event.target.value)}
-          />
-          <p className="text-xs text-muted">File versions are separate from the versions of the details. PaperGo cannot list them yet, so enter a known number.</p>
-          <Button type="submit" disabled={!Number.isSafeInteger(Number(fileVersion)) || Number(fileVersion) < 1}>
-            Restore this version
+      <section aria-labelledby="file-versions" className="flex flex-col gap-2">
+        <h3 id="file-versions" className="text-[13px] font-medium">
+          File versions
+        </h3>
+        <QueryFeedback query={versions} />
+        <ul className="flex flex-col divide-y rounded-md border">
+          {versions.items.map((version) => (
+            <li key={version.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium">
+                  Version {version.version}
+                  {version.is_current && <Badge className="ml-2">Current</Badge>}
+                </p>
+                <p className="truncate text-xs text-muted">
+                  {version.filename} · {format.fileSize(version.size)} · {format.dateTime(version.created_at)}
+                  {version.created_by && ` · ${names.get(version.created_by) ?? version.created_by}`}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label={`Download version ${version.version}`}
+                onClick={() => void downloadContent(item.id, version.filename, version.is_current ? undefined : version.id)}
+              >
+                <Download />
+              </Button>
+              {canWrite && !version.is_current && (
+                <Button size="sm" onClick={() => setRestoring(version)}>
+                  Restore
+                </Button>
+              )}
+            </li>
+          ))}
+          {!versions.isPending && versions.items.length === 0 && (
+            <li className="px-3 py-2 text-[13px] text-muted">No file yet.</li>
+          )}
+        </ul>
+        {versions.hasNextPage && (
+          <Button size="sm" disabled={versions.isFetchingNextPage} onClick={() => void versions.fetchNextPage()}>
+            Older versions
           </Button>
-        </form>
-      </details>
-      )}
+        )}
+      </section>
       <ConfirmDialog
         open={restoring !== undefined}
         onOpenChange={(open) => !open && setRestoring(undefined)}
-        title={`Restore file version ${restoring ?? ''}?`}
-        description="The earlier file becomes the current file as a new version. The name, tags and columns stay as they are."
+        title={`Restore file version ${restoring?.version ?? ''}?`}
+        description="The earlier file becomes the current file as a new version. The name, tags and columns stay as they are, and the current file stays in the version list."
         confirm="Restore file"
         busy={restore.isPending}
         error={restore.error}
-        onConfirm={() => restoring !== undefined && restore.mutate(restoring)}
+        onConfirm={() => restoring && restore.mutate(restoring)}
       />
     </div>
   );

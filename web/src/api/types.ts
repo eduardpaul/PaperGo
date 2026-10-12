@@ -313,6 +313,18 @@ export interface WebDAVCredential {
   password?: string;
 }
 
+export interface FileVersion {
+  id: string;
+  version: number;
+  filename: string;
+  content_type: string;
+  size: number;
+  sha256: string;
+  created_at: string;
+  created_by: string;
+  is_current: boolean;
+}
+
 export interface DocumentUpload {
   item: Resource;
   file: { id: string; filename: string; size: number; content_type: string };

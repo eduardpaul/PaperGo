@@ -38,11 +38,11 @@ All product screens in this section are implemented against the registered `/v1`
 
 ## Narrower than the contract
 
-- The File tab restores bytes using a known file version number. There is no file-version list endpoint; metadata history entries contain `blob_id` without a file version number.
 - The versions tab restores metadata with `POST /v1/items/{id}/revisions/{number}/restore`. File bytes stay on the current version.
 - Move offers the lists or libraries of the same kind in the item's workspace and browses their folders. Each folder level shows folders among its first 200 children.
 - The collection shows one level of children at a time.
 - Preference language and number-format choices include tags the server may reject. The server accepts a BCP-47 tag whose base language matches with exact confidence. A rejected value returns 422.
+- Columns chosen on the page are the `cols` URL parameter. With a saved view they are the query's `select`; managers save them, with the column sort, to a table view (`PUT /v1/views/{id}`) or a new view.
 - Plain browsing reads `GET /v1/resources/{id}/children` of the open folder or collection. A saved view or a column sort uses `POST /v1/resources/{id}/query` with the view's query, the open folder as `parent_id`, the search box as `search` and the chosen sort; the search box replaces a view's own search text. Search matches whole words.
 - Smart folder create stores a name, an owner (personal or one workspace), folder inclusion and one comparison with a text, number or boolean value. The group path stays in page state.
 - Inbox counts on Home come from `POST /v1/resources/{id}/query` with `include_total`. That total can include folders.

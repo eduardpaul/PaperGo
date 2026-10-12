@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/feedback';
+import { UploadsProvider } from '@/features/documents/uploads';
 import { CommandPaletteProvider, useCommandPalette } from './command-palette';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
@@ -12,6 +13,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   return (
     <CommandPaletteProvider>
+      <UploadsProvider>
       <div className="flex min-h-dvh">
         <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 lg:block">
           <Sidebar />
@@ -32,6 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </main>
         </div>
       </div>
+      </UploadsProvider>
     </CommandPaletteProvider>
   );
 }

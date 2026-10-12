@@ -22,6 +22,8 @@ export interface ListingOptions {
   view?: { query?: QuerySpec; columns?: string[] | null };
   q?: string;
   sort?: ListingSort;
+  /** Columns chosen on the page instead of the view's. */
+  columns?: string[];
 }
 
 /**
@@ -39,7 +41,8 @@ export function listingRequest(collectionId: string, options: ListingOptions): A
   if (parent) query.parent_id = parent;
   if (q) query.search = q;
   if (sort) query.sort = [sort];
-  const columns = view?.columns?.filter(Boolean) ?? [];
+  // A view's rows carry only its columns; the page asks for the columns it shows.
+  const columns = view ? ((options.columns ?? view.columns)?.filter(Boolean) ?? []) : [];
   const select = columns.length
     ? [...new Set(['$name', ...columns, ...(base.group_by ? [base.group_by] : [])])]
     : undefined;
@@ -85,6 +88,7 @@ export function replaceContentRequest(itemId: string, version: number, file: { n
   };
 }
 
-export function downloadContentPath(itemId: string): string {
-  return `/v1/items/${itemId}/content`;
+/** The current file, or an earlier version by its blob id (draft readers only). */
+export function downloadContentPath(itemId: string, blobId?: string): string {
+  return `/v1/items/${itemId}/content${blobId ? `?blob_id=${encodeURIComponent(blobId)}` : ''}`;
 }

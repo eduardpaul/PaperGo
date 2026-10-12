@@ -172,6 +172,43 @@ describe('table sorting', () => {
   });
 });
 
+describe('table keyboard', () => {
+  it('moves between rows with the arrow keys, opens with Enter and selects with x', () => {
+    const onOpen = vi.fn();
+    const onToggle = vi.fn();
+    renderWithClient(
+      <ItemsTable
+        rows={[row('a', 'Alpha'), row('b', 'Beta'), row('c', 'Gamma')]}
+        columns={['$name']}
+        fields={[]}
+        publishing={false}
+        names={new Map()}
+        selectable
+        selected={new Map()}
+        sortable={new Set()}
+        onSort={vi.fn()}
+        onToggle={onToggle}
+        onToggleAll={vi.fn()}
+        onOpen={onOpen}
+      />,
+    );
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows.map((element) => element.tabIndex)).toEqual([0, -1, -1]);
+    rows[0].focus();
+    fireEvent.keyDown(rows[0], { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(rows[1]);
+    expect(rows.map((element) => element.tabIndex)).toEqual([-1, 0, -1]);
+    fireEvent.keyDown(rows[1], { key: 'End' });
+    expect(document.activeElement).toBe(rows[2]);
+    fireEvent.keyDown(rows[2], { key: 'x' });
+    expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'c' }), true);
+    fireEvent.keyDown(rows[2], { key: 'Enter' });
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'c' }));
+    fireEvent.keyDown(rows[2], { key: 'Home' });
+    expect(document.activeElement).toBe(rows[0]);
+  });
+});
+
 describe('table selection', () => {
   it('has no checkboxes without write access', () => {
     renderWithClient(

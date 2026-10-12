@@ -97,6 +97,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("GET /v1/items/{id}/schema", a.itemSchema)
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)
+	api.HandleFunc("GET /v1/items/{id}/content/versions", a.fileVersions)
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
 	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
@@ -615,6 +616,14 @@ func (a *API) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	etag(w, version+1)
 	respond(w, r, 201, out)
+}
+func (a *API) fileVersions(w http.ResponseWriter, r *http.Request) {
+	out, err := a.DMS.FileVersions(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	respond(w, r, 200, out)
 }
 func (a *API) publications(w http.ResponseWriter, r *http.Request) {
 	out, err := a.DMS.Publications(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))

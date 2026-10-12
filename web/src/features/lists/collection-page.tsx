@@ -20,12 +20,13 @@ import { api, continuation } from '@/api/http';
 import { batch } from '@/api/batch';
 import { listingRequest, type ApiCall } from '@/api/requests';
 import { contentTypesQuery, fieldsQuery, keys, resourceQuery, viewsQuery } from '@/api/queries';
-import type { DocumentUpload, Page, Resource } from '@/api/types';
+import type { Page, Resource } from '@/api/types';
 import { Page as Screen, PageHeader } from '@/components/page';
 import { FormDialog } from '@/components/form-dialog';
+import { TagInput } from '@/components/tag-input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { EmptyState, Skeleton, Spinner } from '@/components/ui/feedback';
+import { EmptyState, Kbd, Skeleton, Spinner } from '@/components/ui/feedback';
 import { Input, Label } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -37,7 +38,7 @@ import {
 import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
 import { OperationProgress } from '@/features/admin/operation-progress';
-import { uploadDocument } from '@/features/documents/transfer';
+import { useUploads } from '@/features/documents/uploads';
 import { FieldEditor } from '@/features/fields/editor';
 import { useValueNames } from '@/features/fields/names';
 import { valuesPatch } from '@/features/fields/values';
@@ -50,7 +51,8 @@ import { ItemSheet } from './item-sheet';
 import { ItemsBoard, ItemsCalendar, ItemsGallery } from './items-layouts';
 import { ItemsTable } from './items-table';
 import { BulkEditDialog } from './operations';
-import { fieldsForType, parseSort, sortableColumns, sortParam } from './schema';
+import { ColumnPicker } from './column-picker';
+import { columnLabel, fieldsForType, parseSort, sortableColumns, sortParam } from './schema';
 
 export interface CollectionSearch {
   folder?: string;
@@ -60,6 +62,8 @@ export interface CollectionSearch {
   q?: string;
   /** A column key, "-" first for descending. */
   sort?: string;
+  /** Columns chosen on the page, comma separated, instead of the view's. */
+  cols?: string;
 }
 
 interface Listing {
@@ -103,7 +107,15 @@ export function CollectionPage({
   // A sort from an old link on a column that is no longer sortable is ignored rather than failing the list.
   const requestedSort = parseSort(search.sort);
   const sort = requestedSort && sortable.has(requestedSort.field) ? requestedSort : undefined;
-  const request = listingRequest(listId, { folder: search.folder, view, q: search.q, sort });
+  const columnChoices = [...systemFields.filter((field) => field.key !== '$id'), ...(fields.data ?? [])].map((field) => ({
+    key: field.key,
+    label: columnLabel(field.key, fields.data ?? []),
+  }));
+  const chosenColumns = search.cols
+    ?.split(',')
+    .filter((key) => columnChoices.some((choice) => choice.key === key));
+  const pageColumns = chosenColumns?.length ? [...new Set(['$name', ...chosenColumns])] : undefined;
+  const request = listingRequest(listId, { folder: search.folder, view, q: search.q, sort, columns: pageColumns });
   const listing = useQuery({
     queryKey: ['resources', listId, 'rows', request],
     enabled: !!collection.data && views.isSuccess && (!search.sort || fields.isSuccess),
@@ -132,7 +144,8 @@ export function CollectionPage({
   const fieldList = fields.data ?? [];
   const typeList = types.data ?? [];
   const columns = (
-    view?.columns?.length
+    pageColumns ??
+    (view?.columns?.length
       ? view.columns
       : [
           '$name',
@@ -140,7 +153,7 @@ export function CollectionPage({
             .slice(0, defaultColumnCount)
             .map((field) => field.key),
           '$modified_at',
-        ]
+        ])
   ).filter((column) => column !== '$id');
   const refresh = () => queryClient.invalidateQueries({ queryKey: keys.resources });
   const open = (resource: Resource) =>
@@ -148,22 +161,15 @@ export function CollectionPage({
       ? onSearch({ folder: resource.id, item: undefined, tab: undefined })
       : onSearch({ item: resource.id, tab: undefined });
 
-  const upload = useMutation({
-    mutationFn: async (files: File[]) => {
-      const done: DocumentUpload[] = [];
-      for (const file of files) done.push(await uploadDocument(`/v1/resources/${listId}/documents`, file, { folder_id: search.folder }));
-      return done;
-    },
-    onSuccess: async (results) => {
-      await refresh();
-      const duplicates = results.flatMap((result) => result.duplicates ?? []);
-      if (duplicates.length)
-        toast.warning(`Already stored elsewhere: ${duplicates.map((duplicate) => duplicate.name).join(', ')}`);
-      if (results.length === 1) onSearch({ item: results[0].item.id, tab: undefined });
-      else toast.success(`${results.length} files uploaded`);
-    },
-    onError: refresh,
-  });
+  const { upload } = useUploads();
+  // A finished single upload opens its item, unless the person has left this list meanwhile.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const remove = useMutation({
     meta: { silent: true },
@@ -234,7 +240,20 @@ export function CollectionPage({
   const startUpload = () => fileInput.current?.click();
   const uploadFiles = (files: FileList | null | undefined) => {
     const list = [...(files ?? [])];
-    if (list.length) upload.mutate(list);
+    if (!list.length) return;
+    const folder = search.folder;
+    void upload(list, {
+      url: `/v1/resources/${listId}/documents`,
+      label: folder ? (crumbs.data?.at(-1)?.name ?? 'the folder') : current.name,
+      metadata: () => ({ folder_id: folder }),
+      open: (itemId) => ({
+        to: '/w/$workspaceId/l/$listId',
+        params: { workspaceId, listId },
+        search: folder ? { folder, item: itemId } : { item: itemId },
+      }),
+    }).then((results) => {
+      if (list.length === 1 && results.length === 1 && mounted.current) onSearch({ item: results[0].item.id, tab: undefined });
+    });
   };
   const hasFiles = (event: React.DragEvent) => library && canAdd && event.dataTransfer.types.includes('Files');
 
@@ -257,8 +276,8 @@ export function CollectionPage({
             )}
             {canAdd &&
               (library ? (
-                <Button variant="primary" disabled={upload.isPending} onClick={startUpload}>
-                  {upload.isPending ? <Spinner className="text-accent-foreground" /> : <Upload />} Upload
+                <Button variant="primary" onClick={startUpload}>
+                  <Upload /> Upload
                 </Button>
               ) : (
                 <Button variant="primary" onClick={() => setCreating('item')}>
@@ -324,14 +343,27 @@ export function CollectionPage({
         {(views.data?.length ?? 0) > 0 && (
           <div role="tablist" aria-label="Views" className="flex max-w-full overflow-x-auto rounded-md bg-surface-muted p-0.5">
             {views.data?.map((entry) => (
-              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, q: undefined, sort: undefined })}>
+              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, q: undefined, sort: undefined, cols: undefined })}>
                 {entry.name}
               </ViewTab>
             ))}
-            <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined, sort: undefined })}>
+            <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined, sort: undefined, cols: undefined })}>
               All items
             </ViewTab>
           </div>
+        )}
+        {layout === 'table' && (
+          <ColumnPicker
+            collectionId={listId}
+            columns={columns}
+            available={columnChoices}
+            changed={!!pageColumns}
+            view={view}
+            sort={sort}
+            canManage={canManage}
+            onChange={(next) => onSearch({ cols: next?.join(',') }, true)}
+            onSaved={(id) => onSearch({ view: id, cols: undefined, sort: undefined })}
+          />
         )}
         <SearchBox key={search.q ?? ''} initial={search.q ?? ''} noun={noun} onSearch={(q) => onSearch({ q }, true)} />
       </div>
@@ -498,6 +530,12 @@ export function CollectionPage({
               {loadingMore && <Spinner />} Load more
             </Button>
           )}
+          {layout === 'table' && (
+            <span className="ml-auto hidden md:inline">
+              <Kbd>↑</Kbd> <Kbd>↓</Kbd> move · <Kbd>Enter</Kbd> open{canEdit && <> · <Kbd>x</Kbd> select</>} · <Kbd>/</Kbd>{' '}
+              search
+            </span>
+          )}
         </div>
       )}
       {operation && <OperationProgress id={operation} label="Field update on selected items" />}
@@ -573,7 +611,20 @@ function ViewTab({ active, onClick, children }: { active: boolean; onClick: () =
 /** Searches as the person types (after a short pause); Escape or the clear button empties it. */
 function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string; onSearch: (q: string | undefined) => void }) {
   const [value, setValue] = useState(initial);
+  const input = useRef<HTMLInputElement>(null);
   const latest = useRef(onSearch);
+  // "/" jumps to the search box from anywhere on the page, as in many web apps.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') !== null)) return;
+      event.preventDefault();
+      input.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   useEffect(() => {
     latest.current = onSearch;
   });
@@ -594,6 +645,7 @@ function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string;
     >
       <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted" />
       <Input
+        ref={input}
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
@@ -603,6 +655,7 @@ function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string;
           }
         }}
         placeholder={`Search this ${noun}…`}
+        aria-keyshortcuts="/"
         aria-label={`Search this ${noun}`}
         className="px-8"
       />
@@ -639,6 +692,7 @@ function CreateDialog({
   const [name, setName] = useState('');
   const [type, setType] = useState('');
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const [tags, setTags] = useState<string[]>([]);
   const typeList = types.data ?? [];
   const defaultType = typeList.find((entry) => entry.is_default) ?? typeList[0];
   const chosenType = type || defaultType?.id || '';
@@ -651,7 +705,7 @@ function CreateDialog({
           body: {
             kind,
             name: name.trim(),
-            tags: [],
+            tags,
             values: kind === 'item' ? (valuesPatch(visible, {}, values) ?? {}) : {},
             content_type_id: kind === 'item' && type ? type : undefined,
           },
@@ -691,6 +745,8 @@ function CreateDialog({
           onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
         />
       ))}
+      <Label htmlFor="draft-tags">Tags</Label>
+      <TagInput id="draft-tags" value={tags} onChange={setTags} workspaceId={collection.workspace_id} />
     </FormDialog>
   );
 }

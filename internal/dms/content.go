@@ -3,9 +3,11 @@ package dms
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"papergo/ent"
 	"papergo/ent/blob"
 	"papergo/ent/fieldvalue"
+	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/publication"
 	"papergo/ent/resource"
@@ -338,4 +340,80 @@ func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent
 		return nil, ErrNotFound
 	}
 	return b, err
+}
+
+// FileVersion is one retained file of a library item.
+type FileVersion struct {
+	ID          string    `json:"id"`
+	Version     int       `json:"version"`
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"content_type"`
+	Size        int64     `json:"size"`
+	SHA256      string    `json:"sha256"`
+	CreatedAt   time.Time `json:"created_at"`
+	// CreatedBy is who uploaded or restored this version.
+	CreatedBy string `json:"created_by"`
+	// IsCurrent marks the file of the caller's visible revision.
+	IsCurrent bool `json:"is_current"`
+}
+
+// FileVersions lists an item's retained files, newest first. Draft readers see
+// every version; ordinary readers see only the published file.
+func (s *Service) FileVersions(ctx context.Context, subject, id string, after, limit int) (Page[FileVersion], error) {
+	if !s.transaction {
+		return read(ctx, s, func(t *Service) (Page[FileVersion], error) { return t.FileVersions(ctx, subject, id, after, limit) })
+	}
+	if after < 0 {
+		return Page[FileVersion]{}, invalid("file version cursor must be a positive version number")
+	}
+	current, err := s.GetBlob(ctx, subject, id, "")
+	if errors.Is(err, ErrNotFound) {
+		// The item exists and is readable, but has no visible file yet.
+		if _, e := s.Get(ctx, subject, id); e != nil {
+			return Page[FileVersion]{}, e
+		}
+		return Page[FileVersion]{Data: []FileVersion{}}, nil
+	}
+	if err != nil {
+		return Page[FileVersion]{}, err
+	}
+	r, err := s.Client.Resource.Get(ctx, id)
+	if err != nil {
+		return Page[FileVersion]{}, err
+	}
+	draft, err := s.allowedMany(ctx, subject, "read_draft", []*ent.Resource{r})
+	if err != nil {
+		return Page[FileVersion]{}, err
+	}
+	q := s.Client.Blob.Query().Where(blob.ItemIDEQ(id))
+	if !draft[id] {
+		q.Where(blob.IDEQ(current.ID))
+	}
+	if after > 0 {
+		q.Where(blob.VersionLT(after))
+	}
+	rows, err := q.Order(ent.Desc(blob.FieldVersion)).Limit(pageSize(limit) + 1).All(ctx)
+	if err != nil {
+		return Page[FileVersion]{}, err
+	}
+	ids := make([]string, len(rows))
+	for i, b := range rows {
+		ids[i] = b.ID
+	}
+	// The first revision that pinned a file records who uploaded or restored it.
+	revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.ItemIDEQ(id), itemrevision.BlobIDIn(ids...)).Order(ent.Asc(itemrevision.FieldRevisionNumber)).All(ctx)
+	if err != nil {
+		return Page[FileVersion]{}, err
+	}
+	authors := map[string]string{}
+	for _, rev := range revisions {
+		if _, ok := authors[*rev.BlobID]; !ok {
+			authors[*rev.BlobID] = rev.CreatedBy
+		}
+	}
+	out := make([]FileVersion, len(rows))
+	for i, b := range rows {
+		out[i] = FileVersion{ID: b.ID, Version: b.Version, Filename: b.Filename, ContentType: b.ContentType, Size: b.Size, SHA256: b.Sha256, CreatedAt: b.CreatedAt, CreatedBy: authors[b.ID], IsCurrent: b.ID == current.ID}
+	}
+	return numberedPage(out, limit, func(v FileVersion) int { return v.Version }), nil
 }

@@ -11,6 +11,15 @@ describe('listing and search requests', () => {
     });
   });
 
+  it('selects the columns chosen on the page instead of the view\'s', () => {
+    const view = { columns: ['$name', 'status'], query: {} };
+    expect(listingRequest('col', { view, columns: ['$name', 'amount'] }).body).toEqual({
+      include_total: true,
+      query: {},
+      select: ['$name', 'amount'],
+    });
+  });
+
   it('sorts the open folder with a collection query', () => {
     expect(listingRequest('col', { sort: { field: 'amount', direction: 'desc' } })).toEqual({
       path: '/v1/resources/col/query',
@@ -75,5 +84,6 @@ describe('document transfer requests', () => {
       headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': 'a.pdf' },
     });
     expect(downloadContentPath('item')).toBe('/v1/items/item/content');
+    expect(downloadContentPath('item', 'blob')).toBe('/v1/items/item/content?blob_id=blob');
   });
 });

@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, ChevronsUpDown, Folder } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { FieldDefinition, Resource } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/select';
@@ -9,7 +9,10 @@ import { cn } from '@/lib/utils';
 import type { ListingSort } from '@/api/requests';
 import { columnLabel, publishState } from './schema';
 
-/** Rows of a list or library: a click opens the item (or the folder); the checkbox selects it. */
+/**
+ * Rows of a list or library: a click opens the item (or the folder); the checkbox selects it. From the keyboard, the
+ * arrow keys, Home and End move between rows, Enter opens one and x (or Space) selects it.
+ */
 export function ItemsTable({
   rows,
   columns,
@@ -51,6 +54,32 @@ export function ItemsTable({
   useEffect(() => {
     if (allRef.current) allRef.current.indeterminate = some;
   }, [some]);
+  // One row is in the tab order at a time (roving tabindex); the others are reached with the arrow keys.
+  const [focusIndex, setFocusIndex] = useState(0);
+  const current = Math.min(focusIndex, Math.max(rows.length - 1, 0));
+  const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+  const focusRow = (index: number) => {
+    const next = Math.max(0, Math.min(rows.length - 1, index));
+    setFocusIndex(next);
+    rowRefs.current[next]?.focus();
+  };
+  const onRowKey = (event: KeyboardEvent<HTMLTableRowElement>, index: number, resource: Resource) => {
+    if (event.target !== event.currentTarget) return;
+    const keys: Record<string, () => void> = {
+      ArrowDown: () => focusRow(index + 1),
+      ArrowUp: () => focusRow(index - 1),
+      Home: () => focusRow(0),
+      End: () => focusRow(rows.length - 1),
+      Enter: () => onOpen(resource),
+      ...(selectable
+        ? { x: () => onToggle(resource, !selected.has(resource.id)), ' ': () => onToggle(resource, !selected.has(resource.id)) }
+        : {}),
+    };
+    const action = keys[event.key];
+    if (!action || event.altKey || event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    action();
+  };
   return (
     <div className="overflow-x-auto rounded-lg border bg-surface">
       <table className="w-full text-left text-[13px]">
@@ -111,14 +140,21 @@ export function ItemsTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((resource) => {
+          {rows.map((resource, index) => {
             const state = publishState(resource, publishing);
             return (
               <tr
                 key={resource.id}
+                ref={(element) => {
+                  rowRefs.current[index] = element;
+                }}
+                tabIndex={index === current ? 0 : -1}
+                onFocus={() => setFocusIndex(index)}
+                onKeyDown={(event) => onRowKey(event, index, resource)}
                 onClick={() => onOpen(resource)}
                 className={cn(
-                  'cursor-pointer border-b last:border-0 hover:bg-surface-muted/50',
+                  'cursor-pointer border-b outline-none last:border-0 hover:bg-surface-muted/50',
+                  'focus-visible:bg-surface-muted focus-visible:shadow-[inset_3px_0_0_var(--color-accent)]',
                   selected.has(resource.id) && 'bg-accent-soft/40',
                   activeId === resource.id && 'bg-accent-soft/70',
                 )}
@@ -126,6 +162,7 @@ export function ItemsTable({
                 {selectable && (
                   <td className="px-3 py-2" onClick={(event) => event.stopPropagation()}>
                     <Checkbox
+                      tabIndex={-1}
                       checked={selected.has(resource.id)}
                       onChange={(event) => onToggle(resource, event.target.checked)}
                       aria-label={`Select ${resource.name}`}
@@ -137,6 +174,7 @@ export function ItemsTable({
                     {column === '$name' ? (
                       <button
                         type="button"
+                        tabIndex={-1}
                         className="inline-flex max-w-full items-center gap-2 text-left font-medium hover:underline"
                         onClick={(event) => {
                           event.stopPropagation();
