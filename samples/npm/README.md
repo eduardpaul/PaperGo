@@ -79,7 +79,11 @@ docker compose --env-file .env cp "papergo:/data/$backup_name" "generated/$backu
 
 Keep copied archives on separate backup storage and manage retention of the archives in `/data`. Stop PaperGo before restoring so the exclusive data lease can be acquired. The restore command validates an archive before replacing data; see [administrative backup and restore](../../README.md#administrative-backup-and-restore).
 
-The setup script can be rerun with the recorded settings. Credentials and bridge secrets remain stable. Use `--no-build` to reconfigure an already built stack. After manually rotating the bridge secret, rerun setup to update NPM and install the secret, then restart PaperGo to load it. Application and NPM management passwords are changed separately.
+The setup script automatically reuses the recorded settings on subsequent runs. Credentials and bridge secrets remain stable. Run `python3 setup.py --no-build` to finish or reconfigure an already built stack; no hostname, email or port flags need to be repeated. After manually rotating the bridge secret, rerun setup to update NPM and install the secret, then restart PaperGo to load it. Application and NPM management passwords are changed separately.
+
+Setup creates the first NPM administrator only when NPM reports that it has no users. If an existing NPM instance rejects the recorded management credentials, setup prompts for its administrator email and password in the terminal, without echoing the password. It also prompts for a two-factor code when required. After successful authentication it stores the management credentials privately and configures the Access List, TLS certificate and proxy host. It sets the application administrator's Access List password to the recorded application password and disables Pass Auth and Satisfy Any, preserving other users and client address rules. For unattended setup, supply the existing `npm_email` and `npm_password` in `generated/credentials.json`; two-factor login requires a terminal. Existing volumes remain intact.
+
+Run verification only after setup succeeds. Successful setup writes `generated/ready`; failed or interrupted setup leaves verification disabled. A missing local CA means certificate provisioning has not completed; rerun setup after resolving its reported error rather than disabling TLS verification.
 
 The public hostname, certificate issuance and server firewall are deployment inputs. The local stack verifies the authentication and storage path without requiring public DNS.
 

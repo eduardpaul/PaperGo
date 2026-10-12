@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Provision NPM access-list authentication and TLS for PaperGo."""
 import argparse
+import getpass
 import ipaddress
 import json
 import os
@@ -8,8 +9,10 @@ from pathlib import Path
 import re
 import secrets
 import subprocess
+import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent
@@ -53,6 +56,44 @@ class API:
             return json.load(response)
 
 
+def authenticate(api, credentials):
+    for attempt in range(60):
+        try:
+            status = api.call("GET", "/")
+            break
+        except (urllib.error.URLError, ConnectionError):
+            time.sleep(2)
+    else:
+        raise RuntimeError("NPM management API did not become ready")
+    if status.get("setup") is False:
+        api.call("POST", "/users", {"name": "PaperGo Proxy Administrator", "nickname": "Admin",
+                 "email": credentials["npm_email"],
+                 "auth": {"type": "password", "secret": credentials["npm_password"]}})
+    try:
+        result = api.call("POST", "/tokens", {"identity": credentials["npm_email"], "secret": credentials["npm_password"]})
+    except urllib.error.HTTPError as error:
+        if error.code not in (400, 401, 403):
+            raise
+        if not sys.stdin.isatty():
+            raise RuntimeError(
+                "NPM rejected the recorded management credentials. Run setup.py in an interactive terminal "
+                "to enter the existing administrator login privately, or set npm_email and npm_password "
+                "in generated/credentials.json before unattended setup. Credentials were not printed."
+            ) from None
+        print("NPM is already initialized. Enter its administrator login to configure this stack.")
+        email = input(f"NPM administrator email [{credentials['npm_email']}]: ").strip() or credentials['npm_email']
+        password = getpass.getpass("NPM administrator password: ")
+        result = api.call("POST", "/tokens", {"identity": email, "secret": password})
+        credentials = {**credentials, "npm_email": email, "npm_password": password}
+    if result.get("requires_2fa"):
+        if not sys.stdin.isatty():
+            raise RuntimeError("NPM requires a two-factor code. Run setup.py in an interactive terminal to complete login.")
+        code = getpass.getpass("NPM two-factor code: ").strip()
+        result = api.call("POST", "/tokens/2fa", {"challenge_token": result["challenge_token"], "code": code})
+    api.token = result["token"]
+    return credentials
+
+
 def local_certificate(host):
     ca_key, ca_cert = GENERATED / "ca.key", GENERATED / "ca.crt"
     key, csr, cert = GENERATED / "server.key", GENERATED / "server.csr", GENERATED / "server.crt"
@@ -67,10 +108,26 @@ def local_certificate(host):
     return cert, key, ca_cert
 
 
+def configure_access_list(api, username, password):
+    access_lists = api.call("GET", "/nginx/access-lists")
+    access = next((item for item in access_lists if item["name"] == "PaperGo users"), None)
+    items = []
+    if access is not None:
+        access = api.call("GET", f"/nginx/access-lists/{access['id']}?expand=items")
+        # NPM retains a user's current password when an update supplies an empty one.
+        items = [{"username": item["username"], "password": ""}
+                 for item in access["items"] if item["username"] != username]
+    items.append({"username": username, "password": password})
+    payload = {"name": "PaperGo users", "satisfy_any": False, "pass_auth": False, "items": items}
+    if access is None:
+        return api.call("POST", "/nginx/access-lists", {**payload, "clients": []})
+    return api.call("PUT", f"/nginx/access-lists/{access['id']}", payload)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", required=True, help="Public PaperGo hostname")
-    parser.add_argument("--email", required=True, help="NPM administrator email")
+    parser.add_argument("--host", help="Public PaperGo hostname (required for first setup)")
+    parser.add_argument("--email", help="NPM administrator email (required for first setup)")
     parser.add_argument("--tls", choices=["letsencrypt", "local"], default="letsencrypt")
     parser.add_argument("--admin-user", default="papergo-admin")
     parser.add_argument("--http-port", type=int, default=80)
@@ -78,7 +135,16 @@ def main():
     parser.add_argument("--admin-port", type=int, default=8181)
     parser.add_argument("--no-build", action="store_true", help="Use the already built PaperGo image when reconfiguring this stack")
     parser.add_argument("--subnet", default="172.29.242.0/24")
+    settings_file = GENERATED / "deployment.json"
+    if settings_file.exists():
+        try:
+            recorded = json.loads(settings_file.read_text())
+            parser.set_defaults(**recorded)
+        except (OSError, ValueError, TypeError):
+            parser.error("generated/deployment.json is invalid")
     args = parser.parse_args()
+    if not args.host or not args.email:
+        parser.error("--host and --email are required for first setup")
     if not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", args.host) or ".." in args.host:
         parser.error("host must be a DNS hostname without a scheme, port or path")
     if not re.fullmatch(r"[a-zA-Z0-9._@-]{1,200}", args.admin_user):
@@ -96,9 +162,9 @@ def main():
     os.umask(0o077)
     GENERATED.mkdir(mode=0o700, exist_ok=True)
     settings = {key: value for key, value in vars(args).items() if key != "no_build"}
-    settings_file = GENERATED / "deployment.json"
     if settings_file.exists() and json.loads(settings_file.read_text()) != settings:
         parser.error("existing deployment settings differ; use the recorded settings for this stack")
+    (GENERATED / "ready").unlink(missing_ok=True)
     private_write(settings_file, json.dumps(settings, indent=2) + "\n")
     credentials_file = GENERATED / "credentials.json"
     if credentials_file.exists():
@@ -121,29 +187,9 @@ def main():
     private_write(GENERATED / "curl.netrc", f"machine {args.host}\nlogin {args.admin_user}\npassword {credentials['papergo_password']}\n")
     compose("up", *([] if args.no_build else ["--build"]), "-d", "--wait", "--wait-timeout", "240")
     api = API(f"http://127.0.0.1:{args.admin_port}/api")
-    for attempt in range(60):
-        try:
-            api.token = api.call("POST", "/tokens", {"identity": args.email, "secret": credentials["npm_password"]})["token"]
-            break
-        except urllib.error.HTTPError as error:
-            if error.code not in (400, 401, 403):
-                raise
-            # The public setup endpoint creates the first management account only.
-            if attempt == 0:
-                api.call("POST", "/users", {"name": "PaperGo Proxy Administrator", "nickname": "Admin", "email": args.email,
-                         "auth": {"type": "password", "secret": credentials["npm_password"]}})
-        except (urllib.error.URLError, ConnectionError):
-            pass
-        time.sleep(2)
-    else:
-        raise RuntimeError("NPM management API did not become ready")
-    access_lists = api.call("GET", "/nginx/access-lists")
-    access = next((item for item in access_lists if item["name"] == "PaperGo users"), None)
-    if access is None:
-        access = api.call("POST", "/nginx/access-lists", {"name": "PaperGo users", "satisfy_any": False, "pass_auth": False,
-                         "items": [{"username": args.admin_user, "password": credentials["papergo_password"]}], "clients": []})
-    if access.get("pass_auth") or access.get("satisfy_any"):
-        raise RuntimeError("PaperGo Access List must disable Pass Auth and Satisfy Any")
+    credentials = authenticate(api, credentials)
+    private_write(credentials_file, json.dumps(credentials, indent=2) + "\n")
+    access = configure_access_list(api, args.admin_user, credentials["papergo_password"])
     certificates = api.call("GET", "/nginx/certificates")
     certificate = next((item for item in certificates if args.host in item.get("domain_names", [])), None)
     if certificate is None:
@@ -174,6 +220,7 @@ def main():
     result = api.call("PUT" if host else "POST", f"/nginx/proxy-hosts/{host['id']}" if host else "/nginx/proxy-hosts", host_config)
     if result.get("meta", {}).get("nginx_online") is False:
         raise RuntimeError("NPM rejected the generated proxy configuration; inspect the NPM management UI")
+    private_write(GENERATED / "ready", public_url + "\n")
     print(f"PaperGo configured at {public_url}/v1/identity/me")
     print(f"NPM management UI: http://127.0.0.1:{args.admin_port}")
     print("Credentials are stored privately in generated/credentials.json; curl credentials in generated/curl.netrc.")
@@ -185,4 +232,9 @@ if __name__ == "__main__":
     try:
         main()
     except urllib.error.HTTPError as error:
-        raise SystemExit(f"NPM API request failed (HTTP {error.code}); inspect the management UI. Credentials were not printed.")
+        path = urllib.parse.urlsplit(error.url).path
+        raise SystemExit(f"NPM API request to {path} failed (HTTP {error.code}); inspect the management UI. Credentials were not printed.")
+    except RuntimeError as error:
+        raise SystemExit(str(error))
+    except (EOFError, KeyboardInterrupt):
+        raise SystemExit("Setup cancelled; no successful setup was recorded.")

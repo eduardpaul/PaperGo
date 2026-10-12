@@ -57,6 +57,8 @@ jobs:
         run: npm ci --prefix web && npm --prefix web run build
       - name: Check frontend
         run: npm --prefix web run lint && npm --prefix web test -- --maxWorkers=2
+      - name: Check NPM sample setup
+        run: python3 -m unittest discover -s samples/npm -p 'test_*.py' -v
       - name: Verify module checksums
         run: go mod verify
       - name: Verify generated Ent code

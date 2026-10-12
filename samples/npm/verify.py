@@ -13,11 +13,20 @@ import subprocess
 from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parent
-settings = json.loads((ROOT / "generated/deployment.json").read_text())
-credentials = json.loads((ROOT / "generated/credentials.json").read_text())
-hostname, port = settings["host"], settings["https_port"]
-origin = "https://" + hostname + ("" if port == 443 else f":{port}")
-context = ssl.create_default_context(cafile=str(ROOT / "generated/ca.crt") if settings["tls"] == "local" else None)
+
+
+def load_deployment():
+    generated = ROOT / "generated"
+    try:
+        deployment = json.loads((generated / "deployment.json").read_text())
+        public_origin = "https://" + deployment["host"] + ("" if deployment["https_port"] == 443 else f":{deployment['https_port']}")
+        if (generated / "ready").read_text().strip() != public_origin:
+            raise RuntimeError("Setup completion does not match the recorded public origin; rerun setup.py.")
+        login = json.loads((generated / "credentials.json").read_text())
+        tls = ssl.create_default_context(cafile=str(generated / "ca.crt") if deployment["tls"] == "local" else None)
+    except (OSError, ValueError, KeyError):
+        raise RuntimeError("Sample setup is incomplete or its generated files are invalid. Resolve the setup.py error and rerun it successfully before running verify.py.") from None
+    return deployment, login, public_origin, tls
 
 
 class LocalHTTPS(http.client.HTTPSConnection):
@@ -45,9 +54,12 @@ def request(method, path, body=None, *, authenticated=True, headers=None, expect
 
 
 def main():
+    global settings, credentials, hostname, port, origin, context
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--large-upload", action="store_true", help="Also verify a 64 MiB upload and download at the sample's configured limit")
     args = parser.parse_args()
+    settings, credentials, origin, context = load_deployment()
+    hostname, port = settings["host"], settings["https_port"]
     plain = http.client.HTTPConnection("127.0.0.1" if settings["tls"] == "local" else hostname, settings["http_port"], timeout=30)
     plain.request("GET", "/v1/identity/me", headers={"Host": hostname})
     redirect = plain.getresponse()
@@ -103,4 +115,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except RuntimeError as error:
+        raise SystemExit(str(error))
