@@ -30,6 +30,35 @@ def compose(*args):
                     "-f", str(ROOT / "compose.yaml"), *args], check=True)
 
 
+def reset_management_password(credentials):
+    # Use the pinned NPM image's password model, including its bcrypt update hook.
+    # Credentials go over stdin, never command arguments, environment or logs.
+    script = """
+import authModel from '/app/models/auth.js';
+import userModel from '/app/models/user.js';
+let input = '';
+for await (const chunk of process.stdin) input += chunk;
+const credentials = JSON.parse(input);
+const user = await userModel.query().select('id', 'roles')
+  .where('email', credentials.email.toLowerCase().trim())
+  .where('is_deleted', 0).where('is_disabled', 0).first();
+if (!user || !user.roles.includes('admin')) process.exit(2);
+const changed = await authModel.query().where('user_id', user.id)
+  .where('type', 'password').where('is_deleted', 0)
+  .patch({type: 'password', secret: credentials.password});
+process.exit(changed === 1 ? 0 : 3);
+"""
+    result = subprocess.run(
+        ["docker", "compose", "--env-file", str(ROOT / ".env"), "-f", str(ROOT / "compose.yaml"),
+         "exec", "-T", "npm", "node", "--input-type=module", "-e", script],
+        input=json.dumps({"email": credentials["npm_email"], "password": credentials["npm_password"]}),
+        text=True, capture_output=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("NPM password reset failed. The recorded npm_email must identify an active administrator with password authentication. Credentials were not printed.")
+    print("NPM administrator password reset to the value in generated/credentials.json.")
+
+
 class API:
     def __init__(self, url):
         self.url, self.token = url, None
@@ -83,7 +112,17 @@ def authenticate(api, credentials):
         print("NPM is already initialized. Enter its administrator login to configure this stack.")
         email = input(f"NPM administrator email [{credentials['npm_email']}]: ").strip() or credentials['npm_email']
         password = getpass.getpass("NPM administrator password: ")
-        result = api.call("POST", "/tokens", {"identity": email, "secret": password})
+        try:
+            result = api.call("POST", "/tokens", {"identity": email, "secret": password})
+        except urllib.error.HTTPError as error:
+            if error.code not in (400, 401, 403):
+                raise
+            raise RuntimeError(
+                "NPM rejected the administrator email or password. Use the NPM management password, "
+                "which is separate from the PaperGo application password. If it is lost, rerun with "
+                "--reset-npm-admin-password to replace that administrator's password with the recorded "
+                "npm_password while retaining configuration and data. Credentials were not printed."
+            ) from None
         credentials = {**credentials, "npm_email": email, "npm_password": password}
     if result.get("requires_2fa"):
         if not sys.stdin.isatty():
@@ -134,6 +173,8 @@ def main():
     parser.add_argument("--https-port", type=int, default=443)
     parser.add_argument("--admin-port", type=int, default=8181)
     parser.add_argument("--no-build", action="store_true", help="Use the already built PaperGo image when reconfiguring this stack")
+    parser.add_argument("--reset-npm-admin-password", action="store_true",
+                        help="Reset the existing active NPM administrator's password to generated/credentials.json; preserve configuration and data")
     parser.add_argument("--subnet", default="172.29.242.0/24")
     settings_file = GENERATED / "deployment.json"
     if settings_file.exists():
@@ -161,7 +202,7 @@ def main():
         parser.error("subnet must be a dedicated private IPv4 /24 to /28 network")
     os.umask(0o077)
     GENERATED.mkdir(mode=0o700, exist_ok=True)
-    settings = {key: value for key, value in vars(args).items() if key != "no_build"}
+    settings = {key: value for key, value in vars(args).items() if key not in ("no_build", "reset_npm_admin_password")}
     if settings_file.exists() and json.loads(settings_file.read_text()) != settings:
         parser.error("existing deployment settings differ; use the recorded settings for this stack")
     (GENERATED / "ready").unlink(missing_ok=True)
@@ -186,6 +227,8 @@ def main():
                    f"PAPERGO_PRIVATE_IP={network.network_address + 3}"]) + "\n")
     private_write(GENERATED / "curl.netrc", f"machine {args.host}\nlogin {args.admin_user}\npassword {credentials['papergo_password']}\n")
     compose("up", *([] if args.no_build else ["--build"]), "-d", "--wait", "--wait-timeout", "240")
+    if args.reset_npm_admin_password:
+        reset_management_password(credentials)
     api = API(f"http://127.0.0.1:{args.admin_port}/api")
     credentials = authenticate(api, credentials)
     private_write(credentials_file, json.dumps(credentials, indent=2) + "\n")

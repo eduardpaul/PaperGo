@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import Mock, patch
 import urllib.error
@@ -66,12 +67,42 @@ class AuthenticationTests(unittest.TestCase):
         self.assertEqual(api.call.call_args.args, ('POST', '/tokens/2fa', {'challenge_token': 'test-challenge', 'code': '123456'}))
         self.assertEqual(api.token, 'test-token')
 
+    def test_rejected_prompt_explains_management_password_and_reset_option(self):
+        api = Mock()
+        api.call.side_effect = [{'setup': True}, urllib.error.HTTPError(
+            'http://localhost/api/tokens', 400, 'rejected', {}, None), urllib.error.HTTPError(
+            'http://localhost/api/tokens', 400, 'private-password', {}, None)]
+        with patch.object(setup.sys.stdin, 'isatty', return_value=True), patch('builtins.input', return_value=LOGIN['npm_email']), patch.object(setup.getpass, 'getpass', return_value='private-password'), patch('builtins.print'):
+            with self.assertRaisesRegex(RuntimeError, '--reset-npm-admin-password') as error:
+                setup.authenticate(api, LOGIN)
+        self.assertNotIn('private-password', str(error.exception))
+        self.assertEqual(api.call.call_count, 3)
+
     def test_unattended_two_factor_response_is_reported_without_exposing_challenge(self):
         api = Mock()
         api.call.side_effect = [{'setup': True}, {'requires_2fa': True, 'challenge_token': 'private-challenge'}]
         with patch.object(setup.sys.stdin, 'isatty', return_value=False), self.assertRaisesRegex(RuntimeError, 'two-factor') as error:
             setup.authenticate(api, LOGIN)
         self.assertNotIn('private-challenge', str(error.exception))
+
+
+class ResetTests(unittest.TestCase):
+    def test_reset_passes_credentials_only_over_stdin(self):
+        with patch.object(setup.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run, patch('builtins.print'):
+            setup.reset_management_password(LOGIN)
+        command = run.call_args.args[0]
+        self.assertNotIn(LOGIN['npm_password'], ' '.join(command))
+        self.assertNotIn(LOGIN['npm_email'], ' '.join(command))
+        self.assertEqual(json.loads(run.call_args.kwargs['input']),
+                         {'email': LOGIN['npm_email'], 'password': LOGIN['npm_password']})
+        self.assertTrue(run.call_args.kwargs['capture_output'])
+
+    def test_reset_failure_does_not_print_container_output(self):
+        with patch.object(setup.subprocess, 'run', return_value=subprocess.CompletedProcess(
+                [], 2, stdout=LOGIN['npm_password'], stderr=LOGIN['npm_password'])):
+            with self.assertRaisesRegex(RuntimeError, 'active administrator') as error:
+                setup.reset_management_password(LOGIN)
+        self.assertNotIn(LOGIN['npm_password'], str(error.exception))
 
 
 class AccessListTests(unittest.TestCase):

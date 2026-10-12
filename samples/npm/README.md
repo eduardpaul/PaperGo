@@ -85,6 +85,8 @@ Setup creates the first NPM administrator only when NPM reports that it has no u
 
 Run verification only after setup succeeds. Successful setup writes `generated/ready`; failed or interrupted setup leaves verification disabled. A missing local CA means certificate provisioning has not completed; rerun setup after resolving its reported error rather than disabling TLS verification.
 
+If the existing NPM administrator password is lost, run `python3 setup.py --no-build --reset-npm-admin-password`. This explicit option replaces the active administrator's password identified by `npm_email` with the private recorded `npm_password`, then finishes setup. It uses the pinned NPM image's password model and bcrypt hashing. It preserves users, two-factor settings, proxy hosts, certificates, volumes and PaperGo data; it does not create or enable an administrator. The management password is separate from `papergo_password`, which authenticates the application through the Access List.
+
 The public hostname, certificate issuance and server firewall are deployment inputs. The local stack verifies the authentication and storage path without requiring public DNS.
 
 Sources: [NPM release](https://github.com/NginxProxyManager/nginx-proxy-manager/releases/tag/v2.16.0), [NPM access-list authentication](https://nginxproxymanager.com/faq/), and [PaperGo proxy contract](../../docs/reverse-proxies.md).
