@@ -58,6 +58,12 @@ export function ViewsEditor({
         }
       >
         <QueryFeedback query={views} />
+        {views.isSuccess && views.data.length === 0 && (
+          <p className="text-sm text-muted">
+            No saved views yet. Everyone sees all items with the first columns. Add a view to choose columns, filters,
+            sorting, or a board, calendar or gallery layout.
+          </p>
+        )}
         <ul className="divide-y">
           {views.data?.map((view) => (
             <li key={view.id} className="flex items-center gap-3 py-3">
@@ -65,11 +71,11 @@ export function ViewsEditor({
                 {view.name} <Badge>{view.layout}</Badge>
                 {view.is_default && <Badge className="ml-2">Default</Badge>}
               </span>
-              <Button onClick={() => setEditing(view)}>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(view)}>
                 <Pencil /> {canManage ? 'Edit' : 'View'}
               </Button>
               {canManage && (
-                <Button variant="danger" onClick={() => setDeleting(view)}>
+                <Button size="sm" variant="ghost" onClick={() => setDeleting(view)}>
                   Delete
                 </Button>
               )}
@@ -182,9 +188,14 @@ function ViewDialog({
             patchQuery({ group_by: undefined });
           }}
         >
-          {['table', 'board', 'calendar', 'gallery'].map((value) => (
+          {[
+            ['table', 'Table'],
+            ['board', 'Board (cards grouped by a choice column)'],
+            ['calendar', 'Calendar (by a date column)'],
+            ['gallery', 'Gallery (cards)'],
+          ].map(([value, label]) => (
             <option key={value} value={value}>
-              {value}
+              {label}
             </option>
           ))}
         </Select>

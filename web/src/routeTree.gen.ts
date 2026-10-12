@@ -40,7 +40,12 @@ import { Route as AppWWorkspaceIdSettingsRunsRouteImport } from './routes/_app/w
 import { Route as AppWWorkspaceIdSettingsWorkflowsRouteImport } from './routes/_app/w/$workspaceId/settings/workflows'
 import { Route as AppWWorkspaceIdLListIdIndexRouteImport } from './routes/_app/w/$workspaceId/l/$listId/index'
 import { Route as AppWWorkspaceIdLListIdRecycleBinRouteImport } from './routes/_app/w/$workspaceId/l/$listId/recycle-bin'
-import { Route as AppWWorkspaceIdLListIdViewsRouteImport } from './routes/_app/w/$workspaceId/l/$listId/views'
+import { Route as AppWWorkspaceIdLListIdSettingsRouteImport } from './routes/_app/w/$workspaceId/l/$listId/settings'
+import { Route as AppWWorkspaceIdLListIdSettingsIndexRouteImport } from './routes/_app/w/$workspaceId/l/$listId/settings/index'
+import { Route as AppWWorkspaceIdLListIdSettingsActivityRouteImport } from './routes/_app/w/$workspaceId/l/$listId/settings/activity'
+import { Route as AppWWorkspaceIdLListIdSettingsColumnsRouteImport } from './routes/_app/w/$workspaceId/l/$listId/settings/columns'
+import { Route as AppWWorkspaceIdLListIdSettingsPermissionsRouteImport } from './routes/_app/w/$workspaceId/l/$listId/settings/permissions'
+import { Route as AppWWorkspaceIdLListIdSettingsViewsRouteImport } from './routes/_app/w/$workspaceId/l/$listId/settings/views'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -203,11 +208,41 @@ const AppWWorkspaceIdLListIdRecycleBinRoute =
     path: '/w/$workspaceId/l/$listId/recycle-bin',
     getParentRoute: () => AppRoute,
   } as any)
-const AppWWorkspaceIdLListIdViewsRoute =
-  AppWWorkspaceIdLListIdViewsRouteImport.update({
-    id: '/w/$workspaceId/l/$listId/views',
-    path: '/w/$workspaceId/l/$listId/views',
+const AppWWorkspaceIdLListIdSettingsRoute =
+  AppWWorkspaceIdLListIdSettingsRouteImport.update({
+    id: '/w/$workspaceId/l/$listId/settings',
+    path: '/w/$workspaceId/l/$listId/settings',
     getParentRoute: () => AppRoute,
+  } as any)
+const AppWWorkspaceIdLListIdSettingsIndexRoute =
+  AppWWorkspaceIdLListIdSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AppWWorkspaceIdLListIdSettingsRoute,
+  } as any)
+const AppWWorkspaceIdLListIdSettingsActivityRoute =
+  AppWWorkspaceIdLListIdSettingsActivityRouteImport.update({
+    id: '/activity',
+    path: '/activity',
+    getParentRoute: () => AppWWorkspaceIdLListIdSettingsRoute,
+  } as any)
+const AppWWorkspaceIdLListIdSettingsColumnsRoute =
+  AppWWorkspaceIdLListIdSettingsColumnsRouteImport.update({
+    id: '/columns',
+    path: '/columns',
+    getParentRoute: () => AppWWorkspaceIdLListIdSettingsRoute,
+  } as any)
+const AppWWorkspaceIdLListIdSettingsPermissionsRoute =
+  AppWWorkspaceIdLListIdSettingsPermissionsRouteImport.update({
+    id: '/permissions',
+    path: '/permissions',
+    getParentRoute: () => AppWWorkspaceIdLListIdSettingsRoute,
+  } as any)
+const AppWWorkspaceIdLListIdSettingsViewsRoute =
+  AppWWorkspaceIdLListIdSettingsViewsRouteImport.update({
+    id: '/views',
+    path: '/views',
+    getParentRoute: () => AppWWorkspaceIdLListIdSettingsRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -240,8 +275,13 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceId/settings/workflows': typeof AppWWorkspaceIdSettingsWorkflowsRoute
   '/w/$workspaceId/settings/': typeof AppWWorkspaceIdSettingsIndexRoute
   '/w/$workspaceId/l/$listId/recycle-bin': typeof AppWWorkspaceIdLListIdRecycleBinRoute
-  '/w/$workspaceId/l/$listId/views': typeof AppWWorkspaceIdLListIdViewsRoute
+  '/w/$workspaceId/l/$listId/settings': typeof AppWWorkspaceIdLListIdSettingsRouteWithChildren
   '/w/$workspaceId/l/$listId/': typeof AppWWorkspaceIdLListIdIndexRoute
+  '/w/$workspaceId/l/$listId/settings/activity': typeof AppWWorkspaceIdLListIdSettingsActivityRoute
+  '/w/$workspaceId/l/$listId/settings/columns': typeof AppWWorkspaceIdLListIdSettingsColumnsRoute
+  '/w/$workspaceId/l/$listId/settings/permissions': typeof AppWWorkspaceIdLListIdSettingsPermissionsRoute
+  '/w/$workspaceId/l/$listId/settings/views': typeof AppWWorkspaceIdLListIdSettingsViewsRoute
+  '/w/$workspaceId/l/$listId/settings/': typeof AppWWorkspaceIdLListIdSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -270,8 +310,12 @@ export interface FileRoutesByTo {
   '/w/$workspaceId/settings/workflows': typeof AppWWorkspaceIdSettingsWorkflowsRoute
   '/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsIndexRoute
   '/w/$workspaceId/l/$listId/recycle-bin': typeof AppWWorkspaceIdLListIdRecycleBinRoute
-  '/w/$workspaceId/l/$listId/views': typeof AppWWorkspaceIdLListIdViewsRoute
   '/w/$workspaceId/l/$listId': typeof AppWWorkspaceIdLListIdIndexRoute
+  '/w/$workspaceId/l/$listId/settings/activity': typeof AppWWorkspaceIdLListIdSettingsActivityRoute
+  '/w/$workspaceId/l/$listId/settings/columns': typeof AppWWorkspaceIdLListIdSettingsColumnsRoute
+  '/w/$workspaceId/l/$listId/settings/permissions': typeof AppWWorkspaceIdLListIdSettingsPermissionsRoute
+  '/w/$workspaceId/l/$listId/settings/views': typeof AppWWorkspaceIdLListIdSettingsViewsRoute
+  '/w/$workspaceId/l/$listId/settings': typeof AppWWorkspaceIdLListIdSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -305,8 +349,13 @@ export interface FileRoutesById {
   '/_app/w/$workspaceId/settings/workflows': typeof AppWWorkspaceIdSettingsWorkflowsRoute
   '/_app/w/$workspaceId/settings/': typeof AppWWorkspaceIdSettingsIndexRoute
   '/_app/w/$workspaceId/l/$listId/recycle-bin': typeof AppWWorkspaceIdLListIdRecycleBinRoute
-  '/_app/w/$workspaceId/l/$listId/views': typeof AppWWorkspaceIdLListIdViewsRoute
+  '/_app/w/$workspaceId/l/$listId/settings': typeof AppWWorkspaceIdLListIdSettingsRouteWithChildren
   '/_app/w/$workspaceId/l/$listId/': typeof AppWWorkspaceIdLListIdIndexRoute
+  '/_app/w/$workspaceId/l/$listId/settings/activity': typeof AppWWorkspaceIdLListIdSettingsActivityRoute
+  '/_app/w/$workspaceId/l/$listId/settings/columns': typeof AppWWorkspaceIdLListIdSettingsColumnsRoute
+  '/_app/w/$workspaceId/l/$listId/settings/permissions': typeof AppWWorkspaceIdLListIdSettingsPermissionsRoute
+  '/_app/w/$workspaceId/l/$listId/settings/views': typeof AppWWorkspaceIdLListIdSettingsViewsRoute
+  '/_app/w/$workspaceId/l/$listId/settings/': typeof AppWWorkspaceIdLListIdSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -340,8 +389,13 @@ export interface FileRouteTypes {
     | '/w/$workspaceId/settings/workflows'
     | '/w/$workspaceId/settings/'
     | '/w/$workspaceId/l/$listId/recycle-bin'
-    | '/w/$workspaceId/l/$listId/views'
+    | '/w/$workspaceId/l/$listId/settings'
     | '/w/$workspaceId/l/$listId/'
+    | '/w/$workspaceId/l/$listId/settings/activity'
+    | '/w/$workspaceId/l/$listId/settings/columns'
+    | '/w/$workspaceId/l/$listId/settings/permissions'
+    | '/w/$workspaceId/l/$listId/settings/views'
+    | '/w/$workspaceId/l/$listId/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -370,8 +424,12 @@ export interface FileRouteTypes {
     | '/w/$workspaceId/settings/workflows'
     | '/w/$workspaceId/settings'
     | '/w/$workspaceId/l/$listId/recycle-bin'
-    | '/w/$workspaceId/l/$listId/views'
     | '/w/$workspaceId/l/$listId'
+    | '/w/$workspaceId/l/$listId/settings/activity'
+    | '/w/$workspaceId/l/$listId/settings/columns'
+    | '/w/$workspaceId/l/$listId/settings/permissions'
+    | '/w/$workspaceId/l/$listId/settings/views'
+    | '/w/$workspaceId/l/$listId/settings'
   id:
     | '__root__'
     | '/_app'
@@ -404,8 +462,13 @@ export interface FileRouteTypes {
     | '/_app/w/$workspaceId/settings/workflows'
     | '/_app/w/$workspaceId/settings/'
     | '/_app/w/$workspaceId/l/$listId/recycle-bin'
-    | '/_app/w/$workspaceId/l/$listId/views'
+    | '/_app/w/$workspaceId/l/$listId/settings'
     | '/_app/w/$workspaceId/l/$listId/'
+    | '/_app/w/$workspaceId/l/$listId/settings/activity'
+    | '/_app/w/$workspaceId/l/$listId/settings/columns'
+    | '/_app/w/$workspaceId/l/$listId/settings/permissions'
+    | '/_app/w/$workspaceId/l/$listId/settings/views'
+    | '/_app/w/$workspaceId/l/$listId/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -632,12 +695,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdLListIdRecycleBinRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/w/$workspaceId/l/$listId/views': {
-      id: '/_app/w/$workspaceId/l/$listId/views'
-      path: '/w/$workspaceId/l/$listId/views'
-      fullPath: '/w/$workspaceId/l/$listId/views'
-      preLoaderRoute: typeof AppWWorkspaceIdLListIdViewsRouteImport
+    '/_app/w/$workspaceId/l/$listId/settings': {
+      id: '/_app/w/$workspaceId/l/$listId/settings'
+      path: '/w/$workspaceId/l/$listId/settings'
+      fullPath: '/w/$workspaceId/l/$listId/settings'
+      preLoaderRoute: typeof AppWWorkspaceIdLListIdSettingsRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/w/$workspaceId/l/$listId/settings/': {
+      id: '/_app/w/$workspaceId/l/$listId/settings/'
+      path: '/'
+      fullPath: '/w/$workspaceId/l/$listId/settings/'
+      preLoaderRoute: typeof AppWWorkspaceIdLListIdSettingsIndexRouteImport
+      parentRoute: typeof AppWWorkspaceIdLListIdSettingsRoute
+    }
+    '/_app/w/$workspaceId/l/$listId/settings/activity': {
+      id: '/_app/w/$workspaceId/l/$listId/settings/activity'
+      path: '/activity'
+      fullPath: '/w/$workspaceId/l/$listId/settings/activity'
+      preLoaderRoute: typeof AppWWorkspaceIdLListIdSettingsActivityRouteImport
+      parentRoute: typeof AppWWorkspaceIdLListIdSettingsRoute
+    }
+    '/_app/w/$workspaceId/l/$listId/settings/columns': {
+      id: '/_app/w/$workspaceId/l/$listId/settings/columns'
+      path: '/columns'
+      fullPath: '/w/$workspaceId/l/$listId/settings/columns'
+      preLoaderRoute: typeof AppWWorkspaceIdLListIdSettingsColumnsRouteImport
+      parentRoute: typeof AppWWorkspaceIdLListIdSettingsRoute
+    }
+    '/_app/w/$workspaceId/l/$listId/settings/permissions': {
+      id: '/_app/w/$workspaceId/l/$listId/settings/permissions'
+      path: '/permissions'
+      fullPath: '/w/$workspaceId/l/$listId/settings/permissions'
+      preLoaderRoute: typeof AppWWorkspaceIdLListIdSettingsPermissionsRouteImport
+      parentRoute: typeof AppWWorkspaceIdLListIdSettingsRoute
+    }
+    '/_app/w/$workspaceId/l/$listId/settings/views': {
+      id: '/_app/w/$workspaceId/l/$listId/settings/views'
+      path: '/views'
+      fullPath: '/w/$workspaceId/l/$listId/settings/views'
+      preLoaderRoute: typeof AppWWorkspaceIdLListIdSettingsViewsRouteImport
+      parentRoute: typeof AppWWorkspaceIdLListIdSettingsRoute
     }
   }
 }
@@ -709,6 +807,33 @@ const AppWWorkspaceIdSettingsRouteWithChildren =
     AppWWorkspaceIdSettingsRouteChildren,
   )
 
+interface AppWWorkspaceIdLListIdSettingsRouteChildren {
+  AppWWorkspaceIdLListIdSettingsActivityRoute: typeof AppWWorkspaceIdLListIdSettingsActivityRoute
+  AppWWorkspaceIdLListIdSettingsColumnsRoute: typeof AppWWorkspaceIdLListIdSettingsColumnsRoute
+  AppWWorkspaceIdLListIdSettingsPermissionsRoute: typeof AppWWorkspaceIdLListIdSettingsPermissionsRoute
+  AppWWorkspaceIdLListIdSettingsViewsRoute: typeof AppWWorkspaceIdLListIdSettingsViewsRoute
+  AppWWorkspaceIdLListIdSettingsIndexRoute: typeof AppWWorkspaceIdLListIdSettingsIndexRoute
+}
+
+const AppWWorkspaceIdLListIdSettingsRouteChildren: AppWWorkspaceIdLListIdSettingsRouteChildren =
+  {
+    AppWWorkspaceIdLListIdSettingsActivityRoute:
+      AppWWorkspaceIdLListIdSettingsActivityRoute,
+    AppWWorkspaceIdLListIdSettingsColumnsRoute:
+      AppWWorkspaceIdLListIdSettingsColumnsRoute,
+    AppWWorkspaceIdLListIdSettingsPermissionsRoute:
+      AppWWorkspaceIdLListIdSettingsPermissionsRoute,
+    AppWWorkspaceIdLListIdSettingsViewsRoute:
+      AppWWorkspaceIdLListIdSettingsViewsRoute,
+    AppWWorkspaceIdLListIdSettingsIndexRoute:
+      AppWWorkspaceIdLListIdSettingsIndexRoute,
+  }
+
+const AppWWorkspaceIdLListIdSettingsRouteWithChildren =
+  AppWWorkspaceIdLListIdSettingsRoute._addFileChildren(
+    AppWWorkspaceIdLListIdSettingsRouteChildren,
+  )
+
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AppInboxRoute: typeof AppInboxRoute
@@ -721,7 +846,7 @@ interface AppRouteChildren {
   AppWWorkspaceIdTagsRoute: typeof AppWWorkspaceIdTagsRoute
   AppWWorkspaceIdIndexRoute: typeof AppWWorkspaceIdIndexRoute
   AppWWorkspaceIdLListIdRecycleBinRoute: typeof AppWWorkspaceIdLListIdRecycleBinRoute
-  AppWWorkspaceIdLListIdViewsRoute: typeof AppWWorkspaceIdLListIdViewsRoute
+  AppWWorkspaceIdLListIdSettingsRoute: typeof AppWWorkspaceIdLListIdSettingsRouteWithChildren
   AppWWorkspaceIdLListIdIndexRoute: typeof AppWWorkspaceIdLListIdIndexRoute
 }
 
@@ -737,7 +862,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppWWorkspaceIdTagsRoute: AppWWorkspaceIdTagsRoute,
   AppWWorkspaceIdIndexRoute: AppWWorkspaceIdIndexRoute,
   AppWWorkspaceIdLListIdRecycleBinRoute: AppWWorkspaceIdLListIdRecycleBinRoute,
-  AppWWorkspaceIdLListIdViewsRoute: AppWWorkspaceIdLListIdViewsRoute,
+  AppWWorkspaceIdLListIdSettingsRoute:
+    AppWWorkspaceIdLListIdSettingsRouteWithChildren,
   AppWWorkspaceIdLListIdIndexRoute: AppWWorkspaceIdLListIdIndexRoute,
 }
 

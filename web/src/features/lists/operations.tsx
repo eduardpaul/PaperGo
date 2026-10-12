@@ -4,7 +4,9 @@ import { api } from '@/api/http';
 import { useApiPages } from '@/api/pages';
 import type { FieldDefinition } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SettingsSection } from '@/features/settings/section';
 import { Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { FieldEditor } from '@/features/fields/editor';
@@ -75,6 +77,12 @@ export function BulkEditDialog({
   );
 }
 
+const operationKinds: Record<string, string> = {
+  bulk_update: 'Field update on selected items',
+  field_index: 'Column index build',
+};
+
+/** Background work on a collection (bulk field updates, index builds), newest first. */
 export function CollectionOperations({ collectionId }: { collectionId: string }) {
   const operations = useApiPages<Operation>(
     ['operations', collectionId, 'list'],
@@ -82,29 +90,39 @@ export function CollectionOperations({ collectionId }: { collectionId: string })
   );
   const [selected, setSelected] = useState('');
   return (
-    <details className="my-3 rounded border p-3">
-      <summary className="cursor-pointer text-sm font-medium">Background operations</summary>
+    <SettingsSection
+      title="Background work"
+      description="Changes that run in the background, such as editing a field on many items or building a column index."
+    >
       <QueryFeedback query={operations} />
-      <ul>
+      <ul className="flex flex-col divide-y">
         {operations.items.map((operation) => (
           <li key={operation.id}>
             <button
               type="button"
-              className="py-1 text-left text-sm hover:underline"
-              onClick={() => setSelected(operation.id)}
+              className="flex w-full items-center gap-3 py-2 text-left text-[13px] hover:bg-surface-muted/50"
+              aria-expanded={selected === operation.id}
+              onClick={() => setSelected(selected === operation.id ? '' : operation.id)}
             >
-              {operation.kind} · {operation.status} · {operation.id}
+              <span className="flex-1">{operationKinds[operation.kind] ?? operation.kind.replaceAll(/[_-]/g, ' ')}</span>
+              <Badge
+                tone={operation.status === 'succeeded' ? 'success' : operation.status === 'failed' ? 'danger' : 'neutral'}
+              >
+                {operation.status}
+              </Badge>
             </button>
+            {selected === operation.id && <OperationProgress id={operation.id} label="Progress" />}
           </li>
         ))}
       </ul>
-      {!operations.isPending && operations.items.length === 0 && <p className="text-sm text-muted">No operations.</p>}
+      {!operations.isPending && operations.items.length === 0 && (
+        <p className="text-sm text-muted">Nothing has run in the background yet.</p>
+      )}
       {operations.hasNextPage && (
         <Button disabled={operations.isFetchingNextPage} onClick={() => void operations.fetchNextPage()}>
-          Load more operations
+          Load more
         </Button>
       )}
-      {selected && <OperationProgress id={selected} label="Operation progress" />}
-    </details>
+    </SettingsSection>
   );
 }

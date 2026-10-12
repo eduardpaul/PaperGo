@@ -1,4 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { ArrowLeft, Tag } from 'lucide-react';
+import { resourceQuery } from '@/api/queries';
 import { useState } from 'react';
 import { useApiPages } from '@/api/pages';
 import type { Resource } from '@/api/types';
@@ -10,6 +13,7 @@ import { QueryFeedback } from '@/features/admin/common';
 export const Route = createFileRoute('/_app/w/$workspaceId/tags')({ component: WorkspaceTags });
 function WorkspaceTags() {
   const { workspaceId } = Route.useParams();
+  const workspace = useQuery(resourceQuery(workspaceId));
   const [prefix, setPrefix] = useState('');
   const [tag, setTag] = useState('');
   const tags = useApiPages<{ tag: string; count: number }>(
@@ -23,9 +27,17 @@ function WorkspaceTags() {
   });
   return (
     <Page>
+      <Link
+        to="/w/$workspaceId"
+        params={{ workspaceId }}
+        className="mb-2 inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" /> {workspace.data?.name ?? 'Workspace'}
+      </Link>
       <PageHeader
-        title="Workspace tags"
-        description="Labels in this workspace and the resources you can read that carry them."
+        icon={Tag}
+        title="Tags"
+        description="Tags used in this workspace. Choose one to see what carries it."
       />
       <Input
         aria-label="Filter tag prefix"
@@ -36,7 +48,13 @@ function WorkspaceTags() {
       <QueryFeedback query={tags} />
       <div className="my-3 flex flex-wrap gap-2">
         {tags.items.map((entry) => (
-          <Button key={entry.tag} aria-pressed={tag === entry.tag} onClick={() => setTag(entry.tag)}>
+          <Button
+            key={entry.tag}
+            size="sm"
+            variant={tag === entry.tag ? 'primary' : 'secondary'}
+            aria-pressed={tag === entry.tag}
+            onClick={() => setTag(tag === entry.tag ? '' : entry.tag)}
+          >
             {entry.tag} · {entry.count}
           </Button>
         ))}

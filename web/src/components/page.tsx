@@ -26,7 +26,7 @@ export function PageHeader({
 }) {
   return (
     <header className="mb-6 flex flex-wrap items-start gap-x-4 gap-y-3">
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div className="flex min-w-48 flex-1 items-start gap-3">
         {Icon && (
           <span className="mt-0.5 rounded-lg bg-accent-soft p-2 text-accent">
             <Icon className="size-5" />

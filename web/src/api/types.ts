@@ -20,6 +20,7 @@ export interface Resource {
   name: string;
   description?: string;
   allow_folders?: boolean;
+  template_keys?: string[] | null;
   tags?: string[] | null;
   values?: Record<string, unknown> | null;
   inherit_permissions?: boolean;
@@ -195,7 +196,8 @@ export interface Relationship {
 }
 
 export interface PermissionGrant {
-  principal_type: 'user' | 'group';
+  /** Workspace role principals stand for everyone with that role in the workspace. */
+  principal_type: 'user' | 'group' | 'workspace_visitor' | 'workspace_member' | 'workspace_owner';
   principal_id: string;
   action: string;
   effect: string;

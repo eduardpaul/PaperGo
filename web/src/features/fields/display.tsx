@@ -12,7 +12,9 @@ export function FieldDisplay({ field, value, names }: { field: FieldDefinition; 
   if (field.type === 'number' && (typeof value === 'number' || isLosslessNumber(value))) {
     return <>{format.number(String(value), { maximumFractionDigits: 28 })}</>;
   }
-  if (field.type === 'currency') return <>{field.options?.currency_code ? `${field.options.currency_code} ` : ''}{fieldText(value)}</>;
+  if (field.type === 'currency') {
+    return field.options?.currency_code ? <>{format.currency(fieldText(value), field.options.currency_code)}</> : <>{fieldText(value)}</>;
+  }
   if (field.options?.multiple || Array.isArray(value) || field.type === 'person' || field.type === 'lookup' || field.type === 'term' || field.type === 'keywords') {
     const items = asList(value);
     if (items.length === 0) return <span className="text-muted">—</span>;

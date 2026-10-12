@@ -6,13 +6,13 @@ import { Suspense } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseJSON, stringifyJSON } from '@/api/json';
-import { contentTypesQuery, fieldsQuery, resourceQuery } from '@/api/queries';
-import type { BuiltInState, ContentType, FieldDefinition, Resource, Workflow } from '@/api/types';
+import { resourceQuery } from '@/api/queries';
+import type { BuiltInState, FieldDefinition, Resource, Workflow } from '@/api/types';
 import { Route as WorkflowsRoute } from '@/routes/_app/w/$workspaceId/settings/workflows';
 import { FieldEditor } from './fields/editor';
-import { CollectionSettings } from './lists/collection-settings';
+import { CollectionColumns } from './admin/content-types';
+import { CollectionGeneral } from './lists/collection-settings';
 import { ItemSheet } from './lists/item-sheet';
-import { fieldsForType } from './lists/schema';
 import { CreateSmartFolderDialog } from './smart-folders/create-dialog';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -81,43 +81,42 @@ describe('reviewed frontend flows', () => {
     expect(submitted).toEqual(multiple ? ['keyword'] : 'keyword');
   });
 
-  it('refreshes field membership and the version before saving collection settings', async () => {
+  it('uses the collection version after adding a column when saving its settings', async () => {
     const record = collection();
     const fields: FieldDefinition[] = [{ id: 'old', key: 'old', label: 'Old field', type: 'text' }];
-    const type: ContentType = { id: 'type', key: 'type', name: 'Type', is_default: true, field_ids: ['old'] };
+    let added: Record<string, unknown> | undefined;
     let savedVersion: string | undefined;
     mockAPI((url, init) => {
       if (url.pathname.endsWith('/fields') && init.method === 'POST') {
-        const field: FieldDefinition = { id: 'added', key: 'added', label: 'Added field', type: 'text' };
+        added = parseJSON(String(init.body)) as Record<string, unknown>;
+        const field: FieldDefinition = { id: 'added', key: 'added_field', label: 'Added field', type: 'text' };
         fields.push(field);
-        type.field_ids = ['old', 'added'];
         record.version++;
         return field;
       }
       if (url.pathname.endsWith('/fields')) return { value: fields };
-      if (url.pathname.endsWith('/content-types')) return [type];
       if (init.method === 'PATCH') {
         savedVersion = (init.headers as Record<string, string>)['If-Match'];
         return { ...record, name: 'Renamed', version: record.version + 1 };
       }
-      return record;
+      if (url.pathname === '/v1/resources/collection') return record;
+      return { value: [] };
     });
     function Page() {
       const current = useQuery(resourceQuery('collection'));
-      const definitions = useQuery(fieldsQuery('collection'));
-      const types = useQuery(contentTypesQuery('collection'));
       if (!current.data) return null;
       return <>
-        <CollectionSettings key={current.data.version} collection={current.data} open onClose={vi.fn()} onDeleted={vi.fn()} />
-        {fieldsForType(definitions.data ?? [], types.data ?? []).map((field) => <p key={field.id}>{field.label}</p>)}
+        <CollectionColumns collection={current.data} canManage />
+        <CollectionGeneral key={current.data.version} collection={current.data} canManage onDeleted={vi.fn()} />
       </>;
     }
     renderPage(<Page />);
-    fireEvent.change(await screen.findByPlaceholderText('Key'), { target: { value: 'added' } });
-    fireEvent.change(screen.getByPlaceholderText('Label'), { target: { value: 'Added field' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add column' }));
+    fireEvent.change(screen.getByLabelText('Name', { selector: '#catalog-field-label' }), { target: { value: 'Added field' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save field' }));
     await screen.findByText('Added field');
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed' } });
+    expect(added).toMatchObject({ key: 'added_field', label: 'Added field', type: 'text' });
+    fireEvent.change(screen.getByLabelText('Name', { selector: '#collection-name' }), { target: { value: 'Renamed' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(savedVersion).toBe('"2"'));
   });

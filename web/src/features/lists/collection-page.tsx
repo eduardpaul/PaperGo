@@ -1,33 +1,56 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Folder, FolderPlus, Plus, Search, Settings, Trash2, Upload } from 'lucide-react';
-import { useState } from 'react';
+import {
+  ChevronRight,
+  FilePlus,
+  FolderOpen,
+  FolderPlus,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Settings,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api, continuation } from '@/api/http';
 import { batch } from '@/api/batch';
-import { OperationProgress } from '@/features/admin/operation-progress';
-import { BulkEditDialog, CollectionOperations } from './operations';
 import { listingRequest } from '@/api/requests';
 import { contentTypesQuery, fieldsQuery, keys, resourceQuery, viewsQuery } from '@/api/queries';
-import type { FieldDefinition, Page, Resource } from '@/api/types';
+import type { DocumentUpload, Page, Resource } from '@/api/types';
 import { Page as Screen, PageHeader } from '@/components/page';
 import { FormDialog } from '@/components/form-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { EmptyState, Skeleton } from '@/components/ui/feedback';
+import { Card } from '@/components/ui/card';
+import { EmptyState, Skeleton, Spinner } from '@/components/ui/feedback';
 import { Input, Label } from '@/components/ui/input';
-import { Checkbox, Select } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/menu';
+import { Select } from '@/components/ui/select';
+import { QueryFeedback } from '@/features/admin/common';
+import { OperationProgress } from '@/features/admin/operation-progress';
 import { uploadDocument } from '@/features/documents/transfer';
-import { FieldDisplay } from '@/features/fields/display';
 import { FieldEditor } from '@/features/fields/editor';
+import { usePeopleNames } from '@/features/fields/people';
 import { valuesPatch } from '@/features/fields/values';
-import { useFormat } from '@/lib/preferences';
-import { CollectionSettings } from './collection-settings';
+import { ConfirmDialog } from '@/features/settings/section';
+import { cn } from '@/lib/utils';
+import { useCanManage } from './access';
+import { CollectionIcon } from './collection-icon';
+import { systemFields } from './filter-editor';
 import { ItemSheet } from './item-sheet';
 import { ItemsBoard, ItemsCalendar, ItemsGallery } from './items-layouts';
-import { systemFields } from './filter-editor';
-import { QueryFeedback } from '@/features/admin/common';
-import { columnLabel, fieldsForType, publishState } from './schema';
+import { ItemsTable } from './items-table';
+import { BulkEditDialog } from './operations';
+import { fieldsForType } from './schema';
 
 export interface CollectionSearch {
   folder?: string;
@@ -41,30 +64,33 @@ interface Listing {
   items: Resource[];
   next: string | null;
   post: boolean;
+  total?: number;
   select?: string[];
 }
+
+/** Columns shown when no saved view picks them: the name, the first few columns of the default type, the last change. */
+const defaultColumnCount = 4;
 
 export function CollectionPage({
   workspaceId,
   listId,
   search,
   onSearch,
-  onLeave,
   onMoved,
 }: {
   workspaceId: string;
   listId: string;
   search: CollectionSearch;
-  onSearch: (patch: Partial<CollectionSearch>) => void;
-  onLeave: () => void;
+  onSearch: (patch: Partial<CollectionSearch>, replace?: boolean) => void;
   onMoved: (resource: Resource) => void;
 }) {
-  const format = useFormat();
   const queryClient = useQueryClient();
+  const names = usePeopleNames();
   const collection = useQuery(resourceQuery(listId));
   const fields = useQuery(fieldsQuery(listId));
   const types = useQuery(contentTypesQuery(listId));
   const views = useQuery(viewsQuery(listId));
+  const { canManage } = useCanManage(listId);
   const crumbs = useQuery({
     queryKey: ['resources', listId, 'crumbs', search.folder],
     enabled: !!search.folder,
@@ -94,72 +120,64 @@ export function CollectionPage({
     setSelected(new Map());
   }
   const [bulkEditing, setBulkEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [operation, setOperation] = useState('');
-  const [settings, setSettings] = useState(false);
   const [creating, setCreating] = useState<'item' | 'folder' | null>(null);
-  const [draftName, setDraftName] = useState('');
-  const [draftType, setDraftType] = useState('');
-  const [draftValues, setDraftValues] = useState<Record<string, unknown>>({});
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const rows = [...(listing.data?.items ?? []), ...more];
-  const columns = (view?.columns?.length ? view.columns : ['$name', '$modified_at', '$tags']).filter(
-    (column) => column !== '$id',
-  );
   const fieldList = fields.data ?? [];
-  const parentId = search.folder || listId;
-  const draftFields = fieldsForType(fieldList, types.data ?? [], draftType);
-
-  const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: keys.resources });
-  };
-
-  const create = useMutation({
-    mutationFn: () =>
-      api<Resource>(`/v1/resources/${parentId}/children`, {
-        method: 'POST',
-        body: {
-          kind: creating,
-          name: draftName.trim(),
-          tags: [],
-          values: creating === 'item' ? (valuesPatch(draftFields, {}, draftValues) ?? {}) : {},
-          content_type_id: creating === 'item' && draftType ? draftType : undefined,
-        },
-      }),
-    onSuccess: async (result) => {
-      await refresh();
-      setCreating(null);
-      setDraftName('');
-      setDraftValues({});
-      if (result.data.kind === 'item') onSearch({ item: result.data.id, tab: 'details' });
-      else onSearch({ folder: result.data.id, item: undefined });
-    },
-  });
+  const typeList = types.data ?? [];
+  const columns = (
+    view?.columns?.length
+      ? view.columns
+      : [
+          '$name',
+          ...fieldsForType(fieldList, typeList)
+            .slice(0, defaultColumnCount)
+            .map((field) => field.key),
+          '$modified_at',
+        ]
+  ).filter((column) => column !== '$id');
+  const refresh = () => queryClient.invalidateQueries({ queryKey: keys.resources });
+  const open = (resource: Resource) =>
+    resource.kind === 'folder'
+      ? onSearch({ folder: resource.id, item: undefined, tab: undefined })
+      : onSearch({ item: resource.id, tab: undefined });
 
   const upload = useMutation({
-    mutationFn: (file: File) => uploadDocument(`/v1/resources/${listId}/documents`, file, { folder_id: search.folder }),
-    onSuccess: async (result) => {
-      await refresh();
-      const duplicates = result.duplicates ?? [];
-      if (duplicates.length)
-        toast.warning(`Possible duplicates: ${duplicates.map((duplicate) => duplicate.name).join(', ')}`);
-      onSearch({ item: result.item.id, tab: 'details' });
+    mutationFn: async (files: File[]) => {
+      const done: DocumentUpload[] = [];
+      for (const file of files) done.push(await uploadDocument(`/v1/resources/${listId}/documents`, file, { folder_id: search.folder }));
+      return done;
     },
+    onSuccess: async (results) => {
+      await refresh();
+      const duplicates = results.flatMap((result) => result.duplicates ?? []);
+      if (duplicates.length)
+        toast.warning(`Already stored elsewhere: ${duplicates.map((duplicate) => duplicate.name).join(', ')}`);
+      if (results.length === 1) onSearch({ item: results[0].item.id, tab: undefined });
+      else toast.success(`${results.length} files uploaded`);
+    },
+    onError: refresh,
   });
 
   const remove = useMutation({
-    mutationFn: async () => {
-      await batch(
+    meta: { silent: true },
+    mutationFn: () =>
+      batch(
         [...selected.values()].map((resource) => ({
           id: resource.id,
           method: 'DELETE',
           url: `/v1/resources/${resource.id}${resource.kind === 'folder' ? '?recursive=true' : ''}`,
           headers: { 'If-Match': `"${resource.version}"` },
         })),
-      );
-    },
+      ),
     onSuccess: async () => {
-      setSelected(new Map());
+      setConfirmingDelete(false);
       await refresh();
+      toast.success('Moved to the recycle bin');
     },
     onError: refresh,
   });
@@ -169,12 +187,8 @@ export function CollectionPage({
     setLoadingMore(true);
     try {
       const page = listing.data.post
-        ? (
-            await api<Page<Resource>>(next, {
-              method: 'POST',
-              body: { include_total: true, select: listing.data.select },
-            })
-          ).data
+        ? (await api<Page<Resource>>(next, { method: 'POST', body: { include_total: true, select: listing.data.select } }))
+            .data
         : (await api<Page<Resource>>(next)).data;
       setMore((current) => [...current, ...(page.value ?? [])]);
       setNext(continuation(page['@odata.nextLink']));
@@ -202,286 +216,303 @@ export function CollectionPage({
   if (!collection.data) {
     return (
       <Screen>
-        <EmptyState title="Collection not found" />
+        <EmptyState title="This list is not available">It was deleted, or you do not have access to it.</EmptyState>
       </Screen>
     );
   }
   const current = collection.data;
+  const library = current.kind === 'library';
+  const noun = library ? 'library' : 'list';
+  const folders = current.allow_folders !== false;
+  const items = [...selected.values()].filter((resource) => resource.kind === 'item');
+  const startUpload = () => fileInput.current?.click();
+  const uploadFiles = (files: FileList | null | undefined) => {
+    const list = [...(files ?? [])];
+    if (list.length) upload.mutate(list);
+  };
+  const hasFiles = (event: React.DragEvent) => library && event.dataTransfer.types.includes('Files');
 
   return (
-    <Screen wide>
+    <Screen wide className="max-w-[1600px]">
       <PageHeader
-        title={current.name}
-        description={current.description || (current.kind === 'library' ? 'Library' : 'List')}
+        title={
+          <span className="flex items-center gap-2">
+            <CollectionIcon collection={current} className="size-5 shrink-0 text-accent" />
+            <span className="truncate">{current.name}</span>
+          </span>
+        }
+        description={current.description}
         actions={
           <>
-            {current.kind === 'library' && (
-              <Button asChild>
-                <label className="cursor-pointer">
-                  <Upload /> Upload
-                  <input
-                    type="file"
-                    className="sr-only"
-                    disabled={upload.isPending}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) upload.mutate(file);
-                      event.target.value = '';
-                    }}
-                  />
-                </label>
-              </Button>
-            )}
-            {current.allow_folders !== false && (
+            {folders && (
               <Button onClick={() => setCreating('folder')}>
-                <FolderPlus /> Folder
+                <FolderPlus /> New folder
               </Button>
             )}
-            <Button variant="primary" onClick={() => setCreating('item')}>
-              <Plus /> Item
-            </Button>
-            <Button asChild>
-              <Link to="/w/$workspaceId/l/$listId/recycle-bin" params={{ workspaceId, listId }}>
-                Recycle bin
-              </Link>
-            </Button>
-            <Button onClick={() => setSettings(true)} aria-label="Collection settings">
-              <Settings />
-            </Button>
+            {library ? (
+              <Button variant="primary" disabled={upload.isPending} onClick={startUpload}>
+                {upload.isPending ? <Spinner className="text-accent-foreground" /> : <Upload />} Upload
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={() => setCreating('item')}>
+                <Plus /> New item
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={`More actions for this ${noun}`}>
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {library && (
+                  <DropdownMenuItem onSelect={() => setCreating('item')}>
+                    <FilePlus /> New item without a file
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem asChild>
+                  <Link to="/w/$workspaceId/l/$listId/recycle-bin" params={{ workspaceId, listId }}>
+                    <Trash2 /> Recycle bin
+                  </Link>
+                </DropdownMenuItem>
+                {canManage && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/w/$workspaceId/l/$listId/settings/views" params={{ workspaceId, listId }}>
+                        <Pencil /> Edit views
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/w/$workspaceId/l/$listId/settings" params={{ workspaceId, listId }}>
+                        <Settings /> {library ? 'Library settings' : 'List settings'}
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden
+              accept="application/pdf,image/tiff,image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                uploadFiles(event.target.files);
+                event.target.value = '';
+              }}
+            />
           </>
         }
       />
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Link
-          to="/w/$workspaceId/l/$listId"
-          params={{ workspaceId, listId }}
-          search={{ view: search.view, q: search.q }}
-          className="text-xs text-muted hover:text-foreground"
-        >
-          {current.name}
-        </Link>
-        {crumbs.data?.map((crumb) => (
-          <span key={crumb.id} className="flex items-center gap-2 text-xs">
-            <span className="text-muted">/</span>
-            <button
-              type="button"
-              className="text-muted hover:text-foreground"
-              onClick={() => onSearch({ folder: crumb.id, item: undefined })}
-            >
-              {crumb.name}
-            </button>
-          </span>
-        ))}
+        {(views.data?.length ?? 0) > 0 && (
+          <div role="tablist" aria-label="Views" className="flex max-w-full overflow-x-auto rounded-md bg-surface-muted p-0.5">
+            {views.data?.map((entry) => (
+              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, q: undefined })}>
+                {entry.name}
+              </ViewTab>
+            ))}
+            <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined })}>
+              All items
+            </ViewTab>
+          </div>
+        )}
+        <SearchBox key={search.q ?? ''} initial={search.q ?? ''} noun={noun} onSearch={(q) => onSearch({ q }, true)} />
       </div>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button size="sm" variant={!viewId ? 'primary' : 'secondary'} onClick={() => onSearch({ view: 'none' })}>
-          All
-        </Button>
-        {views.data?.map((entry) => (
-          <Button
-            key={entry.id}
-            size="sm"
-            variant={entry.id === viewId ? 'primary' : 'secondary'}
-            onClick={() => onSearch({ view: entry.id })}
+
+      {search.folder && (
+        <nav aria-label="Folders" className="mb-3 flex flex-wrap items-center gap-1 text-[13px]">
+          <Link
+            to="/w/$workspaceId/l/$listId"
+            params={{ workspaceId, listId }}
+            search={{ view: search.view }}
+            className="text-muted hover:text-foreground"
           >
-            {entry.name}
-          </Button>
-        ))}
-        <Button size="sm" asChild>
-          <Link to="/w/$workspaceId/l/$listId/views" params={{ workspaceId, listId }}>
-            Manage views
+            {current.name}
           </Link>
-        </Button>
-        <QueryBox key={search.q ?? ''} initial={search.q ?? ''} onSearch={(q) => onSearch({ q })} />
-      </div>
-      {!!search.q && viewId && (
-        <p className="mb-2 text-xs text-muted">
-          Search looks through the folder’s children. Clear it to return to the saved view.
+          {crumbs.data?.map((crumb, index) => (
+            <span key={crumb.id} className="flex items-center gap-1">
+              <ChevronRight className="size-3.5 text-muted" />
+              {index === crumbs.data.length - 1 ? (
+                <span aria-current="page" className="flex items-center gap-1 font-medium">
+                  <FolderOpen className="size-4 text-muted" /> {crumb.name}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="text-muted hover:text-foreground"
+                  onClick={() => onSearch({ folder: crumb.id, item: undefined })}
+                >
+                  {crumb.name}
+                </button>
+              )}
+            </span>
+          ))}
+        </nav>
+      )}
+
+      {search.q && (
+        <p className="mb-3 flex items-center gap-2 text-[13px] text-muted">
+          Results for “{search.q}” in {search.folder ? 'this folder' : `this ${noun}`}
+          <Button size="sm" variant="ghost" onClick={() => onSearch({ q: undefined }, true)}>
+            <X /> Clear search
+          </Button>
         </p>
       )}
+
       {selected.size > 0 && (
-        <div className="mb-3 flex items-center gap-2">
-          <span className="text-[13px]">{selected.size} selected</span>
-          <Button
-            size="sm"
-            disabled={[...selected.values()].every((item) => item.kind !== 'item')}
-            onClick={() => setBulkEditing(true)}
-          >
-            Edit selected items
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-[13px]">
+          <span className="font-medium">{selected.size} selected</span>
+          <Button size="sm" disabled={items.length === 0} onClick={() => setBulkEditing(true)}>
+            <Pencil /> Edit a field
           </Button>
-          <Button size="sm" variant="danger" disabled={remove.isPending} onClick={() => remove.mutate()}>
+          <Button size="sm" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)}>
             <Trash2 /> Delete
           </Button>
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelected(new Map())}>
+            <X /> Clear selection
+          </Button>
         </div>
       )}
+
       <QueryFeedback query={views} />
-      <QueryFeedback query={listing} />
-      {layout !== 'table' && (
-        <p className="mb-2 text-xs text-muted">
-          Showing {rows.length} loaded entries{next ? '. Load more to include additional entries.' : '.'}
-        </p>
-      )}
-      {layout === 'board' ? (
-        <ItemsBoard
-          items={rows}
-          fields={fieldList.filter((field) => view?.columns?.includes(field.key))}
-          groupBy={fieldList.find((field) => field.key === view?.query?.group_by)}
-          onOpen={(item) =>
-            item.kind === 'folder'
-              ? onSearch({ folder: item.id, item: undefined })
-              : onSearch({ item: item.id, tab: 'details' })
-          }
-        />
-      ) : layout === 'calendar' ? (
-        <ItemsCalendar
-          items={rows}
-          dateField={[...systemFields, ...fieldList].find((field) => field.key === view?.query?.group_by)}
-          onOpen={(item) =>
-            item.kind === 'folder'
-              ? onSearch({ folder: item.id, item: undefined })
-              : onSearch({ item: item.id, tab: 'details' })
-          }
-        />
-      ) : layout === 'gallery' ? (
-        <ItemsGallery
-          items={rows}
-          fields={fieldList.filter((field) => view?.columns?.includes(field.key))}
-          onOpen={(item) =>
-            item.kind === 'folder'
-              ? onSearch({ folder: item.id, item: undefined })
-              : onSearch({ item: item.id, tab: 'details' })
-          }
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-lg border bg-surface">
-          <table className="w-full text-left text-[13px]">
-            <thead className="border-b text-xs text-muted">
-              <tr>
-                <th className="w-10 px-3 py-2" />
-                {columns.map((column) => (
-                  <th key={column} className="px-3 py-2 font-medium">
-                    {columnLabel(column, fieldList)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {listing.isPending && (
-                <tr>
-                  <td colSpan={columns.length + 1} className="px-3 py-4">
-                    <Skeleton className="h-8" />
-                  </td>
-                </tr>
+      <div
+        className={cn('relative rounded-lg', dragging && 'ring-2 ring-accent ring-offset-2')}
+        onDragOver={(event) => {
+          if (!hasFiles(event)) return;
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+        }}
+        onDrop={(event) => {
+          if (!hasFiles(event)) return;
+          event.preventDefault();
+          setDragging(false);
+          uploadFiles(event.dataTransfer.files);
+        }}
+      >
+        {dragging && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-accent-soft/80 text-sm font-medium text-accent">
+            Drop to upload to {search.folder ? (crumbs.data?.at(-1)?.name ?? 'this folder') : current.name}
+          </div>
+        )}
+        {listing.isPending ? (
+          <div className="space-y-2">
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+          </div>
+        ) : listing.isError ? (
+          <QueryFeedback query={listing} />
+        ) : rows.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={search.q ? Search : search.folder ? FolderOpen : undefined}
+              title={search.q ? 'Nothing matches your search' : search.folder ? 'This folder is empty' : `This ${noun} is empty`}
+            >
+              {search.q ? (
+                <Button className="mt-2" onClick={() => onSearch({ q: undefined }, true)}>
+                  Clear search
+                </Button>
+              ) : library ? (
+                <>
+                  <p className="mb-3">Drag files here, or upload them.</p>
+                  <Button variant="primary" onClick={startUpload}>
+                    <Upload /> Upload files
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" className="mt-2" onClick={() => setCreating('item')}>
+                  <Plus /> Add the first item
+                </Button>
               )}
-              {rows.map((resource) => {
-                const state = publishState(resource, !!current.publishing_enabled);
-                return (
-                  <tr key={resource.id} className="border-b last:border-0 hover:bg-surface-muted/50">
-                    <td className="px-3 py-2">
-                      <Checkbox
-                        checked={selected.has(resource.id)}
-                        onChange={(event) => toggle(resource, event.target.checked)}
-                        aria-label={`Select ${resource.name}`}
-                      />
-                    </td>
-                    {columns.map((column) => (
-                      <td key={column} className="max-w-xs px-3 py-2 align-top">
-                        {column === '$name' ? (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-2 text-left font-medium hover:underline"
-                            onClick={() =>
-                              resource.kind === 'folder'
-                                ? onSearch({ folder: resource.id, item: undefined })
-                                : onSearch({ item: resource.id, tab: 'details' })
-                            }
-                          >
-                            {resource.kind === 'folder' && <Folder className="size-4 text-muted" />}
-                            <span className="truncate">{resource.name}</span>
-                            {state && <Badge tone={state === 'Published' ? 'success' : 'warning'}>{state}</Badge>}
-                          </button>
-                        ) : (
-                          <Cell
-                            column={column}
-                            resource={resource}
-                            fields={fieldList}
-                            formatDate={(value) => format.dateTime(value)}
-                          />
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {!listing.isPending && rows.length === 0 && <EmptyState icon={Folder} title="Nothing here" />}
+            </EmptyState>
+          </Card>
+        ) : layout === 'board' ? (
+          <ItemsBoard
+            items={rows}
+            fields={fieldList.filter((field) => view?.columns?.includes(field.key))}
+            groupBy={fieldList.find((field) => field.key === view?.query?.group_by)}
+            onOpen={open}
+          />
+        ) : layout === 'calendar' ? (
+          <ItemsCalendar
+            items={rows}
+            dateField={[...systemFields, ...fieldList].find((field) => field.key === view?.query?.group_by)}
+            onOpen={open}
+          />
+        ) : layout === 'gallery' ? (
+          <ItemsGallery items={rows} fields={fieldList.filter((field) => view?.columns?.includes(field.key))} onOpen={open} />
+        ) : (
+          <ItemsTable
+            rows={rows}
+            columns={columns}
+            fields={fieldList}
+            publishing={!!current.publishing_enabled}
+            names={names}
+            selected={selected}
+            activeId={search.item}
+            onToggle={toggle}
+            onToggleAll={(checked) => setSelected(new Map(checked ? rows.map((row) => [row.id, row]) : []))}
+            onOpen={open}
+          />
+        )}
+      </div>
+      {rows.length > 0 && (
+        <div className="mt-3 flex items-center gap-3 text-xs text-muted">
+          <span>
+            {listing.data?.total !== undefined ? `${rows.length} of ${listing.data.total}` : `${rows.length}${next ? '+' : ''}`}{' '}
+            {rows.length === 1 && listing.data?.total === undefined ? 'entry' : 'entries'}
+          </span>
+          {next && (
+            <Button size="sm" disabled={loadingMore} onClick={() => void loadMore()}>
+              {loadingMore && <Spinner />} Load more
+            </Button>
+          )}
         </div>
       )}
-      {next && (
-        <Button className="mt-3" disabled={loadingMore} onClick={() => void loadMore()}>
-          {loadingMore ? 'Loading…' : 'Load more'}
-        </Button>
-      )}
-      {operation && <OperationProgress id={operation} label="Bulk field update" />}
-      <CollectionOperations collectionId={listId} />
+      {operation && <OperationProgress id={operation} label="Field update on selected items" />}
       {bulkEditing && (
         <BulkEditDialog
           collectionId={listId}
-          ids={[...selected.values()].filter((item) => item.kind === 'item').map((item) => item.id)}
+          ids={items.map((item) => item.id)}
           fields={fieldList}
           onClose={() => setBulkEditing(false)}
           onStarted={setOperation}
         />
       )}
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        title={`Delete ${selected.size === 1 ? `“${[...selected.values()][0]?.name}”` : `${selected.size} entries`}?`}
+        description={
+          [...selected.values()].some((resource) => resource.kind === 'folder')
+            ? 'Folders are deleted with everything in them. You can restore them from the recycle bin.'
+            : 'You can restore them from the recycle bin.'
+        }
+        confirm="Delete"
+        busy={remove.isPending}
+        error={remove.error}
+        onConfirm={() => remove.mutate()}
+      />
       {creating && (
-        <FormDialog
-          open
-          title={creating === 'folder' ? 'New folder' : 'New item'}
-          submitLabel="Create"
-          pending={create.isPending}
-          onClose={() => setCreating(null)}
-          onSubmit={() => draftName.trim() && create.mutate()}
-        >
-          <Label htmlFor="draft-name">Name</Label>
-          <Input
-            id="draft-name"
-            value={draftName}
-            onChange={(event) => setDraftName(event.target.value)}
-            required
-            autoFocus
-          />
-          {creating === 'item' && (types.data?.length ?? 0) > 0 && (
-            <>
-              <Label htmlFor="draft-type">Content type</Label>
-              <Select id="draft-type" value={draftType} onChange={(event) => setDraftType(event.target.value)}>
-                <option value="">Default</option>
-                {types.data?.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.name}
-                  </option>
-                ))}
-              </Select>
-            </>
-          )}
-          {creating === 'item' &&
-            draftFields.map((field) => (
-              <FieldEditor
-                key={field.id}
-                field={field}
-                value={draftValues[field.key]}
-                onChange={(value) => setDraftValues((current) => ({ ...current, [field.key]: value }))}
-              />
-            ))}
-        </FormDialog>
-      )}
-      {settings && (
-        <CollectionSettings
-          key={current.version}
+        <CreateDialog
+          kind={creating}
           collection={current}
-          open
-          onClose={() => setSettings(false)}
-          onDeleted={onLeave}
+          parentId={search.folder || listId}
+          onClose={() => setCreating(null)}
+          onCreated={(created) => {
+            setCreating(null);
+            void refresh();
+            open(created);
+          }}
         />
       )}
       {search.item && (
@@ -489,9 +520,9 @@ export function CollectionPage({
           itemId={search.item}
           collection={current}
           fields={fieldList}
-          contentTypes={types.data ?? []}
+          contentTypes={typeList}
           tab={search.tab ?? 'details'}
-          onTab={(tab) => onSearch({ tab })}
+          onTab={(tab) => onSearch({ tab: tab === 'details' ? undefined : tab }, true)}
           onClose={() => onSearch({ item: undefined, tab: undefined })}
           onMoved={onMoved}
         />
@@ -500,32 +531,146 @@ export function CollectionPage({
   );
 }
 
-function Cell({
-  column,
-  resource,
-  fields,
-  formatDate,
+function ViewTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        'rounded px-2.5 py-1 text-xs font-medium whitespace-nowrap text-muted hover:text-foreground',
+        active && 'bg-surface text-foreground shadow-xs',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Searches as the person types (after a short pause); Escape or the clear button empties it. */
+function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string; onSearch: (q: string | undefined) => void }) {
+  const [value, setValue] = useState(initial);
+  const latest = useRef(onSearch);
+  useEffect(() => {
+    latest.current = onSearch;
+  });
+  useEffect(() => {
+    const trimmed = value.trim();
+    if (trimmed === initial.trim()) return;
+    const timer = setTimeout(() => latest.current(trimmed || undefined), 350);
+    return () => clearTimeout(timer);
+  }, [value, initial]);
+  return (
+    <form
+      role="search"
+      className="relative ml-auto w-full sm:max-w-xs"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSearch(value.trim() || undefined);
+      }}
+    >
+      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted" />
+      <Input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && value) {
+            event.preventDefault();
+            setValue('');
+          }
+        }}
+        placeholder={`Search this ${noun}…`}
+        aria-label={`Search this ${noun}`}
+        className="px-8"
+      />
+      {value && (
+        <button
+          type="button"
+          aria-label="Clear search"
+          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground"
+          onClick={() => setValue('')}
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
+    </form>
+  );
+}
+
+/** A new folder, or a new item with the columns of its content type. */
+function CreateDialog({
+  kind,
+  collection,
+  parentId,
+  onClose,
+  onCreated,
 }: {
-  column: string;
-  resource: Resource;
-  fields: FieldDefinition[];
-  formatDate: (value: string) => string;
+  kind: 'item' | 'folder';
+  collection: Resource;
+  parentId: string;
+  onClose: () => void;
+  onCreated: (resource: Resource) => void;
 }) {
-  if (column === '$tags') return <span className="text-muted">{(resource.tags ?? []).join(', ') || '—'}</span>;
-  if (column === '$modified_at' || column === '$created_at') {
-    const value = column === '$modified_at' ? resource.updated_at : resource.created_at;
-    return <span className="text-muted">{value ? formatDate(value) : '—'}</span>;
-  }
-  if (column === '$modified_by' || column === '$created_by') {
-    return (
-      <span className="text-muted">
-        {(column === '$modified_by' ? resource.updated_by : resource.created_by) || '—'}
-      </span>
-    );
-  }
-  const field = fields.find((entry) => entry.key === column);
-  if (!field) return <span className="text-muted">—</span>;
-  return <FieldDisplay field={field} value={resource.values?.[column]} />;
+  const fields = useQuery(fieldsQuery(collection.id));
+  const types = useQuery(contentTypesQuery(collection.id));
+  const [name, setName] = useState('');
+  const [type, setType] = useState('');
+  const [values, setValues] = useState<Record<string, unknown>>({});
+  const typeList = types.data ?? [];
+  const defaultType = typeList.find((entry) => entry.is_default) ?? typeList[0];
+  const chosenType = type || defaultType?.id || '';
+  const visible = kind === 'item' ? fieldsForType(fields.data ?? [], typeList, chosenType) : [];
+  const create = useMutation({
+    mutationFn: async () =>
+      (
+        await api<Resource>(`/v1/resources/${parentId}/children`, {
+          method: 'POST',
+          body: {
+            kind,
+            name: name.trim(),
+            tags: [],
+            values: kind === 'item' ? (valuesPatch(visible, {}, values) ?? {}) : {},
+            content_type_id: kind === 'item' && type ? type : undefined,
+          },
+        })
+      ).data,
+    onSuccess: onCreated,
+  });
+  return (
+    <FormDialog
+      open
+      title={kind === 'folder' ? 'New folder' : 'New item'}
+      submitLabel={kind === 'folder' ? 'Create folder' : 'Create item'}
+      pending={create.isPending}
+      submitDisabled={!name.trim()}
+      onClose={onClose}
+      onSubmit={() => name.trim() && create.mutate()}
+    >
+      <Label htmlFor="draft-name">Name</Label>
+      <Input id="draft-name" value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
+      {kind === 'item' && typeList.length > 1 && (
+        <>
+          <Label htmlFor="draft-type">Content type</Label>
+          <Select id="draft-type" value={chosenType} onChange={(event) => setType(event.target.value)}>
+            {typeList.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name}
+              </option>
+            ))}
+          </Select>
+        </>
+      )}
+      {visible.map((field) => (
+        <FieldEditor
+          key={field.id}
+          field={field}
+          value={values[field.key]}
+          onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
+        />
+      ))}
+    </FormDialog>
+  );
 }
 
 async function loadListing(
@@ -547,31 +692,9 @@ async function loadListing(
     items: page.value ?? [],
     next: continuation(page['@odata.nextLink']),
     post: request.method === 'POST',
+    total: page.total,
     select,
   };
-}
-
-function QueryBox({ initial, onSearch }: { initial: string; onSearch: (q: string | undefined) => void }) {
-  const [value, setValue] = useState(initial);
-  return (
-    <form
-      className="relative ml-auto min-w-48 flex-1 sm:max-w-xs"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const trimmed = value.trim();
-        onSearch(trimmed || undefined);
-      }}
-    >
-      <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted" />
-      <Input
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="Search this collection"
-        aria-label="Search this collection"
-        className="pl-7"
-      />
-    </form>
-  );
 }
 
 async function folderCrumbs(folderId: string, collectionId: string): Promise<Resource[]> {

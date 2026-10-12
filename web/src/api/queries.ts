@@ -123,14 +123,14 @@ export const smartFoldersQuery = queryOptions({
 
 export const peopleQuery = queryOptions({
   queryKey: keys.people,
-  queryFn: async () => (await api<string[]>('/v1/people')).data,
+  queryFn: async () => listOf((await api<string[] | Page<string>>('/v1/people')).data),
 });
 
 export const usersQuery = queryOptions({
   queryKey: keys.users,
   queryFn: async () => {
     try {
-      return (await api<UserProfile[]>('/v1/identity/users')).data;
+      return listOf((await api<UserProfile[] | Page<UserProfile>>('/v1/identity/users')).data);
     } catch (error) {
       if (isApiError(error, 403)) return [];
       throw error;

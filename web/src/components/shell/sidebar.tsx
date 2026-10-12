@@ -7,6 +7,7 @@ import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/qu
 import { Logo } from '@/components/brand/logo';
 import { Skeleton } from '@/components/ui/feedback';
 import { CreateSmartFolderDialog } from '@/features/smart-folders/create-dialog';
+import { CollectionIcon } from '@/features/lists/collection-icon';
 import { cn } from '@/lib/utils';
 
 const itemClass =
@@ -148,6 +149,7 @@ function WorkspaceLists({ workspaceId, onNavigate }: { workspaceId: string; onNa
             className={itemClass}
             activeProps={{ className: activeClass }}
           >
+            <CollectionIcon collection={list} />
             <span className="truncate">{list.name}</span>
           </Link>
         </li>

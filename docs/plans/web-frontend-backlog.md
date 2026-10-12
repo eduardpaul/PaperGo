@@ -38,15 +38,18 @@ All product screens in this section are implemented against the registered `/v1`
 
 ## Narrower than the contract
 
-- The Content tab restores bytes using a known file version number. There is no file-version list endpoint; metadata history entries contain `blob_id` without a file version number.
+- The File tab restores bytes using a known file version number. There is no file-version list endpoint; metadata history entries contain `blob_id` without a file version number.
 - The versions tab restores metadata with `POST /v1/items/{id}/revisions/{number}/restore`. File bytes stay on the current version.
-- Move accepts any collection id. The picker lists collections in the item's current workspace, and a folder id can be pasted.
+- Move offers the lists or libraries of the same kind in the item's workspace and browses their folders. Each folder level shows folders among its first 200 children.
 - The collection shows one level of children at a time.
 - Term and keyword chips show the id until that id appears in the current search results.
 - Preference language and number-format choices include tags the server may reject. The server accepts a BCP-47 tag whose base language matches with exact confidence. A rejected value returns 422.
 - A non-empty collection search box lists children of the open folder or collection. Saved view query has no extra search term, so search and the saved view are not combined.
 - Smart folder create stores a name, an owner (personal or one workspace), folder inclusion and one comparison with a text, number or boolean value. The group path stays in page state.
 - Inbox counts on Home come from `POST /v1/resources/{id}/query` with `include_total`. That total can include folders.
+- Resources do not carry the caller's access level. Screens offer settings and management actions when `GET /v1/resources/{id}/permissions` (manage only) succeeds, and show contribute actions to everyone; the server rejects writes the caller may not make.
+- Without a saved view, a table shows the name, the first four columns of the default content type and the modified date. Sorting by a column header is not offered: sorting needs a saved view on indexed columns.
+- Lookup and term values in table cells show ids; people show display names when the caller can read users.
 - `GET /v1/people` returns subject strings. Display names come from `GET /v1/identity/users` when the caller has `user.read`.
 
 ## What the UI matches

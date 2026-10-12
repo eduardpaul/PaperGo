@@ -22,8 +22,7 @@ function CollectionRoute() {
       workspaceId={workspaceId}
       listId={listId}
       search={search}
-      onSearch={(patch) => void navigate({ search: (current) => ({ ...current, ...patch }) })}
-      onLeave={() => void navigate({ to: '/w/$workspaceId', params: { workspaceId } })}
+      onSearch={(patch, replace) => void navigate({ search: (current) => ({ ...current, ...patch }), replace })}
       onMoved={(moved) => {
         const destination = moved.container_id ?? listId;
         if (moved.workspace_id !== workspaceId || destination !== listId) {

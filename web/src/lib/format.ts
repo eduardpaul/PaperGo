@@ -26,7 +26,7 @@ export interface Formatter {
   /** "in 3 hours", "yesterday" */
   relative(value: Date | string | null | undefined, now?: Date): string;
   number(value: number | string | null | undefined, options?: Intl.NumberFormatOptions): string;
-  currency(value: number | null | undefined, currencyCode: string): string;
+  currency(value: number | string | null | undefined, currencyCode: string): string;
   fileSize(bytes: number | null | undefined): string;
   /** The calendar day (yyyy-MM-dd) of a moment in the user's time zone. */
   dayKey(value: Date | string): string;
