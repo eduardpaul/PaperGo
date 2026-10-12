@@ -11,6 +11,12 @@ if (Test-Path -LiteralPath $taskGo) {
 } else {
     $taskGo = (Get-Command go -ErrorAction Stop).Source
 }
+if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'web/node_modules'))) {
+    & npm ci --prefix web
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+& npm --prefix web run build
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ([string]::IsNullOrWhiteSpace($Token)) {
     $Token = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLowerInvariant()
     Write-Host ('Development bearer token: ' + $Token)

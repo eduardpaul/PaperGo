@@ -1,4 +1,4 @@
-name: backend
+name: verify
 on:
   push:
   pull_request:
@@ -15,6 +15,13 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build embedded frontend
+        run: npm ci --prefix web && npm --prefix web run build
       - name: Install Staticcheck
         # This upstream revision supports Go 1.27.2's export format.
         run: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45
@@ -41,6 +48,15 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build embedded frontend
+        run: npm ci --prefix web && npm --prefix web run build
+      - name: Check frontend
+        run: npm --prefix web run lint && npm --prefix web test -- --maxWorkers=2
       - name: Verify module checksums
         run: go mod verify
       - name: Verify generated Ent code
@@ -48,10 +64,10 @@ jobs:
           go generate ./ent
           git diff --exit-code -- ent go.mod go.sum
       - name: Verify formatting
-        run: test -z "$(gofmt -l cmd internal ent/schema)"
+        run: test -z "$(gofmt -l cmd internal ent/schema web/*.go)"
       - name: Vet
         run: go vet ./...
       - name: Test with race detection
         run: go test -race -count=1 -timeout=15m ./...
-      - name: Build portable API
+      - name: Build single binary application
         run: CGO_ENABLED=0 go build -trimpath -o bin/papergo ./cmd/api

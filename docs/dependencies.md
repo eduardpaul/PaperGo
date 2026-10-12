@@ -15,3 +15,11 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `modernc.org/sqlite` | CGO-free SQLite driver | BSD-3-Clause |
 
 The runner also links, through DBOS: `github.com/jackc/pgx/v5`, `puddle/v2`, `pgpassfile`, `pgservicefile` and `pgerrcode` (MIT), and `github.com/gorilla/websocket` (BSD-2-Clause; DBOS's optional Conductor client, not used).
+
+Web numeric transport and component tests use these direct packages. The complete frontend dependency list is in [`web/package.json`](../web/package.json).
+
+| Package | Used for | Licence |
+| --- | --- | --- |
+| `lossless-json` | exact JSON numeric fields in API responses, mutations and upload metadata | MIT |
+| `@testing-library/react` | tests of rendered forms and user interactions | MIT |
+| `jsdom` | DOM environment for component tests | MIT |

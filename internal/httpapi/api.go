@@ -19,6 +19,7 @@ import (
 	"papergo/internal/transfer"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
+	"papergo/web"
 	"strconv"
 	"strings"
 	"time"
@@ -117,13 +118,21 @@ func (a *API) Handler() http.Handler {
 	})
 	limit := a.limiter()
 	root.Handle("GET /v1/events", a.authenticate(a.streamLimiter(http.HandlerFunc(a.events))))
-	root.Handle("/", a.authenticate(limit(api)))
+	authenticated := a.authenticate(limit(api))
+	root.Handle("/v1", authenticated)
+	root.Handle("/v1/", authenticated)
+	root.Handle("/health", http.NotFoundHandler())
+	root.Handle("/health/", http.NotFoundHandler())
+	root.Handle("/", web.Handler())
 	if a.WebDAV != nil {
 		dav := limit(a.WebDAV)
 		root.Handle(webdav.Prefix, dav)
 		root.Handle(strings.TrimSuffix(webdav.Prefix, "/"), dav)
 		// Windows and Office discover WebDAV support at the server root.
 		root.Handle("OPTIONS /{$}", a.WebDAV)
+	} else {
+		root.Handle(webdav.Prefix, http.NotFoundHandler())
+		root.Handle(strings.TrimSuffix(webdav.Prefix, "/"), http.NotFoundHandler())
 	}
 	return a.observe(root)
 }

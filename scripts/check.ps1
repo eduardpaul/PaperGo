@@ -8,6 +8,14 @@ if (Test-Path -LiteralPath $taskGo) {
     $env:GOMODCACHE = Join-Path $taskRoot '.cache/mod'
     $env:GOPATH = Join-Path $taskRoot '.cache/gopath'
 } else { $taskGo = (Get-Command go -ErrorAction Stop).Source }
+& npm ci --prefix web
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& npm --prefix web run build
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& npm --prefix web run lint
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& npm --prefix web test -- --maxWorkers=2
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $taskGo mod verify
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $taskGo vet ./...

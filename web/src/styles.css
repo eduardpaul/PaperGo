@@ -1,0 +1,138 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens (ADR-0033): neutral surfaces, one accent, light and dark. */
+:root {
+  --background: oklch(0.99 0.002 264);
+  --foreground: oklch(0.21 0.02 264);
+  --surface: oklch(1 0 0);
+  --surface-muted: oklch(0.967 0.004 264);
+  --sidebar: oklch(0.975 0.004 264);
+  --border: oklch(0.915 0.006 264);
+  --input: oklch(0.88 0.008 264);
+  --muted: oklch(0.52 0.015 264);
+  --accent: oklch(0.51 0.23 277);
+  --accent-foreground: oklch(0.99 0 0);
+  --accent-soft: oklch(0.95 0.03 277);
+  --ring: oklch(0.62 0.19 277);
+  --danger: oklch(0.58 0.22 27);
+  --danger-soft: oklch(0.96 0.03 27);
+  --success: oklch(0.6 0.15 155);
+  --success-soft: oklch(0.96 0.04 155);
+  --warning: oklch(0.72 0.16 70);
+  --warning-soft: oklch(0.97 0.05 85);
+}
+
+.dark {
+  --background: oklch(0.17 0.01 264);
+  --foreground: oklch(0.94 0.005 264);
+  --surface: oklch(0.2 0.012 264);
+  --surface-muted: oklch(0.24 0.012 264);
+  --sidebar: oklch(0.185 0.011 264);
+  --border: oklch(0.29 0.013 264);
+  --input: oklch(0.34 0.014 264);
+  --muted: oklch(0.7 0.015 264);
+  --accent: oklch(0.66 0.17 277);
+  --accent-foreground: oklch(0.15 0.02 277);
+  --accent-soft: oklch(0.3 0.07 277);
+  --ring: oklch(0.7 0.15 277);
+  --danger: oklch(0.68 0.19 25);
+  --danger-soft: oklch(0.3 0.08 25);
+  --success: oklch(0.7 0.14 155);
+  --success-soft: oklch(0.3 0.06 155);
+  --warning: oklch(0.8 0.14 80);
+  --warning-soft: oklch(0.32 0.06 80);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-sidebar: var(--sidebar);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-ring: var(--ring);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --radius-sm: 0.3rem;
+  --radius-md: 0.45rem;
+  --radius-lg: 0.65rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  body {
+    @apply min-h-dvh bg-background text-sm text-foreground;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+}
+
+/* Rendered Markdown of notes (LST-18): readable defaults without a typography plugin. */
+@layer components {
+  .prose-note > * + * {
+    @apply mt-3;
+  }
+  .prose-note h1 {
+    @apply text-xl font-semibold tracking-tight;
+  }
+  .prose-note h2 {
+    @apply text-lg font-semibold;
+  }
+  .prose-note h3 {
+    @apply text-base font-semibold;
+  }
+  .prose-note ul {
+    @apply list-disc pl-5;
+  }
+  .prose-note ol {
+    @apply list-decimal pl-5;
+  }
+  .prose-note li > ul,
+  .prose-note li > ol {
+    @apply mt-1;
+  }
+  .prose-note blockquote {
+    @apply border-l-4 pl-3 text-muted;
+  }
+  .prose-note code {
+    @apply rounded bg-surface-muted px-1 py-0.5 font-mono text-[0.9em];
+  }
+  .prose-note pre {
+    @apply overflow-x-auto rounded-md bg-surface-muted p-3;
+  }
+  .prose-note pre code {
+    @apply bg-transparent p-0;
+  }
+  .prose-note table {
+    @apply w-full border-collapse text-[13px];
+  }
+  .prose-note th,
+  .prose-note td {
+    @apply border px-2 py-1 text-left;
+  }
+  .prose-note input[type='checkbox'] {
+    @apply mr-1.5 align-middle;
+  }
+  .prose-note hr {
+    @apply my-4;
+  }
+}

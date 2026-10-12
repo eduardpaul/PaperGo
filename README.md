@@ -1,10 +1,10 @@
 # PaperGo
 
-Go foundation for headless DMS and CMS applications. Uses **SQLite**, **Ent** for data access, and **Atlas** for reviewed, versioned migrations. One organization per deployment, with multiple workspaces. The API is a modular monolith with immutable content/schema revisions, derived read projections, and local immutable blob storage. [Architecture decisions](docs/architecture.md) explain the extension boundaries. [Application foundation](docs/application-foundation.md) documents rich fields, templates, views, taxonomy, typed relationships, and exclusive permission scopes. [Workflows](docs/workflows.md) are how anything happens after a change or on a schedule: triggers, conditions and flows of activities that people can change, including the built-in processes PaperGo ships, run durably by an embedded runner.
+DMS and CMS application with its React frontend and Go API in one executable. Uses **SQLite**, **Ent** for data access, and **Atlas** for reviewed, versioned migrations. One organization per deployment, with multiple workspaces. The API is a modular monolith with immutable content/schema revisions, derived read projections, and local immutable blob storage. [Architecture decisions](docs/architecture.md) explain the extension boundaries. [Application foundation](docs/application-foundation.md) documents rich fields, templates, views, taxonomy, typed relationships, and exclusive permission scopes. [Workflows](docs/workflows.md) are how anything happens after a change or on a schedule: triggers, conditions and flows of activities that people can change, including the built-in processes PaperGo ships, run durably by an embedded runner.
 
 ## Run locally
 
-Requires Go 1.26+ (CI and the Docker build use Go 1.27.2) and Atlas. This workspace has isolated tools under `.tools/`; they are ignored by Git. No Docker or database service is required.
+Building requires Go 1.26+ (CI and the Docker build use Go 1.27.2), Node.js 24 with npm, and Atlas for schema setup. This workspace has isolated tools under `.tools/`; they are ignored by Git. No Docker or database service is required.
 
 PowerShell, from the repository root:
 
@@ -15,17 +15,38 @@ New-Item -ItemType Directory -Force data | Out-Null
 ./scripts/dev.ps1
 ```
 
-The dev script generates a bearer token, prints it once, and starts on `127.0.0.1:8080`. Supply `-Token` to reuse your own token. `.env.example` documents configuration; the app reads process environment variables and does not automatically load `.env` files.
+The dev script builds the frontend, generates a bearer token, prints it once, and starts the UI and API on `http://127.0.0.1:8080`. Supply `-Token` to reuse your own token. `.env.example` documents configuration; the app reads process environment variables and does not automatically load `.env` files.
 
-With globally installed tools, replace `.tools/atlas.exe` with `atlas`; run `go run ./cmd/api` after setting `APP_ENV=development`, `AUTH_MODE=development`, and `DEV_TOKEN` to a random token of at least 32 characters.
+With globally installed tools, replace `.tools/atlas.exe` with `atlas`; run `npm ci --prefix web` and `npm --prefix web run build`, then `go run ./cmd/api` after setting `APP_ENV=development`, `AUTH_MODE=development`, and `DEV_TOKEN` to a random token of at least 32 characters. Building the server, or running Go tests and analysis across `./...`, requires the frontend build in `web/dist` because it is embedded at compile time.
 
 ```powershell
 ./scripts/check.ps1
 ```
 
-Tests use temporary SQLite files and apply the actual versioned migrations, including FTS5, triggers, foreign keys, and Atlas checksum validation. CI also runs the Go race detector, verifies regenerated Ent code, and runs Staticcheck. Dependency vulnerability scans run on pushes, pull requests, and weekly. The Docker smoke test builds the image, applies the schema to a disposable database using PaperGo's SQLite driver and the Atlas migration executor, and checks readiness, liveness, and an authenticated write under the image's default user. Run it locally with Docker, Go, and curl installed: `bash scripts/docker-smoke.sh`.
+Tests use temporary SQLite files and apply the actual versioned migrations, including FTS5, triggers, foreign keys, and Atlas checksum validation. CI also runs the frontend checks, Go race detector, verifies regenerated Ent code, and runs Staticcheck. Dependency vulnerability scans run on pushes, pull requests, and weekly. The Docker smoke test builds the image, applies the schema to a disposable database using PaperGo's SQLite driver and the Atlas migration executor, and checks the embedded UI, API authentication, readiness, liveness, and an authenticated write under the image's default user. Run it locally with Docker, Go, and curl installed: `bash scripts/docker-smoke.sh`.
 
 The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
+
+## Web UI
+
+The React app in [`web/`](web/) is embedded in the executable and served at `/` on the same port as `/v1`. Browser routes such as `/admin/users` load the app directly. Hashed assets are cached for a year; HTML and unhashed public files revalidate. Missing assets return 404.
+
+To build the deployable executable from the repository root:
+
+```sh
+bash scripts/build.sh
+```
+
+On Windows, run `./scripts/build.ps1`. The scripts install the locked frontend dependencies, build the UI, and compile it into `bin/papergo` or `bin/papergo.exe`. Deploy that executable with the configured database and blob storage. Node.js, npm, a separate web server and the `web/` directory are not needed at runtime. The Docker build produces the same embedded application.
+
+For frontend development with hot reload, run this from `web/` alongside PaperGo:
+
+```text
+npm ci
+npm run dev
+```
+
+Vite listens on `http://127.0.0.1:5173` and proxies `/v1` and `/health` to `http://127.0.0.1:8080`. Set `PAPERGO_API` to point the proxy somewhere else. Sign in with the bearer token printed by the dev script. Screens the API does not support, and API areas that do not have a screen yet, are listed in [the web frontend backlog](docs/plans/web-frontend-backlog.md).
 
 [Organization groups and roles](docs/identity.md) are managed under `/v1/identity`. OIDC deployments require `ADMIN_SUBJECT` or `ADMIN_GROUP` for the first administrator; proxy deployments require `ADMIN_SUBJECT`; development defaults to `DEV_SUBJECT`. Verified subjects enroll with the Member role on first authentication. User profiles, guarded anonymization, organization metadata and scoped personal REST tokens are exposed by these APIs. Module scopes and resource ACLs apply independently, including to owners and workflow item actions.
 
@@ -56,7 +77,7 @@ The machine-readable REST contract is in [`api/openapi.json`](api/openapi.json).
 
 ## API
 
-Every `/v1` request requires `Authorization: Bearer <token>`. Health endpoints are public. IDs are UUID strings. Lists of resources and relationships return `{ "value": [...], "@odata.nextLink": "..." }`; follow `@odata.nextLink` to continue; it is null on the final page. Use `$top` to select a page size (default 50, clamped to 1–500); links contain opaque `$skiptoken` continuations. POST query continuations use the same method and body.
+Every `/v1` request requires `Authorization: Bearer <token>`. The web UI and health endpoints are public. IDs are UUID strings. Lists of resources and relationships return `{ "value": [...], "@odata.nextLink": "..." }`; follow `@odata.nextLink` to continue; it is null on the final page. Use `$top` to select a page size (default 50, clamped to 1–500); links contain opaque `$skiptoken` continuations. POST query continuations use the same method and body.
 
 `POST /v1/$batch` executes 1–20 independent HTTP calls in order. Send `{"requests":[{"id":"list","method":"GET","url":"workspaces"}]}`. Each `responses` entry contains its ID, status, headers and optional body. Calls inherit authentication and may override request headers. `dependsOn` names earlier calls; failures skip dependents with 424. Successful writes persist independently. Relative API URLs only; nested batches and path traversal are rejected. Non-JSON string bodies become raw text; binary responses become base64 strings, with a 16 MiB limit per result.
 

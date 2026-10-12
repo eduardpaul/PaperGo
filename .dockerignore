@@ -8,3 +8,5 @@ coverage.out
 samples/npm/generated
 samples/npm/.env
 samples/npm/__pycache__
+web/node_modules
+web/dist

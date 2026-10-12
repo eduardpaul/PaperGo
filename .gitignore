@@ -1,5 +1,7 @@
 .tools/
 .cache/
+web/node_modules/
+web/dist/
 ent/.ent-generate-*/
 .env
 data/

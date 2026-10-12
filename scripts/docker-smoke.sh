@@ -56,6 +56,20 @@ if [[ "$task_ready" != true ]]; then
 fi
 
 curl --fail --silent --show-error --max-time 5 "$task_address/health/live" > "$task_dir/live.json"
+curl --fail --silent --show-error --max-time 5 "$task_address/" > "$task_dir/index.html"
+curl --fail --silent --show-error --max-time 5 "$task_address/admin/users" > "$task_dir/route.html"
+cmp "$task_dir/index.html" "$task_dir/route.html"
+task_asset=$(sed -n 's/.*src="\(\/assets\/[^" ]*\.js\)".*/\1/p' "$task_dir/index.html" | head -n 1)
+if [[ -z "$task_asset" ]]; then
+  echo 'Embedded frontend did not include an entry chunk.' >&2
+  exit 1
+fi
+curl --fail --silent --show-error --max-time 5 "$task_address$task_asset" > "$task_dir/app.js"
+task_api_status=$(curl --silent --show-error --max-time 5 --output "$task_dir/unauthorized.json" --write-out '%{http_code}' "$task_address/v1/workspaces")
+if [[ "$task_api_status" != 401 ]]; then
+  echo "Expected unauthenticated API to return 401, got $task_api_status." >&2
+  exit 1
+fi
 task_status=$(curl --silent --show-error --max-time 10 \
   --output "$task_dir/workspace.json" --write-out '%{http_code}' \
   --header "Authorization: Bearer $task_token" \
@@ -67,4 +81,4 @@ if [[ "$task_status" != 201 ]]; then
   echo "Expected workspace creation to return 201, got $task_status." >&2
   exit 1
 fi
-echo 'Docker readiness, liveness, and authenticated database write passed.'
+echo 'Docker embedded frontend, readiness, liveness, API authentication and database write passed.'
