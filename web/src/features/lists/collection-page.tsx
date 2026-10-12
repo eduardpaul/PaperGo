@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api, continuation } from '@/api/http';
 import { batch } from '@/api/batch';
-import { listingRequest } from '@/api/requests';
+import { listingRequest, type ApiCall } from '@/api/requests';
 import { contentTypesQuery, fieldsQuery, keys, resourceQuery, viewsQuery } from '@/api/queries';
 import type { DocumentUpload, Page, Resource } from '@/api/types';
 import { Page as Screen, PageHeader } from '@/components/page';
@@ -39,7 +39,7 @@ import { QueryFeedback } from '@/features/admin/common';
 import { OperationProgress } from '@/features/admin/operation-progress';
 import { uploadDocument } from '@/features/documents/transfer';
 import { FieldEditor } from '@/features/fields/editor';
-import { usePeopleNames } from '@/features/fields/people';
+import { useValueNames } from '@/features/fields/names';
 import { valuesPatch } from '@/features/fields/values';
 import { ConfirmDialog } from '@/features/settings/section';
 import { cn } from '@/lib/utils';
@@ -50,7 +50,7 @@ import { ItemSheet } from './item-sheet';
 import { ItemsBoard, ItemsCalendar, ItemsGallery } from './items-layouts';
 import { ItemsTable } from './items-table';
 import { BulkEditDialog } from './operations';
-import { fieldsForType } from './schema';
+import { fieldsForType, parseSort, sortableColumns, sortParam } from './schema';
 
 export interface CollectionSearch {
   folder?: string;
@@ -58,14 +58,16 @@ export interface CollectionSearch {
   item?: string;
   tab?: string;
   q?: string;
+  /** A column key, "-" first for descending. */
+  sort?: string;
 }
 
 interface Listing {
   items: Resource[];
   next: string | null;
-  post: boolean;
+  /** A POST query continues with the same body. */
+  body?: unknown;
   total?: number;
-  select?: string[];
 }
 
 /** Columns shown when no saved view picks them: the name, the first few columns of the default type, the last change. */
@@ -85,7 +87,6 @@ export function CollectionPage({
   onMoved: (resource: Resource) => void;
 }) {
   const queryClient = useQueryClient();
-  const names = usePeopleNames();
   const collection = useQuery(resourceQuery(listId));
   const fields = useQuery(fieldsQuery(listId));
   const types = useQuery(contentTypesQuery(listId));
@@ -98,14 +99,15 @@ export function CollectionPage({
   const viewId = search.view === 'none' ? undefined : (search.view ?? views.data?.find((view) => view.is_default)?.id);
   const view = views.data?.find((entry) => entry.id === viewId);
   const layout = !search.folder && !search.q ? (view?.layout ?? 'table') : 'table';
-  const projection =
-    layout === 'table'
-      ? undefined
-      : [...new Set(['$name', ...(view?.columns ?? []), ...(view?.query?.group_by ? [view.query.group_by] : [])])];
+  const sortable = sortableColumns(fields.data ?? []);
+  // A sort from an old link on a column that is no longer sortable is ignored rather than failing the list.
+  const requestedSort = parseSort(search.sort);
+  const sort = requestedSort && sortable.has(requestedSort.field) ? requestedSort : undefined;
+  const request = listingRequest(listId, { folder: search.folder, view, q: search.q, sort });
   const listing = useQuery({
-    queryKey: ['resources', listId, 'rows', search.folder ?? '', viewId ?? '', view, search.q ?? '', projection],
-    enabled: !!collection.data && views.isSuccess,
-    queryFn: () => loadListing(listId, search.folder, search.q ? undefined : viewId, search.q, projection),
+    queryKey: ['resources', listId, 'rows', request],
+    enabled: !!collection.data && views.isSuccess && (!search.sort || fields.isSuccess),
+    queryFn: () => loadListing(request),
   });
   const [snapshot, setSnapshot] = useState(listing.data);
   const [more, setMore] = useState<Resource[]>([]);
@@ -126,6 +128,7 @@ export function CollectionPage({
   const fileInput = useRef<HTMLInputElement>(null);
 
   const rows = [...(listing.data?.items ?? []), ...more];
+  const names = useValueNames(fields.data ?? [], rows);
   const fieldList = fields.data ?? [];
   const typeList = types.data ?? [];
   const columns = (
@@ -185,9 +188,8 @@ export function CollectionPage({
     if (!next || !listing.data) return;
     setLoadingMore(true);
     try {
-      const page = listing.data.post
-        ? (await api<Page<Resource>>(next, { method: 'POST', body: { include_total: true, select: listing.data.select } }))
-            .data
+      const page = listing.data.body
+        ? (await api<Page<Resource>>(next, { method: 'POST', body: listing.data.body })).data
         : (await api<Page<Resource>>(next)).data;
       setMore((current) => [...current, ...(page.value ?? [])]);
       setNext(continuation(page['@odata.nextLink']));
@@ -322,11 +324,11 @@ export function CollectionPage({
         {(views.data?.length ?? 0) > 0 && (
           <div role="tablist" aria-label="Views" className="flex max-w-full overflow-x-auto rounded-md bg-surface-muted p-0.5">
             {views.data?.map((entry) => (
-              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, q: undefined })}>
+              <ViewTab key={entry.id} active={entry.id === viewId} onClick={() => onSearch({ view: entry.id, q: undefined, sort: undefined })}>
                 {entry.name}
               </ViewTab>
             ))}
-            <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined })}>
+            <ViewTab active={!viewId} onClick={() => onSearch({ view: 'none', q: undefined, sort: undefined })}>
               All items
             </ViewTab>
           </div>
@@ -450,6 +452,7 @@ export function CollectionPage({
             fields={fieldList.filter((field) => view?.columns?.includes(field.key))}
             groupBy={fieldList.find((field) => field.key === view?.query?.group_by)}
             readOnly={!canEdit}
+            names={names}
             onOpen={open}
           />
         ) : layout === 'calendar' ? (
@@ -459,7 +462,12 @@ export function CollectionPage({
             onOpen={open}
           />
         ) : layout === 'gallery' ? (
-          <ItemsGallery items={rows} fields={fieldList.filter((field) => view?.columns?.includes(field.key))} onOpen={open} />
+          <ItemsGallery
+            items={rows}
+            fields={fieldList.filter((field) => view?.columns?.includes(field.key))}
+            names={names}
+            onOpen={open}
+          />
         ) : (
           <ItemsTable
             rows={rows}
@@ -470,6 +478,9 @@ export function CollectionPage({
             selectable={canEdit}
             selected={selected}
             activeId={search.item}
+            sort={sort}
+            sortable={sortable}
+            onSort={(next) => onSearch({ sort: sortParam(next) }, true)}
             onToggle={toggle}
             onToggleAll={(checked) => setSelected(new Map(checked ? rows.map((row) => [row.id, row]) : []))}
             onOpen={open}
@@ -684,27 +695,14 @@ function CreateDialog({
   );
 }
 
-async function loadListing(
-  collectionId: string,
-  folder: string | undefined,
-  viewId: string | undefined,
-  q: string | undefined,
-  select?: string[],
-): Promise<Listing> {
-  const request = listingRequest(collectionId, folder, viewId, q);
-  const page = (
-    await api<Page<Resource>>(request.path, {
-      method: request.method,
-      query: request.query,
-      body: request.method === 'POST' && select ? { include_total: true, select } : request.body,
-    })
-  ).data;
+async function loadListing(request: ApiCall): Promise<Listing> {
+  const page = (await api<Page<Resource>>(request.path, { method: request.method, query: request.query, body: request.body }))
+    .data;
   return {
     items: page.value ?? [],
     next: continuation(page['@odata.nextLink']),
-    post: request.method === 'POST',
+    body: request.method === 'POST' ? request.body : undefined,
     total: page.total,
-    select,
   };
 }
 

@@ -28,3 +28,25 @@ export function publishState(item: Resource, publishingEnabled: boolean): 'Publi
   if (item.head_revision_id && item.head_revision_id !== item.published_revision_id) return 'Draft';
   return 'Published';
 }
+
+const sortableSystemColumns = ['$name', '$created_at', '$created_by', '$modified_at', '$modified_by'];
+
+/** Columns a collection query can sort by: built-in columns and filterable, ready, single-value fields. */
+export function sortableColumns(fields: FieldDefinition[]): Set<string> {
+  return new Set([
+    ...sortableSystemColumns,
+    ...fields
+      .filter((field) => field.indexed && (!field.index_status || field.index_status === 'ready') && !field.options?.multiple)
+      .map((field) => field.key),
+  ]);
+}
+
+/** The `sort` URL parameter: a column key, with "-" first for descending. */
+export function parseSort(value: string | undefined): { field: string; direction: 'asc' | 'desc' } | undefined {
+  if (!value) return undefined;
+  return value.startsWith('-') ? { field: value.slice(1), direction: 'desc' } : { field: value, direction: 'asc' };
+}
+
+export function sortParam(sort: { field: string; direction: 'asc' | 'desc' } | undefined): string | undefined {
+  return sort ? `${sort.direction === 'desc' ? '-' : ''}${sort.field}` : undefined;
+}

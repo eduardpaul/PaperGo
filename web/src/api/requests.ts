@@ -1,4 +1,5 @@
 import { stringifyJSON } from './json';
+import type { QuerySpec } from './types';
 
 /** Shapes of `/v1` calls the screens share. Tests assert these paths and bodies. */
 
@@ -11,11 +12,43 @@ export interface ApiCall {
   headers?: Record<string, string>;
 }
 
-export function listingRequest(collectionId: string, folder: string | undefined, viewId: string | undefined, q: string | undefined): ApiCall {
-  if (viewId && !folder && !q) {
-    return { path: `/v1/views/${viewId}/query`, method: 'POST', query: { $top: 50 }, body: { include_total: true } };
+export interface ListingSort {
+  field: string;
+  direction: 'asc' | 'desc';
+}
+
+export interface ListingOptions {
+  folder?: string;
+  view?: { query?: QuerySpec; columns?: string[] | null };
+  q?: string;
+  sort?: ListingSort;
+}
+
+/**
+ * The rows of a list or library. Plain browsing reads the open folder's children. A saved view or a column sort runs
+ * a collection query: the view's query with the open folder, the search text and the chosen sort on top.
+ */
+export function listingRequest(collectionId: string, options: ListingOptions): ApiCall {
+  const { folder, view, q, sort } = options;
+  if (!view && !sort) {
+    return { path: `/v1/resources/${folder || collectionId}/children`, method: 'GET', query: { q, $top: 50 } };
   }
-  return { path: `/v1/resources/${folder || collectionId}/children`, method: 'GET', query: { q, $top: 50 } };
+  const base = view?.query ?? {};
+  const query: QuerySpec = { ...base };
+  const parent = folder ?? base.parent_id ?? (view ? undefined : collectionId);
+  if (parent) query.parent_id = parent;
+  if (q) query.search = q;
+  if (sort) query.sort = [sort];
+  const columns = view?.columns?.filter(Boolean) ?? [];
+  const select = columns.length
+    ? [...new Set(['$name', ...columns, ...(base.group_by ? [base.group_by] : [])])]
+    : undefined;
+  return {
+    path: `/v1/resources/${collectionId}/query`,
+    method: 'POST',
+    query: { $top: 50 },
+    body: select ? { include_total: true, query, select } : { include_total: true, query },
+  };
 }
 
 export function searchRequest(q: string, workspaceId: string): ApiCall {

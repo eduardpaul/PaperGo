@@ -4,6 +4,7 @@ import { childrenQuery, keywords, peopleQuery, terms, usersQuery } from '@/api/q
 import type { FieldDefinition } from '@/api/types';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useResourceNames, useTermNames } from './names';
 import { asList, fieldText } from './values';
 
 export function FieldEditor({
@@ -205,7 +206,11 @@ function LookupEditor({
   onChange: (value: unknown) => void;
 }) {
   const children = useQuery(childrenQuery(containerId));
-  const items = (children.data?.value ?? []).filter((item) => item.kind === 'item');
+  const listed = (children.data?.value ?? []).filter((item) => item.kind === 'item');
+  // Current values beyond the first page of the looked-up list still show by name.
+  const missing = asList(value).filter((id) => !listed.some((item) => item.id === id)).sort();
+  const names = useResourceNames(missing);
+  const items = [...listed, ...missing.map((id) => ({ id, name: names?.get(id) ?? 'Loading…' }))];
   if (!multiple) {
     return (
       <Select id={id} value={fieldText(value)} onChange={(event) => onChange(event.target.value)}>
@@ -257,7 +262,11 @@ function TermEditor({
 }) {
   const [text, setText] = useState('');
   const [options, setOptions] = useState<{ id: string; name: string }[]>([]);
+  // Names of terms picked here; others come from the term store.
+  const [picked, setPicked] = useState<Map<string, string>>(new Map());
   const selected = asList(value);
+  const stored = useTermNames([...selected].sort());
+  const nameOf = (termId: string) => picked.get(termId) ?? stored?.get(termId) ?? termId;
 
   async function search(next: string) {
     setText(next);
@@ -270,6 +279,8 @@ function TermEditor({
   }
 
   function add(id: string) {
+    const name = options.find((option) => option.id === id)?.name;
+    if (name) setPicked((current) => new Map(current).set(id, name));
     onChange(multiple ? [...new Set([...selected, id])] : id);
     setText('');
     setOptions([]);
@@ -284,9 +295,10 @@ function TermEditor({
               key={id}
               type="button"
               className="rounded-full bg-surface-muted px-2 py-0.5 text-xs"
+              aria-label={`Remove ${nameOf(id)}`}
               onClick={() => onChange(multiple ? selected.filter((item) => item !== id) : '')}
             >
-              {options.find((option) => option.id === id)?.name ?? id} ×
+              {nameOf(id)} ×
             </button>
           ))}
         </div>

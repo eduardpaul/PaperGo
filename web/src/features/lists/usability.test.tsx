@@ -45,6 +45,8 @@ describe('items table', () => {
         names={new Map()}
         selectable
         selected={new Map()}
+        sortable={new Set(['$name'])}
+        onSort={vi.fn()}
         onToggle={onToggle}
         onToggleAll={onToggleAll}
         onOpen={onOpen}
@@ -126,6 +128,50 @@ describe('item panel', () => {
   });
 });
 
+describe('table sorting', () => {
+  function renderSorted(sort: { field: string; direction: 'asc' | 'desc' } | undefined, onSort = vi.fn()) {
+    renderWithClient(
+      <ItemsTable
+        rows={[row('a', 'Alpha')]}
+        columns={['$name', 'note']}
+        fields={[{ id: 'note', key: 'note', label: 'Note', type: 'note' }]}
+        publishing={false}
+        names={new Map()}
+        selectable={false}
+        selected={new Map()}
+        sort={sort}
+        sortable={new Set(['$name'])}
+        onSort={onSort}
+        onToggle={vi.fn()}
+        onToggleAll={vi.fn()}
+        onOpen={vi.fn()}
+      />,
+    );
+    return onSort;
+  }
+
+  it('cycles a sortable column through ascending, descending and none', () => {
+    const onSort = renderSorted(undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Name' }));
+    expect(onSort).toHaveBeenLastCalledWith({ field: '$name', direction: 'asc' });
+    cleanup();
+    const descending = renderSorted({ field: '$name', direction: 'asc' });
+    expect(screen.getByRole('columnheader', { name: 'Name' }).getAttribute('aria-sort')).toBe('ascending');
+    fireEvent.click(screen.getByRole('button', { name: 'Name' }));
+    expect(descending).toHaveBeenLastCalledWith({ field: '$name', direction: 'desc' });
+    cleanup();
+    const none = renderSorted({ field: '$name', direction: 'desc' });
+    fireEvent.click(screen.getByRole('button', { name: 'Name' }));
+    expect(none).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it('offers no sort on columns the server cannot sort by', () => {
+    renderSorted(undefined);
+    expect(screen.queryByRole('button', { name: 'Note' })).toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Note' })).toBeTruthy();
+  });
+});
+
 describe('table selection', () => {
   it('has no checkboxes without write access', () => {
     renderWithClient(
@@ -137,6 +183,8 @@ describe('table selection', () => {
         names={new Map()}
         selectable={false}
         selected={new Map()}
+        sortable={new Set(['$name'])}
+        onSort={vi.fn()}
         onToggle={vi.fn()}
         onToggleAll={vi.fn()}
         onOpen={vi.fn()}

@@ -1,4 +1,4 @@
-import { Folder } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Folder } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { FieldDefinition, Resource } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/select';
 import { FieldDisplay } from '@/features/fields/display';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
+import type { ListingSort } from '@/api/requests';
 import { columnLabel, publishState } from './schema';
 
 /** Rows of a list or library: a click opens the item (or the folder); the checkbox selects it. */
@@ -18,6 +19,9 @@ export function ItemsTable({
   selectable,
   selected,
   activeId,
+  sort,
+  sortable,
+  onSort,
   onToggle,
   onToggleAll,
   onOpen,
@@ -31,6 +35,11 @@ export function ItemsTable({
   selectable: boolean;
   selected: Map<string, Resource>;
   activeId?: string;
+  sort?: ListingSort;
+  /** Columns the server can sort by: the name, dates, people and filterable single-value columns. */
+  sortable: Set<string>;
+  /** Called with the next sort: ascending, then descending, then none. */
+  onSort: (sort: ListingSort | undefined) => void;
   onToggle: (resource: Resource, checked: boolean) => void;
   onToggleAll: (checked: boolean) => void;
   onOpen: (resource: Resource) => void;
@@ -57,11 +66,48 @@ export function ItemsTable({
                 />
               </th>
             )}
-            {columns.map((column) => (
-              <th key={column} className="px-3 py-2 font-medium whitespace-nowrap">
-                {columnLabel(column, fields)}
-              </th>
-            ))}
+            {columns.map((column) => {
+              const active = sort?.field === column ? sort.direction : undefined;
+              const label = columnLabel(column, fields);
+              return (
+                <th
+                  key={column}
+                  aria-sort={active === 'asc' ? 'ascending' : active === 'desc' ? 'descending' : undefined}
+                  className="px-3 py-2 font-medium whitespace-nowrap"
+                >
+                  {sortable.has(column) ? (
+                    <button
+                      type="button"
+                      className={cn(
+                        'group -mx-1 inline-flex items-center gap-1 rounded px-1 hover:text-foreground',
+                        active && 'text-foreground',
+                      )}
+                      title={`Sort by ${label}`}
+                      onClick={() =>
+                        onSort(
+                          active === undefined
+                            ? { field: column, direction: 'asc' }
+                            : active === 'asc'
+                              ? { field: column, direction: 'desc' }
+                              : undefined,
+                        )
+                      }
+                    >
+                      {label}
+                      {active === 'asc' ? (
+                        <ArrowUp className="size-3.5" />
+                      ) : active === 'desc' ? (
+                        <ArrowDown className="size-3.5" />
+                      ) : (
+                        <ChevronsUpDown className="size-3.5 opacity-0 group-hover:opacity-60" />
+                      )}
+                    </button>
+                  ) : (
+                    <span title="To sort by this column, make it filterable in the list's column settings.">{label}</span>
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -140,5 +186,5 @@ function Cell({
   if (column === '$id') return <span className="font-mono text-xs text-muted">{resource.id}</span>;
   const field = fields.find((entry) => entry.key === column);
   if (!field) return <span className="text-muted">—</span>;
-  return <FieldDisplay field={field} value={resource.values?.[column]} names={field.type === 'person' ? names : undefined} />;
+  return <FieldDisplay field={field} value={resource.values?.[column]} names={names} />;
 }

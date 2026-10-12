@@ -2,25 +2,39 @@ import { describe, expect, it } from 'vitest';
 import { documentUploadRequest, downloadContentPath, listingRequest, replaceContentRequest, searchRequest, smartFolderQueryRequest } from './requests';
 
 describe('listing and search requests', () => {
-  it('queries a saved view at the collection root', () => {
-    expect(listingRequest('col', undefined, 'view-1', undefined)).toEqual({
-      path: '/v1/views/view-1/query',
-      method: 'POST',
-      query: { $top: 50 },
-      body: { include_total: true },
+  it('browses the open folder with an optional search when no view or sort applies', () => {
+    expect(listingRequest('col', {})).toEqual({ path: '/v1/resources/col/children', method: 'GET', query: { q: undefined, $top: 50 } });
+    expect(listingRequest('col', { folder: 'folder', q: 'invoice' })).toEqual({
+      path: '/v1/resources/folder/children',
+      method: 'GET',
+      query: { q: 'invoice', $top: 50 },
     });
   });
 
-  it('browses the open folder, and a search term, instead of the saved view', () => {
-    expect(listingRequest('col', 'folder', 'view-1', undefined)).toEqual({
-      path: '/v1/resources/folder/children',
-      method: 'GET',
-      query: { q: undefined, $top: 50 },
+  it('sorts the open folder with a collection query', () => {
+    expect(listingRequest('col', { sort: { field: 'amount', direction: 'desc' } })).toEqual({
+      path: '/v1/resources/col/query',
+      method: 'POST',
+      query: { $top: 50 },
+      body: { include_total: true, query: { parent_id: 'col', sort: [{ field: 'amount', direction: 'desc' }] } },
     });
-    expect(listingRequest('col', undefined, 'view-1', 'invoice')).toEqual({
-      path: '/v1/resources/col/children',
-      method: 'GET',
-      query: { q: 'invoice', $top: 50 },
+  });
+
+  it('combines a saved view with the open folder, the search text and a column sort', () => {
+    const view = {
+      columns: ['$name', 'status'],
+      query: { filter: { field: 'status', op: 'eq', value: 'Open' }, sort: [{ field: '$name', direction: 'asc' }], group_by: 'status' },
+    };
+    expect(listingRequest('col', { view })).toEqual({
+      path: '/v1/resources/col/query',
+      method: 'POST',
+      query: { $top: 50 },
+      body: { include_total: true, query: view.query, select: ['$name', 'status'] },
+    });
+    expect(listingRequest('col', { view, folder: 'folder', q: 'invoice', sort: { field: '$modified_at', direction: 'desc' } }).body).toEqual({
+      include_total: true,
+      query: { ...view.query, parent_id: 'folder', search: 'invoice', sort: [{ field: '$modified_at', direction: 'desc' }] },
+      select: ['$name', 'status'],
     });
   });
 

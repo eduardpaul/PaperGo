@@ -115,7 +115,7 @@ export function FieldDialog({
       const body = {
         label: label.trim(),
         required,
-        indexed,
+        indexed: indexed || type === 'keywords',
         choices: type === 'choice' ? draft.choices : undefined,
         options: { ...options, default_value: normalizedDefault },
       };
@@ -324,8 +324,12 @@ export function FieldDialog({
           Required
         </label>
         <label className="flex gap-2">
-          <Checkbox checked={indexed} onChange={(event) => setIndexed(event.target.checked)} />
-          Use for filtering, sorting and grouping in views
+          <Checkbox
+            checked={indexed || type === 'keywords'}
+            disabled={type === 'keywords'}
+            onChange={(event) => setIndexed(event.target.checked)}
+          />
+          Use for filtering, sorting and grouping in views{type === 'keywords' ? ' (always on for keywords)' : ''}
         </label>
         <label className="flex gap-2">
           <Checkbox checked={!!options.unique} onChange={(event) => patchOptions({ unique: event.target.checked })} />

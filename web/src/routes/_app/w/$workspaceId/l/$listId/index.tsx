@@ -9,6 +9,7 @@ export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
     item: textParam(search.item),
     tab: textParam(search.tab),
     q: textParam(search.q),
+    sort: textParam(search.sort),
   }),
   component: CollectionRoute,
 });

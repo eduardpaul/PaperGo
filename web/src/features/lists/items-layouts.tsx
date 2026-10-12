@@ -26,22 +26,28 @@ import {
 import { FieldDisplay } from '@/features/fields/display';
 import { useFormat } from '@/lib/preferences';
 
-type LayoutProps = { items: Resource[]; fields: FieldDefinition[]; onOpen: (item: Resource) => void };
+type LayoutProps = {
+  items: Resource[];
+  fields: FieldDefinition[];
+  /** Names of people, terms and looked-up items in the values. */
+  names?: Map<string, string>;
+  onOpen: (item: Resource) => void;
+};
 
-function CardFields({ item, fields }: { item: Resource; fields: FieldDefinition[] }) {
+function CardFields({ item, fields, names }: { item: Resource; fields: FieldDefinition[]; names?: Map<string, string> }) {
   return (
     <div className="grid gap-1 text-xs text-muted">
       {fields.slice(0, 3).map((field) => (
         <div key={field.id}>
           <span>{field.label}: </span>
-          <FieldDisplay field={field} value={item.values?.[field.key]} />
+          <FieldDisplay field={field} value={item.values?.[field.key]} names={names} />
         </div>
       ))}
     </div>
   );
 }
 
-export function ItemsGallery({ items, fields, onOpen }: LayoutProps) {
+export function ItemsGallery({ items, fields, names, onOpen }: LayoutProps) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((item) => (
@@ -55,7 +61,7 @@ export function ItemsGallery({ items, fields, onOpen }: LayoutProps) {
               {item.kind === 'folder' ? <Folder className="size-4" /> : <File className="size-4" />}
               {item.name}
             </span>
-            <CardFields item={item} fields={fields} />
+            <CardFields item={item} fields={fields} names={names} />
           </button>
         </li>
       ))}
@@ -69,6 +75,7 @@ export function ItemsBoard({
   fields,
   groupBy,
   readOnly,
+  names,
   onOpen,
 }: LayoutProps & { groupBy?: FieldDefinition; readOnly?: boolean }) {
   const client = useQueryClient();
@@ -143,7 +150,7 @@ export function ItemsBoard({
                       </DropdownMenu>
                     )}
                   </div>
-                  <CardFields item={item} fields={fields.filter((field) => field.key !== groupBy.key)} />
+                  <CardFields item={item} fields={fields.filter((field) => field.key !== groupBy.key)} names={names} />
                 </li>
               ))}
             </ul>
