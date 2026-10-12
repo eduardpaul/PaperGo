@@ -61,7 +61,7 @@ func TestOIDCValidatesSignatureIssuerAudienceAndExpiry(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			ident, e := verifier.Verify(context.Background(), raw)
+			ident, e := verifier.(*OIDC).Verify(context.Background(), raw)
 			if tc.valid {
 				if e != nil || ident.Subject != "alice" {
 					t.Fatalf("valid token rejected: %v", e)
@@ -72,7 +72,7 @@ func TestOIDCValidatesSignatureIssuerAudienceAndExpiry(t *testing.T) {
 				} else {
 					bytes[len(bytes)-5] = 'A'
 				}
-				if _, e = verifier.Verify(context.Background(), string(bytes)); e == nil {
+				if _, e = verifier.(*OIDC).Verify(context.Background(), string(bytes)); e == nil {
 					t.Fatal("tampered signature accepted")
 				}
 			} else if e == nil {
@@ -131,14 +131,14 @@ func TestOIDCTokenTypeValidation(t *testing.T) {
 	// Token without typ header should be rejected
 	s1, _ := signerNormal.Sign(claims)
 	tok1, _ := s1.CompactSerialize()
-	if _, err := verifier.Verify(context.Background(), tok1); err == nil {
+	if _, err := verifier.(*OIDC).Verify(context.Background(), tok1); err == nil {
 		t.Fatal("expected rejection of token without at+jwt typ header")
 	}
 
 	// Token with typ "at+jwt" should be accepted
 	s2, _ := signerAtJwt.Sign(claims)
 	tok2, _ := s2.CompactSerialize()
-	ident, err := verifier.Verify(context.Background(), tok2)
+	ident, err := verifier.(*OIDC).Verify(context.Background(), tok2)
 	if err != nil || ident.Subject != "alice" {
 		t.Fatalf("expected valid at+jwt token, got error: %v, ident: %+v", err, ident)
 	}
@@ -195,7 +195,7 @@ func TestOIDCClaimsAndPrefixSync(t *testing.T) {
 	s, _ := signer.Sign(claims)
 	tok, _ := s.CompactSerialize()
 
-	ident, err := verifier.Verify(context.Background(), tok)
+	ident, err := verifier.(*OIDC).Verify(context.Background(), tok)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestOIDCUserInfoFallback(t *testing.T) {
 	s, _ := signer.Sign(claims)
 	tok, _ := s.CompactSerialize()
 
-	ident, err := verifier.Verify(context.Background(), tok)
+	ident, err := verifier.(*OIDC).Verify(context.Background(), tok)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestOIDCUserInfoFallback(t *testing.T) {
 	}
 
 	// Second verify call should be cached
-	ident2, err := verifier.Verify(context.Background(), tok)
+	ident2, err := verifier.(*OIDC).Verify(context.Background(), tok)
 	if err != nil {
 		t.Fatal(err)
 	}

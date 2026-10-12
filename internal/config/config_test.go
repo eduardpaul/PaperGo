@@ -1,9 +1,37 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestProxyConfigurationFailsClosed(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("AUTH_MODE", "proxy")
+	t.Setenv("ADMIN_SUBJECT", "papergo-admin")
+	t.Setenv("PUBLIC_URL", "https://docs.example.com")
+	secret := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(secret, []byte(strings.Repeat("s", 64)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PROXY_SECRET_FILE", secret)
+	t.Setenv("PROXY_TRUSTED_CIDRS", "172.29.242.2/32")
+	c, err := Load()
+	if err != nil || len(c.ProxyTrustedCIDRs) != 1 {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ key, value string }{{"PROXY_TRUSTED_CIDRS", ""}, {"PROXY_TRUSTED_CIDRS", "0.0.0.0/0"}, {"PROXY_SECRET_FILE", "missing"}, {"PUBLIC_URL", "http://docs.example.com"}, {"ADMIN_SUBJECT", ""}, {"OIDC_GROUPS_CLAIM", "groups"}, {"ADMIN_GROUP", "admins"}} {
+		t.Run(tc.key+tc.value, func(t *testing.T) {
+			t.Setenv(tc.key, tc.value)
+			if _, err := Load(); err == nil {
+				t.Fatal("invalid proxy configuration accepted")
+			}
+		})
+	}
+}
 
 func TestProductionRejectsDevelopmentAuth(t *testing.T) {
 	t.Setenv("APP_ENV", "production")

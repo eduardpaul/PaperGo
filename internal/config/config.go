@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"papergo/internal/identity"
@@ -44,6 +45,8 @@ type Config struct {
 	TokenType string
 	// GroupsFromUserInfo enables fetching groups from UserInfo when missing in access token.
 	GroupsFromUserInfo bool
+	ProxySecret        string
+	ProxyTrustedCIDRs  []netip.Prefix
 }
 
 func Load() (Config, error) {
@@ -104,7 +107,7 @@ func Load() (Config, error) {
 			c.AdminSubject = c.DevSubject
 		}
 		if c.Env == "production" {
-			return c, fmt.Errorf("production requires OIDC authentication")
+			return c, fmt.Errorf("production requires oidc or proxy authentication")
 		}
 		if len(c.DevToken) < 32 {
 			return c, fmt.Errorf("DEV_TOKEN requires at least 32 characters")
@@ -119,8 +122,40 @@ func Load() (Config, error) {
 		if c.Env == "production" && !strings.HasPrefix(c.Issuer, "https://") {
 			return c, fmt.Errorf("production OIDC_ISSUER requires HTTPS")
 		}
+	case "proxy":
+		if c.AdminSubject == "" || c.AdminGroup != "" {
+			return c, fmt.Errorf("proxy authentication requires ADMIN_SUBJECT and does not support ADMIN_GROUP")
+		}
+		if c.PublicURL == nil || c.PublicURL.Scheme != "https" {
+			return c, fmt.Errorf("proxy authentication requires an HTTPS PUBLIC_URL")
+		}
+		secretPath := os.Getenv("PROXY_SECRET_FILE")
+		if secretPath == "" {
+			return c, fmt.Errorf("PROXY_SECRET_FILE is required")
+		}
+		secret, err := os.ReadFile(secretPath)
+		if err != nil {
+			return c, fmt.Errorf("read proxy secret file: %w", err)
+		}
+		c.ProxySecret = strings.TrimSpace(string(secret))
+		if len(c.ProxySecret) < 32 || len(c.ProxySecret) > 256 || strings.ContainsAny(c.ProxySecret, "\r\n\x00") {
+			return c, fmt.Errorf("proxy secret must contain 32 to 256 bytes without line breaks")
+		}
+		for _, raw := range strings.Split(os.Getenv("PROXY_TRUSTED_CIDRS"), ",") {
+			prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
+			if err != nil {
+				return c, fmt.Errorf("PROXY_TRUSTED_CIDRS requires valid CIDRs")
+			}
+			if prefix.Bits() == 0 {
+				return c, fmt.Errorf("proxy trust cannot cover every address")
+			}
+			c.ProxyTrustedCIDRs = append(c.ProxyTrustedCIDRs, prefix.Masked())
+		}
+		if c.GroupsClaim != "" || c.GroupsPrefix != "" || c.GroupsFromUserInfo || c.TokenType != "" || c.Issuer != "" || c.Audience != "" {
+			return c, fmt.Errorf("proxy authentication does not accept OIDC settings")
+		}
 	default:
-		return c, fmt.Errorf("AUTH_MODE must be development or oidc")
+		return c, fmt.Errorf("AUTH_MODE must be development, oidc or proxy")
 	}
 	if c.AdminGroup != "" {
 		if c.GroupsClaim == "" {

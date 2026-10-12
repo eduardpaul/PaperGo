@@ -5,3 +5,6 @@
 data
 bin
 coverage.out
+samples/npm/generated
+samples/npm/.env
+samples/npm/__pycache__

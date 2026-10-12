@@ -2,7 +2,7 @@
 
 ## Deployment boundary
 
-One organization owns one deployment, SQLite database, and blob directory. A workspace is an organizational content scope within that deployment. No tenant ID is inferred from an HTTP header. OIDC subjects enroll in a persisted organization directory; typed user/group principals, nested groups and module-scoped roles feed service authorization and SQL read predicates. Multi-organization SaaS and cross-deployment identities require explicit future design.
+One organization owns one deployment, SQLite database, and blob directory. A workspace is an organizational content scope within that deployment. No tenant ID is inferred from an HTTP header. Verified OIDC subjects or authenticated trusted-proxy assertions enroll in a persisted organization directory; typed user/group principals, nested groups and module-scoped roles feed service authorization and SQL read predicates. Multi-organization SaaS and cross-deployment identities require explicit future design.
 
 ## Authoritative content and derived reads
 
@@ -34,7 +34,7 @@ Blob bytes are written through the storage port before the database transaction.
 
 `internal/webdav` presents each WebDAV-enabled library as a file system at `/webdav/{libraryID}/`. It is a protocol adapter only: the `dms` library-file operations resolve paths, authorize, and commit each PUT, MKCOL, MOVE and DELETE as one transaction, reusing the same create, update, blob-attach and delete code as REST. A new file's first revision already holds its blob. MOVE with overwrite deletes the destination and moves the source atomically. COPY reads the source and writes new entries, so a recursive copy is not one transaction.
 
-Paths resolve by the caller's visible names, using head names for draft readers and published names for others. Head names are unique per folder, but an unpublished rename can leave a reader seeing a published name that equals a sibling's. Then the owner of that head name wins, else the lowest ID, and listings and path resolution apply the same rule. Clients authenticate with API bearer tokens or Basic app passwords (`webdav_credentials`, stored as SHA-256). Write locks live in process memory, which matches the single-writer deployment; a shared lock store must precede multiple replicas.
+Paths resolve by the caller's visible names, using head names for draft readers and published names for others. Head names are unique per folder, but an unpublished rename can leave a reader seeing a published name that equals a sibling's. Then the owner of that head name wins, else the lowest ID, and listings and path resolution apply the same rule. OIDC deployments authenticate clients with API bearer tokens or Basic app passwords (`webdav_credentials`, stored as SHA-256). Trusted-proxy deployments validate the forwarding peer and secret, then use the proxy-verified username for both REST and WebDAV. PaperGo never trusts client-supplied identity headers or forwarded client addresses. Write locks live in process memory, which matches the single-writer deployment; a shared lock store must precede multiple replicas.
 
 ## Relationships and extensions
 

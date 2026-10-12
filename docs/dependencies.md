@@ -10,6 +10,7 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/dbos-inc/dbos-transact-golang` | the embedded workflow runner (`internal/runner` only) | MIT |
 | `github.com/go-jose/go-jose/v4` | JWT handling | Apache-2.0 |
 | `github.com/google/uuid` | identifiers | BSD-3-Clause |
+| `golang.org/x/oauth2` | bearer-token transport for OIDC UserInfo | BSD-3-Clause |
 | `github.com/robfig/cron/v3` | parsing workflow schedule triggers | MIT |
 | `modernc.org/sqlite` | CGO-free SQLite driver | BSD-3-Clause |
 

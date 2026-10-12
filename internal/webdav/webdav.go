@@ -28,7 +28,7 @@ const allowedMethods = "OPTIONS, GET, HEAD, PUT, DELETE, MKCOL, COPY, MOVE, PROP
 
 type Handler struct {
 	DMS       *dms.Service
-	Auth      auth.Verifier
+	Auth      auth.Authenticator
 	Storage   storage.Store
 	Logger    *slog.Logger
 	MaxUpload int64
@@ -38,7 +38,7 @@ type Handler struct {
 	locks      *lockTable
 }
 
-func New(service *dms.Service, verifier auth.Verifier, store storage.Store, logger *slog.Logger, maxUpload int64) *Handler {
+func New(service *dms.Service, verifier auth.Authenticator, store storage.Store, logger *slog.Logger, maxUpload int64) *Handler {
 	return &Handler{DMS: service, Auth: verifier, Storage: store, Logger: logger, MaxUpload: maxUpload, locks: newLockTable()}
 }
 
@@ -130,13 +130,26 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// authenticate accepts an API bearer token or, for clients that only speak
-// Basic authentication, a WebDAV app password with any user name.
+// authenticate accepts the deployment's trusted proxy assertion, or an API
+// bearer token or Basic WebDAV app password in bearer-authenticated deployments.
 func (h *Handler) authenticate(r *http.Request) (string, error) {
+	if h.Auth.Kind() == auth.TrustedProxy {
+		ident, err := h.Auth.Authenticate(r)
+		if err != nil {
+			return "", dms.ErrForbidden
+		}
+		if err = h.DMS.Directory().EnsureUser(r.Context(), ident.Subject); err != nil {
+			return "", err
+		}
+		if err = identity.RequireActive(r.Context(), h.DMS.Directory().DB, ident.Subject); err != nil {
+			return "", dms.ErrForbidden
+		}
+		return ident.Subject, nil
+	}
 	scheme, _, _ := strings.Cut(strings.TrimSpace(r.Header.Get("Authorization")), " ")
 	switch {
 	case strings.EqualFold(scheme, "Bearer"):
-		ident, err := auth.Authenticate(r, h.Auth)
+		ident, err := h.Auth.Authenticate(r)
 		if err != nil {
 			return "", dms.ErrForbidden
 		}

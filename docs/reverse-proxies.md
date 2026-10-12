@@ -1,23 +1,33 @@
 # Reverse proxies and identity providers
 
-PaperGo runs at the root of one public host behind a TLS-terminating reverse proxy. The proxy forwards requests and `Authorization` unchanged. PaperGo verifies provider tokens, stores users and groups in its organization directory, and applies persisted roles and resource ACLs through the existing authorization pipeline.
+PaperGo runs at the root of one public host behind a TLS-terminating reverse proxy. Choose OIDC bearer authentication or trusted proxy authentication. Both modes enroll identities in the same persisted organization directory and apply the same roles and resource ACLs. The [NPM Compose sample](../samples/npm/README.md) runs with NPM Access List authentication and no separate identity provider.
 
 ## Authentication and directory
 
 | Area | Current behavior |
 | --- | --- |
 | Provider bearer tokens | OIDC verifies signature, issuer, expiry and audience. `OIDC_TOKEN_TYPE` optionally checks the JWT header type. |
-| Personal REST tokens | REST accepts scoped personal credentials. These requests preserve the stored profile and group memberships. |
-| Users | Verified subjects enroll with the Member role on first use. Profile claims supply a display name and email. |
+| Personal REST tokens | Bearer-authenticated deployments accept scoped personal credentials. These requests preserve the stored profile and group memberships. |
+| Users | Verified subjects enroll with the Member role on first use. OIDC profile claims supply a display name and email; proxy profiles are locally managed. |
 | Groups | Local groups are administered in PaperGo. OIDC groups synchronize from provider claims; their direct memberships are managed by the provider. |
 | Roles and ACLs | Both group sources use the same persisted role assignments, nested-group expansion and content grants. |
 | First administrator | Exactly one of `ADMIN_SUBJECT` and `ADMIN_GROUP` is required in OIDC mode and applied once at initialization. |
-| WebDAV | Provider bearer tokens or Basic app passwords. App-password requests preserve stored memberships. |
+| WebDAV | OIDC deployments use provider bearer tokens or Basic app passwords. Proxy deployments use proxy-verified usernames. App-password requests preserve stored memberships. |
 | Public links | `PUBLIC_URL` supplies the public scheme and host for absolute continuation links. Without it, links use the request origin. |
 | WebDAV destinations | COPY/MOVE accept the request host or the configured public host, within the same library. |
-| Forwarded identity headers | Ignored. PaperGo does not authenticate `Remote-User` or `Remote-Groups`. |
+| Trusted proxy identities | `AUTH_MODE=proxy` accepts a verified username only from configured peers carrying the shared proxy secret. Generic `Remote-User`, `Remote-Groups` and forwarded client-address headers are ignored. |
 
 HTTP adapters verify credentials and pass the verified identity to `internal/identity`. Profile and membership changes, their audit records and the sync hash commit in one directory transaction. Identity membership audits also feed the existing live-access change notifications. Content operations continue checking current persisted scopes and ACLs in their own transactions.
+
+## NPM-only authentication
+
+Set `AUTH_MODE=proxy`, `ADMIN_SUBJECT` to an NPM Access List username, `PUBLIC_URL` to the HTTPS origin, `PROXY_SECRET_FILE` to a private secret file, and `PROXY_TRUSTED_CIDRS` to the NPM backend address with a /32 (or an explicit bounded proxy network). Use a random secret of at least 32 bytes and keep PaperGo's backend port private.
+
+NPM validates Basic credentials and overwrites `X-Papergo-Subject` with `$remote_user` and `X-Papergo-Proxy-Secret` with the configured secret in every forwarded location. Use `satisfy all` and disable authorization passthrough. PaperGo requires both the actual network peer and the secret, rejects duplicate or empty identity headers, and rejects forwarded client `Authorization`. It never derives trust from `X-Forwarded-For`. Batch requests cannot override the identity assertion. Browser mutations must match the configured public origin through Origin/Referer validation and cannot carry cross-site Fetch Metadata.
+
+NPM Access List usernames are the stable PaperGo subjects. NPM management accounts administer the proxy; they do not become application users. Groups, profiles and roles are managed in PaperGo. Removing access-list credentials blocks subsequent requests; disabling the PaperGo account also revokes active application access. Rename usernames by explicitly creating a different identity rather than transferring another user's permissions.
+
+In this mode REST and WebDAV clients use their NPM Basic credentials over HTTPS. PaperGo personal REST-token and WebDAV app-password endpoints are unavailable (404), and OIDC settings and `ADMIN_GROUP` are rejected. The sample provisions a dedicated backend network, static trusted proxy address, shared secret, TLS, persistent volumes and health checks.
 
 ## Public origin
 
@@ -59,13 +69,13 @@ With `OIDC_GROUPS_FROM_USERINFO=true`, a token lacking the groups claim queries 
 
 ## Deployment limits
 
-PaperGo uses one organization per database. It does not provide trusted-header sign-in, SCIM provisioning or client-IP authorization. Removing a user at the provider stops new tokens; already-issued JWTs remain valid until expiry. Administrators can deactivate a user in PaperGo to end access immediately. Provider removal does not automatically delete or deactivate the stored directory row.
+PaperGo uses one organization per database. It does not provide SCIM provisioning or client-IP authorization. Trusted proxy authentication uses explicitly authenticated proxy assertions; it does not consume arbitrary remote-user headers. Removing a user at the provider stops new tokens; already-issued JWTs remain valid until expiry. Administrators can deactivate a user in PaperGo to end access immediately. Provider removal does not automatically delete or deactivate the stored directory row.
 
 ## Proxy configuration
 
 ### Rules for every proxy
 
-1. **Pass `Authorization` unchanged.** No basic auth, access list or forward auth on the PaperGo host.
+1. **Use the authentication-mode contract.** In OIDC mode, pass `Authorization` unchanged and leave access lists disabled. In proxy mode, require NPM Basic authentication, strip `Authorization` upstream, and install the trusted assertion headers in every location.
 2. **Keep the `Host` header**, or set `PUBLIC_URL`. NPM (`proxy_set_header Host $host`), Caddy and Traefik keep it by default.
 3. **Pass the URI as received.** WebDAV names carry percent-encoding. NPM proxies `$request_uri`, which is correct. Do not normalize or rewrite paths.
 4. **Allow WebDAV methods**: `OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`, `PUT`, `DELETE`. nginx, Caddy and Traefik pass them by default; WAF rules and Cloudflare page rules may not.
@@ -89,7 +99,7 @@ Serve PaperGo at the root of its own host name (`docs.example.com`), not under a
 
 | Tab | Setting |
 | --- | --- |
-| Details | Domain: `docs.example.com`. Scheme `http`, forward host `papergo`, port `8080`. **Cache Assets: off.** **Block Common Exploits: off**: it answers 403 to query strings with `concat(`, `union … select (` and similar, which search terms and filter values can contain. **Websockets Support: on**: no websockets are used, but it switches the upstream to HTTP/1.1, which unbuffered chunked uploads need (macOS Finder uploads with chunked encoding). Access List: **Publicly Accessible**. |
+| Details | Domain: `docs.example.com`. Scheme `http`, forward host `papergo`, port `8080`. **Cache Assets: off.** **Block Common Exploits: off**: it answers 403 to query strings with `concat(`, `union … select (` and similar, which search terms and filter values can contain. **Websockets Support: on**: no websockets are used, but it switches the upstream to HTTP/1.1, which unbuffered chunked uploads need (macOS Finder uploads with chunked encoding). Access List: **Publicly Accessible** for OIDC mode; use the sample’s protected Access List for proxy mode. |
 | SSL | Let's Encrypt certificate, **Force SSL on**, HTTP/2 on, HSTS on. |
 | Advanced | The block below. |
 
@@ -175,7 +185,7 @@ For any IdP: decode a real access token (`jwt.io`-style, locally) and check `iss
 
 ## WebDAV through a proxy
 
-- Clients use **app passwords** (`POST /v1/webdav-credentials`) with Basic auth. The proxy must pass `Authorization` (rule 1). People create them with their bearer token.
+- Clients use **app passwords** (`POST /v1/webdav-credentials`) with Basic auth. The proxy must pass `Authorization` (rule 1). In OIDC mode, people create them with their bearer token. In proxy mode, clients use NPM Access List credentials instead.
 - Windows' WebClient sends Basic credentials only over HTTPS (default `BasicAuthLevel=1`), which the proxy provides, and limits downloads to 50 MB by default (`FileSizeLimitInBytes`).
 - Group sync does not run on app-password requests: they carry no token. Their memberships are whatever the user's last token set.
 

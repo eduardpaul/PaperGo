@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"papergo/internal/auth"
 	"strings"
 	"time"
 )
@@ -97,7 +98,7 @@ func (a *API) batch(next http.Handler) http.HandlerFunc {
 					return
 				}
 				switch canonical {
-				case "Host", "Content-Length", "Connection", "Transfer-Encoding", "Trailer", "Upgrade", "Proxy-Authorization", "Proxy-Connection":
+				case auth.ProxySubjectHeader, auth.ProxySecretHeader, "Host", "Content-Length", "Connection", "Transfer-Encoding", "Trailer", "Upgrade", "Proxy-Authorization", "Proxy-Connection":
 					invalid("transport headers cannot be overridden")
 					return
 				}
@@ -153,7 +154,7 @@ func validBatchHeader(key, value string) bool {
 func (a *API) batchCall(outer *http.Request, call batchRequest, target *url.URL, next http.Handler) batchResponse {
 	body := []byte(call.Body)
 	headers := make(http.Header)
-	for _, key := range []string{"Authorization", "Cookie", "Accept-Language"} {
+	for _, key := range []string{"Authorization", "Cookie", "Accept-Language", auth.ProxySubjectHeader, auth.ProxySecretHeader} {
 		headers[key] = outer.Header.Values(key)
 	}
 	for key, value := range call.Headers {

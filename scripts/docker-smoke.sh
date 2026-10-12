@@ -19,7 +19,7 @@ cleanup() {
 trap cleanup EXIT
 
 docker build --tag papergo:ci-smoke .
-if ! CGO_ENABLED=0 go run ./scripts/docker-smoke-db "$task_dir/papergo.db" > "$task_dir/migrations.log" 2>&1; then
+if ! CGO_ENABLED=0 go run ./cmd/admin initialize --database "$task_dir/papergo.db" --schema migrations > "$task_dir/migrations.log" 2>&1; then
   cat "$task_dir/migrations.log" >&2
   exit 1
 fi

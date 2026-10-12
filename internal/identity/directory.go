@@ -184,10 +184,22 @@ func (d Directory) Initialize(ctx context.Context, administrator, adminGroup str
 	})
 }
 
-// EnsureUser enrolls a verified OIDC subject with the Member role on first use.
+// EnsureUser enrolls a locally managed identity with the Member role on first use.
 // Existing users keep their assignments, including an intentionally empty set.
 func (d Directory) EnsureUser(ctx context.Context, subject string) error {
-	return d.SyncUser(ctx, UserIdentity{Subject: subject})
+	if err := ValidateSubject(subject); err != nil {
+		return err
+	}
+	var exists bool
+	if err := d.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=?)", subject).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	return d.transaction(ctx, func(tx *sql.Tx) error {
+		return auditedIdentity(ctx, tx, subject, "user.create", "user", subject, func() error { return ensureUser(ctx, tx, subject) })
+	})
 }
 
 // SyncUser enrolls or updates an OIDC user, synchronizing profile claims and

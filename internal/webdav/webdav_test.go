@@ -26,12 +26,18 @@ var ctx = context.Background()
 // principals maps bearer tokens to subjects.
 type principals map[string]string
 
-func (p principals) Verify(_ context.Context, token string) (auth.Identity, error) {
-	if subject, ok := p[token]; ok {
+func (p principals) Authenticate(r *http.Request) (auth.Identity, error) {
+	parts := strings.Fields(r.Header.Get("Authorization"))
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return auth.Identity{}, auth.ErrUnauthenticated
+	}
+	if subject, ok := p[parts[1]]; ok {
 		return auth.Identity{Subject: subject}, nil
 	}
 	return auth.Identity{}, errors.New("invalid token")
 }
+
+func (principals) Kind() auth.Kind { return auth.Bearer }
 
 type testLog struct{ t *testing.T }
 

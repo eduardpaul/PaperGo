@@ -12,7 +12,7 @@ A workspace contains lists, libraries and their content, plus workspace configur
 | POST | `/v1/workspaces/{id}/members` | Owner adds a subject or replaces its role |
 | DELETE | `/v1/workspaces/{id}/members/{member}` | Owner removes a subject |
 
-Membership bodies use `{"subject":"oidc-subject","role":"member"}`. The role defaults to `member`. Subjects must be active users in the organization directory, contain 1 to 255 UTF-8 bytes, and have no surrounding whitespace. Verified bearer subjects enroll on first authentication; organization identity managers can provision them through `/v1/identity/users`.
+Membership bodies use `{"subject":"oidc-subject","role":"member"}`. The role defaults to `member`. Subjects must be active users in the organization directory, contain 1 to 255 UTF-8 bytes, and have no surrounding whitespace. Verified bearer or trusted-proxy subjects enroll on first authentication; organization identity managers can provision them through `/v1/identity/users`.
 
 | Role | Access |
 | --- | --- |

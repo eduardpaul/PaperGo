@@ -27,7 +27,19 @@ type Identity struct {
 	SyncGroups        bool
 }
 
-type Verifier interface {
+type Kind string
+
+const (
+	Bearer       Kind = "bearer"
+	TrustedProxy Kind = "proxy"
+)
+
+type Authenticator interface {
+	Authenticate(*http.Request) (Identity, error)
+	Kind() Kind
+}
+
+type tokenVerifier interface {
 	Verify(context.Context, string) (Identity, error)
 }
 
@@ -55,11 +67,11 @@ func (d Development) Verify(_ context.Context, token string) (Identity, error) {
 	}, nil
 }
 
-var ErrUnauthenticated = errors.New("valid bearer authentication is required")
+var ErrUnauthenticated = errors.New("valid authentication is required")
 
-// Authenticate verifies a provider bearer token and returns its identity.
+// authenticateBearer verifies a provider bearer token and returns its identity.
 // REST also recognizes locally issued personal credentials in its middleware.
-func Authenticate(r *http.Request, v Verifier) (Identity, error) {
+func authenticateBearer(r *http.Request, v tokenVerifier) (Identity, error) {
 	parts := strings.Fields(r.Header.Get("Authorization"))
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || len(parts[1]) > 8192 {
 		return Identity{}, ErrUnauthenticated
@@ -287,7 +299,18 @@ func ParseGroups(raw any, prefix string) []string {
 	return out
 }
 
-func New(ctx context.Context, c config.Config) (Verifier, error) {
+func (d Development) Authenticate(r *http.Request) (Identity, error) { return authenticateBearer(r, d) }
+func (Development) Kind() Kind                                       { return Bearer }
+func (o *OIDC) Authenticate(r *http.Request) (Identity, error)       { return authenticateBearer(r, o) }
+func (*OIDC) Kind() Kind                                             { return Bearer }
+
+func New(ctx context.Context, c config.Config) (Authenticator, error) {
+	if c.AuthMode == "proxy" {
+		if c.PublicURL == nil {
+			return nil, errors.New("proxy authentication needs PUBLIC_URL")
+		}
+		return NewProxy(c.ProxySecret, c.ProxyTrustedCIDRs, c.PublicURL.String())
+	}
 	if c.AuthMode == "development" {
 		return Development{Token: c.DevToken, Subject: c.DevSubject}, nil
 	}

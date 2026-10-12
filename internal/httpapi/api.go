@@ -28,7 +28,7 @@ type API struct {
 	DMS       *dms.Service
 	Workflows *workflow.Service
 	Runner    *runner.Runner
-	Auth      auth.Verifier
+	Auth      auth.Authenticator
 	Storage   storage.Store
 	Logger    *slog.Logger
 	Ready     func(context.Context) error
@@ -98,9 +98,11 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
 	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
-	api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
-	api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
-	api.HandleFunc("DELETE /v1/webdav-credentials/{id}", a.revokeWebDAVCredential)
+	if a.Auth == nil || a.Auth.Kind() != auth.TrustedProxy {
+		api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
+		api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
+		api.HandleFunc("DELETE /v1/webdav-credentials/{id}", a.revokeWebDAVCredential)
+	}
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
 	root := http.NewServeMux()
 	root.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { respond(w, r, 200, map[string]string{"status": "ok"}) })
@@ -649,7 +651,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		var ident auth.Identity
 		var err error
 		parts := strings.Fields(r.Header.Get("Authorization"))
-		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.RESTTokenPrefix) {
+		if a.Auth.Kind() != auth.TrustedProxy && len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.RESTTokenPrefix) {
 			token, e := a.DMS.Directory().AuthenticateRESTToken(r.Context(), parts[1])
 			if e != nil {
 				err = e
@@ -658,14 +660,22 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 				r = r.WithContext(identity.WithRESTToken(r.Context(), token))
 			}
 		} else {
-			ident, err = auth.Authenticate(r, a.Auth)
+			ident, err = a.Auth.Authenticate(r)
 		}
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", "Bearer")
-			a.problem(w, r, 401, "unauthorized", "valid bearer authentication is required")
+			if a.Auth.Kind() == auth.TrustedProxy {
+				w.Header().Set("WWW-Authenticate", `Basic realm="PaperGo", charset="UTF-8"`)
+			}
+			a.problem(w, r, 401, "unauthorized", "valid authentication is required")
 			return
 		}
-		if _, personal := identity.RESTTokenContext(r.Context()); !personal {
+		if a.Auth.Kind() == auth.TrustedProxy {
+			if err = a.DMS.Directory().EnsureUser(r.Context(), ident.Subject); err != nil {
+				a.failure(w, r, err)
+				return
+			}
+		} else if _, personal := identity.RESTTokenContext(r.Context()); !personal {
 			if err = a.DMS.Directory().SyncUser(r.Context(), identity.UserIdentity{
 				Subject:           ident.Subject,
 				Name:              ident.Name,

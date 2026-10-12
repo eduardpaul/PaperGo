@@ -1,0 +1,134 @@
+name: papergo-npm
+
+services:
+  volume-permissions:
+    image: busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    secrets: [proxy-secret]
+    volumes: [papergo-data:/data]
+    command:
+      - sh
+      - -eu
+      - -c
+      - >-
+        cp /run/secrets/proxy-secret /data/.proxy-secret;
+        chmod 0400 /data/.proxy-secret;
+        chown 65532:65532 /data /data/.proxy-secret;
+        chmod 0700 /data
+    restart: "no"
+
+  initialize:
+    image: papergo:npm-sample
+    build: ../..
+    entrypoint: [/papergo-admin]
+    command: [initialize, --schema, /schema]
+    environment:
+      DATABASE_PATH: /data/papergo.db
+    volumes: [papergo-data:/data]
+    depends_on:
+      volume-permissions:
+        condition: service_completed_successfully
+    network_mode: none
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+
+  papergo:
+    image: papergo:npm-sample
+    build: ../..
+    environment:
+      APP_ENV: production
+      AUTH_MODE: proxy
+      ADMIN_SUBJECT: ${PAPERGO_ADMIN:?Run setup.py first}
+      PUBLIC_URL: ${PUBLIC_URL:?Run setup.py first}
+      PROXY_SECRET_FILE: /data/.proxy-secret
+      PROXY_TRUSTED_CIDRS: ${NPM_PRIVATE_IP:?Run setup.py first}/32
+      HTTP_ADDR: 0.0.0.0:8080
+      DATABASE_PATH: /data/papergo.db
+      BLOB_PATH: /data/blobs
+      MAX_UPLOAD_BYTES: "67108864"
+      MAX_IN_FLIGHT: "32"
+      REQUEST_TIMEOUT: 30s
+      NODE_ID: papergo-1
+      RUN_RETENTION: 720h
+    volumes: [papergo-data:/data]
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+    networks:
+      backend:
+        ipv4_address: ${PAPERGO_PRIVATE_IP:?Run setup.py first}
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /papergo-admin, health]
+      interval: 10s
+      timeout: 4s
+      start_period: 20s
+      retries: 6
+    restart: unless-stopped
+    stop_grace_period: 45s
+    mem_limit: 1g
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+
+  npm:
+    image: jc21/nginx-proxy-manager:2.16.0@sha256:4393e642e233e5efd5adeb7f10918d4aaea71c9ed875b94190273fc8e87f9594
+    ports:
+      - ${HTTP_PORT:-80}:80
+      - ${HTTPS_PORT:-443}:443
+      - 127.0.0.1:${ADMIN_PORT:-8181}:81
+    volumes:
+      - npm-data:/data
+      - npm-certificates:/etc/letsencrypt
+    networks:
+      frontend: {}
+      backend:
+        ipv4_address: ${NPM_PRIVATE_IP:?Run setup.py first}
+    depends_on:
+      papergo:
+        condition: service_healthy
+    environment:
+      DISABLE_IPV6: "true"
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /usr/bin/check-health]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 1g
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+
+networks:
+  frontend: {}
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${PRIVATE_SUBNET:?Run setup.py first}
+
+volumes:
+  papergo-data: {}
+  npm-data: {}
+  npm-certificates: {}
+
+secrets:
+  proxy-secret:
+    file: ./generated/proxy-secret

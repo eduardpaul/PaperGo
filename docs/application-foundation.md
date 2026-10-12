@@ -48,7 +48,7 @@ Text/email values default to 255 UTF-16 code units, URLs to 2048 and notes to 10
 
 Integer and decimal bounds, defaults, history, and indexed comparisons preserve exact precision. Decimal content is a canonical fixed-scale string; its index is signed 64-bit scaled units. `number` and `currency` use exact JSON decimals with a 96-bit coefficient and scale 0..28, ranging from -79228162514264337593543950335 to 79228162514264337593543950335. Excess fractional precision rounds to nearest, with midpoint ties to even; very small values round to zero. Currency fields require `options.currency_code` containing three uppercase letters (for example EUR). Numeric bounds, filters, sorting, grouping and pagination use exact values. SQLite indexes store a fixed-width numeric ordering key without conversion to floating point.
 
-Person fields store enrolled OIDC subjects and validate newly assigned values against active organization users. GET `/v1/people` lists active subjects with `list.read`; a person assignment grants no content access. Person defaults use the same active-user validation. Explicit reassignment validates every supplied person; omitted people remain in unrelated edits.
+Person fields store enrolled organization subjects and validate newly assigned values against active organization users. GET `/v1/people` lists active subjects with `list.read`; a person assignment grants no content access. Person defaults use the same active-user validation. Explicit reassignment validates every supplied person; omitted people remain in unrelated edits.
 
 Lookup fields reference live collections in any workspace and validate assigned target existence in that collection, independently of target read permission. Unchanged references can remain in later revisions when a term is deprecated or lookup access changes.
 
@@ -260,7 +260,7 @@ Operations dispatch through handlers registered at startup. Each handler validat
 
 ## Live API updates
 
-`GET /v1/events` streams server-sent events using the usual bearer authentication. `item`, `operation` and `run` frames contain the current authorized view; operation payloads and run inputs/results are private. Item removal frames contain only an ID already delivered on that connection. Changes to access emit a `resync` frame without entity details. Clients reconcile item state with the delta API and refresh operation/run lists after `connected` or `resync`.
+`GET /v1/events` streams server-sent events using the deployment's configured authentication mode. `item`, `operation` and `run` frames contain the current authorized view; operation payloads and run inputs/results are private. Item removal frames contain only an ID already delivered on that connection. Changes to access emit a `resync` frame without entity details. Clients reconcile item state with the delta API and refresh operation/run lists after `connected` or `resync`.
 
 Each frame carries a durable numeric `id`. Reconnect with `Last-Event-ID` to replay retained changes; the journal retains seven days and an expired cursor returns 410. A new connection starts at the current position. Repeated changes to the same entity may be coalesced, so this stream is a notification API, not an audit feed. Keepalive frames advance the cursor even when intervening changes are hidden by permissions.
 

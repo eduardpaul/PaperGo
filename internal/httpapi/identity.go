@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"papergo/internal/auth"
 	"papergo/internal/identity"
 )
 
@@ -9,17 +10,19 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 	a.registerPreferences(m)
 	a.registerInboxes(m)
 	d := a.DMS.Directory()
-	m.HandleFunc("GET /v1/identity/me/tokens", foundationRead(a, func(r *http.Request) (any, error) { return d.RESTTokens(r.Context(), subject(r)) }))
-	m.HandleFunc("POST /v1/identity/me/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.RESTTokenInput, _ int) (any, error) {
-		return d.CreateRESTToken(r.Context(), subject(r), in)
-	}))
-	m.HandleFunc("DELETE /v1/identity/me/tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if err := d.RevokeRESTToken(r.Context(), subject(r), r.PathValue("id")); err != nil {
-			a.failure(w, r, err)
-			return
-		}
-		w.WriteHeader(204)
-	})
+	if a.Auth == nil || a.Auth.Kind() != auth.TrustedProxy {
+		m.HandleFunc("GET /v1/identity/me/tokens", foundationRead(a, func(r *http.Request) (any, error) { return d.RESTTokens(r.Context(), subject(r)) }))
+		m.HandleFunc("POST /v1/identity/me/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.RESTTokenInput, _ int) (any, error) {
+			return d.CreateRESTToken(r.Context(), subject(r), in)
+		}))
+		m.HandleFunc("DELETE /v1/identity/me/tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
+			if err := d.RevokeRESTToken(r.Context(), subject(r), r.PathValue("id")); err != nil {
+				a.failure(w, r, err)
+				return
+			}
+			w.WriteHeader(204)
+		})
+	}
 	m.HandleFunc("GET /v1/organization", foundationRead(a, func(r *http.Request) (any, error) { return d.Organization(r.Context(), subject(r)) }))
 	m.HandleFunc("PATCH /v1/organization", foundationMutation(a, 200, true, func(r *http.Request, in identity.OrganizationUpdate, v int) (any, error) {
 		return d.UpdateOrganization(r.Context(), subject(r), v, in)
