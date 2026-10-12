@@ -5,14 +5,14 @@ import { useApiPages } from '@/api/pages';
 import type { FieldDefinition, Relationship, Resource } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
-import { Input, Label } from '@/components/ui/input';
+import { Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { CreateRelationshipType, relationshipTypesQuery } from '@/features/admin/relationship-types';
 import { QueryFeedback, useHasScope } from '@/features/admin/common';
 import { FieldEditor } from '@/features/fields/editor';
 import { valuesPatch } from '@/features/fields/values';
 
-export function RelatedItems({ item }: { item: Resource }) {
+export function RelatedItems({ item, canWrite }: { item: Resource; canWrite: boolean }) {
   const client = useQueryClient();
   const types = useQuery(relationshipTypesQuery);
   const canCreate = useHasScope('list.write');
@@ -92,17 +92,21 @@ export function RelatedItems({ item }: { item: Resource }) {
                 {link.directed ? 'Directed' : 'Symmetric'}
               </p>
             </div>
-            <Button size="sm" disabled={remove.isPending} onClick={() => remove.mutate(link)}>
-              Remove
-            </Button>
+            {canWrite && (
+              <Button size="sm" variant="ghost" disabled={remove.isPending} onClick={() => remove.mutate(link)}>
+                Remove
+              </Button>
+            )}
           </li>
         ))}
       </ul>
+      {!links.isPending && links.items.length === 0 && <p className="text-sm text-muted">No links yet.</p>}
       {links.hasNextPage && (
         <Button onClick={() => void links.fetchNextPage()} disabled={links.isFetchingNextPage}>
           More links
         </Button>
       )}
+      {canWrite && (
       <form
         className="grid gap-2 border-t pt-3"
         onSubmit={(event) => {
@@ -133,7 +137,7 @@ export function RelatedItems({ item }: { item: Resource }) {
             Directed link
           </label>
         )}
-        <Label id="link-target-label">Find target item</Label>
+        <Label id="link-target-label">Item to link</Label>
         <Combobox
           aria-labelledby="link-target-label"
           selected={
@@ -145,8 +149,6 @@ export function RelatedItems({ item }: { item: Resource }) {
         />
         {q && <QueryFeedback query={matches} />}
         {matches.hasNextPage && <Button onClick={() => void matches.fetchNextPage()}>More target items</Button>}
-        <Label htmlFor="link-target">Target item id</Label>
-        <Input id="link-target" required value={target} onChange={(event) => setTarget(event.target.value)} />
         {fields.map((field) => (
           <FieldEditor
             key={field.key}
@@ -159,6 +161,7 @@ export function RelatedItems({ item }: { item: Resource }) {
           Add link
         </Button>
       </form>
+      )}
       {creating && (
         <CreateRelationshipType onClose={() => setCreating(false)} onCreated={(type) => setTypeId(type.id)} />
       )}

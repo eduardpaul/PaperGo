@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { QueryFeedback } from '@/features/admin/common';
-import { useCanManage } from '@/features/lists/access';
+import { useAccess } from '@/features/lists/access';
 import { CollectionIcon } from '@/features/lists/collection-icon';
 import { NewCollectionDialog } from '@/features/workspaces/new-collection-dialog';
 import { useFormat } from '@/lib/preferences';
@@ -25,7 +25,7 @@ function WorkspacePage() {
     queryKey: ['resources', workspaceId, 'collections'],
     queryFn: () => collectionChildren(workspaceId),
   });
-  const { canManage } = useCanManage(workspaceId);
+  const { canManage } = useAccess(workspaceId);
   const [creating, setCreating] = useState(false);
 
   if (workspace.isError) {

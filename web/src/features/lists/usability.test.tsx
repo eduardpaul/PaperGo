@@ -43,6 +43,7 @@ describe('items table', () => {
         fields={[]}
         publishing={false}
         names={new Map()}
+        selectable
         selected={new Map()}
         onToggle={onToggle}
         onToggleAll={onToggleAll}
@@ -63,8 +64,8 @@ describe('item panel', () => {
   const fields: FieldDefinition[] = [{ id: 'note', key: 'note', label: 'Note', type: 'text' }];
   const collection: Resource = { id: 'list', workspace_id: 'workspace', kind: 'list', name: 'Records', version: 1 };
 
-  function mockItem() {
-    const item: Resource = { ...row('item', 'Original'), container_id: 'list', values: { note: 'a' } };
+  function mockItem(access: Resource['access'] = ['read', 'read_draft', 'write']) {
+    const item: Resource = { ...row('item', 'Original'), container_id: 'list', values: { note: 'a' }, access };
     const calls: { method: string; path: string }[] = [];
     vi.stubGlobal(
       'fetch',
@@ -107,6 +108,42 @@ describe('item panel', () => {
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(calls).toContainEqual({ method: 'DELETE', path: '/v1/resources/item' }));
+  });
+
+  it('offers no edits to people who can only read', async () => {
+    mockItem(['read']);
+    renderWithClient(
+      <ItemSheet itemId="item" collection={collection} fields={fields} contentTypes={[]} tab="details" onTab={vi.fn()} onClose={vi.fn()} onMoved={vi.fn()} />,
+    );
+    expect(await screen.findByText('You can read this item but not change it.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(screen.getByLabelText('Note').matches(':disabled')).toBe(true);
+    expect(screen.queryByRole('tab', { name: 'Permissions' })).toBeNull();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Item actions' }), { button: 0, ctrlKey: false });
+    expect(await screen.findByRole('menuitem', { name: 'Field definitions' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Move…' })).toBeNull();
+  });
+});
+
+describe('table selection', () => {
+  it('has no checkboxes without write access', () => {
+    renderWithClient(
+      <ItemsTable
+        rows={[row('a', 'Alpha')]}
+        columns={['$name']}
+        fields={[]}
+        publishing={false}
+        names={new Map()}
+        selectable={false}
+        selected={new Map()}
+        onToggle={vi.fn()}
+        onToggleAll={vi.fn()}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText('Select all')).toBeNull();
+    expect(screen.queryByLabelText('Select Alpha')).toBeNull();
   });
 });
 

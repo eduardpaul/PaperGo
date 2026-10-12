@@ -5,7 +5,7 @@ import { resourceQuery } from '@/api/queries';
 import { Page, PageHeader } from '@/components/page';
 import { SubNav, SubNavLayout, SubNavLink } from '@/components/sub-nav';
 import { Alert } from '@/components/ui/feedback';
-import { useCanManage } from '@/features/lists/access';
+import { useAccess } from '@/features/lists/access';
 import { CollectionIcon } from '@/features/lists/collection-icon';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/settings')({ component: CollectionSettingsLayout });
@@ -14,7 +14,7 @@ export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/settings')(
 function CollectionSettingsLayout() {
   const params = Route.useParams();
   const collection = useQuery(resourceQuery(params.listId));
-  const { canManage, checked } = useCanManage(params.listId);
+  const { canManage, loaded: checked } = useAccess(params.listId);
   const library = collection.data?.kind === 'library';
   return (
     <Page className="max-w-5xl">

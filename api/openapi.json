@@ -790,7 +790,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Resource"
+                  "$ref": "#/components/schemas/ResourceAccess"
                 }
               }
             },
@@ -832,7 +832,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Resource"
+                  "$ref": "#/components/schemas/ResourceAccess"
                 }
               }
             },
@@ -19746,6 +19746,38 @@
             "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
           }
         }
+      },
+      "ResourceAccess": {
+        "description": "A resource with the actions the caller may take on it. Clients use it to offer only allowed actions; the server still checks every request.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          },
+          {
+            "type": "object",
+            "required": [
+              "access"
+            ],
+            "properties": {
+              "access": {
+                "type": "array",
+                "readOnly": true,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_draft",
+                    "write",
+                    "publish",
+                    "manage"
+                  ]
+                },
+                "description": "Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions."
+              }
+            }
+          }
+        ]
       }
     }
   }

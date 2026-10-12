@@ -1,5 +1,7 @@
 export type Kind = 'workspace' | 'list' | 'library' | 'folder' | 'item';
 
+export type AccessAction = 'read' | 'read_draft' | 'write' | 'publish' | 'manage';
+
 export interface Page<T> {
   value?: T[] | null;
   '@odata.nextLink'?: string | null;
@@ -38,6 +40,8 @@ export interface Resource {
   updated_by?: string;
   deleted_at?: string;
   deleted_by?: string;
+  /** The caller's allowed actions; present on GET and PATCH /v1/resources/{id}. */
+  access?: AccessAction[];
 }
 
 export interface FieldOptions {

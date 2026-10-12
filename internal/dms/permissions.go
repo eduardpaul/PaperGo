@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	entsql "entgo.io/ent/dialect/sql"
+	"errors"
 	"papergo/ent"
 	"papergo/ent/itemsurface"
 	"papergo/ent/resource"
@@ -220,4 +221,39 @@ func (s *Service) GetSurface(ctx context.Context, subject, id, surface string) (
 		r.NextRevisionNumber = 0
 	}
 	return r, nil
+}
+
+// AccessActions lists the actions in the order the access field reports them.
+var AccessActions = []string{"read", "read_draft", "write", "publish", "manage"}
+
+// Access returns the actions the subject may take on r, so clients can offer
+// only those. It applies the same ACL and module-scope rules as the writes:
+// adding or changing content (write, publish) below a workspace also needs the
+// list.write scope.
+func (s *Service) Access(ctx context.Context, subject string, r *ent.Resource) ([]string, error) {
+	if !s.transaction {
+		return read(ctx, s, func(t *Service) ([]string, error) { return t.Access(ctx, subject, r) })
+	}
+	contentWrite := true
+	if r.Kind != resource.KindWorkspace {
+		if err := s.RequireScope(ctx, subject, "list.write"); errors.Is(err, ErrForbidden) {
+			contentWrite = false
+		} else if err != nil {
+			return nil, err
+		}
+	}
+	out := []string{}
+	for _, action := range AccessActions {
+		if (action == "write" || action == "publish") && !contentWrite {
+			continue
+		}
+		allowed, err := s.allowedMany(ctx, subject, action, []*ent.Resource{r})
+		if err != nil {
+			return nil, err
+		}
+		if allowed[r.ID] {
+			out = append(out, action)
+		}
+	}
+	return out, nil
 }

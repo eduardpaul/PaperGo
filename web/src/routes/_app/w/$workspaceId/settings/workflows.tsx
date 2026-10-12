@@ -3,7 +3,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
-import { builtIns, collectionChildren, permissions, workflows } from '@/api/queries';
+import { builtIns, collectionChildren, workflows } from '@/api/queries';
+import { useAccess } from '@/features/lists/access';
 import type { BuiltInState, Workflow } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,12 +23,7 @@ function WorkflowsPage() {
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ['workflows', workspaceId], queryFn: () => workflows(workspaceId) });
   const catalog = useQuery({ queryKey: ['workflow-builtins', workspaceId], queryFn: () => builtIns(workspaceId) });
-  const access = useQuery({
-    queryKey: ['permissions', workspaceId],
-    queryFn: () => permissions(workspaceId),
-    retry: false,
-  });
-  const canManage = !!access.data;
+  const { canManage } = useAccess(workspaceId);
   const [editing, setEditing] = useState<Workflow | 'new'>();
   const [launching, setLaunching] = useState<Workflow>();
   const [history, setHistory] = useState<Workflow>();

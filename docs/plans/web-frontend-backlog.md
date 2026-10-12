@@ -47,13 +47,13 @@ All product screens in this section are implemented against the registered `/v1`
 - A non-empty collection search box lists children of the open folder or collection. Saved view query has no extra search term, so search and the saved view are not combined.
 - Smart folder create stores a name, an owner (personal or one workspace), folder inclusion and one comparison with a text, number or boolean value. The group path stays in page state.
 - Inbox counts on Home come from `POST /v1/resources/{id}/query` with `include_total`. That total can include folders.
-- Resources do not carry the caller's access level. Screens offer settings and management actions when `GET /v1/resources/{id}/permissions` (manage only) succeeds, and show contribute actions to everyone; the server rejects writes the caller may not make.
 - Without a saved view, a table shows the name, the first four columns of the default content type and the modified date. Sorting by a column header is not offered: sorting needs a saved view on indexed columns.
 - Lookup and term values in table cells show ids; people show display names when the caller can read users.
 - `GET /v1/people` returns subject strings. Display names come from `GET /v1/identity/users` when the caller has `user.read`.
 
 ## What the UI matches
 
+- Actions follow `access` on `GET /v1/resources/{id}`: adding, editing, moving and deleting need `write`, publishing `publish`, settings and permissions `manage`. Selection and bulk actions use the list's access; an item with its own stricter permissions can still refuse them. Creating workspaces needs the `workspace.create` scope.
 - Resources are `/v1` and JSON fields are snake_case. Bearer deployments send `Authorization: Bearer`; proxy deployments use same-origin browser HTTP credentials. `/auth/config` selects the supported mode before the app mounts.
 - Live updates use `fetch` on `GET /v1/events`. The stream uses the same bearer or proxy credentials as other requests.
 - A personal home workspace is `personal_owner_id`. The sidebar hides it. Home and Inbox still open it through `GET /v1/identity/me/home` and `GET /v1/identity/me/inboxes`. Search includes it because search requires `workspace_id`.

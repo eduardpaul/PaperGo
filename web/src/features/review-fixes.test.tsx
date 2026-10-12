@@ -48,7 +48,7 @@ function mockAPI(handle: (url: URL, init: RequestInit) => unknown) {
 
 describe('reviewed frontend flows', () => {
   it('saves exact item fields without offering or sending a description', async () => {
-    let item: Resource = { id: 'item', workspace_id: 'workspace', container_id: 'collection', kind: 'item', name: 'Original', version: 1, values: {} };
+    let item: Resource = { id: 'item', workspace_id: 'workspace', container_id: 'collection', kind: 'item', name: 'Original', version: 1, values: {}, access: ['read', 'read_draft', 'write'] };
     let patch: Record<string, unknown> | undefined;
     const fields: FieldDefinition[] = [{ id: 'amount', key: 'amount', label: 'Amount', type: 'currency' }];
     mockAPI((url, init) => {
@@ -135,6 +135,7 @@ describe('reviewed frontend flows', () => {
         return next;
       }
       if (url.pathname.endsWith('/workflow-builtins')) return { value: [builtin] };
+      if (url.pathname === '/v1/resources/workspace') return { id: 'workspace', workspace_id: 'workspace', kind: 'workspace', name: 'Workspace', version: 1, access: ['read', 'read_draft', 'write', 'publish', 'manage'] };
       if (url.pathname.endsWith('/children')) return { value: ['a', 'b', 'c'].map((id) => ({ ...collection(), id, name: id })) };
       return { value: [] };
     });

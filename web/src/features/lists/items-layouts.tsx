@@ -64,7 +64,13 @@ export function ItemsGallery({ items, fields, onOpen }: LayoutProps) {
 }
 
 /** Board cards move by drag/drop or the keyboard-accessible Move to menu. */
-export function ItemsBoard({ items, fields, groupBy, onOpen }: LayoutProps & { groupBy?: FieldDefinition }) {
+export function ItemsBoard({
+  items,
+  fields,
+  groupBy,
+  readOnly,
+  onOpen,
+}: LayoutProps & { groupBy?: FieldDefinition; readOnly?: boolean }) {
   const client = useQueryClient();
   const [over, setOver] = useState<string>();
   const move = useMutation({
@@ -81,7 +87,7 @@ export function ItemsBoard({ items, fields, groupBy, onOpen }: LayoutProps & { g
   const valueOf = (item: Resource) => String(item.values?.[groupBy.key] ?? '');
   const columns = [...new Set([...(groupBy.choices ?? []), ...items.map(valueOf), ...(groupBy.required ? [] : [''])])];
   const moveTo = (item: Resource, value: string) => {
-    if (item.kind === 'item' && valueOf(item) !== value) move.mutate({ item, value });
+    if (!readOnly && item.kind === 'item' && valueOf(item) !== value) move.mutate({ item, value });
   };
   return (
     <div className="flex gap-3 overflow-auto pb-2">
@@ -111,7 +117,7 @@ export function ItemsBoard({ items, fields, groupBy, onOpen }: LayoutProps & { g
               {cards.map((item) => (
                 <li
                   key={item.id}
-                  draggable={item.kind === 'item' && !move.isPending}
+                  draggable={!readOnly && item.kind === 'item' && !move.isPending}
                   onDragStart={(event) => event.dataTransfer.setData('text/plain', item.id)}
                   className="grid gap-2 rounded border bg-surface p-3"
                 >
@@ -119,7 +125,7 @@ export function ItemsBoard({ items, fields, groupBy, onOpen }: LayoutProps & { g
                     <button type="button" className="flex-1 text-left font-medium" onClick={() => onOpen(item)}>
                       {item.name}
                     </button>
-                    {item.kind === 'item' && (
+                    {!readOnly && item.kind === 'item' && (
                       <DropdownMenu>
                         <DropdownMenuTrigger aria-label={`Move ${item.name} to`} disabled={move.isPending}>
                           <MoreHorizontal className="size-4" />

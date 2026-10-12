@@ -26,6 +26,7 @@ import { valuesPatch } from '@/features/fields/values';
 import { ConfirmDialog } from '@/features/settings/section';
 import { AddToSmartFolder } from '@/features/smart-folders/classification';
 import { useFormat } from '@/lib/preferences';
+import { can } from './access';
 import { AccessEditor } from './access-editor';
 import { ItemSchemaView, Publications } from './item-history';
 import { MoveDialog } from './move-dialog';
@@ -78,12 +79,15 @@ export function ItemSheet({
   });
   const close = () => (dirty ? setConfirmingClose(true) : onClose());
   const isFile = library && item?.kind === 'item';
+  const canWrite = can(item, 'write');
+  const canManage = can(item, 'manage');
+  const hasActions = isFile || item?.kind === 'item' || canWrite;
   const tabs = [
     'details',
     ...(isFile ? ['content'] : []),
     'versions',
     'links',
-    'access',
+    ...(canManage ? ['access'] : []),
     ...(collection.publishing_enabled ? ['publish'] : []),
   ];
   const current = tabs.includes(tab) ? tab : 'details';
@@ -100,7 +104,7 @@ export function ItemSheet({
               {item?.updated_at && ` · Updated ${format.relative(item.updated_at)}${editor ? ` by ${editor}` : ''}`}
             </SheetDescription>
           </div>
-          {item && (
+          {item && hasActions && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Item actions">
@@ -113,7 +117,7 @@ export function ItemSheet({
                     <Download /> Download
                   </DropdownMenuItem>
                 )}
-                {item.kind === 'item' && (
+                {item.kind === 'item' && canWrite && (
                   <>
                     <DropdownMenuItem onSelect={() => setDialog('move')}>
                       <FolderInput /> Move…
@@ -121,15 +125,21 @@ export function ItemSheet({
                     <DropdownMenuItem onSelect={() => setDialog('classify')}>
                       <FolderSearch /> Add to smart folder…
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setDialog('schema')}>
-                      <FileCode2 /> Field definitions
+                  </>
+                )}
+                {item.kind === 'item' && (
+                  <DropdownMenuItem onSelect={() => setDialog('schema')}>
+                    <FileCode2 /> Field definitions
+                  </DropdownMenuItem>
+                )}
+                {canWrite && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem tone="danger" onSelect={() => setDialog('delete')}>
+                      <Trash2 /> Delete
                     </DropdownMenuItem>
                   </>
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem tone="danger" onSelect={() => setDialog('delete')}>
-                  <Trash2 /> Delete
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -142,7 +152,7 @@ export function ItemSheet({
               {isFile && <TabsTrigger value="content">File</TabsTrigger>}
               <TabsTrigger value="versions">Versions</TabsTrigger>
               <TabsTrigger value="links">Links</TabsTrigger>
-              <TabsTrigger value="access">Permissions</TabsTrigger>
+              {canManage && <TabsTrigger value="access">Permissions</TabsTrigger>}
               {collection.publishing_enabled && <TabsTrigger value="publish">Publishing</TabsTrigger>}
             </TabsList>
             {/* Kept mounted so switching tabs does not lose unsaved edits. */}
@@ -152,26 +162,29 @@ export function ItemSheet({
                 item={item}
                 fields={fields}
                 contentTypes={contentTypes}
+                readOnly={!canWrite}
                 onDirty={setDirty}
               />
             </TabsContent>
             {isFile && (
               <TabsContent value="content" className="min-h-0 flex-1 overflow-auto p-4">
-                <Content item={item} />
+                <Content item={item} canWrite={canWrite} />
               </TabsContent>
             )}
             <TabsContent value="versions" className="min-h-0 flex-1 overflow-auto p-4">
-              <Versions item={item} collection={collection} />
+              <Versions item={item} collection={collection} canWrite={canWrite} />
             </TabsContent>
             <TabsContent value="links" className="min-h-0 flex-1 overflow-auto p-4">
-              <RelatedItems item={item} />
+              <RelatedItems item={item} canWrite={canWrite} />
             </TabsContent>
-            <TabsContent value="access" className="min-h-0 flex-1 overflow-auto p-4">
-              <AccessEditor resource={item} />
-            </TabsContent>
+            {canManage && (
+              <TabsContent value="access" className="min-h-0 flex-1 overflow-auto p-4">
+                <AccessEditor resource={item} />
+              </TabsContent>
+            )}
             {collection.publishing_enabled && (
               <TabsContent value="publish" className="min-h-0 flex-1 overflow-auto p-4">
-                <Publish item={item} collection={collection} />
+                <Publish item={item} collection={collection} canPublish={can(item, 'publish')} />
               </TabsContent>
             )}
           </Tabs>
@@ -234,11 +247,13 @@ function Details({
   item,
   fields,
   contentTypes,
+  readOnly,
   onDirty,
 }: {
   item: Resource;
   fields: FieldDefinition[];
   contentTypes: ContentType[];
+  readOnly: boolean;
   onDirty: (dirty: boolean) => void;
 }) {
   const queryClient = useQueryClient();
@@ -286,7 +301,8 @@ function Details({
         if (dirty) save.mutate();
       }}
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
+      <fieldset disabled={readOnly} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
+        {readOnly && <p className="text-xs text-muted">You can read this item but not change it.</p>}
         <Label htmlFor="item-name">Name</Label>
         <Input id="item-name" value={name} onChange={(event) => setName(event.target.value)} required />
         {contentTypes.length > 1 && item.kind === 'item' && (
@@ -317,7 +333,8 @@ function Details({
           onChange={(event) => setTags(event.target.value)}
           placeholder="Separate tags with commas"
         />
-      </div>
+      </fieldset>
+      {!readOnly && (
       <footer className="flex shrink-0 items-center justify-end gap-2 border-t bg-surface px-4 py-3">
         {dirty && <span className="mr-auto text-xs text-muted">Unsaved changes</span>}
         <Button
@@ -336,11 +353,12 @@ function Details({
           {save.isPending ? 'Saving…' : 'Save'}
         </Button>
       </footer>
+      )}
     </form>
   );
 }
 
-function Content({ item }: { item: Resource }) {
+function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [fileVersion, setFileVersion] = useState('');
@@ -372,9 +390,11 @@ function Content({ item }: { item: Resource }) {
         <Button variant="primary" onClick={() => void downloadContent(item.id, item.name)}>
           <Download /> Download
         </Button>
-        <Button disabled={replace.isPending} onClick={() => input.current?.click()}>
-          <Upload /> {replace.isPending ? 'Uploading…' : 'Replace file'}
-        </Button>
+        {canWrite && (
+          <Button disabled={replace.isPending} onClick={() => input.current?.click()}>
+            <Upload /> {replace.isPending ? 'Uploading…' : 'Replace file'}
+          </Button>
+        )}
         <input
           ref={input}
           type="file"
@@ -388,7 +408,10 @@ function Content({ item }: { item: Resource }) {
           }}
         />
       </div>
-      <p className="text-xs text-muted">Replacing the file keeps the name, tags and columns, and adds a new file version.</p>
+      {canWrite && (
+        <p className="text-xs text-muted">Replacing the file keeps the name, tags and columns, and adds a new file version.</p>
+      )}
+      {canWrite && (
       <details className="rounded-md border p-3">
         <summary className="cursor-pointer text-[13px] font-medium">Restore an earlier file version</summary>
         <form
@@ -414,6 +437,7 @@ function Content({ item }: { item: Resource }) {
           </Button>
         </form>
       </details>
+      )}
       <ConfirmDialog
         open={restoring !== undefined}
         onOpenChange={(open) => !open && setRestoring(undefined)}
@@ -428,7 +452,7 @@ function Content({ item }: { item: Resource }) {
   );
 }
 
-function Versions({ item, collection }: { item: Resource; collection: Resource }) {
+function Versions({ item, collection, canWrite }: { item: Resource; collection: Resource; canWrite: boolean }) {
   const format = useFormat();
   const names = usePeopleNames();
   const queryClient = useQueryClient();
@@ -466,7 +490,7 @@ function Versions({ item, collection }: { item: Resource; collection: Resource }
               {!!revision.changed_fields?.length && ` · changed ${revision.changed_fields.map((key) => key.replace(/^\$/, '')).join(', ')}`}
             </p>
           </div>
-          {!revision.is_current && (
+          {canWrite && !revision.is_current && (
             <Button size="sm" disabled={restore.isPending} onClick={() => restore.mutate(revision)}>
               Restore
             </Button>
@@ -478,7 +502,7 @@ function Versions({ item, collection }: { item: Resource; collection: Resource }
   );
 }
 
-function Publish({ item, collection }: { item: Resource; collection: Resource }) {
+function Publish({ item, collection, canPublish }: { item: Resource; collection: Resource; canPublish: boolean }) {
   const queryClient = useQueryClient();
   const state = publishState(item, !!collection.publishing_enabled);
   const act = useMutation({
@@ -505,6 +529,7 @@ function Publish({ item, collection }: { item: Resource; collection: Resource })
       <p className="text-sm">
         <span className="font-medium">{state}.</span> {explanation}
       </p>
+      {canPublish && (
       <div className="flex gap-2">
         <Button variant="primary" disabled={act.isPending || state === 'Published'} onClick={() => act.mutate('publish')}>
           Publish
@@ -513,6 +538,7 @@ function Publish({ item, collection }: { item: Resource; collection: Resource })
           Unpublish
         </Button>
       </div>
+      )}
       <Publications itemId={item.id} />
     </div>
   );

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { Input, Label, Textarea } from '@/components/ui/input';
+import { useHasScope } from '@/features/admin/common';
 
 export const Route = createFileRoute('/_app/w/')({
   validateSearch: (search: Record<string, unknown>): { create?: boolean } => ({
@@ -24,6 +25,7 @@ function WorkspacesPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const { data, isPending } = useQuery(workspacesQuery);
+  const canCreate = useHasScope('workspace.create');
   const workspaces = data?.filter((workspace) => !workspace.personal_owner_id) ?? [];
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -44,9 +46,11 @@ function WorkspacesPage() {
         title="Workspaces"
         description="Shared places for a team or a project."
         actions={
-          <Button variant="primary" onClick={() => setCreate(true)}>
-            New workspace
-          </Button>
+          canCreate && (
+            <Button variant="primary" onClick={() => setCreate(true)}>
+              New workspace
+            </Button>
+          )
         }
       />
       {isPending ? (
@@ -54,10 +58,15 @@ function WorkspacesPage() {
       ) : workspaces.length === 0 ? (
         <Card>
           <EmptyState icon={Briefcase} title="No workspaces yet">
-            <p className="mb-3">A workspace holds the lists and libraries of a team or a project.</p>
-            <Button variant="primary" onClick={() => setCreate(true)}>
-              New workspace
-            </Button>
+            <p className="mb-3">
+              A workspace holds the lists and libraries of a team or a project.
+              {!canCreate && ' Ask an administrator to create one or add you to one.'}
+            </p>
+            {canCreate && (
+              <Button variant="primary" onClick={() => setCreate(true)}>
+                New workspace
+              </Button>
+            )}
           </EmptyState>
         </Card>
       ) : (
@@ -78,7 +87,7 @@ function WorkspacesPage() {
         </ul>
       )}
       <FormDialog
-        open={!!create}
+        open={!!create && canCreate}
         title="New workspace"
         submitLabel="Create"
         pending={mutation.isPending}

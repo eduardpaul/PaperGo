@@ -8,6 +8,7 @@ import type { Resource } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { SmartFolderPackages } from '@/features/smart-folders/packages';
+import { can } from '@/features/lists/access';
 import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings/')({ component: GeneralPage });
@@ -51,17 +52,21 @@ function GeneralPage() {
     },
   });
   if (!workspace.data) return null;
+  const canManage = can(workspace.data, 'manage');
   const dirty = currentName.trim() !== workspace.data.name || currentDescription !== (workspace.data.description ?? '');
   return (
     <div className="grid gap-5">
       <SettingsSection
         title="General"
         actions={
-          <Button variant="primary" disabled={save.isPending || !dirty || !currentName.trim()} onClick={() => save.mutate()}>
-            Save
-          </Button>
+          canManage && (
+            <Button variant="primary" disabled={save.isPending || !dirty || !currentName.trim()} onClick={() => save.mutate()}>
+              Save
+            </Button>
+          )
         }
       >
+        <fieldset disabled={!canManage} className="contents">
         <SettingRow id="ws-name" label="Name">
           <Input id="ws-name" value={currentName} onChange={(event) => setName(event.target.value)} />
         </SettingRow>
@@ -72,9 +77,10 @@ function GeneralPage() {
             onChange={(event) => setDescription(event.target.value)}
           />
         </SettingRow>
+        </fieldset>
       </SettingsSection>
       <SmartFolderPackages workspaceId={workspaceId} />
-      {!workspace.data.personal_owner_id && (
+      {canManage && !workspace.data.personal_owner_id && (
         <SettingsSection
           title="Delete workspace"
           description="Deletes the workspace with all its lists, libraries, folders, items and workflows."

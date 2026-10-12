@@ -11,6 +11,7 @@ import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
 import { usePeopleNames } from '@/features/fields/people';
+import { useAccess } from '@/features/lists/access';
 import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings/members')({ component: MembersPage });
@@ -25,6 +26,7 @@ function MembersPage() {
   const { workspaceId } = Route.useParams();
   const queryClient = useQueryClient();
   const me = useQuery(meQuery);
+  const { canManage } = useAccess(workspaceId);
   const names = usePeopleNames();
   const people = useQuery(peopleQuery);
   const list = useQuery({ queryKey: ['members', workspaceId], queryFn: () => members(workspaceId) });
@@ -60,6 +62,7 @@ function MembersPage() {
   const sorted = [...(list.data ?? [])].sort((a, b) => nameOf(a.subject).localeCompare(nameOf(b.subject)));
   return (
     <div className="flex flex-col gap-5">
+      {canManage && (
       <SettingsSection
         title="Add people"
         description="People must be active users of the organization."
@@ -94,6 +97,7 @@ function MembersPage() {
           </Select>
         </SettingRow>
       </SettingsSection>
+      )}
       <SettingsSection title="Members" description="Owners manage the workspace; a workspace always keeps one owner.">
         <QueryFeedback query={list} />
         <ul className="flex flex-col divide-y">
@@ -109,22 +113,28 @@ function MembersPage() {
                   <span className="block truncate text-xs text-muted">{member.subject}</span>
                 )}
               </span>
-              <Select
-                aria-label={`Role of ${nameOf(member.subject)}`}
-                className="w-32"
-                value={member.role}
-                disabled={setMember.isPending}
-                onChange={(event) => setMember.mutate({ subject: member.subject, role: event.target.value })}
-              >
-                {roles.map((entry) => (
-                  <option key={entry.value} value={entry.value}>
-                    {entry.label}
-                  </option>
-                ))}
-              </Select>
-              <Button size="sm" variant="ghost" onClick={() => setRemoving(member)}>
-                Remove
-              </Button>
+              {canManage ? (
+                <>
+                  <Select
+                    aria-label={`Role of ${nameOf(member.subject)}`}
+                    className="w-32"
+                    value={member.role}
+                    disabled={setMember.isPending}
+                    onChange={(event) => setMember.mutate({ subject: member.subject, role: event.target.value })}
+                  >
+                    {roles.map((entry) => (
+                      <option key={entry.value} value={entry.value}>
+                        {entry.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <Button size="sm" variant="ghost" onClick={() => setRemoving(member)}>
+                    Remove
+                  </Button>
+                </>
+              ) : (
+                <span className="text-xs text-muted">{roles.find((entry) => entry.value === member.role)?.label ?? member.role}</span>
+              )}
             </li>
           ))}
           {list.isSuccess && list.data.length === 0 && <li className="py-2 text-sm text-muted">No members yet.</li>}

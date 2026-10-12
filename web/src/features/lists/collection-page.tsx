@@ -43,7 +43,7 @@ import { usePeopleNames } from '@/features/fields/people';
 import { valuesPatch } from '@/features/fields/values';
 import { ConfirmDialog } from '@/features/settings/section';
 import { cn } from '@/lib/utils';
-import { useCanManage } from './access';
+import { can } from './access';
 import { CollectionIcon } from './collection-icon';
 import { systemFields } from './filter-editor';
 import { ItemSheet } from './item-sheet';
@@ -90,7 +90,6 @@ export function CollectionPage({
   const fields = useQuery(fieldsQuery(listId));
   const types = useQuery(contentTypesQuery(listId));
   const views = useQuery(viewsQuery(listId));
-  const { canManage } = useCanManage(listId);
   const crumbs = useQuery({
     queryKey: ['resources', listId, 'crumbs', search.folder],
     enabled: !!search.folder,
@@ -224,13 +223,18 @@ export function CollectionPage({
   const library = current.kind === 'library';
   const noun = library ? 'library' : 'list';
   const folders = current.allow_folders !== false;
+  // Adding goes into the open folder, which can have its own permissions.
+  const location = search.folder ? crumbs.data?.at(-1) : current;
+  const canAdd = can(location, 'write');
+  const canEdit = can(current, 'write');
+  const canManage = can(current, 'manage');
   const items = [...selected.values()].filter((resource) => resource.kind === 'item');
   const startUpload = () => fileInput.current?.click();
   const uploadFiles = (files: FileList | null | undefined) => {
     const list = [...(files ?? [])];
     if (list.length) upload.mutate(list);
   };
-  const hasFiles = (event: React.DragEvent) => library && event.dataTransfer.types.includes('Files');
+  const hasFiles = (event: React.DragEvent) => library && canAdd && event.dataTransfer.types.includes('Files');
 
   return (
     <Screen wide className="max-w-[1600px]">
@@ -244,20 +248,22 @@ export function CollectionPage({
         description={current.description}
         actions={
           <>
-            {folders && (
+            {folders && canAdd && (
               <Button onClick={() => setCreating('folder')}>
                 <FolderPlus /> New folder
               </Button>
             )}
-            {library ? (
-              <Button variant="primary" disabled={upload.isPending} onClick={startUpload}>
-                {upload.isPending ? <Spinner className="text-accent-foreground" /> : <Upload />} Upload
-              </Button>
-            ) : (
-              <Button variant="primary" onClick={() => setCreating('item')}>
-                <Plus /> New item
-              </Button>
-            )}
+            {canAdd &&
+              (library ? (
+                <Button variant="primary" disabled={upload.isPending} onClick={startUpload}>
+                  {upload.isPending ? <Spinner className="text-accent-foreground" /> : <Upload />} Upload
+                </Button>
+              ) : (
+                <Button variant="primary" onClick={() => setCreating('item')}>
+                  <Plus /> New item
+                </Button>
+              ))}
+            {(canEdit || canManage) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label={`More actions for this ${noun}`}>
@@ -265,19 +271,21 @@ export function CollectionPage({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {library && (
+                {library && canAdd && (
                   <DropdownMenuItem onSelect={() => setCreating('item')}>
                     <FilePlus /> New item without a file
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem asChild>
-                  <Link to="/w/$workspaceId/l/$listId/recycle-bin" params={{ workspaceId, listId }}>
-                    <Trash2 /> Recycle bin
-                  </Link>
-                </DropdownMenuItem>
+                {canEdit && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/w/$workspaceId/l/$listId/recycle-bin" params={{ workspaceId, listId }}>
+                      <Trash2 /> Recycle bin
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 {canManage && (
                   <>
-                    <DropdownMenuSeparator />
+                    {canEdit && <DropdownMenuSeparator />}
                     <DropdownMenuItem asChild>
                       <Link to="/w/$workspaceId/l/$listId/settings/views" params={{ workspaceId, listId }}>
                         <Pencil /> Edit views
@@ -292,6 +300,7 @@ export function CollectionPage({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            )}
             <input
               ref={fileInput}
               type="file"
@@ -421,7 +430,7 @@ export function CollectionPage({
                 <Button className="mt-2" onClick={() => onSearch({ q: undefined }, true)}>
                   Clear search
                 </Button>
-              ) : library ? (
+              ) : !canAdd ? null : library ? (
                 <>
                   <p className="mb-3">Drag files here, or upload them.</p>
                   <Button variant="primary" onClick={startUpload}>
@@ -440,6 +449,7 @@ export function CollectionPage({
             items={rows}
             fields={fieldList.filter((field) => view?.columns?.includes(field.key))}
             groupBy={fieldList.find((field) => field.key === view?.query?.group_by)}
+            readOnly={!canEdit}
             onOpen={open}
           />
         ) : layout === 'calendar' ? (
@@ -457,6 +467,7 @@ export function CollectionPage({
             fields={fieldList}
             publishing={!!current.publishing_enabled}
             names={names}
+            selectable={canEdit}
             selected={selected}
             activeId={search.item}
             onToggle={toggle}

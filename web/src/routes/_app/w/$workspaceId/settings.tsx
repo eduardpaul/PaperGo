@@ -4,6 +4,8 @@ import { ArrowLeft, History, Settings2, Users, Workflow } from 'lucide-react';
 import { resourceQuery } from '@/api/queries';
 import { Page, PageHeader } from '@/components/page';
 import { SubNav, SubNavLayout, SubNavLink } from '@/components/sub-nav';
+import { Alert } from '@/components/ui/feedback';
+import { can } from '@/features/lists/access';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings')({ component: WorkspaceSettings });
 
@@ -35,6 +37,9 @@ function WorkspaceSettings() {
           </SubNav>
         }
       >
+        {workspace.data && !can(workspace.data, 'manage') && (
+          <Alert tone="warning">Only workspace owners change these settings. You can look at them.</Alert>
+        )}
         <Outlet />
       </SubNavLayout>
     </Page>

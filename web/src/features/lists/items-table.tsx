@@ -15,6 +15,7 @@ export function ItemsTable({
   fields,
   publishing,
   names,
+  selectable,
   selected,
   activeId,
   onToggle,
@@ -26,6 +27,8 @@ export function ItemsTable({
   fields: FieldDefinition[];
   publishing: boolean;
   names: Map<string, string>;
+  /** People who cannot change the list get no checkboxes: there is nothing to do with a selection. */
+  selectable: boolean;
   selected: Map<string, Resource>;
   activeId?: string;
   onToggle: (resource: Resource, checked: boolean) => void;
@@ -44,14 +47,16 @@ export function ItemsTable({
       <table className="w-full text-left text-[13px]">
         <thead className="border-b text-xs text-muted">
           <tr>
-            <th className="w-10 px-3 py-2">
-              <Checkbox
-                ref={allRef}
-                aria-label="Select all"
-                checked={all}
-                onChange={(event) => onToggleAll(event.target.checked)}
-              />
-            </th>
+            {selectable && (
+              <th className="w-10 px-3 py-2">
+                <Checkbox
+                  ref={allRef}
+                  aria-label="Select all"
+                  checked={all}
+                  onChange={(event) => onToggleAll(event.target.checked)}
+                />
+              </th>
+            )}
             {columns.map((column) => (
               <th key={column} className="px-3 py-2 font-medium whitespace-nowrap">
                 {columnLabel(column, fields)}
@@ -72,13 +77,15 @@ export function ItemsTable({
                   activeId === resource.id && 'bg-accent-soft/70',
                 )}
               >
-                <td className="px-3 py-2" onClick={(event) => event.stopPropagation()}>
-                  <Checkbox
-                    checked={selected.has(resource.id)}
-                    onChange={(event) => onToggle(resource, event.target.checked)}
-                    aria-label={`Select ${resource.name}`}
-                  />
-                </td>
+                {selectable && (
+                  <td className="px-3 py-2" onClick={(event) => event.stopPropagation()}>
+                    <Checkbox
+                      checked={selected.has(resource.id)}
+                      onChange={(event) => onToggle(resource, event.target.checked)}
+                      aria-label={`Select ${resource.name}`}
+                    />
+                  </td>
+                )}
                 {columns.map((column) => (
                   <td key={column} className="max-w-xs px-3 py-2 align-top">
                     {column === '$name' ? (

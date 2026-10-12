@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"papergo/ent"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
@@ -455,8 +456,23 @@ func (a *API) get(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
+	a.respondWithAccess(w, r, out)
+}
+
+// resourceWithAccess is a single resource with the caller's allowed actions.
+type resourceWithAccess struct {
+	*ent.Resource
+	Access []string `json:"access"`
+}
+
+func (a *API) respondWithAccess(w http.ResponseWriter, r *http.Request, out *ent.Resource) {
+	access, err := a.DMS.Access(r.Context(), subject(r), out)
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
 	etag(w, out.Version)
-	respond(w, r, 200, out)
+	respond(w, r, 200, resourceWithAccess{out, access})
 }
 func (a *API) update(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)
@@ -472,8 +488,7 @@ func (a *API) update(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	etag(w, out.Version)
-	respond(w, r, 200, out)
+	a.respondWithAccess(w, r, out)
 }
 func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)

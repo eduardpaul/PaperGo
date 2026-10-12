@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { usePeopleNames } from '@/features/fields/people';
+import { can } from '@/features/lists/access';
 import { ConfirmDialog } from '@/features/settings/section';
 import { useFormat } from '@/lib/preferences';
 
@@ -71,9 +72,11 @@ function RecycleBinPage() {
               <Button size="sm" disabled={restore.isPending} onClick={() => restore.mutate(item)}>
                 Restore
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setPurging(item)}>
-                Delete permanently
-              </Button>
+              {can(collection.data, 'manage') && (
+                <Button size="sm" variant="ghost" onClick={() => setPurging(item)}>
+                  Delete permanently
+                </Button>
+              )}
             </li>
           ))}
         </ul>

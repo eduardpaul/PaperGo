@@ -3,7 +3,8 @@ import { ArrowDown, ArrowUp, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '@/api/http';
 import { allPages } from '@/api/pages';
-import { keys, permissions } from '@/api/queries';
+import { keys } from '@/api/queries';
+import { useAccess } from './access';
 import type { ContentType, FieldDefinition, ListView, QuerySpec } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -25,12 +26,7 @@ export function ViewsEditor({
   contentTypes: ContentType[];
 }) {
   const client = useQueryClient();
-  const access = useQuery({
-    queryKey: ['permissions', collectionId],
-    queryFn: () => permissions(collectionId),
-    retry: false,
-  });
-  const canManage = !!access.data;
+  const { canManage } = useAccess(collectionId);
   const views = useQuery({
     queryKey: keys.views(collectionId),
     queryFn: () => allPages<ListView>(`/v1/resources/${collectionId}/views`),
