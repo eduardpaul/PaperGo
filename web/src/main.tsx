@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { toast, Toaster } from 'sonner';
 import { clearToken, isApiError } from './api/http';
+import { loadAuthentication } from './api/auth';
 import { problemMessage } from './lib/errors';
 import { routeTree } from './routeTree.gen';
 import './styles.css';
@@ -52,11 +53,26 @@ declare module '@tanstack/react-query' {
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <Toaster richColors position="top-right" />
-    </QueryClientProvider>
-  </StrictMode>,
-);
+async function start() {
+  const root = createRoot(document.getElementById('root')!);
+  try {
+    await loadAuthentication();
+  } catch {
+    root.render(
+      <main className="p-8">
+        <h1 className="text-lg font-semibold">Unable to load sign-in settings</h1>
+        <p className="mt-2">Refresh this page after checking your connection and proxy authentication.</p>
+      </main>,
+    );
+    return;
+  }
+  root.render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+        <Toaster richColors position="top-right" />
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+}
+void start();

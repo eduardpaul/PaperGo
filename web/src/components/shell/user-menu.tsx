@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { LogOut, Monitor, Moon, Settings, ShieldCheck, Sun } from 'lucide-react';
 import { api, clearToken } from '@/api/http';
+import { authenticationMode } from '@/api/auth';
 import { keys, meQuery, preferencesQuery } from '@/api/queries';
 import type { Preferences } from '@/api/types';
 import { Avatar } from '@/components/ui/avatar';
@@ -71,15 +72,19 @@ export function UserMenu() {
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() => {
-            clearToken();
-            queryClient.clear();
-            void navigate({ to: '/login', search: { returnTo: '/' } });
-          }}
-        >
-          <LogOut /> Sign out
-        </DropdownMenuItem>
+        {authenticationMode() === 'proxy' ? (
+          <p className="px-2 py-2 text-xs text-muted">Sign-in is managed by your reverse proxy.</p>
+        ) : (
+          <DropdownMenuItem
+            onSelect={() => {
+              clearToken();
+              queryClient.clear();
+              void navigate({ to: '/login', search: { returnTo: '/' } });
+            }}
+          >
+            <LogOut /> Sign out
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

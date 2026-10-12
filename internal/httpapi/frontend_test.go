@@ -8,6 +8,10 @@ import (
 
 func TestPublicFrontendAndReservedNamespaces(t *testing.T) {
 	h, _, _ := setup(t)
+	config := request(h, "GET", "/auth/config", "", "", "", "")
+	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"bearer"}` {
+		t.Fatal("bearer capability discovery", config.Code, config.Body.String())
+	}
 	for _, route := range []string{"/", "/login", "/admin/users", "/w/workspace/l/collection"} {
 		w := request(h, "GET", route, "", "", "", "")
 		if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") || !strings.Contains(w.Body.String(), `<div id="root">`) {

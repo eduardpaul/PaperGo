@@ -1,6 +1,6 @@
 import { parseJSON, stringifyJSON } from './json';
-
-const TokenKey = 'papergo.token';
+import { authenticationMode, authorizationHeaders } from './auth';
+export { clearToken, setToken, token } from './auth';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -11,26 +11,6 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
-  }
-}
-
-export function token(): string | null {
-  try {
-    return sessionStorage.getItem(TokenKey);
-  } catch {
-    return null;
-  }
-}
-
-export function setToken(value: string) {
-  sessionStorage.setItem(TokenKey, value);
-}
-
-export function clearToken() {
-  try {
-    sessionStorage.removeItem(TokenKey);
-  } catch {
-    // Storage can be unavailable.
   }
 }
 
@@ -62,8 +42,10 @@ function etagOf(response: Response): number | null {
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
   const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
-  const bearer = token();
-  if (bearer) headers.Authorization = `Bearer ${bearer}`;
+  if (authenticationMode() === 'proxy') {
+    for (const key of Object.keys(headers)) if (key.toLowerCase() === 'authorization') delete headers[key];
+  }
+  Object.assign(headers, authorizationHeaders());
   if (options.ifMatch !== undefined) headers['If-Match'] = `"${options.ifMatch}"`;
 
   let body: BodyInit | undefined;
@@ -78,14 +60,18 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
   }
 
-  const response = await fetch(url, { method: options.method ?? 'GET', headers, body });
+  const response = await fetch(url, { method: options.method ?? 'GET', headers, body, credentials: 'same-origin' });
   if (response.status === 204) return { data: undefined as T, etag: etagOf(response), status: 204 };
 
   const text = await response.text();
   const payload = text ? parseJSON(text) : undefined;
   if (!response.ok) {
     const problem = payload as { code?: string; detail?: string; title?: string } | undefined;
-    throw new ApiError(response.status, problem?.code ?? 'error', problem?.detail ?? problem?.title ?? response.statusText);
+    throw new ApiError(
+      response.status,
+      problem?.code ?? 'error',
+      problem?.detail ?? problem?.title ?? response.statusText,
+    );
   }
   return { data: payload as T, etag: etagOf(response), status: response.status };
 }

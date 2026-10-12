@@ -106,6 +106,16 @@ func (a *API) Handler() http.Handler {
 	}
 	api.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { a.problem(w, r, 404, "not_found", "route not found") })
 	root := http.NewServeMux()
+	root.HandleFunc("GET /auth/config", func(w http.ResponseWriter, r *http.Request) {
+		mode := auth.Bearer
+		if a.Auth != nil {
+			mode = a.Auth.Kind()
+		}
+		respond(w, r, 200, struct {
+			Mode auth.Kind `json:"mode"`
+		}{mode})
+	})
+	root.Handle("/auth/", http.NotFoundHandler())
 	root.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { respond(w, r, 200, map[string]string{"status": "ok"}) })
 	root.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second)

@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '@/api/http';
-import { webdavCredentials } from '@/api/queries';
+import { authenticationMode } from '@/api/auth';
+import { meQuery, webdavCredentials } from '@/api/queries';
 import type { WebDAVCredential } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,26 @@ import { useFormat } from '@/lib/preferences';
 export const Route = createFileRoute('/_app/settings/webdav')({ component: WebDAVPage });
 
 function WebDAVPage() {
+  return authenticationMode() === 'proxy' ? <ProxyWebDAV /> : <BearerWebDAV />;
+}
+
+function ProxyWebDAV() {
+  const me = useQuery(meQuery);
+  return (
+    <SettingsSection
+      title="WebDAV through your proxy"
+      description="Use your reverse-proxy username and password over HTTPS to open a WebDAV-enabled library in Explorer or Finder."
+    >
+      <p className="text-sm">
+        Username: <strong>{me.data?.subject}</strong>
+      </p>
+      <p className="mt-2 break-all text-sm">Library address: {window.location.origin}/webdav/&#123;library-id&#125;/</p>
+      <p className="mt-2 text-xs text-muted">Your proxy manages credentials for both the browser and WebDAV.</p>
+    </SettingsSection>
+  );
+}
+
+function BearerWebDAV() {
   const format = useFormat();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ['webdav-credentials'], queryFn: webdavCredentials });
@@ -50,7 +71,12 @@ function WebDAVPage() {
           <Input id="dav-label" value={label} onChange={(event) => setLabel(event.target.value)} />
         </SettingRow>
         <SettingRow id="dav-expires" label="Expires" hint="Optional.">
-          <Input id="dav-expires" type="datetime-local" value={expires} onChange={(event) => setExpires(event.target.value)} />
+          <Input
+            id="dav-expires"
+            type="datetime-local"
+            value={expires}
+            onChange={(event) => setExpires(event.target.value)}
+          />
         </SettingRow>
         {created?.password && <CopyField label="Password" value={created.password} />}
       </SettingsSection>
@@ -65,12 +91,19 @@ function WebDAVPage() {
                   {credential.expires_at ? ` · expires ${format.date(credential.expires_at)}` : ''}
                 </p>
               </div>
-              <Button size="sm" variant="danger" disabled={revoke.isPending} onClick={() => revoke.mutate(credential.id)}>
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={revoke.isPending}
+                onClick={() => revoke.mutate(credential.id)}
+              >
                 Revoke
               </Button>
             </li>
           ))}
-          {list.isFetched && (list.data?.length ?? 0) === 0 && <li className="text-sm text-muted">No WebDAV passwords.</li>}
+          {list.isFetched && (list.data?.length ?? 0) === 0 && (
+            <li className="text-sm text-muted">No WebDAV passwords.</li>
+          )}
         </ul>
       </SettingsSection>
     </div>

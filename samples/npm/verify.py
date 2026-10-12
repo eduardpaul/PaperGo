@@ -4,6 +4,7 @@ import argparse
 import base64
 import http.client
 import json
+import re
 from pathlib import Path
 import secrets
 import socket
@@ -53,7 +54,18 @@ def main():
     assert redirect.status in (301, 308) and redirect.getheader("Location") == origin + "/v1/identity/me"
     redirect.read()
     plain.close()
+    request("GET", "/", authenticated=False, expected=401)
+    request("GET", "/auth/config", authenticated=False, expected=401)
     request("GET", "/v1/identity/me", authenticated=False, expected=401)
+    assert request("GET", "/auth/config") == {"mode": "proxy"}
+    index = request("GET", "/")
+    assert b'<div id="root">' in index and request("GET", "/admin/users") == index
+    assets = re.findall(rb'(?:src|href)="(/assets/[^" ]+)"', index)
+    assert assets, "frontend entry assets are missing"
+    for asset in assets:
+        assert request("GET", asset.decode()), "frontend asset is empty"
+    request("GET", assets[0].decode(), authenticated=False, expected=401)
+    request("GET", "/assets/missing.js", expected=404)
     me = request("GET", "/v1/identity/me")
     assert me["subject"] == credentials["papergo_user"] and "workspace.manage" in me["scopes"]
     spoofed = request("GET", "/v1/identity/me", headers={"X-Papergo-Subject": "forged-admin", "X-Papergo-Proxy-Secret": "forged"})
@@ -64,7 +76,7 @@ def main():
     assert batch["responses"][0]["status"] == 200 and batch["responses"][0]["body"]["subject"] == me["subject"]
     request("POST", "/v1/$batch", {"requests": [{"id": "me", "method": "GET", "url": "identity/me", "headers": {"X-Papergo-Subject": "forged"}}]}, expected=400)
     request("POST", "/v1/workspaces", {"name": "Cross-origin attempt"}, headers={"Origin": "https://attacker.example"}, expected=401)
-    workspace = request("POST", "/v1/workspaces", {"name": "NPM verification " + secrets.token_hex(4)}, expected=201)
+    workspace = request("POST", "/v1/workspaces", {"name": "NPM verification " + secrets.token_hex(4)}, headers={"Origin": origin, "Sec-Fetch-Site": "same-origin"}, expected=201)
     library = request("POST", f"/v1/resources/{workspace['id']}/children", {"kind": "library", "name": "Documents", "webdav_enabled": True}, expected=201)
     folder = f"/webdav/{library['id']}/" + quote("Sample Ω")
     request("MKCOL", folder, expected=201)
@@ -86,7 +98,7 @@ def main():
     cid = subprocess.check_output(command + ["ps", "-q", "papergo"], text=True).strip()
     ports = json.loads(subprocess.check_output(["docker", "inspect", "--format", "{{json .NetworkSettings.Ports}}", cid], text=True))
     assert not any(ports.values()), "PaperGo backend was published on the host"
-    print("Verified HTTP-to-HTTPS redirect, HTTPS, NPM login, header-spoofing rejection, batch identity, CSRF rejection, private backend, REST writes, and Unicode WebDAV PUT/GET/MOVE/COPY with chunked uploads.")
+    print("Verified embedded UI, deep links, frontend assets, proxy auth configuration, HTTP-to-HTTPS redirect, HTTPS, NPM login, header-spoofing rejection, batch identity, CSRF rejection, private backend, REST writes, and Unicode WebDAV PUT/GET/MOVE/COPY with chunked uploads.")
     print(f"Test workspace: {workspace['id']}; WebDAV library: {library['id']}")
 
 

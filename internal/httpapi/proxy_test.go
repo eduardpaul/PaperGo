@@ -25,6 +25,10 @@ func TestProxyIdentityPreservesProfilesAndRejectsCredentialBypasses(t *testing.T
 		t.Fatal(err)
 	}
 	h := (&API{DMS: s, Auth: proxy, Logger: slog.Default()}).Handler()
+	config := request(h, "GET", "/auth/config", "", "", "", "")
+	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != `{"mode":"proxy"}` || config.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatal("public proxy capability discovery", config.Code, config.Body.String(), config.Header())
+	}
 	do := func(method, path, body, subject, credential string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.RemoteAddr = "172.29.242.2:1234"
@@ -44,6 +48,30 @@ func TestProxyIdentityPreservesProfilesAndRejectsCredentialBypasses(t *testing.T
 	var profile identity.MeProfile
 	if me.Code != 200 || json.Unmarshal(me.Body.Bytes(), &profile) != nil || profile.DisplayName != name || profile.Email != email {
 		t.Fatal(me.Code, me.Body.String())
+	}
+	for _, path := range []string{"/", "/admin/users", "/settings/webdav"} {
+		res := do("GET", path, "", "bob", "")
+		if res.Code != 200 || !strings.Contains(res.Body.String(), `<div id="root">`) {
+			t.Fatal("embedded proxy frontend", path, res.Code)
+		}
+	}
+	mutation := httptest.NewRequest("POST", "/v1/workspaces", strings.NewReader(`{"name":"Browser proxy workspace"}`))
+	mutation.RemoteAddr = "172.29.242.2:1234"
+	mutation.Header.Set(auth.ProxySubjectHeader, "bob")
+	mutation.Header.Set(auth.ProxySecretHeader, secret)
+	mutation.Header.Set("Content-Type", "application/json")
+	mutation.Header.Set("Origin", "https://docs.example.com")
+	mutation.Header.Set("Sec-Fetch-Site", "same-origin")
+	accepted := httptest.NewRecorder()
+	h.ServeHTTP(accepted, mutation)
+	if accepted.Code != 201 {
+		t.Fatal("same-origin proxy browser write", accepted.Code, accepted.Body.String())
+	}
+	mutation.Header.Set("Origin", "https://attacker.example")
+	rejected := httptest.NewRecorder()
+	h.ServeHTTP(rejected, mutation)
+	if rejected.Code != 401 {
+		t.Fatal("cross-origin browser write", rejected.Code)
 	}
 	if r := do("GET", "/v1/identity/me", "", "proxy-member", ""); r.Code != 200 {
 		t.Fatal("verified username was not enrolled", r.Code, r.Body.String())

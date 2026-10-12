@@ -2,6 +2,7 @@ import { createFileRoute, Outlet } from '@tanstack/react-router';
 import { KeyRound, Settings, SlidersHorizontal, UserRound, HardDrive } from 'lucide-react';
 import { Page, PageHeader } from '@/components/page';
 import { SubNav, SubNavLayout, SubNavLink } from '@/components/sub-nav';
+import { authenticationMode } from '@/api/auth';
 
 export const Route = createFileRoute('/_app/settings')({ component: SettingsLayout });
 
@@ -18,9 +19,11 @@ function SettingsLayout() {
             <SubNavLink to="/settings/preferences">
               <SlidersHorizontal /> Preferences
             </SubNavLink>
-            <SubNavLink to="/settings/tokens">
-              <KeyRound /> REST tokens
-            </SubNavLink>
+            {authenticationMode() === 'bearer' && (
+              <SubNavLink to="/settings/tokens">
+                <KeyRound /> REST tokens
+              </SubNavLink>
+            )}
             <SubNavLink to="/settings/webdav">
               <HardDrive /> WebDAV
             </SubNavLink>

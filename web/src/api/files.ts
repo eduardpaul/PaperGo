@@ -1,8 +1,8 @@
-import { ApiError, token } from './http';
+import { ApiError } from './http';
+import { authorizationHeaders } from './auth';
 
 export async function downloadFile(path: string, fallbackName: string) {
-  const bearer = token();
-  const response = await fetch(path, { headers: bearer ? { Authorization: `Bearer ${bearer}` } : {} });
+  const response = await fetch(path, { headers: authorizationHeaders(), credentials: 'same-origin' });
   if (!response.ok) {
     const text = await response.text();
     let code = 'error';

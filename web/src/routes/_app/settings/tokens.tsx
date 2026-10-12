@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
+import { authenticationMode } from '@/api/auth';
 import { useState } from 'react';
 import { api } from '@/api/http';
 import { scopeCatalog, scopes, tokens } from '@/api/queries';
@@ -9,7 +10,12 @@ import { Input } from '@/components/ui/input';
 import { CopyField, SettingRow, SettingsSection } from '@/features/settings/section';
 import { useFormat } from '@/lib/preferences';
 
-export const Route = createFileRoute('/_app/settings/tokens')({ component: TokensPage });
+export const Route = createFileRoute('/_app/settings/tokens')({
+  beforeLoad: () => {
+    if (authenticationMode() === 'proxy') throw redirect({ to: '/settings' });
+  },
+  component: TokensPage,
+});
 
 function TokensPage() {
   const format = useFormat();
@@ -26,7 +32,10 @@ function TokensPage() {
   const issue = useMutation({
     mutationFn: () => {
       const fromCatalog = chosen;
-      const extra = custom.split(',').map((scope) => scope.trim()).filter(Boolean);
+      const extra = custom
+        .split(',')
+        .map((scope) => scope.trim())
+        .filter(Boolean);
       const selected = [...new Set([...fromCatalog, ...extra])];
       const expires = Number(days);
       return api<CreatedRestToken>('/v1/identity/me/tokens', {
@@ -65,7 +74,11 @@ function TokensPage() {
         <SettingRow id="token-days" label="Expires in days">
           <Input id="token-days" inputMode="numeric" value={days} onChange={(event) => setDays(event.target.value)} />
         </SettingRow>
-        <SettingRow id="token-scopes" label="Scopes" hint={mine.data ? `Your account has ${mine.data.length} scopes.` : undefined}>
+        <SettingRow
+          id="token-scopes"
+          label="Scopes"
+          hint={mine.data ? `Your account has ${mine.data.length} scopes.` : undefined}
+        >
           {options.length > 0 ? (
             <div className="flex max-h-40 flex-col gap-1 overflow-auto">
               {options.map((scope) => (
@@ -73,14 +86,23 @@ function TokensPage() {
                   <input
                     type="checkbox"
                     checked={chosen.includes(scope.name)}
-                    onChange={(event) => setChosen((current) => (event.target.checked ? [...current, scope.name] : current.filter((name) => name !== scope.name)))}
+                    onChange={(event) =>
+                      setChosen((current) =>
+                        event.target.checked ? [...current, scope.name] : current.filter((name) => name !== scope.name),
+                      )
+                    }
                   />
                   {scope.name}
                 </label>
               ))}
             </div>
           ) : (
-            <Input id="token-scopes" value={custom} onChange={(event) => setCustom(event.target.value)} placeholder="scope.read, scope.write" />
+            <Input
+              id="token-scopes"
+              value={custom}
+              onChange={(event) => setCustom(event.target.value)}
+              placeholder="scope.read, scope.write"
+            />
           )}
         </SettingRow>
         {created && <CopyField label="Secret" value={created.secret} />}

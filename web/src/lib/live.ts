@@ -1,9 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { clearToken, token } from '@/api/http';
+import { clearToken } from '@/api/http';
+import { authorizationHeaders } from '@/api/auth';
 import { keys } from '@/api/queries';
 
-/** Live changes from GET /v1/events. Fetch carries the bearer token; EventSource cannot. */
+/** Live changes use the same bearer or proxy credentials as other API requests. */
 export function useLiveEvents() {
   const queryClient = useQueryClient();
   useEffect(() => {
@@ -27,12 +28,10 @@ export function useLiveEvents() {
 async function readEvents(signal: AbortSignal, onEvent: (event: string) => void) {
   let lastId = '';
   while (!signal.aborted) {
-    const headers: Record<string, string> = { Accept: 'text/event-stream' };
-    const bearer = token();
-    if (bearer) headers.Authorization = `Bearer ${bearer}`;
+    const headers: Record<string, string> = { Accept: 'text/event-stream', ...authorizationHeaders() };
     if (lastId) headers['Last-Event-ID'] = lastId;
     try {
-      const response = await fetch('/v1/events', { headers, signal });
+      const response = await fetch('/v1/events', { headers, signal, credentials: 'same-origin' });
       if (response.status === 401) {
         onEvent('reauthenticate');
         return;

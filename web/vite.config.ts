@@ -14,6 +14,7 @@ export default defineConfig({
     proxy: {
       '/v1': { target: api, changeOrigin: false },
       '/health': { target: api, changeOrigin: false },
+      '/auth': { target: api, changeOrigin: false },
     },
   },
   build: { outDir: 'dist', chunkSizeWarningLimit: 1500 },

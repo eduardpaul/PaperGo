@@ -6,7 +6,7 @@ The web UI in `web/` talks to the current `/v1` API. This list tracks screens le
 
 These areas have no PaperGo API, so the UI does not include them.
 
-- Password, passkey and OAuth sign-in, and a server end-session. Sign-in stores a bearer token for the browser session.
+- Password, passkey and OAuth sign-in, and a server end-session. Bearer deployments store a token for the browser session. Proxy deployments use the browser’s HTTP credentials; the frontend loads the verified profile without a token form.
 - Tasks.
 - Calendar, calendar feeds and `.ics`.
 - Approvals.
@@ -51,8 +51,8 @@ All product screens in this section are implemented against the registered `/v1`
 
 ## What the UI matches
 
-- Resources are `/v1` and JSON fields are snake_case. The browser sends `Authorization: Bearer`.
-- Live updates use `fetch` on `GET /v1/events`. The stream requires the bearer token, so it is not an `EventSource`.
+- Resources are `/v1` and JSON fields are snake_case. Bearer deployments send `Authorization: Bearer`; proxy deployments use same-origin browser HTTP credentials. `/auth/config` selects the supported mode before the app mounts.
+- Live updates use `fetch` on `GET /v1/events`. The stream uses the same bearer or proxy credentials as other requests.
 - A personal home workspace is `personal_owner_id`. The sidebar hides it. Home and Inbox still open it through `GET /v1/identity/me/home` and `GET /v1/identity/me/inboxes`. Search includes it because search requires `workspace_id`.
 - Preference writes send `If-Match`, including `"0"` when the user has no saved row. A stale preference write is 409.
 - One organization per deployment.

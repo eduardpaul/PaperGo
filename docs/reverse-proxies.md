@@ -27,7 +27,7 @@ NPM validates Basic credentials and overwrites `X-Papergo-Subject` with `$remote
 
 NPM Access List usernames are the stable PaperGo subjects. NPM management accounts administer the proxy; they do not become application users. Groups, profiles and roles are managed in PaperGo. Removing access-list credentials blocks subsequent requests; disabling the PaperGo account also revokes active application access. Rename usernames by explicitly creating a different identity rather than transferring another user's permissions.
 
-In this mode REST and WebDAV clients use their NPM Basic credentials over HTTPS. PaperGo personal REST-token and WebDAV app-password endpoints are unavailable (404), and OIDC settings and `ADMIN_GROUP` are rejected. The sample provisions a dedicated backend network, static trusted proxy address, shared secret, TLS, persistent volumes and health checks.
+In this mode REST, WebDAV and browser clients use their NPM Basic credentials over HTTPS. The frontend reads the public `/auth/config` capability endpoint and loads `/v1/identity/me` without requiring a stored bearer token. Protect the UI, `/auth/config`, frontend assets and API routes with the same NPM Access List. The UI hides personal-token creation and shows proxy WebDAV instructions. Sign-in state belongs to the proxy and browser; PaperGo has no proxy logout endpoint. PaperGo personal REST-token and WebDAV app-password endpoints are unavailable (404), and OIDC settings and `ADMIN_GROUP` are rejected. The sample provisions a dedicated backend network, static trusted proxy address, shared secret, TLS, persistent volumes and health checks.
 
 ## Public origin
 

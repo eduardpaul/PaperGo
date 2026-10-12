@@ -26,7 +26,7 @@ curl --noproxy '*' --resolve papergo.localhost:18443:127.0.0.1 \
   https://papergo.localhost:18443/v1/identity/me
 ```
 
-The API is headless. Start with `/v1/identity/me`, `/v1/workspaces`, or mount a WebDAV-enabled library using the NPM application username and password. `verify.py` creates a test workspace and library, exercises REST and Unicode WebDAV paths with chunked uploads, COPY and MOVE, and rejects unauthenticated requests and forged identity headers. Run `python3 verify.py --large-upload` to also check a 64 MiB upload and download at the configured limit.
+Open the public origin in a browser and sign in with the NPM application username and password at the browser’s HTTP authentication prompt. The embedded frontend automatically loads the verified PaperGo profile without asking for a bearer token. `/auth/config` reports proxy mode; the protected `/` location also covers this endpoint, frontend assets and every API route. WebDAV uses the same NPM credentials. `verify.py` checks the embedded app, deep links, protected frontend assets and proxy auth configuration, then creates a test workspace and library, exercises REST and Unicode WebDAV paths with chunked uploads, COPY and MOVE, and rejects unauthenticated requests and forged identity headers. Run `python3 verify.py --large-upload` to also check a 64 MiB upload and download at the configured limit.
 
 ## Deploy with a public certificate
 
@@ -51,9 +51,9 @@ Open `http://127.0.0.1:8181`. Public ports expose NPM only; PaperGo has no host 
 
 In NPM, edit the **PaperGo users** Access List to add application users. Keep **Satisfy Any** and **Pass Auth to Host** disabled. Preserve the generated TLS redirect, protected `/` location and forwarding headers. New usernames enroll with PaperGo's Member role on their first request. `ADMIN_SUBJECT` names the first application administrator; the initial username is `papergo-admin`.
 
-Use `/v1/identity` to manage application profiles, groups and role assignments. NPM does not supply group or role claims. Usernames are stable application subjects: choosing another username creates another identity and does not transfer permissions. Keep an active application administrator in the Access List when editing credentials.
+Use the frontend’s Administration screens or `/v1/identity` to manage application profiles, groups and role assignments. NPM does not supply group or role claims. Usernames are stable application subjects: choosing another username creates another identity and does not transfer permissions. Keep an active application administrator in the Access List when editing credentials.
 
-Removing NPM credentials blocks new requests. Disabling the PaperGo user through its status API also revokes ongoing application access. Personal REST-token and WebDAV app-password endpoints are unavailable in proxy mode; automations should have their own NPM username and appropriately limited PaperGo roles.
+Removing NPM credentials blocks new requests. Disabling the PaperGo user through its status API also revokes ongoing application access. The frontend hides personal REST tokens and displays proxy WebDAV instructions rather than app-password controls. Browser HTTP credentials are managed by the proxy and browser; PaperGo does not provide a proxy logout endpoint. Personal REST-token and WebDAV app-password endpoints are unavailable in proxy mode; automations should have their own NPM username and appropriately limited PaperGo roles.
 
 PaperGo validates the actual forwarding peer, secret and username. It rejects duplicate assertion headers, forwarded `Authorization`, client attempts to override the assertion in batches, and cross-origin browser mutations. NPM overwrites incoming assertion headers with the authenticated username and configured secret.
 

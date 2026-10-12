@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "PaperGo headless DMS",
+    "title": "PaperGo API",
     "version": "0.4.0",
     "description": "One organization per SQLite deployment. Immutable schema/content revisions, SharePoint-style exclusive permission scopes, head/published projections, rich typed fields, reusable templates, saved queries, personal/shared smart folders with cross-collection navigation and classification, taxonomy, and typed relationships. Libraries with webdav_enabled are also served over WebDAV (RFC 4918 class 1 and 2) at /webdav/{libraryID}/, outside this contract; In OIDC/development deployments, WebDAV accepts provider bearer tokens or HTTP Basic with a WebDAV credential password. In trusted proxy mode, REST and WebDAV clients authenticate with proxy Basic credentials over HTTPS; credential-management endpoints are unavailable. Workflows (triggers, a condition and a flow of activities, with built-in workflows people can turn on, configure or copy) react to committed item changes, schedules and manual starts; runs are durable and are listed under each workspace. Organization groups support nested membership; persisted roles grant module scopes independently of resource ACLs. Verified subjects enroll with the Member role on first authentication. ADMIN_SUBJECT provisions the first administrator once; development defaults to DEV_SUBJECT."
   },
@@ -13998,6 +13998,38 @@
           },
           "default": {
             "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/config": {
+      "get": {
+        "summary": "Browser authentication capabilities",
+        "description": "Public, non-cacheable server authentication mode. Proxy deployments authenticate this request at the reverse proxy along with the UI. Contains no credentials or identity assertions.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Authentication mode for the web frontend",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "mode"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "bearer",
+                        "proxy"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
