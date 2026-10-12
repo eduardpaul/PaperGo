@@ -14,12 +14,13 @@ export function columnLabel(key: string, fields: FieldDefinition[]): string {
   return labels[key] ?? fields.find((field) => field.key === key)?.label ?? key;
 }
 
+/** The fields of a content type in the type's order (the order they were added), or all fields without a type. */
 export function fieldsForType(fields: FieldDefinition[], types: ContentType[], contentTypeId?: string): FieldDefinition[] {
   const selected = types.find((type) => type.id === contentTypeId) ?? types.find((type) => type.is_default);
   const ids = selected?.field_ids?.filter(Boolean);
   if (!ids?.length) return fields;
-  const allowed = new Set(ids);
-  return fields.filter((field) => allowed.has(field.id));
+  const byId = new Map(fields.map((field) => [field.id, field]));
+  return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
 export function publishState(item: Resource, publishingEnabled: boolean): 'Published' | 'Draft' | 'Unpublished' | null {

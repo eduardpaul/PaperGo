@@ -29,7 +29,7 @@ func BenchmarkItemUpdates(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				_, err = s.CreateField(ctx, "writer", list.ID, CreateField{Key: "amount", Label: "Amount", Type: "integer", Indexed: true})
+				_, err = s.CreateField(ctx, "organization-admin", list.ID, CreateField{Key: "amount", Label: "Amount", Type: "integer", Indexed: true})
 				if err != nil {
 					b.Fatal(err)
 				}

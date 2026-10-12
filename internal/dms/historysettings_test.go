@@ -2,6 +2,7 @@ package dms
 
 import (
 	"errors"
+	"papergo/ent"
 	"papergo/ent/resource"
 	"slices"
 	"testing"
@@ -224,5 +225,35 @@ func TestHistoryDisabledKeepsEventAndPublishedSnapshots(t *testing.T) {
 	}
 	if _, err = s.Unpublish(testContext, "alice", item.ID, item.Version); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestItemSnapshotCollectionTouchesOnlyTheGivenItems(t *testing.T) {
+	s, w, _ := fixture(t)
+	c, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: "list", Name: "Scoped", Versioning: ptr("major"), MaxVersions: ptr(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := create(t, s, c.ID, "item", "First", nil)
+	second := create(t, s, c.ID, "item", "Second", nil)
+	for _, item := range []*ent.Resource{first, second} {
+		for _, name := range []string{"Edited", "Edited again"} {
+			if item, err = s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: &name}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(testContext); err != nil {
+		t.Fatal(err)
+	}
+	before := revisionCount(t, s, second.ID)
+	if err = s.CollectItemRevisions(testContext, []string{first.ID, first.ID, ""}); err != nil {
+		t.Fatal(err)
+	}
+	if revisionCount(t, s, first.ID) != 1 || revisionCount(t, s, second.ID) != before || before == 1 {
+		t.Fatal("collection was not limited to the given item", revisionCount(t, s, first.ID), revisionCount(t, s, second.ID), before)
+	}
+	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, second.ID) != 1 {
+		t.Fatal("the full sweep left unreferenced snapshots", err)
 	}
 }

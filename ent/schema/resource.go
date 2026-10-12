@@ -94,5 +94,8 @@ func (Resource) Indexes() []ent.Index {
 		// Lets auto-surface queries list a collection's few ACL scopes by loose index scan.
 		index.Fields("container_id", "scope_id"),
 		index.Fields("parent_id", "name_key").Unique().Annotations(entsql.IndexWhere("name_key IS NOT NULL")),
+		// Revision collection asks whether anything still points at a revision.
+		index.Fields("head_revision_id").Annotations(entsql.IndexWhere("head_revision_id IS NOT NULL")),
+		index.Fields("published_revision_id").Annotations(entsql.IndexWhere("published_revision_id IS NOT NULL")),
 	}
 }
