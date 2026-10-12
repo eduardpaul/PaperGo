@@ -512,11 +512,11 @@ func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) children(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")})
+	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")})
 }
 func (a *API) browse(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")}
+	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")}
 	if r.URL.Path == "/v1/workspaces" {
 		in = dms.Browse{After: q.Get("$skiptoken"), Limit: queryInt(r, "$top")}
 	}

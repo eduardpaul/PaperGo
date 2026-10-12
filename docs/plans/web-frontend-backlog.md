@@ -39,7 +39,7 @@ All product screens in this section are implemented against the registered `/v1`
 ## Narrower than the contract
 
 - The versions tab restores metadata with `POST /v1/items/{id}/revisions/{number}/restore`. File bytes stay on the current version.
-- Move offers the lists or libraries of the same kind in the item's workspace and browses their folders. Each folder level shows folders among its first 200 children.
+- Move offers the lists or libraries of the same kind in the item's workspace and browses their folders with `GET /v1/resources/{id}/children?kind=folder`, 100 at a time.
 - The collection shows one level of children at a time.
 - Preference language and number-format choices include tags the server may reject. The server accepts a BCP-47 tag whose base language matches with exact confidence. A rejected value returns 422.
 - Columns chosen on the page are the `cols` URL parameter. With a saved view they are the query's `select`; managers save them, with the column sort, to a table view (`PUT /v1/views/{id}`) or a new view.

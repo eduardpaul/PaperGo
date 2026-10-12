@@ -1203,6 +1203,11 @@ var (
 				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[0], ResourcesColumns[23]},
 			},
 			{
+				Name:    "resource_parent_id_kind_id_scope_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[5], ResourcesColumns[0], ResourcesColumns[23]},
+			},
+			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
 				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[0]},

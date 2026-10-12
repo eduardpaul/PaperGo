@@ -766,6 +766,21 @@
             "name": "filter_value",
             "description": "Typed value, parsed without floating-point conversion for integer and decimal fields.",
             "in": "query"
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "list",
+                "library",
+                "folder",
+                "item"
+              ]
+            },
+            "description": "Only resources of this kind, e.g. kind=folder for the folders of a large library."
           }
         ]
       }
@@ -1146,6 +1161,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "list",
+                "library",
+                "folder",
+                "item"
+              ]
+            },
+            "description": "Only resources of this kind, e.g. kind=folder for the folders of a large library."
           }
         ]
       },

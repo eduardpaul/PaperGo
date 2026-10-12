@@ -29,6 +29,8 @@ type Browse struct {
 	FilterField string
 	FilterOp    string
 	FilterValue string
+	// Kind keeps one kind of resource, e.g. the folders of a large library.
+	Kind string
 }
 
 func pageSize(limit int) int {
@@ -61,6 +63,9 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if len(in.Search) > 256 {
 		return Page[*ent.Resource]{}, invalid("search is limited to 256 bytes")
 	}
+	if in.Kind != "" && resource.KindValidator(resource.Kind(in.Kind)) != nil {
+		return Page[*ent.Resource]{}, invalid("kind must be workspace, list, library, folder or item")
+	}
 	q := s.Client.Resource.Query().Where(resource.DeletedAtIsNil())
 	if in.ParentID != "" {
 		if _, err := s.authorize(ctx, subject, in.ParentID, "read"); err != nil {
@@ -81,6 +86,9 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 			return Page[*ent.Resource]{}, invalid("search and tags require workspace_id or parent_id")
 		}
 		q.Where(resource.KindEQ(resource.KindWorkspace))
+	}
+	if in.Kind != "" {
+		q.Where(resource.KindEQ(resource.Kind(in.Kind)))
 	}
 	if in.After != "" {
 		q.Where(resource.IDGT(in.After))

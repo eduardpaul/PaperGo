@@ -87,6 +87,8 @@ func (Resource) Indexes() []ent.Index {
 		// cannot read are rejected without loading them.
 		index.Fields("workspace_id", "id", "scope_id"),
 		index.Fields("parent_id", "id", "scope_id"),
+		// Lists one kind of child (the folders of a large library) without scanning the rest.
+		index.Fields("parent_id", "kind", "id", "scope_id"),
 		index.Fields("container_id", "id"),
 		index.Fields("container_id", "content_type_id", "id"),
 		// Lets auto-surface queries list a collection's few ACL scopes by loose index scan.

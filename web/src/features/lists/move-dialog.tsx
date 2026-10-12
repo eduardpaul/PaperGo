@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { api, listOf } from '@/api/http';
+import { api } from '@/api/http';
+import { useApiPages } from '@/api/pages';
 import { collectionChildren, keys } from '@/api/queries';
-import type { Page, Resource } from '@/api/types';
+import type { Resource } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Alert, Skeleton } from '@/components/ui/feedback';
 import { Label } from '@/components/ui/input';
@@ -31,12 +32,9 @@ export function MoveDialog({
   const [targetId, setTargetId] = useState(collection.id);
   const [path, setPath] = useState<Resource[]>([]);
   const parentId = path.at(-1)?.id ?? targetId;
-  const folders = useQuery({
-    queryKey: ['resources', parentId, 'folders'],
-    queryFn: async () =>
-      listOf((await api<Page<Resource>>(`/v1/resources/${parentId}/children`, { query: { $top: 200 } })).data).filter(
-        (child) => child.kind === 'folder',
-      ),
+  // Only folders, page by page, however many files a folder holds.
+  const folders = useApiPages<Resource>(['resources', parentId, 'folders'], `/v1/resources/${parentId}/children`, {
+    query: { kind: 'folder', $top: 100 },
   });
   const unchanged = parentId === (item.parent_id ?? collection.id);
   const move = useMutation({
@@ -102,9 +100,9 @@ export function MoveDialog({
       <div className="max-h-60 overflow-auto rounded-md border">
         {folders.isPending ? (
           <Skeleton className="m-2 h-8" />
-        ) : folders.data?.length ? (
+        ) : folders.items.length ? (
           <ul>
-            {folders.data.map((folder) => (
+            {folders.items.map((folder) => (
               <li key={folder.id}>
                 <button
                   type="button"
@@ -117,6 +115,18 @@ export function MoveDialog({
                 </button>
               </li>
             ))}
+            {folders.hasNextPage && (
+              <li>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-[13px] text-accent hover:bg-surface-muted"
+                  disabled={folders.isFetchingNextPage}
+                  onClick={() => void folders.fetchNextPage()}
+                >
+                  {folders.isFetchingNextPage ? 'Loading…' : 'More folders'}
+                </button>
+              </li>
+            )}
           </ul>
         ) : (
           <p className="flex items-center gap-2 px-3 py-2 text-[13px] text-muted">

@@ -30,4 +30,3 @@ Ordered by how much it helps people.
 
 1. **Document preview.** Libraries show no thumbnail or preview; the File tab only downloads. Add an inline PDF/image preview from `GET /v1/items/{id}/content` and thumbnails when the API offers them.
 2. **Search by word start (API).** List search matches whole words, so typing "lap" finds nothing until "laptops" is complete. Prefix matching on the last word (FTS5 `"lap"*`) would make search as you type useful.
-3. **Folder listing in Move.** Each level shows folders among its first 200 children. A folder filter on children (`kind=folder`) would make large libraries reliable.

@@ -86,7 +86,7 @@ Every `/v1` request requires authentication: `Authorization: Bearer <token>` in 
 | --- | --- | --- |
 | POST / GET | `/v1/workspaces` | Create a workspace / list accessible workspaces |
 | GET / PATCH / DELETE | `/v1/resources/{id}` | Read / update names, tags, item values, `parent_id` (move) and collection settings / delete a folder or item |
-| POST / GET | `/v1/resources/{id}/children` | Create / browse children |
+| POST / GET | `/v1/resources/{id}/children` | Create / browse children; `kind=folder` (or another kind) lists only that kind |
 | POST | `/v1/resources/{id}/bulk` | Atomically create, update/move, publish, unpublish or delete up to 100 items in one list/library |
 | GET | `/v1/workspaces/{id}/tags` | The tag vocabulary with counts of readable resources; `collection_id`, `prefix`, `$skiptoken`, `$top` |
 | POST / GET | `/v1/smart-folders` | Create / browse personal and shared query definitions |
@@ -95,7 +95,7 @@ Every `/v1` request requires authentication: `Authorization: Bearer <token>` in 
 | POST | `/v1/smart-folders/{id}/items` | Classify an existing item or create an item matching the definition/path |
 | DELETE | `/v1/smart-folders/{id}/items/{itemID}` | Remove classification while preserving the item and location |
 | GET / POST | `/v1/workspaces/{id}/smart-folders/export`, `/import` | Export / atomically merge portable shared definitions |
-| GET | `/v1/resources?workspace_id=...&q=...&tag=...` | Workspace search and tag filtering; optional `parent_id` narrows to direct children |
+| GET | `/v1/resources?workspace_id=...&q=...&tag=...` | Workspace search and tag filtering; optional `parent_id` narrows to direct children and `kind` to one kind of resource |
 | POST / GET | `/v1/resources/{id}/fields` | Add / read list or library field definitions |
 | PATCH | `/v1/resources/{id}/fields/{fieldID}` | Evolve label, choices, required or indexed; uses the container ETag |
 | GET | `/v1/resources/{id}/schemas` | Manager-only schema history; paginate with `$skiptoken` |

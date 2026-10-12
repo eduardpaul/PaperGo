@@ -230,6 +230,7 @@ CREATE UNIQUE INDEX smartfolder_workspace_id_name ON smart_folders(workspace_id,
 CREATE UNIQUE INDEX smartfolder_owner_id_workspace_id_name ON smart_folders(owner_id,workspace_id,name);
 CREATE UNIQUE INDEX smartfolder_owner_id_name ON smart_folders(owner_id,name) WHERE workspace_id IS NULL;
 CREATE INDEX `resource_parent_id_id_scope_id` ON `resources` (`parent_id`, `id`, `scope_id`);
+CREATE INDEX `resource_parent_id_kind_id_scope_id` ON `resources` (`parent_id`, `kind`, `id`, `scope_id`);
 CREATE INDEX `resource_container_id_id` ON `resources` (`container_id`, `id`);
 CREATE INDEX resource_container_id_content_type_id_id ON resources(container_id,content_type_id,id);
 CREATE INDEX resource_container_id_scope_id ON resources(container_id,scope_id);
