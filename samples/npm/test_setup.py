@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import subprocess
+import ssl
 import unittest
 from unittest.mock import Mock, patch
 import urllib.error
@@ -119,6 +120,45 @@ class AccessListTests(unittest.TestCase):
         self.assertFalse(payload['pass_auth'])
         self.assertFalse(payload['satisfy_any'])
         self.assertNotIn('clients', payload)
+
+
+class ProxyReadinessTests(unittest.TestCase):
+    settings = {'host': 'papergo.localhost', 'https_port': 18443, 'tls': 'local'}
+    credentials = {'papergo_user': 'papergo-admin', 'papergo_password': 'test-password'}
+
+    def test_waits_through_untrusted_and_old_certificates_before_accepting_profile(self):
+        context = Mock()
+        old_socket, new_socket = Mock(), Mock()
+        old_socket.getpeercert.return_value = b'old-certificate'
+        new_socket.getpeercert.return_value = b'new-certificate'
+        context.wrap_socket.side_effect = [ssl.SSLCertVerificationError(1, 'old CA'), old_socket, new_socket]
+        connection = Mock()
+        connection.getresponse.return_value.status = 200
+        connection.getresponse.return_value.read.return_value = b'{"subject":"papergo-admin"}'
+        certificate = Mock()
+        certificate.read_text.return_value = 'test certificate'
+        with patch.object(setup.ssl, 'create_default_context', return_value=context), patch.object(setup.ssl, 'PEM_cert_to_DER_cert', return_value=b'new-certificate'), patch.object(setup.http.client, 'HTTPSConnection', return_value=connection), patch.object(setup.socket, 'create_connection'), patch.object(setup.time, 'sleep') as sleep, patch.object(setup.time, 'monotonic', return_value=0):
+            setup.wait_for_proxy(self.settings, self.credentials, certificate)
+        self.assertEqual(context.wrap_socket.call_count, 3)
+        connection.request.assert_called_once()
+        self.assertEqual(connection.request.call_args.args, ('GET', '/v1/identity/me'))
+        self.assertEqual(connection.close.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_persistent_certificate_failure_never_reports_ready(self):
+        context = Mock()
+        context.wrap_socket.side_effect = ssl.SSLCertVerificationError(1, 'wrong CA')
+        with patch.object(setup.ssl, 'create_default_context', return_value=context), patch.object(setup.http.client, 'HTTPSConnection'), patch.object(setup.socket, 'create_connection'), patch.object(setup.time, 'sleep'), patch.object(setup.time, 'monotonic', side_effect=[0, 0, 0, 1]):
+            with self.assertRaisesRegex(RuntimeError, 'served TLS certificate does not verify'):
+                setup.wait_for_proxy(self.settings, self.credentials, timeout=1)
+
+    def test_wrong_authenticated_subject_never_reports_ready(self):
+        connection = Mock()
+        connection.getresponse.return_value.status = 200
+        connection.getresponse.return_value.read.return_value = b'{"subject":"someone-else"}'
+        with patch.object(setup.ssl, 'create_default_context'), patch.object(setup.http.client, 'HTTPSConnection', return_value=connection), patch.object(setup.socket, 'create_connection'), patch.object(setup.time, 'sleep'), patch.object(setup.time, 'monotonic', side_effect=[0, 0, 0, 1]):
+            with self.assertRaisesRegex(RuntimeError, 'authenticated profile is not ready'):
+                setup.wait_for_proxy(self.settings, self.credentials, timeout=1)
 
 
 class VerificationTests(unittest.TestCase):

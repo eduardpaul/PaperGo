@@ -2,12 +2,16 @@
 """Provision NPM access-list authentication and TLS for PaperGo."""
 import argparse
 import getpass
+import base64
+import http.client
 import ipaddress
 import json
 import os
 from pathlib import Path
 import re
 import secrets
+import socket
+import ssl
 import subprocess
 import sys
 import time
@@ -101,6 +105,7 @@ def authenticate(api, credentials):
     try:
         result = api.call("POST", "/tokens", {"identity": credentials["npm_email"], "secret": credentials["npm_password"]})
     except urllib.error.HTTPError as error:
+        error.close()
         if error.code not in (400, 401, 403):
             raise
         if not sys.stdin.isatty():
@@ -115,6 +120,7 @@ def authenticate(api, credentials):
         try:
             result = api.call("POST", "/tokens", {"identity": email, "secret": password})
         except urllib.error.HTTPError as error:
+            error.close()
             if error.code not in (400, 401, 403):
                 raise
             raise RuntimeError(
@@ -161,6 +167,45 @@ def configure_access_list(api, username, password):
     if access is None:
         return api.call("POST", "/nginx/access-lists", {**payload, "clients": []})
     return api.call("PUT", f"/nginx/access-lists/{access['id']}", payload)
+
+
+def wait_for_proxy(settings, credentials, certificate=None, timeout=60):
+    local = settings["tls"] == "local"
+    context = ssl.create_default_context(cafile=str(GENERATED / "ca.crt") if local else None)
+    expected_certificate = ssl.PEM_cert_to_DER_cert(certificate.read_text()) if certificate else None
+    login = credentials["papergo_user"] + ":" + credentials["papergo_password"]
+    headers = {"Authorization": "Basic " + base64.b64encode(login.encode()).decode()}
+    deadline = time.monotonic() + timeout
+    reason = "proxy is not responding"
+    while time.monotonic() < deadline:
+        connection = http.client.HTTPSConnection(settings["host"], settings["https_port"],
+                    timeout=min(3, max(0.1, deadline - time.monotonic())), context=context)
+        try:
+            if local:
+                connection.sock = context.wrap_socket(
+                    socket.create_connection(("127.0.0.1", settings["https_port"]), connection.timeout),
+                    server_hostname=settings["host"],
+                )
+            else:
+                connection.connect()
+            if expected_certificate and connection.sock.getpeercert(binary_form=True) != expected_certificate:
+                reason = "Nginx is still serving a different certificate"
+            else:
+                connection.request("GET", "/v1/identity/me", headers=headers)
+                response = connection.getresponse()
+                body = response.read()
+                profile = json.loads(body) if response.status == 200 else None
+                if isinstance(profile, dict) and profile.get("subject") == credentials["papergo_user"]:
+                    return
+                reason = f"authenticated profile is not ready (HTTP {response.status})"
+        except ssl.SSLCertVerificationError:
+            reason = "the served TLS certificate does not verify with the configured trust roots"
+        except (OSError, http.client.HTTPException, ValueError):
+            reason = "verified HTTPS connection or authenticated profile is not ready"
+        finally:
+            connection.close()
+        time.sleep(0.25)
+    raise RuntimeError(f"NPM did not become ready on verified HTTPS: {reason}. Setup is incomplete; inspect the proxy host and certificate in NPM.")
 
 
 def main():
@@ -233,6 +278,7 @@ def main():
     credentials = authenticate(api, credentials)
     private_write(credentials_file, json.dumps(credentials, indent=2) + "\n")
     access = configure_access_list(api, args.admin_user, credentials["papergo_password"])
+    cert = None
     certificates = api.call("GET", "/nginx/certificates")
     certificate = next((item for item in certificates if args.host in item.get("domain_names", [])), None)
     if certificate is None:
@@ -263,6 +309,7 @@ def main():
     result = api.call("PUT" if host else "POST", f"/nginx/proxy-hosts/{host['id']}" if host else "/nginx/proxy-hosts", host_config)
     if result.get("meta", {}).get("nginx_online") is False:
         raise RuntimeError("NPM rejected the generated proxy configuration; inspect the NPM management UI")
+    wait_for_proxy(settings, credentials, cert)
     private_write(GENERATED / "ready", public_url + "\n")
     print(f"PaperGo configured at {public_url}/v1/identity/me")
     print(f"NPM management UI: http://127.0.0.1:{args.admin_port}")

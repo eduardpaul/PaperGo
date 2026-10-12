@@ -117,5 +117,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except ssl.SSLCertVerificationError:
+        raise SystemExit("NPM's served TLS certificate does not verify with the configured trust roots. Rerun setup.py --no-build to install the configured certificate and wait for verified HTTPS. TLS verification remains enabled.")
     except RuntimeError as error:
         raise SystemExit(str(error))
