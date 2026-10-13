@@ -9,6 +9,7 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/coreos/go-oidc/v3` | OIDC bearer token verification | Apache-2.0 |
 | `github.com/dbos-inc/dbos-transact-golang` | the embedded workflow runner (`internal/runner` only) | MIT |
 | `github.com/ebitengine/purego` | loading the ONNX Runtime library without CGO (`internal/ocr/paddle` only) | Apache-2.0 |
+| `github.com/gen2brain/webp` | WebP decoding and encoding in workflows (`internal/imaging` only): libwebp transpiled to Go, or a system libwebp through purego when one is installed (build tag `nodynamic` turns that off) | MIT; the bundled libwebp is BSD-3-Clause |
 | `github.com/go-jose/go-jose/v4` | JWT handling | Apache-2.0 |
 | `github.com/google/uuid` | identifiers | BSD-3-Clause |
 | `golang.org/x/image` | image resampling for OCR, WebP decoding in `cmd/ocr`, fonts in OCR tests | BSD-3-Clause |
