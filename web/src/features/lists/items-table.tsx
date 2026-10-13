@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ChevronsUpDown, Folder } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Folder, FolderOpen } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { FieldDefinition, Resource } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +28,7 @@ export function ItemsTable({
   onToggle,
   onToggleAll,
   onOpen,
+  locations,
 }: {
   rows: Resource[];
   columns: string[];
@@ -46,6 +47,8 @@ export function ItemsTable({
   onToggle: (resource: Resource, checked: boolean) => void;
   onToggleAll: (checked: boolean) => void;
   onOpen: (resource: Resource) => void;
+  /** Names of the folders rows sit in, shown under their names (search results). */
+  locations?: Map<string, string>;
 }) {
   const format = useFormat();
   const all = rows.length > 0 && rows.every((row) => selected.has(row.id));
@@ -172,19 +175,26 @@ export function ItemsTable({
                 {columns.map((column) => (
                   <td key={column} className="max-w-xs px-3 py-2 align-top">
                     {column === '$name' ? (
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        className="inline-flex max-w-full items-center gap-2 text-left font-medium hover:underline"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onOpen(resource);
-                        }}
-                      >
-                        {resource.kind === 'folder' && <Folder className="size-4 shrink-0 text-muted" />}
-                        <span className="truncate">{resource.name}</span>
-                        {state && <Badge tone={state === 'Published' ? 'success' : 'warning'}>{state}</Badge>}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          className="inline-flex max-w-full items-center gap-2 text-left font-medium hover:underline"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpen(resource);
+                          }}
+                        >
+                          {resource.kind === 'folder' && <Folder className="size-4 shrink-0 text-muted" />}
+                          <span className="truncate">{resource.name}</span>
+                          {state && <Badge tone={state === 'Published' ? 'success' : 'warning'}>{state}</Badge>}
+                        </button>
+                        {resource.parent_id && locations?.get(resource.parent_id) && (
+                          <span className="flex items-center gap-1 text-xs text-muted">
+                            <FolderOpen className="size-3" /> in {locations.get(resource.parent_id)}
+                          </span>
+                        )}
+                      </>
                     ) : (
                       <Cell column={column} resource={resource} fields={fields} names={names} formatDate={format.dateTime} />
                     )}

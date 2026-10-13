@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api, continuation } from '@/api/http';
 import { batch } from '@/api/batch';
-import { listingRequest, type ApiCall } from '@/api/requests';
+import { countRequest, listingQuery, listingRequest, type ApiCall } from '@/api/requests';
 import { contentTypesQuery, fieldsQuery, keys, resourceQuery, viewsQuery } from '@/api/queries';
 import type { Page, QuerySpec, Resource } from '@/api/types';
 import { Page as Screen, PageHeader } from '@/components/page';
@@ -40,7 +40,7 @@ import { QueryFeedback } from '@/features/admin/common';
 import { OperationProgress } from '@/features/admin/operation-progress';
 import { useUploads } from '@/features/documents/uploads';
 import { FieldEditor } from '@/features/fields/editor';
-import { useValueNames } from '@/features/fields/names';
+import { useResourceNames, useValueNames } from '@/features/fields/names';
 import { valuesPatch } from '@/features/fields/values';
 import { ConfirmDialog } from '@/features/settings/section';
 import { useFormat } from '@/lib/preferences';
@@ -72,7 +72,6 @@ interface Listing {
   next: string | null;
   /** A POST query continues with the same body. */
   body?: unknown;
-  total?: number;
 }
 
 /** Columns shown when no saved view picks them: the name, the first few columns of the default type, the last change. */
@@ -92,6 +91,7 @@ export function CollectionPage({
   onMoved: (resource: Resource) => void;
 }) {
   const queryClient = useQueryClient();
+  const format = useFormat();
   const collection = useQuery(resourceQuery(listId));
   const fields = useQuery(fieldsQuery(listId));
   const types = useQuery(contentTypesQuery(listId));
@@ -146,6 +146,13 @@ export function CollectionPage({
   const fileInput = useRef<HTMLInputElement>(null);
 
   const rows = [...(listing.data?.items ?? []), ...more];
+  // The count comes after the first page, and only when there is more than one page.
+  const counted = useMatchingTotal(listId, listingQuery(request, listId), !ownRows && !!listing.data?.next);
+  // Search hits can sit in any folder below; each shows where.
+  const folderIds = search.q
+    ? [...new Set(rows.flatMap((row) => (row.parent_id && row.parent_id !== listId ? [row.parent_id] : [])))].sort()
+    : [];
+  const folderNames = useResourceNames(folderIds);
   const names = useValueNames(fields.data ?? [], rows);
   const fieldList = fields.data ?? [];
   const typeList = types.data ?? [];
@@ -162,9 +169,10 @@ export function CollectionPage({
         ])
   ).filter((column) => column !== '$id');
   const refresh = () => queryClient.invalidateQueries({ queryKey: keys.resources });
+  // Opening a folder found by a search shows the folder, not the search inside it.
   const open = (resource: Resource) =>
     resource.kind === 'folder'
-      ? onSearch({ folder: resource.id, item: undefined, tab: undefined })
+      ? onSearch({ folder: resource.id, item: undefined, tab: undefined, q: undefined })
       : onSearch({ item: resource.id, tab: undefined });
 
   const { upload } = useUploads();
@@ -244,7 +252,7 @@ export function CollectionPage({
   const canEdit = can(current, 'write');
   const canManage = can(current, 'manage');
   const items = [...selected.values()].filter((resource) => resource.kind === 'item');
-  const matching = matchingQuery(request, listId);
+  const matching = listingQuery(request, listId);
   const allLoadedSelected = rows.length > 0 && selected.size === rows.length;
   const startUpload = () => fileInput.current?.click();
   const uploadFiles = (files: FileList | null | undefined) => {
@@ -410,7 +418,12 @@ export function CollectionPage({
 
       {search.q && (
         <p className="mb-3 flex items-center gap-2 text-[13px] text-muted">
-          Results for “{search.q}” in {search.folder ? 'this folder' : `this ${noun}`}
+          Results for “{search.q}” in {search.folder ? 'this folder and its subfolders' : `the whole ${noun}`}
+          {search.folder && (
+            <Button size="sm" variant="ghost" onClick={() => onSearch({ folder: undefined, item: undefined }, true)}>
+              <Search /> Search the whole {noun}
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={() => onSearch({ q: undefined }, true)}>
             <X /> Clear search
           </Button>
@@ -545,6 +558,7 @@ export function CollectionPage({
               setAllMatching(false);
               setSelected(new Map(checked ? rows.map((row) => [row.id, row]) : []));
             }}
+            locations={search.q ? folderNames : undefined}
             onOpen={open}
           />
         )}
@@ -552,8 +566,11 @@ export function CollectionPage({
       {rows.length > 0 && !ownRows && (
         <div className="mt-3 flex items-center gap-3 text-xs text-muted">
           <span>
-            {listing.data?.total !== undefined ? `${rows.length} of ${listing.data.total}` : `${rows.length}${next ? '+' : ''}`}{' '}
-            {rows.length === 1 && listing.data?.total === undefined ? 'entry' : 'entries'}
+            {!next
+              ? `${format.number(rows.length)} ${rows.length === 1 ? 'entry' : 'entries'}`
+              : counted
+                ? `${format.number(rows.length)} of ${format.number(counted.total)}${counted.capped ? '+' : ''} entries`
+                : `${format.number(rows.length)}+ entries`}
           </span>
           {next && (
             <Button size="sm" disabled={loadingMore} onClick={() => void loadMore()}>
@@ -800,7 +817,6 @@ async function loadListing(request: ApiCall): Promise<Listing> {
     items: page.value ?? [],
     next: continuation(page['@odata.nextLink']),
     body: request.method === 'POST' ? request.body : undefined,
-    total: page.total,
   };
 }
 
@@ -817,30 +833,24 @@ async function folderCrumbs(folderId: string, collectionId: string): Promise<Res
   return chain;
 }
 
-/** The query that matches what the listing shows: a view's or sorted query, or the open folder's items. */
-function matchingQuery(request: ApiCall, collectionId: string): QuerySpec {
-  if (request.method === 'POST') return ((request.body as { query?: QuerySpec }).query ?? {}) as QuerySpec;
-  const folder = request.path.split('/')[3];
-  const q = request.query?.q;
-  return { parent_id: folder || collectionId, ...(typeof q === 'string' && q ? { search: q } : {}) };
+/** How many items a query matches, counted by the API apart from the rows; `capped` when counting stopped. */
+function useMatchingTotal(collectionId: string, query: QuerySpec, enabled = true) {
+  const call = countRequest(collectionId, query);
+  return useQuery({
+    queryKey: ['resources', collectionId, 'count', call.body],
+    enabled,
+    queryFn: async () => {
+      const page = (await api<Page<Resource>>(call.path, { method: call.method, query: call.query, body: call.body })).data;
+      return { total: page.total ?? 0, capped: !!page.total_capped };
+    },
+  }).data;
 }
 
-/** "2,490 items" matching a query, counted by the API when first shown. */
+/** "2,490 items" or "100,000+ items" matching a query. */
 function MatchingCount({ collectionId, query, bare }: { collectionId: string; query: QuerySpec; bare?: boolean }) {
   const format = useFormat();
-  const { sort: _sort, group_by: _group, ...counted } = query;
-  const total = useQuery({
-    queryKey: ['resources', collectionId, 'matching-count', counted],
-    queryFn: async () =>
-      (
-        await api<Page<Resource>>(`/v1/resources/${collectionId}/query`, {
-          method: 'POST',
-          query: { $top: 1 },
-          body: { include_total: true, query: counted, select: [] },
-        })
-      ).data.total ?? 0,
-  });
-  const count = total.data === undefined ? 'all matching items' : `${format.number(total.data)} ${total.data === 1 ? 'item' : 'items'}`;
-  if (bare) return <>{total.data === undefined ? 'all matching items' : count}</>;
-  return <>{total.data === undefined ? 'All matching items selected' : `All ${count} selected`}</>;
+  const counted = useMatchingTotal(collectionId, query);
+  if (!counted) return <>{bare ? 'all matching items' : 'All matching items selected'}</>;
+  const count = `${format.number(counted.total)}${counted.capped ? '+' : ''} ${counted.total === 1 && !counted.capped ? 'item' : 'items'}`;
+  return <>{bare ? count : `All ${count} selected`}</>;
 }

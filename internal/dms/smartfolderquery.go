@@ -357,7 +357,7 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 	usable := []smartCandidate{}
 	for _, c := range candidates {
 		spec := QuerySpec{Filter: d.Filter, Sort: []SortSpec{{Field: "$modified_at", Direction: "desc"}}}
-		q, err := s.compileCollectionQuery(ctx, subject, c.collection, c.defs, QueryRequest{Query: spec, Surface: in.Surface}, false)
+		q, err := s.compileCollectionQuery(ctx, subject, c.collection, c.defs, QueryRequest{Query: spec, Surface: in.Surface, rowACL: true}, false)
 		if err != nil {
 			var validation *ValidationError
 			if errors.As(err, &validation) {

@@ -6,6 +6,8 @@ export interface Page<T> {
   value?: T[] | null;
   '@odata.nextLink'?: string | null;
   total?: number;
+  /** More than `total` items match; counting stopped there. */
+  total_capped?: boolean;
   field?: string;
   by?: string;
 }
@@ -117,6 +119,8 @@ export interface QuerySpec {
   group_by?: string;
   content_type_id?: string;
   parent_id?: string;
+  /** Anywhere below this folder: in it or its subfolders. */
+  ancestor_id?: string;
   search?: string;
   tag?: string;
 }

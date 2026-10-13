@@ -202,9 +202,10 @@ func (s *Service) selective(ctx context.Context, c candidateSet) (bool, error) {
 	return n <= candidateDriveLimit, rows.Err()
 }
 
-// ftsPhrase treats input as a literal phrase, never as executable FTS query syntax.
+// ftsPhrase treats input as a literal phrase, never as executable FTS query
+// syntax. Its last word matches as a prefix, so search works as people type.
 func ftsPhrase(search string) string {
-	return `"` + strings.ReplaceAll(strings.TrimSpace(search), `"`, `""`) + `"`
+	return `"` + strings.ReplaceAll(strings.TrimSpace(search), `"`, `""`) + `"*`
 }
 
 // overlayPage applies each item's selected surface and returns the selected revision

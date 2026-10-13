@@ -33,8 +33,10 @@ type QuerySpec struct {
 	Sort          []SortSpec  `json:"sort,omitempty"`
 	GroupBy       string      `json:"group_by,omitempty"`
 	ParentID      string      `json:"parent_id,omitempty"`
-	Search        string      `json:"search,omitempty"`
-	Tag           string      `json:"tag,omitempty"`
+	// AncestorID keeps what is anywhere below a folder: in it or its subfolders.
+	AncestorID string `json:"ancestor_id,omitempty"`
+	Search     string `json:"search,omitempty"`
+	Tag        string `json:"tag,omitempty"`
 }
 type QueryRequest struct {
 	Select  []string  `json:"select,omitempty"`
@@ -44,11 +46,19 @@ type QueryRequest struct {
 	Limit   int       `json:"-"`
 	// IncludeTotal counts every authorized match; omitted, total is absent.
 	IncludeTotal bool `json:"include_total,omitempty"`
+	// TotalLimit stops counting there and reports total_capped when more
+	// match, so a total costs at most that many rows. It implies a total.
+	TotalLimit int `json:"total_limit,omitempty"`
+	// rowACL checks permissions row by row, so queries over several
+	// collections share one SQL shape (smart folders).
+	rowACL bool
 }
 type QueryResult struct {
 	Data       []*ent.Resource `json:"value"`
 	NextCursor string          `json:"-"`
 	Total      *int            `json:"total,omitempty"`
+	// TotalCapped means more than total items match (see TotalLimit).
+	TotalCapped bool `json:"total_capped,omitempty"`
 }
 type QueryGroup struct {
 	Value any `json:"value"`
@@ -431,6 +441,23 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		text += " AND r.parent_id=?"
 		args = append(args, parent.ID)
 	}
+	if in.Query.AncestorID != "" {
+		if in.Query.ParentID != "" {
+			return compiledQuery{}, invalid("use parent_id or ancestor_id, not both")
+		}
+		ancestor, e := s.authorize(ctx, subject, in.Query.AncestorID, "read")
+		if e != nil {
+			return compiledQuery{}, e
+		}
+		if ancestor.ID != c.ID && (ancestor.Kind != "folder" || ancestor.ContainerID == nil || *ancestor.ContainerID != c.ID) {
+			return compiledQuery{}, invalid("ancestor_id is outside this collection")
+		}
+		// The collection itself is every item's ancestor.
+		if ancestor.ID != c.ID {
+			text += " AND r.parent_id IN (WITH RECURSIVE below(id) AS (SELECT ? UNION ALL SELECT f.id FROM resources f JOIN below ON f.parent_id=below.id WHERE f.kind='folder' AND f.deleted_at IS NULL) SELECT id FROM below)"
+			args = append(args, ancestor.ID)
+		}
+	}
 	if in.Query.Filter != nil {
 		filter, a, e := compiler.filter(in.Query.Filter, 0)
 		if e != nil {
@@ -446,23 +473,39 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 	if strings.TrimSpace(in.Query.Search) != "" {
 		phrase := ftsPhrase(in.Query.Search)
 		// FTS rowids are item_surfaces rowids; reading the UNINDEXED id column costs a content-table lookup per match.
-		text += " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)"
+		// The unary + keeps SQLite from probing the surface index once per match for every row.
+		text += " AND +p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)"
 		args = append(args, phrase)
 	}
 	conditions, conditionArgs := text, args
-	selected, surfaceArgs := surfaceSQL(ctx, "r.id", subject, in.Surface)
-	args = append(append(append([]any{}, rankArgs...), surfaceArgs...), c.ID)
-	text = "SELECT r.id," + strings.Join(rankParts, ",") + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder')" + conditions
-	args = append(args, conditionArgs...)
-	// SQLite evaluates these terms in order: cheap index filters first, so the
-	// ACL probe runs only on rows that already match.
-	action := "read"
-	if in.Surface == "head" {
-		action = "read_draft"
+	var access *scopeAccess
+	if !in.rowACL {
+		if access, err = s.collectionScopes(ctx, c.ID, subject); err != nil {
+			return compiledQuery{}, err
+		}
 	}
-	acl, aclArgs := permissionSQL(ctx, "r.id", subject, action)
-	text += " AND " + acl
-	args = append(args, aclArgs...)
+	if access != nil {
+		// Permissions follow ACL scopes, and a collection has few: decide each
+		// scope once instead of probing grants for every row.
+		selected, readable, scopeArgs := access.sql(in.Surface)
+		args = append(append(append([]any{}, rankArgs...), scopeArgs[0]...), c.ID)
+		text = "SELECT r.id," + strings.Join(rankParts, ",") + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder') AND r.deleted_at IS NULL AND " + readable + conditions
+		args = append(append(args, scopeArgs[1]...), conditionArgs...)
+	} else {
+		selected, surfaceArgs := surfaceSQL(ctx, "r.id", subject, in.Surface)
+		args = append(append(append([]any{}, rankArgs...), surfaceArgs...), c.ID)
+		text = "SELECT r.id," + strings.Join(rankParts, ",") + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder')" + conditions
+		args = append(args, conditionArgs...)
+		// SQLite evaluates these terms in order: cheap index filters first, so the
+		// ACL probe runs only on rows that already match.
+		action := "read"
+		if in.Surface == "head" {
+			action = "read_draft"
+		}
+		acl, aclArgs := permissionSQL(ctx, "r.id", subject, action)
+		text += " AND " + acl
+		args = append(args, aclArgs...)
+	}
 	fingerprint, _ := json.Marshal(struct {
 		Subject, Collection, Surface, Schema string
 		Query                                QuerySpec
@@ -678,6 +721,9 @@ func (s *Service) rankedIDs(ctx context.Context, query string, args ...any) ([]r
 // queryCompiled returns one page of q. A non-nil fields projects item values
 // to those keys (see overlayPage); nil returns complete values.
 func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery, fields []string) (QueryResult, error) {
+	if in.TotalLimit < 0 || in.TotalLimit > 1_000_000 {
+		return QueryResult{}, invalid("total_limit must be between 1 and 1000000")
+	}
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
 		limit := pageSize(in.Limit)
 		var page []rankedID
@@ -719,12 +765,20 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 				return out, e
 			}
 		}
-		if !in.IncludeTotal {
+		if !in.IncludeTotal && in.TotalLimit == 0 {
 			return out, nil
 		}
 		// An exact total evaluates every eligible row, so callers opt in.
 		var total int
-		if e = t.scan(ctx, []any{&total}, "WITH eligible AS ("+q.sql+") SELECT count(*) FROM eligible", q.args...); e != nil {
+		if in.TotalLimit > 0 {
+			args := append(append([]any{}, q.args...), in.TotalLimit+1)
+			if e = t.scan(ctx, []any{&total}, "SELECT count(*) FROM (SELECT 1 FROM ("+q.sql+") LIMIT ?)", args...); e != nil {
+				return out, e
+			}
+			if total > in.TotalLimit {
+				total, out.TotalCapped = in.TotalLimit, true
+			}
+		} else if e = t.scan(ctx, []any{&total}, "WITH eligible AS ("+q.sql+") SELECT count(*) FROM eligible", q.args...); e != nil {
 			return out, e
 		}
 		out.Total = &total

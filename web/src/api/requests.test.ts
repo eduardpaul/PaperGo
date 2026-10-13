@@ -1,20 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { bulkUpdateRequests, documentUploadRequest, downloadContentPath, listingRequest, replaceContentRequest, searchRequest, smartFolderQueryRequest, viewGroupsRequest, viewRowsRequest } from './requests';
+import { bulkUpdateRequests, countRequest, documentUploadRequest, downloadContentPath, listingQuery, listingRequest, replaceContentRequest, searchRequest, smartFolderQueryRequest, viewGroupsRequest, viewRowsRequest } from './requests';
 
 describe('listing and search requests', () => {
-  it('browses the open folder with an optional search when no view or sort applies', () => {
-    expect(listingRequest('col', {})).toEqual({ path: '/v1/resources/col/children', method: 'GET', query: { q: undefined, $top: 50 } });
+  it('browses the open folder when no view, sort or search applies', () => {
+    expect(listingRequest('col', {})).toEqual({ path: '/v1/resources/col/children', method: 'GET', query: { $top: 50 } });
+    expect(listingRequest('col', { folder: 'folder' }).path).toBe('/v1/resources/folder/children');
+  });
+
+  it('searches the open folder and everything below it, or the whole list at the top', () => {
     expect(listingRequest('col', { folder: 'folder', q: 'invoice' })).toEqual({
-      path: '/v1/resources/folder/children',
-      method: 'GET',
-      query: { q: 'invoice', $top: 50 },
+      path: '/v1/resources/col/query',
+      method: 'POST',
+      query: { $top: 50 },
+      body: { query: { ancestor_id: 'folder', search: 'invoice' } },
     });
+    expect(listingRequest('col', { q: 'invoice' }).body).toEqual({ query: { search: 'invoice' } });
   });
 
   it('selects the columns chosen on the page instead of the view\'s', () => {
     const view = { columns: ['$name', 'status'], query: {} };
     expect(listingRequest('col', { view, columns: ['$name', 'amount'] }).body).toEqual({
-      include_total: true,
       query: {},
       select: ['$name', 'amount'],
     });
@@ -25,7 +30,7 @@ describe('listing and search requests', () => {
       path: '/v1/resources/col/query',
       method: 'POST',
       query: { $top: 50 },
-      body: { include_total: true, query: { parent_id: 'col', sort: [{ field: 'amount', direction: 'desc' }] } },
+      body: { query: { parent_id: 'col', sort: [{ field: 'amount', direction: 'desc' }] } },
     });
   });
 
@@ -38,12 +43,25 @@ describe('listing and search requests', () => {
       path: '/v1/resources/col/query',
       method: 'POST',
       query: { $top: 50 },
-      body: { include_total: true, query: view.query, select: ['$name', 'status'] },
+      body: { query: view.query, select: ['$name', 'status'] },
     });
-    expect(listingRequest('col', { view, folder: 'folder', q: 'invoice', sort: { field: '$modified_at', direction: 'desc' } }).body).toEqual({
-      include_total: true,
-      query: { ...view.query, parent_id: 'folder', search: 'invoice', sort: [{ field: '$modified_at', direction: 'desc' }] },
+    expect(listingRequest('col', { view, folder: 'folder', sort: { field: '$modified_at', direction: 'desc' } }).body).toEqual({
+      query: { ...view.query, parent_id: 'folder', sort: [{ field: '$modified_at', direction: 'desc' }] },
       select: ['$name', 'status'],
+    });
+    expect(listingRequest('col', { view, folder: 'folder', q: 'invoice' }).body).toEqual({
+      query: { ...view.query, ancestor_id: 'folder', search: 'invoice' },
+      select: ['$name', 'status'],
+    });
+  });
+
+  it('counts what a listing shows apart from its rows, up to a limit', () => {
+    expect(listingQuery(listingRequest('col', { folder: 'folder' }), 'col')).toEqual({ parent_id: 'folder' });
+    expect(countRequest('col', { search: 'acme', sort: [{ field: 'amount', direction: 'asc' }], group_by: 'status' })).toEqual({
+      path: '/v1/resources/col/query',
+      method: 'POST',
+      query: { $top: 1 },
+      body: { total_limit: 100000, query: { search: 'acme' }, select: [] },
     });
   });
 

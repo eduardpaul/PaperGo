@@ -151,15 +151,21 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
    groups of 50 under one `or`, at most 1,550 per request. Updating 2,490 items took 2 minutes: the operation runs one
    item per transaction (item 12 below).
 
+4. **Search by word start, below the open folder.** Search matches its last word as a prefix (`"acm"*`): typing
+   "Acm" finds 625 invoices in 10 ms. A search runs from the open folder through all its subfolders (`ancestor_id`),
+   or over the whole list or library at the top; each hit shows the folder it is in, and "Search the whole library"
+   widens it. Opening a folder from the results shows that folder.
+5. **Cheap totals.** Queries decide permissions once per ACL scope (a collection has few) instead of looking up
+   grants for every row. At 10,000 items a total now takes 25 ms (was 360 ms), a filtered total 92 ms (was 420 ms) and
+   board counts 96 ms (was 401 ms); that is about 1.2 s, 4.6 s and 4.8 s at 500,000 items, where they timed out
+   before. The table no longer waits for a count: the first page shows "50+ entries", then "50 of 10,001 entries"
+   from a separate count that stops at 100,000 (`total_limit`, "100,000+" beyond). A search with a total had to be
+   kept from probing the surface index once per match for every row: 11 s became 29 ms.
+
 ## Open work
 
 Ordered by how much it helps people.
 
-4. **Prefix and recursive search (API).** Match the last word as a prefix (FTS5 `"acm"*`) and let a library search the
-   whole library from any folder, showing each hit's folder.
-5. **Cheap totals (API).** Count without the per-row permission check when nothing in the collection has unique
-   permissions (the common case), and return an estimate ("about 500,000") when an exact count would take longer
-   than a budget; group counts the same way. The UI shows exact totals when they are cheap and "about" otherwise.
 6. **Paging in the recycle bin and on the tag page.**
 7. **Name lookups per id.** Cache resolved lookup, person and term names per id so Load more resolves only new ids.
 8. **Virtualize long tables** (TanStack Virtual) once a page holds more than a few hundred rows.

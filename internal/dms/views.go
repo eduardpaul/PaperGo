@@ -158,6 +158,7 @@ type ViewQueryRequest struct {
 	After        string   `json:"-"`
 	Limit        int      `json:"-"`
 	IncludeTotal bool     `json:"include_total,omitempty"`
+	TotalLimit   int      `json:"total_limit,omitempty"`
 }
 
 func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQueryRequest) (QueryResult, error) {
@@ -174,7 +175,7 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 		if selection == nil {
 			selection = v.Columns
 		}
-		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, Select: selection}
+		request := QueryRequest{Query: spec, Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit, Select: selection}
 		if request.Surface == "" {
 			request.Surface = "auto"
 		}

@@ -27,19 +27,27 @@ export interface ListingOptions {
 }
 
 /**
- * The rows of a list or library. Plain browsing reads the open folder's children. A saved view or a column sort runs
- * a collection query: the view's query with the open folder, the search text and the chosen sort on top.
+ * The rows of a list or library. Plain browsing reads the open folder's children. A saved view, a column sort or a
+ * search runs a collection query: the view's query with the open folder, the search text and the chosen sort on top.
+ * A search looks in the open folder and everything below it (the whole list at the top). Totals come separately
+ * (`countRequest`), so the first page never waits for a count.
  */
 export function listingRequest(collectionId: string, options: ListingOptions): ApiCall {
   const { folder, view, q, sort } = options;
-  if (!view && !sort) {
-    return { path: `/v1/resources/${folder || collectionId}/children`, method: 'GET', query: { q, $top: 50 } };
+  if (!view && !sort && !q) {
+    return { path: `/v1/resources/${folder || collectionId}/children`, method: 'GET', query: { $top: 50 } };
   }
   const base = view?.query ?? {};
   const query: QuerySpec = { ...base };
-  const parent = folder ?? base.parent_id ?? (view ? undefined : collectionId);
-  if (parent) query.parent_id = parent;
-  if (q) query.search = q;
+  const location = folder ?? base.parent_id;
+  if (q) {
+    delete query.parent_id;
+    if (location) query.ancestor_id = location;
+    query.search = q;
+  } else {
+    const parent = location ?? (view ? undefined : collectionId);
+    if (parent) query.parent_id = parent;
+  }
   if (sort) query.sort = [sort];
   // A view's rows carry only its columns; the page asks for the columns it shows.
   const columns = view ? ((options.columns ?? view.columns)?.filter(Boolean) ?? []) : [];
@@ -50,7 +58,28 @@ export function listingRequest(collectionId: string, options: ListingOptions): A
     path: `/v1/resources/${collectionId}/query`,
     method: 'POST',
     query: { $top: 50 },
-    body: select ? { include_total: true, query, select } : { include_total: true, query },
+    body: select ? { query, select } : { query },
+  };
+}
+
+/** The query that matches what a listing shows: its collection query, or the open folder's direct children. */
+export function listingQuery(request: ApiCall, collectionId: string): QuerySpec {
+  if (request.method === 'POST') return (request.body as { query?: QuerySpec }).query ?? {};
+  const folder = request.path.split('/')[3];
+  return { parent_id: folder || collectionId };
+}
+
+/** Counting stops here: beyond it people see "100,000+", which is all they need to know. */
+export const totalLimit = 100_000;
+
+/** How many items a query matches, counting at most `totalLimit`. */
+export function countRequest(collectionId: string, query: QuerySpec): ApiCall {
+  const { sort: _sort, group_by: _group, ...counted } = query;
+  return {
+    path: `/v1/resources/${collectionId}/query`,
+    method: 'POST',
+    query: { $top: 1 },
+    body: { total_limit: totalLimit, query: counted, select: [] },
   };
 }
 
