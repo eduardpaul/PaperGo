@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"log/slog"
 	"net/http"
+	"papergo/internal/auth"
 	"strings"
 	"testing"
 )
@@ -33,5 +35,16 @@ func TestPublicFrontendAndReservedNamespaces(t *testing.T) {
 		if w := request(h, "GET", route, "", "", "", ""); w.Code != 404 || strings.Contains(w.Body.String(), "<html") {
 			t.Fatalf("reserved namespace %s must not serve the SPA: %d %s", route, w.Code, w.Body.String())
 		}
+	}
+}
+
+func TestAuthConfigAdvertisesBrowserSignIn(t *testing.T) {
+	_, s, _ := setup(t)
+	signIn := &BrowserSignIn{Issuer: "https://auth.example.com/application/o/papergo/", ClientID: "papergo", Scope: "openid profile email offline_access"}
+	h := (&API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Logger: slog.Default(), BrowserSignIn: signIn}).Handler()
+	config := request(h, "GET", "/auth/config", "", "", "", "")
+	want := `{"mode":"bearer","oidc":{"issuer":"https://auth.example.com/application/o/papergo/","client_id":"papergo","scope":"openid profile email offline_access"}}`
+	if config.Code != 200 || strings.TrimSpace(config.Body.String()) != want || config.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatal("browser sign-in discovery", config.Code, config.Body.String(), config.Header())
 	}
 }

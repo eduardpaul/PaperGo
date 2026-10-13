@@ -1,7 +1,16 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from './http';
-import { authenticationMode, authorizationHeaders, clearToken, loadAuthentication, setToken, token } from './auth';
+import {
+  authenticationMode,
+  authorizationHeaders,
+  clearToken,
+  loadAuthentication,
+  oidcSignIn,
+  setToken,
+  token,
+} from './auth';
+import { safeReturnPath } from './oidc';
 import { downloadFile } from './files';
 
 afterEach(async () => {
@@ -63,4 +72,51 @@ it('rejects invalid bootstrap configuration', async () => {
   await expect(loadAuthentication()).rejects.toThrow('invalid authentication settings');
   vi.stubGlobal('fetch', async () => new Response('Authentication required', { status: 401 }));
   await expect(loadAuthentication()).rejects.toThrow('Unable to load authentication settings');
+});
+
+it('loads provider sign-in for OIDC deployments and restores this tab’s signed-in user', async () => {
+  const settings = { issuer: 'https://auth.example.com/application/o/papergo/', client_id: 'papergo', scope: 'openid' };
+  const userKey = `oidc.user:${settings.issuer}:${settings.client_id}`;
+  const expiresAt = Math.floor(Date.now() / 1000) + 300;
+  sessionStorage.setItem(
+    userKey,
+    JSON.stringify({ access_token: 'provider-access', token_type: 'Bearer', profile: { sub: 'alice' }, expires_at: expiresAt }),
+  );
+  vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ mode: 'bearer', oidc: settings })));
+  await loadAuthentication();
+  expect(oidcSignIn()?.settings).toEqual(settings);
+  expect(authorizationHeaders()).toEqual({ Authorization: 'Bearer provider-access' });
+  clearToken();
+  await vi.waitFor(() => expect(sessionStorage.getItem(userKey)).toBeNull());
+  expect(token()).toBeNull();
+});
+
+it('drops an expired provider sign-in that cannot be renewed', async () => {
+  const settings = { issuer: 'https://auth.example.com/', client_id: 'papergo', scope: 'openid' };
+  const userKey = `oidc.user:${settings.issuer}:${settings.client_id}`;
+  sessionStorage.setItem(
+    userKey,
+    JSON.stringify({ access_token: 'expired', token_type: 'Bearer', profile: { sub: 'alice' }, expires_at: 1 }),
+  );
+  vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ mode: 'bearer', oidc: settings })));
+  await loadAuthentication();
+  expect(token()).toBeNull();
+  expect(sessionStorage.getItem(userKey)).toBeNull();
+});
+
+it('rejects invalid provider settings and ignores them outside bearer mode', async () => {
+  for (const oidc of [null, 'issuer', { issuer: 'not a url', client_id: 'papergo', scope: 'openid' }, { issuer: 'https://auth.example.com/', client_id: '', scope: 'openid' }]) {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ mode: 'bearer', oidc })));
+    await expect(loadAuthentication()).rejects.toThrow('invalid authentication settings');
+  }
+  vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ mode: 'bearer' })));
+  await loadAuthentication();
+  expect(oidcSignIn()).toBeNull();
+});
+
+it('only continues at same-origin application paths after sign-in', () => {
+  expect(safeReturnPath('/w/workspace?view=1')).toBe('/w/workspace?view=1');
+  for (const value of ['https://attacker.example', '//attacker.example', '/\\attacker.example', undefined, 7]) {
+    expect(safeReturnPath(value)).toBe('/');
+  }
 });

@@ -23,7 +23,7 @@ func TestProxyConfigurationFailsClosed(t *testing.T) {
 	if err != nil || len(c.ProxyTrustedCIDRs) != 1 {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct{ key, value string }{{"PROXY_TRUSTED_CIDRS", ""}, {"PROXY_TRUSTED_CIDRS", "0.0.0.0/0"}, {"PROXY_SECRET_FILE", "missing"}, {"PUBLIC_URL", "http://docs.example.com"}, {"ADMIN_SUBJECT", ""}, {"OIDC_GROUPS_CLAIM", "groups"}, {"ADMIN_GROUP", "admins"}} {
+	for _, tc := range []struct{ key, value string }{{"PROXY_TRUSTED_CIDRS", ""}, {"PROXY_TRUSTED_CIDRS", "0.0.0.0/0"}, {"PROXY_SECRET_FILE", "missing"}, {"PUBLIC_URL", "http://docs.example.com"}, {"ADMIN_SUBJECT", ""}, {"OIDC_GROUPS_CLAIM", "groups"}, {"ADMIN_GROUP", "admins"}, {"OIDC_CLIENT_ID", "papergo"}} {
 		t.Run(tc.key+tc.value, func(t *testing.T) {
 			t.Setenv(tc.key, tc.value)
 			if _, err := Load(); err == nil {
@@ -116,6 +116,44 @@ func TestOIDCAdminGroupValidation(t *testing.T) {
 	c, err := Load()
 	if err != nil || c.AdminGroup != "papergo-admins" || c.AdminSubject != "" {
 		t.Fatalf("valid ADMIN_GROUP rejected: %v, config: %+v", err, c)
+	}
+}
+
+func TestOIDCBrowserClient(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("AUTH_MODE", "oidc")
+	t.Setenv("OIDC_ISSUER", "https://issuer.example")
+	t.Setenv("OIDC_AUDIENCE", "papergo")
+	t.Setenv("ADMIN_SUBJECT", "configured-admin")
+	if c, err := Load(); err != nil || c.ClientID != "" || c.ClientScopes != "" {
+		t.Fatal("browser sign-in is optional", c, err)
+	}
+	t.Setenv("OIDC_CLIENT_ID", "papergo")
+	if c, err := Load(); err != nil || c.ClientID != "papergo" || c.ClientScopes != DefaultClientScopes {
+		t.Fatal("default browser scopes", c, err)
+	}
+	t.Setenv("OIDC_CLIENT_SCOPES", "  openid   profile groups ")
+	if c, err := Load(); err != nil || c.ClientScopes != "openid profile groups" {
+		t.Fatal("normalized browser scopes", c, err)
+	}
+	for _, tc := range []struct{ key, value string }{{"OIDC_CLIENT_SCOPES", "profile email"}, {"OIDC_CLIENT_SCOPES", `openid "quoted"`}, {"OIDC_CLIENT_SCOPES", "openid " + strings.Repeat("s", 1024)}, {"OIDC_CLIENT_ID", "two words"}, {"OIDC_CLIENT_ID", strings.Repeat("c", 256)}} {
+		t.Run(tc.key+tc.value, func(t *testing.T) {
+			t.Setenv(tc.key, tc.value)
+			if _, err := Load(); err == nil {
+				t.Fatal("invalid browser client accepted")
+			}
+		})
+	}
+	t.Setenv("OIDC_CLIENT_ID", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("scopes without a client accepted")
+	}
+	t.Setenv("AUTH_MODE", "development")
+	t.Setenv("DEV_TOKEN", "0123456789abcdef0123456789abcdef")
+	t.Setenv("OIDC_CLIENT_SCOPES", "")
+	t.Setenv("OIDC_CLIENT_ID", "papergo")
+	if _, err := Load(); err == nil {
+		t.Fatal("development authentication accepted a browser OIDC client")
 	}
 }
 

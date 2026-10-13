@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, isApiError, setToken } from '@/api/http';
-import { authenticationMode } from '@/api/auth';
+import { authenticationMode, oidcSignIn } from '@/api/auth';
+import { safeReturnPath } from '@/api/oidc';
 import { meQuery } from '@/api/queries';
 import type { Me } from '@/api/types';
 import { Logo } from '@/components/brand/logo';
@@ -12,20 +13,51 @@ import { Input, Label } from '@/components/ui/input';
 import { problemMessage } from '@/lib/errors';
 
 export const Route = createFileRoute('/login')({
-  validateSearch: (search: Record<string, unknown>) => ({
-    returnTo:
-      typeof search.returnTo === 'string' &&
-      search.returnTo.startsWith('/') &&
-      !search.returnTo.startsWith('//') &&
-      !search.returnTo.includes('\\')
-        ? search.returnTo
-        : '/',
-  }),
+  validateSearch: (search: Record<string, unknown>) => ({ returnTo: safeReturnPath(search.returnTo) }),
   component: Login,
 });
 
 function Login() {
-  return authenticationMode() === 'proxy' ? <ProxyLogin /> : <BearerLogin />;
+  if (authenticationMode() === 'proxy') return <ProxyLogin />;
+  return oidcSignIn() ? <ProviderLogin /> : <BearerLogin />;
+}
+
+function ProviderLogin() {
+  const { returnTo } = Route.useSearch();
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+  const [tokenForm, setTokenForm] = useState(false);
+  const signIn = oidcSignIn()!;
+  const provider = new URL(signIn.settings.issuer).host;
+
+  async function onSignIn() {
+    setPending(true);
+    setError('');
+    try {
+      await signIn.signIn(returnTo);
+    } catch {
+      setPending(false);
+      setError(`Unable to reach ${provider}. Check your connection and try again.`);
+    }
+  }
+
+  if (tokenForm) return <BearerLogin />;
+  return (
+    <main className="flex min-h-dvh items-center justify-center px-4">
+      <div className="w-full max-w-sm rounded-xl border bg-surface p-6 shadow-xs">
+        <Logo />
+        <h1 className="mt-6 text-lg font-semibold">Sign in</h1>
+        <p className="mt-1 text-[13px] text-muted">Continue at your organization's identity provider, {provider}.</p>
+        {error && <Alert className="mt-3">{error}</Alert>}
+        <Button variant="primary" className="mt-5 w-full" disabled={pending} onClick={() => void onSignIn()}>
+          {pending ? 'Redirecting…' : 'Sign in with single sign-on'}
+        </Button>
+        <Button variant="ghost" className="mt-2 w-full" onClick={() => setTokenForm(true)}>
+          Use a personal REST token
+        </Button>
+      </div>
+    </main>
+  );
 }
 
 function ProxyLogin() {
@@ -86,7 +118,9 @@ function BearerLogin() {
         <Logo />
         <h1 className="mt-6 text-lg font-semibold">Sign in</h1>
         <p className="mt-1 text-[13px] text-muted">
-          Paste a development bearer token or a personal REST token. PaperGo does not keep passwords in this app.
+          {oidcSignIn()
+            ? 'Paste a personal REST token. PaperGo does not keep passwords in this app.'
+            : 'Paste a development bearer token or a personal REST token. PaperGo does not keep passwords in this app.'}
         </p>
         <Label htmlFor="token" className="mt-5 block">
           Bearer token

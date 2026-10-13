@@ -6,7 +6,7 @@ The web UI in `web/` talks to the current `/v1` API. This list tracks screens le
 
 These areas have no PaperGo API, so the UI does not include them.
 
-- Password, passkey and OAuth sign-in, and a server end-session. Bearer deployments store a token for the browser session. Proxy deployments use the browser’s HTTP credentials; the frontend loads the verified profile without a token form.
+- Password and passkey sign-in in PaperGo itself, and a server end-session. OIDC deployments with `OIDC_CLIENT_ID` sign in at the identity provider (authorization code with PKCE), renew access with refresh tokens and sign out there; passwords, passkeys and MFA belong to the provider. Other bearer deployments store a pasted token for the browser session. Proxy deployments use the browser’s HTTP credentials; the frontend loads the verified profile without a token form.
 - Tasks.
 - Calendar, calendar feeds and `.ics`.
 - Approvals.
@@ -53,7 +53,7 @@ All product screens in this section are implemented against the registered `/v1`
 ## What the UI matches
 
 - Actions follow `access` on `GET /v1/resources/{id}`: adding, editing, moving and deleting need `write`, publishing `publish`, settings and permissions `manage`. Selection and bulk actions use the list's access; an item with its own stricter permissions can still refuse them. Creating workspaces needs the `workspace.create` scope.
-- Resources are `/v1` and JSON fields are snake_case. Bearer deployments send `Authorization: Bearer`; proxy deployments use same-origin browser HTTP credentials. `/auth/config` selects the supported mode before the app mounts.
+- Resources are `/v1` and JSON fields are snake_case. Bearer deployments send `Authorization: Bearer`; proxy deployments use same-origin browser HTTP credentials. `/auth/config` selects the supported mode, and the OIDC client for provider sign-in, before the app mounts.
 - Live updates use `fetch` on `GET /v1/events`. The stream uses the same bearer or proxy credentials as other requests.
 - A personal home workspace is `personal_owner_id`. The sidebar hides it. Home and Inbox still open it through `GET /v1/identity/me/home` and `GET /v1/identity/me/inboxes`. Search includes it because search requires `workspace_id`.
 - Preference writes send `If-Match`, including `"0"` when the user has no saved row. A stale preference write is 409.

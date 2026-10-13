@@ -97,6 +97,9 @@ func run(log *slog.Logger) error {
 		}
 		return db.CheckSchema(ctx)
 	}, WebDAV: webdav.New(service, verifier, store, log, c.MaxUpload), PublicURL: c.PublicURL}
+	if c.ClientID != "" {
+		a.BrowserSignIn = &httpapi.BrowserSignIn{Issuer: c.Issuer, ClientID: c.ClientID, Scope: c.ClientScopes}
+	}
 	if c.PublicURL != nil {
 		a.WebDAV.PublicHost = c.PublicURL.Host
 	}

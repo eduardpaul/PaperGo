@@ -14111,7 +14111,7 @@
     "/auth/config": {
       "get": {
         "summary": "Browser authentication capabilities",
-        "description": "Public, non-cacheable server authentication mode. Proxy deployments authenticate this request at the reverse proxy along with the UI. Contains no credentials or identity assertions.",
+        "description": "Public, non-cacheable server authentication mode and, in OIDC deployments with browser sign-in, the public OIDC client of the web frontend. Proxy deployments authenticate this request at the reverse proxy along with the UI. Contains no credentials or identity assertions.",
         "security": [],
         "responses": {
           "200": {
@@ -14131,6 +14131,29 @@
                         "bearer",
                         "proxy"
                       ]
+                    },
+                    "oidc": {
+                      "type": "object",
+                      "description": "Present in OIDC deployments that set OIDC_CLIENT_ID. The web frontend signs in with this public client using the authorization code flow with PKCE.",
+                      "required": [
+                        "issuer",
+                        "client_id",
+                        "scope"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "issuer": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "client_id": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "description": "Space-separated scopes requested at sign-in."
+                        }
+                      }
                     }
                   }
                 }
