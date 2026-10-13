@@ -282,7 +282,7 @@ Parity tests: port the cases of PaperDotNet's `sdk/typescript/test/scripts.test.
 
 Each phase ships with its tests, OpenAPI contract and docs, and changes `migrations/20261007000100_schema.sql` in place ([AGENTS.md](../../AGENTS.md)).
 
-Status: phase 1 is done. Phase 2 is done except the container image with ONNX Runtime and the models. Optimization keeps the original as an earlier file version (decision 1 below is still open).
+Status: phases 1 to 3 are done, except the container image with ONNX Runtime and the models. Optimization keeps the original as an earlier file version (decision 1 below is still open). The PDF writer is a small package of its own (`internal/pdf`), a port of PaperDotNet's writer, rather than a PDF library: it writes only images and an invisible text layer. Photo pages never grow, where PaperDotNet enlarges pages whose smallest text is under the target.
 
 1. **Engine parts:**
    - work steps and the processing gate;

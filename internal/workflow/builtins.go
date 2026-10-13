@@ -96,6 +96,37 @@ func init() {
 	})
 }
 
+func init() {
+	registerBuiltIn(&BuiltIn{
+		Key:           "documents.photos_to_pdf",
+		Name:          "Photos to PDF",
+		Description:   "Combines selected photos, in the chosen order, into one searchable PDF. After the owners (or the approvers) review it, the primary item gets the PDF as its new file, keeping its metadata and file history, and the other photos go to the recycle bin. Started on a selection.",
+		PerCollection: true,
+		ParametersSchema: mustSchema(`{"type": "object", "properties": {
+			"target_height": {"type": "number", "title": "Smallest text height", "description": "Height in pixels the smallest text of each page keeps; pages never grow.", "minimum": 8, "maximum": 200, "default": 32},
+			"quality": {"type": "integer", "title": "JPEG quality", "minimum": 1, "maximum": 100, "default": 80},
+			"approvers": {"type": "array", "title": "Approvers", "description": "Who reviews the PDF; none means the workspace's owners.", "maxItems": 50, "items": {"type": "string"}, "x-papergo": {"kind": "people", "access": "read_draft"}}
+		}}`),
+		definition: `{
+			"input_schema": {"type": "object", "properties": {}, "x-papergo-selection": {"preview": "image", "item_label": "page", "order_label": "Page order",
+				"primary_description": "This item gets the approved PDF as its new file, keeping its metadata and file history. The other photos go to the recycle bin."}},
+			"triggers": [{"type": "manual", "collection_id": "{param:collection}", "selection": "selection"}],
+			"concurrency": "skip",
+			"flow": {"start": "compose", "nodes": {
+				"compose": {"activity": "file.compose_pdf", "inputs": {"target_height": "{param:target_height}", "quality": "{param:quality}"}, "next": {"done": "review"}},
+				"review": {"activity": "approval", "inputs": {"title": "Review the PDF made from photos for {item:name}",
+					"description": "The pages are the selected photos in order. Approve to replace the primary item's file with this PDF and move the other photos to the recycle bin.",
+					"assignees": "{param:approvers}", "review": {"type": "file.preview", "staged_file_id": "{step:compose.staged_file_id}"}},
+					"next": {"approved": "promote", "rejected": "discard"}},
+				"promote": {"activity": "file.promote", "inputs": {"staged_file_id": "{step:compose.staged_file_id}"}, "next": {"done": "others"}},
+				"others": {"activity": "forEach", "inputs": {"items": "{step:compose.others}", "as": "photo"}, "next": {"body": "recycle"}},
+				"recycle": {"activity": "item.delete", "inputs": {"item_id": "{var:photo}"}},
+				"discard": {"activity": "file.discard", "inputs": {"staged_file_id": "{step:compose.staged_file_id}"}}
+			}}
+		}`,
+	})
+}
+
 var paramPattern = regexp.MustCompile(`\{param:([a-z][a-z0-9_]*)\}`)
 
 // fill replaces {param:x} in the release definition. A string that is

@@ -166,3 +166,19 @@ func FuzzOrientation(f *testing.F) {
 		}
 	})
 }
+
+func TestFlattenPutsTransparencyOnWhite(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(5, 5, 7, 6))
+	img.SetNRGBA(5, 5, color.NRGBA{R: 255, A: 255})
+	img.SetNRGBA(6, 5, color.NRGBA{A: 0})
+	out := Flatten(img)
+	if out.Rect != image.Rect(0, 0, 2, 1) {
+		t.Fatalf("bounds %v", out.Rect)
+	}
+	if got := out.RGBAAt(0, 0); got != (color.RGBA{255, 0, 0, 255}) {
+		t.Errorf("opaque pixel %v", got)
+	}
+	if got := out.RGBAAt(1, 0); got != (color.RGBA{255, 255, 255, 255}) {
+		t.Errorf("transparent pixel %v", got)
+	}
+}

@@ -189,6 +189,16 @@ func RGBA(img image.Image) *image.RGBA {
 	return out
 }
 
+// Flatten returns img as an opaque RGBA image, transparency flattened onto
+// white.
+func Flatten(img image.Image) *image.RGBA {
+	b := img.Bounds()
+	out := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(out, out.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	draw.Draw(out, out.Bounds(), img, b.Min, draw.Over)
+	return out
+}
+
 // Resize scales img to w×h with the Mitchell filter, flattening
 // transparency onto white.
 func Resize(img image.Image, w, h int) *image.RGBA {

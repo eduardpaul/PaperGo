@@ -7,7 +7,7 @@ PaperGo reads text in page images through an OCR layer:
 
 Engines never read storage or the database. Callers decode the file, apply EXIF orientation and pass an `image.Image` of at most 64 million pixels (`ocr.MaxPixels`). Workflow activities use the layer through the port only (see [workflows](workflows.md#building-features-on-workflows)).
 
-The workflow activity [`file.optimize_image`](workflows.md#image-optimization) uses detection. The [document workflows plan](plans/document-workflows.md) describes the next consumer: photo to document (recognition).
+Workflow activities use it: [`file.optimize_image`](workflows.md#image-optimization) detects text to shrink images, and [`file.compose_pdf`](workflows.md#photos-to-pdf) also recognizes it for the text layer of searchable PDFs (`internal/pdf`).
 
 ## Configuration
 

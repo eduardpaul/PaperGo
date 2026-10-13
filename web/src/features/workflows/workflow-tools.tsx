@@ -11,6 +11,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Input, Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
+import { useBlobUrl } from '@/features/approvals/review';
 import { useFormat } from '@/lib/preferences';
 import { formDefaults, normalizeForm } from './model';
 import type { WorkflowDefinition } from './model';
@@ -29,6 +30,7 @@ export function LaunchWorkflow({
   const definition = workflow.definition as WorkflowDefinition;
   const manual = definition.triggers.find((trigger) => trigger.type === 'manual');
   const schema = definition.input_schema ?? { type: 'object', properties: {} };
+  const hints = schema['x-papergo-selection'];
   const [inputs, setInputs] = useState<Record<string, unknown>>(formDefaults(schema));
   const [itemIds, setItemIds] = useState(initialItems);
   const [primary, setPrimary] = useState(initialItems[0] ?? '');
@@ -103,7 +105,7 @@ export function LaunchWorkflow({
           )}
           {manual.selection === 'selection' && (
             <>
-              <Label htmlFor="launch-primary">Primary item</Label>
+              <Label htmlFor="launch-primary">Primary {hints?.item_label ?? 'item'}</Label>
               <Select
                 id="launch-primary"
                 value={itemIds.includes(primary) ? primary : (itemIds[0] ?? '')}
@@ -115,10 +117,20 @@ export function LaunchWorkflow({
                   </option>
                 ))}
               </Select>
-              <ol>
+              {hints?.primary_description && <p className="text-xs text-muted">{hints.primary_description}</p>}
+              <Label id="launch-order-label">{hints?.order_label ?? 'Order'}</Label>
+              <ol aria-labelledby="launch-order-label">
                 {itemIds.map((id, index) => (
                   <li key={id} className="flex items-center gap-2 py-1">
-                    <span className="flex-1">{options.find((option) => option.value === id)?.label ?? id}</span>
+                    {hints?.preview === 'image' && <ItemImage itemId={id} />}
+                    <span className="flex-1">
+                      {hints?.item_label && (
+                        <span className="text-xs text-muted">
+                          {hints.item_label} {index + 1}:{' '}
+                        </span>
+                      )}
+                      {options.find((option) => option.value === id)?.label ?? id}
+                    </span>
                     <Button disabled={index === 0} onClick={() => move(index, -1)}>
                       Up
                     </Button>
@@ -134,6 +146,16 @@ export function LaunchWorkflow({
       )}
       <SchemaFields schema={schema} data={inputs} onChange={setInputs} workspaceId={workflow.workspace_id} />
     </FormDialog>
+  );
+}
+
+/** A small preview of an item's current image file. */
+function ItemImage({ itemId }: { itemId: string }) {
+  const { url } = useBlobUrl(`/v1/items/${itemId}/content`);
+  return (
+    <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded border bg-surface-muted">
+      {url && <img src={url} alt="" className="max-h-12 max-w-12 object-contain" />}
+    </span>
   );
 }
 

@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -216,4 +217,120 @@ func (f *fixture) approvalFor(t *testing.T, runID string) workflow.Approval {
 	}
 	t.Fatalf("run %s has no approval", runID)
 	return workflow.Approval{}
+}
+
+func TestPhotosToPDFBuiltIn(t *testing.T) {
+	f := setup(t)
+	lib, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "library", Name: "Photos", WebDAVEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "documents.photos_to_pdf", workflow.SetBuiltIn{CollectionID: lib.ID, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := f.upload(t, lib.ID, "page-1.png", "image/png", scan(t, 400, 300))
+	second := f.upload(t, lib.ID, "page-2.png", "image/png", scan(t, 300, 400))
+	third := f.upload(t, lib.ID, "page-3.png", "image/png", scan(t, 200, 200))
+	start := func(primary string, ids ...string) string {
+		t.Helper()
+		runs, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: ids, PrimaryItemID: primary})
+		if err != nil || len(runs) != 1 {
+			t.Fatalf("start: %v %v", runs, err)
+		}
+		return runs[0]
+	}
+
+	// Rejecting keeps every photo.
+	run := start(second.ID, third.ID, second.ID, first.ID)
+	a := f.approvalOf(t, run)
+	if a.Review["type"] != workflow.ReviewPreview || a.ItemID == nil || *a.ItemID != second.ID {
+		t.Fatalf("approval %+v", a)
+	}
+	staged, err := f.dms.StagedFile(ctx, "alice", a.Review["staged_file_id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	_ = json.Unmarshal(staged.Metrics, &m)
+	details, _ := m["page_details"].([]any)
+	if staged.ContentType != "application/pdf" || staged.Filename != "page-2.pdf" || m["pages"] != 3.0 || len(details) != 3 || len(staged.Sources) != 3 {
+		t.Fatalf("staged %+v, metrics %v", staged, m)
+	}
+	// Pages follow the run's order: the third photo first.
+	if p := details[0].(map[string]any); p["source_width"] != 200.0 {
+		t.Errorf("first page %v", p)
+	}
+	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "reject"}); err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, run, "completed")
+	if b := f.current(t, second.ID); b.ContentType != "image/png" || b.Version != 1 {
+		t.Fatalf("rejected PDF replaced the file: %+v", b)
+	}
+
+	// While a conversion waits, another one with the same photos is skipped.
+	run = start(second.ID, third.ID, second.ID, first.ID)
+	a = f.approvalOf(t, run)
+	if _, err = f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{first.ID, second.ID}, PrimaryItemID: first.ID}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	f.runsOf(t, w.ID, 2)
+
+	// Approving gives the primary the PDF and recycles the other photos;
+	// those deletions do not cancel the run that made them.
+	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "approve"}); err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, run, "completed")
+	if b := f.current(t, second.ID); b.ContentType != "application/pdf" || b.Filename != "page-2.pdf" || b.Version != 2 {
+		t.Fatalf("primary file %+v", b)
+	}
+	for _, id := range []string{first.ID, third.ID} {
+		if _, err = f.dms.GetSurface(ctx, "alice", id, "head"); err == nil {
+			t.Errorf("photo %s was not recycled", id)
+		}
+	}
+}
+
+func TestPhotosToPDFRefusesChangedAndUnsupportedPhotos(t *testing.T) {
+	f := setup(t)
+	lib, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "library", Name: "Photos", WebDAVEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "documents.photos_to_pdf", workflow.SetBuiltIn{CollectionID: lib.ID, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo := f.upload(t, lib.ID, "page-1.png", "image/png", scan(t, 400, 300))
+	other := f.upload(t, lib.ID, "page-2.png", "image/png", scan(t, 300, 400))
+	pdf := f.upload(t, lib.ID, "contract.pdf", "application/pdf", []byte("%PDF-1.7 test"))
+
+	runs, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{photo.ID, pdf.ID}, PrimaryItemID: photo.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run := f.status(t, runs[0], "failed"); !strings.Contains(run.Error, "not a JPEG, PNG or WebP photo") {
+		t.Fatalf("PDF member: %+v", run)
+	}
+
+	// A photo replaced while the review waits cannot be promoted.
+	runs, err = f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{photo.ID, other.ID}, PrimaryItemID: photo.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := f.approvalOf(t, runs[0])
+	f.upload(t, lib.ID, "page-2.png", "image/png", scan(t, 310, 400))
+	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "approve"}); err == nil {
+		t.Fatal("a review of a changed photo was approved")
+	}
+	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "reject"}); err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, runs[0], "completed")
+	if _, err = f.dms.GetSurface(ctx, "alice", other.ID, "head"); err != nil {
+		t.Fatalf("the changed photo was deleted: %v", err)
+	}
 }

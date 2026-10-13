@@ -28,6 +28,13 @@ export interface FormSchema {
     access?: string;
     relationship_type_id?: string;
   };
+  /** Launch screen hints of a selection run. */
+  'x-papergo-selection'?: {
+    preview?: string;
+    item_label?: string;
+    order_label?: string;
+    primary_description?: string;
+  };
 }
 export interface Trigger {
   type: string;
