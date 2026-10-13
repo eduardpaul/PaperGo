@@ -77,8 +77,12 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *ent.Operation) error {
 		if e != nil {
 			return e
 		}
-		args := append([]any{op.ID, time.Now().UTC(), op.ID}, q.args...)
-		if _, e = s.Client.ExecContext(ctx, `INSERT INTO operation_items(id,created_at,operation_id,item_id) SELECT ?||':'||id,?,?,id FROM (`+q.sql+`)`, args...); e != nil {
+		sql, eligibleArgs, e := s.eligibleRows(ctx, q)
+		if e != nil {
+			return e
+		}
+		args := append([]any{op.ID, time.Now().UTC(), op.ID}, eligibleArgs...)
+		if _, e = s.Client.ExecContext(ctx, `INSERT INTO operation_items(id,created_at,operation_id,item_id) SELECT ?||':'||id,?,?,id FROM (`+sql+`)`, args...); e != nil {
 			return e
 		}
 		matched, e := s.Client.OperationItem.Query().Where(operationitem.OperationIDEQ(op.ID)).Count(ctx)
@@ -134,10 +138,11 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *ent.Operation) error {
 }
 
 // Each bulk update step edits at most bulkStepItems items, and stops early
-// once the budget is spent.
-var bulkStepItems = 200
-
-const bulkStepBudget = 250 * time.Millisecond
+// once bulkStepBudget is spent.
+var (
+	bulkStepItems  = 200
+	bulkStepBudget = 250 * time.Millisecond
+)
 
 // bulkUpdateItem edits one item under a savepoint. An item that cannot be
 // edited (gone, forbidden, changed, invalid) is rolled back and reported as

@@ -14,6 +14,7 @@ import (
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"testing"
+	"time"
 )
 
 func bulkStep(t *testing.T, s *Service) {
@@ -321,6 +322,9 @@ func TestFilteredBulkUpdateItemACLsAndNullRemoval(t *testing.T) {
 }
 
 func TestBulkUpdateEditsABatchOfItemsPerStep(t *testing.T) {
+	// A generous budget: under the race detector one item can take tens of milliseconds.
+	defer func(budget time.Duration) { bulkStepBudget = budget }(bulkStepBudget)
+	bulkStepBudget = time.Minute
 	s, _, l := fixture(t)
 	if _, e := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "stage", Label: "Stage", Type: "text", Indexed: true}); e != nil {
 		t.Fatal(e)
@@ -339,8 +343,8 @@ func TestBulkUpdateEditsABatchOfItemsPerStep(t *testing.T) {
 		t.Fatal(e)
 	}
 	bulkStep(t, s)
-	// One step edits many items; its time budget may leave a few for the next.
-	if got := bulkStatus(t, s, op.ID); got.Processed < 10 {
+	// One step edits every item within its budget.
+	if got := bulkStatus(t, s, op.ID); got.Processed != 31 {
 		t.Fatal("one item per step", got.Processed)
 	}
 	for bulkStatus(t, s, op.ID).Status == operation.StatusPending {

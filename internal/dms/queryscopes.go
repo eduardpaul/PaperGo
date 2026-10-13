@@ -28,64 +28,56 @@ type scopeAccess struct {
 // scope stands for all of them. It returns nil for collections with too many
 // scopes.
 func (s *Service) collectionScopes(ctx context.Context, collectionID, subject string) (*scopeAccess, error) {
-	// A loose index scan over (container_id, scope_id) reads one entry per scope.
+	// One statement: a loose index scan over (container_id, scope_id) reads one
+	// entry per scope, one live row stands for each scope (and for rows without
+	// one), and the caller's access is decided on it.
+	draftSQL, draftArgs := permissionSQL(ctx, "reps.rep", subject, "read_draft")
+	readSQL, readArgs := permissionSQL(ctx, "reps.rep", subject, "read")
+	live := `(SELECT r.id FROM resources r WHERE r.container_id=? AND r.kind IN ('item','folder') AND r.deleted_at IS NULL AND r.scope_id`
+	args := []any{collectionID, collectionID, maxQueryScopes + 1, collectionID, collectionID}
+	args = append(append(args, draftArgs...), readArgs...)
 	rows, err := s.Client.QueryContext(ctx, `WITH RECURSIVE scopes(id) AS (
  SELECT min(scope_id) FROM resources WHERE container_id=?
- UNION ALL SELECT (SELECT min(scope_id) FROM resources WHERE container_id=? AND scope_id>scopes.id) FROM scopes WHERE scopes.id IS NOT NULL)
-SELECT id FROM scopes WHERE id IS NOT NULL LIMIT ?`, collectionID, collectionID, maxQueryScopes+1)
+ UNION ALL SELECT (SELECT min(scope_id) FROM resources WHERE container_id=? AND scope_id>scopes.id) FROM scopes WHERE scopes.id IS NOT NULL),
+listed AS (SELECT id FROM scopes WHERE id IS NOT NULL LIMIT ?),
+reps AS (SELECT l.id AS scope,`+live+`=l.id LIMIT 1) AS rep FROM listed l
+ UNION ALL SELECT NULL,`+live+` IS NULL LIMIT 1))
+SELECT scope,rep IS NOT NULL,`+draftSQL+`,`+readSQL+` FROM reps`, args...)
 	if err != nil {
 		return nil, err
 	}
-	scopes := []*string{}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		scopes = append(scopes, &id)
-	}
-	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
-		return nil, err
-	}
-	if len(scopes) > maxQueryScopes {
-		return nil, nil
-	}
-	scopes = append(scopes, nil)
-	draftSQL, draftArgs := permissionSQL(ctx, "?", subject, "read_draft")
-	readSQL, readArgs := permissionSQL(ctx, "?", subject, "read")
 	access := &scopeAccess{}
-	for _, scope := range scopes {
-		match, matchArgs := "scope_id IS NULL", []any{collectionID}
-		if scope != nil {
-			match, matchArgs = "scope_id=?", []any{collectionID, *scope}
+	listed := 0
+	for rows.Next() {
+		var scope sql.NullString
+		var held, draft, read bool
+		if err = rows.Scan(&scope, &held, &draft, &read); err != nil {
+			break
 		}
-		var row string
-		err = s.scan(ctx, []any{&row}, "SELECT id FROM resources WHERE container_id=? AND "+match+" AND kind IN ('item','folder') AND deleted_at IS NULL LIMIT 1", matchArgs...)
-		if errors.Is(err, sql.ErrNoRows) {
+		if scope.Valid {
+			listed++
+		}
+		if !held {
 			continue
 		}
-		if err != nil {
-			return nil, err
-		}
-		var draft, read bool
-		args := append(append(append([]any{row}, draftArgs...), row), readArgs...)
-		if err = s.scan(ctx, []any{&draft, &read}, "SELECT "+draftSQL+","+readSQL, args...); err != nil {
-			return nil, err
-		}
-		if scope == nil {
-			access.nullRows = true
-		} else {
+		switch {
+		case !scope.Valid:
+			access.nullRows, access.nullDraft, access.nullReadable = true, draft, read || draft
+		case draft:
+			access.live++
+			access.draft = append(access.draft, scope.String)
+		case read:
+			access.live++
+			access.read = append(access.read, scope.String)
+		default:
 			access.live++
 		}
-		switch {
-		case scope == nil:
-			access.nullDraft, access.nullReadable = draft, read || draft
-		case draft:
-			access.draft = append(access.draft, *scope)
-		case read:
-			access.read = append(access.read, *scope)
-		}
+	}
+	if err = errors.Join(err, rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	if listed > maxQueryScopes {
+		return nil, nil
 	}
 	return access, nil
 }
@@ -139,4 +131,66 @@ func (a *scopeAccess) uniform(surface string) (string, bool) {
 		return "published", true
 	}
 	return "", false
+}
+
+// eligibleSQL holds a collection query's parts until a statement needs its
+// eligible rows; then the caller's ACL scopes are decided once.
+type eligibleSQL struct {
+	collection, subject, surface string
+	publishes                    bool
+	ranks                        string
+	rankArgs                     []any
+	conditions                   string
+	conditionArgs                []any
+	built                        bool
+	sql                          string
+	args                         []any
+}
+
+// eligibleRows returns the SQL selecting q's eligible rows and its arguments,
+// a fresh slice the caller may extend.
+func (s *Service) eligibleRows(ctx context.Context, q compiledQuery) (string, []any, error) {
+	e := q.eligible
+	if e == nil {
+		return q.sql, append([]any{}, q.args...), nil
+	}
+	if !e.built {
+		access, err := s.collectionScopes(ctx, e.collection, e.subject)
+		if err != nil {
+			return "", nil, err
+		}
+		if access == nil {
+			e.sql, e.args = e.rows(ctx)
+		} else {
+			// Permissions follow ACL scopes, and a collection has few: each
+			// scope is decided once instead of probing grants for every row.
+			selected, readable, scopeArgs := access.sql(e.surface)
+			if !e.publishes {
+				// Without publishing, head content is the published surface.
+				selected, scopeArgs[0] = "'published'", nil
+			}
+			e.sql = "SELECT r.id," + e.ranks + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder') AND r.deleted_at IS NULL AND " + readable + e.conditions
+			e.args = append(append(append(append(append([]any{}, e.rankArgs...), scopeArgs[0]...), e.collection), scopeArgs[1]...), e.conditionArgs...)
+		}
+		e.built = true
+	}
+	return e.sql, append([]any{}, e.args...), nil
+}
+
+// rows selects the eligible rows checking permissions row by row: for
+// collections with many ACL scopes, and for smart folders, whose collections
+// share one statement shape.
+func (e *eligibleSQL) rows(ctx context.Context) (string, []any) {
+	selected, surfaceArgs := surfaceSQL(ctx, "r.id", e.subject, e.surface)
+	args := append(append(append([]any{}, e.rankArgs...), surfaceArgs...), e.collection)
+	text := "SELECT r.id," + e.ranks + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder')" + e.conditions
+	args = append(args, e.conditionArgs...)
+	// SQLite evaluates these terms in order: cheap index filters first, so the
+	// ACL probe runs only on rows that already match.
+	action := "read"
+	if e.surface == "head" {
+		action = "read_draft"
+	}
+	acl, aclArgs := permissionSQL(ctx, "r.id", e.subject, action)
+	return text + " AND " + acl, append(args, aclArgs...)
 }
