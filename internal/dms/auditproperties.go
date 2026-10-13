@@ -14,6 +14,9 @@ import (
 // retained revision storage are excluded; audit records contain no old values.
 func (s *Service) captureAuditProperties() {
 	s.auditProperties = map[string]map[string]bool{}
+	// Resources created in this transaction: their creation is audited without
+	// properties, so later edits in the same transaction need no old values.
+	created := map[string]bool{}
 	s.Client.Use(func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
 			if m.Type() == "Resource" && m.Op().Is(ent.OpUpdate) {
@@ -74,7 +77,8 @@ func (s *Service) captureAuditProperties() {
 			}
 			id, _ := ids.ID()
 			old := map[string]any{}
-			if m.Op().Is(ent.OpUpdateOne) {
+			fresh := m.Type() == "Resource" && created[id]
+			if m.Op().Is(ent.OpUpdateOne) && !fresh {
 				for _, field := range m.Fields() {
 					if value, err := m.OldField(ctx, field); err == nil {
 						old[field] = value
@@ -90,6 +94,9 @@ func (s *Service) captureAuditProperties() {
 			}
 			if id == "" {
 				return value, nil
+			}
+			if m.Type() == "Resource" && m.Op().Is(ent.OpCreate) {
+				created[id] = true
 			}
 			if s.auditProperties[id] == nil {
 				s.auditProperties[id] = map[string]bool{}
@@ -107,7 +114,7 @@ func (s *Service) captureAuditProperties() {
 				s.auditProperties[id][field] = true
 			}
 			// A revision pointer represents a content edit on its owning item.
-			if m.Type() == "Resource" && m.Op().Is(ent.OpUpdateOne) {
+			if m.Type() == "Resource" && m.Op().Is(ent.OpUpdateOne) && !fresh {
 				if head, changed := m.Field("head_revision_id"); changed {
 					latest, e := s.Client.ItemRevision.Get(ctx, head.(string))
 					if e != nil {

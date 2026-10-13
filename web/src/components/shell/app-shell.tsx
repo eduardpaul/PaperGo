@@ -1,16 +1,21 @@
 import { Menu, Search } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/feedback';
 import { UploadsProvider } from '@/features/documents/uploads';
+import { rememberWorkspace } from '@/lib/recent-workspace';
 import { CommandPaletteProvider, useCommandPalette } from './command-palette';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
+  const { workspaceId } = useParams({ strict: false });
+  useEffect(() => {
+    if (workspaceId) rememberWorkspace(workspaceId);
+  }, [workspaceId]);
   return (
     <CommandPaletteProvider>
       <UploadsProvider>

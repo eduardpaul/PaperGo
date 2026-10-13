@@ -98,6 +98,8 @@ func (s *Service) Bulk(ctx context.Context, subject, collectionID string, in Bul
 	}
 	results := make([]BulkResult, 0, len(in.Operations))
 	err := s.write(ctx, func(t *Service) error {
+		t.batch = newBatchCache(subject)
+		defer func() { t.batch = nil }()
 		c, err := t.authorize(ctx, subject, collectionID, "read")
 		if err != nil {
 			return err
@@ -133,7 +135,7 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 		if parentID == "" {
 			parentID = collectionID
 		}
-		p, err := s.authorize(ctx, subject, parentID, "write")
+		p, err := s.authorizeWrite(ctx, subject, parentID)
 		if err != nil {
 			return result, err
 		}

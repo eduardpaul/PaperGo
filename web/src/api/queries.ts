@@ -224,9 +224,10 @@ export async function keywords(q: string) {
   return listOf((await api<Page<Term>>('/v1/keywords', { query: { q, $top: 20 } })).data);
 }
 
-export async function searchResources(q: string, workspaceId: string) {
+export async function searchResources(q: string, workspaceId: string, top?: number) {
   const request = searchRequest(q, workspaceId);
-  return (await api<Page<Resource>>(request.path, { method: request.method, query: request.query })).data;
+  const query = top ? { ...request.query, $top: top } : request.query;
+  return (await api<Page<Resource>>(request.path, { method: request.method, query })).data;
 }
 
 export async function countChildren(id: string) {

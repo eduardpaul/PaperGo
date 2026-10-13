@@ -127,14 +127,14 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	if r.ContainerID == nil {
 		return nil, invalid("item has no container")
 	}
-	c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
+	c, err := s.batchCollection(ctx, *r.ContainerID)
 	if err != nil {
 		return nil, err
 	}
 	if c.SchemaHeadID == nil {
 		return nil, invalid("container has no schema revision")
 	}
-	schema, err := s.Client.SchemaRevision.Get(ctx, *c.SchemaHeadID)
+	schema, err := s.schemaRevision(ctx, *c.SchemaHeadID)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	return rev, nil
 }
 func (s *Service) replaceSurface(ctx context.Context, r *ent.Resource, rev *ent.ItemRevision, surface itemsurface.Surface, defs []*ent.FieldDefinition) error {
-	current, err := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(*r.ContainerID)).All(ctx)
+	current, err := s.collectionDefinitions(ctx, *r.ContainerID)
 	if err != nil {
 		return err
 	}
@@ -365,7 +365,7 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 	schema := schemas[rev.SchemaRevisionID]
 	if schema == nil {
 		var err error
-		if schema, err = s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID); err != nil {
+		if schema, err = s.schemaRevision(ctx, rev.SchemaRevisionID); err != nil {
 			return nil, err
 		}
 		if schemas != nil {

@@ -34,6 +34,8 @@ type Service struct {
 	traceID             string
 	operationHandlers   map[string]OperationHandler
 	runPurger           func(context.Context, *sql.Tx, string) error
+	// batch is set while one request applies many operations in a transaction.
+	batch *batchCache
 }
 
 // NewService serves the PaperGo database db.
@@ -279,7 +281,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	var containerID *string
 	if parentID != "" {
 		var e error
-		parent, e = s.authorize(ctx, subject, parentID, "write")
+		parent, e = s.authorizeWrite(ctx, subject, parentID)
 		if e != nil {
 			return nil, e
 		}
@@ -330,7 +332,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		if containerID == nil {
 			return nil, invalid("item must belong to a list or library")
 		}
-		defs, e := s.Client.FieldDefinition.Query().Where(collectionFieldPredicate(*containerID)).All(ctx)
+		defs, e := s.collectionDefinitions(ctx, *containerID)
 		if e != nil {
 			return nil, e
 		}
@@ -455,6 +457,10 @@ func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
 	for ; r.ParentID != nil; depth++ {
 		if depth > MaxResourceDepth {
 			return depth, invalid("invalid hierarchy depth")
+		}
+		// Lists and libraries always sit directly in a workspace.
+		if r.Kind == resource.KindList || r.Kind == resource.KindLibrary {
+			return depth + 1, nil
 		}
 		var err error
 		if r, err = s.Client.Resource.Get(ctx, *r.ParentID); err != nil {
@@ -870,7 +876,7 @@ func (s *Service) fileNameKey(ctx context.Context, kind resource.Kind, container
 	if (kind != resource.KindFolder && kind != resource.KindItem) || containerID == nil {
 		return nil, nil
 	}
-	c, err := s.Client.Resource.Get(ctx, *containerID)
+	c, err := s.batchCollection(ctx, *containerID)
 	if err != nil {
 		return nil, err
 	}

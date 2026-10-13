@@ -40,10 +40,11 @@ items alike: create an item ≈ 20 ms, update ≈ 24 ms, upload ≈ 100 ms, and 
 ## Ingest and storage
 
 - Bulk creation through the API with 8 workers: about 100 items/s at the start, 68 items/s at 500,000 items; 10,000
-  items take 98 s, 10,000 documents (with folders) 95 s.
-- Ingest is CPU-bound in the server: the audit hook reads every created row back (49 % of CPU) and every item
-  authorizes its parent again (16 %).
-- About 16 KB of database per item with six columns, mostly the `field_values` rows and their indexes.
+  items took 98 s, 10,000 documents (with folders) 95 s, on a quieter machine than the later comparison below.
+- Ingest is CPU-bound in the one writer: each new item writes a revision, its draft and published surfaces with their
+  field values, a publication and two updates of the item row. The profile first credited the audit hook with half
+  the time, but that included the writes below it; the hook itself read old values, about 7 %.
+- About 16 KB of database per item with six columns, mostly the `field_values` rows of both surfaces and their indexes.
 
 ## API at 10,000 items (and 500,000)
 
@@ -175,13 +176,25 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
    Arrow keys, Home and End scroll to rows that are not rendered yet, and rows carry `aria-rowindex` for screen
    readers. Ten Load more clicks took 4.5 s, 130–470 ms each (6.2 s before).
 
+9. **Search starts where people are.** The search page searches as you type in the workspace last opened (or the only
+   one), offers "All workspaces" (one request each, five hits per workspace with a link to the rest), says what and
+   where each hit is ("Item in Archive"), and pages with More results.
+10. **Tag list in 35 ms (was 914 ms).** The vocabulary query starts from the tag rows instead of walking every resource
+    in the workspace (a forced join order and an unindexed workspace condition).
+11. **Faster ingest.** A bulk request reads the collection's write permission, field definitions, schema and row once
+    instead of per item; the audit hook skips reading old values of rows created in the same transaction; a folder's
+    depth stops at its collection. `BenchmarkBulkCreate` (six indexed columns): 92 → 140 items/s with half the
+    allocations. Through HTTP with the event dispatcher running, seeding 10,000 items took 91 s instead of 122 s and
+    10,000 documents in folders 114 s instead of 124 s (same machine, back to back).
+12. **Faster bulk updates.** A bulk update edits up to 200 items per transaction within a quarter of a second, each
+    under its own savepoint: updating 2,490 invoices took 32 s instead of 121 s.
+
 ## Open work
 
-Ordered by how much it helps people.
+What remains is structural:
 
-9. **Global search defaults to the current (or only) workspace.**
-10. **Faster tag vocabulary.** Keep per-collection tag counts current on write instead of counting every tagged row.
-11. **Faster ingest.** Let the audit hook use the created row instead of reading it back and authorize a batch's parent
-    once; store fewer index entries per field value. Both matter for imports and migrations, not for daily use.
-12. **Faster bulk updates.** A bulk update writes one item per transaction, about 20 items/s (2 minutes for 2,490).
-    Update a batch of items per transaction, keeping per-item failures and restart safety.
+- **Items are indexed twice.** Lists without publishing keep a draft and a published surface per item, each with its
+  own field values, so creation writes and indexes everything twice and an item takes about 16 KB. Sharing one surface
+  while draft and published are the same would halve ingest work and storage.
+- **Board counts at 500,000 items** take about 5 s; a per-collection count of each choice, kept current on write,
+  would make them instant.
