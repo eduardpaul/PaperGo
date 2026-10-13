@@ -38,19 +38,21 @@ All product screens in this section are implemented against the registered `/v1`
 
 ## Narrower than the contract
 
-- The Content tab restores bytes using a known file version number. There is no file-version list endpoint; metadata history entries contain `blob_id` without a file version number.
 - The versions tab restores metadata with `POST /v1/items/{id}/revisions/{number}/restore`. File bytes stay on the current version.
-- Move accepts any collection id. The picker lists collections in the item's current workspace, and a folder id can be pasted.
+- Move offers the lists or libraries of the same kind in the item's workspace and browses their folders with `GET /v1/resources/{id}/children?kind=folder`, 100 at a time.
 - The collection shows one level of children at a time.
-- Term and keyword chips show the id until that id appears in the current search results.
 - Preference language and number-format choices include tags the server may reject. The server accepts a BCP-47 tag whose base language matches with exact confidence. A rejected value returns 422.
-- A non-empty collection search box lists children of the open folder or collection. Saved view query has no extra search term, so search and the saved view are not combined.
+- Columns chosen on the page are the `cols` URL parameter. With a saved view they are the query's `select`; managers save them, with the column sort, to a table view (`PUT /v1/views/{id}`) or a new view.
+- Plain browsing reads `GET /v1/resources/{id}/children` of the open folder or collection. A saved view or a column sort uses `POST /v1/resources/{id}/query` with the view's query, the open folder as `parent_id`, the search box as `search` and the chosen sort; the search box replaces a view's own search text. Search matches whole words.
 - Smart folder create stores a name, an owner (personal or one workspace), folder inclusion and one comparison with a text, number or boolean value. The group path stays in page state.
 - Inbox counts on Home come from `POST /v1/resources/{id}/query` with `include_total`. That total can include folders.
+- Without a saved view, a table shows the name, the first four columns of the default content type and the modified date. Column headers sort by the name, dates, people and filterable (indexed, ready) single-value columns; the sort is the `sort` URL parameter and replaces the view's sort. Folders sort among items.
+- Table cells and cards name people from `GET /v1/identity/users` (when the caller can read users), terms and keywords from `GET /v1/terms?ids=` (when the caller has `taxonomy.read`) and looked-up items through `$batch` reads, 20 per request. Unreadable looked-up items read "Unavailable item".
 - `GET /v1/people` returns subject strings. Display names come from `GET /v1/identity/users` when the caller has `user.read`.
 
 ## What the UI matches
 
+- Actions follow `access` on `GET /v1/resources/{id}`: adding, editing, moving and deleting need `write`, publishing `publish`, settings and permissions `manage`. Selection and bulk actions use the list's access; an item with its own stricter permissions can still refuse them. Creating workspaces needs the `workspace.create` scope.
 - Resources are `/v1` and JSON fields are snake_case. Bearer deployments send `Authorization: Bearer`; proxy deployments use same-origin browser HTTP credentials. `/auth/config` selects the supported mode before the app mounts.
 - Live updates use `fetch` on `GET /v1/events`. The stream uses the same bearer or proxy credentials as other requests.
 - A personal home workspace is `personal_owner_id`. The sidebar hides it. Home and Inbox still open it through `GET /v1/identity/me/home` and `GET /v1/identity/me/inboxes`. Search includes it because search requires `workspace_id`.

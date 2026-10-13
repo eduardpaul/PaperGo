@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { Input, Label, Textarea } from '@/components/ui/input';
+import { useHasScope } from '@/features/admin/common';
 
 export const Route = createFileRoute('/_app/w/')({
   validateSearch: (search: Record<string, unknown>): { create?: boolean } => ({
@@ -24,6 +25,7 @@ function WorkspacesPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const { data, isPending } = useQuery(workspacesQuery);
+  const canCreate = useHasScope('workspace.create');
   const workspaces = data?.filter((workspace) => !workspace.personal_owner_id) ?? [];
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -44,27 +46,40 @@ function WorkspacesPage() {
         title="Workspaces"
         description="Shared places for a team or a project."
         actions={
-          <Button variant="primary" onClick={() => setCreate(true)}>
-            New workspace
-          </Button>
+          canCreate && (
+            <Button variant="primary" onClick={() => setCreate(true)}>
+              New workspace
+            </Button>
+          )
         }
       />
       {isPending ? (
         <Skeleton className="h-24" />
       ) : workspaces.length === 0 ? (
-        <EmptyState icon={Briefcase} title="No workspaces yet">
-          <button type="button" className="font-medium text-accent hover:underline" onClick={() => setCreate(true)}>
-            Create a workspace
-          </button>
-        </EmptyState>
+        <Card>
+          <EmptyState icon={Briefcase} title="No workspaces yet">
+            <p className="mb-3">
+              A workspace holds the lists and libraries of a team or a project.
+              {!canCreate && ' Ask an administrator to create one or add you to one.'}
+            </p>
+            {canCreate && (
+              <Button variant="primary" onClick={() => setCreate(true)}>
+                New workspace
+              </Button>
+            )}
+          </EmptyState>
+        </Card>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {workspaces.map((workspace) => (
             <li key={workspace.id}>
               <Card>
-                <Link to="/w/$workspaceId" params={{ workspaceId: workspace.id }} className="block px-4 py-3 hover:bg-surface-muted/60">
-                  <span className="block truncate font-medium">{workspace.name}</span>
-                  {workspace.description && <span className="mt-1 block truncate text-[13px] text-muted">{workspace.description}</span>}
+                <Link to="/w/$workspaceId" params={{ workspaceId: workspace.id }} className="flex items-start gap-3 px-4 py-3 hover:bg-surface-muted/60">
+                  <Briefcase className="mt-0.5 size-4 shrink-0 text-accent" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{workspace.name}</span>
+                    <span className="mt-1 line-clamp-2 text-[13px] text-muted">{workspace.description || 'No description'}</span>
+                  </span>
                 </Link>
               </Card>
             </li>
@@ -72,7 +87,7 @@ function WorkspacesPage() {
         </ul>
       )}
       <FormDialog
-        open={!!create}
+        open={!!create && canCreate}
         title="New workspace"
         submitLabel="Create"
         pending={mutation.isPending}

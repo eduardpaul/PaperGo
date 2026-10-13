@@ -132,7 +132,7 @@ func (s *Service) PopularKeywords(ctx context.Context, subject string, top int) 
 		rows, e := t.Client.QueryContext(ctx, `SELECT f.value_text,count(DISTINCT f.item_id) n
 FROM field_definitions fd JOIN content_types ct ON EXISTS(SELECT 1 FROM json_each(ct.field_ids) WHERE value=fd.id)
 JOIN collection_types ca ON ca.content_type_id=ct.id JOIN resources c ON c.id=ca.container_id AND c.deleted_at IS NULL
-JOIN field_values f ON f.container_id=ca.container_id AND f.surface='head' AND f.field_key=fd.key
+JOIN field_values f ON f.container_id=ca.container_id AND f.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END AND f.field_key=fd.key
 JOIN terms t ON t.id=f.value_text AND t.deprecated=0 AND (t.term_set_id=? OR t.available_as_keyword)
 WHERE fd.indexed AND fd.index_status='ready' AND (fd.type='keywords' OR fd.type='term' AND json_extract(fd.options,'$.term_set_id')=?)
 GROUP BY f.value_text ORDER BY n DESC,f.value_text LIMIT ?`, set.ID, set.ID, top)

@@ -1,26 +1,43 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { Download, FileCode2, FolderInput, FolderSearch, MoreHorizontal, Trash2, Upload } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
-import { collectionChildren, keys, permissions, resourceQuery, revisions } from '@/api/queries';
-import type { ContentType, FieldDefinition, PermissionGrant, Resource, Revision } from '@/api/types';
+import { keys, resourceQuery, revisions } from '@/api/queries';
+import { useApiPages } from '@/api/pages';
+import type { ContentType, FieldDefinition, FileVersion, Resource, Revision } from '@/api/types';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/feedback';
 import { Input, Label } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/menu';
 import { Select } from '@/components/ui/select';
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { TagInput } from '@/components/tag-input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { downloadContent, replaceContent } from '@/features/documents/transfer';
 import { FieldEditor } from '@/features/fields/editor';
+import { usePeopleNames } from '@/features/fields/people';
 import { valuesPatch } from '@/features/fields/values';
-import { useFormat } from '@/lib/preferences';
-import { fieldsForType, publishState } from './schema';
-import { AddToSmartFolder } from '@/features/smart-folders/classification';
-import { RelatedItems } from './related-items';
-import { ItemSchemaView, Publications } from './item-history';
+import { QueryFeedback } from '@/features/admin/common';
 import { ConfirmDialog } from '@/features/settings/section';
+import { AddToSmartFolder } from '@/features/smart-folders/classification';
+import { useFormat } from '@/lib/preferences';
+import { can } from './access';
+import { AccessEditor } from './access-editor';
+import { ItemSchemaView, Publications } from './item-history';
+import { MoveDialog } from './move-dialog';
+import { RelatedItems } from './related-items';
+import { fieldsForType, publishState } from './schema';
 
-const actions = ['read', 'read_draft', 'write', 'publish', 'manage'] as const;
-
+/** The item panel next to its list: details and the other tabs, with item actions in the header menu. */
 export function ItemSheet({
   itemId,
   collection,
@@ -40,67 +57,191 @@ export function ItemSheet({
   onClose: () => void;
   onMoved: (resource: Resource) => void;
 }) {
+  const queryClient = useQueryClient();
+  const format = useFormat();
+  const names = usePeopleNames();
   const itemQuery = useQuery(resourceQuery(itemId));
   const item = itemQuery.data;
   const library = collection.kind === 'library';
+  const [dirty, setDirty] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const [dialog, setDialog] = useState<'move' | 'classify' | 'delete' | 'schema'>();
+  const remove = useMutation({
+    meta: { silent: true },
+    mutationFn: () =>
+      api(`/v1/resources/${item!.id}`, {
+        method: 'DELETE',
+        ifMatch: item!.version,
+        query: item!.kind === 'folder' ? { recursive: 'true' } : undefined,
+      }),
+    onSuccess: async () => {
+      setDialog(undefined);
+      toast.success('Moved to the recycle bin');
+      await queryClient.invalidateQueries({ queryKey: keys.resources });
+      onClose();
+    },
+  });
+  const close = () => (dirty ? setConfirmingClose(true) : onClose());
+  const isFile = library && item?.kind === 'item';
+  const canWrite = can(item, 'write');
+  const canManage = can(item, 'manage');
+  const hasActions = isFile || item?.kind === 'item' || canWrite;
+  const tabs = [
+    'details',
+    ...(isFile ? ['content'] : []),
+    'versions',
+    'links',
+    ...(canManage ? ['access'] : []),
+    ...(collection.publishing_enabled ? ['publish'] : []),
+  ];
+  const current = tabs.includes(tab) ? tab : 'details';
+  const editor = item?.updated_by ? (names.get(item.updated_by) ?? item.updated_by) : undefined;
+
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent>
-        <header className="flex items-start gap-3 border-b px-4 py-3">
+    <Sheet open onOpenChange={(open) => !open && close()}>
+      <SheetContent aria-describedby={undefined}>
+        <header className="flex items-start gap-2 border-b px-4 py-3">
           <div className="min-w-0 flex-1">
-            <SheetTitle className="truncate text-base font-semibold">{item?.name ?? 'Item'}</SheetTitle>
-            <SheetDescription className="text-xs text-muted">{collection.name}</SheetDescription>
+            <SheetTitle className="truncate text-base font-semibold">{item?.name ?? (itemQuery.isPending ? '…' : 'Item')}</SheetTitle>
+            <SheetDescription className="truncate text-xs text-muted">
+              {collection.name}
+              {item?.updated_at && ` · Updated ${format.relative(item.updated_at)}${editor ? ` by ${editor}` : ''}`}
+            </SheetDescription>
           </div>
+          {item && hasActions && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Item actions">
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {isFile && (
+                  <DropdownMenuItem onSelect={() => void downloadContent(item.id, item.name)}>
+                    <Download /> Download
+                  </DropdownMenuItem>
+                )}
+                {item.kind === 'item' && canWrite && (
+                  <>
+                    <DropdownMenuItem onSelect={() => setDialog('move')}>
+                      <FolderInput /> Move…
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setDialog('classify')}>
+                      <FolderSearch /> Add to smart folder…
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {item.kind === 'item' && (
+                  <DropdownMenuItem onSelect={() => setDialog('schema')}>
+                    <FileCode2 /> Field definitions
+                  </DropdownMenuItem>
+                )}
+                {canWrite && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem tone="danger" onSelect={() => setDialog('delete')}>
+                      <Trash2 /> Delete
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <SheetClose />
         </header>
         {item ? (
-          <Tabs value={tab || 'details'} onValueChange={onTab} className="flex min-h-0 flex-1 flex-col">
-            <TabsList className="overflow-x-auto">
+          <Tabs value={current} onValueChange={onTab} className="flex min-h-0 flex-1 flex-col">
+            <TabsList className="shrink-0 overflow-x-auto">
               <TabsTrigger value="details">Details</TabsTrigger>
-              {library && item.kind === 'item' && <TabsTrigger value="content">Content</TabsTrigger>}
+              {isFile && <TabsTrigger value="content">File</TabsTrigger>}
               <TabsTrigger value="versions">Versions</TabsTrigger>
               <TabsTrigger value="links">Links</TabsTrigger>
-              <TabsTrigger value="access">Access</TabsTrigger>
-              <TabsTrigger value="publish">Publish</TabsTrigger>
-              <TabsTrigger value="schema">Schema</TabsTrigger>
+              {canManage && <TabsTrigger value="access">Permissions</TabsTrigger>}
+              {collection.publishing_enabled && <TabsTrigger value="publish">Publishing</TabsTrigger>}
             </TabsList>
-            <div className="min-h-0 flex-1 overflow-auto">
-              <TabsContent value="details" className="p-4">
-                <Details
-                  key={`${item.id}:${item.version}`}
-                  item={item}
-                  collection={collection}
-                  fields={fields}
-                  contentTypes={contentTypes}
-                  onMoved={onMoved}
-                  onClose={onClose}
-                />
+            {/* Kept mounted so switching tabs does not lose unsaved edits. */}
+            <TabsContent value="details" forceMount className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+              <Details
+                key={`${item.id}:${item.version}`}
+                item={item}
+                fields={fields}
+                contentTypes={contentTypes}
+                readOnly={!canWrite}
+                onDirty={setDirty}
+              />
+            </TabsContent>
+            {isFile && (
+              <TabsContent value="content" className="min-h-0 flex-1 overflow-auto p-4">
+                <Content item={item} canWrite={canWrite} />
               </TabsContent>
-              {library && item.kind === 'item' && (
-                <TabsContent value="content" className="p-4">
-                  <Content item={item} />
-                </TabsContent>
-              )}
-              <TabsContent value="versions" className="p-4">
-                <Versions item={item} />
+            )}
+            <TabsContent value="versions" className="min-h-0 flex-1 overflow-auto p-4">
+              <Versions item={item} collection={collection} canWrite={canWrite} />
+            </TabsContent>
+            <TabsContent value="links" className="min-h-0 flex-1 overflow-auto p-4">
+              <RelatedItems item={item} canWrite={canWrite} />
+            </TabsContent>
+            {canManage && (
+              <TabsContent value="access" className="min-h-0 flex-1 overflow-auto p-4">
+                <AccessEditor resource={item} />
               </TabsContent>
-              <TabsContent value="links" className="p-4">
-                <RelatedItems item={item} />
+            )}
+            {collection.publishing_enabled && (
+              <TabsContent value="publish" className="min-h-0 flex-1 overflow-auto p-4">
+                <Publish item={item} collection={collection} canPublish={can(item, 'publish')} />
               </TabsContent>
-              <TabsContent value="access" className="p-4">
-                <Access item={item} />
-              </TabsContent>
-              <TabsContent value="schema" className="p-4">
-                <ItemSchemaView itemId={item.id} />
-              </TabsContent>
-              <TabsContent value="publish" className="p-4">
-                <Publish item={item} collection={collection} />
-              </TabsContent>
-            </div>
+            )}
           </Tabs>
+        ) : itemQuery.isPending ? (
+          <div className="space-y-3 p-4">
+            <Skeleton className="h-9" />
+            <Skeleton className="h-9" />
+            <Skeleton className="h-9" />
+          </div>
         ) : (
-          <p className="p-4 text-sm text-muted">{itemQuery.isPending ? 'Loading…' : 'This item is not available.'}</p>
+          <p className="p-4 text-sm text-muted">This item is not available. It was deleted or moved, or you no longer have access.</p>
         )}
+        {item && dialog === 'move' && (
+          <MoveDialog item={item} collection={collection} onClose={() => setDialog(undefined)} onMoved={onMoved} />
+        )}
+        {item && dialog === 'classify' && <AddToSmartFolder item={item} onClose={() => setDialog(undefined)} />}
+        {item && dialog === 'schema' && (
+          <Dialog open onOpenChange={(open) => !open && setDialog(undefined)}>
+            <DialogContent className="max-h-[85vh] overflow-auto">
+              <DialogHeader>
+                <DialogTitle>Field definitions</DialogTitle>
+              </DialogHeader>
+              <div className="px-5 pb-5">
+                <ItemSchemaView itemId={item.id} />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+        <ConfirmDialog
+          open={dialog === 'delete'}
+          onOpenChange={(open) => !open && setDialog(undefined)}
+          title={`Delete “${item?.name ?? ''}”?`}
+          description={
+            item?.kind === 'folder'
+              ? 'The folder is deleted with everything in it. You can restore it from the recycle bin.'
+              : 'You can restore it from the recycle bin.'
+          }
+          confirm="Delete"
+          busy={remove.isPending}
+          error={remove.error}
+          onConfirm={() => remove.mutate()}
+        />
+        <ConfirmDialog
+          open={confirmingClose}
+          onOpenChange={setConfirmingClose}
+          title="Discard unsaved changes?"
+          description="Your changes to this item have not been saved."
+          confirm="Discard changes"
+          onConfirm={() => {
+            setConfirmingClose(false);
+            onClose();
+          }}
+        />
       </SheetContent>
     </Sheet>
   );
@@ -108,48 +249,39 @@ export function ItemSheet({
 
 function Details({
   item,
-  collection,
   fields,
   contentTypes,
-  onMoved,
-  onClose,
+  readOnly,
+  onDirty,
 }: {
   item: Resource;
-  collection: Resource;
   fields: FieldDefinition[];
   contentTypes: ContentType[];
-  onMoved: (resource: Resource) => void;
-  onClose: () => void;
+  readOnly: boolean;
+  onDirty: (dirty: boolean) => void;
 }) {
   const queryClient = useQueryClient();
-  const [classifying, setClassifying] = useState(false);
   const [name, setName] = useState(item.name);
-  const [tags, setTags] = useState((item.tags ?? []).join(', '));
+  const [tags, setTags] = useState<string[]>(item.tags ?? []);
   const [contentTypeId, setContentTypeId] = useState(item.content_type_id ?? '');
   const visible = fieldsForType(fields, contentTypes, contentTypeId || item.content_type_id);
   const [values, setValues] = useState<Record<string, unknown>>({ ...(item.values ?? {}) });
-  const [collectionId, setCollectionId] = useState(item.container_id ?? collection.id);
-  const [parentId, setParentId] = useState('');
-  const lists = useQuery({
-    queryKey: ['resources', item.workspace_id, 'collections'],
-    queryFn: () => collectionChildren(item.workspace_id),
-  });
+
+  const body = () => {
+    const changes: Record<string, unknown> = {};
+    if (name.trim() !== item.name) changes.name = name.trim();
+    if (tags.join('\n') !== (item.tags ?? []).join('\n')) changes.tags = tags;
+    if (contentTypeId && contentTypeId !== (item.content_type_id ?? '')) changes.content_type_id = contentTypeId;
+    const patch = valuesPatch(visible, item.values, values);
+    if (patch) changes.values = patch;
+    return changes;
+  };
+  const dirty = Object.keys(body()).length > 0;
+  useEffect(() => onDirty(dirty), [dirty, onDirty]);
 
   const save = useMutation({
-    mutationFn: async () => {
-      const body: Record<string, unknown> = {};
-      if (name.trim() !== item.name) body.name = name.trim();
-      const nextTags = tags
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter(Boolean);
-      if (nextTags.join('\n') !== (item.tags ?? []).join('\n')) body.tags = nextTags;
-      if (contentTypeId && contentTypeId !== (item.content_type_id ?? '')) body.content_type_id = contentTypeId;
-      const patch = valuesPatch(visible, item.values, values);
-      if (patch) body.values = patch;
-      if (Object.keys(body).length === 0) return item;
-      return (await api<Resource>(`/v1/resources/${item.id}`, { method: 'PATCH', ifMatch: item.version, body })).data;
-    },
+    mutationFn: async () =>
+      (await api<Resource>(`/v1/resources/${item.id}`, { method: 'PATCH', ifMatch: item.version, body: body() })).data,
     onSuccess: async (updated) => {
       queryClient.setQueryData(keys.resource(item.id), updated);
       await queryClient.invalidateQueries({ queryKey: keys.resources });
@@ -157,113 +289,77 @@ function Details({
     },
   });
 
-  const move = useMutation({
-    mutationFn: () =>
-      api<Resource>(`/v1/items/${item.id}/move`, {
-        method: 'POST',
-        ifMatch: item.version,
-        body: { collection_id: collectionId, parent_id: parentId.trim() || undefined },
-      }).then((result) => result.data),
-    onSuccess: async (moved) => {
-      await queryClient.invalidateQueries({ queryKey: keys.resources });
-      onMoved(moved);
-    },
-  });
-
-  const remove = useMutation({
-    mutationFn: () =>
-      api(`/v1/resources/${item.id}`, {
-        method: 'DELETE',
-        ifMatch: item.version,
-        query: item.kind === 'folder' ? { recursive: 'true' } : undefined,
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: keys.resources });
-      onClose();
-    },
-  });
-
   return (
     <form
-      className="flex flex-col gap-3"
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault();
-        save.mutate();
+        if (dirty) save.mutate();
       }}
     >
-      <Label htmlFor="item-name">Name</Label>
-      <Input id="item-name" value={name} onChange={(event) => setName(event.target.value)} required />
-      <Label htmlFor="item-tags">Tags</Label>
-      <Input
-        id="item-tags"
-        value={tags}
-        onChange={(event) => setTags(event.target.value)}
-        placeholder="Comma separated"
-      />
-      {contentTypes.length > 0 && item.kind === 'item' && (
-        <>
-          <Label htmlFor="item-type">Content type</Label>
-          <Select id="item-type" value={contentTypeId} onChange={(event) => setContentTypeId(event.target.value)}>
-            <option value="">Default</option>
-            {contentTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
-              </option>
-            ))}
-          </Select>
-        </>
-      )}
-      {visible.map((field) => (
-        <FieldEditor
-          key={field.id}
-          field={field}
-          value={values[field.key]}
-          onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
-        />
-      ))}
-      {item.kind === 'item' && (
-        <>
-          <Button onClick={() => setClassifying(true)}>Add to smart folder</Button>
-          {classifying && <AddToSmartFolder item={item} onClose={() => setClassifying(false)} />}
-        </>
-      )}
-      <Button type="submit" variant="primary" disabled={save.isPending}>
-        Save
-      </Button>
-      {item.kind === 'item' && (
-        <div className="mt-2 flex flex-col gap-2 border-t pt-3">
-          <p className="text-sm font-medium">Move</p>
-          <Select value={collectionId} onChange={(event) => setCollectionId(event.target.value)}>
-            {lists.data?.map((list) => (
-              <option key={list.id} value={list.id}>
-                {list.name}
-              </option>
-            ))}
-          </Select>
-          <Input
-            value={parentId}
-            onChange={(event) => setParentId(event.target.value)}
-            placeholder="Folder id, or empty for the root"
+      <fieldset disabled={readOnly} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
+        {readOnly && <p className="text-xs text-muted">You can read this item but not change it.</p>}
+        <Label htmlFor="item-name">Name</Label>
+        <Input id="item-name" value={name} onChange={(event) => setName(event.target.value)} required />
+        {contentTypes.length > 1 && item.kind === 'item' && (
+          <>
+            <Label htmlFor="item-type">Content type</Label>
+            <Select id="item-type" value={contentTypeId} onChange={(event) => setContentTypeId(event.target.value)}>
+              {!item.content_type_id && <option value="">Default</option>}
+              {contentTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </Select>
+          </>
+        )}
+        {visible.map((field) => (
+          <FieldEditor
+            key={field.id}
+            field={field}
+            value={values[field.key]}
+            onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
           />
-          <Button type="button" disabled={move.isPending || !collectionId} onClick={() => move.mutate()}>
-            Move
-          </Button>
-        </div>
+        ))}
+        <Label htmlFor="item-tags">Tags</Label>
+        <TagInput id="item-tags" value={tags} onChange={setTags} workspaceId={item.workspace_id} disabled={readOnly} />
+      </fieldset>
+      {!readOnly && (
+      <footer className="flex shrink-0 items-center justify-end gap-2 border-t bg-surface px-4 py-3">
+        {dirty && <span className="mr-auto text-xs text-muted">Unsaved changes</span>}
+        <Button
+          type="button"
+          disabled={!dirty || save.isPending}
+          onClick={() => {
+            setName(item.name);
+            setTags(item.tags ?? []);
+            setContentTypeId(item.content_type_id ?? '');
+            setValues({ ...(item.values ?? {}) });
+          }}
+        >
+          Discard
+        </Button>
+        <Button type="submit" variant="primary" disabled={!dirty || save.isPending || !name.trim()}>
+          {save.isPending ? 'Saving…' : 'Save'}
+        </Button>
+      </footer>
       )}
-      <Button type="button" variant="danger" disabled={remove.isPending} onClick={() => remove.mutate()}>
-        {item.kind === 'folder' ? 'Delete folder and its contents' : 'Delete'}
-      </Button>
     </form>
   );
 }
 
-function Content({ item }: { item: Resource }) {
+function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
   const queryClient = useQueryClient();
-  const [fileVersion, setFileVersion] = useState('');
-  const [restoring, setRestoring] = useState<number>();
+  const format = useFormat();
+  const names = usePeopleNames();
+  const input = useRef<HTMLInputElement>(null);
+  const [restoring, setRestoring] = useState<FileVersion>();
+  const versions = useApiPages<FileVersion>(['resources', item.id, 'file-versions'], `/v1/items/${item.id}/content/versions`);
   const restore = useMutation({
-    mutationFn: (number: number) =>
-      api(`/v1/items/${item.id}/content/versions/${number}/restore`, { method: 'POST', ifMatch: item.version }),
+    meta: { silent: true },
+    mutationFn: (version: FileVersion) =>
+      api(`/v1/items/${item.id}/content/versions/${version.version}/restore`, { method: 'POST', ifMatch: item.version }),
     onSuccess: async () => {
       setRestoring(undefined);
       await queryClient.invalidateQueries({ queryKey: keys.resources });
@@ -274,72 +370,100 @@ function Content({ item }: { item: Resource }) {
   const replace = useMutation({
     mutationFn: (file: File) => replaceContent(item.id, item.version, file),
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: keys.resource(item.id) });
       await queryClient.invalidateQueries({ queryKey: keys.resources });
       const duplicates = result.data.duplicates ?? [];
       if (duplicates.length)
-        toast.warning(`Possible duplicates: ${duplicates.map((duplicate) => duplicate.name).join(', ')}`);
+        toast.warning(`Already stored elsewhere: ${duplicates.map((duplicate) => duplicate.name).join(', ')}`);
       else toast.success('File replaced');
     },
   });
   return (
-    <div className="flex flex-col gap-3">
-      <Button type="button" variant="primary" onClick={() => void downloadContent(item.id, item.name)}>
-        Download
-      </Button>
-      <Label htmlFor="replace-file">Replace file</Label>
-      <Input
-        id="replace-file"
-        type="file"
-        disabled={replace.isPending}
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) replace.mutate(file);
-          event.target.value = '';
-        }}
-      />
-      <p className="text-xs text-muted">Replacing the file keeps the current metadata and adds a new file version.</p>
-      <form
-        className="grid gap-2 border-t pt-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setRestoring(Number(fileVersion));
-        }}
-      >
-        <Label htmlFor="restore-file-version">Restore file version</Label>
-        <Input
-          id="restore-file-version"
-          type="number"
-          required
-          min={1}
-          step={1}
-          value={fileVersion}
-          onChange={(event) => setFileVersion(event.target.value)}
-        />
-        <p className="text-xs text-muted">
-          Enter a known file version number. File versions are separate from metadata revisions; the API does not list
-          retained file versions.
-        </p>
-        <Button type="submit" disabled={!Number.isSafeInteger(Number(fileVersion)) || Number(fileVersion) < 1}>
-          Restore file
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" onClick={() => void downloadContent(item.id, item.name)}>
+          <Download /> Download
         </Button>
-      </form>
+        {canWrite && (
+          <Button disabled={replace.isPending} onClick={() => input.current?.click()}>
+            <Upload /> {replace.isPending ? 'Uploading…' : 'Replace file'}
+          </Button>
+        )}
+        <input
+          ref={input}
+          type="file"
+          className="sr-only"
+          tabIndex={-1}
+          aria-label="Replacement file"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) replace.mutate(file);
+            event.target.value = '';
+          }}
+        />
+      </div>
+      {canWrite && (
+        <p className="text-xs text-muted">Replacing the file keeps the name, tags and columns, and adds a new file version.</p>
+      )}
+      <section aria-labelledby="file-versions" className="flex flex-col gap-2">
+        <h3 id="file-versions" className="text-[13px] font-medium">
+          File versions
+        </h3>
+        <QueryFeedback query={versions} />
+        <ul className="flex flex-col divide-y rounded-md border">
+          {versions.items.map((version) => (
+            <li key={version.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium">
+                  Version {version.version}
+                  {version.is_current && <Badge className="ml-2">Current</Badge>}
+                </p>
+                <p className="truncate text-xs text-muted">
+                  {version.filename} · {format.fileSize(version.size)} · {format.dateTime(version.created_at)}
+                  {version.created_by && ` · ${names.get(version.created_by) ?? version.created_by}`}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label={`Download version ${version.version}`}
+                onClick={() => void downloadContent(item.id, version.filename, version.is_current ? undefined : version.id)}
+              >
+                <Download />
+              </Button>
+              {canWrite && !version.is_current && (
+                <Button size="sm" onClick={() => setRestoring(version)}>
+                  Restore
+                </Button>
+              )}
+            </li>
+          ))}
+          {!versions.isPending && versions.items.length === 0 && (
+            <li className="px-3 py-2 text-[13px] text-muted">No file yet.</li>
+          )}
+        </ul>
+        {versions.hasNextPage && (
+          <Button size="sm" disabled={versions.isFetchingNextPage} onClick={() => void versions.fetchNextPage()}>
+            Older versions
+          </Button>
+        )}
+      </section>
       <ConfirmDialog
         open={restoring !== undefined}
         onOpenChange={(open) => !open && setRestoring(undefined)}
-        title={`Restore file version ${restoring ?? ''}?`}
-        description="This creates a new file version using the retained bytes. The current name, tags and fields are kept."
-        confirm="Restore file bytes"
+        title={`Restore file version ${restoring?.version ?? ''}?`}
+        description="The earlier file becomes the current file as a new version. The name, tags and columns stay as they are, and the current file stays in the version list."
+        confirm="Restore file"
         busy={restore.isPending}
         error={restore.error}
-        onConfirm={() => restoring !== undefined && restore.mutate(restoring)}
+        onConfirm={() => restoring && restore.mutate(restoring)}
       />
     </div>
   );
 }
 
-function Versions({ item }: { item: Resource }) {
+function Versions({ item, collection, canWrite }: { item: Resource; collection: Resource; canWrite: boolean }) {
   const format = useFormat();
+  const names = usePeopleNames();
   const queryClient = useQueryClient();
   const history = useQuery({ queryKey: ['revisions', item.id], queryFn: () => revisions(item.id) });
   const restore = useMutation({
@@ -351,175 +475,43 @@ function Versions({ item }: { item: Resource }) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: keys.resource(item.id) });
       await queryClient.invalidateQueries({ queryKey: ['revisions', item.id] });
-      toast.success('Metadata restored');
+      toast.success('Earlier version restored');
     },
   });
   const rows = history.data?.value ?? [];
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs text-muted">
-        Restore brings back the saved name, tags and fields. File bytes stay on the current version.
+        {collection.versioning === 'off'
+          ? 'Version history is off for this list. Earlier versions kept before it was turned off are shown.'
+          : 'Restoring brings back the name, tags and columns of that version as a new version.'}
+        {collection.kind === 'library' && ' The file stays as it is; restore files on the File tab.'}
       </p>
       {rows.map((revision) => (
         <div key={revision.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-medium">
-              {revision.revision_number}. {revision.name}
-              {revision.is_current ? ' · current' : ''}
+              Version {revision.revision_number}
+              {revision.is_current && <span className="font-normal text-muted"> · current</span>}
             </p>
             <p className="text-xs text-muted">
-              {format.dateTime(revision.created_at)} · {revision.created_by}
+              {format.dateTime(revision.created_at)} · {names.get(revision.created_by) ?? revision.created_by}
+              {!!revision.changed_fields?.length && ` · changed ${revision.changed_fields.map((key) => key.replace(/^\$/, '')).join(', ')}`}
             </p>
           </div>
-          {!revision.is_current && (
-            <Button type="button" size="sm" disabled={restore.isPending} onClick={() => restore.mutate(revision)}>
+          {canWrite && !revision.is_current && (
+            <Button size="sm" disabled={restore.isPending} onClick={() => restore.mutate(revision)}>
               Restore
             </Button>
           )}
         </div>
       ))}
-      {!history.isPending && rows.length === 0 && <p className="text-sm text-muted">No retained history.</p>}
+      {!history.isPending && rows.length === 0 && <p className="text-sm text-muted">No earlier versions.</p>}
     </div>
   );
 }
 
-function Access({ item }: { item: Resource }) {
-  const queryClient = useQueryClient();
-  const current = useQuery({ queryKey: ['permissions', item.id], queryFn: () => permissions(item.id) });
-  if (!current.data)
-    return <p className="text-sm text-muted">{current.isPending ? 'Loading…' : 'Permissions are not available.'}</p>;
-  return (
-    <AccessForm
-      key={`${item.version}:${current.data.inherit}`}
-      item={item}
-      inherit={current.data.inherit}
-      grants={current.data.grants ?? []}
-      effective={current.data.effective_grants ?? []}
-      onSaved={() => queryClient.invalidateQueries({ queryKey: ['permissions', item.id] })}
-    />
-  );
-}
-
-function AccessForm({
-  item,
-  inherit,
-  grants,
-  effective,
-  onSaved,
-}: {
-  item: Resource;
-  inherit: boolean;
-  grants: PermissionGrant[];
-  effective: PermissionGrant[];
-  onSaved: () => void;
-}) {
-  const [localInherit, setInherit] = useState(inherit);
-  const [localGrants, setGrants] = useState<PermissionGrant[]>(grants.map((grant) => ({ ...grant, effect: 'allow' })));
-  const [copyInherited, setCopy] = useState(false);
-  const save = useMutation({
-    mutationFn: () =>
-      api(`/v1/resources/${item.id}/permissions`, {
-        method: 'PUT',
-        ifMatch: item.version,
-        body: {
-          inherit: localInherit,
-          copy_inherited: !localInherit && copyInherited,
-          grants: localInherit ? [] : localGrants.filter((grant) => grant.principal_id.trim()),
-        },
-      }),
-    onSuccess: async () => {
-      toast.success('Access saved');
-      onSaved();
-    },
-  });
-  return (
-    <form
-      className="flex flex-col gap-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        save.mutate();
-      }}
-    >
-      <label className="flex items-center gap-2 text-[13px]">
-        <input type="checkbox" checked={localInherit} onChange={(event) => setInherit(event.target.checked)} />
-        Inherit access from the parent
-      </label>
-      {localInherit ? (
-        <ul className="flex flex-col gap-1 text-[13px] text-muted">
-          {effective.map((grant, index) => (
-            <li key={`${grant.principal_id}-${grant.action}-${index}`}>
-              {grant.principal_type} {grant.principal_id} · {grant.action}
-            </li>
-          ))}
-          {effective.length === 0 && <li>No effective grants.</li>}
-        </ul>
-      ) : (
-        <>
-          {inherit && (
-            <label className="flex items-center gap-2 text-[13px]">
-              <input type="checkbox" checked={copyInherited} onChange={(event) => setCopy(event.target.checked)} />
-              Copy the inherited grants
-            </label>
-          )}
-          {localGrants.map((grant, index) => (
-            <div key={index} className="grid grid-cols-[6rem_1fr_7rem] gap-2">
-              <Select
-                value={grant.principal_type}
-                onChange={(event) =>
-                  updateGrant(setGrants, index, {
-                    principal_type: event.target.value as PermissionGrant['principal_type'],
-                  })
-                }
-              >
-                <option value="user">User</option>
-                <option value="group">Group</option>
-              </Select>
-              <Input
-                value={grant.principal_id}
-                placeholder="Subject or group id"
-                onChange={(event) => updateGrant(setGrants, index, { principal_id: event.target.value })}
-              />
-              <Select
-                value={grant.action}
-                onChange={(event) => updateGrant(setGrants, index, { action: event.target.value })}
-              >
-                {actions.map((action) => (
-                  <option key={action} value={action}>
-                    {action}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          ))}
-          <Button
-            type="button"
-            onClick={() =>
-              setGrants((current) => [
-                ...current,
-                { principal_type: 'user', principal_id: '', action: 'read', effect: 'allow' },
-              ])
-            }
-          >
-            Add grant
-          </Button>
-        </>
-      )}
-      <Button type="submit" variant="primary" disabled={save.isPending}>
-        Save access
-      </Button>
-    </form>
-  );
-}
-
-function updateGrant(
-  setGrants: (value: PermissionGrant[] | ((current: PermissionGrant[]) => PermissionGrant[])) => void,
-  index: number,
-  patch: Partial<PermissionGrant>,
-) {
-  setGrants((current) => current.map((grant, i) => (i === index ? { ...grant, ...patch, effect: 'allow' } : grant)));
-}
-
-function Publish({ item, collection }: { item: Resource; collection: Resource }) {
+function Publish({ item, collection, canPublish }: { item: Resource; collection: Resource; canPublish: boolean }) {
   const queryClient = useQueryClient();
   const state = publishState(item, !!collection.publishing_enabled);
   const act = useMutation({
@@ -528,42 +520,34 @@ function Publish({ item, collection }: { item: Resource; collection: Resource })
         method: 'POST',
         ifMatch: item.version,
       }),
-    onSuccess: async () => {
+    onSuccess: async (_result, action) => {
+      toast.success(action === 'publish' ? 'Published' : 'Unpublished');
       await queryClient.invalidateQueries({ queryKey: keys.resource(item.id) });
       await queryClient.invalidateQueries({ queryKey: keys.resources });
       await queryClient.invalidateQueries({ queryKey: ['publications', item.id] });
     },
   });
-  if (!collection.publishing_enabled) {
-    return (
-      <div className="grid gap-3">
-        <p className="text-sm text-muted">
-          Publishing is off for this collection. Changes are visible as soon as they are saved.
-        </p>
-        <Publications itemId={item.id} />
-      </div>
-    );
-  }
+  const explanation =
+    state === 'Published'
+      ? 'Readers see the current version.'
+      : state === 'Draft'
+        ? 'Readers see the last published version; publish to show them your changes.'
+        : 'Readers do not see this item yet.';
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm">Status: {state}</p>
+      <p className="text-sm">
+        <span className="font-medium">{state}.</span> {explanation}
+      </p>
+      {canPublish && (
       <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="primary"
-          disabled={act.isPending || state === 'Published'}
-          onClick={() => act.mutate('publish')}
-        >
+        <Button variant="primary" disabled={act.isPending || state === 'Published'} onClick={() => act.mutate('publish')}>
           Publish
         </Button>
-        <Button
-          type="button"
-          disabled={act.isPending || state === 'Unpublished'}
-          onClick={() => act.mutate('unpublish')}
-        >
+        <Button disabled={act.isPending || state === 'Unpublished'} onClick={() => act.mutate('unpublish')}>
           Unpublish
         </Button>
       </div>
+      )}
       <Publications itemId={item.id} />
     </div>
   );

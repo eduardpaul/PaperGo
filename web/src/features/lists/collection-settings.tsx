@@ -4,125 +4,67 @@ import { toast } from 'sonner';
 import { api } from '@/api/http';
 import { keys } from '@/api/queries';
 import type { Resource } from '@/api/types';
-import { FormDialog } from '@/components/form-dialog';
 import { Button } from '@/components/ui/button';
-import { Input, Label, Textarea } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { Input, Textarea } from '@/components/ui/input';
+import { Checkbox, Select } from '@/components/ui/select';
+import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
 
-import { CollectionSchema } from '@/features/admin/content-types';
-
-const fieldTypes = [
-  'text',
-  'note',
-  'email',
-  'url',
-  'date',
-  'datetime',
-  'choice',
-  'number',
-  'integer',
-  'decimal',
-  'currency',
-  'boolean',
-  'lookup',
-  'person',
-  'term',
-  'keywords',
-];
-
-const multipleTypes = new Set(['choice', 'person', 'lookup', 'term', 'keywords']);
-
-export function CollectionSettings({
+/** Name, folders, history, publishing and file settings of a list or library, and deleting it. */
+export function CollectionGeneral({
   collection,
-  open,
-  onClose,
+  canManage,
   onDeleted,
 }: {
   collection: Resource;
-  open: boolean;
-  onClose: () => void;
+  canManage: boolean;
   onDeleted: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [name, setName] = useState(collection.name);
-  const [description, setDescription] = useState(collection.description ?? '');
-  const [duplicate, setDuplicate] = useState(collection.duplicate_policy ?? 'warn');
-  const [publishing, setPublishing] = useState(!!collection.publishing_enabled);
-  const [webdav, setWebdav] = useState(!!collection.webdav_enabled);
-  const [versioning, setVersioning] = useState(collection.versioning ?? 'off');
-  const [maxVersions, setMaxVersions] = useState(String(collection.max_versions ?? 50));
-  const [allowFolders, setAllowFolders] = useState(collection.allow_folders !== false);
-  const [field, setField] = useState({
-    key: '',
-    label: '',
-    type: 'text',
-    choices: '',
-    currency: '',
-    lookup: '',
-    termSet: '',
-  });
-  const [required, setRequired] = useState(false);
-  const [indexed, setIndexed] = useState(false);
-  const [multiple, setMultiple] = useState(false);
+  const library = collection.kind === 'library';
+  const noun = library ? 'library' : 'list';
+  const initial = {
+    name: collection.name,
+    description: collection.description ?? '',
+    duplicate: collection.duplicate_policy ?? 'warn',
+    publishing: !!collection.publishing_enabled,
+    webdav: !!collection.webdav_enabled,
+    versioning: collection.versioning ?? 'off',
+    maxVersions: String(collection.max_versions ?? 50),
+    allowFolders: collection.allow_folders !== false,
+  };
+  const [draft, setDraft] = useState(initial);
+  const [deleting, setDeleting] = useState(false);
+  const patch = (next: Partial<typeof initial>) => setDraft((current) => ({ ...current, ...next }));
+  const maxVersions = Number(draft.maxVersions);
+  const validMax = Number.isInteger(maxVersions) && maxVersions >= 1 && maxVersions <= 500;
+
+  const body = () => {
+    const changes: Record<string, unknown> = {};
+    if (draft.name.trim() !== initial.name) changes.name = draft.name.trim();
+    if (draft.description !== initial.description) changes.description = draft.description;
+    if (library && draft.duplicate !== initial.duplicate) changes.duplicate_policy = draft.duplicate;
+    if (draft.publishing !== initial.publishing) changes.publishing_enabled = draft.publishing;
+    if (library && draft.webdav !== initial.webdav) changes.webdav_enabled = draft.webdav;
+    if (draft.versioning !== initial.versioning) changes.versioning = draft.versioning;
+    if (draft.versioning !== 'off' && draft.maxVersions !== initial.maxVersions && validMax)
+      changes.max_versions = maxVersions;
+    if (draft.allowFolders !== initial.allowFolders) changes.allow_folders = draft.allowFolders;
+    return changes;
+  };
+  const dirty = Object.keys(body()).length > 0;
 
   const save = useMutation({
-    mutationFn: async () => {
-      const body: Record<string, unknown> = {};
-      if (name.trim() !== collection.name) body.name = name.trim();
-      if (description !== (collection.description ?? '')) body.description = description;
-      if (duplicate !== (collection.duplicate_policy ?? 'warn')) body.duplicate_policy = duplicate;
-      if (publishing !== !!collection.publishing_enabled) body.publishing_enabled = publishing;
-      if (collection.kind === 'library' && webdav !== !!collection.webdav_enabled) body.webdav_enabled = webdav;
-      if (versioning !== (collection.versioning ?? 'off')) body.versioning = versioning;
-      const max = Number(maxVersions);
-      if (Number.isInteger(max) && max !== collection.max_versions) body.max_versions = max;
-      if (allowFolders !== (collection.allow_folders !== false)) body.allow_folders = allowFolders;
-      if (Object.keys(body).length === 0) return collection;
-      return (
-        await api<Resource>(`/v1/resources/${collection.id}`, { method: 'PATCH', ifMatch: collection.version, body })
-      ).data;
-    },
-    onSuccess: async () => {
+    mutationFn: async () =>
+      (await api<Resource>(`/v1/resources/${collection.id}`, { method: 'PATCH', ifMatch: collection.version, body: body() }))
+        .data,
+    onSuccess: async (updated) => {
+      queryClient.setQueryData(keys.resource(collection.id), updated);
       await queryClient.invalidateQueries({ queryKey: keys.resources });
-      toast.success('Collection saved');
-      onClose();
+      toast.success('Settings saved');
     },
   });
-
-  const addField = useMutation({
-    mutationFn: async () => {
-      const body: Record<string, unknown> = {
-        key: field.key.trim(),
-        label: field.label.trim(),
-        type: field.type,
-        required,
-        indexed,
-      };
-      if (field.type === 'choice')
-        body.choices = field.choices
-          .split(',')
-          .map((choice) => choice.trim())
-          .filter(Boolean);
-      if (field.type === 'decimal') body.scale = 2;
-      const options: Record<string, unknown> = {};
-      if (multipleTypes.has(field.type) && multiple) options.multiple = true;
-      if (field.type === 'currency') options.currency_code = field.currency.trim().toUpperCase();
-      if (field.type === 'lookup' && field.lookup.trim()) options.lookup_container_id = field.lookup.trim();
-      if (field.type === 'term' && field.termSet.trim()) options.term_set_id = field.termSet.trim();
-      if (Object.keys(options).length > 0) body.options = options;
-      await api(`/v1/resources/${collection.id}/fields`, { method: 'POST', body });
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: keys.resources });
-      toast.success('Field added');
-      setField({ key: '', label: '', type: 'text', choices: '', currency: '', lookup: '', termSet: '' });
-      setRequired(false);
-      setIndexed(false);
-      setMultiple(false);
-    },
-  });
-
   const remove = useMutation({
+    meta: { silent: true },
     mutationFn: () =>
       api(`/v1/resources/${collection.id}`, {
         method: 'DELETE',
@@ -131,148 +73,139 @@ export function CollectionSettings({
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: keys.resources });
+      toast.success(`${collection.name} deleted`);
       onDeleted();
     },
   });
 
   return (
-    <FormDialog
-      open={open}
-      title="Collection settings"
-      description="Name, history, publishing and fields. Adding a field needs manage access."
-      submitLabel="Save"
-      pending={save.isPending}
-      onClose={onClose}
-      onSubmit={() => save.mutate()}
-    >
-      <Label htmlFor="collection-name">Name</Label>
-      <Input id="collection-name" value={name} onChange={(event) => setName(event.target.value)} required />
-      <Label htmlFor="collection-description">Description</Label>
-      <Textarea
-        id="collection-description"
-        value={description}
-        onChange={(event) => setDescription(event.target.value)}
-      />
-      <Label htmlFor="duplicate-policy">Duplicate files</Label>
-      <Select
-        id="duplicate-policy"
-        value={duplicate}
-        onChange={(event) =>
-          setDuplicate(event.target.value === 'allow' || event.target.value === 'block' ? event.target.value : 'warn')
+    <>
+      <SettingsSection
+        title="General"
+        actions={
+          canManage && (
+            <>
+              <Button disabled={!dirty || save.isPending} onClick={() => setDraft(initial)}>
+                Discard changes
+              </Button>
+              <Button
+                variant="primary"
+                disabled={!dirty || save.isPending || !draft.name.trim() || (draft.versioning !== 'off' && !validMax)}
+                onClick={() => save.mutate()}
+              >
+                Save
+              </Button>
+            </>
+          )
         }
       >
-        <option value="allow">Allow</option>
-        <option value="warn">Warn</option>
-        <option value="block">Block</option>
-      </Select>
-      <Label htmlFor="versioning">Versioning</Label>
-      <Select
-        id="versioning"
-        value={versioning}
-        onChange={(event) => setVersioning(event.target.value === 'major' ? 'major' : 'off')}
-      >
-        <option value="off">Off</option>
-        <option value="major">Major</option>
-      </Select>
-      <Label htmlFor="max-versions">Versions to keep</Label>
-      <Input
-        id="max-versions"
-        inputMode="numeric"
-        value={maxVersions}
-        onChange={(event) => setMaxVersions(event.target.value)}
-      />
-      <label className="flex items-center gap-2 text-[13px]">
-        <input type="checkbox" checked={publishing} onChange={(event) => setPublishing(event.target.checked)} />
-        Require publish before readers see changes
-      </label>
-      <label className="flex items-center gap-2 text-[13px]">
-        <input type="checkbox" checked={allowFolders} onChange={(event) => setAllowFolders(event.target.checked)} />
-        Allow folders
-      </label>
-      {collection.kind === 'library' && (
-        <label className="flex items-center gap-2 text-[13px]">
-          <input type="checkbox" checked={webdav} onChange={(event) => setWebdav(event.target.checked)} />
-          WebDAV
-        </label>
-      )}
-      <div className="mt-2 border-t pt-3">
-        <p className="text-sm font-medium">Add a field</p>
-        <p className="mt-0.5 text-xs text-muted">Keys are lowercase letters, digits and underscores.</p>
-        <div className="mt-2 grid gap-2">
-          <Input
-            placeholder="Key"
-            value={field.key}
-            onChange={(event) => setField({ ...field, key: event.target.value })}
-          />
-          <Input
-            placeholder="Label"
-            value={field.label}
-            onChange={(event) => setField({ ...field, label: event.target.value })}
-          />
-          <Select value={field.type} onChange={(event) => setField({ ...field, type: event.target.value })}>
-            {fieldTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </Select>
-          {field.type === 'choice' && (
-            <Input
-              placeholder="Choices, comma separated"
-              value={field.choices}
-              onChange={(event) => setField({ ...field, choices: event.target.value })}
+        <fieldset disabled={!canManage} className="contents">
+          <SettingRow id="collection-name" label="Name">
+            <Input id="collection-name" required value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
+          </SettingRow>
+          <SettingRow id="collection-description" label="Description">
+            <Textarea
+              id="collection-description"
+              value={draft.description}
+              onChange={(event) => patch({ description: event.target.value })}
             />
-          )}
-          {field.type === 'currency' && (
-            <Input
-              placeholder="Currency code"
-              value={field.currency}
-              onChange={(event) => setField({ ...field, currency: event.target.value })}
-              maxLength={3}
-            />
-          )}
-          {field.type === 'lookup' && (
-            <Input
-              placeholder="Lookup collection id"
-              value={field.lookup}
-              onChange={(event) => setField({ ...field, lookup: event.target.value })}
-            />
-          )}
-          {field.type === 'term' && (
-            <Input
-              placeholder="Term set id"
-              value={field.termSet}
-              onChange={(event) => setField({ ...field, termSet: event.target.value })}
-            />
-          )}
-          <label className="flex items-center gap-2 text-[13px]">
-            <input type="checkbox" checked={required} onChange={(event) => setRequired(event.target.checked)} />{' '}
-            Required
-          </label>
-          <label className="flex items-center gap-2 text-[13px]">
-            <input type="checkbox" checked={indexed} onChange={(event) => setIndexed(event.target.checked)} /> Indexed
-          </label>
-          {multipleTypes.has(field.type) && (
-            <label className="flex items-center gap-2 text-[13px]">
-              <input type="checkbox" checked={multiple} onChange={(event) => setMultiple(event.target.checked)} />{' '}
-              Multiple
+          </SettingRow>
+          <SettingRow id="allow-folders" label="Folders" hint="People can organize content in folders.">
+            <label className="flex items-center gap-2 pt-2 text-[13px]">
+              <Checkbox
+                id="allow-folders"
+                checked={draft.allowFolders}
+                onChange={(event) => patch({ allowFolders: event.target.checked })}
+              />
+              Allow folders
             </label>
-          )}
-          <Button
-            type="button"
-            disabled={!field.key.trim() || !field.label.trim() || addField.isPending}
-            onClick={() => addField.mutate()}
+          </SettingRow>
+          <SettingRow
+            id="versioning"
+            label="Version history"
+            hint={`Keep earlier versions of each ${library ? 'file and its details' : 'item'} so they can be restored.`}
           >
-            Add field
-          </Button>
-        </div>
-      </div>
-      <CollectionSchema collection={collection} />
-      {!collection.system_key && (
-        <Button type="button" variant="danger" disabled={remove.isPending} onClick={() => remove.mutate()}>
-          Delete collection
-        </Button>
+            <Select
+              id="versioning"
+              value={draft.versioning}
+              onChange={(event) => patch({ versioning: event.target.value === 'major' ? 'major' : 'off' })}
+            >
+              <option value="off">Off</option>
+              <option value="major">Keep versions</option>
+            </Select>
+          </SettingRow>
+          {draft.versioning !== 'off' && (
+            <SettingRow id="max-versions" label="Versions to keep" hint="Between 1 and 500; older versions are removed.">
+              <Input
+                id="max-versions"
+                type="number"
+                min={1}
+                max={500}
+                aria-invalid={!validMax}
+                value={draft.maxVersions}
+                onChange={(event) => patch({ maxVersions: event.target.value })}
+              />
+            </SettingRow>
+          )}
+          <SettingRow
+            id="publishing"
+            label="Publishing"
+            hint="Changes stay drafts, visible to editors only, until someone publishes them."
+          >
+            <label className="flex items-center gap-2 pt-2 text-[13px]">
+              <Checkbox id="publishing" checked={draft.publishing} onChange={(event) => patch({ publishing: event.target.checked })} />
+              Require publishing before readers see changes
+            </label>
+          </SettingRow>
+          {library && (
+            <>
+              <SettingRow id="duplicate-policy" label="Duplicate files" hint="What happens when someone uploads a file that is already stored.">
+                <Select
+                  id="duplicate-policy"
+                  value={draft.duplicate}
+                  onChange={(event) =>
+                    patch({
+                      duplicate:
+                        event.target.value === 'allow' || event.target.value === 'block' ? event.target.value : 'warn',
+                    })
+                  }
+                >
+                  <option value="allow">Allow them</option>
+                  <option value="warn">Allow them with a warning</option>
+                  <option value="block">Refuse them</option>
+                </Select>
+              </SettingRow>
+              <SettingRow id="webdav" label="Network drive" hint="Open this library in Windows Explorer, macOS Finder or Office over WebDAV.">
+                <label className="flex items-center gap-2 pt-2 text-[13px]">
+                  <Checkbox id="webdav" checked={draft.webdav} onChange={(event) => patch({ webdav: event.target.checked })} />
+                  Available as a network drive
+                </label>
+              </SettingRow>
+            </>
+          )}
+        </fieldset>
+      </SettingsSection>
+      {canManage && !collection.system_key && (
+        <SettingsSection
+          title={`Delete ${noun}`}
+          description={`Deletes the ${noun} with all its folders and items for everyone.`}
+          actions={
+            <Button variant="danger" onClick={() => setDeleting(true)}>
+              Delete {noun}
+            </Button>
+          }
+        />
       )}
-    </FormDialog>
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title={`Delete ${collection.name}?`}
+        description={`All folders and items in this ${noun} become unavailable to everyone.`}
+        confirm={`Delete ${noun}`}
+        busy={remove.isPending}
+        error={remove.error}
+        onConfirm={() => remove.mutate()}
+      />
+    </>
   );
 }

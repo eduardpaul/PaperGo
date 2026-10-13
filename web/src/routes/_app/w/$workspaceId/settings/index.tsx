@@ -8,7 +8,8 @@ import type { Resource } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { SmartFolderPackages } from '@/features/smart-folders/packages';
-import { SettingRow, SettingsSection } from '@/features/settings/section';
+import { can } from '@/features/lists/access';
+import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings/')({ component: GeneralPage });
 
@@ -19,6 +20,7 @@ function GeneralPage() {
   const workspace = useQuery(resourceQuery(workspaceId));
   const [name, setName] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const currentName = name ?? workspace.data?.name ?? '';
   const currentDescription = description ?? workspace.data?.description ?? '';
   const save = useMutation({
@@ -42,6 +44,7 @@ function GeneralPage() {
     },
   });
   const remove = useMutation({
+    meta: { silent: true },
     mutationFn: () => api(`/v1/resources/${workspaceId}`, { method: 'DELETE', ifMatch: workspace.data?.version }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: keys.workspaces });
@@ -49,16 +52,21 @@ function GeneralPage() {
     },
   });
   if (!workspace.data) return null;
+  const canManage = can(workspace.data, 'manage');
+  const dirty = currentName.trim() !== workspace.data.name || currentDescription !== (workspace.data.description ?? '');
   return (
     <div className="grid gap-5">
       <SettingsSection
         title="General"
         actions={
-          <Button variant="primary" disabled={save.isPending || !currentName.trim()} onClick={() => save.mutate()}>
-            Save
-          </Button>
+          canManage && (
+            <Button variant="primary" disabled={save.isPending || !dirty || !currentName.trim()} onClick={() => save.mutate()}>
+              Save
+            </Button>
+          )
         }
       >
+        <fieldset disabled={!canManage} className="contents">
         <SettingRow id="ws-name" label="Name">
           <Input id="ws-name" value={currentName} onChange={(event) => setName(event.target.value)} />
         </SettingRow>
@@ -69,15 +77,30 @@ function GeneralPage() {
             onChange={(event) => setDescription(event.target.value)}
           />
         </SettingRow>
-        {!workspace.data.personal_owner_id && (
-          <div className="pt-2">
-            <Button variant="danger" disabled={remove.isPending} onClick={() => remove.mutate()}>
-              Delete workspace
-            </Button>
-          </div>
-        )}
+        </fieldset>
       </SettingsSection>
       <SmartFolderPackages workspaceId={workspaceId} />
+      {canManage && !workspace.data.personal_owner_id && (
+        <SettingsSection
+          title="Delete workspace"
+          description="Deletes the workspace with all its lists, libraries, folders, items and workflows."
+          actions={
+            <Button variant="danger" onClick={() => setDeleting(true)}>
+              Delete workspace
+            </Button>
+          }
+        />
+      )}
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title={`Delete ${workspace.data.name}?`}
+        description="Everything in this workspace becomes unavailable to everyone, including its lists, libraries and workflows. This cannot be undone here."
+        confirm="Delete workspace"
+        busy={remove.isPending}
+        error={remove.error}
+        onConfirm={() => remove.mutate()}
+      />
     </div>
   );
 }

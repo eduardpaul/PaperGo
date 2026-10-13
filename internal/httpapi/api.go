@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"papergo/ent"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/identity"
@@ -96,6 +97,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("GET /v1/items/{id}/schema", a.itemSchema)
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)
+	api.HandleFunc("GET /v1/items/{id}/content/versions", a.fileVersions)
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
 	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
@@ -455,8 +457,23 @@ func (a *API) get(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
+	a.respondWithAccess(w, r, out)
+}
+
+// resourceWithAccess is a single resource with the caller's allowed actions.
+type resourceWithAccess struct {
+	*ent.Resource
+	Access []string `json:"access"`
+}
+
+func (a *API) respondWithAccess(w http.ResponseWriter, r *http.Request, out *ent.Resource) {
+	access, err := a.DMS.Access(r.Context(), subject(r), out)
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
 	etag(w, out.Version)
-	respond(w, r, 200, out)
+	respond(w, r, 200, resourceWithAccess{out, access})
 }
 func (a *API) update(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)
@@ -472,8 +489,7 @@ func (a *API) update(w http.ResponseWriter, r *http.Request) {
 		a.failure(w, r, err)
 		return
 	}
-	etag(w, out.Version)
-	respond(w, r, 200, out)
+	a.respondWithAccess(w, r, out)
 }
 func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 	version, ok := a.version(w, r)
@@ -496,11 +512,11 @@ func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) children(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")})
+	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")})
 }
 func (a *API) browse(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value")}
+	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")}
 	if r.URL.Path == "/v1/workspaces" {
 		in = dms.Browse{After: q.Get("$skiptoken"), Limit: queryInt(r, "$top")}
 	}
@@ -600,6 +616,14 @@ func (a *API) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	etag(w, version+1)
 	respond(w, r, 201, out)
+}
+func (a *API) fileVersions(w http.ResponseWriter, r *http.Request) {
+	out, err := a.DMS.FileVersions(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	respond(w, r, 200, out)
 }
 func (a *API) publications(w http.ResponseWriter, r *http.Request) {
 	out, err := a.DMS.Publications(r.Context(), subject(r), r.PathValue("id"), queryInt(r, "$skiptoken"), queryInt(r, "$top"))

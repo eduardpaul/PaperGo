@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	entsql "entgo.io/ent/dialect/sql"
+	"errors"
 	"papergo/ent"
 	"papergo/ent/itemsurface"
 	"papergo/ent/resource"
@@ -144,12 +145,32 @@ func (s *Service) authorize(ctx context.Context, subject, id, action string) (*e
 	}
 	return r, nil
 }
+
+// surfaceSQL selects the surface a row is read on. Collections without
+// publishing keep one surface, the published one, which is also their head.
 func surfaceSQL(ctx context.Context, idColumn, subject, surface string) (string, []any) {
-	if surface == "head" || surface == "published" {
-		return "'" + surface + "'", nil
+	switch surface {
+	case "published":
+		return "'published'", nil
+	case "head":
+		return "CASE WHEN " + publishesSQL(idColumn) + " THEN 'head' ELSE 'published' END", nil
 	}
 	query, args := permissionSQL(ctx, idColumn, subject, "read_draft")
-	return "CASE WHEN " + query + " THEN 'head' ELSE 'published' END", args
+	return "CASE WHEN " + publishesSQL(idColumn) + " AND " + query + " THEN 'head' ELSE 'published' END", args
+}
+
+// publishesSQL tests whether a content row's collection publishes explicitly,
+// which is when its items keep a separate head surface.
+func publishesSQL(idColumn string) string {
+	return "EXISTS(SELECT 1 FROM resources si JOIN resources sc ON sc.id=si.container_id WHERE si.id=" + idColumn + " AND sc.publishing_enabled)"
+}
+
+// headSurface is the surface holding a collection's head content.
+func headSurface(c *ent.Resource) itemsurface.Surface {
+	if c.PublishingEnabled {
+		return itemsurface.SurfaceHead
+	}
+	return itemsurface.SurfacePublished
 }
 
 // When an item has both surfaces, either selection is visible, so the cheap
@@ -220,4 +241,39 @@ func (s *Service) GetSurface(ctx context.Context, subject, id, surface string) (
 		r.NextRevisionNumber = 0
 	}
 	return r, nil
+}
+
+// AccessActions lists the actions in the order the access field reports them.
+var AccessActions = []string{"read", "read_draft", "write", "publish", "manage"}
+
+// Access returns the actions the subject may take on r, so clients can offer
+// only those. It applies the same ACL and module-scope rules as the writes:
+// adding or changing content (write, publish) below a workspace also needs the
+// list.write scope.
+func (s *Service) Access(ctx context.Context, subject string, r *ent.Resource) ([]string, error) {
+	if !s.transaction {
+		return read(ctx, s, func(t *Service) ([]string, error) { return t.Access(ctx, subject, r) })
+	}
+	contentWrite := true
+	if r.Kind != resource.KindWorkspace {
+		if err := s.RequireScope(ctx, subject, "list.write"); errors.Is(err, ErrForbidden) {
+			contentWrite = false
+		} else if err != nil {
+			return nil, err
+		}
+	}
+	out := []string{}
+	for _, action := range AccessActions {
+		if (action == "write" || action == "publish") && !contentWrite {
+			continue
+		}
+		allowed, err := s.allowedMany(ctx, subject, action, []*ent.Resource{r})
+		if err != nil {
+			return nil, err
+		}
+		if allowed[r.ID] {
+			out = append(out, action)
+		}
+	}
+	return out, nil
 }

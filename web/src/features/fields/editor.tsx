@@ -1,9 +1,15 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { childrenQuery, keywords, peopleQuery, terms, usersQuery } from '@/api/queries';
-import type { FieldDefinition } from '@/api/types';
+import { api } from '@/api/http';
+import { keywords, peopleQuery, terms } from '@/api/queries';
+import { lookupOptionsRequest } from '@/api/requests';
+import type { FieldDefinition, Page, Resource } from '@/api/types';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useDebounced } from '@/lib/use-debounced';
+import { useResourceNames, useTermNames } from './names';
+import { usePeopleNames } from './people';
 import { asList, fieldText } from './values';
 
 export function FieldEditor({
@@ -19,7 +25,7 @@ export function FieldEditor({
   const id = `field-${field.key}`;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>
+      <Label id={`${id}-label`} htmlFor={id}>
         {field.label}
         {field.required ? <span className="text-danger"> *</span> : null}
       </Label>
@@ -154,43 +160,25 @@ function ChoiceEditor({
 
 function PersonEditor({ id, multiple, value, onChange }: { id: string; multiple: boolean; value: unknown; onChange: (value: unknown) => void }) {
   const people = useQuery(peopleQuery);
-  const users = useQuery(usersQuery);
-  const names = new Map((users.data ?? []).map((user) => [user.subject, user.display_name || user.subject]));
-  const options = people.data ?? [...names.keys()];
-  if (!multiple) {
-    return (
-      <Select id={id} value={fieldText(value)} onChange={(event) => onChange(event.target.value)}>
-        <option value="">Select a person…</option>
-        {options.map((subject) => (
-          <option key={subject} value={subject}>
-            {names.get(subject) ?? subject}
-          </option>
-        ))}
-      </Select>
-    );
-  }
-  const selected = new Set(asList(value));
+  const names = usePeopleNames();
+  const subjects = people.data ?? [...names.keys()];
+  const option = (subject: string): ComboboxOption => ({ value: subject, label: names.get(subject) ?? subject });
+  const selected = asList(value);
   return (
-    <div id={id} className="flex max-h-40 flex-col gap-1 overflow-auto">
-      {options.map((subject) => (
-        <label key={subject} className="flex items-center gap-2 text-[13px]">
-          <input
-            type="checkbox"
-            checked={selected.has(subject)}
-            onChange={(event) => {
-              const next = new Set(selected);
-              if (event.target.checked) next.add(subject);
-              else next.delete(subject);
-              onChange([...next]);
-            }}
-          />
-          {names.get(subject) ?? subject}
-        </label>
-      ))}
-    </div>
+    <Combobox
+      id={id}
+      aria-labelledby={`${id}-label`}
+      multiple={multiple}
+      placeholder="Select a person…"
+      loading={people.isPending}
+      selected={selected.map(option)}
+      options={subjects.map(option)}
+      onChange={(chosen) => onChange(multiple ? chosen.map((entry) => entry.value) : (chosen[0]?.value ?? ''))}
+    />
   );
 }
 
+/** Items of the looked-up list, searched by name as people type, however many it holds. */
 function LookupEditor({
   id,
   containerId,
@@ -204,39 +192,31 @@ function LookupEditor({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
-  const children = useQuery(childrenQuery(containerId));
-  const items = (children.data?.value ?? []).filter((item) => item.kind === 'item');
-  if (!multiple) {
-    return (
-      <Select id={id} value={fieldText(value)} onChange={(event) => onChange(event.target.value)}>
-        <option value="">Select…</option>
-        {items.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.name}
-          </option>
-        ))}
-      </Select>
-    );
-  }
-  const selected = new Set(asList(value));
+  const [text, setText] = useState('');
+  const search = useDebounced(text);
+  const call = lookupOptionsRequest(containerId, search);
+  const found = useQuery({
+    queryKey: ['resources', containerId, 'lookup-options', search],
+    queryFn: async () => (await api<Page<Resource>>(call.path, { method: call.method, query: call.query, body: call.body })).data,
+    placeholderData: keepPreviousData,
+  });
+  const selected = asList(value);
+  // Names of the current values come by id, wherever they sit in the looked-up list.
+  const names = useResourceNames([...selected].sort());
+  const options = (found.data?.value ?? []).map((item) => ({ value: item.id, label: item.name }));
+  const labels = new Map(options.map((entry) => [entry.value, entry.label]));
   return (
-    <div id={id} className="flex max-h-40 flex-col gap-1 overflow-auto">
-      {items.map((item) => (
-        <label key={item.id} className="flex items-center gap-2 text-[13px]">
-          <input
-            type="checkbox"
-            checked={selected.has(item.id)}
-            onChange={(event) => {
-              const next = new Set(selected);
-              if (event.target.checked) next.add(item.id);
-              else next.delete(item.id);
-              onChange([...next]);
-            }}
-          />
-          {item.name}
-        </label>
-      ))}
-    </div>
+    <Combobox
+      id={id}
+      aria-labelledby={`${id}-label`}
+      multiple={multiple}
+      loading={found.isFetching}
+      selected={selected.map((item) => ({ value: item, label: names?.get(item) ?? labels.get(item) ?? 'Loading…' }))}
+      options={options}
+      onSearch={setText}
+      onChange={(chosen) => onChange(multiple ? chosen.map((entry) => entry.value) : (chosen[0]?.value ?? ''))}
+      footer={found.data?.['@odata.nextLink'] ? 'More items match. Type to narrow the list.' : undefined}
+    />
   );
 }
 
@@ -257,7 +237,11 @@ function TermEditor({
 }) {
   const [text, setText] = useState('');
   const [options, setOptions] = useState<{ id: string; name: string }[]>([]);
+  // Names of terms picked here; others come from the term store.
+  const [picked, setPicked] = useState<Map<string, string>>(new Map());
   const selected = asList(value);
+  const stored = useTermNames([...selected].sort());
+  const nameOf = (termId: string) => picked.get(termId) ?? stored?.get(termId) ?? termId;
 
   async function search(next: string) {
     setText(next);
@@ -270,6 +254,8 @@ function TermEditor({
   }
 
   function add(id: string) {
+    const name = options.find((option) => option.id === id)?.name;
+    if (name) setPicked((current) => new Map(current).set(id, name));
     onChange(multiple ? [...new Set([...selected, id])] : id);
     setText('');
     setOptions([]);
@@ -284,9 +270,10 @@ function TermEditor({
               key={id}
               type="button"
               className="rounded-full bg-surface-muted px-2 py-0.5 text-xs"
+              aria-label={`Remove ${nameOf(id)}`}
               onClick={() => onChange(multiple ? selected.filter((item) => item !== id) : '')}
             >
-              {options.find((option) => option.id === id)?.name ?? id} ×
+              {nameOf(id)} ×
             </button>
           ))}
         </div>

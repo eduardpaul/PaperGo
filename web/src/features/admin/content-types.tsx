@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/api/http';
-import { contentTypesQuery, fieldsQuery, keys, permissions } from '@/api/queries';
+import { Plus } from 'lucide-react';
+import { contentTypesQuery, fieldsQuery, keys } from '@/api/queries';
 import type { ContentType, FieldDefinition, Resource, ValidationRule } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +12,7 @@ import { Checkbox, Select } from '@/components/ui/select';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
 import { JsonInput } from '@/features/workflows/schema-form';
 import { Field, QueryFeedback, useHasScope } from './common';
-import { FieldDialog } from './field-dialog';
+import { FieldDialog, fieldTypeLabel } from './field-dialog';
 
 export const catalogTypesQuery = {
   queryKey: ['catalog', 'content-types'],
@@ -147,7 +148,7 @@ function TypeDialog({
               />
               {field.label}{' '}
               <span className="text-xs text-muted">
-                {field.key} · {field.type}
+                {fieldTypeLabel(field.type)}
               </span>
             </label>
           ))}
@@ -199,16 +200,17 @@ function FieldList({
             <span className="flex-1">
               <span className="font-medium">{field.label}</span>
               <span className="block text-xs text-muted">
-                {field.key} · {field.type}
-                {field.required ? ' · required' : ''}
-                {field.index_status ? ` · index ${field.index_status}` : ''}
+                {collection ? '' : `${field.key} · `}
+                {fieldTypeLabel(field.type)}
+                {field.required ? ' · Required' : ''}
+                {field.indexed ? (field.index_status && field.index_status !== 'ready' ? ' · Preparing filters…' : ' · Filterable') : ''}
               </span>
             </span>
-            <Button size="sm" onClick={() => onEdit(field)}>
+            <Button size="sm" variant="ghost" onClick={() => onEdit(field)}>
               {canManage ? 'Edit' : 'View'}
             </Button>
             {canManage && (
-              <Button size="sm" variant="danger" onClick={() => setDeleting(field)}>
+              <Button size="sm" variant="ghost" onClick={() => setDeleting(field)}>
                 Delete
               </Button>
             )}
@@ -218,9 +220,9 @@ function FieldList({
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => !open && setDeleting(undefined)}
-        title={`Delete field ${deleting?.label ?? ''}?`}
-        description="This removes the shared field from all content types and collections using it. Current values are removed; retained revision schemas remain."
-        confirm="Delete shared field"
+        title={`Delete ${collection ? 'column' : 'field'} ${deleting?.label ?? ''}?`}
+        description="This removes the shared field from every content type, list and library that uses it, with its current values. Earlier versions keep theirs."
+        confirm={collection ? 'Delete column' : 'Delete shared field'}
         busy={remove.isPending}
         error={remove.error}
         onConfirm={() => deleting && remove.mutate(deleting)}
@@ -229,21 +231,47 @@ function FieldList({
   );
 }
 
-export function CollectionSchema({ collection }: { collection: Resource }) {
+/** The columns of a list or library: shared organization fields attached through its content types. */
+export function CollectionColumns({ collection, canManage }: { collection: Resource; canManage: boolean }) {
+  const fields = useQuery(fieldsQuery(collection.id));
+  const [editing, setEditing] = useState<FieldDefinition | 'new'>();
+  return (
+    <SettingsSection
+      title="Columns"
+      description="The information kept for each item. Columns are shared fields: changing one changes it everywhere it is used."
+      actions={
+        canManage && (
+          <Button variant="primary" onClick={() => setEditing('new')}>
+            <Plus /> Add column
+          </Button>
+        )
+      }
+    >
+      <QueryFeedback query={fields} />
+      <FieldList collection={collection} fields={fields.data ?? []} canManage={canManage} onEdit={setEditing} />
+      {fields.isSuccess && fields.data.length === 0 && (
+        <p className="text-sm text-muted">No columns yet. Every item has a name; add columns for anything else.</p>
+      )}
+      {editing && (
+        <FieldDialog
+          field={editing === 'new' ? undefined : editing}
+          collection={collection}
+          canManage={canManage}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
+    </SettingsSection>
+  );
+}
+
+/** Content types attached to a list or library; each item uses one and gets its columns. */
+export function CollectionContentTypes({ collection, canManage }: { collection: Resource; canManage: boolean }) {
   const client = useQueryClient();
-  const access = useQuery({
-    queryKey: ['permissions', collection.id],
-    queryFn: () => permissions(collection.id),
-    retry: false,
-  });
-  const canManage = !!access.data;
   const canReadCatalog = useHasScope('contentType.read');
   const catalog = useQuery({ ...catalogTypesQuery, enabled: canReadCatalog });
   const types = useQuery(contentTypesQuery(collection.id));
-  const fields = useQuery(fieldsQuery(collection.id));
   const [attachId, setAttachId] = useState('');
   const [makeDefault, setMakeDefault] = useState(false);
-  const [editing, setEditing] = useState<FieldDefinition>();
   const [detaching, setDetaching] = useState<ContentType>();
   const refresh = async () => {
     await client.invalidateQueries({ queryKey: keys.resources });
@@ -255,7 +283,10 @@ export function CollectionSchema({ collection }: { collection: Resource }) {
         ifMatch: collection.version,
         body: { content_type_id: id, is_default: isDefault },
       }),
-    onSuccess: refresh,
+    onSuccess: async () => {
+      setAttachId('');
+      await refresh();
+    },
   });
   const detach = useMutation({
     mutationFn: (type: ContentType) =>
@@ -265,50 +296,58 @@ export function CollectionSchema({ collection }: { collection: Resource }) {
       await refresh();
     },
   });
+  const available = catalog.data?.filter((type) => !types.data?.some((attached) => attached.id === type.id)) ?? [];
   return (
-    <section className="grid gap-2 border-t pt-3">
-      <h3 className="font-medium">Content types and shared fields</h3>
+    <SettingsSection
+      title="Content types"
+      description="Kinds of items this list holds, each with its own columns. New items use the default type."
+    >
       <QueryFeedback query={types} />
-      <ul>
+      <ul className="divide-y">
         {types.data?.map((type) => (
-          <li key={type.id} className="flex items-center gap-2 py-1">
-            <span className="flex-1">
+          <li key={type.id} className="flex items-center gap-2 py-2">
+            <span className="flex-1 text-[13px] font-medium">
               {type.name} {type.is_default && <Badge>Default</Badge>}
             </span>
             {canManage && (
               <>
                 <Button
                   size="sm"
+                  variant="ghost"
                   disabled={type.is_default || attach.isPending}
                   onClick={() => attach.mutate({ id: type.id, isDefault: true })}
                 >
                   Make default
                 </Button>
-                <Button size="sm" disabled={(types.data?.length ?? 0) <= 1} onClick={() => setDetaching(type)}>
-                  Detach
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={(types.data?.length ?? 0) <= 1}
+                  onClick={() => setDetaching(type)}
+                >
+                  Remove
                 </Button>
               </>
             )}
           </li>
         ))}
       </ul>
-      {canManage && canReadCatalog && (
-        <>
+      {canManage && canReadCatalog && available.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center">
           <Select
-            aria-label="Attach content type"
+            aria-label="Add content type"
+            className="sm:max-w-xs"
             value={attachId}
             onChange={(event) => setAttachId(event.target.value)}
           >
-            <option value="">Choose content type…</option>
-            {catalog.data
-              ?.filter((type) => !types.data?.some((attached) => attached.id === type.id))
-              .map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
+            <option value="">Add a content type…</option>
+            {available.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
+              </option>
+            ))}
           </Select>
-          <label className="flex gap-2">
+          <label className="flex items-center gap-2 text-[13px]">
             <Checkbox checked={makeDefault} onChange={(event) => setMakeDefault(event.target.checked)} />
             Make default
           </label>
@@ -316,30 +355,20 @@ export function CollectionSchema({ collection }: { collection: Resource }) {
             disabled={!attachId || attach.isPending}
             onClick={() => attach.mutate({ id: attachId, isDefault: makeDefault })}
           >
-            Attach content type
+            Add
           </Button>
-        </>
-      )}
-      <QueryFeedback query={fields} />
-      <FieldList collection={collection} fields={fields.data ?? []} canManage={canManage} onEdit={setEditing} />
-      {editing && (
-        <FieldDialog
-          field={editing}
-          collection={collection}
-          canManage={canManage}
-          onClose={() => setEditing(undefined)}
-        />
+        </div>
       )}
       <ConfirmDialog
         open={!!detaching}
         onOpenChange={(open) => !open && setDetaching(undefined)}
-        title={`Detach ${detaching?.name ?? ''}?`}
-        description="The shared catalog definition remains. A type in use by current items cannot be detached."
-        confirm="Detach type"
+        title={`Remove ${detaching?.name ?? ''} from this list?`}
+        description="The content type stays available to other lists. A type still used by items cannot be removed."
+        confirm="Remove content type"
         busy={detach.isPending}
         error={detach.error}
         onConfirm={() => detaching && detach.mutate(detaching)}
       />
-    </section>
+    </SettingsSection>
   );
 }

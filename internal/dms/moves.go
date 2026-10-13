@@ -111,8 +111,10 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 			if e != nil {
 				return e
 			}
-			if e = t.replaceSurface(ctx, out, rev, itemsurface.SurfaceHead, defs); e != nil {
-				return e
+			if dest.PublishingEnabled {
+				if e = t.replaceSurface(ctx, out, rev, itemsurface.SurfaceHead, defs); e != nil {
+					return e
+				}
 			}
 			if !dest.PublishingEnabled {
 				if _, e = t.publishRevision(ctx, subject, out, rev, false, nil); e != nil {

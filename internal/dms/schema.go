@@ -186,6 +186,10 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 	if err != nil {
 		return err
 	}
+	c, err := s.Client.Resource.Get(ctx, containerID)
+	if err != nil {
+		return err
+	}
 	membership := map[string]map[string]bool{}
 	for _, typ := range types {
 		membership[typ.ID] = map[string]bool{}
@@ -194,7 +198,7 @@ func (s *Service) checkRequiredFilled(ctx context.Context, containerID string, k
 		}
 	}
 	for after := ""; ; {
-		heads, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID), itemsurface.SurfaceEQ(itemsurface.SurfaceHead), itemsurface.ItemIDGT(after)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(surfaceBatch).Select(itemsurface.FieldItemID, itemsurface.FieldPayload).All(ctx)
+		heads, e := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDEQ(containerID), itemsurface.SurfaceEQ(headSurface(c)), itemsurface.ItemIDGT(after)).Order(ent.Asc(itemsurface.FieldItemID)).Limit(surfaceBatch).Select(itemsurface.FieldItemID, itemsurface.FieldPayload).All(ctx)
 		if e != nil {
 			return e
 		}

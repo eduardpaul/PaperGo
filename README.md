@@ -65,7 +65,7 @@ Vite listens on `http://127.0.0.1:5173` and proxies `/v1`, `/auth` and `/health`
 | Unique permissions at every level | SharePoint-style inheritance: only the nearest exclusive scope supplies additive read/read_draft/write/publish/manage grants. Break, copy, or reset inheritance explicitly. Manage implies all actions; write/publish imply draft and published read. Denies are rejected. |
 | Typed item relationships | Every link has a workspace relationship type supplying its key, directed/symmetric policy, validated attributes, cardinality limits, and edge ETags. Indexed incoming/outgoing queries require visible, authorized endpoints before pagination. New cross-workspace links are rejected; item moves preserve existing links, which require readable live endpoints. |
 | Publish any list/library item | Publishing disabled by default: new items, edits and uploads are automatically published. With publishing enabled, changes create drafts and explicit publish/unpublish controls the published pointer. Ordinary readers see published revisions only. Library revisions pin their blob. |
-| Preserve content history | Every item create, metadata edit and upload stores an immutable revision tied to its schema revision. Head and published surfaces are independent. Lifecycle/ACL changes advance the lock version without creating content revisions. |
+| Preserve content history | Every item create, metadata edit and upload stores an immutable revision tied to its schema revision. Head and published surfaces are independent in publishing collections; without publishing they are one surface. Lifecycle/ACL changes advance the lock version without creating content revisions. |
 | Tags on all content | Built-in tags on every resource, with a normalized indexed projection maintained by database triggers. The workspace tag vocabulary lists tags in use with counts of what the caller can read. |
 | Read-heavy browsing and search | Keyset pagination and permission filtering before LIMIT; FTS5 and tags on the selected head/published surface; optional typed field indexes for exact filters and ranges. Multi-step reads use a consistent database snapshot. |
 | Enterprise backend foundation | Fail-closed bearer authentication, production OIDC, transactional audit events, optimistic concurrency, strict JSON, upload limits, structured logs, health probes, graceful shutdown and non-root container build. |
@@ -86,7 +86,7 @@ Every `/v1` request requires authentication: `Authorization: Bearer <token>` in 
 | --- | --- | --- |
 | POST / GET | `/v1/workspaces` | Create a workspace / list accessible workspaces |
 | GET / PATCH / DELETE | `/v1/resources/{id}` | Read / update names, tags, item values, `parent_id` (move) and collection settings / delete a folder or item |
-| POST / GET | `/v1/resources/{id}/children` | Create / browse children |
+| POST / GET | `/v1/resources/{id}/children` | Create / browse children; `kind=folder` (or another kind) lists only that kind |
 | POST | `/v1/resources/{id}/bulk` | Atomically create, update/move, publish, unpublish or delete up to 100 items in one list/library |
 | GET | `/v1/workspaces/{id}/tags` | The tag vocabulary with counts of readable resources; `collection_id`, `prefix`, `$skiptoken`, `$top` |
 | POST / GET | `/v1/smart-folders` | Create / browse personal and shared query definitions |
@@ -95,7 +95,7 @@ Every `/v1` request requires authentication: `Authorization: Bearer <token>` in 
 | POST | `/v1/smart-folders/{id}/items` | Classify an existing item or create an item matching the definition/path |
 | DELETE | `/v1/smart-folders/{id}/items/{itemID}` | Remove classification while preserving the item and location |
 | GET / POST | `/v1/workspaces/{id}/smart-folders/export`, `/import` | Export / atomically merge portable shared definitions |
-| GET | `/v1/resources?workspace_id=...&q=...&tag=...` | Workspace search and tag filtering; optional `parent_id` narrows to direct children |
+| GET | `/v1/resources?workspace_id=...&q=...&tag=...` | Workspace search and tag filtering; optional `parent_id` narrows to direct children and `kind` to one kind of resource |
 | POST / GET | `/v1/resources/{id}/fields` | Add / read list or library field definitions |
 | PATCH | `/v1/resources/{id}/fields/{fieldID}` | Evolve label, choices, required or indexed; uses the container ETag |
 | GET | `/v1/resources/{id}/schemas` | Manager-only schema history; paginate with `$skiptoken` |
@@ -111,6 +111,7 @@ Every `/v1` request requires authentication: `Authorization: Bearer <token>` in 
 | GET | `/v1/items/{id}/schema?surface=auto` | Immutable schema of the caller's visible content revision |
 | PUT / GET | `/v1/items/{id}/content` | Upload a blob / download the selected revision's blob; draft readers may request historical `blob_id` |
 | POST | `/v1/resources/{id}/documents` | Create a library document using multipart `file` and optional `metadata` JSON; see [documents](docs/documents.md) |
+| GET | `/v1/items/{id}/content/versions` | Retained file versions, newest first: number, file name, type, size, SHA-256, who added it, and the current one. Ordinary readers see only the published file |
 | POST | `/v1/items/{id}/content/versions/{number}/restore` | Restore an earlier file as a new version; requires current numeric `If-Match` |
 | GET | `/v1/audit` | Organization-wide feed requiring `audit.read`; actor/entity/workspace/date filters, changed properties, trace IDs and newest-first paging |
 | GET / PATCH | `/v1/identity/me` | Current user profile and self display-name edits |
@@ -123,6 +124,8 @@ Every `/v1` request requires authentication: `Authorization: Bearer <token>` in 
 | GET | `/health/live`, `/health/ready` | Process liveness / database and migration readiness |
 
 Read/update responses carry a quoted numeric `ETag`. PATCH, resource DELETE, catalog PUT, view DELETE, template application, ACL replacement, blob upload, publish and unpublish require `If-Match: "<current version>"`. Missing preconditions return 428; stale versions return 412. These mutations consume a lock version; publishing an already published head returns 409. Content `revision_number`, blob `version`, and resource lock `version` are independent counters. Upload returns `resource_version` and an ETag for the resource. Publication event `version` records the lock version consumed by the transition. PATCH `values` merges supplied keys; null removes an optional value. Relationship deletion requires write access to both endpoints and does not require If-Match.
+
+GET and PATCH `/v1/resources/{id}` add `access`: the actions the caller may take on that resource, in the order `read`, `read_draft`, `write`, `publish`, `manage`. It applies the same ACL and module-scope rules as the requests themselves (`write` and `publish` below a workspace also need `list.write`), so clients can offer only allowed actions. The server still checks every request.
 
 GET resources and browsing support `surface=auto|head|published`. Auto chooses head for draft readers and published for ordinary readers. An unpublished item returns 404 to a reader; explicit head requests require draft access. Names, tags, values, search matches, field filters and downloads all use the chosen surface. Readers cannot download draft or arbitrary historical blobs. A published resource's lock version may advance when editors save drafts; its `updated_at` describes the selected content revision.
 
@@ -244,7 +247,7 @@ POST `/v1/resources/{collectionID}/bulk-update` queues a durable operation with 
 {"query":{"filter":{"field":"status","value":"todo"}},"values":{"status":"done"}}
 ```
 
-The response is 202 with a `Location` pointing to `/v1/operations/{id}`. Poll that URL for `matched`, `processed`, `updated`, `failed`, `progress` and `failures`. The runner freezes selection when it starts and commits each item independently through normal permissions, validation, history, uniqueness and event handling. Values merge; null removes a field. Selection uses head content and does not publish changes. Successful edits survive other items' failures. `succeeded` means execution finished, even when some items failed; `failed` means the operation stopped because collection access, schema or infrastructure failed; earlier successful edits remain committed. Counts include every failure, with at most 50 reported reasons. Results require the starter and current collection read access. Pending work resumes after restart. `/bulk` provides a separate atomic batch of explicit actions.
+The response is 202 with a `Location` pointing to `/v1/operations/{id}`. Poll that URL for `matched`, `processed`, `updated`, `failed`, `progress` and `failures`. The runner freezes selection when it starts and edits items in batches of up to 200 per transaction (about a quarter of a second each, so other writes proceed between batches); each item goes through normal permissions, validation, history, uniqueness and event handling under its own savepoint, so one item's failure leaves the others in its batch intact. Values merge; null removes a field. Selection uses head content and does not publish changes. Successful edits survive other items' failures. `succeeded` means execution finished, even when some items failed; `failed` means the operation stopped because collection access, schema or infrastructure failed; earlier successful edits remain committed. Counts include every failure, with at most 50 reported reasons. Results require the starter and current collection read access. Pending work resumes after restart. `/bulk` provides a separate atomic batch of explicit actions.
 
 Lookup fields may target any live collection in the organization, across workspace boundaries. Explicit assignments and defaults validate that every target is a live item of that collection, without requiring target read access or publication. Repeating a stored ID explicitly revalidates it; omitted lookup values survive unrelated edits. A lookup reference does not grant access to the target content.
 

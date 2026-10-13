@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"papergo/ent"
 	"papergo/ent/operation"
 	"papergo/ent/operationitem"
@@ -56,10 +57,10 @@ func (s *Service) StartBulkUpdate(ctx context.Context, subject, collectionID str
 	return
 }
 
-// bulkUpdateStep holds the writer for a single item. A savepoint discards a
-// failed edit's projections, claims, audit and events while committing its
-// failure and progress. Successful edits and completion markers commit together,
-// so cancellation/restart cannot apply the same patch twice.
+// bulkUpdateStep holds the writer for a batch of items. A savepoint per item
+// discards a failed edit's projections, claims, audit and events while
+// committing its failure and progress. Successful edits and completion markers
+// commit together, so cancellation/restart cannot apply the same patch twice.
 func (s *Service) bulkUpdateStep(ctx context.Context, op *ent.Operation) error {
 	if _, e := s.authorize(ctx, op.CreatedBy, op.ContainerID, "write"); e != nil {
 		return e
@@ -76,8 +77,12 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *ent.Operation) error {
 		if e != nil {
 			return e
 		}
-		args := append([]any{op.ID, time.Now().UTC(), op.ID}, q.args...)
-		if _, e = s.Client.ExecContext(ctx, `INSERT INTO operation_items(id,created_at,operation_id,item_id) SELECT ?||':'||id,?,?,id FROM (`+q.sql+`)`, args...); e != nil {
+		sql, eligibleArgs, e := s.eligibleRows(ctx, q)
+		if e != nil {
+			return e
+		}
+		args := append([]any{op.ID, time.Now().UTC(), op.ID}, eligibleArgs...)
+		if _, e = s.Client.ExecContext(ctx, `INSERT INTO operation_items(id,created_at,operation_id,item_id) SELECT ?||':'||id,?,?,id FROM (`+sql+`)`, args...); e != nil {
 			return e
 		}
 		matched, e := s.Client.OperationItem.Query().Where(operationitem.OperationIDEQ(op.ID)).Count(ctx)
@@ -90,65 +95,94 @@ func (s *Service) bulkUpdateStep(ctx context.Context, op *ent.Operation) error {
 		}
 		return b.Exec(ctx)
 	}
-	row, e := s.Client.OperationItem.Query().Where(operationitem.OperationIDEQ(op.ID)).Order(ent.Asc(operationitem.FieldItemID)).First(ctx)
-	if ent.IsNotFound(e) {
-		return s.Client.Operation.UpdateOne(op).SetStatus(operation.StatusSucceeded).SetProgress(100).Exec(ctx)
-	}
+	rows, e := s.Client.OperationItem.Query().Where(operationitem.OperationIDEQ(op.ID)).Order(ent.Asc(operationitem.FieldItemID)).Limit(bulkStepItems).All(ctx)
 	if e != nil {
 		return e
 	}
-	if _, e = s.tx.ExecContext(ctx, "SAVEPOINT bulk_item"); e != nil {
-		return e
+	if len(rows) == 0 {
+		return s.Client.Operation.UpdateOne(op).SetStatus(operation.StatusSucceeded).SetProgress(100).Exec(ctx)
+	}
+	// One transaction edits a batch of items, each under its own savepoint;
+	// the time budget keeps other writers from waiting long behind it.
+	s.batch = newBatchCache(op.CreatedBy)
+	defer func() { s.batch = nil }()
+	deadline := time.Now().Add(bulkStepBudget)
+	processed, updated, failed := op.Processed, op.Updated, op.Failed
+	failures := op.Failures
+	for _, row := range rows {
+		itemErr, err := s.bulkUpdateItem(ctx, op, in, row.ItemID)
+		if err != nil {
+			return err
+		}
+		if itemErr == nil {
+			updated++
+		} else {
+			failed++
+			if len(failures) < 50 {
+				failures = append(failures, model.OperationFailure{ItemID: row.ItemID, Reason: bulkFailureReason(itemErr)})
+			}
+		}
+		if e = s.Client.OperationItem.DeleteOne(row).Exec(ctx); e != nil {
+			return e
+		}
+		processed++
+		if time.Now().After(deadline) {
+			break
+		}
+	}
+	b := s.Client.Operation.UpdateOne(op).SetProcessed(processed).SetUpdated(updated).SetFailed(failed).SetFailures(failures).SetProgress(processed * 100 / op.Matched)
+	if processed == op.Matched {
+		b.SetStatus(operation.StatusSucceeded)
+	}
+	return b.Exec(ctx)
+}
+
+// Each bulk update step edits at most bulkStepItems items, and stops early
+// once bulkStepBudget is spent.
+var (
+	bulkStepItems  = 200
+	bulkStepBudget = 250 * time.Millisecond
+)
+
+// bulkUpdateItem edits one item under a savepoint. An item that cannot be
+// edited (gone, forbidden, changed, invalid) is rolled back and reported as
+// itemErr; infrastructure failures stop the operation.
+func (s *Service) bulkUpdateItem(ctx context.Context, op *ent.Operation, in FilteredBulkUpdate, itemID string) (itemErr, err error) {
+	if _, err = s.tx.ExecContext(ctx, "SAVEPOINT bulk_item"); err != nil {
+		return nil, err
 	}
 	queued := len(*s.pending)
-	r, e := s.authorize(ctx, op.CreatedBy, row.ItemID, "write")
+	r, e := s.authorize(ctx, op.CreatedBy, itemID, "write")
 	if e == nil {
 		if r.ContainerID == nil || *r.ContainerID != op.ContainerID || !contentKind(r.Kind) {
 			e = invalid("bulk target is outside the collection")
 		} else {
 			patch := UpdateResource{Name: in.Name, Tags: in.Tags, ContentTypeID: in.ContentTypeID}
 			if len(in.Values) > 0 {
-				patch.Values = &in.Values
+				values := maps.Clone(in.Values)
+				patch.Values = &values
 			}
-			_, e = s.update(ctx, op.CreatedBy, row.ItemID, r.Version, patch)
+			_, e = s.update(ctx, op.CreatedBy, itemID, r.Version, patch)
 		}
 	}
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return nil, ctx.Err()
 	}
 	if e != nil {
 		var validation *ValidationError
 		if !errors.Is(e, ErrForbidden) && !errors.Is(e, ErrNotFound) && !errors.Is(e, ErrConflict) && !errors.Is(e, ErrPreconditionFailed) && !ent.IsConstraintError(e) && !errors.As(e, &validation) {
-			// Infrastructure failures stop the operation and roll back this item.
-			return e
+			// Infrastructure failures stop the operation and roll back the step.
+			return nil, e
 		}
 		if _, rollback := s.tx.ExecContext(ctx, "ROLLBACK TO bulk_item"); rollback != nil {
-			return errors.Join(e, rollback)
+			return nil, errors.Join(e, rollback)
 		}
 		*s.pending = (*s.pending)[:queued]
 	}
-	if _, release := s.tx.ExecContext(ctx, "RELEASE bulk_item"); release != nil {
-		return release
+	if _, err = s.tx.ExecContext(ctx, "RELEASE bulk_item"); err != nil {
+		return nil, err
 	}
-	updated, failed := op.Updated, op.Failed
-	failures := op.Failures
-	if e == nil {
-		updated++
-	} else {
-		failed++
-		if len(failures) < 50 {
-			failures = append(failures, model.OperationFailure{ItemID: row.ItemID, Reason: bulkFailureReason(e)})
-		}
-	}
-	if e = s.Client.OperationItem.DeleteOne(row).Exec(ctx); e != nil {
-		return e
-	}
-	processed := op.Processed + 1
-	b := s.Client.Operation.UpdateOne(op).SetProcessed(processed).SetUpdated(updated).SetFailed(failed).SetFailures(failures).SetProgress(processed * 100 / op.Matched)
-	if processed == op.Matched {
-		b.SetStatus(operation.StatusSucceeded)
-	}
-	return b.Exec(ctx)
+	return e, nil
 }
 
 func bulkFailureReason(e error) string {

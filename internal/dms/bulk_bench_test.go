@@ -29,7 +29,7 @@ func BenchmarkItemUpdates(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				_, err = s.CreateField(ctx, "writer", list.ID, CreateField{Key: "amount", Label: "Amount", Type: "integer", Indexed: true})
+				_, err = s.CreateField(ctx, "organization-admin", list.ID, CreateField{Key: "amount", Label: "Amount", Type: "integer", Indexed: true})
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -67,4 +67,53 @@ func BenchmarkItemUpdates(b *testing.B) {
 			})
 		}
 	}
+}
+
+// Measure bulk creation of items with six indexed columns, as imports do.
+// Run with -cpuprofile to see where ingest time goes.
+func BenchmarkBulkCreate(b *testing.B) {
+	ctx := context.Background()
+	s := NewService(testutil.Database(b).SQL)
+	w, err := s.Create(ctx, "writer", "", CreateResource{Kind: "workspace", Name: "Benchmark"})
+	if err != nil {
+		b.Fatal(err)
+	}
+	list, err := s.Create(ctx, "writer", w.ID, CreateResource{Kind: "list", Name: "Invoices"})
+	if err != nil {
+		b.Fatal(err)
+	}
+	for _, field := range []CreateField{
+		{Key: "amount", Label: "Amount", Type: "decimal", Scale: 2, Indexed: true},
+		{Key: "status", Label: "Status", Type: "choice", Choices: []string{"Open", "Paid"}, Indexed: true},
+		{Key: "due", Label: "Due", Type: "date", Indexed: true},
+		{Key: "owner", Label: "Owner", Type: "person", Indexed: true},
+		{Key: "reference", Label: "Reference", Type: "text", Indexed: true},
+		{Key: "count", Label: "Count", Type: "integer", Indexed: true},
+	} {
+		if _, err = s.CreateField(ctx, "organization-admin", list.ID, field); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	created := 0
+	for n := 0; n < b.N; n++ {
+		operations := make([]BulkOperation, MaxBulkOperations)
+		for i := range operations {
+			created++
+			operations[i] = BulkOperation{Action: "create", Create: &BulkCreate{
+				Name: fmt.Sprintf("Invoice INV-%07d Acme Travel", created),
+				Tags: []string{"finance"},
+				Values: map[string]any{
+					"amount": json.Number(fmt.Sprintf("%d.%02d", created%10000, created%100)), "status": "Open", "due": "2026-10-13",
+					"owner": "writer", "reference": fmt.Sprintf("PO-%06d", created), "count": json.Number(fmt.Sprint(created % 50)),
+				},
+			}}
+		}
+		if _, err := s.Bulk(ctx, "writer", list.ID, BulkRequest{Operations: operations}); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.StopTimer()
+	b.ReportMetric(float64(created)/b.Elapsed().Seconds(), "items/s")
 }

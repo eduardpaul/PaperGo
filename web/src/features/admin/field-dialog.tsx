@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/api/http';
-import { keys } from '@/api/queries';
+import { collectionChildren, keys } from '@/api/queries';
 import type { FieldDefinition, FieldOptions, Resource } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
@@ -29,6 +29,41 @@ export const fieldTypes = [
   'term',
   'keywords',
 ];
+const typeLabels: Record<string, string> = {
+  text: 'Single line of text',
+  note: 'Multiple lines of text',
+  email: 'Email address',
+  url: 'Link',
+  date: 'Date',
+  datetime: 'Date and time',
+  choice: 'Choice',
+  number: 'Number',
+  integer: 'Whole number',
+  decimal: 'Decimal number',
+  currency: 'Currency',
+  boolean: 'Yes/No',
+  lookup: 'Lookup (item in another list)',
+  person: 'Person',
+  term: 'Managed metadata (term set)',
+  keywords: 'Keywords',
+};
+
+export function fieldTypeLabel(type: string) {
+  return typeLabels[type] ?? type;
+}
+
+/** A field key from its label: lowercase letters, digits and underscores, starting with a letter. */
+export function keyFromLabel(label: string) {
+  const key = label
+    .normalize('NFKD')
+    .replaceAll(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, '_')
+    .replaceAll(/^_+|_+$/g, '')
+    .slice(0, 64);
+  return /^[a-z]/.test(key) ? key : key ? `field_${key}` : '';
+}
+
 const multipleTypes = new Set(['choice', 'person', 'lookup', 'term', 'keywords']);
 
 /** Shared organization field editor, adapted from PaperDotNet's content type editor. */
@@ -45,6 +80,7 @@ export function FieldDialog({
 }) {
   const client = useQueryClient();
   const [key, setKey] = useState(field?.key ?? '');
+  const [keyEdited, setKeyEdited] = useState(!!field);
   const [label, setLabel] = useState(field?.label ?? '');
   const [type, setType] = useState(field?.type ?? 'text');
   const [scale, setScale] = useState(field?.scale ?? 2);
@@ -55,6 +91,11 @@ export function FieldDialog({
   const [hasDefault, setHasDefault] = useState(field?.options?.default_value !== undefined);
   const [defaultValue, setDefaultValue] = useState<unknown>(field?.options?.default_value);
   const termSets = useQuery({ ...termSetsQuery, enabled: type === 'term' });
+  const lookupTargets = useQuery({
+    queryKey: ['resources', collection?.workspace_id, 'collections'],
+    queryFn: () => collectionChildren(collection!.workspace_id),
+    enabled: type === 'lookup' && !!collection,
+  });
   const draft: FieldDefinition = {
     id: field?.id ?? 'new',
     key,
@@ -74,7 +115,7 @@ export function FieldDialog({
       const body = {
         label: label.trim(),
         required,
-        indexed,
+        indexed: indexed || type === 'keywords',
         choices: type === 'choice' ? draft.choices : undefined,
         options: { ...options, default_value: normalizedDefault },
       };
@@ -98,8 +139,12 @@ export function FieldDialog({
   return (
     <FormDialog
       open
-      title={field ? `Field ${field.label}` : 'New field'}
-      description="Organization fields are shared. Editing a field updates every collection using it."
+      title={field ? `${collection ? 'Column' : 'Field'} ${field.label}` : collection ? 'Add a column' : 'New field'}
+      description={
+        collection
+          ? 'Columns are shared organization fields. Editing one updates every list and library that uses it.'
+          : 'Organization fields are shared. Editing a field updates every collection using it.'
+      }
       submitLabel="Save field"
       submitDisabled={!canManage}
       pending={save.isPending}
@@ -107,18 +152,34 @@ export function FieldDialog({
       onSubmit={() => canManage && save.mutate()}
     >
       <fieldset className="grid gap-3" disabled={!canManage}>
-        <Field id="catalog-field-key" label="Key">
+        <Field id="catalog-field-label" label="Name">
+          <Input
+            id="catalog-field-label"
+            required
+            autoFocus={!field}
+            value={label}
+            onChange={(event) => {
+              setLabel(event.target.value);
+              if (!keyEdited) setKey(keyFromLabel(event.target.value));
+            }}
+          />
+        </Field>
+        <Field
+          id="catalog-field-key"
+          label="Key"
+          hint={field ? 'The key cannot be changed.' : 'Used by the API, filters and workflows. Lowercase letters, digits and underscores.'}
+        >
           <Input
             id="catalog-field-key"
             required
             pattern="[a-z][a-z0-9_]*"
             disabled={!!field}
             value={key}
-            onChange={(event) => setKey(event.target.value)}
+            onChange={(event) => {
+              setKey(event.target.value);
+              setKeyEdited(true);
+            }}
           />
-        </Field>
-        <Field id="catalog-field-label" label="Label">
-          <Input id="catalog-field-label" required value={label} onChange={(event) => setLabel(event.target.value)} />
         </Field>
         <Field id="catalog-field-type" label="Type">
           <Select
@@ -133,7 +194,9 @@ export function FieldDialog({
             }}
           >
             {fieldTypes.map((value) => (
-              <option key={value}>{value}</option>
+              <option key={value} value={value}>
+                {fieldTypeLabel(value)}
+              </option>
             ))}
           </Select>
         </Field>
@@ -213,13 +276,30 @@ export function FieldDialog({
           </Field>
         )}
         {type === 'lookup' && (
-          <Field id="field-lookup" label="Lookup collection id">
-            <Input
-              id="field-lookup"
-              required
-              value={options.lookup_container_id ?? ''}
-              onChange={(event) => patchOptions({ lookup_container_id: event.target.value })}
-            />
+          <Field id="field-lookup" label="Look up items in">
+            {collection ? (
+              <Select
+                id="field-lookup"
+                required
+                value={options.lookup_container_id ?? ''}
+                onChange={(event) => patchOptions({ lookup_container_id: event.target.value })}
+              >
+                <option value="">Choose a list…</option>
+                {lookupTargets.data?.map((target) => (
+                  <option key={target.id} value={target.id}>
+                    {target.name}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <Input
+                id="field-lookup"
+                required
+                placeholder="List or library id"
+                value={options.lookup_container_id ?? ''}
+                onChange={(event) => patchOptions({ lookup_container_id: event.target.value })}
+              />
+            )}
           </Field>
         )}
         {type === 'term' && (
@@ -244,8 +324,12 @@ export function FieldDialog({
           Required
         </label>
         <label className="flex gap-2">
-          <Checkbox checked={indexed} onChange={(event) => setIndexed(event.target.checked)} />
-          Indexed for filtering and sorting
+          <Checkbox
+            checked={indexed || type === 'keywords'}
+            disabled={type === 'keywords'}
+            onChange={(event) => setIndexed(event.target.checked)}
+          />
+          Use for filtering, sorting and grouping in views{type === 'keywords' ? ' (always on for keywords)' : ''}
         </label>
         <label className="flex gap-2">
           <Checkbox checked={!!options.unique} onChange={(event) => patchOptions({ unique: event.target.checked })} />

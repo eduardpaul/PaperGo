@@ -7,6 +7,8 @@ import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/qu
 import { Logo } from '@/components/brand/logo';
 import { Skeleton } from '@/components/ui/feedback';
 import { CreateSmartFolderDialog } from '@/features/smart-folders/create-dialog';
+import { useHasScope } from '@/features/admin/common';
+import { CollectionIcon } from '@/features/lists/collection-icon';
 import { cn } from '@/lib/utils';
 
 const itemClass =
@@ -89,6 +91,7 @@ function Workspaces({ onNavigate }: { onNavigate?: () => void }) {
   const { data, isPending } = useQuery(workspacesQuery);
   const { workspaceId: current } = useParams({ strict: false });
   const [open, setOpen] = useState(true);
+  const canCreate = useHasScope('workspace.create');
   const workspaces = data?.filter((workspace) => !workspace.personal_owner_id) ?? [];
 
   return (
@@ -98,9 +101,11 @@ function Workspaces({ onNavigate }: { onNavigate?: () => void }) {
           <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
           Workspaces
         </Collapsible.Trigger>
-        <Link to="/w" search={{ create: true }} onClick={onNavigate} aria-label="New workspace" className="rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground">
-          <Plus className="size-3.5" />
-        </Link>
+        {canCreate && (
+          <Link to="/w" search={{ create: true }} onClick={onNavigate} aria-label="New workspace" className="rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground">
+            <Plus className="size-3.5" />
+          </Link>
+        )}
       </div>
       <Collapsible.Content>
         <ul className="flex flex-col gap-0.5">
@@ -148,6 +153,7 @@ function WorkspaceLists({ workspaceId, onNavigate }: { workspaceId: string; onNa
             className={itemClass}
             activeProps={{ className: activeClass }}
           >
+            <CollectionIcon collection={list} />
             <span className="truncate">{list.name}</span>
           </Link>
         </li>

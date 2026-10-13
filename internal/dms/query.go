@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	entsql "entgo.io/ent/dialect/sql"
+	"maps"
 	"papergo/ent"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/predicate"
 	"papergo/ent/resource"
+	"slices"
 	"strings"
 	"time"
 )
@@ -29,6 +31,8 @@ type Browse struct {
 	FilterField string
 	FilterOp    string
 	FilterValue string
+	// Kind keeps one kind of resource, e.g. the folders of a large library.
+	Kind string
 }
 
 func pageSize(limit int) int {
@@ -61,6 +65,9 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if len(in.Search) > 256 {
 		return Page[*ent.Resource]{}, invalid("search is limited to 256 bytes")
 	}
+	if in.Kind != "" && resource.KindValidator(resource.Kind(in.Kind)) != nil {
+		return Page[*ent.Resource]{}, invalid("kind must be workspace, list, library, folder or item")
+	}
 	q := s.Client.Resource.Query().Where(resource.DeletedAtIsNil())
 	if in.ParentID != "" {
 		if _, err := s.authorize(ctx, subject, in.ParentID, "read"); err != nil {
@@ -81,6 +88,9 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 			return Page[*ent.Resource]{}, invalid("search and tags require workspace_id or parent_id")
 		}
 		q.Where(resource.KindEQ(resource.KindWorkspace))
+	}
+	if in.Kind != "" {
+		q.Where(resource.KindEQ(resource.Kind(in.Kind)))
 	}
 	if in.After != "" {
 		q.Where(resource.IDGT(in.After))
@@ -194,9 +204,10 @@ func (s *Service) selective(ctx context.Context, c candidateSet) (bool, error) {
 	return n <= candidateDriveLimit, rows.Err()
 }
 
-// ftsPhrase treats input as a literal phrase, never as executable FTS query syntax.
+// ftsPhrase treats input as a literal phrase, never as executable FTS query
+// syntax. Its last word matches as a prefix, so search works as people type.
 func ftsPhrase(search string) string {
-	return `"` + strings.ReplaceAll(strings.TrimSpace(search), `"`, `""`) + `"`
+	return `"` + strings.ReplaceAll(strings.TrimSpace(search), `"`, `""`) + `"*`
 }
 
 // overlayPage applies each item's selected surface and returns the selected revision
@@ -219,8 +230,24 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 	if err != nil {
 		return nil, err
 	}
+	// Items of collections without publishing have one surface, the published one.
+	containers := map[string]bool{}
+	for _, r := range items {
+		if r.ContainerID != nil {
+			containers[*r.ContainerID] = true
+		}
+	}
+	publishing, err := s.Client.Resource.Query().Where(resource.IDIn(slices.Collect(maps.Keys(containers))...), resource.PublishingEnabled(true)).IDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	publishes := map[string]bool{}
+	for _, id := range publishing {
+		publishes[id] = true
+	}
+	wantsHead := func(r *ent.Resource) bool { return surface == "head" || (surface == "auto" && draft[r.ID]) }
 	selectedSurface := func(r *ent.Resource) itemsurface.Surface {
-		if surface == "head" || (surface == "auto" && draft[r.ID]) {
+		if r.ContainerID != nil && publishes[*r.ContainerID] && wantsHead(r) {
 			return itemsurface.SurfaceHead
 		}
 		return itemsurface.SurfacePublished
@@ -287,7 +314,8 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 			}
 			selectedRevisions[r.ID] = rev
 		}
-		if selected == itemsurface.SurfacePublished {
+		// Readers of published content do not learn about drafts.
+		if selected == itemsurface.SurfacePublished && !wantsHead(r) {
 			r.HeadRevisionID = nil
 			r.NextRevisionNumber = 0
 		}

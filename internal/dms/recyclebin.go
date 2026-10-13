@@ -3,8 +3,10 @@ package dms
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"papergo/ent"
 	"papergo/ent/itemsurface"
 	"papergo/ent/relationship"
@@ -16,26 +18,48 @@ type DeletedResource struct {
 	*ent.Resource
 	DeletedAt time.Time `json:"deleted_at"`
 	DeletedBy string    `json:"deleted_by"`
+	// DeletedWith counts what a folder took with it: descendants deleted at
+	// the same time, which a recursive restore brings back.
+	DeletedWith int `json:"deleted_with,omitempty"`
+}
+
+// RecycleBinQuery pages the recycle bin, newest deletions first. TopLevel
+// leaves out entries deleted together with their folder.
+type RecycleBinQuery struct {
+	After    string
+	Limit    int
+	TopLevel bool
 }
 
 // RecycleBin exposes only writable deleted content in a live collection.
-func (s *Service) RecycleBin(ctx context.Context, subject, collection, after string, limit int) (Page[DeletedResource], error) {
+func (s *Service) RecycleBin(ctx context.Context, subject, collection string, in RecycleBinQuery) (Page[DeletedResource], error) {
 	return read(ctx, s, func(t *Service) (Page[DeletedResource], error) {
 		out := Page[DeletedResource]{Data: []DeletedResource{}}
 		if _, err := t.recycleCollection(ctx, subject, collection); err != nil {
 			return out, err
 		}
 		q := t.Client.Resource.Query().Where(resource.ContainerIDEQ(collection), resource.DeletedAtNotNil(), permissionPredicate(ctx, subject, "write"))
-		if after != "" {
-			q.Where(resource.IDGT(after))
+		if in.After != "" {
+			at, id, ok := strings.Cut(in.After, "|")
+			when, err := time.Parse(time.RFC3339Nano, at)
+			if !ok || err != nil {
+				return out, invalid("invalid recycle bin cursor")
+			}
+			q.Where(resource.Or(resource.DeletedAtLT(when), resource.And(resource.DeletedAtEQ(when), resource.IDLT(id))))
 		}
-		rows, err := q.Order(ent.Asc(resource.FieldID)).Limit(pageSize(limit) + 1).All(ctx)
+		if in.TopLevel {
+			q.Where(func(sel *entsql.Selector) {
+				sel.Where(entsql.ExprP("NOT EXISTS (SELECT 1 FROM resources folder WHERE folder.id=" + sel.C(resource.FieldParentID) + " AND folder.deleted_at=" + sel.C(resource.FieldDeletedAt) + ")"))
+			})
+		}
+		rows, err := q.Order(ent.Desc(resource.FieldDeletedAt), ent.Desc(resource.FieldID)).Limit(pageSize(in.Limit) + 1).All(ctx)
 		if err != nil {
 			return out, err
 		}
-		if len(rows) > pageSize(limit) {
-			rows = rows[:pageSize(limit)]
-			out.NextCursor = rows[len(rows)-1].ID
+		if len(rows) > pageSize(in.Limit) {
+			rows = rows[:pageSize(in.Limit)]
+			last := rows[len(rows)-1]
+			out.NextCursor = last.DeletedAt.UTC().Format(time.RFC3339Nano) + "|" + last.ID
 		}
 		for _, r := range rows {
 			if contentKind(r.Kind) {
@@ -47,7 +71,13 @@ func (s *Service) RecycleBin(ctx context.Context, subject, collection, after str
 			if r.DeletedBy != nil {
 				actor = *r.DeletedBy
 			}
-			out.Data = append(out.Data, DeletedResource{r, *r.DeletedAt, actor})
+			entry := DeletedResource{r, *r.DeletedAt, actor, 0}
+			if r.Kind == resource.KindFolder {
+				if err = t.scan(ctx, []any{&entry.DeletedWith}, `WITH RECURSIVE sub(id) AS (SELECT ? UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.deleted_at=?) SELECT count(*)-1 FROM sub`, r.ID, *r.DeletedAt); err != nil {
+					return out, err
+				}
+			}
+			out.Data = append(out.Data, entry)
 		}
 		return out, nil
 	})
@@ -98,6 +128,10 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 		if e != nil {
 			return e
 		}
+		c, e := t.Client.Resource.Get(ctx, collection)
+		if e != nil {
+			return e
+		}
 		rows := []*ent.Resource{r}
 		if recursive && r.Kind == resource.KindFolder {
 			rows, e = t.deletedTree(ctx, r, true)
@@ -140,12 +174,30 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 			if e != nil {
 				return e
 			}
-			if contentKind(row.Kind) {
-				// Restore the retained head and publication with their frozen schemas.
-				for _, surface := range []struct {
+			if contentKind(row.Kind) && !c.PublishingEnabled && row.HeadRevisionID != nil && (row.PublishedRevisionID == nil || *row.PublishedRevisionID != *row.HeadRevisionID) {
+				// Without publishing the head is the published content: an entry
+				// deleted while publishing was on comes back published.
+				head, e := t.Client.ItemRevision.Get(ctx, *row.HeadRevisionID)
+				if e != nil {
+					return e
+				}
+				if _, e = t.publishRevision(ctx, subject, row, head, false, nil); e != nil {
+					return e
+				}
+				if row.Kind == resource.KindItem {
+					t.emit(ctx, EventItemRestored, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
+				}
+			} else if contentKind(row.Kind) {
+				// Restore the retained head and publication with their frozen
+				// schemas; without publishing only the published surface exists.
+				surfaces := []struct {
 					id   *string
 					kind itemsurface.Surface
-				}{{row.HeadRevisionID, itemsurface.SurfaceHead}, {row.PublishedRevisionID, itemsurface.SurfacePublished}} {
+				}{{row.HeadRevisionID, itemsurface.SurfaceHead}, {row.PublishedRevisionID, itemsurface.SurfacePublished}}
+				if !c.PublishingEnabled {
+					surfaces = surfaces[1:]
+				}
+				for _, surface := range surfaces {
 					if surface.id == nil {
 						continue
 					}

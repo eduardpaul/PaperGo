@@ -87,10 +87,17 @@ func (Resource) Indexes() []ent.Index {
 		// cannot read are rejected without loading them.
 		index.Fields("workspace_id", "id", "scope_id"),
 		index.Fields("parent_id", "id", "scope_id"),
+		// Lists one kind of child (the folders of a large library) without scanning the rest.
+		index.Fields("parent_id", "kind", "id", "scope_id"),
 		index.Fields("container_id", "id"),
 		index.Fields("container_id", "content_type_id", "id"),
 		// Lets auto-surface queries list a collection's few ACL scopes by loose index scan.
 		index.Fields("container_id", "scope_id"),
 		index.Fields("parent_id", "name_key").Unique().Annotations(entsql.IndexWhere("name_key IS NOT NULL")),
+		// Revision collection asks whether anything still points at a revision.
+		index.Fields("head_revision_id").Annotations(entsql.IndexWhere("head_revision_id IS NOT NULL")),
+		index.Fields("published_revision_id").Annotations(entsql.IndexWhere("published_revision_id IS NOT NULL")),
+		// The recycle bin, newest deletions first.
+		index.Fields("container_id", "deleted_at", "id").Annotations(entsql.IndexWhere("deleted_at IS NOT NULL")),
 	}
 }

@@ -33,8 +33,10 @@ type QuerySpec struct {
 	Sort          []SortSpec  `json:"sort,omitempty"`
 	GroupBy       string      `json:"group_by,omitempty"`
 	ParentID      string      `json:"parent_id,omitempty"`
-	Search        string      `json:"search,omitempty"`
-	Tag           string      `json:"tag,omitempty"`
+	// AncestorID keeps what is anywhere below a folder: in it or its subfolders.
+	AncestorID string `json:"ancestor_id,omitempty"`
+	Search     string `json:"search,omitempty"`
+	Tag        string `json:"tag,omitempty"`
 }
 type QueryRequest struct {
 	Select  []string  `json:"select,omitempty"`
@@ -44,11 +46,19 @@ type QueryRequest struct {
 	Limit   int       `json:"-"`
 	// IncludeTotal counts every authorized match; omitted, total is absent.
 	IncludeTotal bool `json:"include_total,omitempty"`
+	// TotalLimit stops counting there and reports total_capped when more
+	// match, so a total costs at most that many rows. It implies a total.
+	TotalLimit int `json:"total_limit,omitempty"`
+	// rowACL checks permissions row by row, so queries over several
+	// collections share one SQL shape (smart folders).
+	rowACL bool
 }
 type QueryResult struct {
 	Data       []*ent.Resource `json:"value"`
 	NextCursor string          `json:"-"`
 	Total      *int            `json:"total,omitempty"`
+	// TotalCapped means more than total items match (see TotalLimit).
+	TotalCapped bool `json:"total_capped,omitempty"`
 }
 type QueryGroup struct {
 	Value any `json:"value"`
@@ -58,8 +68,11 @@ type QueryGroup struct {
 	Count int    `json:"count"`
 }
 type compiledQuery struct {
+	// sql and args select the eligible rows; empty while eligible decides them
+	// on first use (see Service.eligibleRows).
 	sql         string
 	args        []any
+	eligible    *eligibleSQL
 	fingerprint string
 	descending  bool
 	kind        string
@@ -295,7 +308,8 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 			if d.Type != "text" && d.Type != "note" && d.Type != "email" && d.Type != "url" {
 				return "", nil, invalid("contains requires text")
 			}
-			compare = "instr(" + col + ",?)>0"
+			// Case-insensitive, as people type names in pickers and filters.
+			compare = "instr(unicode_lower(" + col + "),unicode_lower(?))>0"
 		} else {
 			operator := ops[op]
 			if operator == "" {
@@ -430,6 +444,23 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		text += " AND r.parent_id=?"
 		args = append(args, parent.ID)
 	}
+	if in.Query.AncestorID != "" {
+		if in.Query.ParentID != "" {
+			return compiledQuery{}, invalid("use parent_id or ancestor_id, not both")
+		}
+		ancestor, e := s.authorize(ctx, subject, in.Query.AncestorID, "read")
+		if e != nil {
+			return compiledQuery{}, e
+		}
+		if ancestor.ID != c.ID && (ancestor.Kind != "folder" || ancestor.ContainerID == nil || *ancestor.ContainerID != c.ID) {
+			return compiledQuery{}, invalid("ancestor_id is outside this collection")
+		}
+		// The collection itself is every item's ancestor.
+		if ancestor.ID != c.ID {
+			text += " AND r.parent_id IN (WITH RECURSIVE below(id) AS (SELECT ? UNION ALL SELECT f.id FROM resources f JOIN below ON f.parent_id=below.id WHERE f.kind='folder' AND f.deleted_at IS NULL) SELECT id FROM below)"
+			args = append(args, ancestor.ID)
+		}
+	}
 	if in.Query.Filter != nil {
 		filter, a, e := compiler.filter(in.Query.Filter, 0)
 		if e != nil {
@@ -445,23 +476,20 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 	if strings.TrimSpace(in.Query.Search) != "" {
 		phrase := ftsPhrase(in.Query.Search)
 		// FTS rowids are item_surfaces rowids; reading the UNINDEXED id column costs a content-table lookup per match.
-		text += " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)"
+		// The unary + keeps SQLite from probing the surface index once per match for every row.
+		text += " AND +p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)"
 		args = append(args, phrase)
 	}
 	conditions, conditionArgs := text, args
-	selected, surfaceArgs := surfaceSQL(ctx, "r.id", subject, in.Surface)
-	args = append(append(append([]any{}, rankArgs...), surfaceArgs...), c.ID)
-	text = "SELECT r.id," + strings.Join(rankParts, ",") + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder')" + conditions
-	args = append(args, conditionArgs...)
-	// SQLite evaluates these terms in order: cheap index filters first, so the
-	// ACL probe runs only on rows that already match.
-	action := "read"
-	if in.Surface == "head" {
-		action = "read_draft"
+	// Collection queries decide the caller's ACL scopes when a statement first
+	// needs the eligible rows: pages read from a sort index check them per arm.
+	eligible := &eligibleSQL{collection: c.ID, subject: subject, surface: in.Surface, publishes: c.PublishingEnabled, ranks: strings.Join(rankParts, ","), rankArgs: rankArgs, conditions: conditions, conditionArgs: conditionArgs}
+	if in.rowACL {
+		text, args = eligible.rows(ctx)
+		eligible = nil
+	} else {
+		text, args = "", nil
 	}
-	acl, aclArgs := permissionSQL(ctx, "r.id", subject, action)
-	text += " AND " + acl
-	args = append(args, aclArgs...)
 	fingerprint, _ := json.Marshal(struct {
 		Subject, Collection, Surface, Schema string
 		Query                                QuerySpec
@@ -469,13 +497,13 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		Select                               []string
 	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.Select})
 	sum := sha256.Sum256(fingerprint)
-	q := compiledQuery{sql: text, args: args, fingerprint: hex.EncodeToString(sum[:]), descending: compiledOrders[0].descending, kind: compiledOrders[0].kind, rankDef: compiler.defs[rankField], orders: compiledOrders, projection: projection, includeTags: includeTags}
+	q := compiledQuery{sql: text, args: args, eligible: eligible, fingerprint: hex.EncodeToString(sum[:]), descending: compiledOrders[0].descending, kind: compiledOrders[0].kind, rankDef: compiler.defs[rankField], orders: compiledOrders, projection: projection, includeTags: includeTags}
 	if !grouped && len(compiledOrders) == 1 {
 		column, _ := systemField(rankField)
 		if column == "r.id" {
 			column = "p.item_id"
 		}
-		q.seek = &seekPlan{collection: c.ID, subject: subject, surface: in.Surface, conditions: conditions, args: conditionArgs, column: column}
+		q.seek = &seekPlan{collection: c.ID, subject: subject, surface: in.Surface, publishes: c.PublishingEnabled, conditions: conditions, args: conditionArgs, column: column}
 	}
 	return q, nil
 }
@@ -625,7 +653,7 @@ var resourceSummaryColumns = func() []string {
 
 // page selects one keyset page of IDs and sort values; where is keyset's clause.
 // Missing values sort last; ID ties follow the sort direction, as in queryseek.go.
-func (q compiledQuery) page(where string) string {
+func (q compiledQuery) page(sql, where string) string {
 	columns := []string{}
 	ordering := []string{}
 	for i, order := range q.orders {
@@ -642,7 +670,7 @@ func (q compiledQuery) page(where string) string {
 		direction = "DESC"
 	}
 	ordering = append(ordering, "id "+direction)
-	return "WITH eligible AS (" + q.sql + ") SELECT id," + strings.Join(columns, ",") + " FROM eligible" + where + " ORDER BY " + strings.Join(ordering, ",") + " LIMIT ?"
+	return "WITH eligible AS (" + sql + ") SELECT id," + strings.Join(columns, ",") + " FROM eligible" + where + " ORDER BY " + strings.Join(ordering, ",") + " LIMIT ?"
 }
 
 // eligiblePage sorts every eligible row of the CTE. Smart folders, which
@@ -652,8 +680,12 @@ func (s *Service) eligiblePage(ctx context.Context, q compiledQuery, after strin
 	if e != nil {
 		return nil, e
 	}
-	args := append(append([]any{}, q.args...), afterArgs...)
-	return s.queryRankedIDs(ctx, q, q.page(where), append(args, n)...)
+	sql, args, e := s.eligibleRows(ctx, q)
+	if e != nil {
+		return nil, e
+	}
+	args = append(append(args, afterArgs...), n)
+	return s.queryRankedIDs(ctx, q, q.page(sql, where), args...)
 }
 
 // rankedIDs reads (id, sort_value) rows.
@@ -677,6 +709,9 @@ func (s *Service) rankedIDs(ctx context.Context, query string, args ...any) ([]r
 // queryCompiled returns one page of q. A non-nil fields projects item values
 // to those keys (see overlayPage); nil returns complete values.
 func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryRequest, q compiledQuery, fields []string) (QueryResult, error) {
+	if in.TotalLimit < 0 || in.TotalLimit > 1_000_000 {
+		return QueryResult{}, invalid("total_limit must be between 1 and 1000000")
+	}
 	return read(ctx, s, func(t *Service) (QueryResult, error) {
 		limit := pageSize(in.Limit)
 		var page []rankedID
@@ -718,12 +753,24 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 				return out, e
 			}
 		}
-		if !in.IncludeTotal {
+		if !in.IncludeTotal && in.TotalLimit == 0 {
 			return out, nil
 		}
 		// An exact total evaluates every eligible row, so callers opt in.
 		var total int
-		if e = t.scan(ctx, []any{&total}, "WITH eligible AS ("+q.sql+") SELECT count(*) FROM eligible", q.args...); e != nil {
+		sql, args, e := t.eligibleRows(ctx, q)
+		if e != nil {
+			return out, e
+		}
+		if in.TotalLimit > 0 {
+			args = append(args, in.TotalLimit+1)
+			if e = t.scan(ctx, []any{&total}, "SELECT count(*) FROM (SELECT 1 FROM ("+sql+") LIMIT ?)", args...); e != nil {
+				return out, e
+			}
+			if total > in.TotalLimit {
+				total, out.TotalCapped = in.TotalLimit, true
+			}
+		} else if e = t.scan(ctx, []any{&total}, "WITH eligible AS ("+sql+") SELECT count(*) FROM eligible", args...); e != nil {
 			return out, e
 		}
 		out.Total = &total
@@ -735,6 +782,9 @@ func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, 
 		q, e := t.compileQuery(ctx, subject, containerID, in, true)
 		if e != nil {
 			return Page[QueryGroup]{}, e
+		}
+		if groups, ok, e := t.countedGroups(ctx, subject, containerID, in, q.rankDef); e != nil || ok {
+			return Page[QueryGroup]{Data: groups}, e
 		}
 		out, e := t.queryGroupsCompiled(ctx, in, q)
 		if e != nil || q.rankDef == nil || q.rankDef.Type != "term" && q.rankDef.Type != "keywords" {
@@ -762,9 +812,12 @@ func (s *Service) queryGroupsCompiled(ctx context.Context, in QueryRequest, q co
 		if e != nil {
 			return Page[QueryGroup]{}, e
 		}
-		args := append(append([]any{}, q.args...), afterArgs...)
-		args = append(args, pageSize(in.Limit)+1)
-		rows, e := t.Client.QueryContext(ctx, "WITH eligible AS ("+q.sql+"),grouped AS (SELECT sort_value,count(*) n FROM eligible GROUP BY sort_value) SELECT sort_value,n FROM grouped"+where+" ORDER BY (sort_value IS NULL) ASC,sort_value ASC LIMIT ?", args...)
+		sql, args, e := t.eligibleRows(ctx, q)
+		if e != nil {
+			return Page[QueryGroup]{}, e
+		}
+		args = append(append(args, afterArgs...), pageSize(in.Limit)+1)
+		rows, e := t.Client.QueryContext(ctx, "WITH eligible AS ("+sql+"),grouped AS (SELECT sort_value,count(*) n FROM eligible GROUP BY sort_value) SELECT sort_value,n FROM grouped"+where+" ORDER BY (sort_value IS NULL) ASC,sort_value ASC LIMIT ?", args...)
 		if e != nil {
 			return Page[QueryGroup]{}, e
 		}

@@ -1,26 +1,67 @@
 import { describe, expect, it } from 'vitest';
-import { documentUploadRequest, downloadContentPath, listingRequest, replaceContentRequest, searchRequest, smartFolderQueryRequest } from './requests';
+import { bulkUpdateRequests, countRequest, documentUploadRequest, downloadContentPath, listingQuery, listingRequest, replaceContentRequest, searchRequest, smartFolderQueryRequest, viewGroupsRequest, viewRowsRequest } from './requests';
 
 describe('listing and search requests', () => {
-  it('queries a saved view at the collection root', () => {
-    expect(listingRequest('col', undefined, 'view-1', undefined)).toEqual({
-      path: '/v1/views/view-1/query',
+  it('browses the open folder when no view, sort or search applies', () => {
+    expect(listingRequest('col', {})).toEqual({ path: '/v1/resources/col/children', method: 'GET', query: { $top: 50 } });
+    expect(listingRequest('col', { folder: 'folder' }).path).toBe('/v1/resources/folder/children');
+  });
+
+  it('searches the open folder and everything below it, or the whole list at the top', () => {
+    expect(listingRequest('col', { folder: 'folder', q: 'invoice' })).toEqual({
+      path: '/v1/resources/col/query',
       method: 'POST',
       query: { $top: 50 },
-      body: { include_total: true },
+      body: { query: { ancestor_id: 'folder', search: 'invoice' } },
+    });
+    expect(listingRequest('col', { q: 'invoice' }).body).toEqual({ query: { search: 'invoice' } });
+  });
+
+  it('selects the columns chosen on the page instead of the view\'s', () => {
+    const view = { columns: ['$name', 'status'], query: {} };
+    expect(listingRequest('col', { view, columns: ['$name', 'amount'] }).body).toEqual({
+      query: {},
+      select: ['$name', 'amount'],
     });
   });
 
-  it('browses the open folder, and a search term, instead of the saved view', () => {
-    expect(listingRequest('col', 'folder', 'view-1', undefined)).toEqual({
-      path: '/v1/resources/folder/children',
-      method: 'GET',
-      query: { q: undefined, $top: 50 },
+  it('sorts the open folder with a collection query', () => {
+    expect(listingRequest('col', { sort: { field: 'amount', direction: 'desc' } })).toEqual({
+      path: '/v1/resources/col/query',
+      method: 'POST',
+      query: { $top: 50 },
+      body: { query: { parent_id: 'col', sort: [{ field: 'amount', direction: 'desc' }] } },
     });
-    expect(listingRequest('col', undefined, 'view-1', 'invoice')).toEqual({
-      path: '/v1/resources/col/children',
-      method: 'GET',
-      query: { q: 'invoice', $top: 50 },
+  });
+
+  it('combines a saved view with the open folder, the search text and a column sort', () => {
+    const view = {
+      columns: ['$name', 'status'],
+      query: { filter: { field: 'status', op: 'eq', value: 'Open' }, sort: [{ field: '$name', direction: 'asc' }], group_by: 'status' },
+    };
+    expect(listingRequest('col', { view })).toEqual({
+      path: '/v1/resources/col/query',
+      method: 'POST',
+      query: { $top: 50 },
+      body: { query: view.query, select: ['$name', 'status'] },
+    });
+    expect(listingRequest('col', { view, folder: 'folder', sort: { field: '$modified_at', direction: 'desc' } }).body).toEqual({
+      query: { ...view.query, parent_id: 'folder', sort: [{ field: '$modified_at', direction: 'desc' }] },
+      select: ['$name', 'status'],
+    });
+    expect(listingRequest('col', { view, folder: 'folder', q: 'invoice' }).body).toEqual({
+      query: { ...view.query, ancestor_id: 'folder', search: 'invoice' },
+      select: ['$name', 'status'],
+    });
+  });
+
+  it('counts what a listing shows apart from its rows, up to a limit', () => {
+    expect(listingQuery(listingRequest('col', { folder: 'folder' }), 'col')).toEqual({ parent_id: 'folder' });
+    expect(countRequest('col', { search: 'acme', sort: [{ field: 'amount', direction: 'asc' }], group_by: 'status' })).toEqual({
+      path: '/v1/resources/col/query',
+      method: 'POST',
+      query: { $top: 1 },
+      body: { total_limit: 100000, query: { search: 'acme' }, select: [] },
     });
   });
 
@@ -61,5 +102,49 @@ describe('document transfer requests', () => {
       headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': 'a.pdf' },
     });
     expect(downloadContentPath('item')).toBe('/v1/items/item/content');
+    expect(downloadContentPath('item', 'blob')).toBe('/v1/items/item/content?blob_id=blob');
+  });
+});
+
+describe('bulk updates', () => {
+  it('sends up to 1550 selected ids per request as groups of 50', () => {
+    const ids = Array.from({ length: 1600 }, (_, i) => `id${i}`);
+    const calls = bulkUpdateRequests('col', { ids }, { status: 'Paid' });
+    expect(calls).toHaveLength(2);
+    const first = calls[0].body as { query: { filter: { or: { value: string[] }[] } }; values: unknown };
+    expect(first.query.filter.or).toHaveLength(31);
+    expect(first.query.filter.or.every((part) => part.value.length === 50)).toBe(true);
+    expect(first.values).toEqual({ status: 'Paid' });
+    expect(calls[1].body).toEqual({ query: { filter: { field: '$id', op: 'in', value: ids.slice(1550, 1600) } }, values: { status: 'Paid' } });
+  });
+
+  it('updates everything a view matches without its sort or grouping', () => {
+    const query = { filter: { field: 'status', op: 'eq', value: 'Open' }, sort: [{ field: 'due', direction: 'asc' }], group_by: 'status', search: 'acme' };
+    expect(bulkUpdateRequests('col', { query }, { status: 'Paid' })).toEqual([
+      {
+        path: '/v1/resources/col/bulk-update',
+        method: 'POST',
+        body: { query: { filter: { field: 'status', op: 'eq', value: 'Open' }, search: 'acme' }, values: { status: 'Paid' } },
+      },
+    ]);
+  });
+});
+
+describe('board and calendar requests', () => {
+  it('narrows a view by one more condition and counts its groups', () => {
+    const view = { columns: ['amount'], query: { filter: { field: 'amount', op: 'gt', value: 5 }, group_by: 'status', sort: [{ field: 'due', direction: 'asc' }] } };
+    expect(viewRowsRequest('col', view, { field: 'status', op: 'eq', value: 'Open' }, 20)).toEqual({
+      path: '/v1/resources/col/query',
+      method: 'POST',
+      query: { $top: 20 },
+      body: {
+        query: {
+          filter: { and: [view.query.filter, { field: 'status', op: 'eq', value: 'Open' }] },
+          sort: [{ field: 'due', direction: 'asc' }],
+        },
+        select: ['$name', 'amount', 'status'],
+      },
+    });
+    expect(viewGroupsRequest('col', view).body).toEqual({ query: { filter: view.query.filter, group_by: 'status' } });
   });
 });

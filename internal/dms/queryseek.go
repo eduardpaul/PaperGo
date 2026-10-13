@@ -11,6 +11,8 @@ import (
 // instead costs the whole collection on every page.
 type seekPlan struct {
 	collection, subject, surface string
+	// publishes is false for collections that keep only the published surface.
+	publishes bool
 	// conditions are compileCollectionQuery's predicates over r and p.
 	conditions string
 	args       []any
@@ -38,6 +40,13 @@ type seekArm struct {
 func (s *Service) arms(ctx context.Context, p *seekPlan) ([]seekArm, error) {
 	draft, draftArgs := permissionSQL(ctx, "r.id", p.subject, "read_draft")
 	read, readArgs := permissionSQL(ctx, "r.id", p.subject, "read")
+	if !p.publishes {
+		// One surface: head readers need drafts, everyone else read access.
+		if p.surface == "head" {
+			return []seekArm{{"published", draft, draftArgs}}, nil
+		}
+		return []seekArm{{"published", read, readArgs}}, nil
+	}
 	switch p.surface {
 	case "head":
 		return []seekArm{{"head", draft, draftArgs}}, nil

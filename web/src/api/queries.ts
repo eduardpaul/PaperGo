@@ -123,14 +123,14 @@ export const smartFoldersQuery = queryOptions({
 
 export const peopleQuery = queryOptions({
   queryKey: keys.people,
-  queryFn: async () => (await api<string[]>('/v1/people')).data,
+  queryFn: async () => listOf((await api<string[] | Page<string>>('/v1/people')).data),
 });
 
 export const usersQuery = queryOptions({
   queryKey: keys.users,
   queryFn: async () => {
     try {
-      return (await api<UserProfile[]>('/v1/identity/users')).data;
+      return listOf((await api<UserProfile[] | Page<UserProfile>>('/v1/identity/users')).data);
     } catch (error) {
       if (isApiError(error, 403)) return [];
       throw error;
@@ -170,10 +170,6 @@ export async function relationships(itemId: string) {
 
 export async function permissions(id: string) {
   return (await api<Permissions>(`/v1/resources/${id}/permissions`)).data;
-}
-
-export async function recycleBin(collectionId: string) {
-  return (await api<Page<Resource>>(`/v1/resources/${collectionId}/recycle-bin`)).data;
 }
 
 export async function scopes() {
@@ -228,9 +224,10 @@ export async function keywords(q: string) {
   return listOf((await api<Page<Term>>('/v1/keywords', { query: { q, $top: 20 } })).data);
 }
 
-export async function searchResources(q: string, workspaceId: string) {
+export async function searchResources(q: string, workspaceId: string, top?: number) {
   const request = searchRequest(q, workspaceId);
-  return (await api<Page<Resource>>(request.path, { method: request.method, query: request.query })).data;
+  const query = top ? { ...request.query, $top: top } : request.query;
+  return (await api<Page<Resource>>(request.path, { method: request.method, query })).data;
 }
 
 export async function countChildren(id: string) {

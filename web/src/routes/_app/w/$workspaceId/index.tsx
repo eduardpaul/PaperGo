@@ -1,17 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Settings } from 'lucide-react';
+import { Briefcase, Library, Plus, Settings, Tag } from 'lucide-react';
 import { useState } from 'react';
-import { api } from '@/api/http';
-import { collectionChildren, keys, resourceQuery, templatesQuery } from '@/api/queries';
-import type { Resource } from '@/api/types';
+import { collectionChildren, resourceQuery } from '@/api/queries';
 import { Page, PageHeader } from '@/components/page';
-import { FormDialog } from '@/components/form-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
-import { Input, Label, Textarea } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { QueryFeedback } from '@/features/admin/common';
+import { useAccess } from '@/features/lists/access';
+import { CollectionIcon } from '@/features/lists/collection-icon';
+import { NewCollectionDialog } from '@/features/workspaces/new-collection-dialog';
+import { useFormat } from '@/lib/preferences';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/')({
   component: WorkspacePage,
@@ -19,119 +19,96 @@ export const Route = createFileRoute('/_app/w/$workspaceId/')({
 
 function WorkspacePage() {
   const { workspaceId } = Route.useParams();
-  const queryClient = useQueryClient();
+  const format = useFormat();
   const workspace = useQuery(resourceQuery(workspaceId));
   const collections = useQuery({
     queryKey: ['resources', workspaceId, 'collections'],
     queryFn: () => collectionChildren(workspaceId),
   });
-  const templates = useQuery(templatesQuery);
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [template, setTemplate] = useState('');
-  const [kind, setKind] = useState<'list' | 'library'>('list');
-  const create = useMutation({
-    mutationFn: () =>
-      api<Resource>(`/v1/resources/${workspaceId}/children`, {
-        method: 'POST',
-        body: template
-          ? { name: name.trim(), description: description.trim(), template_key: template, tags: [], values: {} }
-          : { kind, name: name.trim(), description: description.trim(), tags: [], values: {} },
-      }).then((result) => result.data),
-    onSuccess: async () => {
-      setOpen(false);
-      setName('');
-      setDescription('');
-      await queryClient.invalidateQueries({ queryKey: ['resources', workspaceId, 'collections'] });
-      await queryClient.invalidateQueries({ queryKey: keys.resources });
-    },
-  });
+  const { canManage } = useAccess(workspaceId);
+  const [creating, setCreating] = useState(false);
 
+  if (workspace.isError) {
+    return (
+      <Page>
+        <QueryFeedback query={workspace} />
+      </Page>
+    );
+  }
   return (
     <Page>
       <PageHeader
-        title={workspace.data?.name ?? 'Workspace'}
+        icon={Briefcase}
+        title={workspace.data?.name ?? ''}
         description={workspace.data?.description}
         actions={
           <>
-            <Button asChild>
-              <Link to="/w/$workspaceId/settings" params={{ workspaceId }}>
-                <Settings /> Settings
-              </Link>
-            </Button>
-            <Button asChild>
+            <Button asChild variant="ghost">
               <Link to="/w/$workspaceId/tags" params={{ workspaceId }}>
-                Tags
+                <Tag /> Tags
               </Link>
             </Button>
-            <Button variant="primary" onClick={() => setOpen(true)}>
-              New collection
-            </Button>
+            {canManage && (
+              <Button asChild>
+                <Link to="/w/$workspaceId/settings" params={{ workspaceId }}>
+                  <Settings /> Settings
+                </Link>
+              </Button>
+            )}
+            {canManage && (
+              <Button variant="primary" onClick={() => setCreating(true)}>
+                <Plus /> New list or library
+              </Button>
+            )}
           </>
         }
       />
+      <h2 className="mb-3 text-xs font-medium tracking-wide text-muted uppercase">Lists and libraries</h2>
       {collections.isPending ? (
-        <Skeleton className="h-24" />
-      ) : (collections.data?.length ?? 0) === 0 ? (
-        <EmptyState title="No lists or libraries">Create one to start adding items.</EmptyState>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {collections.data?.map((collection) => (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+        </div>
+      ) : collections.isError ? (
+        <QueryFeedback query={collections} />
+      ) : collections.data.length ? (
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {collections.data.map((collection) => (
             <li key={collection.id}>
-              <Card>
-                <Link
-                  to="/w/$workspaceId/l/$listId"
-                  params={{ workspaceId, listId: collection.id }}
-                  className="block px-4 py-3 hover:bg-surface-muted/60"
-                >
-                  <span className="block truncate font-medium">{collection.name}</span>
-                  <span className="text-xs text-muted">{collection.kind === 'library' ? 'Library' : 'List'}</span>
-                </Link>
-              </Card>
+              <Link
+                to="/w/$workspaceId/l/$listId"
+                params={{ workspaceId, listId: collection.id }}
+                className="group block h-full"
+              >
+                <Card className="flex h-full flex-col gap-2 p-4 transition-colors group-hover:border-accent/50">
+                  <span className="flex items-center gap-2">
+                    <CollectionIcon collection={collection} className="size-4 shrink-0 text-accent" />
+                    <span className="truncate font-semibold">{collection.name}</span>
+                  </span>
+                  <span className="line-clamp-2 flex-1 text-[13px] text-muted">
+                    {collection.description || (collection.kind === 'library' ? 'Library' : 'List')}
+                  </span>
+                  {collection.updated_at && (
+                    <span className="text-xs text-muted">Updated {format.relative(collection.updated_at)}</span>
+                  )}
+                </Card>
+              </Link>
             </li>
           ))}
         </ul>
+      ) : (
+        <Card>
+          <EmptyState icon={Library} title="No lists or libraries yet">
+            <p className="mb-3">Lists hold rows of information such as contacts or budgets; libraries hold files.</p>
+            {canManage && (
+              <Button variant="primary" onClick={() => setCreating(true)}>
+                <Plus /> New list or library
+              </Button>
+            )}
+          </EmptyState>
+        </Card>
       )}
-      <FormDialog
-        open={open}
-        title="New collection"
-        submitLabel="Create"
-        pending={create.isPending}
-        onClose={() => setOpen(false)}
-        onSubmit={() => name.trim() && create.mutate()}
-      >
-        <Label htmlFor="collection-name">Name</Label>
-        <Input id="collection-name" value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
-        <Label htmlFor="collection-description">Description</Label>
-        <Textarea
-          id="collection-description"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-        <Label htmlFor="collection-template">Template</Label>
-        <Select id="collection-template" value={template} onChange={(event) => setTemplate(event.target.value)}>
-          <option value="">None</option>
-          {templates.data?.map((entry) => (
-            <option key={entry.key} value={entry.key}>
-              {entry.name}
-            </option>
-          ))}
-        </Select>
-        {!template && (
-          <>
-            <Label htmlFor="collection-kind">Kind</Label>
-            <Select
-              id="collection-kind"
-              value={kind}
-              onChange={(event) => setKind(event.target.value as 'list' | 'library')}
-            >
-              <option value="list">List</option>
-              <option value="library">Library</option>
-            </Select>
-          </>
-        )}
-      </FormDialog>
+      <NewCollectionDialog key={String(creating)} workspaceId={workspaceId} open={creating} onOpenChange={setCreating} />
     </Page>
   );
 }

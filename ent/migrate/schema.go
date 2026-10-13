@@ -804,6 +804,11 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[5], ItemSurfacesColumns[13]},
 			},
+			{
+				Name:    "itemsurface_revision_id",
+				Unique:  false,
+				Columns: []*schema.Column{ItemSurfacesColumns[14]},
+			},
 		},
 	}
 	// ListViewsColumns holds the columns for the "list_views" table.
@@ -1203,6 +1208,11 @@ var (
 				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[0], ResourcesColumns[23]},
 			},
 			{
+				Name:    "resource_parent_id_kind_id_scope_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[5], ResourcesColumns[0], ResourcesColumns[23]},
+			},
+			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
 				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[0]},
@@ -1223,6 +1233,30 @@ var (
 				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[24]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
+				},
+			},
+			{
+				Name:    "resource_head_revision_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[30]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "head_revision_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "resource_published_revision_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[31]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "published_revision_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "resource_container_id_deleted_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[25], ResourcesColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "deleted_at IS NOT NULL",
 				},
 			},
 		},

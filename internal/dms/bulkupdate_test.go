@@ -14,6 +14,7 @@ import (
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"testing"
+	"time"
 )
 
 func bulkStep(t *testing.T, s *Service) {
@@ -32,6 +33,9 @@ func bulkStatus(t *testing.T, s *Service, id string) *ent.Operation {
 }
 
 func TestFilteredBulkUpdateFreezesSelectionResumesAndMerges(t *testing.T) {
+	// One item per step, to stop and resume between items.
+	defer func(n int) { bulkStepItems = n }(bulkStepItems)
+	bulkStepItems = 1
 	s, _, l := fixture(t)
 	for _, f := range []CreateField{{Key: "stage", Label: "Stage", Type: "text", Indexed: true}, {Key: "keep", Label: "Keep", Type: "text"}, {Key: "amount", Label: "Amount", Type: "integer"}} {
 		if _, e := s.CreateField(testContext, "alice", l.ID, f); e != nil {
@@ -313,6 +317,46 @@ func TestFilteredBulkUpdateItemACLsAndNullRemoval(t *testing.T) {
 	for _, name := range []string{"hidden", "draft reader", "revoked"} {
 		if latest(t, s, items[name].ID).Values["memo"] != "keep" {
 			t.Fatal("inaccessible item edited", name)
+		}
+	}
+}
+
+func TestBulkUpdateEditsABatchOfItemsPerStep(t *testing.T) {
+	// A generous budget: under the race detector one item can take tens of milliseconds.
+	defer func(budget time.Duration) { bulkStepBudget = budget }(bulkStepBudget)
+	bulkStepBudget = time.Minute
+	s, _, l := fixture(t)
+	if _, e := s.CreateField(testContext, "alice", l.ID, CreateField{Key: "stage", Label: "Stage", Type: "text", Indexed: true}); e != nil {
+		t.Fatal(e)
+	}
+	ids := map[string]bool{}
+	for i := range 30 {
+		ids[create(t, s, l.ID, "item", fmt.Sprintf("Item %02d", i), map[string]any{"stage": "todo"}).ID] = true
+	}
+	gone := create(t, s, l.ID, "item", "Gone", map[string]any{"stage": "todo"})
+	op, e := s.StartBulkUpdate(testContext, "alice", l.ID, FilteredBulkUpdate{Query: QuerySpec{Filter: &FilterExpr{Field: "stage", Value: json.RawMessage(`"todo"`)}}, Values: map[string]any{"stage": "done"}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	bulkStep(t, s) // selection
+	if e = s.Delete(testContext, "alice", gone.ID, latest(t, s, gone.ID).Version, DeleteOptions{}); e != nil {
+		t.Fatal(e)
+	}
+	bulkStep(t, s)
+	// One step edits every item within its budget.
+	if got := bulkStatus(t, s, op.ID); got.Processed != 31 {
+		t.Fatal("one item per step", got.Processed)
+	}
+	for bulkStatus(t, s, op.ID).Status == operation.StatusPending {
+		bulkStep(t, s)
+	}
+	got := bulkStatus(t, s, op.ID)
+	if got.Status != operation.StatusSucceeded || got.Matched != 31 || got.Processed != 31 || got.Updated != 30 || got.Failed != 1 || len(got.Failures) != 1 || got.Failures[0].ItemID != gone.ID {
+		t.Fatal("bulk result", got)
+	}
+	for id := range ids {
+		if v := latest(t, s, id).Values["stage"]; v != "done" {
+			t.Fatal("not updated", id, v)
 		}
 	}
 }

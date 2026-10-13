@@ -9,6 +9,8 @@ export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
     item: textParam(search.item),
     tab: textParam(search.tab),
     q: textParam(search.q),
+    sort: textParam(search.sort),
+    cols: textParam(search.cols),
   }),
   component: CollectionRoute,
 });
@@ -22,8 +24,7 @@ function CollectionRoute() {
       workspaceId={workspaceId}
       listId={listId}
       search={search}
-      onSearch={(patch) => void navigate({ search: (current) => ({ ...current, ...patch }) })}
-      onLeave={() => void navigate({ to: '/w/$workspaceId', params: { workspaceId } })}
+      onSearch={(patch, replace) => void navigate({ search: (current) => ({ ...current, ...patch }), replace })}
       onMoved={(moved) => {
         const destination = moved.container_id ?? listId;
         if (moved.workspace_id !== workspaceId || destination !== listId) {

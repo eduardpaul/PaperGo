@@ -1,15 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Inbox as InboxIcon, Upload } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { api, continuation } from '@/api/http';
 import { contentTypesQuery, fieldsQuery, inboxesQuery, keys, resourceQuery } from '@/api/queries';
 import type { Page as ApiPage, Resource } from '@/api/types';
 import { Page, PageHeader } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
-import { uploadDocument } from '@/features/documents/transfer';
+import { useUploads } from '@/features/documents/uploads';
 import { ItemSheet } from '@/features/lists/item-sheet';
 import { useFormat } from '@/lib/preferences';
 import { textParam } from '@/lib/search';
@@ -54,19 +53,21 @@ function InboxPage() {
   }
   const format = useFormat();
   const queryClient = useQueryClient();
-  const upload = useMutation({
-    mutationFn: (file: File) => {
-      const url = selected?.group_id ? `/v1/identity/groups/${selected.group_id}/inbox/documents` : '/v1/identity/me/inbox/documents';
-      return uploadDocument(url, file, { name: file.name });
-    },
-    onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: keys.resources });
-      await queryClient.invalidateQueries({ queryKey: keys.inboxes });
-      const duplicates = result.duplicates ?? [];
-      if (duplicates.length) toast.warning(`Possible duplicates: ${duplicates.map((duplicate) => duplicate.name).join(', ')}`);
-      void navigate({ search: (current) => ({ ...current, inbox: selected?.library_id, item: result.item.id, tab: 'details' }) });
-    },
-  });
+  const { upload } = useUploads();
+  const uploadFiles = (files: FileList | null) => {
+    const list = [...(files ?? [])];
+    if (!selected || !list.length) return;
+    const inbox = selected;
+    void upload(list, {
+      url: inbox.group_id ? `/v1/identity/groups/${inbox.group_id}/inbox/documents` : '/v1/identity/me/inbox/documents',
+      label: inbox.group_name ? `${inbox.group_name} inbox` : 'your inbox',
+      metadata: (file) => ({ name: file.name }),
+      open: (itemId) => ({ to: '/inbox', search: { inbox: inbox.library_id, item: itemId } }),
+    }).then((results) => {
+      if (list.length === 1 && results.length === 1)
+        void navigate({ search: (current) => ({ ...current, inbox: inbox.library_id, item: results[0].item.id, tab: 'details' }) });
+    });
+  };
 
   const rows = [...(children.data?.value ?? []), ...more];
 
@@ -83,11 +84,10 @@ function InboxPage() {
                 <Upload /> Upload
                 <input
                   type="file"
+                  multiple
                   className="sr-only"
-                  disabled={upload.isPending}
                   onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) upload.mutate(file);
+                    uploadFiles(event.target.files);
                     event.target.value = '';
                   }}
                 />

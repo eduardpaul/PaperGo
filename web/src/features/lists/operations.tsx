@@ -1,10 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { api } from '@/api/http';
 import { useApiPages } from '@/api/pages';
-import type { FieldDefinition } from '@/api/types';
+import { bulkUpdateRequests } from '@/api/requests';
+import type { FieldDefinition, QuerySpec } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Alert } from '@/components/ui/feedback';
+import { problemMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/button';
+import { SettingsSection } from '@/features/settings/section';
 import { Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { FieldEditor } from '@/features/fields/editor';
@@ -15,46 +20,53 @@ import type { Operation } from '@/features/admin/operation-progress';
 
 export function BulkEditDialog({
   collectionId,
-  ids,
+  target,
+  count,
   fields,
   onClose,
   onStarted,
 }: {
   collectionId: string;
-  ids: string[];
+  /** The selected items, or everything a query matches. */
+  target: { ids: string[] } | { query: QuerySpec };
+  /** How many items the query matches, as people should read it. */
+  count?: ReactNode;
   fields: FieldDefinition[];
   onClose: () => void;
-  onStarted: (id: string) => void;
+  onStarted: (operationIds: string[]) => void;
 }) {
   const client = useQueryClient();
   const [key, setKey] = useState(fields[0]?.key ?? '');
   const [value, setValue] = useState<unknown>(null);
   const field = fields.find((field) => field.key === key);
   const apply = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const patch = valuesPatch([field!], {}, { [key]: value }) ?? { [key]: null };
-      return api<Operation>(`/v1/resources/${collectionId}/bulk-update`, {
-        method: 'POST',
-        body: { query: { filter: { field: '$id', op: 'in', value: ids } }, values: patch },
-      });
+      const started: string[] = [];
+      for (const call of bulkUpdateRequests(collectionId, target, patch)) {
+        started.push((await api<Operation>(call.path, { method: call.method, body: call.body })).data.id);
+      }
+      return started;
     },
-    onSuccess: (result) => {
+    onSuccess: (started) => {
       void client.invalidateQueries({ queryKey: ['operations', collectionId, 'list'] });
-      onStarted(result.data.id);
+      onStarted(started);
       onClose();
     },
   });
+  const all = 'query' in target;
   return (
     <FormDialog
       open
-      title={`Edit ${ids.length} selected items`}
-      description="Set one field on every selected item in the background. Leave it empty to clear it. Each failure is reported separately."
-      submitLabel="Apply to selected items"
+      title={all ? <>Edit {count ?? 'all matching items'}</> : `Edit ${target.ids.length} selected items`}
+      description={`Set one field on every ${all ? 'matching' : 'selected'} item in the background. Leave it empty to clear it. Each failure is reported separately.`}
+      submitLabel={all ? 'Apply to all matching items' : 'Apply to selected items'}
       pending={apply.isPending}
       submitDisabled={!field}
       onClose={onClose}
       onSubmit={() => apply.mutate()}
     >
+      {apply.isError && <Alert>{problemMessage(apply.error)}</Alert>}
       <Label htmlFor="bulk-field">Field</Label>
       <Select
         id="bulk-field"
@@ -75,6 +87,12 @@ export function BulkEditDialog({
   );
 }
 
+const operationKinds: Record<string, string> = {
+  bulk_update: 'Field update on many items',
+  field_index: 'Column index build',
+};
+
+/** Background work on a collection (bulk field updates, index builds), newest first. */
 export function CollectionOperations({ collectionId }: { collectionId: string }) {
   const operations = useApiPages<Operation>(
     ['operations', collectionId, 'list'],
@@ -82,29 +100,39 @@ export function CollectionOperations({ collectionId }: { collectionId: string })
   );
   const [selected, setSelected] = useState('');
   return (
-    <details className="my-3 rounded border p-3">
-      <summary className="cursor-pointer text-sm font-medium">Background operations</summary>
+    <SettingsSection
+      title="Background work"
+      description="Changes that run in the background, such as editing a field on many items or building a column index."
+    >
       <QueryFeedback query={operations} />
-      <ul>
+      <ul className="flex flex-col divide-y">
         {operations.items.map((operation) => (
           <li key={operation.id}>
             <button
               type="button"
-              className="py-1 text-left text-sm hover:underline"
-              onClick={() => setSelected(operation.id)}
+              className="flex w-full items-center gap-3 py-2 text-left text-[13px] hover:bg-surface-muted/50"
+              aria-expanded={selected === operation.id}
+              onClick={() => setSelected(selected === operation.id ? '' : operation.id)}
             >
-              {operation.kind} · {operation.status} · {operation.id}
+              <span className="flex-1">{operationKinds[operation.kind] ?? operation.kind.replaceAll(/[_-]/g, ' ')}</span>
+              <Badge
+                tone={operation.status === 'succeeded' ? 'success' : operation.status === 'failed' ? 'danger' : 'neutral'}
+              >
+                {operation.status}
+              </Badge>
             </button>
+            {selected === operation.id && <OperationProgress id={operation.id} label="Progress" />}
           </li>
         ))}
       </ul>
-      {!operations.isPending && operations.items.length === 0 && <p className="text-sm text-muted">No operations.</p>}
+      {!operations.isPending && operations.items.length === 0 && (
+        <p className="text-sm text-muted">Nothing has run in the background yet.</p>
+      )}
       {operations.hasNextPage && (
         <Button disabled={operations.isFetchingNextPage} onClick={() => void operations.fetchNextPage()}>
-          Load more operations
+          Load more
         </Button>
       )}
-      {selected && <OperationProgress id={selected} label="Operation progress" />}
-    </details>
+    </SettingsSection>
   );
 }

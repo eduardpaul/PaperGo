@@ -1,9 +1,13 @@
 export type Kind = 'workspace' | 'list' | 'library' | 'folder' | 'item';
 
+export type AccessAction = 'read' | 'read_draft' | 'write' | 'publish' | 'manage';
+
 export interface Page<T> {
   value?: T[] | null;
   '@odata.nextLink'?: string | null;
   total?: number;
+  /** More than `total` items match; counting stopped there. */
+  total_capped?: boolean;
   field?: string;
   by?: string;
 }
@@ -20,6 +24,7 @@ export interface Resource {
   name: string;
   description?: string;
   allow_folders?: boolean;
+  template_keys?: string[] | null;
   tags?: string[] | null;
   values?: Record<string, unknown> | null;
   inherit_permissions?: boolean;
@@ -37,6 +42,8 @@ export interface Resource {
   updated_by?: string;
   deleted_at?: string;
   deleted_by?: string;
+  /** The caller's allowed actions; present on GET and PATCH /v1/resources/{id}. */
+  access?: AccessAction[];
 }
 
 export interface FieldOptions {
@@ -112,6 +119,8 @@ export interface QuerySpec {
   group_by?: string;
   content_type_id?: string;
   parent_id?: string;
+  /** Anywhere below this folder: in it or its subfolders. */
+  ancestor_id?: string;
   search?: string;
   tag?: string;
 }
@@ -195,7 +204,8 @@ export interface Relationship {
 }
 
 export interface PermissionGrant {
-  principal_type: 'user' | 'group';
+  /** Workspace role principals stand for everyone with that role in the workspace. */
+  principal_type: 'user' | 'group' | 'workspace_visitor' | 'workspace_member' | 'workspace_owner';
   principal_id: string;
   action: string;
   effect: string;
@@ -234,6 +244,13 @@ export interface SmartFolderEntry {
   collection_id: string;
   collection_name: string;
   item: Resource;
+}
+
+/** A value of a query's grouping field and how many matching items hold it. */
+export interface QueryGroup {
+  value: unknown;
+  label?: string;
+  count: number;
 }
 
 export interface SmartFolderGroup {
@@ -305,6 +322,18 @@ export interface WebDAVCredential {
   created_at: string;
   expires_at?: string;
   password?: string;
+}
+
+export interface FileVersion {
+  id: string;
+  version: number;
+  filename: string;
+  content_type: string;
+  size: number;
+  sha256: string;
+  created_at: string;
+  created_by: string;
+  is_current: boolean;
 }
 
 export interface DocumentUpload {

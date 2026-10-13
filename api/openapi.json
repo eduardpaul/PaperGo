@@ -766,6 +766,21 @@
             "name": "filter_value",
             "description": "Typed value, parsed without floating-point conversion for integer and decimal fields.",
             "in": "query"
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "list",
+                "library",
+                "folder",
+                "item"
+              ]
+            },
+            "description": "Only resources of this kind, e.g. kind=folder for the folders of a large library."
           }
         ]
       }
@@ -790,7 +805,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Resource"
+                  "$ref": "#/components/schemas/ResourceAccess"
                 }
               }
             },
@@ -832,7 +847,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Resource"
+                  "$ref": "#/components/schemas/ResourceAccess"
                 }
               }
             },
@@ -1146,6 +1161,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "list",
+                "library",
+                "folder",
+                "item"
+              ]
+            },
+            "description": "Only resources of this kind, e.g. kind=folder for the folders of a large library."
           }
         ]
       },
@@ -2001,6 +2031,82 @@
           }
         },
         "description": "Ordinary readers can download only the current published blob, including with blob_id. Draft readers default to head and may request retained historical blobs. Required module scopes: list.read and document.read. Resource ACLs and any additional use-case checks also apply.",
+        "x-module-scopes": [
+          "list.read",
+          "document.read"
+        ]
+      }
+    },
+    "/v1/items/{id}/content/versions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "summary": "List retained file versions",
+        "operationId": "listFileVersions",
+        "description": "Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version. Restore one with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.",
+        "parameters": [
+          {
+            "name": "$skiptoken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/FileVersion"
+                      }
+                    },
+                    "@odata.nextLink": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "@odata.nextLink"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
         "x-module-scopes": [
           "list.read",
           "document.read"
@@ -19744,6 +19850,90 @@
             "type": "string",
             "maxLength": 191,
             "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
+          }
+        }
+      },
+      "ResourceAccess": {
+        "description": "A resource with the actions the caller may take on it. Clients use it to offer only allowed actions; the server still checks every request.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          },
+          {
+            "type": "object",
+            "required": [
+              "access"
+            ],
+            "properties": {
+              "access": {
+                "type": "array",
+                "readOnly": true,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_draft",
+                    "write",
+                    "publish",
+                    "manage"
+                  ]
+                },
+                "description": "Allowed actions, in the order read, read_draft, write, publish, manage. Workspace ACLs and the caller's module scopes both apply: write and publish below a workspace also need list.write. On a workspace, manage means owner; on a list or library, write means adding and editing content and manage means changing settings, fields, views and permissions."
+              }
+            }
+          }
+        ]
+      },
+      "FileVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "filename",
+          "content_type",
+          "size",
+          "sha256",
+          "created_at",
+          "created_by",
+          "is_current"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Blob id, as in revision blob_id."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "File version number used by restore."
+          },
+          "filename": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Subject that uploaded or restored this version."
+          },
+          "is_current": {
+            "type": "boolean"
           }
         }
       }

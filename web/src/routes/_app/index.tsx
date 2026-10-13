@@ -3,6 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { Briefcase, ChevronRight, Inbox } from 'lucide-react';
 import { countChildren, homeQuery, meQuery, workspacesQuery } from '@/api/queries';
 import { Page } from '@/components/page';
+import { useHasScope } from '@/features/admin/common';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { useFormat } from '@/lib/preferences';
@@ -67,6 +68,7 @@ function InboxCard() {
 
 function WorkspacesCard() {
   const { data, isPending } = useQuery(workspacesQuery);
+  const canCreate = useHasScope('workspace.create');
   const workspaces = data?.filter((workspace) => !workspace.personal_owner_id) ?? [];
   return (
     <Card>
@@ -94,10 +96,16 @@ function WorkspacesCard() {
         </ul>
       ) : (
         <EmptyState icon={Briefcase} title="No workspaces yet">
-          <Link to="/w" search={{ create: true }} className="font-medium text-accent hover:underline">
-            Create a workspace
-          </Link>{' '}
-          for a team or project.
+          {canCreate ? (
+            <>
+              <Link to="/w" search={{ create: true }} className="font-medium text-accent hover:underline">
+                Create a workspace
+              </Link>{' '}
+              for a team or project.
+            </>
+          ) : (
+            'Ask an administrator to add you to a workspace.'
+          )}
         </EmptyState>
       )}
     </Card>

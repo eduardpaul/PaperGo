@@ -38,7 +38,9 @@ func (s *Service) Tags(ctx context.Context, subject, workspaceID string, in Tags
 	if w.Kind != resource.KindWorkspace {
 		return Page[TagCount]{}, invalid("tags belong to a workspace")
 	}
-	scope, scopeArgs := "r.workspace_id=?", []any{workspaceID}
+	// Tag rows are far fewer than resources: the unary + and CROSS JOIN make
+	// SQLite start from the tags instead of walking every resource in scope.
+	scope, scopeArgs := "+r.workspace_id=?", []any{workspaceID}
 	if in.CollectionID != "" {
 		c, err := s.authorize(ctx, subject, in.CollectionID, "read")
 		if err != nil {
@@ -47,7 +49,7 @@ func (s *Service) Tags(ctx context.Context, subject, workspaceID string, in Tags
 		if c.WorkspaceID != workspaceID || c.Kind != resource.KindList && c.Kind != resource.KindLibrary {
 			return Page[TagCount]{}, invalid("collection_id must be a list or library of the workspace")
 		}
-		scope, scopeArgs = "r.container_id=?", []any{in.CollectionID}
+		scope, scopeArgs = "+r.container_id=?", []any{in.CollectionID}
 	}
 	match, matchArgs := "1", []any{}
 	if in.Prefix != "" {
@@ -61,10 +63,10 @@ func (s *Service) Tags(ctx context.Context, subject, workspaceID string, in Tags
 	readable, readArgs := permissionSQL(ctx, "r.id", subject, "read")
 	selected, selectedArgs := surfaceSQL(ctx, "r.id", subject, "auto")
 	query := `SELECT tag, count(*) FROM (
-		SELECT t.tag AS tag FROM resource_tags t JOIN resources r ON r.id=t.resource_id
+		SELECT t.tag AS tag FROM resource_tags t CROSS JOIN resources r ON r.id=t.resource_id
 		WHERE ` + match + ` AND r.kind NOT IN ('item','folder') AND r.deleted_at IS NULL AND ` + scope + ` AND ` + readable + `
 		UNION ALL
-		SELECT t.tag FROM item_surface_tags t JOIN item_surfaces p ON p.id=t.surface_id JOIN resources r ON r.id=p.item_id
+		SELECT t.tag FROM item_surface_tags t CROSS JOIN item_surfaces p ON p.id=t.surface_id CROSS JOIN resources r ON r.id=p.item_id
 		WHERE ` + match + ` AND r.deleted_at IS NULL AND ` + scope + ` AND p.surface=` + selected + ` AND ` + readable + `
 	) GROUP BY tag ORDER BY tag LIMIT ?`
 	args := append(append(append(append([]any{}, matchArgs...), scopeArgs...), readArgs...), matchArgs...)

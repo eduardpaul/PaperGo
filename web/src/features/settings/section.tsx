@@ -63,7 +63,7 @@ export function SettingRow({
 }) {
   return (
     <div className="grid gap-1.5 py-2.5 sm:grid-cols-[12rem_1fr] sm:items-start sm:gap-4">
-      <label htmlFor={id} className="pt-2 text-[13px] font-medium">
+      <label id={`${id}-label`} htmlFor={id} className="pt-2 text-[13px] font-medium">
         {label}
       </label>
       <div className="flex min-w-0 flex-col gap-1">
