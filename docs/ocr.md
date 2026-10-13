@@ -70,7 +70,8 @@ ONNX Runtime is loaded at run time through [purego](https://github.com/ebitengin
 
 What this means for deployments:
 
-- **A dynamically linked binary.** A binary that imports `internal/ocr/paddle` is linked against the platform's C library, so it cannot run in a `scratch` image. Today that is only `cmd/ocr`. The API binary and the Docker image change when the first OCR activity ships.
+- **A dynamically linked binary.** The API (`cmd/api`) and `cmd/ocr` import `internal/ocr/paddle`, so on Linux they are linked against glibc and cannot run in a `scratch` or Alpine image. They still build with `CGO_ENABLED=0`, and they run without ONNX Runtime when OCR is off.
+- **The Docker image** is based on `gcr.io/distroless/cc-debian12` (glibc and libstdc++, which ONNX Runtime needs). It holds the pinned ONNX Runtime at `/usr/lib/papergo/libonnxruntime.so`, with its licence and third-party notices in `/usr/share/doc/onnxruntime`, and the models in `/usr/share/papergo/models/paddleocr`, so OCR is on by default. Unset `ONNXRUNTIME_LIB` to turn it off. The Docker smoke test runs the image optimization built-in on an uploaded image, which loads both.
 - **The shared library:** `libonnxruntime.so` (Linux, glibc), `libonnxruntime.dylib` (macOS) or `onnxruntime.dll` (Windows). `scripts/fetch-onnxruntime.sh` downloads the pinned Linux release (1.23.2, x64 or arm64), checks its SHA-256 and prints the library's path.
 
 Configuration (`paddle.Config`):

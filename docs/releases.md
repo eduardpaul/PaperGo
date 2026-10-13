@@ -22,6 +22,10 @@ bundle. It builds and runs native smoke tests for Linux amd64/arm64, macOS Intel
 Apple Silicon, and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
 `papergo-admin`, the database bundle and this guide. Both executables support
 `--version`; version, commit and commit date are injected into the build.
+The Linux executables need glibc (the API loads ONNX Runtime through purego).
+The archives do not include ONNX Runtime or the OCR models: OCR workflows need
+`ONNXRUNTIME_LIB` and `OCR_MODELS` ([OCR](ocr.md#configuration)), which the
+Docker image sets.
 
 Publication creates a draft, uploads all five archives plus
 `release-database.json` and `SHA256SUMS`, then publishes it. Stable releases become
