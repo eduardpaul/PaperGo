@@ -61,6 +61,17 @@ PaperGo validates the actual forwarding peer, secret and username. It rejects du
 
 Named volumes preserve PaperGo data, NPM configuration and certificates. A network-isolated permissions job installs the private bridge secret, and a one-shot `papergo-admin initialize` job applies the single current Atlas schema with PaperGo's SQLite driver, including FTS5. The initializer validates an existing database's schema and checksum without changing user data. Schema changes require a fresh disposable database; there is no upgrade or repair path.
 
+If setup fails, it prints recent service logs. An initializer error saying `database schema checksum differs from this application; use a fresh database` requires discarding the PaperGo data volume. From this directory, run:
+
+```sh
+docker compose --env-file .env rm -sf papergo initialize volume-permissions
+docker volume rm papergo-npm_papergo-data
+python3 setup.py
+python3 verify.py
+```
+
+This deletes all PaperGo records and blobs. NPM configuration, certificates and the private files in `generated/` remain available. Setup recreates the data volume and initializes the current schema. Use `python3 setup.py --no-build` when the current application image is already built.
+
 The PaperGo container runs as UID 65532, with a read-only root filesystem, dropped capabilities, an internal network, bounded resources and rotated container logs. Readiness checks use the image's `papergo-admin health` command. NPM uses its supported image layout and persistent directories.
 
 ```sh

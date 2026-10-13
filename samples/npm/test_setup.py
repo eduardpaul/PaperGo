@@ -22,6 +22,36 @@ verify = load_module('verify')
 LOGIN = {'npm_email': 'operator@example.test', 'npm_password': 'private-test-password'}
 
 
+class StartupTests(unittest.TestCase):
+    def test_startup_failure_prints_logs_and_actionable_error(self):
+        with patch.object(setup.subprocess, 'run', side_effect=[
+                subprocess.CalledProcessError(1, ['docker', 'compose', 'up']),
+                subprocess.CompletedProcess([], 0)]) as run, patch('builtins.print'):
+            with self.assertRaisesRegex(RuntimeError, 'schema checksum mismatch') as error:
+                setup.start_stack(no_build=False)
+        self.assertIn('samples/npm/README.md', str(error.exception))
+        startup, logs = run.call_args_list
+        self.assertIn('--build', startup.args[0])
+        self.assertTrue(startup.kwargs['check'])
+        self.assertEqual(logs.args[0][-8:],
+                         ['logs', '--no-color', '--tail', '80',
+                          'volume-permissions', 'initialize', 'papergo', 'npm'])
+        self.assertFalse(logs.kwargs['check'])
+
+    def test_log_failure_keeps_startup_error(self):
+        with patch.object(setup.subprocess, 'run', side_effect=[
+                subprocess.CalledProcessError(17, ['docker', 'compose', 'up']),
+                OSError('logs unavailable')]), patch('builtins.print'):
+            with self.assertRaisesRegex(RuntimeError, 'exit 17'):
+                setup.start_stack(no_build=True)
+
+    def test_successful_startup_without_build_does_not_fetch_logs(self):
+        with patch.object(setup.subprocess, 'run') as run:
+            setup.start_stack(no_build=True)
+        run.assert_called_once()
+        self.assertNotIn('--build', run.call_args.args[0])
+
+
 class AuthenticationTests(unittest.TestCase):
     def test_new_instance_creates_first_admin_before_login(self):
         api = Mock()

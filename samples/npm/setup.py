@@ -29,9 +29,27 @@ def private_write(path, content):
     os.chmod(path, 0o600)
 
 
-def compose(*args):
+def compose(*args, check=True):
     subprocess.run(["docker", "compose", "--env-file", str(ROOT / ".env"),
-                    "-f", str(ROOT / "compose.yaml"), *args], check=True)
+                    "-f", str(ROOT / "compose.yaml"), *args], check=check)
+
+
+def start_stack(no_build):
+    try:
+        compose("up", *([] if no_build else ["--build"]), "-d", "--wait", "--wait-timeout", "240")
+    except subprocess.CalledProcessError as error:
+        print("Docker Compose startup failed; recent service logs:", flush=True)
+        try:
+            compose("logs", "--no-color", "--tail", "80",
+                    "volume-permissions", "initialize", "papergo", "npm", check=False)
+        except OSError:
+            pass
+        raise RuntimeError(
+            f"Docker Compose startup failed (exit {error.returncode}). Setup is incomplete. "
+            "Inspect the service logs above. If initialize reports a schema checksum mismatch, "
+            "recreate the disposable PaperGo data volume using the commands in "
+            "samples/npm/README.md under Storage and operations, then rerun setup."
+        ) from None
 
 
 def reset_management_password(credentials):
@@ -271,7 +289,7 @@ def main():
                    f"PRIVATE_SUBNET={network}", f"NPM_PRIVATE_IP={network.network_address + 2}",
                    f"PAPERGO_PRIVATE_IP={network.network_address + 3}"]) + "\n")
     private_write(GENERATED / "curl.netrc", f"machine {args.host}\nlogin {args.admin_user}\npassword {credentials['papergo_password']}\n")
-    compose("up", *([] if args.no_build else ["--build"]), "-d", "--wait", "--wait-timeout", "240")
+    start_stack(args.no_build)
     if args.reset_npm_admin_password:
         reset_management_password(credentials)
     api = API(f"http://127.0.0.1:{args.admin_port}/api")
