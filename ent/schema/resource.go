@@ -97,5 +97,7 @@ func (Resource) Indexes() []ent.Index {
 		// Revision collection asks whether anything still points at a revision.
 		index.Fields("head_revision_id").Annotations(entsql.IndexWhere("head_revision_id IS NOT NULL")),
 		index.Fields("published_revision_id").Annotations(entsql.IndexWhere("published_revision_id IS NOT NULL")),
+		// The recycle bin, newest deletions first.
+		index.Fields("container_id", "deleted_at", "id").Annotations(entsql.IndexWhere("deleted_at IS NOT NULL")),
 	}
 }

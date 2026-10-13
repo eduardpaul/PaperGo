@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, ChevronsUpDown, Folder, FolderOpen } from 'lucide-react';
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { FieldDefinition, Resource } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/select';
@@ -8,6 +9,10 @@ import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import type { ListingSort } from '@/api/requests';
 import { columnLabel, publishState } from './schema';
+
+/** Longer tables render only the rows near the screen, so loading more stays fast. */
+const virtualizeAfter = 200;
+const estimatedRowHeight = 41;
 
 /**
  * Rows of a list or library: a click opens the item (or the folder); the checkbox selects it. From the keyboard, the
@@ -61,10 +66,55 @@ export function ItemsTable({
   const [focusIndex, setFocusIndex] = useState(0);
   const current = Math.min(focusIndex, Math.max(rows.length - 1, 0));
   const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+  const virtualize = rows.length > virtualizeAfter;
+  // The page scrolls, not the table: rows are placed relative to where the table body starts.
+  const body = useRef<HTMLTableSectionElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  useLayoutEffect(() => {
+    if (!virtualize) return;
+    // Content above the table (a selection bar, a search note) moves it, which also resizes the page.
+    const measure = () => {
+      const top = (body.current?.getBoundingClientRect().top ?? 0) + window.scrollY;
+      setScrollMargin((current) => (Math.abs(top - current) > 1 ? top : current));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(document.body);
+    return () => observer.disconnect();
+  }, [virtualize]);
+  const virtualizer = useWindowVirtualizer({
+    count: rows.length,
+    estimateSize: () => estimatedRowHeight,
+    overscan: 15,
+    scrollMargin,
+    enabled: virtualize,
+  });
+  const visible = virtualize
+    ? virtualizer.getVirtualItems().map((item) => item.index)
+    : rows.map((_row, index) => index);
+  const items = virtualizer.getVirtualItems();
+  const padTop = virtualize && items.length ? items[0].start - scrollMargin : 0;
+  const padBottom = virtualize && items.length ? virtualizer.getTotalSize() - (items[items.length - 1].end - scrollMargin) : 0;
+  // A row reached from the keyboard may not be rendered yet: scroll to it, then focus it once it is.
+  const pendingFocus = useRef<number | null>(null);
+  useEffect(() => {
+    if (pendingFocus.current === null) return;
+    const row = rowRefs.current[pendingFocus.current];
+    if (row) {
+      row.focus({ preventScroll: true });
+      pendingFocus.current = null;
+    }
+  });
   const focusRow = (index: number) => {
     const next = Math.max(0, Math.min(rows.length - 1, index));
     setFocusIndex(next);
-    rowRefs.current[next]?.focus();
+    const row = rowRefs.current[next];
+    if (row) row.focus();
+    else {
+      pendingFocus.current = next;
+      virtualizer.scrollToIndex(next, { align: 'auto' });
+    }
   };
   const onRowKey = (event: KeyboardEvent<HTMLTableRowElement>, index: number, resource: Resource) => {
     if (event.target !== event.currentTarget) return;
@@ -85,7 +135,7 @@ export function ItemsTable({
   };
   return (
     <div className="overflow-x-auto rounded-lg border bg-surface">
-      <table className="w-full text-left text-[13px]">
+      <table className="w-full text-left text-[13px]" aria-rowcount={virtualize ? rows.length + 1 : undefined}>
         <thead className="border-b text-xs text-muted">
           <tr>
             {selectable && (
@@ -142,14 +192,23 @@ export function ItemsTable({
             })}
           </tr>
         </thead>
-        <tbody>
-          {rows.map((resource, index) => {
+        <tbody ref={body}>
+          {padTop > 0 && (
+            <tr aria-hidden style={{ height: padTop }}>
+              <td colSpan={columns.length + (selectable ? 1 : 0)} />
+            </tr>
+          )}
+          {visible.map((index) => {
+            const resource = rows[index];
             const state = publishState(resource, publishing);
             return (
               <tr
                 key={resource.id}
+                data-index={index}
+                aria-rowindex={virtualize ? index + 2 : undefined}
                 ref={(element) => {
                   rowRefs.current[index] = element;
+                  if (virtualize && element) virtualizer.measureElement(element);
                 }}
                 tabIndex={index === current ? 0 : -1}
                 onFocus={() => setFocusIndex(index)}
@@ -203,6 +262,11 @@ export function ItemsTable({
               </tr>
             );
           })}
+          {padBottom > 0 && (
+            <tr aria-hidden style={{ height: padBottom }}>
+              <td colSpan={columns.length + (selectable ? 1 : 0)} />
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

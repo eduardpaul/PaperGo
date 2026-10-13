@@ -246,6 +246,7 @@ CREATE INDEX resource_workspace_id_id_scope_id ON resources(workspace_id,id,scop
 CREATE UNIQUE INDEX resource_parent_id_name_key ON resources(parent_id,name_key) WHERE name_key IS NOT NULL;
 CREATE INDEX resource_head_revision_id ON resources(head_revision_id) WHERE head_revision_id IS NOT NULL;
 CREATE INDEX resource_published_revision_id ON resources(published_revision_id) WHERE published_revision_id IS NOT NULL;
+CREATE INDEX resource_container_id_deleted_at_id ON resources(container_id,deleted_at,id) WHERE deleted_at IS NOT NULL;
 CREATE UNIQUE INDEX webdav_credentials_secret_hash_key ON webdav_credentials(secret_hash);
 CREATE INDEX webdavcredential_subject_id ON webdav_credentials(subject,id);
 CREATE INDEX relationship_source_id_id ON relationships(source_id,id);

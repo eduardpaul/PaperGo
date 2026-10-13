@@ -1251,6 +1251,14 @@ var (
 					Where: "published_revision_id IS NOT NULL",
 				},
 			},
+			{
+				Name:    "resource_container_id_deleted_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[25], ResourcesColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "deleted_at IS NOT NULL",
+				},
+			},
 		},
 	}
 	// SchemaRevisionsColumns holds the columns for the "schema_revisions" table.

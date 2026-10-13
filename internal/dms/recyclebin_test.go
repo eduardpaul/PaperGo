@@ -29,7 +29,7 @@ func TestRecycleBinRestoreTreeAndPurge(t *testing.T) {
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{Recursive: true}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := s.RecycleBin(testContext, "alice", c.ID, "", 1)
+	page, err := s.RecycleBin(testContext, "alice", c.ID, RecycleBinQuery{Limit: 1})
 	if err != nil || len(page.Data) != 1 || page.NextCursor == "" || page.Data[0].DeletedBy != "alice" {
 		t.Fatalf("bin: %+v %v", page, err)
 	}
@@ -81,7 +81,7 @@ func TestRecycleBinAccessAndParentFallback(t *testing.T) {
 	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{Recursive: true}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := s.RecycleBin(testContext, "bob", c.ID, "", 50)
+	page, err := s.RecycleBin(testContext, "bob", c.ID, RecycleBinQuery{})
 	if err != nil || len(page.Data) != 0 {
 		t.Fatal("reader can see bin", page, err)
 	}
@@ -173,5 +173,49 @@ func TestRecycleRestoreConflictRollsBack(t *testing.T) {
 	}
 	if r, err := s.Client.Resource.Get(testContext, item.ID); err != nil || r.DeletedAt == nil {
 		t.Fatal("partial restore", r, err)
+	}
+}
+
+func TestRecycleBinListsTopLevelDeletionsNewestFirst(t *testing.T) {
+	s, _, c := fixture(t)
+	folder := create(t, s, c.ID, "folder", "Contracts", nil)
+	sub := create(t, s, folder.ID, "folder", "2024", nil)
+	for _, name := range []string{"One", "Two"} {
+		create(t, s, sub.ID, "item", name, nil)
+	}
+	alone := create(t, s, folder.ID, "item", "Deleted alone", nil)
+	if err := s.Delete(testContext, "alice", alone.ID, alone.Version, DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	first := create(t, s, c.ID, "item", "First", nil)
+	if err := s.Delete(testContext, "alice", first.ID, first.Version, DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete(testContext, "alice", folder.ID, folder.Version, DeleteOptions{Recursive: true}); err != nil {
+		t.Fatal(err)
+	}
+	names, with, after := []string{}, []int{}, ""
+	for {
+		page, err := s.RecycleBin(testContext, "alice", c.ID, RecycleBinQuery{TopLevel: true, Limit: 2, After: after})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range page.Data {
+			names, with = append(names, entry.Name), append(with, entry.DeletedWith)
+		}
+		if after = page.NextCursor; after == "" {
+			break
+		}
+	}
+	// The folder took its subfolder and two items; the item deleted earlier stays its own entry.
+	if len(names) != 3 || names[0] != "Contracts" || with[0] != 3 || names[1] != "First" || names[2] != "Deleted alone" {
+		t.Fatal(names, with)
+	}
+	all, err := s.RecycleBin(testContext, "alice", c.ID, RecycleBinQuery{})
+	if err != nil || len(all.Data) != 6 {
+		t.Fatal("every entry", len(all.Data), err)
+	}
+	if _, err = s.RecycleBin(testContext, "alice", c.ID, RecycleBinQuery{After: "nonsense"}); err == nil {
+		t.Fatal("bad cursor accepted")
 	}
 }

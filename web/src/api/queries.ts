@@ -172,10 +172,6 @@ export async function permissions(id: string) {
   return (await api<Permissions>(`/v1/resources/${id}/permissions`)).data;
 }
 
-export async function recycleBin(collectionId: string) {
-  return (await api<Page<Resource>>(`/v1/resources/${collectionId}/recycle-bin`)).data;
-}
-
 export async function scopes() {
   return (await api<string[]>('/v1/identity/me/scopes')).data;
 }

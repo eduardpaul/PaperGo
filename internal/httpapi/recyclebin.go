@@ -1,9 +1,14 @@
 package httpapi
 
-import "net/http"
+import (
+	"net/http"
+
+	"papergo/internal/dms"
+)
 
 func (a *API) recycleBin(w http.ResponseWriter, r *http.Request) {
-	out, err := a.DMS.RecycleBin(r.Context(), subject(r), r.PathValue("id"), r.URL.Query().Get("$skiptoken"), queryInt(r, "$top"))
+	q := r.URL.Query()
+	out, err := a.DMS.RecycleBin(r.Context(), subject(r), r.PathValue("id"), dms.RecycleBinQuery{After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), TopLevel: q.Get("top_level") == "true"})
 	if err != nil {
 		a.failure(w, r, err)
 		return

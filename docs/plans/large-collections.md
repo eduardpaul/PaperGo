@@ -162,13 +162,23 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
    from a separate count that stops at 100,000 (`total_limit`, "100,000+" beyond). A search with a total had to be
    kept from probing the surface index once per match for every row: 11 s became 29 ms.
 
+6. **A recycle bin that pages, one entry per deletion.** The recycle bin lists the newest deletions first, 50 at a
+   time with Load more, and only what was deleted directly (`top_level=true`): a deleted folder is one entry saying
+   how much it took with it ("with 1,010 entries inside") instead of 1,011 entries. A partial index on deleted rows
+   keeps it fast however large the collection. The tag page already paged ("More resources"); the test had only
+   counted its first page.
+7. **Names read once per id.** Lookup and term names are cached per id and read together for the ids a screen asks
+   for at once, so Load more reads only names it has not seen: 10 loads read 445 names in 28 requests, each once
+   (before, every load read all names again).
+8. **Long tables render the rows near the screen.** Above 200 rows the table renders about 40–60 rows around the
+   visible part (TanStack Virtual, against the page scroll); 550 loaded rows keep 56 in the page instead of 550.
+   Arrow keys, Home and End scroll to rows that are not rendered yet, and rows carry `aria-rowindex` for screen
+   readers. Ten Load more clicks took 4.5 s, 130–470 ms each (6.2 s before).
+
 ## Open work
 
 Ordered by how much it helps people.
 
-6. **Paging in the recycle bin and on the tag page.**
-7. **Name lookups per id.** Cache resolved lookup, person and term names per id so Load more resolves only new ids.
-8. **Virtualize long tables** (TanStack Virtual) once a page holds more than a few hundred rows.
 9. **Global search defaults to the current (or only) workspace.**
 10. **Faster tag vocabulary.** Keep per-collection tag counts current on write instead of counting every tagged row.
 11. **Faster ingest.** Let the audit hook use the created row instead of reading it back and authorize a batch's parent

@@ -32,6 +32,35 @@ const row = (id: string, name: string, kind: Resource['kind'] = 'item'): Resourc
 });
 
 describe('items table', () => {
+  it('renders only the rows near the screen in long tables', () => {
+    const rows = Array.from({ length: 1000 }, (_, index) => row(`r${index}`, `Row ${index}`));
+    // jsdom has no layout: give rows a height so they can be measured.
+    vi.spyOn(HTMLTableRowElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 800, 41));
+    renderWithClient(
+      <ItemsTable
+        rows={rows}
+        columns={['$name']}
+        fields={[]}
+        publishing={false}
+        names={new Map()}
+        selectable={false}
+        selected={new Map()}
+        sortable={new Set()}
+        onSort={vi.fn()}
+        onToggle={vi.fn()}
+        onToggleAll={vi.fn()}
+        onOpen={vi.fn()}
+      />,
+    );
+    const rendered = screen.getAllByRole('row').filter((element) => element.getAttribute('aria-rowindex'));
+    // jsdom has no scrolling, so only check that rows are left out and still numbered for assistive technology.
+    expect(rendered.length).toBeGreaterThan(10);
+    expect(rendered.length).toBeLessThan(rows.length);
+    expect(Number(rendered[0].getAttribute('aria-rowindex'))).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole('table').getAttribute('aria-rowcount')).toBe('1001');
+    vi.restoreAllMocks();
+  });
+
   it('opens a row on click, selects with its checkbox and selects all from the header', () => {
     const onOpen = vi.fn();
     const onToggle = vi.fn();

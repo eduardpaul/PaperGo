@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { stringifyJSON } from './json';
 import { resourceNames, termNames } from './names';
-import { referencedIds } from '@/features/fields/names';
+import { referencedIds, useResourceNames } from '@/features/fields/names';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -63,4 +66,21 @@ it('collects distinct referenced ids of the requested field types', () => {
   ];
   expect(referencedIds(fields, rows, ['lookup'])).toEqual(['c1', 'c2']);
   expect(referencedIds(fields, rows, ['term', 'keywords'])).toEqual(['k1', 'k2']);
+});
+
+it('reads each name once, together with the other names asked for at the same time', async () => {
+  const asked: string[][] = [];
+  respond((_url, init) => {
+    const { requests } = JSON.parse(String(init.body)) as { requests: { id: string }[] };
+    asked.push(requests.map((request) => request.id));
+    return { body: { responses: requests.map((request) => ({ id: request.id, status: 200, body: { name: `Name ${request.id}` } })) } };
+  });
+  const client = new QueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const { result, rerender } = renderHook(({ ids }) => useResourceNames(ids), { wrapper, initialProps: { ids: ['a', 'b'] } });
+  await waitFor(() => expect(result.current.get('b')).toBe('Name b'));
+  rerender({ ids: ['a', 'b', 'c'] });
+  await waitFor(() => expect(result.current.get('c')).toBe('Name c'));
+  expect(asked).toEqual([['a', 'b'], ['c']]);
+  client.clear();
 });

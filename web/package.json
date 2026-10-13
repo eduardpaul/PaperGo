@@ -16,6 +16,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",
     "@tanstack/react-router": "^1.170.39",
+    "@tanstack/react-virtual": "3.14.13",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
