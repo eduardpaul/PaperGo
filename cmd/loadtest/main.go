@@ -2,6 +2,7 @@
 // the public API and measures how its reads and writes behave at that size.
 //
 //	loadtest seed    -url http://127.0.0.1:8080 -token TOKEN -items 500000 -state large.json
+//	loadtest resume  -url http://127.0.0.1:8080 -token TOKEN -max-folders 400 -state large.json
 //	loadtest measure -url http://127.0.0.1:8080 -token TOKEN -state large.json -out results.json
 //
 // Use a disposable database: seeding creates users, a workspace, a list and a
@@ -28,16 +29,18 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: loadtest seed|measure [flags]")
+		fmt.Fprintln(os.Stderr, "usage: loadtest seed|resume|measure [flags]")
 		os.Exit(2)
 	}
 	switch os.Args[1] {
 	case "seed":
 		seed(os.Args[2:])
+	case "resume":
+		resume(os.Args[2:])
 	case "measure":
 		measure(os.Args[2:])
 	default:
-		fmt.Fprintln(os.Stderr, "usage: loadtest seed|measure [flags]")
+		fmt.Fprintln(os.Stderr, "usage: loadtest seed|resume|measure [flags]")
 		os.Exit(2)
 	}
 }
@@ -258,50 +261,179 @@ func seed(args []string) {
 			st.SubFolders = append(st.SubFolders, sub.ID)
 		}
 	}
-	perFolder := *items / len(st.SubFolders)
 	start = time.Now()
+	fillLibrary(c, &st, *items/len(st.SubFolders), *workers, nil, len(st.SubFolders))
+	st.LibrarySeconds = time.Since(start).Seconds()
+	finishSeed(c, &st, *files, *statePath)
+}
+
+// libraryDocument is the n-th document of the library.
+func libraryDocument(n int) map[string]any {
+	return map[string]any{
+		"name":   fmt.Sprintf("scan-%07d-%s-%s.pdf", n, strings.ToLower(companies[n%len(companies)]), strings.ToLower(docTypes[n%len(docTypes)])),
+		"values": map[string]any{"doc_type": docTypes[n%len(docTypes)], "received": time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, n%2190).Format("2006-01-02")},
+	}
+}
+
+// fillLibrary tops every subfolder up to perFolder documents (existing counts
+// what a folder already holds), at most maxFolders folders per call.
+func fillLibrary(c *client, st *State, perFolder, workers int, existing map[string]int, maxFolders int) {
+	start := time.Now()
 	created := int64(0)
-	var mu sync.Mutex
 	jobs := make(chan int)
 	var wg sync.WaitGroup
-	for range *workers {
+	for range workers {
 		wg.Go(func() {
 			for f := range jobs {
 				folder := st.SubFolders[f]
-				docs := bulkCreate(c, lib.ID, perFolder, 1, folder, func(i int) map[string]any {
-					n := f*perFolder + i
-					return map[string]any{
-						"name":   fmt.Sprintf("scan-%07d-%s-%s.pdf", n, strings.ToLower(companies[n%len(companies)]), strings.ToLower(docTypes[n%len(docTypes)])),
-						"values": map[string]any{"doc_type": docTypes[n%len(docTypes)], "received": time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, n%2190).Format("2006-01-02")},
-					}
-				}, true)
-				mu.Lock()
-				if len(st.SampleDocs) < *files {
-					st.SampleDocs = append(st.SampleDocs, docs[0])
+				have := existing[folder]
+				first := f * perFolder
+				if have > 0 {
+					// Topping up after an interrupted seed: a separate range keeps names unique in the folder.
+					first = 10_000_000 + f*perFolder
 				}
-				mu.Unlock()
-				done := atomic.AddInt64(&created, int64(perFolder))
-				if done%20000 < int64(perFolder) {
-					log.Printf("library: %d documents, %.0f/s", done, float64(done)/time.Since(start).Seconds())
-				}
+				bulkCreate(c, st.Library, perFolder-have, 1, folder, func(i int) map[string]any { return libraryDocument(first + have + i) }, false)
+				done := atomic.AddInt64(&created, int64(perFolder-have))
+				log.Printf("library: folder %d done, %d documents this run, %.0f/s", f, done, float64(done)/time.Since(start).Seconds())
 			}
 		})
 	}
-	for f := range st.SubFolders {
+	queued := 0
+	for f, folder := range st.SubFolders {
+		if existing[folder] >= perFolder {
+			continue
+		}
+		if queued == maxFolders {
+			break
+		}
 		jobs <- f
+		queued++
 	}
 	close(jobs)
 	wg.Wait()
-	st.LibrarySeconds = time.Since(start).Seconds()
+}
+
+// finishSeed gives the first document of the first folders a small PDF and writes the state.
+func finishSeed(c *client, st *State, files int, statePath string) {
 	pdf := []byte("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n")
-	for i, id := range st.SampleDocs {
-		c.must("PUT", "/v1/items/"+id+"/content", append(pdf, []byte(fmt.Sprintf("%% %d\n", i))...), 1, nil)
+	st.SampleDocs = nil
+	for i, folder := range st.SubFolders {
+		if len(st.SampleDocs) == files || i == len(st.SubFolders) {
+			break
+		}
+		var first page
+		c.must("GET", "/v1/resources/"+folder+"/children?kind=item&$top=1", nil, 0, &first)
+		if len(first.Value) == 0 {
+			continue
+		}
+		doc := first.Value[0]
+		var versions struct {
+			Value []any `json:"value"`
+		}
+		c.must("GET", "/v1/items/"+doc.ID+"/content/versions", nil, 0, &versions)
+		if len(versions.Value) == 0 {
+			c.must("PUT", "/v1/items/"+doc.ID+"/content", append(append([]byte{}, pdf...), []byte(fmt.Sprintf("%% %d\n", i))...), doc.Version, nil)
+		}
+		st.SampleDocs = append(st.SampleDocs, doc.ID)
 	}
 	buf, _ := json.MarshalIndent(st, "", "  ")
-	if err := os.WriteFile(*statePath, buf, 0o644); err != nil {
+	if err := os.WriteFile(statePath, buf, 0o644); err != nil {
 		log.Fatal(err)
 	}
 	log.Printf("seeded: list %.0fs, library %.0fs", st.ListSeconds, st.LibrarySeconds)
+}
+
+// resume finds what an interrupted seed created and fills the library's missing documents.
+func resume(args []string) {
+	fs := flag.NewFlagSet("resume", flag.ExitOnError)
+	base := fs.String("url", "http://127.0.0.1:8080", "PaperGo URL")
+	token := fs.String("token", os.Getenv("PAPERGO_TOKEN"), "bearer token of an organization administrator")
+	items := fs.Int("items", 500000, "documents the library should hold")
+	files := fs.Int("files", 200, "library items that get a small PDF")
+	workers := fs.Int("workers", 2, "concurrent bulk requests")
+	maxFolders := fs.Int("max-folders", 1000000, "subfolders to fill in this run; run again to continue")
+	statePath := fs.String("state", "large.json", "where to write what was found")
+	_ = fs.Parse(args)
+	c := newClient(*base, *token)
+	all := func(path string) []resource {
+		out := []resource{}
+		next := path
+		for next != "" {
+			var p page
+			c.must("GET", next, nil, 0, &p)
+			out = append(out, p.Value...)
+			next = ""
+			if p.Next != nil {
+				u, _ := url.Parse(*p.Next)
+				next = u.RequestURI()
+			}
+		}
+		return out
+	}
+	st := State{Items: *items}
+	for _, w := range all("/v1/workspaces?$top=200") {
+		if strings.HasPrefix(w.Name, "Load test") {
+			st.Workspace = w.ID
+		}
+	}
+	if st.Workspace == "" {
+		log.Fatal("no Load test workspace")
+	}
+	for _, r := range all("/v1/resources/" + st.Workspace + "/children?$top=200") {
+		switch r.Name {
+		case "Suppliers":
+			st.Suppliers = r.ID
+		case "Invoices":
+			st.List = r.ID
+		case "Archive":
+			st.Library = r.ID
+		}
+	}
+	for _, r := range all("/v1/resources/" + st.Suppliers + "/children?$top=500") {
+		st.SupplierIDs = append(st.SupplierIDs, r.ID)
+	}
+	var sample page
+	c.must("GET", "/v1/resources/"+st.List+"/children?$top=500", nil, 0, &sample)
+	for _, r := range sample.Value {
+		st.SampleItems = append(st.SampleItems, r.ID)
+	}
+	var members []struct {
+		Subject string `json:"subject"`
+	}
+	var wrapped struct {
+		Value []struct {
+			Subject string `json:"subject"`
+		} `json:"value"`
+	}
+	c.must("GET", "/v1/workspaces/"+st.Workspace+"/members", nil, 0, &wrapped)
+	members = wrapped.Value
+	for _, m := range members {
+		if strings.HasPrefix(m.Subject, "load-user-") {
+			st.Users = append(st.Users, m.Subject)
+		}
+	}
+	existing := map[string]int{}
+	for _, top := range all("/v1/resources/" + st.Library + "/children?kind=folder&$top=500") {
+		st.TopFolders = append(st.TopFolders, top.ID)
+		for _, sub := range all("/v1/resources/" + top.ID + "/children?kind=folder&$top=500") {
+			st.SubFolders = append(st.SubFolders, sub.ID)
+			var count page
+			c.must("POST", "/v1/resources/"+st.Library+"/query?$top=1", map[string]any{"include_total": true, "query": map[string]any{"parent_id": sub.ID}}, 0, &count)
+			if count.Total != nil {
+				existing[sub.ID] = *count.Total
+			}
+		}
+	}
+	perFolder := *items / len(st.SubFolders)
+	missing := 0
+	for _, sub := range st.SubFolders {
+		missing += max(0, perFolder-existing[sub])
+	}
+	log.Printf("found %d subfolders; %d documents missing", len(st.SubFolders), missing)
+	start := time.Now()
+	fillLibrary(c, &st, perFolder, *workers, existing, *maxFolders)
+	st.LibrarySeconds = time.Since(start).Seconds()
+	finishSeed(c, &st, *files, *statePath)
 }
 
 // bulkCreate creates n items in batches of 100 and returns the IDs (all of them
