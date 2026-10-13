@@ -4,18 +4,36 @@ import { clearToken } from '@/api/http';
 import { authorizationHeaders } from '@/api/auth';
 import { keys } from '@/api/queries';
 
+/** Changes arriving within this many milliseconds refresh the page once. */
+export const liveRefreshInterval = 1000;
+
 /** Live changes use the same bearer or proxy credentials as other API requests. */
 export function useLiveEvents() {
   const queryClient = useQueryClient();
   useEffect(() => {
     const controller = new AbortController();
-    void readEvents(controller.signal, (event) => {
-      if (event === 'item' || event === 'resync' || event === 'connected') {
+    // A bulk edit streams an event per item: refresh at most once per interval,
+    // so an open page does not refetch everything for every changed item.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const pending = new Set<string>();
+    const flush = () => {
+      timer = undefined;
+      if (pending.has('content')) {
         void queryClient.invalidateQueries({ queryKey: keys.resources });
         void queryClient.invalidateQueries({ queryKey: keys.home });
         void queryClient.invalidateQueries({ queryKey: keys.inboxes });
       }
-      if (event === 'run') void queryClient.invalidateQueries({ queryKey: ['workflow-runs'] });
+      if (pending.has('run')) void queryClient.invalidateQueries({ queryKey: ['workflow-runs'] });
+      pending.clear();
+    };
+    const schedule = (kind: string) => {
+      pending.add(kind);
+      timer ??= setTimeout(flush, liveRefreshInterval);
+    };
+    controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+    void readEvents(controller.signal, (event) => {
+      if (event === 'item' || event === 'resync' || event === 'connected') schedule('content');
+      if (event === 'run') schedule('run');
       if (event === 'reauthenticate') {
         clearToken();
         window.location.assign('/login');

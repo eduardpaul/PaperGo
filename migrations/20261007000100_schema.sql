@@ -458,6 +458,32 @@ CREATE TRIGGER item_surface_tags_update AFTER UPDATE OF tags ON item_surfaces BE
  DELETE FROM item_surface_tags WHERE surface_id=old.id;
  INSERT INTO item_surface_tags SELECT new.id,value FROM json_each(new.tags);
 END;
+-- Live counts of single-choice values per collection and surface, kept by
+-- triggers, so board columns count without reading every item. The row with
+-- an empty field_key counts the surfaces themselves (items and folders).
+CREATE TABLE group_counts(container_id TEXT NOT NULL,surface TEXT NOT NULL,field_key TEXT NOT NULL,value TEXT NOT NULL,count INTEGER NOT NULL,PRIMARY KEY(container_id,surface,field_key,value)) WITHOUT ROWID;
+CREATE TRIGGER group_counts_surface_insert AFTER INSERT ON item_surfaces BEGIN
+ INSERT INTO group_counts VALUES(new.container_id,new.surface,'','',1) ON CONFLICT DO UPDATE SET count=count+1;
+END;
+CREATE TRIGGER group_counts_surface_delete AFTER DELETE ON item_surfaces BEGIN
+ UPDATE group_counts SET count=count-1 WHERE container_id=old.container_id AND surface=old.surface AND field_key='' AND value='';
+END;
+CREATE TRIGGER group_counts_surface_update AFTER UPDATE OF container_id,surface ON item_surfaces WHEN old.container_id<>new.container_id OR old.surface<>new.surface BEGIN
+ UPDATE group_counts SET count=count-1 WHERE container_id=old.container_id AND surface=old.surface AND field_key='' AND value='';
+ INSERT INTO group_counts VALUES(new.container_id,new.surface,'','',1) ON CONFLICT DO UPDATE SET count=count+1;
+END;
+CREATE TRIGGER group_counts_value_insert AFTER INSERT ON field_values WHEN new.field_type='choice' AND new.ordinal=0 AND new.value_text IS NOT NULL BEGIN
+ INSERT INTO group_counts VALUES(new.container_id,new.surface,new.field_key,new.value_text,1) ON CONFLICT DO UPDATE SET count=count+1;
+END;
+CREATE TRIGGER group_counts_value_delete AFTER DELETE ON field_values WHEN old.field_type='choice' AND old.ordinal=0 AND old.value_text IS NOT NULL BEGIN
+ UPDATE group_counts SET count=count-1 WHERE container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND value=old.value_text;
+ DELETE FROM group_counts WHERE container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND value=old.value_text AND count<=0;
+END;
+CREATE TRIGGER group_counts_value_update AFTER UPDATE ON field_values WHEN old.field_type='choice' OR new.field_type='choice' BEGIN
+ UPDATE group_counts SET count=count-1 WHERE old.field_type='choice' AND old.ordinal=0 AND container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND value=old.value_text;
+ DELETE FROM group_counts WHERE container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND value=old.value_text AND count<=0;
+ INSERT INTO group_counts SELECT new.container_id,new.surface,new.field_key,new.value_text,1 WHERE new.field_type='choice' AND new.ordinal=0 AND new.value_text IS NOT NULL ON CONFLICT DO UPDATE SET count=count+1;
+END;
 CREATE TRIGGER schema_revision_validate BEFORE INSERT ON schema_revisions BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.container_id AND kind IN ('list','library')) THEN RAISE(ABORT,'invalid schema container') END;
 END;

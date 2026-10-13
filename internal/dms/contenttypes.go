@@ -461,7 +461,7 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *ent.Res
 		if len(ids) == 0 {
 			return nil
 		}
-		heads, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDIn(ids...), itemsurface.SurfaceEQ(itemsurface.SurfaceHead)).All(ctx)
+		heads, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDIn(ids...), itemsurface.SurfaceEQ(headSurface(c))).All(ctx)
 		if err != nil {
 			return err
 		}

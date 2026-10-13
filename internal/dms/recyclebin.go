@@ -128,6 +128,10 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 		if e != nil {
 			return e
 		}
+		c, e := t.Client.Resource.Get(ctx, collection)
+		if e != nil {
+			return e
+		}
 		rows := []*ent.Resource{r}
 		if recursive && r.Kind == resource.KindFolder {
 			rows, e = t.deletedTree(ctx, r, true)
@@ -170,12 +174,30 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 			if e != nil {
 				return e
 			}
-			if contentKind(row.Kind) {
-				// Restore the retained head and publication with their frozen schemas.
-				for _, surface := range []struct {
+			if contentKind(row.Kind) && !c.PublishingEnabled && row.HeadRevisionID != nil && (row.PublishedRevisionID == nil || *row.PublishedRevisionID != *row.HeadRevisionID) {
+				// Without publishing the head is the published content: an entry
+				// deleted while publishing was on comes back published.
+				head, e := t.Client.ItemRevision.Get(ctx, *row.HeadRevisionID)
+				if e != nil {
+					return e
+				}
+				if _, e = t.publishRevision(ctx, subject, row, head, false, nil); e != nil {
+					return e
+				}
+				if row.Kind == resource.KindItem {
+					t.emit(ctx, EventItemRestored, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
+				}
+			} else if contentKind(row.Kind) {
+				// Restore the retained head and publication with their frozen
+				// schemas; without publishing only the published surface exists.
+				surfaces := []struct {
 					id   *string
 					kind itemsurface.Surface
-				}{{row.HeadRevisionID, itemsurface.SurfaceHead}, {row.PublishedRevisionID, itemsurface.SurfacePublished}} {
+				}{{row.HeadRevisionID, itemsurface.SurfaceHead}, {row.PublishedRevisionID, itemsurface.SurfacePublished}}
+				if !c.PublishingEnabled {
+					surfaces = surfaces[1:]
+				}
+				for _, surface := range surfaces {
 					if surface.id == nil {
 						continue
 					}

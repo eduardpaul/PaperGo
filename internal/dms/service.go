@@ -709,6 +709,15 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		if e = s.publishAllHeads(ctx, subject, out); e != nil {
 			return nil, e
 		}
+		// Heads are published now; the collection keeps one surface per item.
+		if e = s.dropHeadSurfaces(ctx, out.ID); e != nil {
+			return nil, e
+		}
+	}
+	if in.PublishingEnabled != nil && *in.PublishingEnabled && !r.PublishingEnabled {
+		if e = s.addHeadSurfaces(ctx, out); e != nil {
+			return nil, e
+		}
 	}
 	details := map[string]any{"version": out.Version}
 	if moved {

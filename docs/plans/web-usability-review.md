@@ -30,4 +30,4 @@ This plan records how the workspace, list and library screens are meant to work 
 Ordered by how much it helps people.
 
 1. **Document preview.** Libraries show no thumbnail or preview; the File tab only downloads. Add an inline PDF/image preview from `GET /v1/items/{id}/content` and thumbnails when the API offers them.
-2. **Very large lists and libraries.** Board counts take seconds at 500,000 items and items are indexed twice; see `large-collections.md` for the measurements.
+2. **Very large lists and libraries.** See `large-collections.md` for the measurements and what remains.

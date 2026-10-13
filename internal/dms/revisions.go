@@ -202,8 +202,12 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	}
 	r.HeadRevisionID = &rev.ID
 	r.NextRevisionNumber++
-	if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfaceHead, defs); err != nil {
-		return nil, err
+	// Without publishing, head and published content are one, kept only as the
+	// published surface: written once below, indexed once.
+	if c.PublishingEnabled {
+		if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfaceHead, defs); err != nil {
+			return nil, err
+		}
 	}
 	if r.Kind == resource.KindFolder {
 		// Folder metadata is immediately visible. Internal schema snapshots keep
@@ -401,6 +405,66 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 	r.PublishedRevisionID = &rev.ID
 	s.emit(ctx, EventItemPublished, actor, r.WorkspaceID, r.ContainerID, r.ID, map[string]any{"revision_id": rev.ID, "revision_number": rev.RevisionNumber, "publication_id": event.ID})
 	return event, nil
+}
+
+// addHeadSurfaces gives every item and folder of a collection that starts
+// publishing its own head surface, a copy of the published one, so drafts can
+// differ from what readers see. Pages of surfaceBatch keep memory flat.
+func (s *Service) addHeadSurfaces(ctx context.Context, c *ent.Resource) error {
+	schemas := map[string]*ent.SchemaRevision{}
+	for after := ""; ; {
+		rows, err := s.Client.Resource.Query().Where(resource.ContainerIDEQ(c.ID), resource.KindIn(resource.KindItem, resource.KindFolder), resource.DeletedAtIsNil(), resource.HeadRevisionIDNotNil(), resource.IDGT(after)).Order(ent.Asc(resource.FieldID)).Limit(surfaceBatch).All(ctx)
+		if err != nil {
+			return err
+		}
+		heads := make([]string, 0, len(rows))
+		for _, r := range rows {
+			heads = append(heads, *r.HeadRevisionID)
+		}
+		revisions, err := s.Client.ItemRevision.Query().Where(itemrevision.IDIn(heads...)).All(ctx)
+		if err != nil {
+			return err
+		}
+		byID := make(map[string]*ent.ItemRevision, len(revisions))
+		for _, rev := range revisions {
+			byID[rev.ID] = rev
+		}
+		for _, r := range rows {
+			rev := byID[*r.HeadRevisionID]
+			schema := schemas[rev.SchemaRevisionID]
+			if schema == nil {
+				if schema, err = s.schemaRevision(ctx, rev.SchemaRevisionID); err != nil {
+					return err
+				}
+				schemas[schema.ID] = schema
+			}
+			defs, _, err := typedDefinitions(schema.Definition, rev.ContentTypeID)
+			if err != nil {
+				return err
+			}
+			if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfaceHead, defs); err != nil {
+				return err
+			}
+		}
+		if len(rows) < surfaceBatch {
+			return nil
+		}
+		after = rows[len(rows)-1].ID
+	}
+}
+
+// dropHeadSurfaces removes the head surfaces of a collection that stops
+// publishing, after its heads were published: they equal the published ones.
+func (s *Service) dropHeadSurfaces(ctx context.Context, collection string) error {
+	for _, statement := range []string{
+		`DELETE FROM field_values WHERE surface_id IN (SELECT id FROM item_surfaces WHERE container_id=? AND surface='head')`,
+		`DELETE FROM item_surfaces WHERE container_id=? AND surface='head'`,
+	} {
+		if _, err := s.Client.ExecContext(ctx, statement, collection); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // publishAllHeads publishes every unpublished head in surfaceBatch pages, so

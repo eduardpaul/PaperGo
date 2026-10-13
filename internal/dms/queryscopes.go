@@ -16,6 +16,10 @@ const maxQueryScopes = 64
 type scopeAccess struct {
 	draft, read             []string
 	nullDraft, nullReadable bool
+	// live counts the scopes holding live rows; nullRows is whether rows
+	// without a scope exist.
+	live     int
+	nullRows bool
 }
 
 // collectionScopes decides, once per ACL scope, whether the caller reads the
@@ -69,6 +73,11 @@ SELECT id FROM scopes WHERE id IS NOT NULL LIMIT ?`, collectionID, collectionID,
 		if err = s.scan(ctx, []any{&draft, &read}, "SELECT "+draftSQL+","+readSQL, args...); err != nil {
 			return nil, err
 		}
+		if scope == nil {
+			access.nullRows = true
+		} else {
+			access.live++
+		}
 		switch {
 		case scope == nil:
 			access.nullDraft, access.nullReadable = draft, read || draft
@@ -109,4 +118,25 @@ func (a *scopeAccess) sql(surface string) (string, string, [2][]any) {
 		return "'published'", readable, [2][]any{nil, readableArgs}
 	}
 	return "CASE WHEN " + draft + " THEN 'head' ELSE 'published' END", readable, [2][]any{draftArgs, readableArgs}
+}
+
+// uniform reports the one surface the caller reads every live row on, when
+// they read all of them the same way: then counts of the whole collection are
+// theirs too.
+func (a *scopeAccess) uniform(surface string) (string, bool) {
+	allDraft := len(a.draft) == a.live && (!a.nullRows || a.nullDraft)
+	allRead := len(a.draft)+len(a.read) == a.live && (!a.nullRows || a.nullReadable)
+	switch surface {
+	case "head":
+		return "head", allDraft
+	case "published":
+		return "published", allRead
+	}
+	if allDraft {
+		return "head", true
+	}
+	if len(a.draft) == 0 && allRead && !a.nullDraft {
+		return "published", true
+	}
+	return "", false
 }

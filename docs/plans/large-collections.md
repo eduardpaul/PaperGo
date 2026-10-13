@@ -44,7 +44,8 @@ items alike: create an item ≈ 20 ms, update ≈ 24 ms, upload ≈ 100 ms, and 
 - Ingest is CPU-bound in the one writer: each new item writes a revision, its draft and published surfaces with their
   field values, a publication and two updates of the item row. The profile first credited the audit hook with half
   the time, but that included the writes below it; the hook itself read old values, about 7 %.
-- About 16 KB of database per item with six columns, mostly the `field_values` rows of both surfaces and their indexes.
+- About 16 KB of database per item with six columns, mostly the `field_values` rows of both surfaces and their indexes
+  (9.2 KB since lists without publishing keep one surface, item 13 below).
 
 ## API at 10,000 items (and 500,000)
 
@@ -189,12 +190,24 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
 12. **Faster bulk updates.** A bulk update edits up to 200 items per transaction within a quarter of a second, each
     under its own savepoint: updating 2,490 invoices took 32 s instead of 121 s.
 
+13. **One surface per item without publishing.** Lists and libraries without publishing publish every write, so their
+    draft and published content were always the same, stored and indexed twice. They now keep only the published
+    surface, which every read of head content uses; turning publishing on copies it to a head surface, turning it off
+    publishes the heads and drops the head surfaces. At 10,000 items: 9.2 KB per item instead of 15.4 KB (−40 %),
+    seeding the list in 69 s instead of 91 s and the library in 97 s instead of 114 s, `BenchmarkBulkCreate`
+    140 → about 170 items/s.
+14. **Board counts in 5 ms at any size.** Triggers keep a count per collection, surface and single-choice value
+    (`group_counts`). Board columns of a whole collection read it when the person reads every item the same way (no
+    item with permissions that hide it from them); a filtered board, or a person who cannot see some items, still
+    counts rows. At 10,000 items 5 ms instead of 96 ms; at 500,000 the same 5 ms instead of about 5 s.
+15. **Live updates no longer slow bulk work.** An open list refreshed everything for each changed item; during a bulk
+    edit that is about 100 refreshes a second. It now refreshes at most once a second: editing 2,502 items with the list
+    open took 47 s instead of 116 s (25 s with no page open).
+
 ## Open work
 
-What remains is structural:
+Nothing structural remains from this test. Smaller things worth doing:
 
-- **Items are indexed twice.** Lists without publishing keep a draft and a published surface per item, each with its
-  own field values, so creation writes and indexes everything twice and an item takes about 16 KB. Sharing one surface
-  while draft and published are the same would halve ingest work and storage.
-- **Board counts at 500,000 items** take about 5 s; a per-collection count of each choice, kept current on write,
-  would make them instant.
+- Imports into folders still check the folder's permission for every item (a deleted folder must stop the batch).
+- Turning publishing on for a very large list copies every surface in one transaction; at 500,000 items that would
+  hold the writer for minutes and should become a background operation like index builds.

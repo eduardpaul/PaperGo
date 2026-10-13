@@ -339,9 +339,16 @@ func TestBulkUpdateEditsABatchOfItemsPerStep(t *testing.T) {
 		t.Fatal(e)
 	}
 	bulkStep(t, s)
+	// One step edits many items; its time budget may leave a few for the next.
+	if got := bulkStatus(t, s, op.ID); got.Processed < 10 {
+		t.Fatal("one item per step", got.Processed)
+	}
+	for bulkStatus(t, s, op.ID).Status == operation.StatusPending {
+		bulkStep(t, s)
+	}
 	got := bulkStatus(t, s, op.ID)
 	if got.Status != operation.StatusSucceeded || got.Matched != 31 || got.Processed != 31 || got.Updated != 30 || got.Failed != 1 || len(got.Failures) != 1 || got.Failures[0].ItemID != gone.ID {
-		t.Fatal("one step", got)
+		t.Fatal("bulk result", got)
 	}
 	for id := range ids {
 		if v := latest(t, s, id).Values["stage"]; v != "done" {

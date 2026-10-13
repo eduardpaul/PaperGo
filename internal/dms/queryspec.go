@@ -488,6 +488,10 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		// Permissions follow ACL scopes, and a collection has few: decide each
 		// scope once instead of probing grants for every row.
 		selected, readable, scopeArgs := access.sql(in.Surface)
+		if !c.PublishingEnabled {
+			// Without publishing, head content is the published surface.
+			selected, scopeArgs[0] = "'published'", nil
+		}
 		args = append(append(append([]any{}, rankArgs...), scopeArgs[0]...), c.ID)
 		text = "SELECT r.id," + strings.Join(rankParts, ",") + " FROM resources r JOIN item_surfaces p ON p.item_id=r.id AND p.surface=" + selected + " WHERE r.container_id=? AND r.kind IN ('item','folder') AND r.deleted_at IS NULL AND " + readable + conditions
 		args = append(append(args, scopeArgs[1]...), conditionArgs...)
@@ -519,7 +523,7 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		if column == "r.id" {
 			column = "p.item_id"
 		}
-		q.seek = &seekPlan{collection: c.ID, subject: subject, surface: in.Surface, conditions: conditions, args: conditionArgs, column: column}
+		q.seek = &seekPlan{collection: c.ID, subject: subject, surface: in.Surface, publishes: c.PublishingEnabled, conditions: conditions, args: conditionArgs, column: column}
 	}
 	return q, nil
 }
@@ -790,6 +794,9 @@ func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, 
 		q, e := t.compileQuery(ctx, subject, containerID, in, true)
 		if e != nil {
 			return Page[QueryGroup]{}, e
+		}
+		if groups, ok, e := t.countedGroups(ctx, subject, containerID, in, q.rankDef); e != nil || ok {
+			return Page[QueryGroup]{Data: groups}, e
 		}
 		out, e := t.queryGroupsCompiled(ctx, in, q)
 		if e != nil || q.rankDef == nil || q.rankDef.Type != "term" && q.rankDef.Type != "keywords" {

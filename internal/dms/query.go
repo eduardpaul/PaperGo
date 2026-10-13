@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	entsql "entgo.io/ent/dialect/sql"
+	"maps"
 	"papergo/ent"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
 	"papergo/ent/predicate"
 	"papergo/ent/resource"
+	"slices"
 	"strings"
 	"time"
 )
@@ -228,8 +230,24 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 	if err != nil {
 		return nil, err
 	}
+	// Items of collections without publishing have one surface, the published one.
+	containers := map[string]bool{}
+	for _, r := range items {
+		if r.ContainerID != nil {
+			containers[*r.ContainerID] = true
+		}
+	}
+	publishing, err := s.Client.Resource.Query().Where(resource.IDIn(slices.Collect(maps.Keys(containers))...), resource.PublishingEnabled(true)).IDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	publishes := map[string]bool{}
+	for _, id := range publishing {
+		publishes[id] = true
+	}
+	wantsHead := func(r *ent.Resource) bool { return surface == "head" || (surface == "auto" && draft[r.ID]) }
 	selectedSurface := func(r *ent.Resource) itemsurface.Surface {
-		if surface == "head" || (surface == "auto" && draft[r.ID]) {
+		if r.ContainerID != nil && publishes[*r.ContainerID] && wantsHead(r) {
 			return itemsurface.SurfaceHead
 		}
 		return itemsurface.SurfacePublished
@@ -296,7 +314,8 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 			}
 			selectedRevisions[r.ID] = rev
 		}
-		if selected == itemsurface.SurfacePublished {
+		// Readers of published content do not learn about drafts.
+		if selected == itemsurface.SurfacePublished && !wantsHead(r) {
 			r.HeadRevisionID = nil
 			r.NextRevisionNumber = 0
 		}
