@@ -86,7 +86,11 @@ jobs:
         run: test -z "$(gofmt -l cmd internal ent/schema web/*.go)"
       - name: Vet
         run: go vet ./...
+      - name: Install ONNX Runtime for the OCR tests
+        run: echo "ONNXRUNTIME_LIB=$(bash scripts/fetch-onnxruntime.sh)" >> "$GITHUB_ENV"
       - name: Test with race detection
+        env:
+          PAPERGO_REQUIRE_OCR: '1'
         run: go test -race -count=1 -timeout=15m ./...
       - name: Build single binary application
         run: CGO_ENABLED=0 go build -trimpath -o bin/papergo ./cmd/api

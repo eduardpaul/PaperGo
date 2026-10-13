@@ -40,7 +40,7 @@ Phase 1 of the [runner](runner.md) is done. The pieces both workflows need are c
 - **One node is one write transaction, and that is the main constraint.** It gives exactly-once writes cheaply, and it should stay the rule for writes. CPU-heavy work needs a second kind of step that runs outside the transaction (see [work steps](#1-work-steps-heavy-work-outside-the-write-transaction)).
 - **The storage collector would delete staged files.** The collector deletes unreferenced objects older than one hour. A candidate waiting days for review is unreferenced by `blobs`, so it would be deleted. Staged files need their own references.
 - **File history is immutable.** PaperDotNet frees the original's bytes once an optimization is accepted, as an explicit exception to keeping every file version (ADR-0046). In PaperGo, item revisions pin their blob, and revisions cannot be updated or deleted. A "reclaim the original" option is therefore a schema decision (see [decisions](#decisions-needed)). Without it, an accepted optimization makes the item's current file smaller but frees no disk space until the original file version leaves history.
-- **The CGO-free, `FROM scratch` image limits OCR.** PaperDotNet runs PaddleOCR ONNX models in-process. In Go that needs `onnxruntime_go` (MIT), which requires CGO and a native shared library. Tesseract is an external executable. Either way, the current single static binary cannot run OCR (see [the image and OCR stack](#image-ocr-and-pdf-stack-in-go)).
+- **OCR needs a native library.** PaperDotNet runs PaddleOCR ONNX models in-process. PaperGo now does too, through [the OCR layer](../ocr.md): ONNX Runtime loaded through purego, so builds stay CGO-free. A binary that uses it is dynamically linked, though, so the API image moves from `scratch` to a glibc base when the first OCR activity ships.
 
 ## Engine additions
 
@@ -162,8 +162,7 @@ Parameters use the same names and defaults as PaperDotNet, in PaperGo's snake ca
 2. Decode within the pixel limit, then apply the EXIF orientation.
 3. Make an analysis copy whose longest side is at most `max_analysis_dimension`, with scale factor `k`.
 4. Detect text and collect text heights projected back to source pixels:
-   - line strategy (detector): the shortest side of each oriented box, keeping boxes with confidence ≥ `min_confidence`, an analysis height ≥ 6 px and an aspect ratio ≥ 1.5;
-   - word strategy (Tesseract TSV): level-5 words with confidence ≥ `min_confidence` and at least 2 letters or digits; each height is `round(height / k)`, kept when it is above 3.
+   - `ocr.Engine.Detect` with `MinScore = min_confidence / 100`, then the shortest side of each region (`Quad.Height()`), keeping regions at least 6 preview pixels high (`Detection.Scale`) with an aspect ratio of at least 1.5, as PaperDotNet's line strategy does;
 5. Find the smallest reliable height: the interpolated `percentile` of the heights, at least 4 px. No heights means `skipped` ("no reliable text").
 6. Compute `scale = clamp(target_height / smallest, minimum_scale, 1)`. The image is never upscaled.
 7. Resize with a bicubic filter and encode WebP at `quality`. If the result is not smaller, skip ("not smaller").
@@ -227,23 +226,20 @@ All new direct dependencies must be added to [dependencies](../dependencies.md).
 | Decode WebP, resample | `golang.org/x/image` (`webp`, `draw.CatmullRom`) | BSD-3-Clause | no | `x/image/webp` decodes only, and has no animation API. Detect `ANIM`/`ANMF` chunks before decoding. |
 | Encode WebP with a quality setting | `github.com/gen2brain/webp` | MIT (libwebp BSD-3-Clause, run by `tetratelabs/wazero` Apache-2.0) | no | libwebp compiled to WASM and run in-process. It is the only CGO-free lossy WebP encoder found. |
 | EXIF orientation | `github.com/rwcarlsen/goexif` | BSD-2-Clause | no | Unmaintained since 2019. Alternatively, a small parser for tag 0x0112 only, with fuzz tests. |
-| Word heights and recognition | Tesseract executable (TSV, hOCR) | Apache-2.0 | no (separate process) | PaperDotNet's alternative strategy. It needs `tesseract` and traineddata in the image. |
-| Text region detection like PaperDotNet's default | PaddleOCR PP-OCRv6 DBNet ONNX through `github.com/yalue/onnxruntime_go` | MIT, models Apache-2.0, ONNX Runtime MIT (with an Eigen MPL-2.0 part) | **yes**, plus `libonnxruntime.so` | Breaks the CGO-free static build. As a separate OCR sidecar, it keeps the API binary unchanged. |
+| Text detection and recognition | **Implemented:** PaddleOCR PP-OCRv6 small with PaperDotNet's models, in ONNX Runtime loaded through `github.com/ebitengine/purego` ([OCR](../ocr.md)) | Apache-2.0, models Apache-2.0, ONNX Runtime MIT (with an Eigen MPL-2.0 part) | no, but the binary is dynamically linked and needs `libonnxruntime` | Same models, preprocessing and thresholds as PaperDotNet. |
 | Write PDFs with an image and invisible text | `github.com/pdfcpu/pdfcpu` (Apache-2.0) or `github.com/signintech/gopdf` (MIT) | | no | To be confirmed in a spike: JPEG and Flate images, text render mode 3 and a Unicode font subset. |
 
-**Recommendation.**
+**Decision.**
 
-- Do the image work in pure Go: standard library, `x/image` and `gen2brain/webp`.
-- Put OCR behind an `internal/ocr` port with two operations:
-  - `DetectText(image) → heights + engine metrics`
-  - `Recognize(pages) → words with boxes per page`
-- Ship one engine first, **Tesseract**, run as a process with `OMP_THREAD_LIMIT=1`. It covers both workflows: the word strategy for optimization, and hOCR or TSV words for the PDF text layer.
-- Publish two images:
-  - the current `scratch` image, without OCR, where the OCR activities fail with "OCR is not available in this deployment";
-  - a Debian-slim image with `tesseract-ocr` and a few language packs.
-- A Paddle sidecar can come later behind the same port, for parity with PaperDotNet's default detector.
+- Image work stays in pure Go: the standard library, `x/image` and `gen2brain/webp`.
+- OCR is the `internal/ocr` port with the PaddleOCR engine (`internal/ocr/paddle`), implemented:
+  - `Detect` gives text regions for optimization;
+  - `Recognize` gives lines and words with their positions for the PDF text layer.
+- When the first OCR activity ships:
+  - the API image moves to a glibc base with the pinned ONNX Runtime (`scripts/fetch-onnxruntime.sh`) and `models/paddleocr`;
+  - the activities fail with "OCR is not available in this deployment" when no library is configured.
 
-PaperDotNet's notes apply to every engine. Word heights and line boxes are not the same measurement, so the same `target_height` gives different scales per strategy. Both strategies need fresh benchmarks on PaperGo hardware, and a manager review stays mandatory.
+Detection measures line boxes, as PaperDotNet's default strategy does, so PaperDotNet's default parameters apply unchanged. A manager review stays mandatory.
 
 ## Script node on goja
 
@@ -301,14 +297,13 @@ Each phase ships with its tests, OpenAPI contract and docs, and changes `migrati
    - the collector keeps pending staged files.
 2. **Optimization:**
    - the image pipeline in pure Go;
-   - the `internal/ocr` port with the Tesseract engine and the OCR image;
+   - OCR configuration for the API and the image with ONNX Runtime and the models;
    - `file.optimize_image`, `file.promote` and `file.discard`;
    - the `documents.optimize` built-in;
    - the `file.compare` review screen.
 
    Tests: PaperDotNet's numeric cases, synthetic images with known text sizes, and end-to-end runs with approve and reject.
 3. **Photo to document:**
-   - Tesseract recognition with word boxes;
    - the PDF writer (after the library spike);
    - `file.compose_pdf` and the `documents.photos_to_pdf` built-in;
    - `image` previews in the selection launch screen;
@@ -324,12 +319,10 @@ Each phase ships with its tests, OpenAPI contract and docs, and changes `migrati
 
 ## Decisions needed
 
-1. **OCR deployment.** The options are:
-   - **(a)** two images: `scratch` without OCR, and Debian-slim with Tesseract (recommended);
-   - **(b)** one Debian-slim image for everyone;
-   - **(c)** an OCR sidecar (Tesseract or Paddle) behind HTTP, keeping the API image `scratch`.
-2. **Reclaiming originals after an accepted optimization.** The options are:
+The OCR engine is decided and implemented: PaddleOCR in ONNX Runtime through purego, with PaperDotNet's models ([OCR](../ocr.md)).
+
+
+1. **Reclaiming originals after an accepted optimization.** The options are:
    - keep the original as an earlier file version (no schema change; frees no disk space until it leaves history);
    - add a "reclaimed" file-version state that keeps the metadata, hash and metrics but frees the bytes. This is PaperDotNet's behaviour. It is an explicit exception to immutable file history and needs a schema change.
-3. **Paddle parity.** Decide whether PaperDotNet's default DBNet line detector is required, or whether the Tesseract word strategy is acceptable at first. The two strategies measure different things, so default parameters may need tuning.
-4. **Script writes.** Decide between direct writes in the step transaction (recommended, atomic) and PaperDotNet's plan-then-apply model (identical semantics, more machinery).
+2. **Script writes.** Decide between direct writes in the step transaction (recommended, atomic) and PaperDotNet's plan-then-apply model (identical semantics, more machinery).

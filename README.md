@@ -235,7 +235,7 @@ Back up SQLite with its online backup API or `VACUUM INTO` and back up the refer
 
 This is an initial backend foundation, not a completed enterprise certification or deployment. S3 storage, antivirus scanning, quotas, approval and task activities, notifications, document text extraction and tracing/metrics export remain future extensions. Benchmarks cover query latency and allocations, writer wait during index builds and WAL growth on configurable collection sizes; concurrent upload throughput, multi-client load and SLOs still need a target workload.
 
-The [runner plan](docs/plans/runner.md) describes the embedded runner and the next workflow phases; notifications and tasks build on workflows as activities and built-in workflows.
+[OCR](docs/ocr.md) reads text in page images with PaddleOCR in ONNX Runtime, for workflow activities. The [runner plan](docs/plans/runner.md) describes the embedded runner and the next workflow phases; notifications and tasks build on workflows as activities and built-in workflows.
 
 The [NPM Compose sample](samples/npm/README.md) provisions an NPM-only authenticated deployment with HTTPS and persistent storage. The [authentik Compose sample](samples/authentik/README.md) provisions an OIDC deployment with authentik for users, groups and MFA, browser sign-in, Caddy for HTTPS, and persistent storage. The [reverse proxy guide](docs/reverse-proxies.md) covers running PaperGo behind Nginx Proxy Manager and other proxies, and syncing identity-provider users and groups.
 
