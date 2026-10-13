@@ -133,7 +133,7 @@ New capabilities the runner unlocks. Each will be designed separately:
 - notifications (inbox and live events);
 - tasks and approval of publishing;
 - an item change feed and change subscriptions (the [PaperDotNet comparison](../paperdotnet-comparison.md) §3);
-- document text extraction and OCR projections;
+- document text extraction and OCR projections, starting with the storage optimization and photo-to-document workflows ([document workflows plan](document-workflows.md));
 - audit and revision retention rules.
 
 ## Operations
