@@ -1,7 +1,7 @@
 import { ApiError } from './http';
 import { authorizationHeaders } from './auth';
 
-export async function downloadFile(path: string, fallbackName: string) {
+async function authorizedFetch(path: string): Promise<Response> {
   const response = await fetch(path, { headers: authorizationHeaders(), credentials: 'same-origin' });
   if (!response.ok) {
     const text = await response.text();
@@ -16,6 +16,16 @@ export async function downloadFile(path: string, fallbackName: string) {
     }
     throw new ApiError(response.status, code, detail);
   }
+  return response;
+}
+
+/** Fetches an authenticated file as a blob, for previews. */
+export async function fetchBlob(path: string): Promise<Blob> {
+  return (await authorizedFetch(path)).blob();
+}
+
+export async function downloadFile(path: string, fallbackName: string) {
+  const response = await authorizedFetch(path);
   const disposition = response.headers.get('Content-Disposition');
   const match = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"|filename=([^;]+)/i.exec(disposition ?? '');
   const raw = match?.[1] ?? match?.[2] ?? match?.[3];

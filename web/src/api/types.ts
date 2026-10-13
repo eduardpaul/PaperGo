@@ -1,3 +1,5 @@
+import type { FormSchema } from '@/features/workflows/model';
+
 export type Kind = 'workspace' | 'list' | 'library' | 'folder' | 'item';
 
 export type AccessAction = 'read' | 'read_draft' | 'write' | 'publish' | 'manage';
@@ -345,4 +347,40 @@ export interface DocumentUpload {
 export interface Scope {
   name: string;
   granted_to_members: boolean;
+}
+
+export interface Approval {
+  id: string;
+  workspace_id: string;
+  workflow_id: string;
+  run_id: string;
+  node: string;
+  item_id?: string;
+  title: string;
+  description?: string;
+  assignees: string[];
+  input_schema?: FormSchema;
+  review?: { type: 'file.compare' | 'file.preview'; staged_file_id: string };
+  status: 'open' | 'approved' | 'rejected' | 'cancelled';
+  decided_by?: string;
+  decided_at?: string;
+  comment?: string;
+  input?: Record<string, unknown>;
+  created_at: string;
+  created_by: string;
+}
+
+export interface StagedFile {
+  id: string;
+  item_id: string;
+  run_id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  sha256: string;
+  metrics: Record<string, unknown>;
+  sources: { item_id: string; blob_id: string }[];
+  state: 'pending' | 'promoted' | 'discarded';
+  fresh: boolean;
+  created_at: string;
 }

@@ -70,6 +70,21 @@ func (s *Service) WorkspaceMembers(ctx context.Context, subject, id string) ([]W
 	})
 }
 
+// WorkspaceManagers returns the users granted manage access on the
+// workspace itself, inside the caller's transaction.
+func (s *Service) WorkspaceManagers(ctx context.Context, id string) ([]string, error) {
+	grants, err := s.Client.Grant.Query().Where(grant.ResourceIDEQ(id), grant.ActionEQ(grant.ActionManage), grant.PrincipalTypeEQ(grant.PrincipalTypeUser)).
+		Order(ent.Asc(grant.FieldPrincipalID)).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(grants))
+	for i, g := range grants {
+		out[i] = g.PrincipalID
+	}
+	return out, nil
+}
+
 // SetWorkspaceMember adds a member or replaces their role. A retry is a no-op.
 // Membership changes do not consume the workspace metadata ETag.
 func (s *Service) SetWorkspaceMember(ctx context.Context, subject, id string, in WorkspaceMember) error {

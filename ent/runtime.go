@@ -4,6 +4,7 @@ package ent
 
 import (
 	"encoding/json/jsontext"
+	"papergo/ent/approvalrequest"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
@@ -59,6 +60,77 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	approvalrequestMixin := schema.ApprovalRequest{}.Mixin()
+	approvalrequestMixinFields0 := approvalrequestMixin[0].Fields()
+	_ = approvalrequestMixinFields0
+	approvalrequestFields := schema.ApprovalRequest{}.Fields()
+	_ = approvalrequestFields
+	// approvalrequestDescCreatedAt is the schema descriptor for created_at field.
+	approvalrequestDescCreatedAt := approvalrequestMixinFields0[1].Descriptor()
+	// approvalrequest.DefaultCreatedAt holds the default value on creation for the created_at field.
+	approvalrequest.DefaultCreatedAt = approvalrequestDescCreatedAt.Default.(func() time.Time)
+	// approvalrequestDescWorkspaceID is the schema descriptor for workspace_id field.
+	approvalrequestDescWorkspaceID := approvalrequestFields[0].Descriptor()
+	// approvalrequest.WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
+	approvalrequest.WorkspaceIDValidator = approvalrequestDescWorkspaceID.Validators[0].(func(string) error)
+	// approvalrequestDescWorkflowID is the schema descriptor for workflow_id field.
+	approvalrequestDescWorkflowID := approvalrequestFields[1].Descriptor()
+	// approvalrequest.WorkflowIDValidator is a validator for the "workflow_id" field. It is called by the builders before save.
+	approvalrequest.WorkflowIDValidator = approvalrequestDescWorkflowID.Validators[0].(func(string) error)
+	// approvalrequestDescRunID is the schema descriptor for run_id field.
+	approvalrequestDescRunID := approvalrequestFields[2].Descriptor()
+	// approvalrequest.RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
+	approvalrequest.RunIDValidator = approvalrequestDescRunID.Validators[0].(func(string) error)
+	// approvalrequestDescNode is the schema descriptor for node field.
+	approvalrequestDescNode := approvalrequestFields[3].Descriptor()
+	// approvalrequest.NodeValidator is a validator for the "node" field. It is called by the builders before save.
+	approvalrequest.NodeValidator = approvalrequestDescNode.Validators[0].(func(string) error)
+	// approvalrequestDescTitle is the schema descriptor for title field.
+	approvalrequestDescTitle := approvalrequestFields[5].Descriptor()
+	// approvalrequest.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	approvalrequest.TitleValidator = func() func(string) error {
+		validators := approvalrequestDescTitle.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(title string) error {
+			for _, fn := range fns {
+				if err := fn(title); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// approvalrequestDescDescription is the schema descriptor for description field.
+	approvalrequestDescDescription := approvalrequestFields[6].Descriptor()
+	// approvalrequest.DefaultDescription holds the default value on creation for the description field.
+	approvalrequest.DefaultDescription = approvalrequestDescDescription.Default.(string)
+	// approvalrequest.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
+	approvalrequest.DescriptionValidator = approvalrequestDescDescription.Validators[0].(func(string) error)
+	// approvalrequestDescParked is the schema descriptor for parked field.
+	approvalrequestDescParked := approvalrequestFields[11].Descriptor()
+	// approvalrequest.DefaultParked holds the default value on creation for the parked field.
+	approvalrequest.DefaultParked = approvalrequestDescParked.Default.(bool)
+	// approvalrequestDescComment is the schema descriptor for comment field.
+	approvalrequestDescComment := approvalrequestFields[14].Descriptor()
+	// approvalrequest.DefaultComment holds the default value on creation for the comment field.
+	approvalrequest.DefaultComment = approvalrequestDescComment.Default.(string)
+	// approvalrequest.CommentValidator is a validator for the "comment" field. It is called by the builders before save.
+	approvalrequest.CommentValidator = approvalrequestDescComment.Validators[0].(func(string) error)
+	// approvalrequestDescUpdatedAt is the schema descriptor for updated_at field.
+	approvalrequestDescUpdatedAt := approvalrequestFields[17].Descriptor()
+	// approvalrequest.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	approvalrequest.DefaultUpdatedAt = approvalrequestDescUpdatedAt.Default.(func() time.Time)
+	// approvalrequest.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	approvalrequest.UpdateDefaultUpdatedAt = approvalrequestDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// approvalrequestDescID is the schema descriptor for id field.
+	approvalrequestDescID := approvalrequestMixinFields0[0].Descriptor()
+	// approvalrequest.DefaultID holds the default value on creation for the id field.
+	approvalrequest.DefaultID = approvalrequestDescID.Default.(func() string)
+	// approvalrequest.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	approvalrequest.IDValidator = approvalrequestDescID.Validators[0].(func(string) error)
 	auditeventMixin := schema.AuditEvent{}.Mixin()
 	auditeventMixinFields0 := auditeventMixin[0].Fields()
 	_ = auditeventMixinFields0

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"papergo/ent/approvalrequest"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
@@ -118,6 +119,7 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			approvalrequest.Table:      approvalrequest.ValidColumn,
 			auditevent.Table:           auditevent.ValidColumn,
 			blob.Table:                 blob.ValidColumn,
 			blobdeletion.Table:         blobdeletion.ValidColumn,

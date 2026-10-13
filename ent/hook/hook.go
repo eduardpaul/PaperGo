@@ -8,6 +8,18 @@ import (
 	"papergo/ent"
 )
 
+// The ApprovalRequestFunc type is an adapter to allow the use of ordinary
+// function as ApprovalRequest mutator.
+type ApprovalRequestFunc func(context.Context, *ent.ApprovalRequestMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ApprovalRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ApprovalRequestMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalRequestMutation", m)
+}
+
 // The AuditEventFunc type is an adapter to allow the use of ordinary
 // function as AuditEvent mutator.
 type AuditEventFunc func(context.Context, *ent.AuditEventMutation) (ent.Value, error)

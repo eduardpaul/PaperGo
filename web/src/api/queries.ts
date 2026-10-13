@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 import { api, isApiError, listOf } from './http';
 import { searchRequest, smartFolderQueryRequest } from './requests';
 import type {
+  Approval,
   BuiltInState,
   CollectionTemplate,
   ContentType,
@@ -21,6 +22,7 @@ import type {
   SmartFolder,
   SmartFolderEntry,
   SmartFolderGroup,
+  StagedFile,
   Term,
   UserProfile,
   WebDAVCredential,
@@ -46,7 +48,28 @@ export const keys = {
   templates: ['collection-templates'] as const,
   people: ['people'] as const,
   users: ['users'] as const,
+  approvals: (status: string) => ['approvals', status] as const,
+  approval: (id: string) => ['approvals', 'one', id] as const,
+  stagedFile: (id: string) => ['staged-files', id] as const,
 };
+
+export const myApprovalsQuery = (status: string) =>
+  queryOptions({
+    queryKey: keys.approvals(status),
+    queryFn: async () => listOf((await api<Page<Approval>>('/v1/me/approvals', { query: { status } })).data),
+  });
+
+export const approvalQuery = (id: string) =>
+  queryOptions({
+    queryKey: keys.approval(id),
+    queryFn: async () => (await api<Approval>(`/v1/approvals/${id}`)).data,
+  });
+
+export const stagedFileQuery = (id: string) =>
+  queryOptions({
+    queryKey: keys.stagedFile(id),
+    queryFn: async () => (await api<StagedFile>(`/v1/staged-files/${id}`)).data,
+  });
 
 export const meQuery = queryOptions({
   queryKey: keys.me,

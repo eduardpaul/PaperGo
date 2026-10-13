@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// ApprovalRequest is the predicate function for approvalrequest builders.
+type ApprovalRequest func(*sql.Selector)
+
 // AuditEvent is the predicate function for auditevent builders.
 type AuditEvent func(*sql.Selector)
 

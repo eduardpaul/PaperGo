@@ -38,6 +38,9 @@ type RunInput struct {
 type Exec interface {
 	Step(name string, fn func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error)) (json.RawMessage, error)
 	Work(name string, fn func(ctx context.Context) (json.RawMessage, error)) (json.RawMessage, error)
+	// Await waits for approval request id, which node created, to be
+	// decided, and returns the node's output: Decided's value.
+	Await(node, id string) (json.RawMessage, error)
 	Sleep(d time.Duration) error
 }
 
@@ -150,6 +153,26 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 			r.steps[name] = map[string]any{"error": err.Error()}
 			name = next
 			continue
+		}
+		if o.Wait != "" {
+			raw, err := r.x.Await(name, o.Wait)
+			if err != nil {
+				if ctx.Err() != nil {
+					return Result{Status: "cancelled", Node: name}, ctx.Err()
+				}
+				next, ok := node.Next[PortError]
+				if !ok {
+					return r.finish(name, err)
+				}
+				r.steps[name] = map[string]any{"error": err.Error()}
+				name = next
+				continue
+			}
+			var decided map[string]any
+			if err = decode(raw, &decided); err != nil {
+				return r.finish(name, err)
+			}
+			o.Output, o.Port = decided, fmt.Sprint(decided["decision"])
 		}
 		r.steps[name] = o.Output
 		for k, v := range o.Vars {
@@ -280,7 +303,7 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 			return item, nil
 		}
 	}
-	e := &env{ctx: dms.WithCause(ctx, r.in.Event.Depth, r.in.RunID), t: t, author: r.l.Author, itemID: r.in.ItemID, items: r.in.Items, runID: r.in.RunID, workspaceID: r.in.WorkspaceID, scope: sc,
+	e := &env{ctx: dms.WithCause(ctx, r.in.Event.Depth, r.in.RunID), t: t, author: r.l.Author, itemID: r.in.ItemID, items: r.in.Items, runID: r.in.RunID, workspaceID: r.in.WorkspaceID, workflowID: r.in.WorkflowID, node: name, scope: sc,
 		raise: func(event string, data map[string]any) { raise(r.event(WorkflowEvent(r.l.Key, event), data)) }}
 	o, err := run(e)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 
 	"papergo/ent/migrate"
 
+	"papergo/ent/approvalrequest"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
@@ -71,6 +72,8 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// ApprovalRequest is the client for interacting with the ApprovalRequest builders.
+	ApprovalRequest *ApprovalRequestClient
 	// AuditEvent is the client for interacting with the AuditEvent builders.
 	AuditEvent *AuditEventClient
 	// Blob is the client for interacting with the Blob builders.
@@ -174,6 +177,7 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.ApprovalRequest = NewApprovalRequestClient(c.config)
 	c.AuditEvent = NewAuditEventClient(c.config)
 	c.Blob = NewBlobClient(c.config)
 	c.BlobDeletion = NewBlobDeletionClient(c.config)
@@ -312,6 +316,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:                  ctx,
 		config:               cfg,
+		ApprovalRequest:      NewApprovalRequestClient(cfg),
 		AuditEvent:           NewAuditEventClient(cfg),
 		Blob:                 NewBlobClient(cfg),
 		BlobDeletion:         NewBlobDeletionClient(cfg),
@@ -377,6 +382,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:                  ctx,
 		config:               cfg,
+		ApprovalRequest:      NewApprovalRequestClient(cfg),
 		AuditEvent:           NewAuditEventClient(cfg),
 		Blob:                 NewBlobClient(cfg),
 		BlobDeletion:         NewBlobDeletionClient(cfg),
@@ -429,7 +435,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		AuditEvent.
+//		ApprovalRequest.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -452,16 +458,17 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
-		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
-		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
-		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
-		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken,
-		c.SyncView, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
-		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.ApprovalRequest, c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey,
+		c.CollectionType, c.ContentType, c.DomainEvent, c.FieldDefinition,
+		c.FieldValue, c.Grant, c.GroupInbox, c.IdentityAssignment, c.IdentityGroup,
+		c.IdentityMembership, c.IdentityOrganization, c.IdentityPreference,
+		c.IdentityRESTToken, c.IdentityRole, c.IdentityUser, c.ItemHistory,
+		c.ItemRevision, c.ItemSurface, c.ListView, c.LiveChange, c.Operation,
+		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
+		c.SyncToken, c.SyncView, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential,
+		c.Workflow, c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger,
+		c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -471,16 +478,17 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
-		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
-		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
-		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
-		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken,
-		c.SyncView, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
-		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.ApprovalRequest, c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey,
+		c.CollectionType, c.ContentType, c.DomainEvent, c.FieldDefinition,
+		c.FieldValue, c.Grant, c.GroupInbox, c.IdentityAssignment, c.IdentityGroup,
+		c.IdentityMembership, c.IdentityOrganization, c.IdentityPreference,
+		c.IdentityRESTToken, c.IdentityRole, c.IdentityUser, c.ItemHistory,
+		c.ItemRevision, c.ItemSurface, c.ListView, c.LiveChange, c.Operation,
+		c.OperationItem, c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
+		c.SyncToken, c.SyncView, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential,
+		c.Workflow, c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger,
+		c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -489,6 +497,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *ApprovalRequestMutation:
+		return c.ApprovalRequest.mutate(ctx, m)
 	case *AuditEventMutation:
 		return c.AuditEvent.mutate(ctx, m)
 	case *BlobMutation:
@@ -583,6 +593,139 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.WorkflowVersion.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// ApprovalRequestClient is a client for the ApprovalRequest schema.
+type ApprovalRequestClient struct {
+	config
+}
+
+// NewApprovalRequestClient returns a client for the ApprovalRequest from the given config.
+func NewApprovalRequestClient(c config) *ApprovalRequestClient {
+	return &ApprovalRequestClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `approvalrequest.Hooks(f(g(h())))`.
+func (c *ApprovalRequestClient) Use(hooks ...Hook) {
+	c.hooks.ApprovalRequest = append(c.hooks.ApprovalRequest, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `approvalrequest.Intercept(f(g(h())))`.
+func (c *ApprovalRequestClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ApprovalRequest = append(c.inters.ApprovalRequest, interceptors...)
+}
+
+// Create returns a builder for creating a ApprovalRequest entity.
+func (c *ApprovalRequestClient) Create() *ApprovalRequestCreate {
+	mutation := newApprovalRequestMutation(c.config, OpCreate)
+	return &ApprovalRequestCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ApprovalRequest entities.
+func (c *ApprovalRequestClient) CreateBulk(builders ...*ApprovalRequestCreate) *ApprovalRequestCreateBulk {
+	return &ApprovalRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ApprovalRequestClient) MapCreateBulk(slice any, setFunc func(*ApprovalRequestCreate, int)) *ApprovalRequestCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ApprovalRequestCreateBulk{err: fmt.Errorf("calling to ApprovalRequestClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ApprovalRequestCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ApprovalRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ApprovalRequest.
+func (c *ApprovalRequestClient) Update() *ApprovalRequestUpdate {
+	mutation := newApprovalRequestMutation(c.config, OpUpdate)
+	return &ApprovalRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ApprovalRequestClient) UpdateOne(_m *ApprovalRequest) *ApprovalRequestUpdateOne {
+	mutation := newApprovalRequestMutation(c.config, OpUpdateOne, withApprovalRequest(_m))
+	return &ApprovalRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ApprovalRequestClient) UpdateOneID(id string) *ApprovalRequestUpdateOne {
+	mutation := newApprovalRequestMutation(c.config, OpUpdateOne, withApprovalRequestID(id))
+	return &ApprovalRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ApprovalRequest.
+func (c *ApprovalRequestClient) Delete() *ApprovalRequestDelete {
+	mutation := newApprovalRequestMutation(c.config, OpDelete)
+	return &ApprovalRequestDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ApprovalRequestClient) DeleteOne(_m *ApprovalRequest) *ApprovalRequestDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ApprovalRequestClient) DeleteOneID(id string) *ApprovalRequestDeleteOne {
+	builder := c.Delete().Where(approvalrequest.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ApprovalRequestDeleteOne{builder}
+}
+
+// Query returns a query builder for ApprovalRequest.
+func (c *ApprovalRequestClient) Query() *ApprovalRequestQuery {
+	return &ApprovalRequestQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeApprovalRequest},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ApprovalRequest entity by its id.
+func (c *ApprovalRequestClient) Get(ctx context.Context, id string) (*ApprovalRequest, error) {
+	return c.Query().Where(approvalrequest.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ApprovalRequestClient) GetX(ctx context.Context, id string) *ApprovalRequest {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ApprovalRequestClient) Hooks() []Hook {
+	return c.hooks.ApprovalRequest
+}
+
+// Interceptors returns the client interceptors.
+func (c *ApprovalRequestClient) Interceptors() []Interceptor {
+	return c.inters.ApprovalRequest
+}
+
+func (c *ApprovalRequestClient) mutate(ctx context.Context, m *ApprovalRequestMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ApprovalRequestCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ApprovalRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ApprovalRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ApprovalRequestDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ApprovalRequest mutation op: %q", m.Op())
 	}
 }
 
@@ -7635,8 +7778,8 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
-		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
+		ApprovalRequest, AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType,
+		ContentType, DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
 		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
 		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
 		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,
@@ -7646,8 +7789,8 @@ type (
 		WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
-		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
-		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
+		ApprovalRequest, AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType,
+		ContentType, DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
 		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
 		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
 		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,

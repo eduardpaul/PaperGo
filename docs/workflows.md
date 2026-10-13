@@ -173,6 +173,7 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `set_variable` | flow | sets `name` to `value` | `name`, `value` |
 | `forEach` | flow | runs the nodes from its `body` port once per element of `items` (an array or a single token such as `{run:items}`, at most 1,000), with the element in the variable `as` and its position in `as_index`; see [loops](#loops) | `items`, `count`, `as` |
 | `delay` | flow | waits `duration` (`90m`, `48h`) or `until` a date or time, durably | `until` |
+| `approval` | flow | asks `assignees` (people; default the workspace's owners) to approve or reject `title` (with an optional `description`), with an optional decision form (`input_schema`) and `review` of a staged file; ports `approved`/`rejected`; see [approvals](#approvals) | `request_id`, `decision`, `decided_by`, `comment`, `input` |
 | `event.raise` | flow | raises `wf.{key}.{event}` with `data` and the run's item | `event` |
 | `item.has_terms` | flow | tests whether the item's term and keywords fields hold `terms` (or descendants, or terms merged into them): any of them, or all with `match: "all"`; ports `matched`/`unmatched` | `matched`, `terms` (those held) |
 | `end` / `fail` | flow | completes the run / fails it with `message` | |
@@ -259,7 +260,21 @@ Saving a workflow checks that collections and relationship types belong to the w
 
 **Selection hints.** The root of a [selection](#selection-runs) workflow's launch form can carry `x-papergo-selection`, text hints for the screen that chooses and orders the items: `preview` (such as `image`), `item_label` (such as `page`), `order_label` and `primary_description`. They are presentation only.
 
-Approval steps (planned) will collect their answers with the same forms and checks.
+Approval decisions collect their answers with the same forms and checks.
+
+## Approvals
+
+An `approval` node creates an approval request and waits for the first decision:
+
+- **Assignees** are subjects who can read the workspace and the run item's draft; the default is the workspace's owners. They find their open requests in `GET /v1/me/approvals` and the web app's Approvals screen.
+- **A decision** is `approve` or `reject`, with an optional comment and the values of the request's `input_schema` form, checked like a launch form. The first decision wins. The node follows `approved` or `rejected`, and its output holds `decided_by`, `comment` and `input` (such as `{step:review.input.reason}`).
+- **A review** shows a staged file of the run:
+  - `file.compare` shows the item's current file beside a staged image, both at 100%;
+  - `file.preview` shows a staged document, such as a PDF.
+
+  Approving fails with 409 when the staged file was made from a file that is no longer current; it can still be rejected.
+
+While a request is open, the run **waits** without holding a worker: it parks, shows as `waiting`, and resumes moments after the decision. Waiting runs count as active for [concurrency](#concurrency) and are not deleted by run retention. Cancelling a waiting run, or replacing it, cancels its open request.
 
 ## Selection runs
 
@@ -306,6 +321,7 @@ How people use them:
 | --- | --- |
 | `queued` | waiting for a worker |
 | `running` | executing, or waiting in `delay` |
+| `waiting` | waiting for an approval decision, without holding a worker |
 | `completed` | finished |
 | `failed` | a node failed with no `error` port, or `fail` ran |
 | `cancelled` | stopped by a manager |
@@ -330,6 +346,7 @@ Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default
 | Start a manual workflow on items | `write` on each item |
 | Start a manual workflow with no item | workspace `manage` |
 | See, cancel and retry runs | workspace `manage` |
+| Decide an approval | being an assignee who can read the workspace and the item's draft |
 
 ## API
 
@@ -346,6 +363,11 @@ Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default
 | GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `$skiptoken`, `$top`) |
 | GET | /v1/workflow-runs/{id} | A run with result and steps |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
+| GET | /v1/me/approvals | The caller's approval requests (`status`, `$top`) |
+| GET | /v1/workspaces/{id}/approvals | A workspace's approval requests, for its managers |
+| GET | /v1/approvals/{id} | An approval request, for its assignees and the workspace's managers |
+| POST | /v1/approvals/{id}/decision | Decide: `{"decision": "approve" \| "reject", "comment", "input"}` |
+| GET | /v1/staged-files/{id}, /content | A staged file and its bytes, for readers of its item |
 
 ## Runtime
 

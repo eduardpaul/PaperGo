@@ -36,6 +36,9 @@ func (r *Runner) dispatchLoop(ctx context.Context) {
 		if err := r.SyncLiveRuns(ctx); err != nil && ctx.Err() == nil {
 			r.log.Error("observe workflow statuses", "error", err)
 		}
+		if err := r.ResumeDecided(ctx); err != nil && ctx.Err() == nil {
+			r.log.Error("resume decided approvals", "error", err)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -79,9 +82,13 @@ func (r *Runner) activeRuns(ids []string) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
+	parked, err := parkedRuns(context.Background(), r.dms, ids)
+	if err != nil {
+		return nil, err
+	}
 	out := map[string]bool{}
 	for _, s := range statuses {
-		if state := status(s.Status); state == "queued" || state == "running" {
+		if state := status(s.Status); state == "queued" || state == "running" || parked[s.ID] {
 			out[s.ID] = true
 		}
 	}
@@ -93,11 +100,11 @@ func (r *Runner) cancelActive(id string) error {
 	if err := r.attach(runs, false); err != nil {
 		return err
 	}
-	if runs[0].Status != "queued" && runs[0].Status != "running" {
+	if runs[0].Status != "queued" && runs[0].Status != "running" && runs[0].Status != "waiting" {
 		return nil
 	}
 	r.log.Info("cancel run: a member was deleted, or a newer run replaced it", "run_id", id)
-	return dbos.CancelWorkflow(r.ctx, id)
+	return r.cancelRun(context.Background(), id)
 }
 
 func (r *Runner) dispatchBatch(ctx context.Context) (int, []string, error) {

@@ -70,6 +70,11 @@ func (a *Activity) Validate(inputs map[string]any) error {
 			return errors.New("event must be a lowercase key other than completed and failed")
 		}
 	}
+	if a.Key == "approval" {
+		if err := validateApproval(inputs); err != nil {
+			return err
+		}
+	}
 	if a.Key == forEachKey {
 		if as, ok := inputs["as"].(string); !ok || !inputNamePattern.MatchString(as) {
 			return errors.New("as must be a variable name")
@@ -105,6 +110,9 @@ type outcome struct {
 	Fail string `json:"fail,omitempty"`
 	// Job hands the node to its activity's work (activities with work only).
 	Job json.RawMessage `json:"job,omitempty"`
+	// Wait is an approval request the run waits for; its decision picks the
+	// port and becomes the output.
+	Wait string `json:"wait,omitempty"`
 }
 
 // env is what an activity can use while its node runs: the DMS service bound
@@ -118,6 +126,8 @@ type env struct {
 	items       []string
 	runID       string
 	workspaceID string
+	workflowID  string
+	node        string
 	scope       *scope
 	raise       func(typ string, data map[string]any)
 }

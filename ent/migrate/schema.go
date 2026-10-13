@@ -9,6 +9,52 @@ import (
 )
 
 var (
+	// ApprovalRequestsColumns holds the columns for the "approval_requests" table.
+	ApprovalRequestsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "workspace_id", Type: field.TypeString},
+		{Name: "workflow_id", Type: field.TypeString},
+		{Name: "run_id", Type: field.TypeString},
+		{Name: "node", Type: field.TypeString},
+		{Name: "item_id", Type: field.TypeString, Nullable: true},
+		{Name: "title", Type: field.TypeString, Size: 500},
+		{Name: "description", Type: field.TypeString, Size: 4000, Default: ""},
+		{Name: "assignees", Type: field.TypeJSON},
+		{Name: "input_schema", Type: field.TypeJSON, Nullable: true},
+		{Name: "review", Type: field.TypeJSON, Nullable: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "approved", "rejected", "cancelled"}, Default: "open"},
+		{Name: "parked", Type: field.TypeBool, Default: false},
+		{Name: "decided_by", Type: field.TypeString, Nullable: true},
+		{Name: "decided_at", Type: field.TypeTime, Nullable: true},
+		{Name: "comment", Type: field.TypeString, Size: 4000, Default: ""},
+		{Name: "input", Type: field.TypeJSON, Nullable: true},
+		{Name: "created_by", Type: field.TypeString},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ApprovalRequestsTable holds the schema information for the "approval_requests" table.
+	ApprovalRequestsTable = &schema.Table{
+		Name:       "approval_requests",
+		Columns:    ApprovalRequestsColumns,
+		PrimaryKey: []*schema.Column{ApprovalRequestsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "approvalrequest_run_id",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRequestsColumns[4]},
+			},
+			{
+				Name:    "approvalrequest_status_workspace_id",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRequestsColumns[12], ApprovalRequestsColumns[2]},
+			},
+			{
+				Name:    "approvalrequest_parked_status",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalRequestsColumns[13], ApprovalRequestsColumns[12]},
+			},
+		},
+	}
 	// AuditEventsColumns holds the columns for the "audit_events" table.
 	AuditEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1909,6 +1955,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		ApprovalRequestsTable,
 		AuditEventsTable,
 		BlobsTable,
 		BlobDeletionsTable,

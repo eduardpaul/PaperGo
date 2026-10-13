@@ -1,6 +1,6 @@
-import { isLosslessNumber } from "lossless-json";
-import { numericInput } from "@/api/json";
-import type { FilterExpr } from "@/api/types";
+import { isLosslessNumber } from 'lossless-json';
+import { numericInput } from '@/api/json';
+import type { FilterExpr } from '@/api/types';
 
 export interface FormSchema {
   type?: string;
@@ -19,7 +19,7 @@ export interface FormSchema {
   maxLength?: number;
   minItems?: number;
   maxItems?: number;
-  "x-papergo"?: {
+  'x-papergo'?: {
     kind: string;
     collection_id?: string;
     term_set_id?: string;
@@ -52,6 +52,7 @@ export interface WorkflowDefinition {
   condition?: FilterExpr;
   input_schema?: FormSchema;
   variables?: Record<string, unknown>;
+  concurrency?: string;
   flow: { start: string; nodes: Record<string, FlowNode> };
 }
 export interface Activity {
@@ -67,22 +68,14 @@ export interface WorkflowCatalog {
   activities: Activity[];
 }
 
-export function normalizeForm(
-  schema: FormSchema,
-  value: unknown,
-  tokens = false,
-): unknown {
+export function normalizeForm(schema: FormSchema, value: unknown, tokens = false): unknown {
   if (value === undefined) return undefined;
-  if (tokens && typeof value === "string" && value.includes("{")) return value;
-  if (schema.type === "number" || schema.type === "integer")
-    return typeof value === "string"
-      ? numericInput(value, schema.type === "integer")
-      : value;
-  if (schema.type === "array")
-    return (value as unknown[]).map((value) =>
-      normalizeForm(schema.items ?? {}, value, tokens),
-    );
-  if (schema.type === "object" && schema.properties)
+  if (tokens && typeof value === 'string' && value.includes('{')) return value;
+  if (schema.type === 'number' || schema.type === 'integer')
+    return typeof value === 'string' ? numericInput(value, schema.type === 'integer') : value;
+  if (schema.type === 'array')
+    return (value as unknown[]).map((value) => normalizeForm(schema.items ?? {}, value, tokens));
+  if (schema.type === 'object' && schema.properties)
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, value]) => [
         key,
@@ -98,11 +91,11 @@ export function formDefaults(schema: FormSchema): Record<string, unknown> {
       property.default !== undefined
         ? [[key, property.default]]
         : schema.required?.includes(key)
-          ? property.type === "boolean"
+          ? property.type === 'boolean'
             ? [[key, false]]
-            : property.type === "object"
+            : property.type === 'object'
               ? [[key, formDefaults(property)]]
-              : property.type === "array"
+              : property.type === 'array'
                 ? [[key, []]]
                 : []
           : [],
@@ -111,29 +104,20 @@ export function formDefaults(schema: FormSchema): Record<string, unknown> {
 }
 
 /** Rename graph edges and output tokens together so the saved flow keeps its meaning. */
-export function renameNode(
-  definition: WorkflowDefinition,
-  oldName: string,
-  newName: string,
-): WorkflowDefinition {
+export function renameNode(definition: WorkflowDefinition, oldName: string, newName: string): WorkflowDefinition {
   newName = newName.trim();
   if (!/^[A-Za-z0-9][A-Za-z0-9 _-]{0,99}$/.test(newName))
-    throw new Error(
-      "Step names use letters, digits, spaces, underscores or hyphens.",
-    );
-  if (newName !== oldName && definition.flow.nodes[newName])
-    throw new Error("A step already has this name.");
+    throw new Error('Step names use letters, digits, spaces, underscores or hyphens.');
+  if (newName !== oldName && definition.flow.nodes[newName]) throw new Error('A step already has this name.');
   const tokens = (value: unknown): unknown => {
-    if (typeof value === "string")
+    if (typeof value === 'string')
       return value
         .replaceAll(`{step:${oldName}.`, `{step:${newName}.`)
         .replaceAll(`{step:${oldName}}`, `{step:${newName}}`);
     if (isLosslessNumber(value)) return value;
     if (Array.isArray(value)) return value.map(tokens);
-    if (value && typeof value === "object")
-      return Object.fromEntries(
-        Object.entries(value).map(([key, value]) => [key, tokens(value)]),
-      );
+    if (value && typeof value === 'object')
+      return Object.fromEntries(Object.entries(value).map(([key, value]) => [key, tokens(value)]));
     return value;
   };
   const updated = tokens(definition) as WorkflowDefinition;
@@ -145,10 +129,7 @@ export function renameNode(
         {
           ...node,
           next: Object.fromEntries(
-            Object.entries(node.next ?? {}).map(([port, target]) => [
-              port,
-              target === oldName ? newName : target,
-            ]),
+            Object.entries(node.next ?? {}).map(([port, target]) => [port, target === oldName ? newName : target]),
           ),
         },
       ]),

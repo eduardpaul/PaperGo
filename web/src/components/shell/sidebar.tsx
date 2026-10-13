@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { Briefcase, ChevronRight, House, Inbox, Plus, Search } from 'lucide-react';
+import { Briefcase, ChevronRight, ClipboardCheck, House, Inbox, Plus, Search } from 'lucide-react';
 import { Collapsible } from 'radix-ui';
 import { useState } from 'react';
 import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/queries';
@@ -18,6 +18,7 @@ const activeClass = 'bg-accent-soft! text-accent! font-medium [&_svg]:text-accen
 const navigation = [
   { to: '/', label: 'Home', icon: House, exact: true },
   { to: '/inbox', label: 'Inbox', icon: Inbox, exact: false },
+  { to: '/approvals', label: 'Approvals', icon: ClipboardCheck, exact: false },
   { to: '/search', label: 'Search', icon: Search, exact: false },
 ] as const;
 

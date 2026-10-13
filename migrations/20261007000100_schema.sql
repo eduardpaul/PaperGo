@@ -209,6 +209,16 @@ CREATE TABLE staged_files (
  metrics JSON NOT NULL DEFAULT '{}' CHECK(json_valid(metrics)),
  state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','promoted','discarded')),created_by TEXT NOT NULL
 );
+CREATE TABLE approval_requests (
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,
+ workspace_id TEXT NOT NULL,workflow_id TEXT NOT NULL,run_id TEXT NOT NULL,node TEXT NOT NULL,item_id TEXT,
+ title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 500),description TEXT NOT NULL DEFAULT '' CHECK(length(description)<=4000),
+ assignees JSON NOT NULL CHECK(json_valid(assignees) AND json_type(assignees)='array'),
+ input_schema JSON CHECK(input_schema IS NULL OR json_valid(input_schema)),review JSON CHECK(review IS NULL OR json_valid(review)),
+ status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','approved','rejected','cancelled')),parked BOOLEAN NOT NULL DEFAULT 0,
+ decided_by TEXT,decided_at DATETIME,comment TEXT NOT NULL DEFAULT '' CHECK(length(comment)<=4000),
+ input JSON CHECK(input IS NULL OR json_valid(input)),created_by TEXT NOT NULL
+);
 CREATE TABLE runner_step_results (
  run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL,
  PRIMARY KEY (run_id, step_id)
@@ -318,6 +328,9 @@ CREATE INDEX workflowrunitem_item_id ON workflow_run_items(item_id);
 CREATE INDEX stagedfile_run_id ON staged_files(run_id);
 CREATE INDEX stagedfile_item_id ON staged_files(item_id);
 CREATE INDEX stagedfile_object_key_state ON staged_files(object_key,state);
+CREATE INDEX approvalrequest_run_id ON approval_requests(run_id);
+CREATE INDEX approvalrequest_status_workspace_id ON approval_requests(status,workspace_id);
+CREATE INDEX approvalrequest_parked_status ON approval_requests(parked,status);
 
 -- Triggers: derived projections, integrity guards and permission scopes
 CREATE TRIGGER resource_search_insert AFTER INSERT ON resources BEGIN

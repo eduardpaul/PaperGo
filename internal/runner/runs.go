@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"papergo/ent"
+	"papergo/ent/approvalrequest"
 	"papergo/ent/domainevent"
 	"papergo/ent/workflowrun"
 	"papergo/ent/workflowrunitem"
@@ -109,12 +111,21 @@ func (r *Runner) attach(runs []Run, output bool) error {
 	for _, s := range statuses {
 		byID[s.ID] = s
 	}
+	parked, err := parkedRuns(context.Background(), r.dms, ids)
+	if err != nil {
+		return err
+	}
 	for i := range runs {
 		s, ok := byID[runs[i].ID]
 		if !ok {
 			continue
 		}
 		runs[i].Status = status(s.Status)
+		if parked[runs[i].ID] && s.Status == dbos.WorkflowStatusCancelled {
+			runs[i].Status = "waiting"
+			runs[i].Error = ""
+			s.Error = nil
+		}
 		if !s.UpdatedAt.IsZero() {
 			t := s.UpdatedAt.UTC()
 			runs[i].UpdatedAt = &t
@@ -341,7 +352,7 @@ func (r *Runner) Cancel(ctx context.Context, subject, id string) (Run, error) {
 	if _, err := r.row(ctx, subject, id); err != nil {
 		return Run{}, err
 	}
-	if err := dbos.CancelWorkflow(r.ctx, id); err != nil {
+	if err := r.cancelRun(ctx, id); err != nil {
 		return Run{}, err
 	}
 	return r.Run(ctx, subject, id)
@@ -436,9 +447,18 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 		if err != nil || len(done) == 0 {
 			return deleted, err
 		}
-		ids := make([]string, len(done))
-		for i, s := range done {
-			ids[i] = s.ID
+		ids := make([]string, 0, len(done))
+		for _, s := range done {
+			ids = append(ids, s.ID)
+		}
+		// Parked runs wait for an approval; they are not finished.
+		parked, err := parkedRuns(ctx, r.dms, ids)
+		if err != nil {
+			return deleted, err
+		}
+		ids = slices.DeleteFunc(ids, func(id string) bool { return parked[id] })
+		if len(ids) == 0 {
+			return deleted, nil
 		}
 		if err = r.dms.Write(ctx, func(t *dms.Service) error {
 			args := make([]any, len(ids))
@@ -450,6 +470,9 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 				return err
 			}
 			if err := t.DiscardRunStagedFiles(ctx, ids...); err != nil {
+				return err
+			}
+			if _, err := t.Client.ApprovalRequest.Delete().Where(approvalrequest.RunIDIn(ids...)).Exec(ctx); err != nil {
 				return err
 			}
 			_, err := t.Client.WorkflowRun.Delete().Where(workflowrun.IDIn(ids...)).Exec(ctx)
