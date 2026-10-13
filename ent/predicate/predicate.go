@@ -105,6 +105,9 @@ type SchemaTemplate func(*sql.Selector)
 // SmartFolder is the predicate function for smartfolder builders.
 type SmartFolder func(*sql.Selector)
 
+// StagedFile is the predicate function for stagedfile builders.
+type StagedFile func(*sql.Selector)
+
 // SyncState is the predicate function for syncstate builders.
 type SyncState func(*sql.Selector)
 

@@ -38,6 +38,7 @@ import (
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
+	"papergo/ent/stagedfile"
 	"papergo/ent/syncstate"
 	"papergo/ent/synctoken"
 	"papergo/ent/syncview"
@@ -1642,6 +1643,91 @@ func init() {
 	smartfolder.DefaultID = smartfolderDescID.Default.(func() string)
 	// smartfolder.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	smartfolder.IDValidator = smartfolderDescID.Validators[0].(func(string) error)
+	stagedfileMixin := schema.StagedFile{}.Mixin()
+	stagedfileMixinFields0 := stagedfileMixin[0].Fields()
+	_ = stagedfileMixinFields0
+	stagedfileFields := schema.StagedFile{}.Fields()
+	_ = stagedfileFields
+	// stagedfileDescCreatedAt is the schema descriptor for created_at field.
+	stagedfileDescCreatedAt := stagedfileMixinFields0[1].Descriptor()
+	// stagedfile.DefaultCreatedAt holds the default value on creation for the created_at field.
+	stagedfile.DefaultCreatedAt = stagedfileDescCreatedAt.Default.(func() time.Time)
+	// stagedfileDescWorkspaceID is the schema descriptor for workspace_id field.
+	stagedfileDescWorkspaceID := stagedfileFields[0].Descriptor()
+	// stagedfile.WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
+	stagedfile.WorkspaceIDValidator = stagedfileDescWorkspaceID.Validators[0].(func(string) error)
+	// stagedfileDescItemID is the schema descriptor for item_id field.
+	stagedfileDescItemID := stagedfileFields[1].Descriptor()
+	// stagedfile.ItemIDValidator is a validator for the "item_id" field. It is called by the builders before save.
+	stagedfile.ItemIDValidator = stagedfileDescItemID.Validators[0].(func(string) error)
+	// stagedfileDescRunID is the schema descriptor for run_id field.
+	stagedfileDescRunID := stagedfileFields[2].Descriptor()
+	// stagedfile.RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
+	stagedfile.RunIDValidator = stagedfileDescRunID.Validators[0].(func(string) error)
+	// stagedfileDescObjectKey is the schema descriptor for object_key field.
+	stagedfileDescObjectKey := stagedfileFields[4].Descriptor()
+	// stagedfile.ObjectKeyValidator is a validator for the "object_key" field. It is called by the builders before save.
+	stagedfile.ObjectKeyValidator = stagedfileDescObjectKey.Validators[0].(func(string) error)
+	// stagedfileDescFilename is the schema descriptor for filename field.
+	stagedfileDescFilename := stagedfileFields[5].Descriptor()
+	// stagedfile.FilenameValidator is a validator for the "filename" field. It is called by the builders before save.
+	stagedfile.FilenameValidator = func() func(string) error {
+		validators := stagedfileDescFilename.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(filename string) error {
+			for _, fn := range fns {
+				if err := fn(filename); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// stagedfileDescContentType is the schema descriptor for content_type field.
+	stagedfileDescContentType := stagedfileFields[6].Descriptor()
+	// stagedfile.ContentTypeValidator is a validator for the "content_type" field. It is called by the builders before save.
+	stagedfile.ContentTypeValidator = func() func(string) error {
+		validators := stagedfileDescContentType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(content_type string) error {
+			for _, fn := range fns {
+				if err := fn(content_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// stagedfileDescSize is the schema descriptor for size field.
+	stagedfileDescSize := stagedfileFields[7].Descriptor()
+	// stagedfile.SizeValidator is a validator for the "size" field. It is called by the builders before save.
+	stagedfile.SizeValidator = stagedfileDescSize.Validators[0].(func(int64) error)
+	// stagedfileDescSha256 is the schema descriptor for sha256 field.
+	stagedfileDescSha256 := stagedfileFields[8].Descriptor()
+	// stagedfile.Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
+	stagedfile.Sha256Validator = stagedfileDescSha256.Validators[0].(func(string) error)
+	// stagedfileDescMetrics is the schema descriptor for metrics field.
+	stagedfileDescMetrics := stagedfileFields[9].Descriptor()
+	// stagedfile.DefaultMetrics holds the default value on creation for the metrics field.
+	stagedfile.DefaultMetrics = stagedfileDescMetrics.Default.(jsontext.Value)
+	// stagedfileDescUpdatedAt is the schema descriptor for updated_at field.
+	stagedfileDescUpdatedAt := stagedfileFields[12].Descriptor()
+	// stagedfile.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	stagedfile.DefaultUpdatedAt = stagedfileDescUpdatedAt.Default.(func() time.Time)
+	// stagedfile.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	stagedfile.UpdateDefaultUpdatedAt = stagedfileDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// stagedfileDescID is the schema descriptor for id field.
+	stagedfileDescID := stagedfileMixinFields0[0].Descriptor()
+	// stagedfile.DefaultID holds the default value on creation for the id field.
+	stagedfile.DefaultID = stagedfileDescID.Default.(func() string)
+	// stagedfile.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	stagedfile.IDValidator = stagedfileDescID.Validators[0].(func(string) error)
 	syncstateMixin := schema.SyncState{}.Mixin()
 	syncstateMixinFields0 := syncstateMixin[0].Fields()
 	_ = syncstateMixinFields0

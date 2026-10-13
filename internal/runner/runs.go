@@ -449,6 +449,9 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 			if _, err := t.Client.ExecContext(ctx, `DELETE FROM runner_step_results WHERE run_id IN (`+strings.Join(marks, ",")+`)`, args...); err != nil {
 				return err
 			}
+			if err := t.DiscardRunStagedFiles(ctx, ids...); err != nil {
+				return err
+			}
 			_, err := t.Client.WorkflowRun.Delete().Where(workflowrun.IDIn(ids...)).Exec(ctx)
 			return err
 		}); err != nil {

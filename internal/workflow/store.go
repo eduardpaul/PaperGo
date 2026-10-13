@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -27,6 +28,8 @@ import (
 // authorization and audit trail as every other change.
 type Service struct {
 	DMS *dms.Service
+	// Tools are what activities with heavy work use outside transactions.
+	Tools Tools
 }
 
 // Workflow is a workflow with its current definition.
@@ -606,7 +609,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 		}
 		// Purge removes revision payloads. Older queued content events must not
 		// block dispatch or start actions against an item that no longer exists.
-		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored) {
+		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded) {
 			exists, err := t.Client.Resource.Query().Where(resource.IDEQ(e.ResourceID)).Exist(ctx)
 			if err != nil {
 				return nil, err
@@ -738,6 +741,12 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 	for _, tr := range m.def.Triggers {
 		if tr.Type != e.Type || tr.CollectionID != "" && tr.CollectionID != e.CollectionID {
 			continue
+		}
+		if e.Type == dms.EventFileAdded {
+			source, _ := e.Data["source"].(string)
+			if !slices.Contains(tr.sources(), source) {
+				continue
+			}
 		}
 		if tr.ContentTypeID != "" {
 			typ, _ := e.Data["content_type_id"].(string)

@@ -192,12 +192,22 @@ CREATE TABLE workflow_runs (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, workflow_id TEXT NOT NULL REFERENCES workflows(id),
  workflow_version INTEGER NOT NULL CHECK(workflow_version>0), workspace_id TEXT NOT NULL REFERENCES resources(id),
  item_id TEXT, event_id TEXT NOT NULL, event_type TEXT NOT NULL,
- depth INTEGER NOT NULL CHECK(depth>=0), actor TEXT NOT NULL, retry_of TEXT,
+ depth INTEGER NOT NULL CHECK(depth>=0), actor TEXT NOT NULL, retry_of TEXT
+,
  live_status TEXT NOT NULL DEFAULT 'queued',live_updated_at INTEGER NOT NULL DEFAULT 0 CHECK(live_updated_at>=0)
 );
 CREATE TABLE workflow_run_items (
  id TEXT PRIMARY KEY NOT NULL, run_id TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
  item_id TEXT NOT NULL, position INTEGER NOT NULL CHECK(position>=0)
+);
+CREATE TABLE staged_files (
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,
+ workspace_id TEXT NOT NULL,item_id TEXT NOT NULL,run_id TEXT NOT NULL,
+ sources JSON NOT NULL CHECK(json_valid(sources) AND json_type(sources)='array'),
+ object_key TEXT NOT NULL CHECK(object_key<>''),filename TEXT NOT NULL CHECK(length(filename) BETWEEN 1 AND 255),
+ content_type TEXT NOT NULL CHECK(length(content_type) BETWEEN 1 AND 255),size INTEGER NOT NULL CHECK(size>=0),sha256 TEXT NOT NULL,
+ metrics JSON NOT NULL DEFAULT '{}' CHECK(json_valid(metrics)),
+ state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','promoted','discarded')),created_by TEXT NOT NULL
 );
 CREATE TABLE runner_step_results (
  run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL,
@@ -305,6 +315,9 @@ CREATE INDEX workflowrun_created_at ON workflow_runs(created_at);
 CREATE UNIQUE INDEX workflowrunitem_run_id_position ON workflow_run_items(run_id,position);
 CREATE UNIQUE INDEX workflowrunitem_run_id_item_id ON workflow_run_items(run_id,item_id);
 CREATE INDEX workflowrunitem_item_id ON workflow_run_items(item_id);
+CREATE INDEX stagedfile_run_id ON staged_files(run_id);
+CREATE INDEX stagedfile_item_id ON staged_files(item_id);
+CREATE INDEX stagedfile_object_key_state ON staged_files(object_key,state);
 
 -- Triggers: derived projections, integrity guards and permission scopes
 CREATE TRIGGER resource_search_insert AFTER INSERT ON resources BEGIN

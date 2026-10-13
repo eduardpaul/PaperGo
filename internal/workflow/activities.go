@@ -31,6 +31,11 @@ type Activity struct {
 	// Terminal activities end the run and have no next nodes.
 	Terminal bool `json:"terminal,omitempty"`
 	run      func(*env, map[string]any) (outcome, error)
+	// work and commit are set for activities with heavy work: run returns a
+	// job (outcome.Job) instead of finishing, work does the job outside any
+	// transaction, and commit records its result (see runState.once).
+	work   func(*workEnv, json.RawMessage) (json.RawMessage, error)
+	commit func(*env, json.RawMessage, json.RawMessage) (outcome, error)
 }
 
 // Validate checks a node's inputs when a workflow is saved: required inputs
@@ -90,6 +95,8 @@ type outcome struct {
 	// End completes the run; Fail fails it with this message.
 	End  bool   `json:"end,omitempty"`
 	Fail string `json:"fail,omitempty"`
+	// Job hands the node to its activity's work (activities with work only).
+	Job json.RawMessage `json:"job,omitempty"`
 }
 
 // env is what an activity can use while its node runs: the DMS service bound
@@ -99,8 +106,12 @@ type env struct {
 	t      *dms.Service
 	author string
 	itemID string
-	scope  *scope
-	raise  func(typ string, data map[string]any)
+	// items is a selection run's ordered membership.
+	items       []string
+	runID       string
+	workspaceID string
+	scope       *scope
+	raise       func(typ string, data map[string]any)
 }
 
 var compareOps = map[string]bool{"eq": true, "ne": true, "gt": true, "ge": true, "lt": true, "le": true, "contains": true, "empty": true, "not_empty": true}

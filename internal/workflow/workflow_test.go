@@ -38,6 +38,10 @@ func TestDefinitionValidation(t *testing.T) {
 		"selection on items":   {`{"triggers": [{"type": "item.created", "collection_id": "c", "selection": "selection"}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "on manual triggers"},
 		"bad selection":        {`{"triggers": [{"type": "manual", "collection_id": "c", "selection": "all"}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "per_item or selection"},
 		"bad duration":         {`{"triggers": [{"type": "manual"}], "flow": {"start": "a", "nodes": {"a": {"activity": "delay", "inputs": {"duration": "soon"}}}}}`, "duration"},
+		"file sources":         {`{"triggers": [{"type": "file.added", "collection_id": "c", "sources": ["upload", "workflow"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, ""},
+		"sources on items":     {`{"triggers": [{"type": "item.created", "sources": ["upload"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "belong to file.added"},
+		"unknown source":       {`{"triggers": [{"type": "file.added", "sources": ["email"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "distinct values"},
+		"repeated source":      {`{"triggers": [{"type": "file.added", "sources": ["upload", "upload"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "distinct values"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			def, err := ParseDefinition(json.RawMessage(tc.def))

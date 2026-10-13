@@ -17494,7 +17494,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, schedule, manual, term.merged, or wf.{key}.{event}."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, schedule, manual, term.merged, or wf.{key}.{event}."
           },
           "collection_id": {
             "type": "string"
@@ -17543,6 +17543,21 @@
               "removed"
             ],
             "description": "With terms: held by the revision (present, default), held now but not by the revision before (added), or the reverse (removed)."
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "upload",
+                "webdav",
+                "restore",
+                "workflow"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true,
+            "description": "On file.added: the file sources that start runs; default upload, webdav and restore."
           }
         },
         "required": [

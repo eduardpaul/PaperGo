@@ -31,9 +31,13 @@ type RunInput struct {
 // Exec makes a run durable. Step runs fn once: the writes it makes through t
 // and the events it passes to raise commit together, exactly once, and a
 // replay after a crash returns the recorded result without running fn.
+// Work runs fn outside any transaction, for CPU-heavy work that must not
+// hold the database writer, and records its result: fn may run again after
+// a crash, so it must be safe to repeat and must not write domain data.
 // Sleep waits durably.
 type Exec interface {
 	Step(name string, fn func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error)) (json.RawMessage, error)
+	Work(name string, fn func(ctx context.Context) (json.RawMessage, error)) (json.RawMessage, error)
 	Sleep(d time.Duration) error
 }
 
@@ -55,9 +59,10 @@ type loaded struct {
 
 // Execute interprets the run's workflow version: it starts at the flow's
 // start node and follows the port each node's outcome selects. Every node is
-// one durable step, so after a crash the run continues at the node it
-// reached. Workflow code here only routes between recorded step results.
-func Execute(ctx context.Context, x Exec, in RunInput) (Result, error) {
+// one durable step, or three for activities with heavy work, so after a
+// crash the run continues at the node it reached. Workflow code here only
+// routes between recorded step results.
+func (s *Service) Execute(ctx context.Context, x Exec, in RunInput) (Result, error) {
 	raw, err := x.Step("load", func(ctx context.Context, t *dms.Service, _ func(dms.Event)) (json.RawMessage, error) {
 		w, err := t.Client.Workflow.Get(ctx, in.WorkflowID)
 		if err != nil {
@@ -83,7 +88,7 @@ func Execute(ctx context.Context, x Exec, in RunInput) (Result, error) {
 	if err = decode(raw, &l); err != nil {
 		return Result{Status: "failed"}, err
 	}
-	r := &runState{in: in, x: x, l: l, vars: map[string]any{}, steps: map[string]any{}}
+	r := &runState{in: in, x: x, l: l, tools: s.Tools, vars: map[string]any{}, steps: map[string]any{}}
 	for k, v := range l.Definition.Variables {
 		r.vars[k] = jsonish(v)
 	}
@@ -94,6 +99,7 @@ type runState struct {
 	in    RunInput
 	x     Exec
 	l     loaded
+	tools Tools
 	vars  map[string]any
 	steps map[string]any
 }
@@ -157,12 +163,9 @@ func (r *runState) attempt(ctx context.Context, name string, node Node) (outcome
 		delay, _ = time.ParseDuration(node.Retry.Delay)
 	}
 	for i := 1; ; i++ {
-		raw, err := r.x.Step(name, func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error) {
-			return r.node(ctx, t, raise, name, node)
-		})
+		o, err := r.once(name, node)
 		if err == nil {
-			var o outcome
-			return o, decode(raw, &o)
+			return o, nil
 		}
 		if i >= attempts || ctx.Err() != nil {
 			return outcome{}, err
@@ -175,9 +178,46 @@ func (r *runState) attempt(ctx context.Context, name string, node Node) (outcome
 	}
 }
 
+// once runs one attempt of a node. An activity with heavy work runs in
+// three steps: its run in a step transaction returns either the outcome or a
+// job; the job's work runs outside any transaction; and commit turns the
+// work's result into the outcome in a second step transaction.
+func (r *runState) once(name string, node Node) (outcome, error) {
+	a := activities[node.Activity]
+	raw, err := r.x.Step(name, func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error) {
+		return r.node(ctx, t, raise, name, func(e *env) (outcome, error) { return a.run(e, node.Inputs) })
+	})
+	if err != nil {
+		return outcome{}, err
+	}
+	var o outcome
+	if err = decode(raw, &o); err != nil || o.Job == nil {
+		return o, err
+	}
+	job := o.Job
+	result, err := r.x.Work(name+" work", func(ctx context.Context) (json.RawMessage, error) {
+		out, err := a.work(&workEnv{ctx: ctx, tools: r.tools, runID: r.in.RunID}, job)
+		if err == nil && len(out) > MaxOutputBytes {
+			err = fmt.Errorf("node %s work result is larger than %d bytes", name, MaxOutputBytes)
+		}
+		return out, err
+	})
+	if err != nil {
+		return outcome{}, err
+	}
+	raw, err = r.x.Step(name+" commit", func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error) {
+		return r.node(ctx, t, raise, name, func(e *env) (outcome, error) { return a.commit(e, job, result) })
+	})
+	if err != nil {
+		return outcome{}, err
+	}
+	o = outcome{}
+	return o, decode(raw, &o)
+}
+
 // node runs inside a step: tokens and the item are read in the node's
 // transaction, and the outcome is recorded.
-func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Event), name string, node Node) (json.RawMessage, error) {
+func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Event), name string, run func(*env) (outcome, error)) (json.RawMessage, error) {
 	var item map[string]any
 	sc := &scope{ctx: ctx, trigger: jsonish(r.in.Event).(map[string]any), inputs: r.in.Inputs, vars: r.vars, steps: r.steps, now: time.Now().UTC(),
 		run: map[string]any{"id": r.in.RunID, "workflow_id": r.in.WorkflowID, "workflow_key": r.l.Key, "version": r.in.Version, "actor": r.in.Event.Actor, "items": r.items()}}
@@ -193,9 +233,9 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 			return item, nil
 		}
 	}
-	e := &env{ctx: dms.WithCause(ctx, r.in.Event.Depth, r.in.RunID), t: t, author: r.l.Author, itemID: r.in.ItemID, scope: sc,
+	e := &env{ctx: dms.WithCause(ctx, r.in.Event.Depth, r.in.RunID), t: t, author: r.l.Author, itemID: r.in.ItemID, items: r.in.Items, runID: r.in.RunID, workspaceID: r.in.WorkspaceID, scope: sc,
 		raise: func(event string, data map[string]any) { raise(r.event(WorkflowEvent(r.l.Key, event), data)) }}
-	o, err := activities[node.Activity].run(e, node.Inputs)
+	o, err := run(e)
 	if err != nil {
 		return nil, err
 	}

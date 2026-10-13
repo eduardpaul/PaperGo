@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,7 +27,7 @@ const (
 )
 
 // ItemTriggers are the trigger types raised by item writes.
-var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged}
+var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged, dms.EventFileAdded}
 
 // Limits keep definitions and runs bounded.
 const (
@@ -71,6 +72,18 @@ type Trigger struct {
 	// or removed (held before, not now).
 	Terms      []string `json:"terms,omitempty"`
 	TermChange string   `json:"term_change,omitempty"`
+	// Sources, on file.added triggers, are the file sources that start runs
+	// (dms.FileSources). The default is every source except workflow, so a
+	// workflow that replaces a file does not start itself again.
+	Sources []string `json:"sources,omitempty"`
+}
+
+// sources returns the file sources a file.added trigger accepts.
+func (t Trigger) sources() []string {
+	if len(t.Sources) > 0 {
+		return t.Sources
+	}
+	return []string{dms.FileUpload, dms.FileWebDAV, dms.FileRestore}
 }
 
 // Term changes a trigger's terms filter reacts to.
@@ -203,6 +216,18 @@ func (d Definition) validate() error {
 			case "", TermPresent, TermAdded, TermRemoved:
 			default:
 				return dms.Invalid(at + "term_change is present, added or removed")
+			}
+		}
+		if len(t.Sources) > 0 {
+			if t.Type != dms.EventFileAdded {
+				return dms.Invalid(at + "sources belong to file.added triggers")
+			}
+			seen := map[string]bool{}
+			for _, s := range t.Sources {
+				if !slices.Contains(dms.FileSources, s) || seen[s] {
+					return dms.Invalid(at + "sources are distinct values of " + strings.Join(dms.FileSources, ", "))
+				}
+				seen[s] = true
 			}
 		}
 		switch {

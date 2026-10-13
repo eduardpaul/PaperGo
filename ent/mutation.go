@@ -41,6 +41,7 @@ import (
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
+	"papergo/ent/stagedfile"
 	"papergo/ent/syncstate"
 	"papergo/ent/synctoken"
 	"papergo/ent/syncview"
@@ -103,6 +104,7 @@ const (
 	TypeSchemaRevision       = "SchemaRevision"
 	TypeSchemaTemplate       = "SchemaTemplate"
 	TypeSmartFolder          = "SmartFolder"
+	TypeStagedFile           = "StagedFile"
 	TypeSyncState            = "SyncState"
 	TypeSyncToken            = "SyncToken"
 	TypeSyncView             = "SyncView"
@@ -29071,6 +29073,1108 @@ func (m *SmartFolderMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown SmartFolder edge %s", name)
+}
+
+// StagedFileMutation represents an operation that mutates the StagedFile nodes in the graph.
+type StagedFileMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *string
+	created_at    *time.Time
+	workspace_id  *string
+	item_id       *string
+	run_id        *string
+	sources       *[]model.StagedSource
+	appendsources []model.StagedSource
+	object_key    *string
+	filename      *string
+	content_type  *string
+	size          *int64
+	addsize       *int64
+	sha256        *string
+	metrics       *jsontext.Value
+	appendmetrics jsontext.Value
+	state         *stagedfile.State
+	created_by    *string
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*StagedFile, error)
+	predicates    []predicate.StagedFile
+}
+
+var _ ent.Mutation = (*StagedFileMutation)(nil)
+
+// stagedfileOption allows management of the mutation configuration using functional options.
+type stagedfileOption func(*StagedFileMutation)
+
+// newStagedFileMutation creates new mutation for the StagedFile entity.
+func newStagedFileMutation(c config, op Op, opts ...stagedfileOption) *StagedFileMutation {
+	m := &StagedFileMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeStagedFile,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withStagedFileID sets the ID field of the mutation.
+func withStagedFileID(id string) stagedfileOption {
+	return func(m *StagedFileMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *StagedFile
+		)
+		m.oldValue = func(ctx context.Context) (*StagedFile, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().StagedFile.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withStagedFile sets the old StagedFile of the mutation.
+func withStagedFile(node *StagedFile) stagedfileOption {
+	return func(m *StagedFileMutation) {
+		m.oldValue = func(context.Context) (*StagedFile, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m StagedFileMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m StagedFileMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of StagedFile entities.
+func (m *StagedFileMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *StagedFileMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *StagedFileMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().StagedFile.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *StagedFileMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *StagedFileMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *StagedFileMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetWorkspaceID sets the "workspace_id" field.
+func (m *StagedFileMutation) SetWorkspaceID(s string) {
+	m.workspace_id = &s
+}
+
+// WorkspaceID returns the value of the "workspace_id" field in the mutation.
+func (m *StagedFileMutation) WorkspaceID() (r string, exists bool) {
+	v := m.workspace_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkspaceID returns the old "workspace_id" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldWorkspaceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkspaceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkspaceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkspaceID: %w", err)
+	}
+	return oldValue.WorkspaceID, nil
+}
+
+// ResetWorkspaceID resets all changes to the "workspace_id" field.
+func (m *StagedFileMutation) ResetWorkspaceID() {
+	m.workspace_id = nil
+}
+
+// SetItemID sets the "item_id" field.
+func (m *StagedFileMutation) SetItemID(s string) {
+	m.item_id = &s
+}
+
+// ItemID returns the value of the "item_id" field in the mutation.
+func (m *StagedFileMutation) ItemID() (r string, exists bool) {
+	v := m.item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldItemID returns the old "item_id" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldItemID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldItemID: %w", err)
+	}
+	return oldValue.ItemID, nil
+}
+
+// ResetItemID resets all changes to the "item_id" field.
+func (m *StagedFileMutation) ResetItemID() {
+	m.item_id = nil
+}
+
+// SetRunID sets the "run_id" field.
+func (m *StagedFileMutation) SetRunID(s string) {
+	m.run_id = &s
+}
+
+// RunID returns the value of the "run_id" field in the mutation.
+func (m *StagedFileMutation) RunID() (r string, exists bool) {
+	v := m.run_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRunID returns the old "run_id" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldRunID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRunID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRunID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRunID: %w", err)
+	}
+	return oldValue.RunID, nil
+}
+
+// ResetRunID resets all changes to the "run_id" field.
+func (m *StagedFileMutation) ResetRunID() {
+	m.run_id = nil
+}
+
+// SetSources sets the "sources" field.
+func (m *StagedFileMutation) SetSources(ms []model.StagedSource) {
+	m.sources = &ms
+	m.appendsources = nil
+}
+
+// Sources returns the value of the "sources" field in the mutation.
+func (m *StagedFileMutation) Sources() (r []model.StagedSource, exists bool) {
+	v := m.sources
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSources returns the old "sources" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldSources(ctx context.Context) (v []model.StagedSource, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSources is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSources requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSources: %w", err)
+	}
+	return oldValue.Sources, nil
+}
+
+// AppendSources adds ms to the "sources" field.
+func (m *StagedFileMutation) AppendSources(ms []model.StagedSource) {
+	m.appendsources = append(m.appendsources, ms...)
+}
+
+// AppendedSources returns the list of values that were appended to the "sources" field in this mutation.
+func (m *StagedFileMutation) AppendedSources() ([]model.StagedSource, bool) {
+	if len(m.appendsources) == 0 {
+		return nil, false
+	}
+	return m.appendsources, true
+}
+
+// ResetSources resets all changes to the "sources" field.
+func (m *StagedFileMutation) ResetSources() {
+	m.sources = nil
+	m.appendsources = nil
+}
+
+// SetObjectKey sets the "object_key" field.
+func (m *StagedFileMutation) SetObjectKey(s string) {
+	m.object_key = &s
+}
+
+// ObjectKey returns the value of the "object_key" field in the mutation.
+func (m *StagedFileMutation) ObjectKey() (r string, exists bool) {
+	v := m.object_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectKey returns the old "object_key" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldObjectKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectKey: %w", err)
+	}
+	return oldValue.ObjectKey, nil
+}
+
+// ResetObjectKey resets all changes to the "object_key" field.
+func (m *StagedFileMutation) ResetObjectKey() {
+	m.object_key = nil
+}
+
+// SetFilename sets the "filename" field.
+func (m *StagedFileMutation) SetFilename(s string) {
+	m.filename = &s
+}
+
+// Filename returns the value of the "filename" field in the mutation.
+func (m *StagedFileMutation) Filename() (r string, exists bool) {
+	v := m.filename
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFilename returns the old "filename" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldFilename(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFilename is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFilename requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFilename: %w", err)
+	}
+	return oldValue.Filename, nil
+}
+
+// ResetFilename resets all changes to the "filename" field.
+func (m *StagedFileMutation) ResetFilename() {
+	m.filename = nil
+}
+
+// SetContentType sets the "content_type" field.
+func (m *StagedFileMutation) SetContentType(s string) {
+	m.content_type = &s
+}
+
+// ContentType returns the value of the "content_type" field in the mutation.
+func (m *StagedFileMutation) ContentType() (r string, exists bool) {
+	v := m.content_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContentType returns the old "content_type" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldContentType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContentType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContentType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContentType: %w", err)
+	}
+	return oldValue.ContentType, nil
+}
+
+// ResetContentType resets all changes to the "content_type" field.
+func (m *StagedFileMutation) ResetContentType() {
+	m.content_type = nil
+}
+
+// SetSize sets the "size" field.
+func (m *StagedFileMutation) SetSize(i int64) {
+	m.size = &i
+	m.addsize = nil
+}
+
+// Size returns the value of the "size" field in the mutation.
+func (m *StagedFileMutation) Size() (r int64, exists bool) {
+	v := m.size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSize returns the old "size" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldSize(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSize: %w", err)
+	}
+	return oldValue.Size, nil
+}
+
+// AddSize adds i to the "size" field.
+func (m *StagedFileMutation) AddSize(i int64) {
+	if m.addsize != nil {
+		*m.addsize += i
+	} else {
+		m.addsize = &i
+	}
+}
+
+// AddedSize returns the value that was added to the "size" field in this mutation.
+func (m *StagedFileMutation) AddedSize() (r int64, exists bool) {
+	v := m.addsize
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSize resets all changes to the "size" field.
+func (m *StagedFileMutation) ResetSize() {
+	m.size = nil
+	m.addsize = nil
+}
+
+// SetSha256 sets the "sha256" field.
+func (m *StagedFileMutation) SetSha256(s string) {
+	m.sha256 = &s
+}
+
+// Sha256 returns the value of the "sha256" field in the mutation.
+func (m *StagedFileMutation) Sha256() (r string, exists bool) {
+	v := m.sha256
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSha256 returns the old "sha256" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldSha256(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSha256 is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSha256 requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSha256: %w", err)
+	}
+	return oldValue.Sha256, nil
+}
+
+// ResetSha256 resets all changes to the "sha256" field.
+func (m *StagedFileMutation) ResetSha256() {
+	m.sha256 = nil
+}
+
+// SetMetrics sets the "metrics" field.
+func (m *StagedFileMutation) SetMetrics(j jsontext.Value) {
+	m.metrics = &j
+	m.appendmetrics = nil
+}
+
+// Metrics returns the value of the "metrics" field in the mutation.
+func (m *StagedFileMutation) Metrics() (r jsontext.Value, exists bool) {
+	v := m.metrics
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetrics returns the old "metrics" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldMetrics(ctx context.Context) (v jsontext.Value, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetrics is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetrics requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetrics: %w", err)
+	}
+	return oldValue.Metrics, nil
+}
+
+// AppendMetrics adds j to the "metrics" field.
+func (m *StagedFileMutation) AppendMetrics(j jsontext.Value) {
+	m.appendmetrics = append(m.appendmetrics, j...)
+}
+
+// AppendedMetrics returns the list of values that were appended to the "metrics" field in this mutation.
+func (m *StagedFileMutation) AppendedMetrics() (jsontext.Value, bool) {
+	if len(m.appendmetrics) == 0 {
+		return nil, false
+	}
+	return m.appendmetrics, true
+}
+
+// ResetMetrics resets all changes to the "metrics" field.
+func (m *StagedFileMutation) ResetMetrics() {
+	m.metrics = nil
+	m.appendmetrics = nil
+}
+
+// SetState sets the "state" field.
+func (m *StagedFileMutation) SetState(s stagedfile.State) {
+	m.state = &s
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *StagedFileMutation) State() (r stagedfile.State, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldState(ctx context.Context) (v stagedfile.State, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *StagedFileMutation) ResetState() {
+	m.state = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *StagedFileMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *StagedFileMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *StagedFileMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *StagedFileMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *StagedFileMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the StagedFile entity.
+// If the StagedFile object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StagedFileMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *StagedFileMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the StagedFileMutation builder.
+func (m *StagedFileMutation) Where(ps ...predicate.StagedFile) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the StagedFileMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *StagedFileMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.StagedFile, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *StagedFileMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *StagedFileMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (StagedFile).
+func (m *StagedFileMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *StagedFileMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.created_at != nil {
+		fields = append(fields, stagedfile.FieldCreatedAt)
+	}
+	if m.workspace_id != nil {
+		fields = append(fields, stagedfile.FieldWorkspaceID)
+	}
+	if m.item_id != nil {
+		fields = append(fields, stagedfile.FieldItemID)
+	}
+	if m.run_id != nil {
+		fields = append(fields, stagedfile.FieldRunID)
+	}
+	if m.sources != nil {
+		fields = append(fields, stagedfile.FieldSources)
+	}
+	if m.object_key != nil {
+		fields = append(fields, stagedfile.FieldObjectKey)
+	}
+	if m.filename != nil {
+		fields = append(fields, stagedfile.FieldFilename)
+	}
+	if m.content_type != nil {
+		fields = append(fields, stagedfile.FieldContentType)
+	}
+	if m.size != nil {
+		fields = append(fields, stagedfile.FieldSize)
+	}
+	if m.sha256 != nil {
+		fields = append(fields, stagedfile.FieldSha256)
+	}
+	if m.metrics != nil {
+		fields = append(fields, stagedfile.FieldMetrics)
+	}
+	if m.state != nil {
+		fields = append(fields, stagedfile.FieldState)
+	}
+	if m.created_by != nil {
+		fields = append(fields, stagedfile.FieldCreatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, stagedfile.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *StagedFileMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case stagedfile.FieldCreatedAt:
+		return m.CreatedAt()
+	case stagedfile.FieldWorkspaceID:
+		return m.WorkspaceID()
+	case stagedfile.FieldItemID:
+		return m.ItemID()
+	case stagedfile.FieldRunID:
+		return m.RunID()
+	case stagedfile.FieldSources:
+		return m.Sources()
+	case stagedfile.FieldObjectKey:
+		return m.ObjectKey()
+	case stagedfile.FieldFilename:
+		return m.Filename()
+	case stagedfile.FieldContentType:
+		return m.ContentType()
+	case stagedfile.FieldSize:
+		return m.Size()
+	case stagedfile.FieldSha256:
+		return m.Sha256()
+	case stagedfile.FieldMetrics:
+		return m.Metrics()
+	case stagedfile.FieldState:
+		return m.State()
+	case stagedfile.FieldCreatedBy:
+		return m.CreatedBy()
+	case stagedfile.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *StagedFileMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case stagedfile.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case stagedfile.FieldWorkspaceID:
+		return m.OldWorkspaceID(ctx)
+	case stagedfile.FieldItemID:
+		return m.OldItemID(ctx)
+	case stagedfile.FieldRunID:
+		return m.OldRunID(ctx)
+	case stagedfile.FieldSources:
+		return m.OldSources(ctx)
+	case stagedfile.FieldObjectKey:
+		return m.OldObjectKey(ctx)
+	case stagedfile.FieldFilename:
+		return m.OldFilename(ctx)
+	case stagedfile.FieldContentType:
+		return m.OldContentType(ctx)
+	case stagedfile.FieldSize:
+		return m.OldSize(ctx)
+	case stagedfile.FieldSha256:
+		return m.OldSha256(ctx)
+	case stagedfile.FieldMetrics:
+		return m.OldMetrics(ctx)
+	case stagedfile.FieldState:
+		return m.OldState(ctx)
+	case stagedfile.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case stagedfile.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown StagedFile field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *StagedFileMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case stagedfile.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case stagedfile.FieldWorkspaceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkspaceID(v)
+		return nil
+	case stagedfile.FieldItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetItemID(v)
+		return nil
+	case stagedfile.FieldRunID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRunID(v)
+		return nil
+	case stagedfile.FieldSources:
+		v, ok := value.([]model.StagedSource)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSources(v)
+		return nil
+	case stagedfile.FieldObjectKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectKey(v)
+		return nil
+	case stagedfile.FieldFilename:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFilename(v)
+		return nil
+	case stagedfile.FieldContentType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContentType(v)
+		return nil
+	case stagedfile.FieldSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSize(v)
+		return nil
+	case stagedfile.FieldSha256:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSha256(v)
+		return nil
+	case stagedfile.FieldMetrics:
+		v, ok := value.(jsontext.Value)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetrics(v)
+		return nil
+	case stagedfile.FieldState:
+		v, ok := value.(stagedfile.State)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
+		return nil
+	case stagedfile.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case stagedfile.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown StagedFile field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *StagedFileMutation) AddedFields() []string {
+	var fields []string
+	if m.addsize != nil {
+		fields = append(fields, stagedfile.FieldSize)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *StagedFileMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case stagedfile.FieldSize:
+		return m.AddedSize()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *StagedFileMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case stagedfile.FieldSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSize(v)
+		return nil
+	}
+	return fmt.Errorf("unknown StagedFile numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *StagedFileMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *StagedFileMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *StagedFileMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown StagedFile nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *StagedFileMutation) ResetField(name string) error {
+	switch name {
+	case stagedfile.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case stagedfile.FieldWorkspaceID:
+		m.ResetWorkspaceID()
+		return nil
+	case stagedfile.FieldItemID:
+		m.ResetItemID()
+		return nil
+	case stagedfile.FieldRunID:
+		m.ResetRunID()
+		return nil
+	case stagedfile.FieldSources:
+		m.ResetSources()
+		return nil
+	case stagedfile.FieldObjectKey:
+		m.ResetObjectKey()
+		return nil
+	case stagedfile.FieldFilename:
+		m.ResetFilename()
+		return nil
+	case stagedfile.FieldContentType:
+		m.ResetContentType()
+		return nil
+	case stagedfile.FieldSize:
+		m.ResetSize()
+		return nil
+	case stagedfile.FieldSha256:
+		m.ResetSha256()
+		return nil
+	case stagedfile.FieldMetrics:
+		m.ResetMetrics()
+		return nil
+	case stagedfile.FieldState:
+		m.ResetState()
+		return nil
+	case stagedfile.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case stagedfile.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown StagedFile field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *StagedFileMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *StagedFileMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *StagedFileMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *StagedFileMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *StagedFileMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *StagedFileMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *StagedFileMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown StagedFile unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *StagedFileMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown StagedFile edge %s", name)
 }
 
 // SyncStateMutation represents an operation that mutates the SyncState nodes in the graph.

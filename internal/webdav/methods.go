@@ -86,7 +86,7 @@ func (h *Handler) store(r *request, path []string, body io.Reader, cond dms.File
 	if err != nil {
 		return nil, false, err
 	}
-	in := dms.PutFile{FileConditions: cond, Tags: tags, Values: values, ContentTypeID: typeID, Blob: dms.BlobInput{ObjectKey: object.Key, Filename: path[len(path)-1], ContentType: mediaType, Size: object.Size, SHA256: object.SHA256}}
+	in := dms.PutFile{FileConditions: cond, Tags: tags, Values: values, ContentTypeID: typeID, Blob: dms.BlobInput{ObjectKey: object.Key, Filename: path[len(path)-1], ContentType: mediaType, Size: object.Size, SHA256: object.SHA256, Source: dms.FileWebDAV}}
 	f, created, err := h.DMS.PutFile(r.Context(), r.subject, r.library, path, in)
 	if err != nil {
 		if cleanupErr := h.Storage.Delete(context.WithoutCancel(r.Context()), object.Key); cleanupErr != nil {

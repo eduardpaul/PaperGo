@@ -1390,6 +1390,47 @@ var (
 			},
 		},
 	}
+	// StagedFilesColumns holds the columns for the "staged_files" table.
+	StagedFilesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "workspace_id", Type: field.TypeString},
+		{Name: "item_id", Type: field.TypeString},
+		{Name: "run_id", Type: field.TypeString},
+		{Name: "sources", Type: field.TypeJSON},
+		{Name: "object_key", Type: field.TypeString},
+		{Name: "filename", Type: field.TypeString, Size: 255},
+		{Name: "content_type", Type: field.TypeString, Size: 255},
+		{Name: "size", Type: field.TypeInt64},
+		{Name: "sha256", Type: field.TypeString},
+		{Name: "metrics", Type: field.TypeJSON},
+		{Name: "state", Type: field.TypeEnum, Enums: []string{"pending", "promoted", "discarded"}, Default: "pending"},
+		{Name: "created_by", Type: field.TypeString},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// StagedFilesTable holds the schema information for the "staged_files" table.
+	StagedFilesTable = &schema.Table{
+		Name:       "staged_files",
+		Columns:    StagedFilesColumns,
+		PrimaryKey: []*schema.Column{StagedFilesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "stagedfile_run_id",
+				Unique:  false,
+				Columns: []*schema.Column{StagedFilesColumns[4]},
+			},
+			{
+				Name:    "stagedfile_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{StagedFilesColumns[3]},
+			},
+			{
+				Name:    "stagedfile_object_key_state",
+				Unique:  false,
+				Columns: []*schema.Column{StagedFilesColumns[6], StagedFilesColumns[12]},
+			},
+		},
+	}
 	// SyncStatesColumns holds the columns for the "sync_states" table.
 	SyncStatesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1901,6 +1942,7 @@ var (
 		SchemaRevisionsTable,
 		SchemaTemplatesTable,
 		SmartFoldersTable,
+		StagedFilesTable,
 		SyncStatesTable,
 		SyncTokensTable,
 		SyncViewsTable,

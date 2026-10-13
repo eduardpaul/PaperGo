@@ -404,6 +404,18 @@ func (f SmartFolderFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SmartFolderMutation", m)
 }
 
+// The StagedFileFunc type is an adapter to allow the use of ordinary
+// function as StagedFile mutator.
+type StagedFileFunc func(context.Context, *ent.StagedFileMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f StagedFileFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.StagedFileMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.StagedFileMutation", m)
+}
+
 // The SyncStateFunc type is an adapter to allow the use of ordinary
 // function as SyncState mutator.
 type SyncStateFunc func(context.Context, *ent.SyncStateMutation) (ent.Value, error)

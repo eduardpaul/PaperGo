@@ -321,7 +321,7 @@ func (s *Service) PurgeDeleted(ctx context.Context, subject, collection, id stri
 				`DELETE FROM field_values WHERE item_id=?`, `DELETE FROM business_keys WHERE item_id=?`, `DELETE FROM item_surfaces WHERE item_id=?`,
 				`DELETE FROM publications WHERE item_id=?`, `DELETE FROM item_histories WHERE revision_id IN (SELECT id FROM item_revisions WHERE item_id=?)`,
 				`DELETE FROM item_revisions WHERE item_id=?`, `DELETE FROM blobs WHERE item_id=?`, `DELETE FROM grants WHERE resource_id=?`,
-				`DELETE FROM operation_items WHERE item_id=?`,
+				`DELETE FROM operation_items WHERE item_id=?`, `DELETE FROM staged_files WHERE item_id=?`,
 				`DELETE FROM relationships WHERE source_id=? OR target_id=?`, `DELETE FROM resources WHERE id=?`,
 			} {
 				args := []any{row.ID}
@@ -365,7 +365,7 @@ func (s *Service) CleanupPurgedBlobs(ctx context.Context, store objectDeleter) e
 
 func (s *Service) deleteUnreferencedObject(ctx context.Context, store objectDeleter, key string) error {
 	var referenced bool
-	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=?) OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now')))`, key, OperationKindImport, key, OperationKindExport, key); err != nil {
+	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=?) OR EXISTS(SELECT 1 FROM staged_files WHERE object_key=? AND state='pending') OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now')))`, key, key, OperationKindImport, key, OperationKindExport, key); err != nil {
 		return err
 	}
 	if referenced {

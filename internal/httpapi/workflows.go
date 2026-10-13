@@ -33,6 +33,7 @@ var triggerTypes = []map[string]string{
 	{"type": dms.EventItemPublished, "description": "An item revision was published; data has revision_id, revision_number and publication_id. terms and term_change as for item.created."},
 	{"type": dms.EventItemUnpublished, "description": "An item was unpublished; data has revision_id."},
 	{"type": dms.EventItemDeleted, "description": "An item was deleted, alone or with its folder; the run has no item."},
+	{"type": dms.EventFileAdded, "description": "A new file version became an item's current file; data has source (upload, webdav, restore or workflow), file_version, blob_id, content_type, size, revision_id and content_type_id. sources limits the sources; the default is all but workflow."},
 	{"type": workflow.TriggerSchedule, "description": "A cron occurrence (cron, time_zone). With collection_id, one run per item that meets the condition."},
 	{"type": workflow.TriggerManual, "description": "Started through POST /v1/workflows/{id}/runs, on items or (without collection_id) with no item."},
 	{"type": dms.EventTermMerged, "description": "A term was merged into another; data has source_term_id, target_term_id and term_set_id; the run has no item."},

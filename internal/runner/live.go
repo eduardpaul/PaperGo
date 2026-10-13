@@ -50,6 +50,13 @@ func (r *Runner) SyncLiveRuns(ctx context.Context) error {
 				if _, err := t.Client.WorkflowRun.Update().Where(workflowrun.IDEQ(row.ID), workflowrun.LiveStatusIn("queued", "running")).SetLiveStatus(state).SetLiveUpdatedAt(at).Save(ctx); err != nil {
 					return err
 				}
+				// A finished or cancelled run promotes nothing more. A failed
+				// run keeps its staged files for a retry until it is purged.
+				if state == "completed" || state == "cancelled" {
+					if err := t.DiscardRunStagedFiles(ctx, row.ID); err != nil {
+						return err
+					}
+				}
 			}
 			return nil
 		})

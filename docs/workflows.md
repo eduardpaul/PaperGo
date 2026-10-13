@@ -45,6 +45,7 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | `item.deleted` | an item is deleted, alone or with its folder | none (`{trigger:resource_id}` names it) |
 | `item.restored` | a deleted item is restored from the recycle bin | the item |
 | `item.purged` | a deleted item is permanently purged | none (`{trigger:resource_id}` names it) |
+| `file.added` | a new file version becomes a library item's current file: a new document, a replacement, a restore, or a workflow's | the item |
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
 | `manual` | someone starts it through the API | each chosen item, the selection's primary item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
@@ -55,6 +56,7 @@ Fields of a trigger:
 - `collection_id` limits item and workflow-event triggers to one list or library.
 - `content_type_id` (with `collection_id`) limits item triggers to one content type.
 - `terms` (1 to 20 term IDs) limits `item.created`, `item.updated` and `item.published` to revisions whose term and keywords fields hold one of the terms, a descendant of one, or a term merged into one. `term_change` says what counts: `present` (the default, the revision holds it), `added` (held now, not by the item's revision before) or `removed` (held before, not now).
+- `sources` (on `file.added`) lists the file sources that start runs: `upload`, `webdav`, `restore` and `workflow`. The default is every source except `workflow`, so a workflow that replaces a file does not start itself again.
 - For a schedule:
   - **With `collection_id`:** each occurrence starts one run per item of the collection that meets the condition, up to 500, on `surface` (`head` by default, or `published`).
   - **Without `collection_id`:** one run with no item.
@@ -78,6 +80,7 @@ Trigger data, readable as `{trigger:...}`:
 The `data` for each event type:
 
 - `item.created` / `item.updated`: `revision_id`, `revision_number`, `content_type_id`, `blob_id`
+- `file.added`: `source`, `file_version`, `blob_id`, `content_type` (the file's media type), `size`, `revision_id`, `content_type_id`
 - `item.published`: `revision_id`, `revision_number`, `publication_id`
 - `item.unpublished`: `revision_id`
 - `schedule`: `workflow_id`, `occurrence`
@@ -153,8 +156,31 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `item.publish` | action | publishes the head revision, if not already published | `published` |
 | `item.unpublish` | action | unpublishes, if published | `unpublished` |
 | `item.delete` | action | deletes the item | `deleted` |
+| `file.promote` | action | makes a staged file of this run (`staged_file_id`) its item's current file, as a new file version; fails when a file it was made from is no longer current | `item_id`, `blob_id`, `file_version` |
+| `file.discard` | action | discards a staged file of this run; the item keeps its file | `discarded` |
 
 Item actions work on the run's item unless `item_id` is given. They use the same validation, permissions, revisions, audit records and events as API requests.
+
+### Staged files
+
+Activities that produce files, such as a smaller image or a PDF composed from photos, do not replace anything themselves. They **stage** the file:
+
+- A staged file belongs to the run and to the item it would replace.
+- It records the file versions it was made from, and keeps its bytes while it is pending.
+- `file.promote` makes it the item's current file. That is a new file version (`file.added` with source `workflow`), with the item's metadata, revision history, audit and events like an upload. It succeeds only if every file it was made from is still its item's current file, so a candidate made from an old upload never replaces a newer one.
+- `file.discard` drops it.
+
+A completed or cancelled run discards its pending staged files. A failed run keeps them for a retry until the run is deleted. Purging an item deletes its staged files. The storage collector frees discarded files' bytes after its grace period.
+
+### Heavy work
+
+Every node normally runs in one write transaction. An activity that decodes, analyzes or encodes files runs in three steps instead, so it never holds the database writer while it computes:
+
+1. It reads what it needs and checks permissions in a step transaction.
+2. It does the work outside any transaction. One such work step runs at a time per server, and its result is recorded.
+3. It records the result, such as a staged file, in a second step transaction.
+
+A work step that a crash interrupts runs again; it writes no data of its own.
 
 ## Forms
 

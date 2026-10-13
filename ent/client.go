@@ -44,6 +44,7 @@ import (
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
+	"papergo/ent/stagedfile"
 	"papergo/ent/syncstate"
 	"papergo/ent/synctoken"
 	"papergo/ent/syncview"
@@ -136,6 +137,8 @@ type Client struct {
 	SchemaTemplate *SchemaTemplateClient
 	// SmartFolder is the client for interacting with the SmartFolder builders.
 	SmartFolder *SmartFolderClient
+	// StagedFile is the client for interacting with the StagedFile builders.
+	StagedFile *StagedFileClient
 	// SyncState is the client for interacting with the SyncState builders.
 	SyncState *SyncStateClient
 	// SyncToken is the client for interacting with the SyncToken builders.
@@ -204,6 +207,7 @@ func (c *Client) init() {
 	c.SchemaRevision = NewSchemaRevisionClient(c.config)
 	c.SchemaTemplate = NewSchemaTemplateClient(c.config)
 	c.SmartFolder = NewSmartFolderClient(c.config)
+	c.StagedFile = NewStagedFileClient(c.config)
 	c.SyncState = NewSyncStateClient(c.config)
 	c.SyncToken = NewSyncTokenClient(c.config)
 	c.SyncView = NewSyncViewClient(c.config)
@@ -341,6 +345,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SchemaRevision:       NewSchemaRevisionClient(cfg),
 		SchemaTemplate:       NewSchemaTemplateClient(cfg),
 		SmartFolder:          NewSmartFolderClient(cfg),
+		StagedFile:           NewStagedFileClient(cfg),
 		SyncState:            NewSyncStateClient(cfg),
 		SyncToken:            NewSyncTokenClient(cfg),
 		SyncView:             NewSyncViewClient(cfg),
@@ -405,6 +410,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SchemaRevision:       NewSchemaRevisionClient(cfg),
 		SchemaTemplate:       NewSchemaTemplateClient(cfg),
 		SmartFolder:          NewSmartFolderClient(cfg),
+		StagedFile:           NewStagedFileClient(cfg),
 		SyncState:            NewSyncStateClient(cfg),
 		SyncToken:            NewSyncTokenClient(cfg),
 		SyncView:             NewSyncViewClient(cfg),
@@ -453,9 +459,9 @@ func (c *Client) Use(hooks ...Hook) {
 		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
 		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.SyncState, c.SyncToken, c.SyncView, c.Term,
-		c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun,
-		c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken,
+		c.SyncView, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -472,9 +478,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
 		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.SyncState, c.SyncToken, c.SyncView, c.Term,
-		c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun,
-		c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken,
+		c.SyncView, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -549,6 +555,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SchemaTemplate.mutate(ctx, m)
 	case *SmartFolderMutation:
 		return c.SmartFolder.mutate(ctx, m)
+	case *StagedFileMutation:
+		return c.StagedFile.mutate(ctx, m)
 	case *SyncStateMutation:
 		return c.SyncState.mutate(ctx, m)
 	case *SyncTokenMutation:
@@ -5735,6 +5743,139 @@ func (c *SmartFolderClient) mutate(ctx context.Context, m *SmartFolderMutation) 
 	}
 }
 
+// StagedFileClient is a client for the StagedFile schema.
+type StagedFileClient struct {
+	config
+}
+
+// NewStagedFileClient returns a client for the StagedFile from the given config.
+func NewStagedFileClient(c config) *StagedFileClient {
+	return &StagedFileClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `stagedfile.Hooks(f(g(h())))`.
+func (c *StagedFileClient) Use(hooks ...Hook) {
+	c.hooks.StagedFile = append(c.hooks.StagedFile, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `stagedfile.Intercept(f(g(h())))`.
+func (c *StagedFileClient) Intercept(interceptors ...Interceptor) {
+	c.inters.StagedFile = append(c.inters.StagedFile, interceptors...)
+}
+
+// Create returns a builder for creating a StagedFile entity.
+func (c *StagedFileClient) Create() *StagedFileCreate {
+	mutation := newStagedFileMutation(c.config, OpCreate)
+	return &StagedFileCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of StagedFile entities.
+func (c *StagedFileClient) CreateBulk(builders ...*StagedFileCreate) *StagedFileCreateBulk {
+	return &StagedFileCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *StagedFileClient) MapCreateBulk(slice any, setFunc func(*StagedFileCreate, int)) *StagedFileCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &StagedFileCreateBulk{err: fmt.Errorf("calling to StagedFileClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*StagedFileCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &StagedFileCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for StagedFile.
+func (c *StagedFileClient) Update() *StagedFileUpdate {
+	mutation := newStagedFileMutation(c.config, OpUpdate)
+	return &StagedFileUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *StagedFileClient) UpdateOne(_m *StagedFile) *StagedFileUpdateOne {
+	mutation := newStagedFileMutation(c.config, OpUpdateOne, withStagedFile(_m))
+	return &StagedFileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *StagedFileClient) UpdateOneID(id string) *StagedFileUpdateOne {
+	mutation := newStagedFileMutation(c.config, OpUpdateOne, withStagedFileID(id))
+	return &StagedFileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for StagedFile.
+func (c *StagedFileClient) Delete() *StagedFileDelete {
+	mutation := newStagedFileMutation(c.config, OpDelete)
+	return &StagedFileDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *StagedFileClient) DeleteOne(_m *StagedFile) *StagedFileDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *StagedFileClient) DeleteOneID(id string) *StagedFileDeleteOne {
+	builder := c.Delete().Where(stagedfile.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &StagedFileDeleteOne{builder}
+}
+
+// Query returns a query builder for StagedFile.
+func (c *StagedFileClient) Query() *StagedFileQuery {
+	return &StagedFileQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeStagedFile},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a StagedFile entity by its id.
+func (c *StagedFileClient) Get(ctx context.Context, id string) (*StagedFile, error) {
+	return c.Query().Where(stagedfile.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *StagedFileClient) GetX(ctx context.Context, id string) *StagedFile {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *StagedFileClient) Hooks() []Hook {
+	return c.hooks.StagedFile
+}
+
+// Interceptors returns the client interceptors.
+func (c *StagedFileClient) Interceptors() []Interceptor {
+	return c.inters.StagedFile
+}
+
+func (c *StagedFileClient) mutate(ctx context.Context, m *StagedFileMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&StagedFileCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&StagedFileUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&StagedFileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&StagedFileDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown StagedFile mutation op: %q", m.Op())
+	}
+}
+
 // SyncStateClient is a client for the SyncState schema.
 type SyncStateClient struct {
 	config
@@ -7500,8 +7641,8 @@ type (
 		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
 		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,
 		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
-		SchemaTemplate, SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup,
-		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Term,
+		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
 		WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
@@ -7511,8 +7652,8 @@ type (
 		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
 		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,
 		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
-		SchemaTemplate, SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup,
-		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
+		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Term,
+		TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
 		WorkflowTrigger, WorkflowVersion []ent.Interceptor
 	}
 )

@@ -19,7 +19,21 @@ const (
 	EventItemDeleted     = "item.deleted"
 	EventItemRestored    = "item.restored"
 	EventItemPurged      = "item.purged"
+	// EventFileAdded is raised when a new file version becomes an item's
+	// current file, with the revision that pins it.
+	EventFileAdded = "file.added"
 )
+
+// File sources, the source of a file.added event.
+const (
+	FileUpload   = "upload"
+	FileWebDAV   = "webdav"
+	FileRestore  = "restore"
+	FileWorkflow = "workflow"
+)
+
+// FileSources lists every file source.
+var FileSources = []string{FileUpload, FileWebDAV, FileRestore, FileWorkflow}
 
 // Event is a domain event: something that happened in a committed write and
 // that workflows can react to. Events are separate from audit events, which
