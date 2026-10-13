@@ -14,3 +14,6 @@ func lockLease(f *os.File, exclusive bool) error {
 	}
 	return unix.Flock(int(f.Fd()), flags)
 }
+
+// ShareLease atomically converts the startup lease to a shared serving lease.
+func ShareLease(f *os.File) error { return lockLease(f, false) }

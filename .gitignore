@@ -9,3 +9,5 @@ bin/
 coverage.out
 *.test
 *.exe
+dist/
+__pycache__/

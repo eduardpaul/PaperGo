@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"papergo/ent"
+	"papergo/migrations"
 	"path/filepath"
 	"strings"
 	"time"
@@ -106,12 +107,15 @@ func (d *Database) Close() error { return d.Client.Close() }
 
 // CheckSchema prevents the API from serving with missing or unapplied migrations.
 func (d *Database) CheckSchema(ctx context.Context) error {
-	var version string
-	if err := d.SQL.QueryRowContext(ctx, "SELECT version FROM atlas_schema_revisions WHERE applied = total AND (error IS NULL OR error = '') ORDER BY version DESC LIMIT 1").Scan(&version); err != nil {
+	var version, hash string
+	if err := d.SQL.QueryRowContext(ctx, "SELECT version,hash FROM atlas_schema_revisions WHERE applied = total AND (error IS NULL OR error = '') ORDER BY version DESC LIMIT 1").Scan(&version, &hash); err != nil {
 		return fmt.Errorf("apply Atlas migrations before starting the API: %w", err)
 	}
 	if version != "20261007000100" {
 		return fmt.Errorf("database migration version %s is incompatible with this API; expected 20261007000100", version)
+	}
+	if hash != migrations.SchemaHash() {
+		return fmt.Errorf("database schema checksum differs from this application")
 	}
 	if _, err := d.SQL.ExecContext(ctx, "SELECT id FROM item_surface_search LIMIT 0"); err != nil {
 		return fmt.Errorf("search migration is missing: %w", err)

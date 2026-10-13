@@ -12,3 +12,12 @@ func lockLease(f *os.File, exclusive bool) error {
 	}
 	return windows.LockFileEx(windows.Handle(f.Fd()), flags, 0, 1, 0, &windows.Overlapped{})
 }
+
+// ShareLease permits online backups after exclusive release initialization.
+// Callers close all SQLite handles before unlocking this lease.
+func ShareLease(f *os.File) error {
+	if err := windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, &windows.Overlapped{}); err != nil {
+		return err
+	}
+	return lockLease(f, false)
+}

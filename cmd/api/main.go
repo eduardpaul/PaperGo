@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"papergo/internal/auth"
+	"papergo/internal/buildinfo"
 	"papergo/internal/config"
 	"papergo/internal/database"
 	"papergo/internal/dms"
@@ -17,12 +18,21 @@ import (
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
+	"papergo/migrations"
 	"path/filepath"
 	"syscall"
 	"time"
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println(buildinfo.String())
+		return
+	}
+	if len(os.Args) > 1 {
+		fmt.Fprintln(os.Stderr, "usage: papergo [--version]; configure the server through environment variables")
+		os.Exit(1)
+	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	if err := run(log); err != nil {
 		log.Error("startup failed", "error", err)
@@ -34,14 +44,21 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	startup, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	timeout := 20 * time.Second
+	if migrations.Published() {
+		timeout = database.ReleaseStartupTimeout
+	}
+	startup, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	// Every SQLite handle, including the runner, uses the same canonical name.
-	c.DatabasePath, err = filepath.EvalSymlinks(c.DatabasePath)
-	if err != nil {
+	resolved, err := filepath.EvalSymlinks(c.DatabasePath)
+	if err == nil {
+		c.DatabasePath = resolved
+	}
+	if err != nil && !(migrations.Published() && os.IsNotExist(err)) {
 		return fmt.Errorf("resolve database path (apply the Atlas schema before startup): %w", err)
 	}
-	dataLease, err := database.AcquireLease(c.DatabasePath, false)
+	dataLease, err := database.AcquireLease(c.DatabasePath, migrations.Published())
 	if err != nil {
 		return err
 	}
@@ -55,7 +72,33 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { db.Close() }()
+	if migrations.Published() {
+		bundle, e := migrations.EmbeddedBundle()
+		if e != nil {
+			return e
+		}
+		snapshot, e := db.ApplyRelease(startup, c.DatabasePath, bundle)
+		if e != nil {
+			return e
+		}
+		if snapshot != "" {
+			log.Info("database upgraded", "snapshot", snapshot, "version", buildinfo.Version)
+		}
+		// Windows cannot downgrade a byte-range lease atomically. Close all
+		// SQLite handles before sharing the lease, then reopen under that lease.
+		if e = db.Close(); e != nil {
+			return e
+		}
+		if e = database.ShareLease(dataLease); e != nil {
+			return e
+		}
+		reopened, e := database.Open(startup, c.DatabasePath)
+		if e != nil {
+			return e
+		}
+		db = reopened
+	}
 	if err = db.CheckSchema(startup); err != nil {
 		return err
 	}

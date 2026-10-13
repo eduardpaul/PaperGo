@@ -37,7 +37,7 @@ func AcquireLease(path string, exclusive bool) (*os.File, error) {
 	}
 	if err = lockLease(f, exclusive); err != nil {
 		f.Close()
-		return nil, fmt.Errorf("data is in use; stop the API before restoring: %w", err)
+		return nil, fmt.Errorf("data is in use; stop the API before restoring or upgrading: %w", err)
 	}
 	return f, nil
 }

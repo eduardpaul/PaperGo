@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"papergo/internal/backup"
+	"papergo/internal/buildinfo"
 	"papergo/internal/database"
 )
 
@@ -26,6 +27,10 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, out io.Writer) error {
+	if len(args) == 1 && args[0] == "--version" {
+		fmt.Fprintln(out, buildinfo.String())
+		return nil
+	}
 	if len(args) > 0 && args[0] == "health" {
 		flags := flag.NewFlagSet("health", flag.ContinueOnError)
 		flags.SetOutput(out)
