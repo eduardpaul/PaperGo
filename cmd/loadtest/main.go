@@ -608,7 +608,7 @@ func measure(args []string) {
 	record("list: search no match (zzzz)", *runs, get("/v1/resources/"+l+"/children?q=zzzz&$top=50"))
 	record("list: search prefix (Acm)", *runs, get("/v1/resources/"+l+"/children?q=Acm&$top=50"))
 	record("list: search Acme sorted by amount", *runs, query("/v1/resources/"+l+"/query?$top=50", map[string]any{"query": map[string]any{"parent_id": l, "search": "Acme", "sort": []map[string]string{{"field": "amount", "direction": "desc"}}}}))
-	record("list: tag filter (audit-2026, 500 items)", *runs, get("/v1/resources/"+l+"/children?tag=audit-2026&$top=50"))
+	record("list: tag filter (audit-2026, 1 in 1000 items)", *runs, get("/v1/resources/"+l+"/children?tag=audit-2026&$top=50"))
 	record("workspace tags vocabulary", *runs, get("/v1/workspaces/"+st.Workspace+"/tags"))
 	record("workspace search (Acme)", *runs, get("/v1/resources?workspace_id="+st.Workspace+"&q=Acme&$top=50"))
 	record("item read", *runs, get("/v1/resources/"+st.SampleItems[0]))
@@ -616,7 +616,7 @@ func measure(args []string) {
 	record("lookup list first page (suppliers)", *runs, get("/v1/resources/"+st.Suppliers+"/children?$top=50"))
 	record("library: root children", *runs, get("/v1/resources/"+lib+"/children?$top=50"))
 	record("library: root folders only", *runs, get("/v1/resources/"+lib+"/children?kind=folder&$top=100"))
-	record("library: subfolder (500 docs) first page", *runs, get("/v1/resources/"+st.SubFolders[0]+"/children?$top=50"))
+	record("library: subfolder first page", *runs, get("/v1/resources/"+st.SubFolders[0]+"/children?$top=50"))
 	record("library: all documents query with total", *runs, query("/v1/resources/"+lib+"/query?$top=50", map[string]any{"include_total": true, "query": map[string]any{}}))
 	record("library: filter doc_type=Contract sort received", *runs, query("/v1/resources/"+lib+"/query?$top=50", map[string]any{"include_total": true, "query": map[string]any{"filter": map[string]any{"field": "doc_type", "op": "eq", "value": "Contract"}, "sort": []map[string]string{{"field": "received", "direction": "desc"}}}}))
 	record("library: search (acme)", *runs, get("/v1/resources/"+lib+"/children?q=acme&$top=50"))
@@ -635,12 +635,13 @@ func measure(args []string) {
 		s, err := c.do("PATCH", "/v1/resources/"+st.SampleItems[1], map[string]any{"values": map[string]any{"status": "Paid"}}, r.Version, nil)
 		return s, "", err
 	})
-	record("item create in 500k list", 1, func() (int, string, error) {
+	record("item create", 1, func() (int, string, error) {
 		s, err := c.do("POST", "/v1/resources/"+l+"/children", map[string]any{"kind": "item", "name": "Fresh invoice", "tags": []string{}, "values": map[string]any{"status": "Open"}}, 0, nil)
 		return s, "", err
 	})
-	record("bulk field update of 1000 selected items (operation)", 1, func() (int, string, error) {
-		ids := st.SampleItems[:min(1000, len(st.SampleItems))]
+	record("bulk field update of 50 selected items (operation)", 1, func() (int, string, error) {
+		// The filter takes at most 50 ids, as many as a page of selected rows.
+		ids := st.SampleItems[:min(50, len(st.SampleItems))]
 		var op struct {
 			ID string `json:"id"`
 		}
@@ -650,7 +651,7 @@ func measure(args []string) {
 		}
 		return waitOperation(c, op.ID)
 	})
-	record("make a column filterable on 500k items (index build)", 1, func() (int, string, error) {
+	record("make a column filterable (index build)", 1, func() (int, string, error) {
 		var field struct {
 			ID string `json:"id"`
 		}
@@ -701,7 +702,7 @@ func measure(args []string) {
 		}
 		return 0, "timed out", errors.New("index build took over 30 minutes")
 	})
-	record("delete folder with 500 documents (recursive)", 1, func() (int, string, error) {
+	record("delete a subfolder with its documents (recursive)", 1, func() (int, string, error) {
 		var f resource
 		if _, err := c.do("GET", "/v1/resources/"+st.SubFolders[len(st.SubFolders)-1], nil, 0, &f); err != nil {
 			return 0, "", err
@@ -710,11 +711,11 @@ func measure(args []string) {
 		return s, "", err
 	})
 	record("recycle bin first page", *runs, get("/v1/resources/"+lib+"/recycle-bin"))
-	record("restore folder with 500 documents", 1, func() (int, string, error) {
+	record("restore that subfolder", 1, func() (int, string, error) {
 		s, err := c.do("POST", "/v1/resources/"+lib+"/recycle-bin/"+st.SubFolders[len(st.SubFolders)-1]+"/restore?recursive=true", nil, 0, nil)
 		return s, "", err
 	})
-	record("delete top folder with 10000 documents (recursive)", 1, func() (int, string, error) {
+	record("delete a top folder with its subfolders (recursive)", 1, func() (int, string, error) {
 		var f resource
 		if _, err := c.do("GET", "/v1/resources/"+st.TopFolders[len(st.TopFolders)-1], nil, 0, &f); err != nil {
 			return 0, "", err
