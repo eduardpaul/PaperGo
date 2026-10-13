@@ -43,7 +43,19 @@ type API struct {
 	// PublicURL, when set, supplies the scheme and host of absolute links, so
 	// they are correct behind a TLS-terminating reverse proxy.
 	PublicURL *url.URL
+	// BrowserSignIn, when set, tells the web frontend which OIDC client signs
+	// users in. It is public configuration: an issuer, a client ID and scopes.
+	BrowserSignIn *BrowserSignIn
 }
+
+// BrowserSignIn describes the public OIDC client of the web frontend
+// (authorization code flow with PKCE).
+type BrowserSignIn struct {
+	Issuer   string `json:"issuer"`
+	ClientID string `json:"client_id"`
+	Scope    string `json:"scope"`
+}
+
 type subjectKey struct{}
 type requestKey struct{}
 type publicURLKey struct{}
@@ -113,9 +125,14 @@ func (a *API) Handler() http.Handler {
 		if a.Auth != nil {
 			mode = a.Auth.Kind()
 		}
+		var signIn *BrowserSignIn
+		if mode == auth.Bearer {
+			signIn = a.BrowserSignIn
+		}
 		respond(w, r, 200, struct {
-			Mode auth.Kind `json:"mode"`
-		}{mode})
+			Mode auth.Kind      `json:"mode"`
+			OIDC *BrowserSignIn `json:"oidc,omitempty"`
+		}{mode, signIn})
 	})
 	root.Handle("/auth/", http.NotFoundHandler())
 	root.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { respond(w, r, 200, map[string]string{"status": "ok"}) })

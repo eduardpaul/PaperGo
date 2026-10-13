@@ -21,6 +21,7 @@ Web numeric transport, long tables and component tests use these direct packages
 | Package | Used for | Licence |
 | --- | --- | --- |
 | `lossless-json` | exact JSON numeric fields in API responses, mutations and upload metadata | MIT |
+| `oidc-client-ts` | web sign-in at the OIDC provider: authorization code with PKCE, refresh and sign-out (brings `jwt-decode`, MIT) | Apache-2.0 |
 | `@tanstack/react-virtual` | rendering only the visible rows of long list tables | MIT |
 | `@testing-library/react` | tests of rendered forms and user interactions | MIT |
 | `jsdom` | DOM environment for component tests | MIT |

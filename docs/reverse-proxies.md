@@ -1,12 +1,13 @@
 # Reverse proxies and identity providers
 
-PaperGo runs at the root of one public host behind a TLS-terminating reverse proxy. Choose OIDC bearer authentication or trusted proxy authentication. Both modes enroll identities in the same persisted organization directory and apply the same roles and resource ACLs. The [NPM Compose sample](../samples/npm/README.md) runs with NPM Access List authentication and no separate identity provider.
+PaperGo runs at the root of one public host behind a TLS-terminating reverse proxy. Choose OIDC bearer authentication or trusted proxy authentication. Both modes enroll identities in the same persisted organization directory and apply the same roles and resource ACLs. The [NPM Compose sample](../samples/npm/README.md) runs with NPM Access List authentication and no separate identity provider. The [authentik Compose sample](../samples/authentik/README.md) runs OIDC with authentik and Caddy, including web sign-in.
 
 ## Authentication and directory
 
 | Area | Current behavior |
 | --- | --- |
 | Provider bearer tokens | OIDC verifies signature, issuer, expiry and audience. `OIDC_TOKEN_TYPE` optionally checks the JWT header type. |
+| Web sign-in | With `OIDC_CLIENT_ID`, the web app signs in at the provider with the authorization code flow and PKCE, renews access with refresh tokens and signs out at the provider. Without it, people paste a token. |
 | Personal REST tokens | Bearer-authenticated deployments accept scoped personal credentials. These requests preserve the stored profile and group memberships. |
 | Users | Verified subjects enroll with the Member role on first use. OIDC profile claims supply a display name and email; proxy profiles are locally managed. |
 | Groups | Local groups are administered in PaperGo. OIDC groups synchronize from provider claims; their direct memberships are managed by the provider. |
@@ -66,6 +67,18 @@ Bootstrap runs once. Until the first member of `ADMIN_GROUP` signs in, that conf
 Set `OIDC_AUDIENCE` to the intended API audience. Where supported, a resource identifier such as `https://docs.example.com` separates API access tokens from a client's ID tokens. `OIDC_TOKEN_TYPE=at+jwt` additionally requires a matching JWT header type; configure it only for an issuer that supplies that type.
 
 With `OIDC_GROUPS_FROM_USERINFO=true`, a token lacking the groups claim queries the issuer's UserInfo endpoint using the same bearer token. UserInfo can also supply missing profile claims. Results are cached per token until expiry. The cache holds at most 1,024 tokens, prunes expired entries when storing a result, and evicts the earliest-expiring entry when full. An evicted token fetches UserInfo again on its next request. JWT access tokens are required; opaque-token introspection is unsupported.
+
+## Web sign-in
+
+Set `OIDC_CLIENT_ID` to a client registered at the provider for the web app. `/auth/config` then publishes the issuer, the client ID and the scopes (`OIDC_CLIENT_SCOPES`, default `openid profile email offline_access`), and the sign-in page offers **Sign in with single sign-on** next to pasting a personal REST token. Register the client as follows:
+
+- **Public client** (no secret) with the authorization code grant, PKCE (`S256`) and refresh tokens. The browser cannot keep a secret.
+- **Redirect URI** `<PUBLIC_URL>/login/callback`, matched exactly, and **post-logout redirect URI** `<PUBLIC_URL>/login`.
+- **Access tokens** must satisfy the bearer rules above: the token's `aud` must be `OIDC_AUDIENCE`. Where the provider sets `aud` to the client ID, `OIDC_AUDIENCE` is the same value as `OIDC_CLIENT_ID`.
+- **CORS**: the browser calls the token endpoint from PaperGo's origin. Providers usually allow the origins of registered redirect URIs.
+- **Refresh tokens** keep people signed in while a tab is open; the app renews the access token a minute before it expires. Without a refresh token (for example without `offline_access`), people sign in again when the access token expires, usually without a password prompt while the provider session lasts.
+
+The signed-in user and tokens live in the tab's session storage, like a pasted token. **Sign out** forgets them and ends the provider session through its end-session endpoint (RP-initiated logout), which returns to `/login`. The settings are rejected outside `AUTH_MODE=oidc`, and `OIDC_CLIENT_SCOPES` must include `openid`.
 
 ## Deployment limits
 
@@ -171,12 +184,12 @@ The free plan limits request bodies to 100 MB and cuts responses after 100 s wit
 
 ## Identity providers
 
-What each IdP needs so that PaperGo receives a **JWT access token** with the right `aud`, a stable `sub` and a groups claim. Clients get tokens from the IdP: authorization code + PKCE for apps and a future web UI, the device flow for CLIs, client credentials for services (their `sub` is the client and is enrolled like a user).
+What each IdP needs so that PaperGo receives a **JWT access token** with the right `aud`, a stable `sub` and a groups claim. Clients get tokens from the IdP: authorization code + PKCE for the web app (`OIDC_CLIENT_ID`) and other apps, the device flow for CLIs, client credentials for services (their `sub` is the client and is enrolled like a user).
 
 | IdP | Access token | `OIDC_AUDIENCE` | Groups | Notes |
 | --- | --- | --- | --- | --- |
 | **Authelia** | Opaque by default. Set the client's `access_token_signed_response_alg` (for example `RS256`) for RFC 9068 JWTs. | An entry from the client's `audience` list, requested with the `audience` parameter (`requested_audience_mode: implicit` grants it without asking). | `groups` scope, copied into the access token by a `claims_policies.<name>.access_token: [groups]` policy on the client. *Not verified on a running instance.* | Supports `OIDC_TOKEN_TYPE=at+jwt`. File or LDAP users; two-factor and passkeys. |
-| **Authentik** | JWT. | The provider's client ID (no separate resource audience). | `groups` from the default `profile` scope mapping. *Not verified on a running instance.* | No `at+jwt` type. Give PaperGo its own provider, so no other client's ID tokens carry its audience. |
+| **Authentik** | JWT (RS256 with a signing key; without one, HS256 with the client secret, which PaperGo cannot verify). | The provider's client ID (no separate resource audience); the same value as `OIDC_CLIENT_ID`. | `groups` (direct group names) from the default `profile` scope mapping, also in the access token. | No `at+jwt` type. Give PaperGo its own public provider with the `authorization_code` and `refresh_token` grants, the `offline_access` scope mapping, and `default-invalidation-flow` so signing out ends the authentik session. Verified by the [authentik sample](../samples/authentik/README.md). |
 | **Keycloak** | JWT. | Add an *Audience* mapper to the client scope (`aud = docs.example.com` or a resource client ID); the default `aud` is `account`. | *Group Membership* mapper → claim `groups`, "Full group path" off. Realm roles: `OIDC_GROUPS_CLAIM=realm_access.roles`. | `sub` is a UUID: use `ADMIN_GROUP`. |
 | **Pocket ID** | JWT. | Client ID. *Not verified.* | `groups` scope. *Not verified.* | Passkey-only; the smallest option for people who only want "NPM plus users". |
 | **Microsoft Entra ID** | JWT for an exposed API (`api://…`). | The API's application ID URI. | `groups` claim with group **object IDs**, not names; more than 200 groups produce an overage claim. | Prefer app roles: `OIDC_GROUPS_CLAIM=roles` carries role names. |
@@ -195,4 +208,5 @@ For any IdP: decode a real access token (`jwt.io`-style, locally) and check `iss
 - Group sync: creation, add and remove; local groups untouched; read-only membership API for oidc groups; name collision with a local group; nesting oidc in local groups; ACL and role effects on the next request; last administrator kept; hash short-circuit (no write when unchanged); 100-group limit; prefix filter; dotted claim paths.
 - `ADMIN_GROUP`: initialization, first member becomes administrator, exactly-one-of validation.
 - Token type check: an ID token is rejected with `OIDC_TOKEN_TYPE=at+jwt`.
+- Web sign-in with authentik (the authentik sample's `verify.py` and a browser): authorization code with PKCE, return to the requested page, reload, refresh-token renewal, sign-out ending the provider session, and denial for users outside the application's group.
 - Deployment validation through a configured proxy: API through the proxy, a 64 MiB upload and download with buffering off, a chunked WebDAV `PUT`, `COPY`/`MOVE`, a request longer than 90 s.

@@ -1,0 +1,279 @@
+name: papergo-authentik
+
+x-hardening: &hardening
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+
+x-authentik: &authentik
+  <<: *hardening
+  image: ghcr.io/goauthentik/server:2026.8.3@sha256:ab9b4e8cc4ab3f8d1198d2db6aeea66bafea1963b3f2843589e0d163f97d9849
+  environment:
+    AUTHENTIK_POSTGRESQL__HOST: postgresql
+    AUTHENTIK_POSTGRESQL__NAME: authentik
+    AUTHENTIK_POSTGRESQL__USER: authentik
+    AUTHENTIK_POSTGRESQL__PASSWORD: file:///secrets/postgres-password
+    AUTHENTIK_SECRET_KEY: file:///secrets/authentik-secret-key
+    AUTHENTIK_BOOTSTRAP_PASSWORD_HASH: ${IDP_ADMIN_PASSWORD_HASH:?Run setup.py first}
+    AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+    AUTHENTIK_DISABLE_STARTUP_ANALYTICS: "true"
+    AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    # The sample's networks are IPv4; the defaults ([::]) fail where IPv6 is disabled.
+    AUTHENTIK_LISTEN__HTTP: 0.0.0.0:9000
+    AUTHENTIK_LISTEN__HTTPS: 0.0.0.0:9443
+    AUTHENTIK_LISTEN__METRICS: 0.0.0.0:9300
+    PAPERGO_PUBLIC_URL: ${PUBLIC_URL:?Run setup.py first}
+    PAPERGO_ADMIN_USER: ${PAPERGO_ADMIN:?Run setup.py first}
+    PAPERGO_ADMIN_EMAIL: ${PAPERGO_ADMIN_EMAIL:?Run setup.py first}
+    PAPERGO_ADMIN_PASSWORD_HASH: ${PAPERGO_ADMIN_PASSWORD_HASH:?Run setup.py first}
+  volumes:
+    - authentik-data:/data
+    - authentik-secrets:/secrets:ro
+    - authentik-blueprints:/blueprints/custom:ro
+  depends_on:
+    postgresql:
+      condition: service_healthy
+  cap_drop: [ALL]
+  shm_size: 512mb
+  restart: unless-stopped
+  stop_grace_period: 30s
+  mem_limit: 2g
+  pids_limit: 512
+
+services:
+  # Installs secrets, proxy configuration, the blueprint and the local CA into
+  # volumes owned by each service's user, independent of the host account that
+  # ran setup.py. Runs again on every `up`, so setup reruns update them.
+  volume-permissions:
+    image: busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    secrets: [postgres-password, authentik-secret-key, local-ca, caddyfile, tls-certificate, tls-key, blueprint]
+    volumes:
+      - papergo-data:/papergo
+      - authentik-data:/authentik
+      - authentik-secrets:/authentik-secrets
+      - authentik-blueprints:/authentik-blueprints
+      - postgres-secrets:/postgres-secrets
+      - caddy-etc:/caddy
+    command:
+      - sh
+      - -eu
+      - -c
+      - >-
+        cp /run/secrets/postgres-password /postgres-secrets/postgres-password;
+        chown -R 70:70 /postgres-secrets; chmod 0500 /postgres-secrets; chmod 0400 /postgres-secrets/postgres-password;
+        cp /run/secrets/postgres-password /authentik-secrets/postgres-password;
+        cp /run/secrets/authentik-secret-key /authentik-secrets/authentik-secret-key;
+        chown -R 1000:1000 /authentik-secrets /authentik; chmod 0500 /authentik-secrets; chmod 0400 /authentik-secrets/*;
+        cp /run/secrets/blueprint /authentik-blueprints/papergo.yaml;
+        chown -R 1000:1000 /authentik-blueprints; chmod 0500 /authentik-blueprints; chmod 0400 /authentik-blueprints/papergo.yaml;
+        mkdir -p /caddy/tls;
+        cp /run/secrets/caddyfile /caddy/Caddyfile;
+        cp /run/secrets/tls-certificate /caddy/tls/server.crt;
+        cp /run/secrets/tls-key /caddy/tls/server.key;
+        chown -R 0:0 /caddy; chmod -R u=rX,go= /caddy;
+        cp /run/secrets/local-ca /papergo/.local-ca.pem;
+        chmod 0444 /papergo/.local-ca.pem;
+        chown 65532:65532 /papergo /papergo/.local-ca.pem;
+        chmod 0700 /papergo
+    restart: "no"
+
+  postgresql:
+    <<: *hardening
+    image: postgres:16.13-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD_FILE: /secrets/postgres-password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-secrets:/secrets:ro
+    depends_on:
+      volume-permissions:
+        condition: service_completed_successfully
+    networks: [idp]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -d authentik -U authentik]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+    restart: unless-stopped
+    stop_grace_period: 60s
+    mem_limit: 1g
+    pids_limit: 256
+
+  authentik-server:
+    <<: *authentik
+    command: server
+    networks:
+      backend: {}
+      idp: {}
+      idp-egress: {}
+    healthcheck:
+      test: [CMD, ak, healthcheck]
+      interval: 10s
+      timeout: 5s
+      # The first start applies database migrations, which takes minutes.
+      start_period: 600s
+      start_interval: 5s
+      retries: 6
+
+  authentik-worker:
+    <<: *authentik
+    command: worker
+    networks:
+      idp: {}
+      idp-egress: {}
+    healthcheck:
+      test: [CMD, ak, healthcheck]
+      interval: 10s
+      timeout: 5s
+      # The first start applies database migrations, which takes minutes.
+      start_period: 600s
+      start_interval: 5s
+      retries: 6
+
+  initialize:
+    image: papergo:authentik-sample
+    build: ../..
+    entrypoint: [/papergo-admin]
+    command: [initialize, --schema, /schema]
+    environment:
+      DATABASE_PATH: /data/papergo.db
+    volumes: [papergo-data:/data]
+    depends_on:
+      volume-permissions:
+        condition: service_completed_successfully
+    network_mode: none
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+
+  papergo:
+    <<: *hardening
+    image: papergo:authentik-sample
+    build: ../..
+    environment:
+      APP_ENV: production
+      AUTH_MODE: oidc
+      OIDC_ISSUER: ${OIDC_ISSUER:?Run setup.py first}
+      OIDC_AUDIENCE: papergo
+      OIDC_CLIENT_ID: papergo
+      OIDC_GROUPS_CLAIM: groups
+      OIDC_GROUPS_PREFIX: papergo-
+      ADMIN_GROUP: admins
+      PUBLIC_URL: ${PUBLIC_URL:?Run setup.py first}
+      # Local TLS trusts the generated CA; public certificates use the image's roots.
+      SSL_CERT_FILE: ${PAPERGO_TRUST_FILE:?Run setup.py first}
+      HTTP_ADDR: 0.0.0.0:8080
+      DATABASE_PATH: /data/papergo.db
+      BLOB_PATH: /data/blobs
+      MAX_UPLOAD_BYTES: "67108864"
+      MAX_IN_FLIGHT: "32"
+      REQUEST_TIMEOUT: 30s
+      NODE_ID: papergo-1
+      RUN_RETENTION: 720h
+    volumes: [papergo-data:/data]
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+      caddy:
+        condition: service_healthy
+      authentik-server:
+        condition: service_healthy
+    networks: [backend]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, /papergo-admin, health]
+      interval: 10s
+      timeout: 4s
+      start_period: 20s
+      retries: 6
+    restart: unless-stopped
+    stop_grace_period: 45s
+    mem_limit: 1g
+    pids_limit: 256
+
+  caddy:
+    <<: *hardening
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    ports:
+      - ${HTTP_PORT:?Run setup.py first}:${HTTP_PORT}
+      - ${HTTPS_PORT:?Run setup.py first}:${HTTPS_PORT}
+      - ${HTTPS_PORT}:${HTTPS_PORT}/udp
+    volumes:
+      - caddy-etc:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      volume-permissions:
+        condition: service_completed_successfully
+    networks:
+      edge: {}
+      # PaperGo reaches the issuer through the proxy under its public name.
+      backend:
+        aliases: ["${PAPERGO_HOST:?Run setup.py first}", "${AUTH_HOST:?Run setup.py first}"]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:2019/config/]
+      interval: 10s
+      timeout: 4s
+      start_period: 10s
+      retries: 6
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 512m
+    pids_limit: 256
+
+networks:
+  # Public ingress and ACME; only Caddy publishes ports.
+  edge: {}
+  # Caddy, PaperGo and the authentik server. No outbound access.
+  backend:
+    internal: true
+  # authentik and its database. No outbound access.
+  idp:
+    internal: true
+  # Outbound access for authentik (email, social sign-in sources).
+  idp-egress: {}
+
+volumes:
+  papergo-data: {}
+  postgres-data: {}
+  postgres-secrets: {}
+  authentik-data: {}
+  authentik-secrets: {}
+  authentik-blueprints: {}
+  caddy-etc: {}
+  caddy-data: {}
+  caddy-config: {}
+
+secrets:
+  postgres-password:
+    file: ./generated/postgres-password
+  authentik-secret-key:
+    file: ./generated/authentik-secret-key
+  local-ca:
+    file: ./generated/local-ca.pem
+  caddyfile:
+    file: ./generated/Caddyfile
+  tls-certificate:
+    file: ./generated/tls/server.crt
+  tls-key:
+    file: ./generated/tls/server.key
+  blueprint:
+    file: ./papergo-blueprint.yaml

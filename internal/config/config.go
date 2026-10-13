@@ -45,8 +45,13 @@ type Config struct {
 	TokenType string
 	// GroupsFromUserInfo enables fetching groups from UserInfo when missing in access token.
 	GroupsFromUserInfo bool
-	ProxySecret        string
-	ProxyTrustedCIDRs  []netip.Prefix
+	// ClientID is the public OIDC client the web frontend signs in with
+	// (authorization code with PKCE). Empty disables browser sign-in.
+	ClientID string
+	// ClientScopes are the scopes the web frontend requests from the issuer.
+	ClientScopes      string
+	ProxySecret       string
+	ProxyTrustedCIDRs []netip.Prefix
 }
 
 func Load() (Config, error) {
@@ -57,6 +62,8 @@ func Load() (Config, error) {
 	c.AdminGroup = os.Getenv("ADMIN_GROUP")
 	c.TokenType = os.Getenv("OIDC_TOKEN_TYPE")
 	c.GroupsFromUserInfo = os.Getenv("OIDC_GROUPS_FROM_USERINFO") == "true"
+	c.ClientID = os.Getenv("OIDC_CLIENT_ID")
+	c.ClientScopes = os.Getenv("OIDC_CLIENT_SCOPES")
 	if v := os.Getenv("MAX_UPLOAD_BYTES"); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || n < 1 || n > 1024*1024*1024 {
@@ -115,12 +122,18 @@ func Load() (Config, error) {
 		if strings.TrimSpace(c.DevSubject) == "" || len(c.DevSubject) > 255 {
 			return c, fmt.Errorf("invalid DEV_SUBJECT")
 		}
+		if c.ClientID != "" || c.ClientScopes != "" {
+			return c, fmt.Errorf("OIDC_CLIENT_ID and OIDC_CLIENT_SCOPES require AUTH_MODE=oidc")
+		}
 	case "oidc":
 		if c.Issuer == "" || c.Audience == "" {
 			return c, fmt.Errorf("OIDC_ISSUER and OIDC_AUDIENCE are required")
 		}
 		if c.Env == "production" && !strings.HasPrefix(c.Issuer, "https://") {
 			return c, fmt.Errorf("production OIDC_ISSUER requires HTTPS")
+		}
+		if err := c.validateBrowserClient(); err != nil {
+			return c, err
 		}
 	case "proxy":
 		if c.AdminSubject == "" || c.AdminGroup != "" {
@@ -151,7 +164,7 @@ func Load() (Config, error) {
 			}
 			c.ProxyTrustedCIDRs = append(c.ProxyTrustedCIDRs, prefix.Masked())
 		}
-		if c.GroupsClaim != "" || c.GroupsPrefix != "" || c.GroupsFromUserInfo || c.TokenType != "" || c.Issuer != "" || c.Audience != "" {
+		if c.GroupsClaim != "" || c.GroupsPrefix != "" || c.GroupsFromUserInfo || c.TokenType != "" || c.Issuer != "" || c.Audience != "" || c.ClientID != "" || c.ClientScopes != "" {
 			return c, fmt.Errorf("proxy authentication does not accept OIDC settings")
 		}
 	default:
@@ -178,6 +191,43 @@ func Load() (Config, error) {
 	}
 	return c, nil
 }
+
+// DefaultClientScopes request an ID token, profile and group claims, and a
+// refresh token so the browser renews access without another redirect.
+const DefaultClientScopes = "openid profile email offline_access"
+
+func (c *Config) validateBrowserClient() error {
+	if c.ClientID == "" {
+		if c.ClientScopes != "" {
+			return fmt.Errorf("OIDC_CLIENT_SCOPES requires OIDC_CLIENT_ID")
+		}
+		return nil
+	}
+	if len(c.ClientID) > 255 || strings.IndexFunc(c.ClientID, func(r rune) bool { return r <= ' ' || r == 0x7f }) >= 0 {
+		return fmt.Errorf("OIDC_CLIENT_ID must be a client identifier without spaces")
+	}
+	if c.ClientScopes == "" {
+		c.ClientScopes = DefaultClientScopes
+	}
+	scopes := strings.Fields(c.ClientScopes)
+	openid := false
+	for _, scope := range scopes {
+		// RFC 6749 section 3.3 scope-token characters.
+		if strings.IndexFunc(scope, func(r rune) bool { return r < 0x21 || r > 0x7e || r == '"' || r == '\\' }) >= 0 {
+			return fmt.Errorf("OIDC_CLIENT_SCOPES contains an invalid scope")
+		}
+		openid = openid || scope == "openid"
+	}
+	if !openid {
+		return fmt.Errorf("OIDC_CLIENT_SCOPES must include openid")
+	}
+	if len(c.ClientScopes) > 1024 {
+		return fmt.Errorf("OIDC_CLIENT_SCOPES must not exceed 1024 bytes")
+	}
+	c.ClientScopes = strings.Join(scopes, " ")
+	return nil
+}
+
 func value(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

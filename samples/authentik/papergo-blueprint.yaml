@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+# PaperGo sign-in. The worker applies this file at startup and whenever it changes;
+# setup.py also applies it explicitly. Values come from the worker environment.
+version: 1
+metadata:
+  name: PaperGo
+  labels:
+    blueprints.goauthentik.io/description: OIDC sign-in, groups and the first administrator for PaperGo
+entries:
+  # Members may sign in to PaperGo. Groups named papergo-<name> appear in PaperGo as <name>.
+  - model: authentik_core.group
+    id: users
+    identifiers:
+      name: papergo-users
+  # ADMIN_GROUP=admins: members receive PaperGo's Administrator role.
+  - model: authentik_core.group
+    id: admins
+    identifiers:
+      name: papergo-admins
+
+  # The first PaperGo administrator. Created once; later password, profile and
+  # group changes made in authentik are preserved.
+  - model: authentik_core.user
+    state: created
+    identifiers:
+      username: !Env PAPERGO_ADMIN_USER
+    attrs:
+      name: PaperGo Administrator
+      email: !Env PAPERGO_ADMIN_EMAIL
+      password_hash: !Env PAPERGO_ADMIN_PASSWORD_HASH
+      groups:
+        - !KeyOf users
+        - !KeyOf admins
+
+  # Public browser client: authorization code with PKCE and refresh tokens.
+  - model: authentik_providers_oauth2.oauth2provider
+    id: provider
+    identifiers:
+      name: PaperGo
+    attrs:
+      client_type: public
+      client_id: papergo
+      grant_types:
+        - authorization_code
+        - refresh_token
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      # Signing out of PaperGo ends the authentik session too.
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      redirect_uris:
+        - matching_mode: strict
+          url: !Format ["%s/login/callback", !Env PAPERGO_PUBLIC_URL]
+        - matching_mode: strict
+          url: !Format ["%s/login", !Env PAPERGO_PUBLIC_URL]
+          redirect_uri_type: logout
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      sub_mode: hashed_user_id
+      issuer_mode: per_provider
+      include_claims_in_id_token: true
+      access_code_validity: minutes=1
+      access_token_validity: minutes=10
+      refresh_token_validity: days=30
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
+
+  - model: authentik_core.application
+    id: application
+    identifiers:
+      slug: papergo
+    attrs:
+      name: PaperGo
+      provider: !KeyOf provider
+      meta_launch_url: !Env PAPERGO_PUBLIC_URL
+      policy_engine_mode: any
+
+  # Only papergo-users members can sign in to PaperGo.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf application
+      group: !KeyOf users
+    attrs:
+      order: 0
