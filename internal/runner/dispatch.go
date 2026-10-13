@@ -72,6 +72,22 @@ func (r *Runner) Dispatch(ctx context.Context) (int, error) {
 	return total, ctx.Err()
 }
 
+// activeRuns reports which runs DBOS still has queued or running. It reads
+// on DBOS's own connection, which sees committed state only.
+func (r *Runner) activeRuns(ids []string) (map[string]bool, error) {
+	statuses, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterWorkflowIDs(ids...), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, s := range statuses {
+		if state := status(s.Status); state == "queued" || state == "running" {
+			out[s.ID] = true
+		}
+	}
+	return out, nil
+}
+
 func (r *Runner) cancelActive(id string) error {
 	runs := []Run{{ID: id}}
 	if err := r.attach(runs, false); err != nil {
@@ -80,7 +96,7 @@ func (r *Runner) cancelActive(id string) error {
 	if runs[0].Status != "queued" && runs[0].Status != "running" {
 		return nil
 	}
-	r.log.Info("cancel selection run: a member was deleted", "run_id", id)
+	r.log.Info("cancel run: a member was deleted, or a newer run replaced it", "run_id", id)
 	return dbos.CancelWorkflow(r.ctx, id)
 }
 
@@ -107,10 +123,11 @@ func (r *Runner) dispatchBatch(ctx context.Context) (int, []string, error) {
 			}
 			ids[i] = row.ID
 		}
-		starts, err := workflow.Match(ctx, t, events)
+		starts, replaced, err := workflow.Match(ctx, t, events, r.activeRuns)
 		if err != nil {
 			return err
 		}
+		cancel = append(cancel, replaced...)
 		for _, e := range events {
 			if (e.Type != dms.EventItemDeleted && e.Type != dms.EventItemPurged) || e.ResourceID == "" {
 				continue

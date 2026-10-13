@@ -102,6 +102,22 @@ type runState struct {
 	tools Tools
 	vars  map[string]any
 	steps map[string]any
+	// loops are the forEach nodes the run is inside, innermost last.
+	loops []loopFrame
+}
+
+// loopFrame is a forEach node's progress: its items, recorded by the node's
+// step, and the element the current pass runs with.
+type loopFrame struct {
+	node  string
+	items []any
+	index int
+	as    string
+}
+
+func (r *runState) loopVars(f loopFrame) {
+	r.vars[f.as] = f.items[f.index]
+	r.vars[f.as+"_index"] = f.index
 }
 
 func (r *runState) execute(ctx context.Context) (Result, error) {
@@ -112,6 +128,16 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 			return r.finish(name, fmt.Errorf("the run visited more than %d nodes", MaxNodeVisits))
 		}
 		node := flow.Nodes[name]
+		if node.Activity == forEachKey {
+			// Reaching a loop through a port starts it again, also when an
+			// outer loop's next pass reaches an inner one.
+			for i, f := range r.loops {
+				if f.node == name {
+					r.loops = r.loops[:i]
+					break
+				}
+			}
+		}
 		o, err := r.attempt(ctx, name, node)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -144,9 +170,30 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 		if port == "" {
 			port = PortDone
 		}
+		if node.Activity == forEachKey && port == portBody {
+			out, _ := o.Output.(map[string]any)
+			items, _ := out["items"].([]any)
+			as, _ := out["as"].(string)
+			f := loopFrame{node: name, items: items, as: as}
+			r.loops = append(r.loops, f)
+			r.loopVars(f)
+		}
 		next, ok := node.Next[port]
 		if !ok && port != PortError {
 			next, ok = node.Next[PortDone]
+		}
+		// A pass of a loop ends where its nodes have nothing next: the next
+		// element starts, or after the last one the loop follows done.
+		for !ok && len(r.loops) > 0 {
+			f := &r.loops[len(r.loops)-1]
+			if f.index++; f.index < len(f.items) {
+				r.loopVars(*f)
+				next, ok = flow.Nodes[f.node].Next[portBody], true
+				break
+			}
+			loop := flow.Nodes[f.node]
+			r.loops = r.loops[:len(r.loops)-1]
+			next, ok = loop.Next[PortDone]
 		}
 		if !ok {
 			return r.finish(name, nil)

@@ -90,6 +90,18 @@ The `data` for each event type:
 
 Only items raise item events. Folders, collections and settings do not; merging organization terms delivers `term.merged` to every live workspace so its workflow subscriptions can react.
 
+## Concurrency
+
+`concurrency` decides what a start does while a run of the same workflow on the same item is still queued or running:
+
+| Value | A new start |
+| --- | --- |
+| `parallel` (default) | runs beside the active run |
+| `skip` | starts nothing |
+| `replace` | cancels the active run and starts |
+
+Selection runs compare every member: a start overlaps an active run when they share an item. A start that `skip` drops creates no run. Cancelling a run discards its staged files and closes its open approvals.
+
 ## Conditions
 
 `condition` uses the [query filter language](application-foundation.md) of collection queries, so a condition means exactly what the same filter means in a view:
@@ -121,6 +133,20 @@ After a node runs:
 
 Node names use letters, digits, spaces, `_` and `-`. Every node must be reachable from `start`. Loops are allowed: a run visits at most 1,000 nodes, and a node's output is limited to 64 KB.
 
+### Loops
+
+A `forEach` node runs its body once per element:
+
+- A pass ends at a node with nothing next (no connected port, and no `done`). The next element then starts at the body port again.
+- After the last element, or with no elements, the loop follows `done`. Without `done`, the run continues with an enclosing loop, or completes.
+- Reaching a `forEach` node through a port starts it from its first element, so an inner loop starts again on every pass of an outer loop.
+- `end` and `fail` inside a body end the run.
+
+```json
+"members": {"activity": "forEach", "inputs": {"items": "{run:items}", "as": "member"}, "next": {"body": "tag", "done": "finish"}},
+"tag": {"activity": "item.update", "inputs": {"item_id": "{var:member}", "tags": ["reviewed"]}}
+```
+
 ## Tokens
 
 Strings in node inputs can read run data:
@@ -145,6 +171,7 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | --- | --- | --- | --- |
 | `if` | flow | `filter` (a query filter on the item's head), or `left` `op` `right` (`eq ne gt ge lt le contains empty not_empty`; numbers compare as numbers); ports `true`/`false` | `result` |
 | `set_variable` | flow | sets `name` to `value` | `name`, `value` |
+| `forEach` | flow | runs the nodes from its `body` port once per element of `items` (an array or a single token such as `{run:items}`, at most 1,000), with the element in the variable `as` and its position in `as_index`; see [loops](#loops) | `items`, `count`, `as` |
 | `delay` | flow | waits `duration` (`90m`, `48h`) or `until` a date or time, durably | `until` |
 | `event.raise` | flow | raises `wf.{key}.{event}` with `data` and the run's item | `event` |
 | `item.has_terms` | flow | tests whether the item's term and keywords fields hold `terms` (or descendants, or terms merged into them): any of them, or all with `match: "all"`; ports `matched`/`unmatched` | `matched`, `terms` (those held) |

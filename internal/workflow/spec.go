@@ -48,8 +48,20 @@ type Definition struct {
 	// InputSchema is the launch form of manual starts (see forms.go).
 	InputSchema map[string]any `json:"input_schema,omitempty"`
 	Variables   map[string]any `json:"variables,omitempty"`
-	Flow        Flow           `json:"flow"`
+	// Concurrency decides what a start does while a run of the workflow on
+	// the same item is still active: parallel (the default) starts anyway,
+	// skip starts nothing, replace cancels the active run. Selection runs
+	// compare every member.
+	Concurrency string `json:"concurrency,omitempty"`
+	Flow        Flow   `json:"flow"`
 }
+
+// Concurrency policies.
+const (
+	ConcurrencyParallel = "parallel"
+	ConcurrencySkip     = "skip"
+	ConcurrencyReplace  = "replace"
+)
 
 // Trigger starts runs. CollectionID limits item and workflow-event triggers
 // to one list or library, and makes a schedule start one run per item of
@@ -282,6 +294,11 @@ func (d Definition) validate() error {
 			return dms.Invalid("input_schema: x-papergo-selection belongs to selection workflows")
 		}
 	}
+	switch d.Concurrency {
+	case "", ConcurrencyParallel, ConcurrencySkip, ConcurrencyReplace:
+	default:
+		return dms.Invalid("concurrency is parallel, skip or replace")
+	}
 	for name := range d.Variables {
 		if !inputNamePattern.MatchString(name) {
 			return dms.Invalid("invalid variable name " + name)
@@ -317,6 +334,9 @@ func (f Flow) validate() error {
 			if _, ok := f.Nodes[target]; !ok {
 				return dms.Invalid(at + "port " + port + " leads to unknown node " + target)
 			}
+		}
+		if n.Activity == forEachKey && n.Next[portBody] == "" {
+			return dms.Invalid(at + "forEach needs its body port connected")
 		}
 		if a.Terminal && len(n.Next) > 0 {
 			return dms.Invalid(at + n.Activity + " ends the run and has no next nodes")

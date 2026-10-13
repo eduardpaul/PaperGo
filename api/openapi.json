@@ -17643,6 +17643,15 @@
             "type": "object",
             "additionalProperties": true
           },
+          "concurrency": {
+            "type": "string",
+            "enum": [
+              "parallel",
+              "skip",
+              "replace"
+            ],
+            "description": "While a run on the same item (or selection member) is active: start anyway (parallel, default), start nothing (skip), or cancel the active run (replace)."
+          },
           "flow": {
             "$ref": "#/components/schemas/WorkflowFlow"
           },

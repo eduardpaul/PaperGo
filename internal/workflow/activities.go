@@ -70,6 +70,14 @@ func (a *Activity) Validate(inputs map[string]any) error {
 			return errors.New("event must be a lowercase key other than completed and failed")
 		}
 	}
+	if a.Key == forEachKey {
+		if as, ok := inputs["as"].(string); !ok || !inputNamePattern.MatchString(as) {
+			return errors.New("as must be a variable name")
+		}
+		if v, ok := inputs["items"].(string); ok && !strings.Contains(v, "{") {
+			return errors.New("items must be an array or a token")
+		}
+	}
 	if a.Key == "delay" {
 		_, d := inputs["duration"]
 		_, u := inputs["until"]
@@ -112,6 +120,42 @@ type env struct {
 	workspaceID string
 	scope       *scope
 	raise       func(typ string, data map[string]any)
+}
+
+const (
+	forEachKey = "forEach"
+	// portBody is the forEach port each pass starts at.
+	portBody = "body"
+	// maxLoopItems bounds a forEach node's items.
+	maxLoopItems = 1000
+)
+
+func runForEach(e *env, in map[string]any) (outcome, error) {
+	v, err := e.scope.resolve(in["items"])
+	if err != nil {
+		return outcome{}, err
+	}
+	var items []any
+	switch list := v.(type) {
+	case []any:
+		items = list
+	case nil, string:
+		// A missing token, or empty text, is no items.
+		if s, _ := list.(string); s != "" {
+			return outcome{}, errors.New("items is not an array")
+		}
+	default:
+		return outcome{}, errors.New("items is not an array")
+	}
+	if len(items) > maxLoopItems {
+		return outcome{}, fmt.Errorf("forEach takes at most %d items", maxLoopItems)
+	}
+	as, _ := in["as"].(string)
+	out := outcome{Output: map[string]any{"items": items, "count": len(items), "as": as}}
+	if len(items) > 0 {
+		out.Port = portBody
+	}
+	return out, nil
 }
 
 var compareOps = map[string]bool{"eq": true, "ne": true, "gt": true, "ge": true, "lt": true, "le": true, "contains": true, "empty": true, "not_empty": true}
@@ -167,6 +211,9 @@ func init() {
 	register(&Activity{Key: "event.raise", Kind: "flow", Description: "Raises wf.{workflow key}.{event} for other workflows, with the run's item.",
 		InputSchema:  inputs(`"event": {"type": "string", "title": "Event"}, "data": {"type": "object", "title": "Data"}`, "event"),
 		OutputSchema: mustSchema(`{"type": "object", "properties": {"event": {"type": "string"}}}`), run: runRaise})
+	register(&Activity{Key: forEachKey, Kind: "flow", Ports: []string{portBody}, Description: "Runs the nodes from its body port once per element of items, with the element in the variable as and its position in as_index. A pass ends at a node with nothing next; after the last element, the loop follows done.",
+		InputSchema:  inputs(`"items": {"type": "array", "title": "Items", "description": "An array, or a single token such as {run:items}.", "maxItems": 1000}, "as": {"type": "string", "title": "Variable", "description": "The variable each element is in.", "default": "element"}`, "items", "as"),
+		OutputSchema: mustSchema(`{"type": "object", "properties": {"items": {"type": "array"}, "count": {"type": "integer"}, "as": {"type": "string"}}}`), run: runForEach})
 	register(&Activity{Key: "end", Kind: "flow", Terminal: true, Description: "Completes the run.", run: func(*env, map[string]any) (outcome, error) { return outcome{End: true}, nil }})
 	register(&Activity{Key: "fail", Kind: "flow", Terminal: true, Description: "Fails the run with a message.",
 		InputSchema: inputs(`"message": {"type": "string", "title": "Message"}`, "message"), run: runFail})
