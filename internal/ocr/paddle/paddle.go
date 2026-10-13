@@ -90,6 +90,8 @@ type models struct {
 	det, cls, rec *session
 	keys          []string
 	clsW, clsH    int
+	// maxDimension is Config.MaxDetectionDimension.
+	maxDimension int
 }
 
 // New checks the configuration and the model files. The library and the
@@ -175,7 +177,7 @@ func (e *Engine) load() (*models, error) {
 		}
 		return s, nil
 	}
-	m := &models{}
+	m := &models{maxDimension: e.cfg.MaxDetectionDimension}
 	defer func() {
 		if e.models == nil {
 			for _, s := range []*session{m.det, m.cls, m.rec} {
@@ -238,7 +240,14 @@ func (e *Engine) Detect(ctx context.Context, img image.Image, opts ocr.DetectOpt
 	if err != nil {
 		return ocr.Detection{}, err
 	}
-	return m.detect(ctx, img, e.cfg.MaxDetectionDimension, opts.MinScore)
+	dimension := 0
+	if opts.MaxDimension != 0 {
+		if opts.MaxDimension < 256 || opts.MaxDimension > ocr.MaxDetectionDimension {
+			return ocr.Detection{}, fmt.Errorf("the detection dimension must be between 256 and %d", ocr.MaxDetectionDimension)
+		}
+		dimension = opts.MaxDimension
+	}
+	return m.detect(ctx, img, dimension, opts.MinScore)
 }
 
 // Recognize reads the image's text lines.
@@ -256,7 +265,7 @@ func (e *Engine) Recognize(ctx context.Context, img image.Image) (ocr.Page, erro
 	}
 	src := opaque(img)
 	page := ocr.Page{Width: src.Rect.Dx(), Height: src.Rect.Dy(), Lines: []ocr.Line{}}
-	det, err := m.detect(ctx, src, e.cfg.MaxDetectionDimension, recognizeMinScore)
+	det, err := m.detect(ctx, src, 0, recognizeMinScore)
 	if err != nil {
 		return ocr.Page{}, err
 	}
@@ -305,12 +314,22 @@ func networkDimension(pixels int) int {
 	return max(32, int(math.RoundToEven(float64(pixels)/32))*32)
 }
 
-func (m *models) detect(ctx context.Context, img image.Image, maxDimension int, minScore float64) (ocr.Detection, error) {
+// detect finds text regions on a preview of img whose longest side is at
+// most dimension, or the engine's area-bounded default when it is 0.
+func (m *models) detect(ctx context.Context, img image.Image, dimension int, minScore float64) (ocr.Detection, error) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
-	k := math.Min(1, float64(detectionDimension(w, h, maxDimension))/float64(max(w, h)))
+	if dimension == 0 {
+		dimension = detectionDimension(w, h, m.maxDimension)
+	}
+	k := math.Min(1, float64(dimension)/float64(max(w, h)))
 	pw, ph := max(1, int(math.RoundToEven(float64(w)*k))), max(1, int(math.RoundToEven(float64(h)*k)))
-	preview := resize(img, pw, ph, color.White)
+	// The cubic filter is not interpolating: an image already small enough
+	// is analyzed as it is.
+	preview := opaque(img)
+	if pw != w || ph != h {
+		preview = resize(img, pw, ph, color.White)
+	}
 	nw, nh := networkDimension(pw), networkDimension(ph)
 	input, shape := tensor(resize(preview, nw, nh, color.White), detMean, detStd)
 	out, dims, err := m.det.run(ctx, input, shape)

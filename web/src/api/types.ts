@@ -288,7 +288,9 @@ export interface BuiltInState {
   name: string;
   description: string;
   per_collection?: boolean;
-  parameters_schema?: { properties?: Record<string, { title?: string; description?: string; default?: unknown }> };
+  parameters_schema?: {
+    properties?: Record<string, { type?: string; title?: string; description?: string; default?: unknown }>;
+  };
   workflows?: Workflow[] | null;
 }
 

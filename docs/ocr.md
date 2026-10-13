@@ -7,13 +7,23 @@ PaperGo reads text in page images through an OCR layer:
 
 Engines never read storage or the database. Callers decode the file, apply EXIF orientation and pass an `image.Image` of at most 64 million pixels (`ocr.MaxPixels`). Workflow activities use the layer through the port only (see [workflows](workflows.md#building-features-on-workflows)).
 
-No activity uses the layer yet. The [document workflows plan](plans/document-workflows.md) describes the first consumers: storage optimization (detection) and photo to document (recognition).
+The workflow activity [`file.optimize_image`](workflows.md#image-optimization) uses detection. The [document workflows plan](plans/document-workflows.md) describes the next consumer: photo to document (recognition).
+
+## Configuration
+
+OCR is off unless the server is given ONNX Runtime:
+
+| Setting | Meaning |
+| --- | --- |
+| `ONNXRUNTIME_LIB` | Path of the ONNX Runtime shared library (1.23 or newer). Empty turns OCR off; activities that need it fail with a message saying so. |
+| `OCR_MODELS` | Directory of the [model files](../models/paddleocr/README.md) (default `models/paddleocr`). The server checks them when it starts and loads them on first use. |
+| `OCR_THREADS` | CPU threads one inference uses, 1 to 32 (default 1). |
 
 ## Results
 
 | Call | Returns |
 | --- | --- |
-| `Detect(ctx, img, DetectOptions{MinScore})` | `Detection`: the regions in reading order, each a `Quad` with the detector's `Score` (0 to 1). Also the size of the preview the detector analyzed, because regions only a few preview pixels high are unreliable. |
+| `Detect(ctx, img, DetectOptions{MinScore, MaxDimension})` | `Detection`: the regions in reading order, each a `Quad` with the detector's `Score` (0 to 1). Also the size of the preview the detector analyzed, because regions only a few preview pixels high are unreliable. `MaxDimension` (256 to 2600) bounds only the preview's longest side instead of the engine's default, so a caller can analyze a larger preview, as image optimization does. |
 | `Recognize(ctx, img)` | `Page`: its `Lines` in reading order, each with `Text`, `Confidence` (the mean of its characters), `Quad` and `Words`, each word with its own `Quad`. `Page.Text()` joins the lines. An image without text gives a page without lines. |
 | `Info()` | the engine's name and its model files with their SHA-256, for run metrics |
 
@@ -29,7 +39,7 @@ Scripts without spaces (Chinese, Japanese, Korean) have one word per character.
 The engine runs the same models, preprocessing and thresholds as PaperDotNet, so both applications read text the same way. The models are in [`models/paddleocr`](../models/paddleocr/README.md):
 
 1. **Detection.** PP-OCRv6 small DBNet runs on a bounded preview:
-   - The preview's longest side is at most `MaxDetectionDimension` (default 1536), and smaller for square images, so it stays near one megapixel.
+   - The preview's longest side is at most `MaxDetectionDimension` (default 1536), and smaller for square images, so it stays near one megapixel. With `DetectOptions.MaxDimension`, only the longest side is bounded. An image already small enough is analyzed as it is.
    - Its sides are rounded to multiples of 32. Pixels are BGR with ImageNet mean and standard deviation; transparency is flattened onto white.
    - The probability map is thresholded at 0.2 and dilated by one pixel. Each region becomes its minimum-area rectangle, scored by the mean probability inside it.
    - Rectangles with a short side under 3 pixels are dropped. The rest are expanded by area × 1.4 / perimeter, and dropped if their short side is then under 5 pixels.

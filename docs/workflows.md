@@ -92,7 +92,7 @@ Only items raise item events. Folders, collections and settings do not; merging 
 
 ## Concurrency
 
-`concurrency` decides what a start does while a run of the same workflow on the same item is still queued or running:
+`concurrency` decides what a start does while a run of the same workflow on the same item is still queued, running or waiting for an approval:
 
 | Value | A new start |
 | --- | --- |
@@ -173,7 +173,7 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `set_variable` | flow | sets `name` to `value` | `name`, `value` |
 | `forEach` | flow | runs the nodes from its `body` port once per element of `items` (an array or a single token such as `{run:items}`, at most 1,000), with the element in the variable `as` and its position in `as_index`; see [loops](#loops) | `items`, `count`, `as` |
 | `delay` | flow | waits `duration` (`90m`, `48h`) or `until` a date or time, durably | `until` |
-| `approval` | flow | asks `assignees` (people; default the workspace's owners) to approve or reject `title` (with an optional `description`), with an optional decision form (`input_schema`) and `review` of a staged file; ports `approved`/`rejected`; see [approvals](#approvals) | `request_id`, `decision`, `decided_by`, `comment`, `input` |
+| `approval` | flow | asks `assignees` (people; none means the workspace's owners) to approve or reject `title` (with an optional `description`), with an optional decision form (`input_schema`) and `review` of a staged file; ports `approved`/`rejected`; see [approvals](#approvals) | `request_id`, `decision`, `decided_by`, `comment`, `input` |
 | `event.raise` | flow | raises `wf.{key}.{event}` with `data` and the run's item | `event` |
 | `item.has_terms` | flow | tests whether the item's term and keywords fields hold `terms` (or descendants, or terms merged into them): any of them, or all with `match: "all"`; ports `matched`/`unmatched` | `matched`, `terms` (those held) |
 | `end` / `fail` | flow | completes the run / fails it with `message` | |
@@ -186,6 +186,7 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `item.delete` | action | deletes the item | `deleted` |
 | `file.promote` | action | makes a staged file of this run (`staged_file_id`) its item's current file, as a new file version; fails when a file it was made from is no longer current | `item_id`, `blob_id`, `file_version` |
 | `file.discard` | action | discards a staged file of this run; the item keeps its file | `discarded` |
+| `file.optimize_image` | action | analyzes the text of the item's current JPEG, PNG or WebP image with [OCR](ocr.md) and stages a smaller WebP copy whose smallest text keeps `target_height`; ports `candidate`/`skipped`; see [image optimization](#image-optimization). Heavy work. | `staged_file_id` (candidate) or `reason` (skipped), `item_id`, `blob_id`, `file_version`, `metrics` |
 
 Item actions work on the run's item unless `item_id` is given. They use the same validation, permissions, revisions, audit records and events as API requests.
 
@@ -209,6 +210,18 @@ Every node normally runs in one write transaction. An activity that decodes, ana
 3. It records the result, such as a staged file, in a second step transaction.
 
 A work step that a crash interrupts runs again; it writes no data of its own.
+
+### Image optimization
+
+`file.optimize_image` shrinks page images without making their text unreadable. It is PaperDotNet's storage optimization, with the same parameters and results:
+
+1. It skips files that are not JPEG, PNG or WebP, and runs started by a `file.added` whose file a newer one already replaced.
+2. It decodes the image (at most 64 megapixels), applies its EXIF orientation, and keeps animated images unchanged.
+3. A copy at most `max_analysis_dimension` pixels long (default 2600) goes to the OCR detector. Text lines that score at least `min_confidence` (default 50), are at least 6 analysis pixels high and at least 1.5 times as long as high count. Each line's height is its shortest side, projected back to the image's pixels.
+4. The `percentile` (default 5) of those heights, interpolated and rounded, at least 4, is the smallest text. The scale is `target_height` (default 12) divided by it, between `minimum_scale` (default 0.05) and 1: images never grow.
+5. The image is resized with the Mitchell filter (transparency flattened onto white) and encoded as WebP at `quality` (default 80).
+
+It keeps the original, following `skipped` with the reason, when the image has no reliable text, is already WebP with its smallest text at the target, or the WebP file would not be smaller. Otherwise it stages the WebP file, named after the original, with `metrics` for reviewers: text regions, smallest text height, scale, sizes before and after, and the settings, detector and model hashes. Without an OCR engine (see [OCR configuration](ocr.md#configuration)) the node fails.
 
 ## Forms
 
@@ -305,6 +318,7 @@ Built-in workflows are processes PaperGo ships, in the same model.
 
 | Key | Name | Scope | Parameters |
 | --- | --- | --- | --- |
+| `documents.optimize` | Optimize image storage: when an image is added (uploaded, through WebDAV or restored), or on demand, `file.optimize_image` proposes a smaller copy and an `approval` asks the `approvers` to compare it with the current file at full size; approving promotes it as a new file version, rejecting discards it. `concurrency: replace`, so a newer file cancels a waiting review. | per library | `target_height`, `min_confidence`, `percentile`, `max_analysis_dimension`, `minimum_scale`, `quality` (see [image optimization](#image-optimization)), `approvers` (people; none means the workspace's owners) |
 | `items.expire` | Unpublish expired items: every day, unpublishes the published items whose date `field` is before today | per list or library | `field` (an indexed date field), `cron` (default `0 1 * * *`), `time_zone` (default `UTC`) |
 
 How people use them:

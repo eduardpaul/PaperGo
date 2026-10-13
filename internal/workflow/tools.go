@@ -18,6 +18,15 @@ type Tools struct {
 	OCR ocr.Engine
 	// MaxFileBytes bounds the files work steps produce; default 1 GiB.
 	MaxFileBytes int64
+	// MaxPixels bounds the images work steps decode; default ocr.MaxPixels.
+	MaxPixels int64
+}
+
+func (t Tools) maxPixels() int64 {
+	if t.MaxPixels > 0 {
+		return t.MaxPixels
+	}
+	return ocr.MaxPixels
 }
 
 // ErrNoOCR fails OCR activities in a deployment without an OCR engine.

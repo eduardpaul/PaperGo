@@ -63,6 +63,39 @@ func init() {
 	})
 }
 
+func init() {
+	registerBuiltIn(&BuiltIn{
+		Key:           "documents.optimize",
+		Name:          "Optimize image storage",
+		Description:   "When an image is added, proposes a smaller WebP copy whose smallest text keeps a readable height, and asks the owners (or the approvers) to compare both before it replaces the file. A newer file cancels the waiting review. Also runs on demand.",
+		PerCollection: true,
+		ParametersSchema: mustSchema(`{"type": "object", "properties": {
+			"target_height": {"type": "number", "title": "Smallest text height", "description": "Height in pixels the smallest text keeps.", "minimum": 4, "maximum": 200, "default": 12},
+			"min_confidence": {"type": "number", "title": "Minimum confidence", "description": "Detector score a text line needs, 0 to 100.", "minimum": 0, "maximum": 100, "default": 50},
+			"percentile": {"type": "number", "title": "Height percentile", "description": "Percentile of the text heights taken as the smallest text.", "minimum": 0, "maximum": 100, "default": 5},
+			"max_analysis_dimension": {"type": "integer", "title": "Analysis size", "description": "Longest side in pixels of the copy the detector analyzes.", "minimum": 256, "maximum": 2600, "default": 2600},
+			"minimum_scale": {"type": "number", "title": "Minimum scale", "description": "How far an image may shrink.", "minimum": 0.01, "maximum": 1, "default": 0.05},
+			"quality": {"type": "integer", "title": "WebP quality", "minimum": 1, "maximum": 100, "default": 80},
+			"approvers": {"type": "array", "title": "Approvers", "description": "Who reviews the smaller file; none means the workspace's owners.", "maxItems": 50, "items": {"type": "string"}, "x-papergo": {"kind": "people", "access": "read_draft"}}
+		}}`),
+		definition: `{
+			"triggers": [{"type": "file.added", "collection_id": "{param:collection}"}, {"type": "manual", "collection_id": "{param:collection}"}],
+			"concurrency": "replace",
+			"flow": {"start": "prepare", "nodes": {
+				"prepare": {"activity": "file.optimize_image", "inputs": {"target_height": "{param:target_height}", "min_confidence": "{param:min_confidence}",
+					"percentile": "{param:percentile}", "max_analysis_dimension": "{param:max_analysis_dimension}", "minimum_scale": "{param:minimum_scale}", "quality": "{param:quality}"},
+					"next": {"candidate": "review"}},
+				"review": {"activity": "approval", "inputs": {"title": "Review a smaller file for {item:name}",
+					"description": "The proposed WebP file is shown beside the current file at full size. Approve if its smallest text is still readable.",
+					"assignees": "{param:approvers}", "review": {"type": "file.compare", "staged_file_id": "{step:prepare.staged_file_id}"}},
+					"next": {"approved": "promote", "rejected": "discard"}},
+				"promote": {"activity": "file.promote", "inputs": {"staged_file_id": "{step:prepare.staged_file_id}"}},
+				"discard": {"activity": "file.discard", "inputs": {"staged_file_id": "{step:prepare.staged_file_id}"}}
+			}}
+		}`,
+	})
+}
+
 var paramPattern = regexp.MustCompile(`\{param:([a-z][a-z0-9_]*)\}`)
 
 // fill replaces {param:x} in the release definition. A string that is

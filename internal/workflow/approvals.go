@@ -38,7 +38,7 @@ func init() {
 	register(&Activity{Key: "approval", Kind: "flow", Ports: []string{Approved, Rejected}, Description: "Asks the assignees to approve or reject, and waits for the first decision. The run holds no worker while it waits. An optional form collects input with the decision, and review shows a staged file of this run.",
 		InputSchema: inputs(`"title": {"type": "string", "title": "Title"},
 			"description": {"type": "string", "title": "Description"},
-			"assignees": {"type": "array", "title": "Assignees", "description": "Who may decide; defaults to the workspace's owners.", "items": {"type": "string"}, "maxItems": 50, "x-papergo": {"kind": "people", "access": "read_draft"}},
+			"assignees": {"type": "array", "title": "Assignees", "description": "Who may decide; none means the workspace's owners.", "items": {"type": "string"}, "maxItems": 50, "x-papergo": {"kind": "people", "access": "read_draft"}},
 			"input_schema": {"type": "object", "title": "Decision form", "description": "A form whose values come with the decision, as {step:node.input...}."},
 			"review": {"type": "object", "title": "Review", "description": "A staged file to review: type file.compare (beside the current file) or file.preview, and staged_file_id.", "properties": {"type": {"type": "string", "enum": ["file.compare", "file.preview"]}, "staged_file_id": {"type": "string"}}}`, "title"),
 		OutputSchema: mustSchema(`{"type": "object", "properties": {"request_id": {"type": "string"}, "decision": {"type": "string", "enum": ["approved", "rejected"]}, "decided_by": {"type": "string"}, "comment": {"type": "string"}, "input": {"type": "object"}}}`),
@@ -89,11 +89,16 @@ func runApproval(e *env, in map[string]any) (outcome, error) {
 		if assignees, err = e.strings(v); err != nil {
 			return outcome{}, err
 		}
-	} else if assignees, err = e.t.WorkspaceManagers(e.ctx, e.workspaceID); err != nil {
-		return outcome{}, err
+	}
+	assignees = slices.DeleteFunc(assignees, func(s string) bool { return strings.TrimSpace(s) == "" })
+	// No assignees, or a token or parameter that gives none, means the owners.
+	if len(assignees) == 0 {
+		if assignees, err = e.t.WorkspaceManagers(e.ctx, e.workspaceID); err != nil {
+			return outcome{}, err
+		}
 	}
 	slices.Sort(assignees)
-	assignees = slices.Compact(slices.DeleteFunc(assignees, func(s string) bool { return strings.TrimSpace(s) == "" }))
+	assignees = slices.Compact(assignees)
 	if len(assignees) == 0 {
 		return outcome{}, errors.New("no one can decide: give assignees, or add owners to the workspace")
 	}

@@ -174,6 +174,36 @@ func TestDetect(t *testing.T) {
 	}
 }
 
+func TestDetectMaxDimension(t *testing.T) {
+	e := testEngine(t)
+	// A tall 1000×3000 page: the default preview bounds its area, a
+	// requested dimension only its longest side.
+	lines := make([]string, 0, 60)
+	for len(lines) < 60 {
+		lines = append(lines, invoice...)
+	}
+	img := page(t, lines, 24, false)
+	d, err := e.Detect(context.Background(), img, ocr.DetectOptions{MinScore: 0.5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	full, err := e.Detect(context.Background(), img, ocr.DetectOptions{MinScore: 0.5, MaxDimension: ocr.MaxDetectionDimension})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if full.Height != ocr.MaxDetectionDimension || d.Height >= full.Height {
+		t.Errorf("previews %dx%d (default) and %dx%d (requested)", d.Width, d.Height, full.Width, full.Height)
+	}
+	if len(full.Regions) != len(lines) {
+		t.Errorf("detected %d of %d lines on the larger preview", len(full.Regions), len(lines))
+	}
+	for _, bad := range []int{100, ocr.MaxDetectionDimension + 1} {
+		if _, err = e.Detect(context.Background(), img, ocr.DetectOptions{MaxDimension: bad}); err == nil {
+			t.Errorf("dimension %d is accepted", bad)
+		}
+	}
+}
+
 func TestBlankPage(t *testing.T) {
 	e := testEngine(t)
 	blank := image.NewGray(image.Rect(0, 0, 640, 480))

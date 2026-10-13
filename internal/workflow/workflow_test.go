@@ -133,6 +133,49 @@ func TestBuiltInFill(t *testing.T) {
 	}
 }
 
+func TestBuiltInsAreValid(t *testing.T) {
+	for _, b := range BuiltIns() {
+		if err := validateSchema(b.ParametersSchema, "parameters", 0, true); err != nil {
+			t.Errorf("%s: %v", b.Key, err)
+		}
+		params, err := b.params(map[string]any{"field": "expires"}, "list-1")
+		if err != nil && b.Key != "items.expire" {
+			params, err = b.params(map[string]any{}, "list-1")
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", b.Key, err)
+		}
+		raw, err := b.fill(params)
+		if err != nil {
+			t.Fatalf("%s: %v", b.Key, err)
+		}
+		def, err := ParseDefinition(raw)
+		if err == nil {
+			err = def.validate()
+		}
+		if err != nil {
+			t.Errorf("%s: %v\n%s", b.Key, err, raw)
+		}
+	}
+	b := builtins["documents.optimize"]
+	params, err := b.params(map[string]any{"target_height": 16}, "lib-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := b.fill(params)
+	def, _ := ParseDefinition(raw)
+	in := def.Flow.Nodes["prepare"].Inputs
+	if in["target_height"] != json.Number("16") && in["target_height"] != 16.0 || def.Concurrency != ConcurrencyReplace || def.Triggers[0].CollectionID != "lib-1" {
+		t.Errorf("filled: %s", raw)
+	}
+	if def.Flow.Nodes["review"].Inputs["assignees"] != nil {
+		t.Errorf("no approvers fills %v", def.Flow.Nodes["review"].Inputs["assignees"])
+	}
+	if _, err = b.params(map[string]any{"quality": 101}, "lib-1"); err == nil {
+		t.Error("quality 101 is accepted")
+	}
+}
+
 func TestCompare(t *testing.T) {
 	for _, tc := range []struct {
 		l, op, r any

@@ -15,6 +15,7 @@ import { QueryFeedback } from '@/features/admin/common';
 import { WorkflowEditor } from '@/features/workflows/workflow-editor';
 import { CopyBuiltIn, LaunchWorkflow, WorkflowVersions } from '@/features/workflows/workflow-tools';
 import type { WorkflowDefinition } from '@/features/workflows/model';
+import { typedParameters } from '@/features/workflows/builtins';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/settings/workflows')({ component: WorkflowsPage });
 
@@ -268,10 +269,11 @@ function BuiltInParameters({
     const initial: Record<string, string> = {};
     for (const [key, spec] of Object.entries(properties)) {
       const current = existing?.parameters?.[key] ?? spec.default ?? '';
-      initial[key] = current == null ? '' : String(current);
+      initial[key] = current == null ? '' : Array.isArray(current) ? current.join(', ') : String(current);
     }
     return initial;
   });
+  const typed = typedParameters(properties, parameters);
   const save = useMutation({
     mutationFn: (enabled: boolean) =>
       api(`/v1/workspaces/${workspaceId}/workflow-builtins/${builtin.key}`, {
@@ -280,7 +282,7 @@ function BuiltInParameters({
         body: {
           collection_id: builtin.per_collection ? collectionId : undefined,
           enabled,
-          parameters,
+          parameters: typed,
         },
       }),
     onSuccess: async () => {
@@ -294,6 +296,7 @@ function BuiltInParameters({
         {Object.entries(properties).map(([key, spec]) => (
           <label key={key} className="grid gap-1 text-[13px]">
             <span>{spec.title || key}</span>
+            {spec.description && <span className="text-xs text-muted">{spec.description}</span>}
             <Input
               disabled={!canManage}
               value={parameters[key] ?? ''}
@@ -332,7 +335,7 @@ function BuiltInParameters({
           workspaceId={workspaceId}
           builtinKey={builtin.key}
           collectionId={builtin.per_collection ? collectionId : undefined}
-          parameters={parameters}
+          parameters={typed}
           onClose={() => setCopying(false)}
           onCopied={onChanged}
         />

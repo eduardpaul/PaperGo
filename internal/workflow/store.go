@@ -785,11 +785,11 @@ func overlaps(a, b []string) bool {
 	return false
 }
 
-// activeRuns returns the queued or running runs of a workflow that work on
-// any of items, as primary item or selection member. Recorded statuses lag
-// behind the runner, so active confirms them.
+// activeRuns returns the queued, running or waiting runs of a workflow that
+// work on any of items, as primary item or selection member. Recorded
+// statuses lag behind the runner, so active confirms them.
 func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []string, active ActiveFunc) ([]string, error) {
-	rows, err := t.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(workflowID), workflowrun.LiveStatusIn("queued", "running"),
+	rows, err := t.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(workflowID), workflowrun.LiveStatusIn("queued", "running", "waiting"),
 		workflowrun.Or(workflowrun.ItemIDIn(items...), func(s *entsql.Selector) {
 			s.Where(entsql.In(s.C(workflowrun.FieldID), entsql.Select(workflowrunitem.FieldRunID).From(entsql.Table(workflowrunitem.Table)).Where(entsql.In(workflowrunitem.FieldItemID, anyStrings(items)...))))
 		})).IDs(ctx)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"papergo/internal/database"
 	"papergo/internal/dms"
 	"papergo/internal/model"
+	"papergo/internal/storage"
 	"papergo/internal/testutil"
 	"papergo/internal/workflow"
 )
@@ -31,6 +33,8 @@ type fixture struct {
 	r    *Runner
 	ws   *ent.Resource
 	list *ent.Resource
+	// store holds file content; workflows read and write it.
+	store storage.Store
 }
 
 var ctx = context.Background()
@@ -49,8 +53,11 @@ func open(t testing.TB, path, node string) *fixture {
 		db = testutil.DatabaseAt(t, path)
 	}
 	f := &fixture{path: path, db: db, dms: dms.NewService(db.SQL)}
-	f.wf = &workflow.Service{DMS: f.dms}
 	var err error
+	if f.store, err = storage.NewLocal(filepath.Join(filepath.Dir(path), "blobs")); err != nil {
+		t.Fatal(err)
+	}
+	f.wf = &workflow.Service{DMS: f.dms, Tools: workflow.Tools{Storage: f.store, OCR: textEngine{}}}
 	f.r, err = New(Config{DatabasePath: path, NodeID: node, PollInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *"}, db.SQL, f.dms, f.wf)
 	if err != nil {
 		t.Fatal(err)
@@ -302,8 +309,12 @@ func TestBuiltInExpiryOnSchedule(t *testing.T) {
 		t.Fatalf("copy: %+v %v", copied, err)
 	}
 	states, err := f.wf.ListBuiltIns(ctx, "alice", f.ws.ID)
-	if err != nil || len(states) == 0 || len(states[0].Workflows) != 1 || states[0].Workflows[0].Enabled {
-		t.Fatalf("built-in after copy: %+v %v", states, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(states, func(s workflow.BuiltInState) bool { return s.Key == "items.expire" })
+	if i < 0 || len(states[i].Workflows) != 1 || states[i].Workflows[0].Enabled {
+		t.Fatalf("built-in after copy: %+v", states)
 	}
 }
 

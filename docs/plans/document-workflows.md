@@ -282,6 +282,8 @@ Parity tests: port the cases of PaperDotNet's `sdk/typescript/test/scripts.test.
 
 Each phase ships with its tests, OpenAPI contract and docs, and changes `migrations/20261007000100_schema.sql` in place ([AGENTS.md](../../AGENTS.md)).
 
+Status: phase 1 is done. Phase 2 is done except the container image with ONNX Runtime and the models. Optimization keeps the original as an earlier file version (decision 1 below is still open).
+
 1. **Engine parts:**
    - work steps and the processing gate;
    - `staged_files` and collector references;

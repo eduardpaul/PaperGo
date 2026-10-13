@@ -14,6 +14,7 @@ import (
 	"papergo/internal/database"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
+	"papergo/internal/ocr/paddle"
 	"papergo/internal/runner"
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
@@ -117,7 +118,17 @@ func run(log *slog.Logger) error {
 	if err = service.RegisterPortability(store); err != nil {
 		return err
 	}
-	workflows := &workflow.Service{DMS: service}
+	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload}
+	if c.OCRLibrary != "" {
+		engine, e := paddle.New(paddle.Config{Library: c.OCRLibrary, Models: c.OCRModels, Threads: c.OCRThreads})
+		if e != nil {
+			return fmt.Errorf("configure OCR: %w", e)
+		}
+		defer engine.Close()
+		tools.OCR = engine
+		log.Info("ocr enabled", "engine", engine.Info().Engine, "library", c.OCRLibrary, "models", c.OCRModels)
+	}
+	workflows := &workflow.Service{DMS: service, Tools: tools}
 	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, NodeID: c.NodeID, Retention: c.RunRetention, Logger: log}, db.SQL, service, workflows)
 	if err != nil {
 		return err

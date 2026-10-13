@@ -65,7 +65,16 @@ func (d Detection) Scale(source image.Rectangle) float64 {
 type DetectOptions struct {
 	// MinScore drops regions with a lower Score, 0 to 1.
 	MinScore float64
+	// MaxDimension, when set, bounds the longest side of the preview the
+	// detector analyzes instead of the engine's default, which also bounds
+	// its area: 256 to MaxDetectionDimension. An image at most this large
+	// is analyzed at its own size.
+	MaxDimension int
 }
+
+// MaxDetectionDimension is the largest preview DetectOptions.MaxDimension
+// can ask for.
+const MaxDetectionDimension = 2600
 
 // Word is a word of a recognized line. Scripts without spaces, such as
 // Chinese, have one word per character.
