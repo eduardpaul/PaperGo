@@ -20,7 +20,7 @@ import { api, continuation } from '@/api/http';
 import { batch } from '@/api/batch';
 import { listingRequest, type ApiCall } from '@/api/requests';
 import { contentTypesQuery, fieldsQuery, keys, resourceQuery, viewsQuery } from '@/api/queries';
-import type { Page, Resource } from '@/api/types';
+import type { Page, QuerySpec, Resource } from '@/api/types';
 import { Page as Screen, PageHeader } from '@/components/page';
 import { FormDialog } from '@/components/form-dialog';
 import { TagInput } from '@/components/tag-input';
@@ -43,6 +43,7 @@ import { FieldEditor } from '@/features/fields/editor';
 import { useValueNames } from '@/features/fields/names';
 import { valuesPatch } from '@/features/fields/values';
 import { ConfirmDialog } from '@/features/settings/section';
+import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
 import { can } from './access';
 import { CollectionIcon } from './collection-icon';
@@ -116,9 +117,11 @@ export function CollectionPage({
     .filter((key) => columnChoices.some((choice) => choice.key === key));
   const pageColumns = chosenColumns?.length ? [...new Set(['$name', ...chosenColumns])] : undefined;
   const request = listingRequest(listId, { folder: search.folder, view, q: search.q, sort, columns: pageColumns });
+  // Boards and calendars load their own rows: per column, per month.
+  const ownRows = !!view && (layout === 'board' || layout === 'calendar');
   const listing = useQuery({
     queryKey: ['resources', listId, 'rows', request],
-    enabled: !!collection.data && views.isSuccess && (!search.sort || fields.isSuccess),
+    enabled: !!collection.data && views.isSuccess && (!search.sort || fields.isSuccess) && !ownRows,
     queryFn: () => loadListing(request),
   });
   const [snapshot, setSnapshot] = useState(listing.data);
@@ -126,15 +129,18 @@ export function CollectionPage({
   const [next, setNext] = useState<string | null>(listing.data?.next ?? null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<Map<string, Resource>>(new Map());
+  // Everything the listing matches, beyond the loaded rows (for bulk edits).
+  const [allMatching, setAllMatching] = useState(false);
   if (listing.data !== snapshot) {
     setSnapshot(listing.data);
     setMore([]);
     setNext(listing.data?.next ?? null);
     setSelected(new Map());
+    setAllMatching(false);
   }
   const [bulkEditing, setBulkEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [operation, setOperation] = useState('');
+  const [operations, setOperations] = useState<string[]>([]);
   const [creating, setCreating] = useState<'item' | 'folder' | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -205,6 +211,7 @@ export function CollectionPage({
   }
 
   function toggle(resource: Resource, checked: boolean) {
+    setAllMatching(false);
     setSelected((current) => {
       const next = new Map(current);
       if (checked) next.set(resource.id, resource);
@@ -237,6 +244,8 @@ export function CollectionPage({
   const canEdit = can(current, 'write');
   const canManage = can(current, 'manage');
   const items = [...selected.values()].filter((resource) => resource.kind === 'item');
+  const matching = matchingQuery(request, listId);
+  const allLoadedSelected = rows.length > 0 && selected.size === rows.length;
   const startUpload = () => fileInput.current?.click();
   const uploadFiles = (files: FileList | null | undefined) => {
     const list = [...(files ?? [])];
@@ -410,14 +419,31 @@ export function CollectionPage({
 
       {selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-[13px]">
-          <span className="font-medium">{selected.size} selected</span>
-          <Button size="sm" disabled={items.length === 0} onClick={() => setBulkEditing(true)}>
+          <span className="font-medium">
+            {allMatching ? <MatchingCount collectionId={listId} query={matching} /> : `${selected.size} selected`}
+          </span>
+          {!allMatching && allLoadedSelected && next && canEdit && (
+            <Button size="sm" variant="ghost" className="text-accent" onClick={() => setAllMatching(true)}>
+              Select all <MatchingCount collectionId={listId} query={matching} bare />
+            </Button>
+          )}
+          <Button size="sm" disabled={!allMatching && items.length === 0} onClick={() => setBulkEditing(true)}>
             <Pencil /> Edit a field
           </Button>
-          <Button size="sm" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)}>
-            <Trash2 /> Delete
-          </Button>
-          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelected(new Map())}>
+          {!allMatching && (
+            <Button size="sm" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)}>
+              <Trash2 /> Delete
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            onClick={() => {
+              setSelected(new Map());
+              setAllMatching(false);
+            }}
+          >
             <X /> Clear selection
           </Button>
         </div>
@@ -446,7 +472,23 @@ export function CollectionPage({
             Drop to upload to {search.folder ? (crumbs.data?.at(-1)?.name ?? 'this folder') : current.name}
           </div>
         )}
-        {listing.isPending ? (
+        {ownRows && layout === 'board' ? (
+          <ItemsBoard
+            collectionId={listId}
+            view={view}
+            fields={fieldList.filter((field) => view.columns?.includes(field.key))}
+            groupBy={fieldList.find((field) => field.key === view.query?.group_by)}
+            readOnly={!canEdit}
+            onOpen={open}
+          />
+        ) : ownRows ? (
+          <ItemsCalendar
+            collectionId={listId}
+            view={view}
+            dateField={[...systemFields, ...fieldList].find((field) => field.key === view.query?.group_by)}
+            onOpen={open}
+          />
+        ) : listing.isPending ? (
           <div className="space-y-2">
             <Skeleton className="h-10" />
             <Skeleton className="h-10" />
@@ -478,21 +520,6 @@ export function CollectionPage({
               )}
             </EmptyState>
           </Card>
-        ) : layout === 'board' ? (
-          <ItemsBoard
-            items={rows}
-            fields={fieldList.filter((field) => view?.columns?.includes(field.key))}
-            groupBy={fieldList.find((field) => field.key === view?.query?.group_by)}
-            readOnly={!canEdit}
-            names={names}
-            onOpen={open}
-          />
-        ) : layout === 'calendar' ? (
-          <ItemsCalendar
-            items={rows}
-            dateField={[...systemFields, ...fieldList].find((field) => field.key === view?.query?.group_by)}
-            onOpen={open}
-          />
         ) : layout === 'gallery' ? (
           <ItemsGallery
             items={rows}
@@ -514,12 +541,15 @@ export function CollectionPage({
             sortable={sortable}
             onSort={(next) => onSearch({ sort: sortParam(next) }, true)}
             onToggle={toggle}
-            onToggleAll={(checked) => setSelected(new Map(checked ? rows.map((row) => [row.id, row]) : []))}
+            onToggleAll={(checked) => {
+              setAllMatching(false);
+              setSelected(new Map(checked ? rows.map((row) => [row.id, row]) : []));
+            }}
             onOpen={open}
           />
         )}
       </div>
-      {rows.length > 0 && (
+      {rows.length > 0 && !ownRows && (
         <div className="mt-3 flex items-center gap-3 text-xs text-muted">
           <span>
             {listing.data?.total !== undefined ? `${rows.length} of ${listing.data.total}` : `${rows.length}${next ? '+' : ''}`}{' '}
@@ -538,14 +568,26 @@ export function CollectionPage({
           )}
         </div>
       )}
-      {operation && <OperationProgress id={operation} label="Field update on selected items" />}
+      {operations.map((id, index) => (
+        <OperationProgress
+          key={id}
+          id={id}
+          label={`Field update${operations.length > 1 ? ` (part ${index + 1} of ${operations.length})` : ''}`}
+        />
+      ))}
       {bulkEditing && (
         <BulkEditDialog
           collectionId={listId}
-          ids={items.map((item) => item.id)}
+          target={allMatching ? { query: matching } : { ids: items.map((item) => item.id) }}
+          count={allMatching ? <MatchingCount collectionId={listId} query={matching} bare /> : undefined}
           fields={fieldList}
           onClose={() => setBulkEditing(false)}
-          onStarted={setOperation}
+          onStarted={(ids) => {
+            toast.success('The field update runs in the background. Its progress shows below the list.');
+            setOperations(ids);
+            setSelected(new Map());
+            setAllMatching(false);
+          }}
         />
       )}
       <ConfirmDialog
@@ -773,4 +815,32 @@ async function folderCrumbs(folderId: string, collectionId: string): Promise<Res
     id = loaded.parent_id;
   }
   return chain;
+}
+
+/** The query that matches what the listing shows: a view's or sorted query, or the open folder's items. */
+function matchingQuery(request: ApiCall, collectionId: string): QuerySpec {
+  if (request.method === 'POST') return ((request.body as { query?: QuerySpec }).query ?? {}) as QuerySpec;
+  const folder = request.path.split('/')[3];
+  const q = request.query?.q;
+  return { parent_id: folder || collectionId, ...(typeof q === 'string' && q ? { search: q } : {}) };
+}
+
+/** "2,490 items" matching a query, counted by the API when first shown. */
+function MatchingCount({ collectionId, query, bare }: { collectionId: string; query: QuerySpec; bare?: boolean }) {
+  const format = useFormat();
+  const { sort: _sort, group_by: _group, ...counted } = query;
+  const total = useQuery({
+    queryKey: ['resources', collectionId, 'matching-count', counted],
+    queryFn: async () =>
+      (
+        await api<Page<Resource>>(`/v1/resources/${collectionId}/query`, {
+          method: 'POST',
+          query: { $top: 1 },
+          body: { include_total: true, query: counted, select: [] },
+        })
+      ).data.total ?? 0,
+  });
+  const count = total.data === undefined ? 'all matching items' : `${format.number(total.data)} ${total.data === 1 ? 'item' : 'items'}`;
+  if (bare) return <>{total.data === undefined ? 'all matching items' : count}</>;
+  return <>{total.data === undefined ? 'All matching items selected' : `All ${count} selected`}</>;
 }

@@ -21,7 +21,7 @@ export function FormDialog({
   children,
 }: {
   open: boolean;
-  title: string;
+  title: ReactNode;
   description?: string;
   submitLabel: string;
   pending?: boolean;

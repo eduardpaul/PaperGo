@@ -137,18 +137,24 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
    workspace.
 9. **The tag vocabulary takes almost a second** at 10,000 items, so tag suggestions lag while typing.
 
+## Done since the test
+
+1. **Board and calendar from the API.** Board columns count with `query/groups` (Open 2,490, Paid 2,487, Overdue
+   2,487, Disputed 2,537: all 10,001 items) and load 20 cards per column with Load more. The calendar asks for the
+   visible weeks only (date fields by day, moments widened by the largest time zone offsets), shows "279 items this
+   month", folds days with more than four items, and lists undated items separately.
+2. **Searchable pickers.** Lookup fields search the looked-up list by name as people type (`$name contains`, now
+   case-insensitive in the API, 20 at a time, "More items match" when there are more); "1555" finds Umbrella Software
+   1555 among 2,000 suppliers. The current value shows by name wherever it sits. Person fields use the same picker.
+3. **Bulk edit on all matching items.** After selecting every loaded row, "Select all 2,490 items" selects everything
+   the view (or folder and search) matches, and Edit a field sends that query to `bulk-update`. Selected ids go in
+   groups of 50 under one `or`, at most 1,550 per request. Updating 2,490 items took 2 minutes: the operation runs one
+   item per transaction (item 12 below).
+
 ## Open work
 
 Ordered by how much it helps people.
 
-1. **Board counts and calendar from the API.** Board columns take their counts from `query/groups` and load their own
-   pages per column; the calendar asks for the visible month (`due` between the first and last day) instead of
-   filtering loaded rows.
-2. **Searchable pickers.** Lookup, person and term pickers search as you type (`search` on the target list, `$top`
-   20) and show the chosen value's name even when it is not on the first page.
-3. **Bulk actions on all matching items.** "Select all 2,490 matching items" after selecting the page, and a bulk
-   update that takes the view's filter instead of ids (an operation, with progress in the Background work page).
-   Until then the UI sends ids in chunks of 50.
 4. **Prefix and recursive search (API).** Match the last word as a prefix (FTS5 `"acm"*`) and let a library search the
    whole library from any folder, showing each hit's folder.
 5. **Cheap totals (API).** Count without the per-row permission check when nothing in the collection has unique
@@ -161,3 +167,5 @@ Ordered by how much it helps people.
 10. **Faster tag vocabulary.** Keep per-collection tag counts current on write instead of counting every tagged row.
 11. **Faster ingest.** Let the audit hook use the created row instead of reading it back and authorize a batch's parent
     once; store fewer index entries per field value. Both matter for imports and migrations, not for daily use.
+12. **Faster bulk updates.** A bulk update writes one item per transaction, about 20 items/s (2 minutes for 2,490).
+    Update a batch of items per transaction, keeping per-item failures and restart safety.

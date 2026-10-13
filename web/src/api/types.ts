@@ -242,6 +242,13 @@ export interface SmartFolderEntry {
   item: Resource;
 }
 
+/** A value of a query's grouping field and how many matching items hold it. */
+export interface QueryGroup {
+  value: unknown;
+  label?: string;
+  count: number;
+}
+
 export interface SmartFolderGroup {
   value: unknown;
   label: string;

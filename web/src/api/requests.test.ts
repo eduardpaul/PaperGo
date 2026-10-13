@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { documentUploadRequest, downloadContentPath, listingRequest, replaceContentRequest, searchRequest, smartFolderQueryRequest } from './requests';
+import { bulkUpdateRequests, documentUploadRequest, downloadContentPath, listingRequest, replaceContentRequest, searchRequest, smartFolderQueryRequest, viewGroupsRequest, viewRowsRequest } from './requests';
 
 describe('listing and search requests', () => {
   it('browses the open folder with an optional search when no view or sort applies', () => {
@@ -85,5 +85,48 @@ describe('document transfer requests', () => {
     });
     expect(downloadContentPath('item')).toBe('/v1/items/item/content');
     expect(downloadContentPath('item', 'blob')).toBe('/v1/items/item/content?blob_id=blob');
+  });
+});
+
+describe('bulk updates', () => {
+  it('sends up to 1550 selected ids per request as groups of 50', () => {
+    const ids = Array.from({ length: 1600 }, (_, i) => `id${i}`);
+    const calls = bulkUpdateRequests('col', { ids }, { status: 'Paid' });
+    expect(calls).toHaveLength(2);
+    const first = calls[0].body as { query: { filter: { or: { value: string[] }[] } }; values: unknown };
+    expect(first.query.filter.or).toHaveLength(31);
+    expect(first.query.filter.or.every((part) => part.value.length === 50)).toBe(true);
+    expect(first.values).toEqual({ status: 'Paid' });
+    expect(calls[1].body).toEqual({ query: { filter: { field: '$id', op: 'in', value: ids.slice(1550, 1600) } }, values: { status: 'Paid' } });
+  });
+
+  it('updates everything a view matches without its sort or grouping', () => {
+    const query = { filter: { field: 'status', op: 'eq', value: 'Open' }, sort: [{ field: 'due', direction: 'asc' }], group_by: 'status', search: 'acme' };
+    expect(bulkUpdateRequests('col', { query }, { status: 'Paid' })).toEqual([
+      {
+        path: '/v1/resources/col/bulk-update',
+        method: 'POST',
+        body: { query: { filter: { field: 'status', op: 'eq', value: 'Open' }, search: 'acme' }, values: { status: 'Paid' } },
+      },
+    ]);
+  });
+});
+
+describe('board and calendar requests', () => {
+  it('narrows a view by one more condition and counts its groups', () => {
+    const view = { columns: ['amount'], query: { filter: { field: 'amount', op: 'gt', value: 5 }, group_by: 'status', sort: [{ field: 'due', direction: 'asc' }] } };
+    expect(viewRowsRequest('col', view, { field: 'status', op: 'eq', value: 'Open' }, 20)).toEqual({
+      path: '/v1/resources/col/query',
+      method: 'POST',
+      query: { $top: 20 },
+      body: {
+        query: {
+          filter: { and: [view.query.filter, { field: 'status', op: 'eq', value: 'Open' }] },
+          sort: [{ field: 'due', direction: 'asc' }],
+        },
+        select: ['$name', 'amount', 'status'],
+      },
+    });
+    expect(viewGroupsRequest('col', view).body).toEqual({ query: { filter: view.query.filter, group_by: 'status' } });
   });
 });

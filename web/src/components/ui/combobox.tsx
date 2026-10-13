@@ -27,6 +27,7 @@ export function Combobox({
   onSearch,
   onChange,
   onCreate,
+  footer,
   disabled,
   'aria-invalid': invalid,
   'aria-labelledby': labelledBy,
@@ -42,6 +43,8 @@ export function Combobox({
   onChange: (values: ComboboxOption[]) => void;
   /** Offers "Add …" for text that matches no option (open term sets, keywords). */
   onCreate?: (text: string) => void;
+  /** A note under the options, such as that more match than are shown. */
+  footer?: ReactNode;
   disabled?: boolean;
   'aria-invalid'?: boolean;
   /** The id of the visible label (a <label for> cannot name a custom combobox). */
@@ -165,6 +168,7 @@ export function Combobox({
               </CommandPrimitive.Item>
             )}
           </CommandPrimitive.List>
+          {footer && <div className="border-t px-3 py-1.5 text-xs text-muted">{footer}</div>}
         </CommandPrimitive>
       </PopoverContent>
     </Popover>

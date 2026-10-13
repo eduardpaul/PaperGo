@@ -1,5 +1,5 @@
 import { stringifyJSON } from './json';
-import type { QuerySpec } from './types';
+import type { FilterExpr, QuerySpec } from './types';
 
 /** Shapes of `/v1` calls the screens share. Tests assert these paths and bodies. */
 
@@ -52,6 +52,82 @@ export function listingRequest(collectionId: string, options: ListingOptions): A
     query: { $top: 50 },
     body: select ? { include_total: true, query, select } : { include_total: true, query },
   };
+}
+
+/** Both conditions; either may be absent. */
+export function andFilter(base: FilterExpr | undefined, extra: FilterExpr | undefined): FilterExpr | undefined {
+  if (!base) return extra;
+  if (!extra) return base;
+  return { and: [base, extra] };
+}
+
+type ViewLike = { query?: QuerySpec; columns?: string[] | null };
+
+function viewSelect(view: ViewLike): string[] | undefined {
+  const columns = view.columns?.filter(Boolean) ?? [];
+  return columns.length ? [...new Set(['$name', ...columns, ...(view.query?.group_by ? [view.query.group_by] : [])])] : undefined;
+}
+
+/**
+ * Rows of a view narrowed by one more condition (a board column, a calendar month). Boards and calendars ask for
+ * their own rows so they show the whole collection, not the rows a table happened to load.
+ */
+export function viewRowsRequest(collectionId: string, view: ViewLike, extra: FilterExpr | undefined, top = 50): ApiCall {
+  const { group_by: _group, ...base } = view.query ?? {};
+  const query: QuerySpec = { ...base };
+  const filter = andFilter(base.filter, extra);
+  if (filter) query.filter = filter;
+  const select = viewSelect(view);
+  return {
+    path: `/v1/resources/${collectionId}/query`,
+    method: 'POST',
+    query: { $top: top },
+    body: select ? { query, select } : { query },
+  };
+}
+
+/** How many items of a view fall in each value of its grouping field (board column counts). */
+export function viewGroupsRequest(collectionId: string, view: ViewLike): ApiCall {
+  const { sort: _sort, ...query } = view.query ?? {};
+  return { path: `/v1/resources/${collectionId}/query/groups`, method: 'POST', query: { $top: 500 }, body: { query } };
+}
+
+/** Items of a looked-up list whose name contains the typed text (any case), by name. */
+export function lookupOptionsRequest(containerId: string, text: string): ApiCall {
+  const query: QuerySpec = { sort: [{ field: '$name', direction: 'asc' }] };
+  if (text.trim()) query.filter = { field: '$name', op: 'contains', value: text.trim() };
+  return { path: `/v1/resources/${containerId}/query`, method: 'POST', query: { $top: 20 }, body: { query, select: [] } };
+}
+
+/** The API takes at most 50 values per `in` and 32 filter nodes, so larger selections go in several requests. */
+export const bulkIdsPerRequest = 31 * 50;
+
+/**
+ * Sets fields on many items in the background: on the selected ids (in chunks the API accepts) or on everything
+ * a query matches.
+ */
+export function bulkUpdateRequests(
+  collectionId: string,
+  target: { ids: string[] } | { query: QuerySpec },
+  values: Record<string, unknown>,
+): ApiCall[] {
+  const call = (query: QuerySpec): ApiCall => ({
+    path: `/v1/resources/${collectionId}/bulk-update`,
+    method: 'POST',
+    body: { query, values },
+  });
+  if ('query' in target) {
+    const { sort: _sort, group_by: _group, ...query } = target.query;
+    return [call(query)];
+  }
+  const calls: ApiCall[] = [];
+  for (let start = 0; start < target.ids.length; start += bulkIdsPerRequest) {
+    const ids = target.ids.slice(start, start + bulkIdsPerRequest);
+    const parts: FilterExpr[] = [];
+    for (let at = 0; at < ids.length; at += 50) parts.push({ field: '$id', op: 'in', value: ids.slice(at, at + 50) });
+    calls.push(call({ filter: parts.length === 1 ? parts[0] : { or: parts } }));
+  }
+  return calls;
 }
 
 export function searchRequest(q: string, workspaceId: string): ApiCall {

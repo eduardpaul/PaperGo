@@ -295,7 +295,8 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 			if d.Type != "text" && d.Type != "note" && d.Type != "email" && d.Type != "url" {
 				return "", nil, invalid("contains requires text")
 			}
-			compare = "instr(" + col + ",?)>0"
+			// Case-insensitive, as people type names in pickers and filters.
+			compare = "instr(unicode_lower(" + col + "),unicode_lower(?))>0"
 		} else {
 			operator := ops[op]
 			if operator == "" {

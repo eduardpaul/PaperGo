@@ -1,10 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { api } from '@/api/http';
 import { useApiPages } from '@/api/pages';
-import type { FieldDefinition } from '@/api/types';
+import { bulkUpdateRequests } from '@/api/requests';
+import type { FieldDefinition, QuerySpec } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Alert } from '@/components/ui/feedback';
+import { problemMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/button';
 import { SettingsSection } from '@/features/settings/section';
 import { Label } from '@/components/ui/input';
@@ -17,46 +20,53 @@ import type { Operation } from '@/features/admin/operation-progress';
 
 export function BulkEditDialog({
   collectionId,
-  ids,
+  target,
+  count,
   fields,
   onClose,
   onStarted,
 }: {
   collectionId: string;
-  ids: string[];
+  /** The selected items, or everything a query matches. */
+  target: { ids: string[] } | { query: QuerySpec };
+  /** How many items the query matches, as people should read it. */
+  count?: ReactNode;
   fields: FieldDefinition[];
   onClose: () => void;
-  onStarted: (id: string) => void;
+  onStarted: (operationIds: string[]) => void;
 }) {
   const client = useQueryClient();
   const [key, setKey] = useState(fields[0]?.key ?? '');
   const [value, setValue] = useState<unknown>(null);
   const field = fields.find((field) => field.key === key);
   const apply = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const patch = valuesPatch([field!], {}, { [key]: value }) ?? { [key]: null };
-      return api<Operation>(`/v1/resources/${collectionId}/bulk-update`, {
-        method: 'POST',
-        body: { query: { filter: { field: '$id', op: 'in', value: ids } }, values: patch },
-      });
+      const started: string[] = [];
+      for (const call of bulkUpdateRequests(collectionId, target, patch)) {
+        started.push((await api<Operation>(call.path, { method: call.method, body: call.body })).data.id);
+      }
+      return started;
     },
-    onSuccess: (result) => {
+    onSuccess: (started) => {
       void client.invalidateQueries({ queryKey: ['operations', collectionId, 'list'] });
-      onStarted(result.data.id);
+      onStarted(started);
       onClose();
     },
   });
+  const all = 'query' in target;
   return (
     <FormDialog
       open
-      title={`Edit ${ids.length} selected items`}
-      description="Set one field on every selected item in the background. Leave it empty to clear it. Each failure is reported separately."
-      submitLabel="Apply to selected items"
+      title={all ? <>Edit {count ?? 'all matching items'}</> : `Edit ${target.ids.length} selected items`}
+      description={`Set one field on every ${all ? 'matching' : 'selected'} item in the background. Leave it empty to clear it. Each failure is reported separately.`}
+      submitLabel={all ? 'Apply to all matching items' : 'Apply to selected items'}
       pending={apply.isPending}
       submitDisabled={!field}
       onClose={onClose}
       onSubmit={() => apply.mutate()}
     >
+      {apply.isError && <Alert>{problemMessage(apply.error)}</Alert>}
       <Label htmlFor="bulk-field">Field</Label>
       <Select
         id="bulk-field"
@@ -78,7 +88,7 @@ export function BulkEditDialog({
 }
 
 const operationKinds: Record<string, string> = {
-  bulk_update: 'Field update on selected items',
+  bulk_update: 'Field update on many items',
   field_index: 'Column index build',
 };
 
