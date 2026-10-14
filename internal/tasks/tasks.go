@@ -161,6 +161,15 @@ func Create(ctx context.Context, t *dms.Service, subject string, in Input) (*ent
 			return nil, err
 		}
 	}
+	if in.InputSchema != nil {
+		// Pickers point at this workspace; prefilled picks are valid answers.
+		if err = forms.CheckConfig(ctx, t, subject, in.WorkspaceID, in.InputSchema, "input_schema"); err != nil {
+			return nil, err
+		}
+		if err = forms.CheckValues(ctx, t, subject, in.WorkspaceID, in.InputSchema, in.Values, "values"); err != nil {
+			return nil, err
+		}
+	}
 	if in.Review != nil {
 		if err = checkReview(ctx, t, subject, in); err != nil {
 			return nil, err

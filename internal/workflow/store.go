@@ -330,6 +330,13 @@ func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceI
 			return def, nil, err
 		}
 	}
+	for name, node := range def.Flow.Nodes {
+		if schema, ok := node.Inputs["input_schema"].(map[string]any); ok && (node.Activity == "task" || node.Activity == "approval") {
+			if err = forms.CheckConfig(ctx, t, subject, workspaceID, schema, "flow.nodes."+name+".inputs.input_schema"); err != nil {
+				return def, nil, err
+			}
+		}
+	}
 	normalized, err := json.Marshal(def)
 	return def, normalized, err
 }

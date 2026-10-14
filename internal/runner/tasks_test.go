@@ -547,6 +547,40 @@ func TestTaskNodeValidationAndRecipients(t *testing.T) {
 	}
 }
 
+// A task form's pickers must point at this workspace, as a launch form's
+// do, and prefilled picks must be valid answers.
+func TestTaskFormsCheckTheirPickers(t *testing.T) {
+	f := setup(t)
+	other, err := f.dms.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere, err := f.dms.Create(ctx, "alice", other.ID, dms.CreateResource{Kind: "list", Name: "Elsewhere"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := f.dms.Create(ctx, "alice", elsewhere.ID, dms.CreateResource{Kind: "item", Name: "Foreign"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	picker := `{"type": "object", "properties": {"doc": {"type": "string", "x-papergo": {"kind": "item", "collection_id": "` + elsewhere.ID + `"}}}}`
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Pick", Definition: json.RawMessage(`{"triggers": [{"type": "manual"}],
+		"flow": {"start": "a", "nodes": {"a": {"activity": "task", "inputs": {"title": "x", "input_schema": ` + picker + `}}}}}`)}); err == nil || !strings.Contains(err.Error(), "collection_id") {
+		t.Errorf("a task form picking from another workspace: %v", err)
+	}
+	var schema map[string]any
+	if err = json.Unmarshal([]byte(picker), &schema); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: "x", Assignees: []string{"bob"}, InputSchema: schema}); err == nil {
+		t.Error("a user task form picking from another workspace")
+	}
+	open := map[string]any{"type": "object", "properties": map[string]any{"doc": map[string]any{"type": "string", "x-papergo": map[string]any{"kind": "item"}}}}
+	if _, err = f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: "x", Assignees: []string{"bob"}, InputSchema: open, Values: map[string]any{"doc": foreign.ID}}); err == nil {
+		t.Error("a prefilled pick from another workspace")
+	}
+}
+
 func TestTaskCancelRefusesATaskARunWaitsFor(t *testing.T) {
 	f := setup(t)
 	waiting := f.workflow(t, "Waits", approvalFlow)
