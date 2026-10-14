@@ -428,6 +428,9 @@ func (r *Runner) purge(ctx dbos.Context, _ dbos.ScheduledWorkflowInput) (any, er
 	return r.Purge(ctx)
 }
 
+// purgePage is how many finished runs Purge reads at a time.
+var purgePage = 200
+
 // Purge applies the retention now.
 func (r *Runner) Purge(ctx context.Context) (int, error) {
 	cutoff := time.Now().Add(-r.cfg.Retention)
@@ -440,10 +443,12 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 	}); err != nil {
 		return 0, err
 	}
-	deleted := 0
+	// Parked runs wait for a task; they are not finished. They stay at the
+	// front of the listing, so later pages start after the ones skipped.
+	deleted, skipped := 0, 0
 	for {
 		done, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterName(runName), dbos.WithFilterStatus(dbos.WorkflowStatusSuccess, dbos.WorkflowStatusError, dbos.WorkflowStatusCancelled, dbos.WorkflowStatusMaxRecoveryAttemptsExceeded),
-			dbos.WithFilterCompletedBefore(cutoff), dbos.WithFilterLimit(200), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
+			dbos.WithFilterCompletedBefore(cutoff), dbos.WithFilterOffset(skipped), dbos.WithFilterLimit(purgePage), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 		if err != nil || len(done) == 0 {
 			return deleted, err
 		}
@@ -451,14 +456,14 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 		for _, s := range done {
 			ids = append(ids, s.ID)
 		}
-		// Parked runs wait for an approval; they are not finished.
 		parked, err := parkedRuns(ctx, r.dms, ids)
 		if err != nil {
 			return deleted, err
 		}
 		ids = slices.DeleteFunc(ids, func(id string) bool { return parked[id] })
+		skipped += len(done) - len(ids)
 		if len(ids) == 0 {
-			return deleted, nil
+			continue
 		}
 		if err = r.dms.Write(ctx, func(t *dms.Service) error {
 			args := make([]any, len(ids))

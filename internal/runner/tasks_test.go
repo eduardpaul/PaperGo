@@ -194,6 +194,35 @@ func TestDeletingTheItemCancelsAWaitingRun(t *testing.T) {
 	}
 }
 
+// Retention keeps parked runs and still deletes the finished runs after them.
+func TestPurgeSkipsParkedRuns(t *testing.T) {
+	f := setup(t)
+	defer func(n int) { purgePage = n }(purgePage)
+	purgePage = 1
+	f.r.cfg.Retention = time.Millisecond
+	review := f.workflow(t, "Review", approvalFlow)
+	note := f.workflow(t, "Note", `{"triggers": [{"type": "manual", "collection_id": "$LIST"}], "flow": {"start": "n", "nodes": {"n": {"activity": "item.update", "inputs": {"values": {"note": "seen"}}}}}}`)
+	item := f.item(t, "alice", "Contract", nil)
+	waiting, err := f.wf.StartRuns(ctx, "alice", review.ID, workflow.Start{ItemIDs: []string{item.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, waiting[0], "waiting")
+	done, err := f.wf.StartRuns(ctx, "alice", note.ID, workflow.Start{ItemIDs: []string{item.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, done[0], "completed")
+	time.Sleep(10 * time.Millisecond)
+	if n, err := f.r.Purge(ctx); err != nil || n != 1 {
+		t.Fatalf("purged %d, %v", n, err)
+	}
+	f.status(t, waiting[0], "waiting")
+	if _, err = f.r.Run(ctx, "alice", done[0]); !errors.Is(err, dms.ErrNotFound) {
+		t.Fatalf("the finished run is kept: %v", err)
+	}
+}
+
 func TestWaitingRunsHoldNoWorker(t *testing.T) {
 	f := setup(t)
 	review := f.workflow(t, "Review", approvalFlow)
