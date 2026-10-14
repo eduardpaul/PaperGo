@@ -21,6 +21,7 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/model"
 	"papergo/internal/storage"
+	"papergo/internal/tasks"
 	"papergo/internal/testutil"
 	"papergo/internal/workflow"
 )
@@ -99,6 +100,8 @@ func setup(t testing.TB) *fixture {
 	}
 	return f
 }
+
+func (f *fixture) tasks() *tasks.Service { return &tasks.Service{DMS: f.dms} }
 
 func (f *fixture) workflow(t testing.TB, name string, def string) workflow.Workflow {
 	t.Helper()

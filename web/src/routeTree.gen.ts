@@ -13,10 +13,10 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
-import { Route as AppApprovalsRouteImport } from './routes/_app/approvals'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppTasksRouteImport } from './routes/_app/tasks'
 import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppAdminAuditRouteImport } from './routes/_app/admin/audit'
@@ -68,11 +68,6 @@ const AppAdminRoute = AppAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
-const AppApprovalsRoute = AppApprovalsRouteImport.update({
-  id: '/approvals',
-  path: '/approvals',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppInboxRoute = AppInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
@@ -86,6 +81,11 @@ const AppSearchRoute = AppSearchRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTasksRoute = AppTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
   getParentRoute: () => AppRoute,
 } as any)
 const LoginCallbackRoute = LoginCallbackRouteImport.update({
@@ -261,10 +261,10 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRouteWithChildren
-  '/approvals': typeof AppApprovalsRoute
   '/inbox': typeof AppInboxRoute
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRouteWithChildren
+  '/tasks': typeof AppTasksRoute
   '/login/callback': typeof LoginCallbackRoute
   '/admin/audit': typeof AppAdminAuditRoute
   '/admin/content-types': typeof AppAdminContentTypesRoute
@@ -299,9 +299,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
-  '/approvals': typeof AppApprovalsRoute
   '/inbox': typeof AppInboxRoute
   '/search': typeof AppSearchRoute
+  '/tasks': typeof AppTasksRoute
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AppIndexRoute
   '/admin/audit': typeof AppAdminAuditRoute
@@ -338,10 +338,10 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRouteWithChildren
-  '/_app/approvals': typeof AppApprovalsRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
+  '/_app/tasks': typeof AppTasksRoute
   '/login_/callback': typeof LoginCallbackRoute
   '/_app/': typeof AppIndexRoute
   '/_app/admin/audit': typeof AppAdminAuditRoute
@@ -381,10 +381,10 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin'
-    | '/approvals'
     | '/inbox'
     | '/search'
     | '/settings'
+    | '/tasks'
     | '/login/callback'
     | '/admin/audit'
     | '/admin/content-types'
@@ -419,9 +419,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
-    | '/approvals'
     | '/inbox'
     | '/search'
+    | '/tasks'
     | '/login/callback'
     | '/'
     | '/admin/audit'
@@ -457,10 +457,10 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/admin'
-    | '/_app/approvals'
     | '/_app/inbox'
     | '/_app/search'
     | '/_app/settings'
+    | '/_app/tasks'
     | '/login_/callback'
     | '/_app/'
     | '/_app/admin/audit'
@@ -531,13 +531,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/approvals': {
-      id: '/_app/approvals'
-      path: '/approvals'
-      fullPath: '/approvals'
-      preLoaderRoute: typeof AppApprovalsRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/inbox': {
       id: '/_app/inbox'
       path: '/inbox'
@@ -557,6 +550,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tasks': {
+      id: '/_app/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof AppTasksRouteImport
       parentRoute: typeof AppRoute
     }
     '/login_/callback': {
@@ -875,10 +875,10 @@ const AppWWorkspaceIdLListIdSettingsRouteWithChildren =
 
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
-  AppApprovalsRoute: typeof AppApprovalsRoute
   AppInboxRoute: typeof AppInboxRoute
   AppSearchRoute: typeof AppSearchRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
+  AppTasksRoute: typeof AppTasksRoute
   AppIndexRoute: typeof AppIndexRoute
   AppFFolderIdRoute: typeof AppFFolderIdRoute
   AppWIndexRoute: typeof AppWIndexRoute
@@ -892,10 +892,10 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
-  AppApprovalsRoute: AppApprovalsRoute,
   AppInboxRoute: AppInboxRoute,
   AppSearchRoute: AppSearchRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
+  AppTasksRoute: AppTasksRoute,
   AppIndexRoute: AppIndexRoute,
   AppFFolderIdRoute: AppFFolderIdRoute,
   AppWIndexRoute: AppWIndexRoute,

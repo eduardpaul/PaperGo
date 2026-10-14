@@ -209,15 +209,28 @@ CREATE TABLE staged_files (
  metrics JSON NOT NULL DEFAULT '{}' CHECK(json_valid(metrics)),
  state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','promoted','discarded')),created_by TEXT NOT NULL
 );
-CREATE TABLE approval_requests (
- id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,
- workspace_id TEXT NOT NULL,workflow_id TEXT NOT NULL,run_id TEXT NOT NULL,node TEXT NOT NULL,item_id TEXT,
+CREATE TABLE tasks (
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
+ workspace_id TEXT NOT NULL,item_id TEXT,kind TEXT NOT NULL DEFAULT 'task' CHECK(kind IN ('task','approval')),key TEXT NOT NULL DEFAULT '' CHECK(length(key)<=64),
  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 500),description TEXT NOT NULL DEFAULT '' CHECK(length(description)<=4000),
  assignees JSON NOT NULL CHECK(json_valid(assignees) AND json_type(assignees)='array'),
- input_schema JSON CHECK(input_schema IS NULL OR json_valid(input_schema)),review JSON CHECK(review IS NULL OR json_valid(review)),
- status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','approved','rejected','cancelled')),parked BOOLEAN NOT NULL DEFAULT 0,
- decided_by TEXT,decided_at DATETIME,comment TEXT NOT NULL DEFAULT '' CHECK(length(comment)<=4000),
- input JSON CHECK(input IS NULL OR json_valid(input)),created_by TEXT NOT NULL
+ completion TEXT NOT NULL DEFAULT 'any' CHECK(completion IN ('any','all')),
+ outcomes JSON NOT NULL CHECK(json_valid(outcomes) AND json_type(outcomes)='array' AND json_array_length(outcomes)>0),
+ input_schema JSON CHECK(input_schema IS NULL OR json_valid(input_schema)),`values` JSON CHECK(`values` IS NULL OR json_valid(`values`)),
+ review JSON CHECK(review IS NULL OR json_valid(review)),
+ priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('low','normal','high')),due_at DATETIME,
+ source TEXT NOT NULL CHECK(source IN ('workflow','user','system')),workflow_id TEXT,run_id TEXT,node TEXT,
+ wait BOOLEAN NOT NULL DEFAULT 0,parked BOOLEAN NOT NULL DEFAULT 0,
+ status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','completed','cancelled','expired')),
+ outcome TEXT,completed_by TEXT,completed_at DATETIME,comment TEXT NOT NULL DEFAULT '' CHECK(length(comment)<=4000),
+ input JSON CHECK(input IS NULL OR json_valid(input)),created_by TEXT NOT NULL,
+ CHECK(source<>'workflow' OR (workflow_id IS NOT NULL AND run_id IS NOT NULL AND node IS NOT NULL)),
+ CHECK((status='open')=(completed_at IS NULL))
+);
+CREATE TABLE task_responses (
+ id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+ subject TEXT NOT NULL,assignee TEXT NOT NULL,outcome TEXT NOT NULL,comment TEXT NOT NULL DEFAULT '' CHECK(length(comment)<=4000),
+ input JSON CHECK(input IS NULL OR json_valid(input))
 );
 CREATE TABLE runner_step_results (
  run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL,
@@ -328,9 +341,11 @@ CREATE INDEX workflowrunitem_item_id ON workflow_run_items(item_id);
 CREATE INDEX stagedfile_run_id ON staged_files(run_id);
 CREATE INDEX stagedfile_item_id ON staged_files(item_id);
 CREATE INDEX stagedfile_object_key_state ON staged_files(object_key,state);
-CREATE INDEX approvalrequest_run_id ON approval_requests(run_id);
-CREATE INDEX approvalrequest_status_workspace_id ON approval_requests(status,workspace_id);
-CREATE INDEX approvalrequest_parked_status ON approval_requests(parked,status);
+CREATE INDEX task_run_id ON tasks(run_id);
+CREATE INDEX task_workspace_id_status ON tasks(workspace_id,status);
+CREATE INDEX task_item_id ON tasks(item_id);
+CREATE INDEX task_parked_status ON tasks(parked,status);
+CREATE UNIQUE INDEX taskresponse_task_id_assignee ON task_responses(task_id,assignee);
 
 -- Triggers: derived projections, integrity guards and permission scopes
 CREATE TRIGGER resource_search_insert AFTER INSERT ON resources BEGIN

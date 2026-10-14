@@ -69,7 +69,7 @@ func (a *API) Handler() http.Handler {
 	a.registerFoundation(api)
 	a.registerSmartFolders(api)
 	a.registerWorkflows(api)
-	a.registerApprovals(api)
+	a.registerTasks(api)
 	// Subrequests already share the outer admission slot; authenticating them
 	// separately preserves authorization overrides without recursively queueing.
 	api.HandleFunc("POST /v1/$batch", a.batch(a.observe(a.authenticate(api))))

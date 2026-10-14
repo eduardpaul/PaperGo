@@ -11,7 +11,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@
 import { QueryFeedback } from '@/features/admin/common';
 import { FilterEditor, normalizeFilter, systemFields } from '@/features/lists/filter-editor';
 import { problemMessage } from '@/lib/errors';
-import { formDefaults, normalizeForm, renameNode } from './model';
+import { formDefaults, nodePorts, normalizeForm, renameNode } from './model';
 import type { Activity, FlowNode, Trigger, WorkflowCatalog, WorkflowDefinition } from './model';
 import { JsonInput, SchemaFields } from './schema-form';
 
@@ -473,7 +473,7 @@ function FlowEditor({
         onClick={() => {
           let name = `Step ${Object.keys(nodes).length + 1}`;
           while (nodes[name]) name += '_';
-          const port = activity?.ports[0] ?? 'done';
+          const port = nodePorts(activity, node?.inputs)[0] ?? 'done';
           const target = activity?.terminal ? selected : node?.next?.[port];
           const next: FlowNode = { activity: 'item.get', inputs: {}, next: target ? { done: target } : undefined };
           const updated = Object.fromEntries(
@@ -562,10 +562,11 @@ function FlowEditor({
             value={node.activity}
             onChange={(event) => {
               const activity = activities.find((activity) => activity.key === event.target.value)!;
-              const ports = ['done', 'error', ...activity.ports];
+              const inputs = formDefaults(activity.input_schema);
+              const ports = ['done', 'error', ...nodePorts(activity, inputs)];
               changeNode({
                 activity: activity.key,
-                inputs: formDefaults(activity.input_schema),
+                inputs,
                 next: activity.terminal
                   ? undefined
                   : Object.fromEntries(Object.entries(node.next ?? {}).filter(([port]) => ports.includes(port))),
@@ -590,7 +591,7 @@ function FlowEditor({
             />
           )}
           {!activity?.terminal &&
-            [...new Set(['done', 'error', ...(activity?.ports ?? [])])].map((port) => (
+            [...new Set(['done', 'error', ...nodePorts(activity, node.inputs)])].map((port) => (
               <label key={port} className="grid grid-cols-[5rem_1fr] items-center gap-2">
                 {port}
                 <Select

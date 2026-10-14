@@ -14,8 +14,6 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
-	// ApprovalRequest is the client for interacting with the ApprovalRequest builders.
-	ApprovalRequest *ApprovalRequestClient
 	// AuditEvent is the client for interacting with the AuditEvent builders.
 	AuditEvent *AuditEventClient
 	// Blob is the client for interacting with the Blob builders.
@@ -90,6 +88,10 @@ type Tx struct {
 	SyncToken *SyncTokenClient
 	// SyncView is the client for interacting with the SyncView builders.
 	SyncView *SyncViewClient
+	// Task is the client for interacting with the Task builders.
+	Task *TaskClient
+	// TaskResponse is the client for interacting with the TaskResponse builders.
+	TaskResponse *TaskResponseClient
 	// Term is the client for interacting with the Term builders.
 	Term *TermClient
 	// TermGroup is the client for interacting with the TermGroup builders.
@@ -239,7 +241,6 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
-	tx.ApprovalRequest = NewApprovalRequestClient(tx.config)
 	tx.AuditEvent = NewAuditEventClient(tx.config)
 	tx.Blob = NewBlobClient(tx.config)
 	tx.BlobDeletion = NewBlobDeletionClient(tx.config)
@@ -277,6 +278,8 @@ func (tx *Tx) init() {
 	tx.SyncState = NewSyncStateClient(tx.config)
 	tx.SyncToken = NewSyncTokenClient(tx.config)
 	tx.SyncView = NewSyncViewClient(tx.config)
+	tx.Task = NewTaskClient(tx.config)
+	tx.TaskResponse = NewTaskResponseClient(tx.config)
 	tx.Term = NewTermClient(tx.config)
 	tx.TermGroup = NewTermGroupClient(tx.config)
 	tx.TermSet = NewTermSetClient(tx.config)
@@ -295,7 +298,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: ApprovalRequest.QueryXXX(), the query will be executed
+// applies a query, for example: AuditEvent.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

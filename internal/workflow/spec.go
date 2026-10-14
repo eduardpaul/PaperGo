@@ -17,6 +17,7 @@ import (
 
 	"papergo/internal/dms"
 	"papergo/internal/forms"
+	"papergo/internal/tasks"
 )
 
 // Trigger types. Item triggers react to committed item writes, schedule
@@ -89,6 +90,9 @@ type Trigger struct {
 	// (dms.FileSources). The default is every source except workflow, so a
 	// workflow that replaces a file does not start itself again.
 	Sources []string `json:"sources,omitempty"`
+	// TaskKey, on task.created, task.completed and task.cancelled triggers,
+	// limits them to tasks with this key.
+	TaskKey string `json:"task_key,omitempty"`
 }
 
 // sources returns the file sources a file.added trigger accepts.
@@ -242,6 +246,9 @@ func (d Definition) validate() error {
 				seen[s] = true
 			}
 		}
+		if t.TaskKey != "" && (!slices.Contains(tasks.Events, t.Type) || !tasks.ValidKey(t.TaskKey)) {
+			return dms.Invalid(at + "task_key is a task key, on task.created, task.completed and task.cancelled triggers")
+		}
 		switch {
 		case isItemTrigger(t.Type):
 			if t.Cron != "" || t.TimeZone != "" {
@@ -261,6 +268,13 @@ func (d Definition) validate() error {
 			manual++
 			if t.Cron != "" || t.TimeZone != "" || t.ContentTypeID != "" {
 				return dms.Invalid(at + "manual triggers take only collection_id and selection")
+			}
+		case slices.Contains(tasks.Events, t.Type):
+			if t.Cron != "" || t.TimeZone != "" || t.ContentTypeID != "" {
+				return dms.Invalid(at + "task triggers take collection_id and task_key")
+			}
+			if d.Condition != nil {
+				return dms.Invalid(at + "a condition tests items; filter task triggers with task_key")
 			}
 		case t.Type == dms.EventTermMerged:
 			if t.CollectionID != "" || t.ContentTypeID != "" || t.Cron != "" || t.TimeZone != "" {
@@ -324,7 +338,7 @@ func (f Flow) validate() error {
 			return dms.Invalid(at + "unknown activity " + n.Activity)
 		}
 		ports := map[string]bool{PortDone: true, PortError: true}
-		for _, p := range a.Ports {
+		for _, p := range a.NodePorts(n.Inputs) {
 			ports[p] = true
 		}
 		for port, target := range n.Next {

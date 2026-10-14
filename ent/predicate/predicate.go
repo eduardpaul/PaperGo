@@ -6,9 +6,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
-// ApprovalRequest is the predicate function for approvalrequest builders.
-type ApprovalRequest func(*sql.Selector)
-
 // AuditEvent is the predicate function for auditevent builders.
 type AuditEvent func(*sql.Selector)
 
@@ -119,6 +116,12 @@ type SyncToken func(*sql.Selector)
 
 // SyncView is the predicate function for syncview builders.
 type SyncView func(*sql.Selector)
+
+// Task is the predicate function for task builders.
+type Task func(*sql.Selector)
+
+// TaskResponse is the predicate function for taskresponse builders.
+type TaskResponse func(*sql.Selector)
 
 // Term is the predicate function for term builders.
 type Term func(*sql.Selector)

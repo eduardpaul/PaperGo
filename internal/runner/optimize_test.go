@@ -15,6 +15,7 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/imaging"
 	"papergo/internal/ocr"
+	"papergo/internal/tasks"
 	"papergo/internal/workflow"
 )
 
@@ -71,20 +72,20 @@ func (f *fixture) upload(t *testing.T, libraryID, name, contentType string, data
 }
 
 // approvalOf waits for the run to wait and returns its open approval.
-func (f *fixture) approvalOf(t *testing.T, runID string) workflow.Approval {
+func (f *fixture) approvalOf(t *testing.T, runID string) tasks.View {
 	t.Helper()
 	f.status(t, runID, "waiting")
-	all, err := f.wf.WorkspaceApprovals(ctx, "alice", f.ws.ID, workflow.ApprovalFilter{Status: "open"})
+	all, err := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{Status: "open"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range all {
-		if a.RunID == runID {
+		if a.RunID != nil && *a.RunID == runID {
 			return a
 		}
 	}
 	t.Fatalf("run %s has no open approval: %+v", runID, all)
-	return workflow.Approval{}
+	return tasks.View{}
 }
 
 func (f *fixture) current(t *testing.T, itemID string) *ent.Blob {
@@ -111,7 +112,7 @@ func TestOptimizeImageBuiltIn(t *testing.T) {
 	file := f.upload(t, lib.ID, "receipt.png", "image/png", scan(t, 1200, 800))
 	runs := f.runsOf(t, w.ID, 1)
 	a := f.approvalOf(t, runs[0])
-	if a.Title != "Review a smaller file for receipt.png" || len(a.Assignees) != 1 || a.Assignees[0] != "alice" || a.Review["type"] != workflow.ReviewCompare {
+	if a.Title != "Review a smaller file for receipt.png" || len(a.Assignees) != 1 || a.Assignees[0] != "alice" || a.Review["type"] != tasks.ReviewCompare {
 		t.Fatalf("approval %+v", a)
 	}
 	staged, err := f.dms.StagedFile(ctx, "alice", a.Review["staged_file_id"].(string))
@@ -125,7 +126,7 @@ func TestOptimizeImageBuiltIn(t *testing.T) {
 	if staged.ContentType != "image/webp" || staged.Filename != "receipt.webp" || m["scale"] != 0.5 || m["smallest_text_height"] != 24.0 || m["width"] != 600.0 || m["detector"] != "test" {
 		t.Fatalf("staged %s %s, metrics %v", staged.Filename, staged.ContentType, m)
 	}
-	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "approve"}); err != nil {
+	if _, err = f.tasks().Respond(ctx, "alice", a.ID, tasks.Response{Outcome: "approved"}); err != nil {
 		t.Fatal(err)
 	}
 	run := f.status(t, runs[0], "completed")
@@ -153,13 +154,13 @@ func TestOptimizeImageBuiltIn(t *testing.T) {
 	f.upload(t, lib.ID, "invoice.png", "image/png", scan(t, 900, 600))
 	all := f.runsOf(t, w.ID, 3)
 	f.status(t, first, "cancelled")
-	closed, err := f.wf.Approval(ctx, "alice", f.approvalFor(t, first).ID)
+	closed, err := f.tasks().Get(ctx, "alice", f.approvalFor(t, first).ID)
 	if err != nil || closed.Status != "cancelled" {
 		t.Fatalf("replaced run's approval: %+v %v", closed, err)
 	}
 	// Rejecting keeps the file and discards the copy.
 	a = f.approvalOf(t, all[0])
-	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "reject"}); err != nil {
+	if _, err = f.tasks().Respond(ctx, "alice", a.ID, tasks.Response{Outcome: "rejected", Comment: "not now"}); err != nil {
 		t.Fatal(err)
 	}
 	f.status(t, all[0], "completed")
@@ -174,7 +175,7 @@ func TestOptimizeImageBuiltIn(t *testing.T) {
 	f.upload(t, lib.ID, "contract.pdf", "application/pdf", []byte("%PDF-1.7 test"))
 	pdfRun := f.runsOf(t, w.ID, 4)[0]
 	done := f.status(t, pdfRun, "completed")
-	if open, _ := f.wf.WorkspaceApprovals(ctx, "alice", f.ws.ID, workflow.ApprovalFilter{Status: "open"}); len(open) != 0 {
+	if open, _ := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{Status: "open"}); len(open) != 0 {
 		t.Fatalf("a PDF asked for review: %+v (run %+v)", open, done)
 	}
 }
@@ -204,19 +205,19 @@ func (f *fixture) runsOf(t *testing.T, workflowID string, want int) []string {
 }
 
 // approvalFor returns the run's approval in any status.
-func (f *fixture) approvalFor(t *testing.T, runID string) workflow.Approval {
+func (f *fixture) approvalFor(t *testing.T, runID string) tasks.View {
 	t.Helper()
-	all, err := f.wf.WorkspaceApprovals(ctx, "alice", f.ws.ID, workflow.ApprovalFilter{})
+	all, err := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range all {
-		if a.RunID == runID {
+		if a.RunID != nil && *a.RunID == runID {
 			return a
 		}
 	}
 	t.Fatalf("run %s has no approval", runID)
-	return workflow.Approval{}
+	return tasks.View{}
 }
 
 func TestPhotosToPDFBuiltIn(t *testing.T) {
@@ -244,7 +245,7 @@ func TestPhotosToPDFBuiltIn(t *testing.T) {
 	// Rejecting keeps every photo.
 	run := start(second.ID, third.ID, second.ID, first.ID)
 	a := f.approvalOf(t, run)
-	if a.Review["type"] != workflow.ReviewPreview || a.ItemID == nil || *a.ItemID != second.ID {
+	if a.Review["type"] != tasks.ReviewPreview || a.ItemID == nil || *a.ItemID != second.ID {
 		t.Fatalf("approval %+v", a)
 	}
 	staged, err := f.dms.StagedFile(ctx, "alice", a.Review["staged_file_id"].(string))
@@ -261,7 +262,7 @@ func TestPhotosToPDFBuiltIn(t *testing.T) {
 	if p := details[0].(map[string]any); p["source_width"] != 200.0 {
 		t.Errorf("first page %v", p)
 	}
-	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "reject"}); err != nil {
+	if _, err = f.tasks().Respond(ctx, "alice", a.ID, tasks.Response{Outcome: "rejected", Comment: "not now"}); err != nil {
 		t.Fatal(err)
 	}
 	f.status(t, run, "completed")
@@ -280,7 +281,7 @@ func TestPhotosToPDFBuiltIn(t *testing.T) {
 
 	// Approving gives the primary the PDF and recycles the other photos;
 	// those deletions do not cancel the run that made them.
-	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "approve"}); err != nil {
+	if _, err = f.tasks().Respond(ctx, "alice", a.ID, tasks.Response{Outcome: "approved"}); err != nil {
 		t.Fatal(err)
 	}
 	f.status(t, run, "completed")
@@ -323,10 +324,10 @@ func TestPhotosToPDFRefusesChangedAndUnsupportedPhotos(t *testing.T) {
 	}
 	a := f.approvalOf(t, runs[0])
 	f.upload(t, lib.ID, "page-2.png", "image/png", scan(t, 310, 400))
-	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "approve"}); err == nil {
+	if _, err = f.tasks().Respond(ctx, "alice", a.ID, tasks.Response{Outcome: "approved"}); err == nil {
 		t.Fatal("a review of a changed photo was approved")
 	}
-	if _, err = f.wf.Decide(ctx, "alice", a.ID, workflow.Decision{Decision: "reject"}); err != nil {
+	if _, err = f.tasks().Respond(ctx, "alice", a.ID, tasks.Response{Outcome: "rejected", Comment: "not now"}); err != nil {
 		t.Fatal(err)
 	}
 	f.status(t, runs[0], "completed")

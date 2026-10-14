@@ -18,7 +18,7 @@ const activeClass = 'bg-accent-soft! text-accent! font-medium [&_svg]:text-accen
 const navigation = [
   { to: '/', label: 'Home', icon: House, exact: true },
   { to: '/inbox', label: 'Inbox', icon: Inbox, exact: false },
-  { to: '/approvals', label: 'Approvals', icon: ClipboardCheck, exact: false },
+  { to: '/tasks', label: 'Tasks', icon: ClipboardCheck, exact: false },
   { to: '/search', label: 'Search', icon: Search, exact: false },
 ] as const;
 

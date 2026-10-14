@@ -835,6 +835,11 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 		if tr.Type != e.Type || tr.CollectionID != "" && tr.CollectionID != e.CollectionID {
 			continue
 		}
+		if tr.TaskKey != "" {
+			if key, _ := e.Data["key"].(string); key != tr.TaskKey {
+				continue
+			}
+		}
 		if e.Type == dms.EventFileAdded {
 			source, _ := e.Data["source"].(string)
 			if !slices.Contains(tr.sources(), source) {

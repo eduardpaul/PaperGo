@@ -1,6 +1,6 @@
 # Tasks and notifications (plan)
 
-Status: **proposed.** Nothing in this plan is implemented yet. It designs two core building blocks that workflows and the rest of PaperGo share:
+Status: **phase 1 (tasks core) implemented**, documented in [workflows](../workflows.md#tasks). Phases 2 to 4 are planned. It designs two core building blocks that workflows and the rest of PaperGo share:
 
 - **Tasks:** *action required.* Someone has to do something and say so: approve, reject, fill in a form, confirm. A workflow can wait for the answer.
 - **Notifications:** *something happened.* People are told; nobody has to answer, and nothing waits.
@@ -42,7 +42,7 @@ A task belongs to a workspace and may concern one item.
 | `assignees` | entries, resolved when the task is created (see [recipients](#recipients)) |
 | `completion` | `any` (the first response completes it, the default) or `all` (every assignee responds) |
 | `outcomes` | the answers, in order: `[{key, label, style, comment, decisive}]`. Default `[{key: "done", label: "Done"}]` |
-| `input_schema`, `review` | an optional [form](../workflows.md#forms) answered with the response, and an optional staged-file review (`file.compare`, `file.preview`) |
+| `input_schema`, `values`, `review` | an optional [form](../workflows.md#forms) answered with the response (the form system of workflow launch forms, `internal/forms`, frozen on the task), values that prefill it, and an optional staged-file review (`file.compare`, `file.preview`) |
 | `priority`, `due_at` | `low`/`normal`/`high`; an optional due time |
 | `reminders`, `on_due` | when to remind assignees before or after the due time, and whether the task `expires` at the due time or stays open (`keep`) |
 | `source` | `workflow` (with `workflow_id`, `run_id`, `node`), `user` or `system` |
@@ -58,6 +58,8 @@ An outcome:
 - `key` and `label`: `approved` / "Approve".
 - `style`: `primary`, `danger` or `default`, for the button.
 - `comment`: `none`, `optional` (default) or `required`. A rejection usually requires one.
+- `skip_form`: the answer needs no form values, such as a rejection.
+- `allow_stale`: the answer is allowed when the review's staged file is no longer current, as a rejection is.
 - `decisive` (`all` mode only): choosing it completes the task at once with that outcome, such as a rejection in an all-must-approve review.
 
 ### Lifecycle

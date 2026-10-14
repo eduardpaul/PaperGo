@@ -15,11 +15,11 @@ import (
 	"github.com/google/uuid"
 
 	"papergo/ent"
-	"papergo/ent/approvalrequest"
 	"papergo/ent/domainevent"
 	"papergo/ent/workflowrun"
 	"papergo/ent/workflowrunitem"
 	"papergo/internal/dms"
+	"papergo/internal/tasks"
 )
 
 // Run is a workflow run as the API shows it.
@@ -472,8 +472,11 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 			if err := t.DiscardRunStagedFiles(ctx, ids...); err != nil {
 				return err
 			}
-			if _, err := t.Client.ApprovalRequest.Delete().Where(approvalrequest.RunIDIn(ids...)).Exec(ctx); err != nil {
-				return err
+			// Tasks outlive their runs as a record; one still waiting closes.
+			for _, id := range ids {
+				if _, err := tasks.CancelRun(ctx, t, id); err != nil {
+					return err
+				}
 			}
 			_, err := t.Client.WorkflowRun.Delete().Where(workflowrun.IDIn(ids...)).Exec(ctx)
 			return err

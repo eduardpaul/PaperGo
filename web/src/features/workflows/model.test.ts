@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseJSON, stringifyJSON } from '@/api/json';
-import { normalizeForm, renameNode } from './model';
+import { nodePorts, normalizeForm, renameNode } from './model';
 import type { WorkflowDefinition } from './model';
 
 describe('workflow editing', () => {
@@ -31,5 +31,15 @@ describe('workflow editing', () => {
       ),
     ).toBe('{"entries":[{"amount":9007199254740993}],"token":"{input:amount}"}');
     expect(() => normalizeForm(schema, { entries: [{ amount: '1.5' }] })).toThrow();
+  });
+});
+
+describe('node ports', () => {
+  const task = { key: 'task', kind: 'flow', description: '', ports: [], ports_from: 'outcomes' as const, input_schema: { type: 'object' } };
+  it('follows a task node outcomes, done by default and none without waiting', () => {
+    expect(nodePorts(task, { outcomes: [{ key: 'correct' }, { key: 'fix' }] })).toEqual(['correct', 'fix']);
+    expect(nodePorts(task, {})).toEqual(['done']);
+    expect(nodePorts(task, { wait: false, outcomes: [{ key: 'x' }] })).toEqual([]);
+    expect(nodePorts({ ...task, ports_from: undefined, ports: ['true', 'false'] }, {})).toEqual(['true', 'false']);
   });
 });

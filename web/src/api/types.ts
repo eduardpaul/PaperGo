@@ -351,25 +351,61 @@ export interface Scope {
   granted_to_members: boolean;
 }
 
-export interface Approval {
-  id: string;
-  workspace_id: string;
-  workflow_id: string;
-  run_id: string;
-  node: string;
-  item_id?: string;
-  title: string;
-  description?: string;
-  assignees: string[];
-  input_schema?: FormSchema;
-  review?: { type: 'file.compare' | 'file.preview'; staged_file_id: string };
-  status: 'open' | 'approved' | 'rejected' | 'cancelled';
-  decided_by?: string;
-  decided_at?: string;
+/** An answer a task offers; each is a workflow port. */
+export interface TaskOutcome {
+  key: string;
+  label: string;
+  style?: 'primary' | 'danger' | 'default';
+  comment?: 'none' | 'optional' | 'required';
+  skip_form?: boolean;
+  allow_stale?: boolean;
+  decisive?: boolean;
+}
+
+export interface TaskAnswer {
+  subject: string;
+  /** The entry answered for: the subject, or group:<id>. */
+  assignee: string;
+  outcome: string;
   comment?: string;
   input?: Record<string, unknown>;
   created_at: string;
+}
+
+/** An action request: an approval, or any task a workflow, person or the system created. */
+export interface Task {
+  id: string;
+  workspace_id: string;
+  item_id?: string;
+  kind: 'task' | 'approval';
+  key?: string;
+  title: string;
+  description?: string;
+  assignees: string[];
+  completion: 'any' | 'all';
+  outcomes: TaskOutcome[];
+  input_schema?: FormSchema;
+  values?: Record<string, unknown>;
+  review?: { type: 'file.compare' | 'file.preview'; staged_file_id: string };
+  priority: 'low' | 'normal' | 'high';
+  due_at?: string;
+  source: 'workflow' | 'user' | 'system';
+  workflow_id?: string;
+  run_id?: string;
+  node?: string;
+  status: 'open' | 'completed' | 'cancelled' | 'expired';
+  outcome?: string;
+  completed_by?: string;
+  completed_at?: string;
+  comment?: string;
+  input?: Record<string, unknown>;
   created_by: string;
+  created_at: string;
+  updated_at: string;
+  version: number;
+  responses?: TaskAnswer[];
+  answered?: boolean;
+  can_respond: boolean;
 }
 
 export interface StagedFile {

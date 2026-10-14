@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { fetchBlob } from "@/api/files";
 import { stagedFileQuery } from "@/api/queries";
-import type { Approval, StagedFile } from "@/api/types";
+import type { StagedFile, Task } from "@/api/types";
 import { Alert, Skeleton } from "@/components/ui/feedback";
 import { useFormat } from "@/lib/preferences";
 import { problemMessage } from "@/lib/errors";
@@ -28,9 +28,9 @@ export function useBlobUrl(path: string | undefined) {
   return { url, error: blob.error, loading: blob.isLoading };
 }
 
-/** The file an approval asks to review, rendered by its review type. */
-export function Review({ approval }: { approval: Approval }) {
-  const review = approval.review;
+/** The staged file a task asks to review, rendered by its review type. */
+export function Review({ task }: { task: Task }) {
+  const review = task.review;
   const staged = useQuery({
     ...stagedFileQuery(review?.staged_file_id ?? ""),
     enabled: !!review,
@@ -47,7 +47,7 @@ export function Review({ approval }: { approval: Approval }) {
       {file.state === "pending" && !file.fresh && (
         <Alert tone="warning">
           A file this was made from changed after the review was requested. It
-          can no longer be approved; reject it.
+          can no longer be accepted; only a rejection is possible.
         </Alert>
       )}
       {review.type === "file.compare" ? (

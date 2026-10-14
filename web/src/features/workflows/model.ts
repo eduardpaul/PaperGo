@@ -67,8 +67,19 @@ export interface Activity {
   kind: string;
   description: string;
   ports: string[];
+  /** A node's ports come from this input instead: a task node's outcomes. */
+  ports_from?: 'outcomes';
   terminal?: boolean;
   input_schema: FormSchema;
+}
+
+/** The ports a node can connect besides done and error, as the server checks them. */
+export function nodePorts(activity: Activity | undefined, inputs: Record<string, unknown> | undefined): string[] {
+  if (!activity) return [];
+  if (activity.ports_from !== 'outcomes') return activity.ports;
+  if (inputs?.wait === false) return [];
+  const outcomes = Array.isArray(inputs?.outcomes) ? (inputs.outcomes as { key?: unknown }[]) : [{ key: 'done' }];
+  return outcomes.map((o) => (typeof o?.key === 'string' ? o.key : '')).filter(Boolean);
 }
 export interface WorkflowCatalog {
   triggers: { type: string; description: string }[];

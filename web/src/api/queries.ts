@@ -2,7 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 import { api, isApiError, listOf } from './http';
 import { searchRequest, smartFolderQueryRequest } from './requests';
 import type {
-  Approval,
+  Task,
   BuiltInState,
   CollectionTemplate,
   ContentType,
@@ -48,21 +48,35 @@ export const keys = {
   templates: ['collection-templates'] as const,
   people: ['people'] as const,
   users: ['users'] as const,
-  approvals: (status: string) => ['approvals', status] as const,
-  approval: (id: string) => ['approvals', 'one', id] as const,
+  tasks: (filter: TaskFilter) => ['tasks', filter] as const,
+  task: (id: string) => ['tasks', 'one', id] as const,
   stagedFile: (id: string) => ['staged-files', id] as const,
 };
 
-export const myApprovalsQuery = (status: string) =>
+/** Which of the caller's tasks to list: waiting for them, or by status. */
+export interface TaskFilter {
+  waiting?: boolean;
+  status?: string;
+  kind?: string;
+}
+
+export const myTasksQuery = (filter: TaskFilter) =>
   queryOptions({
-    queryKey: keys.approvals(status),
-    queryFn: async () => listOf((await api<Page<Approval>>('/v1/me/approvals', { query: { status } })).data),
+    queryKey: keys.tasks(filter),
+    queryFn: async () =>
+      listOf(
+        (
+          await api<Page<Task>>('/v1/me/tasks', {
+            query: { waiting: filter.waiting ? 'true' : undefined, status: filter.status, kind: filter.kind },
+          })
+        ).data,
+      ),
   });
 
-export const approvalQuery = (id: string) =>
+export const taskQuery = (id: string) =>
   queryOptions({
-    queryKey: keys.approval(id),
-    queryFn: async () => (await api<Approval>(`/v1/approvals/${id}`)).data,
+    queryKey: keys.task(id),
+    queryFn: async () => (await api<Task>(`/v1/tasks/${id}`)).data,
   });
 
 export const stagedFileQuery = (id: string) =>

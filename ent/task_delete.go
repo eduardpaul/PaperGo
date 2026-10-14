@@ -4,34 +4,34 @@ package ent
 
 import (
 	"context"
-	"papergo/ent/approvalrequest"
 	"papergo/ent/predicate"
+	"papergo/ent/task"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
 
-// ApprovalRequestDelete is the builder for deleting a ApprovalRequest entity.
-type ApprovalRequestDelete struct {
+// TaskDelete is the builder for deleting a Task entity.
+type TaskDelete struct {
 	config
 	hooks    []Hook
-	mutation *ApprovalRequestMutation
+	mutation *TaskMutation
 }
 
-// Where appends a list predicates to the ApprovalRequestDelete builder.
-func (_d *ApprovalRequestDelete) Where(ps ...predicate.ApprovalRequest) *ApprovalRequestDelete {
+// Where appends a list predicates to the TaskDelete builder.
+func (_d *TaskDelete) Where(ps ...predicate.Task) *TaskDelete {
 	_d.mutation.Where(ps...)
 	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (_d *ApprovalRequestDelete) Exec(ctx context.Context) (int, error) {
+func (_d *TaskDelete) Exec(ctx context.Context) (int, error) {
 	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *ApprovalRequestDelete) ExecX(ctx context.Context) int {
+func (_d *TaskDelete) ExecX(ctx context.Context) int {
 	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
@@ -39,8 +39,8 @@ func (_d *ApprovalRequestDelete) ExecX(ctx context.Context) int {
 	return n
 }
 
-func (_d *ApprovalRequestDelete) sqlExec(ctx context.Context) (int, error) {
-	_spec := sqlgraph.NewDeleteSpec(approvalrequest.Table, sqlgraph.NewFieldSpec(approvalrequest.FieldID, field.TypeString))
+func (_d *TaskDelete) sqlExec(ctx context.Context) (int, error) {
+	_spec := sqlgraph.NewDeleteSpec(task.Table, sqlgraph.NewFieldSpec(task.FieldID, field.TypeString))
 	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -56,32 +56,32 @@ func (_d *ApprovalRequestDelete) sqlExec(ctx context.Context) (int, error) {
 	return affected, err
 }
 
-// ApprovalRequestDeleteOne is the builder for deleting a single ApprovalRequest entity.
-type ApprovalRequestDeleteOne struct {
-	_d *ApprovalRequestDelete
+// TaskDeleteOne is the builder for deleting a single Task entity.
+type TaskDeleteOne struct {
+	_d *TaskDelete
 }
 
-// Where appends a list predicates to the ApprovalRequestDelete builder.
-func (_d *ApprovalRequestDeleteOne) Where(ps ...predicate.ApprovalRequest) *ApprovalRequestDeleteOne {
+// Where appends a list predicates to the TaskDelete builder.
+func (_d *TaskDeleteOne) Where(ps ...predicate.Task) *TaskDeleteOne {
 	_d._d.mutation.Where(ps...)
 	return _d
 }
 
 // Exec executes the deletion query.
-func (_d *ApprovalRequestDeleteOne) Exec(ctx context.Context) error {
+func (_d *TaskDeleteOne) Exec(ctx context.Context) error {
 	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
 	case n == 0:
-		return &NotFoundError{approvalrequest.Label}
+		return &NotFoundError{task.Label}
 	default:
 		return nil
 	}
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *ApprovalRequestDeleteOne) ExecX(ctx context.Context) {
+func (_d *TaskDeleteOne) ExecX(ctx context.Context) {
 	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}

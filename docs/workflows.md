@@ -49,6 +49,7 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
 | `manual` | someone starts it through the API | each chosen item, the selection's primary item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
+| `task.created`, `task.completed`, `task.cancelled` | a [task](#tasks) of the workspace is created, completed or cancelled | the task's item, or none |
 | `wf.{key}.{event}` | a run of workflow `key` raises `event`; `completed` and `failed` are raised when a run ends | that run's item |
 
 Fields of a trigger:
@@ -56,6 +57,7 @@ Fields of a trigger:
 - `collection_id` limits item and workflow-event triggers to one list or library.
 - `content_type_id` (with `collection_id`) limits item triggers to one content type.
 - `terms` (1 to 20 term IDs) limits `item.created`, `item.updated` and `item.published` to revisions whose term and keywords fields hold one of the terms, a descendant of one, or a term merged into one. `term_change` says what counts: `present` (the default, the revision holds it), `added` (held now, not by the item's revision before) or `removed` (held before, not now).
+- `task_key` (on `task.*` triggers) limits them to tasks with that key, such as `legal_review`. With `collection_id`, only tasks about items of that collection start runs.
 - `sources` (on `file.added`) lists the file sources that start runs: `upload`, `webdav`, `restore` and `workflow`. The default is every source except `workflow`, so a workflow that replaces a file does not start itself again.
 - For a schedule:
   - **With `collection_id`:** each occurrence starts one run per item of the collection that meets the condition, up to 500, on `surface` (`head` by default, or `published`).
@@ -86,13 +88,14 @@ The `data` for each event type:
 - `schedule`: `workflow_id`, `occurrence`
 - `manual`: `workflow_id`, `inputs`
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
+- `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.completed` adds `outcome` and `completed_by`
 - `wf.*`: `run_id` and the raised data; `completed`/`failed` add `status`, `node` and, on failure, `error`
 
 Only items raise item events. Folders, collections and settings do not; merging organization terms delivers `term.merged` to every live workspace so its workflow subscriptions can react.
 
 ## Concurrency
 
-`concurrency` decides what a start does while a run of the same workflow on the same item is still queued, running or waiting for an approval:
+`concurrency` decides what a start does while a run of the same workflow on the same item is still queued, running or waiting for a task:
 
 | Value | A new start |
 | --- | --- |
@@ -100,7 +103,7 @@ Only items raise item events. Folders, collections and settings do not; merging 
 | `skip` | starts nothing |
 | `replace` | cancels the active run and starts |
 
-Selection runs compare every member: a start overlaps an active run when they share an item. A start that `skip` drops creates no run. Cancelling a run discards its staged files and closes its open approvals.
+Selection runs compare every member: a start overlaps an active run when they share an item. A start that `skip` drops creates no run. Cancelling a run discards its staged files and cancels the tasks it waits for.
 
 ## Conditions
 
@@ -173,7 +176,8 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `set_variable` | flow | sets `name` to `value` | `name`, `value` |
 | `forEach` | flow | runs the nodes from its `body` port once per element of `items` (an array or a single token such as `{run:items}`, at most 1,000), with the element in the variable `as` and its position in `as_index`; see [loops](#loops) | `items`, `count`, `as` |
 | `delay` | flow | waits `duration` (`90m`, `48h`) or `until` a date or time, durably | `until` |
-| `approval` | flow | asks `assignees` (people; none means the workspace's owners) to approve or reject `title` (with an optional `description`), with an optional decision form (`input_schema`) and `review` of a staged file; ports `approved`/`rejected`; see [approvals](#approvals) | `request_id`, `decision`, `decided_by`, `comment`, `input` |
+| `task` | flow | asks `assignees` to do something and answer with one of its `outcomes`, optionally filling in a form; with `wait` (default), follows the port named after the outcome. See [tasks](#tasks) | `task_id`, `status`, `outcome`, `completed_by`, `comment`, `input`, `responses` |
+| `approval` | flow | a `task` of kind `approval` with the outcomes `approved` and `rejected` (a rejection needs a comment); takes the other `task` inputs | as `task` |
 | `event.raise` | flow | raises `wf.{key}.{event}` with `data` and the run's item | `event` |
 | `item.has_terms` | flow | tests whether the item's term and keywords fields hold `terms` (or descendants, or terms merged into them): any of them, or all with `match: "all"`; ports `matched`/`unmatched` | `matched`, `terms` (those held) |
 | `end` / `fail` | flow | completes the run / fails it with `message` | |
@@ -184,6 +188,7 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `item.publish` | action | publishes the head revision, if not already published | `published` |
 | `item.unpublish` | action | unpublishes, if published | `unpublished` |
 | `item.delete` | action | deletes the item | `deleted` |
+| `task.cancel` | action | cancels an open task of the workspace that no run waits for (`task_id`), such as a follow-up created without waiting; a task a run waits for ends with its run | `task_id`, `status` |
 | `file.promote` | action | makes a staged file of this run (`staged_file_id`) its item's current file, as a new file version; fails when a file it was made from is no longer current | `item_id`, `blob_id`, `file_version` |
 | `file.discard` | action | discards a staged file of this run; the item keeps its file | `discarded` |
 | `file.compose_pdf` | action | combines the current files of the run's items (JPEG, PNG or WebP photos of one list or library) into one searchable PDF in the run's order, staged for the primary item; see [photos to PDF](#photos-to-pdf). Heavy work. | `staged_file_id`, `item_id`, `others` (the other items, in order), `pages`, `bytes`, `metrics` |
@@ -285,21 +290,49 @@ Saving a workflow checks that collections and relationship types belong to the w
 
 **Selection hints.** The root of a [selection](#selection-runs) workflow's launch form can carry `x-papergo-selection`, text hints for the screen that chooses and orders the items: `preview` (such as `image`), `item_label` (such as `page`), `order_label` and `primary_description`. They are presentation only.
 
-Approval decisions collect their answers with the same forms and checks.
+[Task](#tasks) answers fill in forms with the same renderer, defaults and checks, with the pickers checked against the person who answers.
 
-## Approvals
+## Tasks
 
-An `approval` node creates an approval request and waits for the first decision:
+A task asks people to do something and say so: approve, confirm data, fill in a form. Workflows create tasks with the `task` and `approval` nodes; people create them with the API and the web app's Tasks screen. An approval is a task of kind `approval`. The model and its rules live in `internal/tasks`, shared by workflows, the API and PaperGo itself.
 
-- **Assignees** are subjects who can read the workspace and the run item's draft; the default is the workspace's owners. They find their open requests in `GET /v1/me/approvals` and the web app's Approvals screen.
-- **A decision** is `approve` or `reject`, with an optional comment and the values of the request's `input_schema` form, checked like a launch form. The first decision wins. The node follows `approved` or `rejected`, and its output holds `decided_by`, `comment` and `input` (such as `{step:review.input.reason}`).
-- **A review** shows a staged file of the run:
-  - `file.compare` shows the item's current file beside a staged image, both at 100%;
-  - `file.preview` shows a staged document, such as a PDF.
+```json
+"check": {"activity": "task", "inputs": {
+  "title": "Check the invoice data of {item:name}",
+  "assignees": ["role:members"],
+  "key": "invoice_check",
+  "outcomes": [
+    {"key": "correct", "label": "Correct", "style": "primary"},
+    {"key": "fix", "label": "Needs a fix", "comment": "required", "skip_form": true},
+    {"key": "not_invoice", "label": "Not an invoice", "style": "danger", "skip_form": true}],
+  "input_schema": {"type": "object", "required": ["total"], "properties": {"total": {"type": "number", "title": "Total"}}},
+  "values": {"total": "{item:values.total}"},
+  "due": "48h"},
+  "next": {"correct": "save", "fix": "notify_uploader", "not_invoice": "move"}}
+```
 
-  Approving fails with 409 when the staged file was made from a file that is no longer current; it can still be rejected.
+- **Assignees** are recipient entries:
+  - a person's subject;
+  - `group:<id>`, nested groups included;
+  - `role:owners` or `role:members` of the workspace;
+  - `creator` (the item's creator), `actor` (who caused the run), or `field:<key>` (the people in a field of the item);
+  - tokens.
 
-While a request is open, the run **waits** without holding a worker: it parks, shows as `waiting`, and resumes moments after the decision. Waiting runs count as active for [concurrency](#concurrency) and are not deleted by run retention. Cancelling a waiting run, or replacing it, cancels its open request.
+  No assignees means the workspace's owners. Unknown people or groups fail the node with their names, and inactive users are left out. At most 50.
+- **Access.** Assignees who are people must be able to read the workspace and, for a task about an item, the item's draft. This is checked when the task is created (the node fails, naming who cannot) and again when someone answers; a group's members are checked when they answer. A task is visible to its assignees, its creator and the workspace's owners.
+- **Outcomes** are the answers, in order (default one, `done`), at most 10. Each has a `key` (a lowercase name other than `error` and `expired`), a `label`, a `style` for its button (`primary`, `danger`, `default`), and:
+  - `comment`: `none`, `optional` (default) or `required`;
+  - `skip_form`: answers without the form, such as a rejection;
+  - `allow_stale`: allows the answer when the review's staged file was made from files that are no longer current;
+  - `decisive`: in `all` mode, completes the task at once.
+- **Ports.** A task node's ports are its outcomes, plus `done` and `error`. Outcomes must be a literal list, so saving checks `next` against them. An outcome without a port ends the run.
+- **Completion.** `any` (default): the first answer completes the task. `all`: every assignee answers once, a group by any one of its members. A decisive outcome completes it at once; otherwise it completes when everyone has answered, with the outcome chosen most often (ties go to the outcome listed first). Every answer is in the output's `responses`.
+- **Form.** `input_schema` is a [form](#forms), frozen on the task when it is created, so editing the workflow does not change an open task. `values` prefill it; tokens in them, such as `{item:values.total}`, are resolved then, and they must be valid answers. An answer sends the form's values unless its outcome skips the form; the server applies defaults and checks them, and pickers are checked against the person who answers. Later nodes read them as `{step:check.input.total}`.
+- **Review.** `review` shows a staged file of the run beside the form: `file.compare` shows the item's current file beside a staged image, both at 100%; `file.preview` shows a staged document, such as a PDF. An answer whose outcome does not `allow_stale` fails with 409 when the staged file was made from a file that is no longer current.
+- **Waiting.** With `wait` (the default), the run waits without holding a worker: it parks, shows as `waiting`, and resumes moments after the task completes. Waiting runs count as active for [concurrency](#concurrency) and are not deleted by run retention. Cancelling a waiting run, or replacing it, cancels the task. With `wait: false`, the node creates the task, outputs `task_id` and continues at `done`; the task outlives the run, and other workflows react to it with `task.*` triggers.
+- **Other inputs:** `key` (a lowercase name triggers and lists filter on), `priority` (`low`, `normal`, `high`), `due` (a duration such as `48h`, a date or a time), `item_id` (default the run's item).
+
+Answers and their form values stay on the task after it completes, and completed tasks are kept when their runs are deleted. Creating and answering tasks are recorded in the workspace's audit trail (`task.create`, `task.respond`).
 
 ## Selection runs
 
@@ -348,7 +381,7 @@ How people use them:
 | --- | --- |
 | `queued` | waiting for a worker |
 | `running` | executing, or waiting in `delay` |
-| `waiting` | waiting for an approval decision, without holding a worker |
+| `waiting` | waiting for a task, without holding a worker |
 | `completed` | finished |
 | `failed` | a node failed with no `error` port, or `fail` ran |
 | `cancelled` | stopped by a manager |
@@ -373,7 +406,10 @@ Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default
 | Start a manual workflow on items | `write` on each item |
 | Start a manual workflow with no item | workspace `manage` |
 | See, cancel and retry runs | workspace `manage` |
-| Decide an approval | being an assignee who can read the workspace and the item's draft |
+| Answer a task | being an assignee (or in an assigned group) who can read the workspace and the item's draft |
+| Create a task | workspace `read`, and `write` on the item when it concerns one |
+| Cancel a task | its creator or a workspace owner; a workflow's task ends with its run |
+| See a task | being an assignee, its creator or a workspace owner |
 
 ## API
 
@@ -390,10 +426,12 @@ Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default
 | GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `$skiptoken`, `$top`) |
 | GET | /v1/workflow-runs/{id} | A run with result and steps |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
-| GET | /v1/me/approvals | The caller's approval requests (`status`, `$top`) |
-| GET | /v1/workspaces/{id}/approvals | A workspace's approval requests, for its managers |
-| GET | /v1/approvals/{id} | An approval request, for its assignees and the workspace's managers |
-| POST | /v1/approvals/{id}/decision | Decide: `{"decision": "approve" \| "reject", "comment", "input"}` |
+| GET | /v1/me/tasks | The caller's tasks (`waiting=true` for those still to answer, `status`, `kind`, `key`, `workspace_id`, `item_id`, `$top`); open ones by due time |
+| GET / POST | /v1/workspaces/{id}/tasks | A workspace's tasks, for its owners; create a task: `{"title", "description", "assignees", "item_id", "kind", "key", "completion", "outcomes", "input_schema", "values", "priority", "due_at"}` |
+| GET | /v1/items/{id}/tasks | The tasks about an item the caller may see |
+| GET | /v1/tasks/{id} | A task with its answers, `can_respond` and `answered` |
+| POST | /v1/tasks/{id}/responses | Answer: `{"outcome", "comment", "input"}` |
+| POST | /v1/tasks/{id}/cancel | Cancel a person's or the system's open task |
 | GET | /v1/staged-files/{id}, /content | A staged file and its bytes, for readers of its item |
 
 ## Runtime

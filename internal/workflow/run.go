@@ -39,8 +39,8 @@ type RunInput struct {
 type Exec interface {
 	Step(name string, fn func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error)) (json.RawMessage, error)
 	Work(name string, fn func(ctx context.Context) (json.RawMessage, error)) (json.RawMessage, error)
-	// Await waits for approval request id, which node created, to be
-	// decided, and returns the node's output: Decided's value.
+	// Await waits for task id, which node created, to be completed, and
+	// returns the node's output: tasks.Result's value.
 	Await(node, id string) (json.RawMessage, error)
 	Sleep(d time.Duration) error
 }
@@ -169,11 +169,11 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 				name = next
 				continue
 			}
-			var decided map[string]any
-			if err = decode(raw, &decided); err != nil {
+			var result map[string]any
+			if err = decode(raw, &result); err != nil {
 				return r.finish(name, err)
 			}
-			o.Output, o.Port = decided, fmt.Sprint(decided["decision"])
+			o.Output, o.Port = result, fmt.Sprint(result["outcome"])
 		}
 		r.steps[name] = o.Output
 		for k, v := range o.Vars {

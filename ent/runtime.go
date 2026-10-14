@@ -4,7 +4,6 @@ package ent
 
 import (
 	"encoding/json/jsontext"
-	"papergo/ent/approvalrequest"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
@@ -43,6 +42,8 @@ import (
 	"papergo/ent/syncstate"
 	"papergo/ent/synctoken"
 	"papergo/ent/syncview"
+	"papergo/ent/task"
+	"papergo/ent/taskresponse"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
@@ -60,77 +61,6 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
-	approvalrequestMixin := schema.ApprovalRequest{}.Mixin()
-	approvalrequestMixinFields0 := approvalrequestMixin[0].Fields()
-	_ = approvalrequestMixinFields0
-	approvalrequestFields := schema.ApprovalRequest{}.Fields()
-	_ = approvalrequestFields
-	// approvalrequestDescCreatedAt is the schema descriptor for created_at field.
-	approvalrequestDescCreatedAt := approvalrequestMixinFields0[1].Descriptor()
-	// approvalrequest.DefaultCreatedAt holds the default value on creation for the created_at field.
-	approvalrequest.DefaultCreatedAt = approvalrequestDescCreatedAt.Default.(func() time.Time)
-	// approvalrequestDescWorkspaceID is the schema descriptor for workspace_id field.
-	approvalrequestDescWorkspaceID := approvalrequestFields[0].Descriptor()
-	// approvalrequest.WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
-	approvalrequest.WorkspaceIDValidator = approvalrequestDescWorkspaceID.Validators[0].(func(string) error)
-	// approvalrequestDescWorkflowID is the schema descriptor for workflow_id field.
-	approvalrequestDescWorkflowID := approvalrequestFields[1].Descriptor()
-	// approvalrequest.WorkflowIDValidator is a validator for the "workflow_id" field. It is called by the builders before save.
-	approvalrequest.WorkflowIDValidator = approvalrequestDescWorkflowID.Validators[0].(func(string) error)
-	// approvalrequestDescRunID is the schema descriptor for run_id field.
-	approvalrequestDescRunID := approvalrequestFields[2].Descriptor()
-	// approvalrequest.RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
-	approvalrequest.RunIDValidator = approvalrequestDescRunID.Validators[0].(func(string) error)
-	// approvalrequestDescNode is the schema descriptor for node field.
-	approvalrequestDescNode := approvalrequestFields[3].Descriptor()
-	// approvalrequest.NodeValidator is a validator for the "node" field. It is called by the builders before save.
-	approvalrequest.NodeValidator = approvalrequestDescNode.Validators[0].(func(string) error)
-	// approvalrequestDescTitle is the schema descriptor for title field.
-	approvalrequestDescTitle := approvalrequestFields[5].Descriptor()
-	// approvalrequest.TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	approvalrequest.TitleValidator = func() func(string) error {
-		validators := approvalrequestDescTitle.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(title string) error {
-			for _, fn := range fns {
-				if err := fn(title); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
-	// approvalrequestDescDescription is the schema descriptor for description field.
-	approvalrequestDescDescription := approvalrequestFields[6].Descriptor()
-	// approvalrequest.DefaultDescription holds the default value on creation for the description field.
-	approvalrequest.DefaultDescription = approvalrequestDescDescription.Default.(string)
-	// approvalrequest.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
-	approvalrequest.DescriptionValidator = approvalrequestDescDescription.Validators[0].(func(string) error)
-	// approvalrequestDescParked is the schema descriptor for parked field.
-	approvalrequestDescParked := approvalrequestFields[11].Descriptor()
-	// approvalrequest.DefaultParked holds the default value on creation for the parked field.
-	approvalrequest.DefaultParked = approvalrequestDescParked.Default.(bool)
-	// approvalrequestDescComment is the schema descriptor for comment field.
-	approvalrequestDescComment := approvalrequestFields[14].Descriptor()
-	// approvalrequest.DefaultComment holds the default value on creation for the comment field.
-	approvalrequest.DefaultComment = approvalrequestDescComment.Default.(string)
-	// approvalrequest.CommentValidator is a validator for the "comment" field. It is called by the builders before save.
-	approvalrequest.CommentValidator = approvalrequestDescComment.Validators[0].(func(string) error)
-	// approvalrequestDescUpdatedAt is the schema descriptor for updated_at field.
-	approvalrequestDescUpdatedAt := approvalrequestFields[17].Descriptor()
-	// approvalrequest.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	approvalrequest.DefaultUpdatedAt = approvalrequestDescUpdatedAt.Default.(func() time.Time)
-	// approvalrequest.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	approvalrequest.UpdateDefaultUpdatedAt = approvalrequestDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// approvalrequestDescID is the schema descriptor for id field.
-	approvalrequestDescID := approvalrequestMixinFields0[0].Descriptor()
-	// approvalrequest.DefaultID holds the default value on creation for the id field.
-	approvalrequest.DefaultID = approvalrequestDescID.Default.(func() string)
-	// approvalrequest.IDValidator is a validator for the "id" field. It is called by the builders before save.
-	approvalrequest.IDValidator = approvalrequestDescID.Validators[0].(func(string) error)
 	auditeventMixin := schema.AuditEvent{}.Mixin()
 	auditeventMixinFields0 := auditeventMixin[0].Fields()
 	_ = auditeventMixinFields0
@@ -1975,6 +1905,118 @@ func init() {
 	syncview.DefaultID = syncviewDescID.Default.(func() string)
 	// syncview.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	syncview.IDValidator = syncviewDescID.Validators[0].(func(string) error)
+	taskMixin := schema.Task{}.Mixin()
+	taskMixinFields0 := taskMixin[0].Fields()
+	_ = taskMixinFields0
+	taskFields := schema.Task{}.Fields()
+	_ = taskFields
+	// taskDescCreatedAt is the schema descriptor for created_at field.
+	taskDescCreatedAt := taskMixinFields0[1].Descriptor()
+	// task.DefaultCreatedAt holds the default value on creation for the created_at field.
+	task.DefaultCreatedAt = taskDescCreatedAt.Default.(func() time.Time)
+	// taskDescWorkspaceID is the schema descriptor for workspace_id field.
+	taskDescWorkspaceID := taskFields[0].Descriptor()
+	// task.WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
+	task.WorkspaceIDValidator = taskDescWorkspaceID.Validators[0].(func(string) error)
+	// taskDescKey is the schema descriptor for key field.
+	taskDescKey := taskFields[3].Descriptor()
+	// task.DefaultKey holds the default value on creation for the key field.
+	task.DefaultKey = taskDescKey.Default.(string)
+	// task.KeyValidator is a validator for the "key" field. It is called by the builders before save.
+	task.KeyValidator = taskDescKey.Validators[0].(func(string) error)
+	// taskDescTitle is the schema descriptor for title field.
+	taskDescTitle := taskFields[4].Descriptor()
+	// task.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	task.TitleValidator = func() func(string) error {
+		validators := taskDescTitle.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(title string) error {
+			for _, fn := range fns {
+				if err := fn(title); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// taskDescDescription is the schema descriptor for description field.
+	taskDescDescription := taskFields[5].Descriptor()
+	// task.DefaultDescription holds the default value on creation for the description field.
+	task.DefaultDescription = taskDescDescription.Default.(string)
+	// task.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
+	task.DescriptionValidator = taskDescDescription.Validators[0].(func(string) error)
+	// taskDescWait is the schema descriptor for wait field.
+	taskDescWait := taskFields[18].Descriptor()
+	// task.DefaultWait holds the default value on creation for the wait field.
+	task.DefaultWait = taskDescWait.Default.(bool)
+	// taskDescParked is the schema descriptor for parked field.
+	taskDescParked := taskFields[19].Descriptor()
+	// task.DefaultParked holds the default value on creation for the parked field.
+	task.DefaultParked = taskDescParked.Default.(bool)
+	// taskDescComment is the schema descriptor for comment field.
+	taskDescComment := taskFields[24].Descriptor()
+	// task.DefaultComment holds the default value on creation for the comment field.
+	task.DefaultComment = taskDescComment.Default.(string)
+	// task.CommentValidator is a validator for the "comment" field. It is called by the builders before save.
+	task.CommentValidator = taskDescComment.Validators[0].(func(string) error)
+	// taskDescUpdatedAt is the schema descriptor for updated_at field.
+	taskDescUpdatedAt := taskFields[27].Descriptor()
+	// task.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	task.DefaultUpdatedAt = taskDescUpdatedAt.Default.(func() time.Time)
+	// task.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	task.UpdateDefaultUpdatedAt = taskDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// taskDescVersion is the schema descriptor for version field.
+	taskDescVersion := taskFields[28].Descriptor()
+	// task.DefaultVersion holds the default value on creation for the version field.
+	task.DefaultVersion = taskDescVersion.Default.(int)
+	// task.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	task.VersionValidator = taskDescVersion.Validators[0].(func(int) error)
+	// taskDescID is the schema descriptor for id field.
+	taskDescID := taskMixinFields0[0].Descriptor()
+	// task.DefaultID holds the default value on creation for the id field.
+	task.DefaultID = taskDescID.Default.(func() string)
+	// task.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	task.IDValidator = taskDescID.Validators[0].(func(string) error)
+	taskresponseMixin := schema.TaskResponse{}.Mixin()
+	taskresponseMixinFields0 := taskresponseMixin[0].Fields()
+	_ = taskresponseMixinFields0
+	taskresponseFields := schema.TaskResponse{}.Fields()
+	_ = taskresponseFields
+	// taskresponseDescCreatedAt is the schema descriptor for created_at field.
+	taskresponseDescCreatedAt := taskresponseMixinFields0[1].Descriptor()
+	// taskresponse.DefaultCreatedAt holds the default value on creation for the created_at field.
+	taskresponse.DefaultCreatedAt = taskresponseDescCreatedAt.Default.(func() time.Time)
+	// taskresponseDescTaskID is the schema descriptor for task_id field.
+	taskresponseDescTaskID := taskresponseFields[0].Descriptor()
+	// taskresponse.TaskIDValidator is a validator for the "task_id" field. It is called by the builders before save.
+	taskresponse.TaskIDValidator = taskresponseDescTaskID.Validators[0].(func(string) error)
+	// taskresponseDescSubject is the schema descriptor for subject field.
+	taskresponseDescSubject := taskresponseFields[1].Descriptor()
+	// taskresponse.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	taskresponse.SubjectValidator = taskresponseDescSubject.Validators[0].(func(string) error)
+	// taskresponseDescAssignee is the schema descriptor for assignee field.
+	taskresponseDescAssignee := taskresponseFields[2].Descriptor()
+	// taskresponse.AssigneeValidator is a validator for the "assignee" field. It is called by the builders before save.
+	taskresponse.AssigneeValidator = taskresponseDescAssignee.Validators[0].(func(string) error)
+	// taskresponseDescOutcome is the schema descriptor for outcome field.
+	taskresponseDescOutcome := taskresponseFields[3].Descriptor()
+	// taskresponse.OutcomeValidator is a validator for the "outcome" field. It is called by the builders before save.
+	taskresponse.OutcomeValidator = taskresponseDescOutcome.Validators[0].(func(string) error)
+	// taskresponseDescComment is the schema descriptor for comment field.
+	taskresponseDescComment := taskresponseFields[4].Descriptor()
+	// taskresponse.DefaultComment holds the default value on creation for the comment field.
+	taskresponse.DefaultComment = taskresponseDescComment.Default.(string)
+	// taskresponse.CommentValidator is a validator for the "comment" field. It is called by the builders before save.
+	taskresponse.CommentValidator = taskresponseDescComment.Validators[0].(func(string) error)
+	// taskresponseDescID is the schema descriptor for id field.
+	taskresponseDescID := taskresponseMixinFields0[0].Descriptor()
+	// taskresponse.DefaultID holds the default value on creation for the id field.
+	taskresponse.DefaultID = taskresponseDescID.Default.(func() string)
+	// taskresponse.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	taskresponse.IDValidator = taskresponseDescID.Validators[0].(func(string) error)
 	termMixin := schema.Term{}.Mixin()
 	termMixinFields0 := termMixin[0].Fields()
 	_ = termMixinFields0

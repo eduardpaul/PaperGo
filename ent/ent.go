@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"papergo/ent/approvalrequest"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
@@ -44,6 +43,8 @@ import (
 	"papergo/ent/syncstate"
 	"papergo/ent/synctoken"
 	"papergo/ent/syncview"
+	"papergo/ent/task"
+	"papergo/ent/taskresponse"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
@@ -119,7 +120,6 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			approvalrequest.Table:      approvalrequest.ValidColumn,
 			auditevent.Table:           auditevent.ValidColumn,
 			blob.Table:                 blob.ValidColumn,
 			blobdeletion.Table:         blobdeletion.ValidColumn,
@@ -157,6 +157,8 @@ func checkColumn(t, c string) error {
 			syncstate.Table:            syncstate.ValidColumn,
 			synctoken.Table:            synctoken.ValidColumn,
 			syncview.Table:             syncview.ValidColumn,
+			task.Table:                 task.ValidColumn,
+			taskresponse.Table:         taskresponse.ValidColumn,
 			term.Table:                 term.ValidColumn,
 			termgroup.Table:            termgroup.ValidColumn,
 			termset.Table:              termset.ValidColumn,

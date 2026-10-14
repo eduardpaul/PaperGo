@@ -29,6 +29,9 @@ type Activity struct {
 	// may be tokens, so their types are checked when the node runs.
 	InputSchema  map[string]any `json:"input_schema"`
 	OutputSchema map[string]any `json:"output_schema,omitempty"`
+	// PortsFrom names the input a node's ports come from instead of Ports:
+	// "outcomes" for task nodes, whose answers are their ports.
+	PortsFrom string `json:"ports_from,omitempty"`
 	// Terminal activities end the run and have no next nodes.
 	Terminal bool `json:"terminal,omitempty"`
 	run      func(*env, map[string]any) (outcome, error)
@@ -71,8 +74,8 @@ func (a *Activity) Validate(inputs map[string]any) error {
 			return errors.New("event must be a lowercase key other than completed and failed")
 		}
 	}
-	if a.Key == "approval" {
-		if err := validateApproval(inputs); err != nil {
+	if a.Key == "task" || a.Key == "approval" {
+		if err := validateTask(a, inputs); err != nil {
 			return err
 		}
 	}
@@ -111,8 +114,8 @@ type outcome struct {
 	Fail string `json:"fail,omitempty"`
 	// Job hands the node to its activity's work (activities with work only).
 	Job json.RawMessage `json:"job,omitempty"`
-	// Wait is an approval request the run waits for; its decision picks the
-	// port and becomes the output.
+	// Wait is a task the run waits for; its outcome picks the port and its
+	// result becomes the output.
 	Wait string `json:"wait,omitempty"`
 }
 

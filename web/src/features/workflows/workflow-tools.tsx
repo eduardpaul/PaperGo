@@ -11,7 +11,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Input, Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
-import { useBlobUrl } from '@/features/approvals/review';
+import { useBlobUrl } from '@/features/tasks/review';
 import { useFormat } from '@/lib/preferences';
 import { formDefaults, normalizeForm } from './model';
 import type { WorkflowDefinition } from './model';
