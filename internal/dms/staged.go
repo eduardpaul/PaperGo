@@ -189,8 +189,10 @@ func (s *Service) runStaged(ctx context.Context, subject, id, runID string) (*en
 // PromoteStagedFile makes a pending staged file of run the item's current
 // file: a new file version from source workflow, with the item's
 // metadata, revision, audit and events like an upload. It fails with
-// ErrConflict when a source is no longer current.
-func (s *Service) PromoteStagedFile(ctx context.Context, subject, id, runID string) (out *ent.Blob, err error) {
+// ErrConflict when a source is no longer current. With recycleSources, the
+// other source items go to the recycle bin in the same transaction, so a
+// newer upload cannot arrive between the freshness check and their deletion.
+func (s *Service) PromoteStagedFile(ctx context.Context, subject, id, runID string, recycleSources bool) (out *ent.Blob, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		f, e := t.runStaged(ctx, subject, id, runID)
 		if e != nil {
@@ -224,6 +226,22 @@ func (s *Service) PromoteStagedFile(ctx context.Context, subject, id, runID stri
 		in := BlobInput{ObjectKey: f.ObjectKey, Filename: f.Filename, ContentType: f.ContentType, Size: f.Size, SHA256: f.Sha256, Languages: languages, Source: FileWorkflow}
 		if out, e = t.writeBlob(ctx, subject, f.ItemID, r.Version, in, "blob.promote", nil); e != nil {
 			return e
+		}
+		if recycleSources {
+			recycled := map[string]bool{f.ItemID: true}
+			for _, src := range f.Sources {
+				if recycled[src.ItemID] {
+					continue
+				}
+				r, e := t.authorize(ctx, subject, src.ItemID, "write")
+				if e != nil {
+					return e
+				}
+				if e = t.Delete(ctx, subject, r.ID, r.Version, DeleteOptions{}); e != nil {
+					return e
+				}
+				recycled[src.ItemID] = true
+			}
 		}
 		return t.Client.StagedFile.UpdateOne(f).SetState(stagedfile.StatePromoted).Exec(ctx)
 	})

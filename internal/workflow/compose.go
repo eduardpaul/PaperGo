@@ -17,8 +17,8 @@ import (
 
 // file.compose_pdf combines the photos of a selection run into one
 // searchable PDF and stages it for the run's primary item (see package
-// compose). An approval reviews it; file.promote makes it the primary's
-// file, and item.delete can recycle the other photos.
+// compose). An approval reviews it; file.promote with recycle_sources makes
+// it the primary's file and recycles the other photos atomically.
 
 func init() {
 	register(&Activity{Key: "file.compose_pdf", Kind: "action",

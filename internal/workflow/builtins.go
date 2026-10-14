@@ -119,9 +119,7 @@ func init() {
 					"description": "The pages are the selected photos in order. Approve to replace the primary item's file with this PDF and move the other photos to the recycle bin.",
 					"assignees": "{param:approvers}", "review": {"type": "file.preview", "staged_file_id": "{step:compose.staged_file_id}"}},
 					"next": {"approved": "promote", "rejected": "discard"}},
-				"promote": {"activity": "file.promote", "inputs": {"staged_file_id": "{step:compose.staged_file_id}"}, "next": {"done": "others"}},
-				"others": {"activity": "forEach", "inputs": {"items": "{step:compose.others}", "as": "photo"}, "next": {"body": "recycle"}},
-				"recycle": {"activity": "item.delete", "inputs": {"item_id": "{var:photo}"}},
+				"promote": {"activity": "file.promote", "inputs": {"staged_file_id": "{step:compose.staged_file_id}", "recycle_sources": true}},
 				"discard": {"activity": "file.discard", "inputs": {"staged_file_id": "{step:compose.staged_file_id}"}}
 			}}
 		}`,

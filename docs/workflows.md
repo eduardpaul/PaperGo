@@ -189,7 +189,7 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `item.unpublish` | action | unpublishes, if published | `unpublished` |
 | `item.delete` | action | deletes the item | `deleted` |
 | `task.cancel` | action | cancels an open task of the workspace that no run waits for (`task_id`), such as a follow-up created without waiting; a task a run waits for ends with its run | `task_id`, `status` |
-| `file.promote` | action | makes a staged file of this run (`staged_file_id`) its item's current file, as a new file version; fails when a file it was made from is no longer current | `item_id`, `blob_id`, `file_version` |
+| `file.promote` | action | makes a staged file of this run (`staged_file_id`) its item's current file, as a new file version; fails when a file it was made from is no longer current. With `recycle_sources: true`, recycles the other source items in the same transaction | `item_id`, `blob_id`, `file_version` |
 | `file.discard` | action | discards a staged file of this run; the item keeps its file | `discarded` |
 | `file.compose_pdf` | action | combines the current files of the run's items (JPEG, PNG or WebP photos of one list or library) into one searchable PDF in the run's order, staged for the primary item; see [photos to PDF](#photos-to-pdf). Heavy work. | `staged_file_id`, `item_id`, `others` (the other items, in order), `pages`, `bytes`, `metrics` |
 | `file.optimize_image` | action | analyzes the text of the item's current JPEG, PNG or WebP image with [OCR](ocr.md) and stages a smaller WebP copy whose smallest text keeps `target_height`; ports `candidate`/`skipped`; see [image optimization](#image-optimization). Heavy work. | `staged_file_id` (candidate) or `reason` (skipped), `item_id`, `blob_id`, `file_version`, `metrics` |
@@ -203,6 +203,7 @@ Activities that produce files, such as a smaller image or a PDF composed from ph
 - A staged file belongs to the run and to the item it would replace.
 - It records the file versions it was made from, and keeps its bytes while it is pending.
 - `file.promote` makes it the item's current file. That is a new file version (`file.added` with source `workflow`), with the item's metadata, revision history, audit and events like an upload. It succeeds only if every file it was made from is still its item's current file, so a candidate made from an old upload never replaces a newer one.
+- With `recycle_sources: true` (default `false`), `file.promote` also moves the other source items to the recycle bin in the same transaction. The author must be able to write every source item. If any source changed or cannot be recycled, neither promotion nor recycling commits.
 - `file.discard` drops it.
 
 A completed or cancelled run discards its pending staged files. A failed run keeps them for a retry until the run is deleted. Purging an item deletes its staged files. The storage collector frees discarded files' bytes after its grace period.
@@ -238,7 +239,7 @@ It keeps the original, following `skipped` with the reason, when the image has n
 3. **Text.** OCR reads the full-resolution photo. Each line is placed, invisible, at its position on the scaled page, so the PDF can be searched and its text selected and copied. The text layer embeds a placeholder font and maps characters to Unicode, so it needs no system fonts and keeps every script.
 4. **PDF.** Each page image is embedded at 150 pixels per inch, as JPEG at `quality` (default 80), or losslessly when that is smaller. The PDF is staged for the primary item, named after its file, with the other items as `others`.
 
-The node fails if a photo changes before the PDF is staged; promotion fails if one changes before the decision. Either way, start a new conversion.
+The node fails if a photo changes before the PDF is staged; promotion fails if one changes before promotion commits. Either way, start a new conversion. The Photos to PDF built-in promotes with `recycle_sources: true`, so the PDF replacement and recycling commit together and no upload can arrive between them.
 
 ## Forms
 
@@ -367,7 +368,7 @@ Built-in workflows are processes PaperGo ships, in the same model.
 | Key | Name | Scope | Parameters |
 | --- | --- | --- | --- |
 | `documents.optimize` | Optimize image storage: when an image is added (uploaded, through WebDAV or restored), or on demand, `file.optimize_image` proposes a smaller copy and an `approval` asks the `approvers` to compare it with the current file at full size; approving promotes it as a new file version, rejecting discards it. `concurrency: replace`, so a newer file cancels a waiting review. | per library | `target_height`, `min_confidence`, `percentile`, `max_analysis_dimension`, `minimum_scale`, `quality` (see [image optimization](#image-optimization)), `approvers` (people; none means the workspace's owners) |
-| `documents.photos_to_pdf` | Photos to PDF: started on a selection (`selection: "selection"`, launch screen with image previews and a page order), `file.compose_pdf` combines the photos into one searchable PDF and an `approval` asks the `approvers` to review it (`file.preview`). Approving promotes it as the primary item's new file version, keeping its metadata and history, then sends the other photos to the recycle bin; rejecting discards it. `concurrency: skip`, so a second conversion with any of the same photos is not started while one waits. | per library | `target_height` (default 32), `quality` (default 80), `approvers` (people; none means the workspace's owners) |
+| `documents.photos_to_pdf` | Photos to PDF: started on a selection (`selection: "selection"`, launch screen with image previews and a page order), `file.compose_pdf` combines the photos into one searchable PDF and an `approval` asks the `approvers` to review it (`file.preview`). Approving atomically promotes it as the primary item's new file version, keeping its metadata and history, and sends the other photos to the recycle bin; rejecting discards it. `concurrency: skip`, so a second conversion with any of the same photos is not started while one waits. | per library | `target_height` (default 32), `quality` (default 80), `approvers` (people; none means the workspace's owners) |
 | `items.expire` | Unpublish expired items: every day, unpublishes the published items whose date `field` is before today | per list or library | `field` (an indexed date field), `cron` (default `0 1 * * *`), `time_zone` (default `UTC`) |
 
 How people use them:

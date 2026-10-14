@@ -192,9 +192,7 @@ Per library, off by default, and started manually on a selection.
         "title": "Review combined PDF for {item:name}", "assignees": "{param:approvers}",
         "review": {"type": "file.preview", "staged_file_id": "{step:compose.staged_file_id}"}
       }, "next": {"approved": "accept", "rejected": "discard"}},
-      "accept": {"activity": "file.promote", "inputs": {"staged_file_id": "{step:compose.staged_file_id}", "source_version": "{step:compose.source_version}"}, "next": {"done": "others"}},
-      "others": {"activity": "forEach", "inputs": {"items": "{step:compose.others}", "as": "member"}, "next": {"body": "recycle"}},
-      "recycle": {"activity": "item.delete", "inputs": {"item_id": "{var:member}"}},
+      "accept": {"activity": "file.promote", "inputs": {"staged_file_id": "{step:compose.staged_file_id}", "recycle_sources": true}},
       "discard": {"activity": "file.discard", "inputs": {"staged_file_id": "{step:compose.staged_file_id}"}}
     }
   }
@@ -212,9 +210,7 @@ Per library, off by default, and started manually on a selection.
 4. **Write the PDF.** Each page embeds the resized image as JPEG at `quality` (default 80), or as lossless Flate when that is smaller. Invisible text is placed at the recognized positions, with coordinates scaled to the resized image.
 5. **Stage the PDF.** Output `staged_file_id`, `source_version` (the primary's file version), `others` (the other members in order), `pages` and `bytes`.
 
-`file.promote` gives the primary item the PDF as a new file version. Its metadata and earlier files stay in its history. `item.delete` then sends the other members to the recycle bin, where they stay recoverable. The run is the cause of those deletions, so it is not cancelled (the existing selection-run rule).
-
-One difference from PaperDotNet: there, promotion and recycling commit in one transaction. Here they are separate nodes, each exactly-once, so a crash between them resumes at the next node rather than rolling back. If that atomicity matters, `file.promote` can take an optional `delete_items` input and do both in one step.
+`file.promote` with `recycle_sources: true` gives the primary item the PDF as a new file version and sends the other source items to the recycle bin in one transaction. The primary's metadata and earlier files stay in its history, and recycled photos stay recoverable. Every source must still be current and writable; any failure rolls back both promotion and recycling. The run is the cause of those deletions, so they do not cancel it.
 
 ## Image, OCR and PDF stack in Go
 

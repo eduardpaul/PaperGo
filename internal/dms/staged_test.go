@@ -6,11 +6,116 @@ import (
 	"testing"
 	"time"
 
+	"papergo/ent"
 	"papergo/ent/domainevent"
 	"papergo/ent/stagedfile"
 	"papergo/internal/model"
 	"papergo/internal/storage"
 )
+
+func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
+	for _, scenario := range []string{"promote", "changed source", "cannot recycle source"} {
+		t.Run(scenario, func(t *testing.T) {
+			s, w, _ := fixture(t)
+			lib := davLibrary(t, s, w, false)
+			if err := s.SetWorkspaceMember(testContext, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
+				t.Fatal(err)
+			}
+			var items []*File
+			var sources []model.StagedSource
+			for _, name := range []string{"primary.pdf", "first.pdf", "second.pdf"} {
+				item, _, err := s.PutFile(testContext, "alice", lib.ID, []string{name}, PutFile{Blob: content(name)})
+				if err != nil {
+					t.Fatal(err)
+				}
+				b, err := s.CurrentFile(testContext, "alice", item.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				items = append(items, item)
+				sources = append(sources, model.StagedSource{ItemID: item.ID, BlobID: b.ID})
+			}
+			f, err := s.StageFile(testContext, "bob", StageInput{ItemID: items[0].ID, RunID: "conversion", Sources: sources,
+				ObjectKey: "combined", Filename: "combined.pdf", ContentType: "application/pdf", Size: 12, SHA256: hash('a')})
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch scenario {
+			case "changed source":
+				if _, _, err = s.PutFile(testContext, "alice", lib.ID, []string{"second.pdf"}, PutFile{Blob: content("second.pdf")}); err != nil {
+					t.Fatal(err)
+				}
+			case "cannot recycle source":
+				r, err := s.Client.Resource.Get(testContext, items[2].ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = s.SetPermissions(testContext, "alice", r.ID, r.Version, Permissions{Grants: []Permission{
+					{"user", "alice", "manage", "allow"}, {"user", "bob", "read_draft", "allow"},
+				}}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err = s.PromoteStagedFile(testContext, "bob", f.ID, "conversion", true)
+			if scenario == "promote" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				want := ErrConflict
+				if scenario == "cannot recycle source" {
+					want = ErrForbidden
+				}
+				if !errors.Is(err, want) {
+					t.Fatalf("promotion: %v, want %v", err, want)
+				}
+			}
+			current, err := s.CurrentFile(testContext, "alice", items[0].ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "promote" {
+				if current.ObjectKey != f.ObjectKey || current.Version != 2 {
+					t.Fatalf("promoted file %+v", current)
+				}
+			} else if current.ID != sources[0].BlobID {
+				t.Fatal("failed cleanup replaced the primary file")
+			}
+			for _, item := range items[1:] {
+				r, err := s.Client.Resource.Get(testContext, item.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if (r.DeletedAt != nil) != (scenario == "promote") {
+					t.Fatalf("source %s deleted at %v in %s", item.ID, r.DeletedAt, scenario)
+				}
+			}
+			f, err = s.Client.StagedFile.Get(testContext, f.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantState := stagedfile.StatePending
+			if scenario == "promote" {
+				wantState = stagedfile.StatePromoted
+			}
+			if f.State != wantState {
+				t.Fatalf("staged file is %s, want %s", f.State, wantState)
+			}
+			// A failed cleanup must roll back the file.added event too.
+			events, err := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventFileAdded), domainevent.ResourceIDEQ(items[0].ID)).Order(ent.Asc(domainevent.FieldID)).All(testContext)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantEvents := 1
+			if scenario == "promote" {
+				wantEvents = 2
+			}
+			if len(events) != wantEvents {
+				t.Fatalf("file.added events: %d, want %d", len(events), wantEvents)
+			}
+		})
+	}
+}
 
 func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	s, w, _ := fixture(t)
@@ -57,17 +162,17 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	if _, err = store.Open(testContext, smallerObject.Key); err != nil {
 		t.Fatalf("a pending staged file lost its bytes: %v", err)
 	}
-	if _, err = s.PromoteStagedFile(testContext, "alice", smaller, "run-2"); err == nil {
+	if _, err = s.PromoteStagedFile(testContext, "alice", smaller, "run-2", false); err == nil {
 		t.Fatal("another run promoted the staged file")
 	}
-	b, err := s.PromoteStagedFile(testContext, "alice", smaller, "run-1")
+	b, err := s.PromoteStagedFile(testContext, "alice", smaller, "run-1", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if b.Version != 2 || b.Languages != "eng" || b.ObjectKey != smallerObject.Key {
 		t.Fatalf("promoted file %+v", b)
 	}
-	if _, err = s.PromoteStagedFile(testContext, "alice", smaller, "run-1"); !errors.Is(err, ErrConflict) {
+	if _, err = s.PromoteStagedFile(testContext, "alice", smaller, "run-1", false); !errors.Is(err, ErrConflict) {
 		t.Fatalf("promoting twice: %v", err)
 	}
 	e, err := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventFileAdded), domainevent.ResourceIDEQ(f.ID)).Order(domainevent.ByID()).All(testContext)
@@ -75,7 +180,7 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 		t.Fatalf("file.added events %v, %v", e, err)
 	}
 	// The other candidate was made from the replaced file: stale.
-	if _, err = s.PromoteStagedFile(testContext, "alice", discarded, "run-1"); !errors.Is(err, ErrConflict) {
+	if _, err = s.PromoteStagedFile(testContext, "alice", discarded, "run-1", false); !errors.Is(err, ErrConflict) {
 		t.Fatalf("a stale candidate was promoted: %v", err)
 	}
 	if err = s.DiscardStagedFile(testContext, "alice", discarded, "run-1"); err != nil {

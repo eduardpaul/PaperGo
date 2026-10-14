@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as Router from '@tanstack/react-router';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentType } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { stringifyJSON } from '@/api/json';
@@ -60,6 +60,30 @@ function show() {
     },
   };
 }
+
+it('shows an explicitly selected task when no tasks are assigned to the reader', async () => {
+  navigation.search = { view: 'all', id: 'assigned-to-bob' };
+  stub(() => response({ value: [] }));
+  const page = show();
+  await act(async () => { await page.client.refetchQueries({ queryKey: ['tasks'] }); });
+  expect(await screen.findByRole('article', { name: 'Task assigned-to-bob' })).toBeTruthy();
+  expect(within(screen.getByRole('list', { name: 'Tasks' })).queryAllByRole('listitem')).toHaveLength(0);
+  expect(screen.queryByText('No tasks yet')).toBeNull();
+});
+
+it('keeps the selected task open after the last waiting task leaves the inbox', async () => {
+  navigation.search = { id: 'last' };
+  let completed = false;
+  stub(() => response({ value: completed ? [] : [task('last')] }));
+  const page = show();
+  await within(screen.getByRole('list', { name: 'Tasks' })).findByRole('button', { name: /^Task last\b/ });
+  await screen.findByRole('article', { name: 'Task last' });
+  completed = true;
+  await act(async () => { await page.client.invalidateQueries({ queryKey: ['tasks'] }); });
+  await waitFor(() => expect(within(screen.getByRole('list', { name: 'Tasks' })).queryAllByRole('listitem')).toHaveLength(0));
+  expect(screen.getByRole('article', { name: 'Task last' })).toBeTruthy();
+  expect(screen.queryByText('Nothing is waiting for you')).toBeNull();
+});
 
 it('loads beyond 100 tasks through each proxy-safe next link and keeps the selected task open', async () => {
   let finishNext!: (result: Response) => void;

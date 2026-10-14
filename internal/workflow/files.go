@@ -17,8 +17,8 @@ import (
 const stagedProp = `"staged_file_id": {"type": "string", "title": "Staged file", "description": "A staged file of this run, such as {step:prepare.staged_file_id}."}`
 
 func init() {
-	register(&Activity{Key: "file.promote", Kind: "action", Description: "Makes a staged file of this run its item's current file, as a new file version. Fails when a file it was made from is no longer current.",
-		InputSchema:  inputs(stagedProp, "staged_file_id"),
+	register(&Activity{Key: "file.promote", Kind: "action", Description: "Makes a staged file of this run its item's current file, as a new file version. Fails when a file it was made from is no longer current. With recycle_sources, moves the other source items to the recycle bin in the same transaction.",
+		InputSchema:  inputs(stagedProp+`, "recycle_sources": {"type": "boolean", "title": "Recycle source items", "description": "Move the other source items to the recycle bin atomically with promotion.", "default": false}`, "staged_file_id"),
 		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"item_id": {"type": "string"}, "blob_id": {"type": "string"}, "file_version": {"type": "integer"}}}`), run: runFilePromote})
 	register(&Activity{Key: "file.discard", Kind: "action", Description: "Discards a staged file of this run; the item keeps its current file.",
 		InputSchema:  inputs(stagedProp, "staged_file_id"),
@@ -41,7 +41,18 @@ func runFilePromote(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	b, err := e.t.PromoteStagedFile(e.ctx, e.author, id, e.runID)
+	recycle := false
+	if v, ok := in["recycle_sources"]; ok {
+		v, err := e.scope.resolve(v)
+		if err != nil {
+			return outcome{}, err
+		}
+		var valid bool
+		if recycle, valid = v.(bool); !valid {
+			return outcome{}, errors.New("recycle_sources must be true or false")
+		}
+	}
+	b, err := e.t.PromoteStagedFile(e.ctx, e.author, id, e.runID, recycle)
 	if err != nil {
 		return outcome{}, err
 	}

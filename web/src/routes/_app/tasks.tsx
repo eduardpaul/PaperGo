@@ -97,13 +97,13 @@ function TasksPage() {
             </Button>
           )}
         </div>
-        {list.isSuccess && rows.length === 0 ? (
+        {selectedId ? (
+          <Detail key={selectedId} id={selectedId} />
+        ) : list.isSuccess && rows.length === 0 ? (
           <EmptyState
             icon={ClipboardCheck}
             title={view.filter.waiting ? 'Nothing is waiting for you' : 'No tasks yet'}
           />
-        ) : selectedId ? (
-          <Detail key={selectedId} id={selectedId} />
         ) : null}
       </div>
       {creating && <CreateTask onClose={() => setCreating(false)} onCreated={(id) => navigate({ search: { view: 'all', id } })} />}
