@@ -33,9 +33,9 @@ var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.Even
 
 // Limits keep definitions and runs bounded.
 const (
-	MaxTriggers    = 10
-	MaxNodes       = 100
-	MaxDepth       = 5
+	MaxTriggers = 10
+	MaxNodes    = 100
+	MaxDepth    = 5
 	// MaxNodeVisits bounds the nodes a run visits outside forEach passes,
 	// and those of each pass; MaxRunVisits bounds them all.
 	MaxNodeVisits  = 1000
