@@ -25,6 +25,7 @@ import (
 	"papergo/ent/workflowtrigger"
 	"papergo/ent/workflowversion"
 	"papergo/internal/dms"
+	"papergo/internal/forms"
 )
 
 // Service manages workflow definitions on top of the DMS: the same writer,
@@ -325,7 +326,7 @@ func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceI
 		}
 	}
 	if def.InputSchema != nil {
-		if err = checkDomainConfig(ctx, t, subject, workspaceID, def.InputSchema, "input_schema"); err != nil {
+		if err = forms.CheckConfig(ctx, t, subject, workspaceID, def.InputSchema, "input_schema"); err != nil {
 			return def, nil, err
 		}
 	}
@@ -514,7 +515,7 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			return err
 		}
 		if def.InputSchema != nil {
-			if err = checkDomainValues(ctx, t, subject, w.WorkspaceID, def.InputSchema, inputs, "inputs"); err != nil {
+			if err = forms.CheckValues(ctx, t, subject, w.WorkspaceID, def.InputSchema, inputs, "inputs"); err != nil {
 				return err
 			}
 		}

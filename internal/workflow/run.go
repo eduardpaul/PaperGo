@@ -9,6 +9,7 @@ import (
 
 	"papergo/ent/workflowversion"
 	"papergo/internal/dms"
+	"papergo/internal/forms"
 )
 
 // RunInput starts one run of a workflow version. The runner stores it with
@@ -93,7 +94,7 @@ func (s *Service) Execute(ctx context.Context, x Exec, in RunInput) (Result, err
 	}
 	r := &runState{in: in, x: x, l: l, tools: s.Tools, vars: map[string]any{}, steps: map[string]any{}}
 	for k, v := range l.Definition.Variables {
-		r.vars[k] = jsonish(v)
+		r.vars[k] = forms.Plain(v)
 	}
 	return r.execute(ctx)
 }
@@ -289,7 +290,7 @@ func (r *runState) once(name string, node Node) (outcome, error) {
 // transaction, and the outcome is recorded.
 func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Event), name string, run func(*env) (outcome, error)) (json.RawMessage, error) {
 	var item map[string]any
-	sc := &scope{ctx: ctx, trigger: jsonish(r.in.Event).(map[string]any), inputs: r.in.Inputs, vars: r.vars, steps: r.steps, now: time.Now().UTC(),
+	sc := &scope{ctx: ctx, trigger: forms.Plain(r.in.Event).(map[string]any), inputs: r.in.Inputs, vars: r.vars, steps: r.steps, now: time.Now().UTC(),
 		run: map[string]any{"id": r.in.RunID, "workflow_id": r.in.WorkflowID, "workflow_key": r.l.Key, "version": r.in.Version, "actor": r.in.Event.Actor, "items": r.items()}}
 	if r.in.ItemID != "" {
 		sc.item = func(ctx context.Context) (map[string]any, error) {
@@ -298,7 +299,7 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 				if err != nil {
 					return nil, fmt.Errorf("read the run's item: %w", err)
 				}
-				item = jsonish(snapshot(res)).(map[string]any)
+				item = forms.Plain(snapshot(res)).(map[string]any)
 			}
 			return item, nil
 		}
@@ -309,7 +310,7 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 	if err != nil {
 		return nil, err
 	}
-	o.Output = jsonish(o.Output)
+	o.Output = forms.Plain(o.Output)
 	out, err := json.Marshal(o)
 	if err != nil {
 		return nil, err

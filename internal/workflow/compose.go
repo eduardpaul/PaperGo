@@ -10,6 +10,7 @@ import (
 
 	"papergo/internal/compose"
 	"papergo/internal/dms"
+	"papergo/internal/forms"
 	"papergo/internal/model"
 	"papergo/internal/storage"
 )
@@ -24,7 +25,7 @@ func init() {
 		Description: "Combines the current files of the run's items, JPEG, PNG or WebP photos of one list or library, into one searchable PDF in the run's order, and stages it for the primary item. Each page is turned upright and shrunk so its smallest text keeps target_height; OCR places the recognized text invisibly on it. Fails when a photo changes before the PDF is staged.",
 		InputSchema: inputs(`"target_height": {"type": "number", "title": "Smallest text height", "description": "Height in pixels the smallest text of each page keeps, 8 to 200; pages never grow.", "minimum": 8, "maximum": 200, "default": 32},
 			"quality": {"type": "integer", "title": "JPEG quality", "minimum": 1, "maximum": 100, "default": 80}`),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {
 			"staged_file_id": {"type": "string", "description": "The staged PDF."},
 			"item_id": {"type": "string", "description": "The primary item the PDF is for."},
 			"others": {"type": "array", "items": {"type": "string"}, "description": "The run's other items, in order."},

@@ -14,6 +14,7 @@ import (
 	"papergo/ent"
 	"papergo/ent/approvalrequest"
 	"papergo/internal/dms"
+	"papergo/internal/forms"
 )
 
 // An approval node asks people to approve or reject, optionally with a form
@@ -41,14 +42,14 @@ func init() {
 			"assignees": {"type": "array", "title": "Assignees", "description": "Who may decide; none means the workspace's owners.", "items": {"type": "string"}, "maxItems": 50, "x-papergo": {"kind": "people", "access": "read_draft"}},
 			"input_schema": {"type": "object", "title": "Decision form", "description": "A form whose values come with the decision, as {step:node.input...}."},
 			"review": {"type": "object", "title": "Review", "description": "A staged file to review: type file.compare (beside the current file) or file.preview, and staged_file_id.", "properties": {"type": {"type": "string", "enum": ["file.compare", "file.preview"]}, "staged_file_id": {"type": "string"}}}`, "title"),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"request_id": {"type": "string"}, "decision": {"type": "string", "enum": ["approved", "rejected"]}, "decided_by": {"type": "string"}, "comment": {"type": "string"}, "input": {"type": "object"}}}`),
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"request_id": {"type": "string"}, "decision": {"type": "string", "enum": ["approved", "rejected"]}, "decided_by": {"type": "string"}, "comment": {"type": "string"}, "input": {"type": "object"}}}`),
 		run:          runApproval})
 }
 
 // validateApproval checks an approval node's literal inputs at save time.
 func validateApproval(in map[string]any) error {
 	if s, ok := in["input_schema"].(map[string]any); ok {
-		if err := validateSchema(s, "input_schema", 0, true); err != nil {
+		if err := forms.Validate(s, "input_schema"); err != nil {
 			return err
 		}
 	}
@@ -337,11 +338,11 @@ func (s *Service) Decide(ctx context.Context, subject, id string, d Decision) (A
 		}
 		var input json.RawMessage
 		if r.InputSchema != nil {
-			values, err := formValues(r.InputSchema, d.Input, "input")
+			values, err := forms.Values(r.InputSchema, d.Input, "input")
 			if err != nil {
 				return err
 			}
-			if err = checkDomainValues(ctx, t, subject, r.WorkspaceID, r.InputSchema, values, "input"); err != nil {
+			if err = forms.CheckValues(ctx, t, subject, r.WorkspaceID, r.InputSchema, values, "input"); err != nil {
 				return err
 			}
 			if input, err = json.Marshal(values); err != nil {

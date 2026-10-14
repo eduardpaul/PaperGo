@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"papergo/internal/dms"
+	"papergo/internal/forms"
 	"papergo/internal/model"
 	"papergo/internal/optimize"
 	"papergo/internal/storage"
@@ -41,7 +42,7 @@ func init() {
 			"max_analysis_dimension": {"type": "integer", "title": "Analysis size", "description": "Longest side in pixels of the copy the detector analyzes, 256 to 2600.", "minimum": 256, "maximum": 2600, "default": 2600},
 			"minimum_scale": {"type": "number", "title": "Minimum scale", "description": "How far the image may shrink, 0.01 to 1.", "minimum": 0.01, "maximum": 1, "default": 0.05},
 			"quality": {"type": "integer", "title": "WebP quality", "minimum": 1, "maximum": 100, "default": 80}`),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {
 			"staged_file_id": {"type": "string", "description": "The staged WebP file (candidate)."},
 			"reason": {"type": "string", "description": "Why the original is kept (skipped)."},
 			"item_id": {"type": "string"}, "blob_id": {"type": "string", "description": "The analyzed file version."}, "file_version": {"type": "integer"},
@@ -105,7 +106,7 @@ func runOptimizeImage(e *env, in map[string]any) (outcome, error) {
 	// A run a superseded upload started must not optimize its replacement.
 	if trigger := e.scope.trigger; trigger["type"] == dms.EventFileAdded && trigger["resource_id"] == itemID {
 		data, _ := trigger["data"].(map[string]any)
-		if v, ok := number(data["file_version"]); ok && int(v) != b.Version {
+		if v, ok := forms.Number(data["file_version"]); ok && int(v) != b.Version {
 			return skip(reasonSuperseded)
 		}
 	}
@@ -142,7 +143,7 @@ func (e *env) number(in map[string]any, name string, v *float64) error {
 		*v = f
 		return nil
 	}
-	f, ok := number(r)
+	f, ok := forms.Number(r)
 	if !ok {
 		return fmt.Errorf("%s must be a number", name)
 	}

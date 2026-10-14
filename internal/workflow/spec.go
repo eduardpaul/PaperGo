@@ -16,6 +16,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"papergo/internal/dms"
+	"papergo/internal/forms"
 )
 
 // Trigger types. Item triggers react to committed item writes, schedule
@@ -142,11 +143,10 @@ const (
 )
 
 var (
-	keyPattern       = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
-	eventPattern     = regexp.MustCompile(`^wf\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)$`)
-	nodeNamePattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 _-]{0,99}$`)
-	inputNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
-	cronParser       = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	keyPattern      = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+	eventPattern    = regexp.MustCompile(`^wf\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)$`)
+	nodeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 _-]{0,99}$`)
+	cronParser      = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 )
 
 // WorkflowEvent is the event type a run of workflow key raises.
@@ -287,7 +287,7 @@ func (d Definition) validate() error {
 		if manual == 0 {
 			return dms.Invalid("input_schema belongs to workflows with a manual trigger")
 		}
-		if err := validateSchema(d.InputSchema, "input_schema", 0, true); err != nil {
+		if err := forms.ValidateLaunch(d.InputSchema, "input_schema"); err != nil {
 			return dms.Invalid(err.Error())
 		}
 		if _, hints := d.InputSchema["x-papergo-selection"]; hints && !d.selection() {
@@ -300,7 +300,7 @@ func (d Definition) validate() error {
 		return dms.Invalid("concurrency is parallel, skip or replace")
 	}
 	for name := range d.Variables {
-		if !inputNamePattern.MatchString(name) {
+		if !forms.NamePattern.MatchString(name) {
 			return dms.Invalid("invalid variable name " + name)
 		}
 	}
@@ -390,5 +390,5 @@ func (d Definition) selection() bool {
 // launchInputs applies the launch form's defaults to a manual start's
 // values and checks them.
 func (d Definition) launchInputs(values map[string]any) (map[string]any, error) {
-	return formValues(d.InputSchema, values, "inputs")
+	return forms.Values(d.InputSchema, values, "inputs")
 }

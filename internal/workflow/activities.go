@@ -13,6 +13,7 @@ import (
 
 	"papergo/ent"
 	"papergo/internal/dms"
+	"papergo/internal/forms"
 )
 
 // Activity is one kind of node. Flow activities steer the run; actions change
@@ -76,7 +77,7 @@ func (a *Activity) Validate(inputs map[string]any) error {
 		}
 	}
 	if a.Key == forEachKey {
-		if as, ok := inputs["as"].(string); !ok || !inputNamePattern.MatchString(as) {
+		if as, ok := inputs["as"].(string); !ok || !forms.NamePattern.MatchString(as) {
 			return errors.New("as must be a variable name")
 		}
 		if v, ok := inputs["items"].(string); ok && !strings.Contains(v, "{") {
@@ -187,7 +188,7 @@ func register(a *Activity) {
 		a.Ports = []string{}
 	}
 	if a.InputSchema == nil {
-		a.InputSchema = mustSchema(`{"type": "object", "properties": {}}`)
+		a.InputSchema = forms.MustParse(`{"type": "object", "properties": {}}`)
 	}
 	activities[a.Key] = a
 }
@@ -198,7 +199,7 @@ func inputs(properties string, required ...string) map[string]any {
 	if required == nil {
 		req = []byte("[]")
 	}
-	return mustSchema(`{"type": "object", "properties": {` + properties + `}, "required": ` + string(req) + `}`)
+	return forms.MustParse(`{"type": "object", "properties": {` + properties + `}, "required": ` + string(req) + `}`)
 }
 
 const (
@@ -211,42 +212,42 @@ const (
 func init() {
 	register(&Activity{Key: "if", Kind: "flow", Ports: []string{"true", "false"}, Description: "Follows true or false. With filter, tests the run's item with the query filter language; otherwise compares left and right.",
 		InputSchema:  inputs(`"filter": ` + filterProp + `, "left": {"type": "string", "title": "Left"}, "op": {"type": "string", "title": "Comparison", "enum": ["eq", "ne", "gt", "ge", "lt", "le", "contains", "empty", "not_empty"]}, "right": {"type": "string", "title": "Right"}`),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"result": {"type": "boolean"}}}`), run: runIf})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"result": {"type": "boolean"}}}`), run: runIf})
 	register(&Activity{Key: "set_variable", Kind: "flow", Description: "Sets a run variable.",
 		InputSchema:  inputs(`"name": {"type": "string", "title": "Variable"}, "value": {"type": "string", "title": "Value", "description": "A single token keeps its type."}`, "name"),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"name": {"type": "string"}, "value": {"type": "string"}}}`), run: runSetVariable})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"name": {"type": "string"}, "value": {"type": "string"}}}`), run: runSetVariable})
 	register(&Activity{Key: "delay", Kind: "flow", Description: "Waits durably for a duration or until a time.",
 		InputSchema:  inputs(`"duration": {"type": "string", "title": "Duration", "description": "Such as 30m or 72h."}, "until": {"type": "string", "title": "Until", "description": "A date or RFC 3339 time."}`),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"until": {"type": "string", "format": "date-time"}}}`), run: runDelay})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"until": {"type": "string", "format": "date-time"}}}`), run: runDelay})
 	register(&Activity{Key: "event.raise", Kind: "flow", Description: "Raises wf.{workflow key}.{event} for other workflows, with the run's item.",
 		InputSchema:  inputs(`"event": {"type": "string", "title": "Event"}, "data": {"type": "object", "title": "Data"}`, "event"),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"event": {"type": "string"}}}`), run: runRaise})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"event": {"type": "string"}}}`), run: runRaise})
 	register(&Activity{Key: forEachKey, Kind: "flow", Ports: []string{portBody}, Description: "Runs the nodes from its body port once per element of items, with the element in the variable as and its position in as_index. A pass ends at a node with nothing next; after the last element, the loop follows done.",
 		InputSchema:  inputs(`"items": {"type": "array", "title": "Items", "description": "An array, or a single token such as {run:items}.", "maxItems": 1000}, "as": {"type": "string", "title": "Variable", "description": "The variable each element is in.", "default": "element"}`, "items", "as"),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"items": {"type": "array"}, "count": {"type": "integer"}, "as": {"type": "string"}}}`), run: runForEach})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"items": {"type": "array"}, "count": {"type": "integer"}, "as": {"type": "string"}}}`), run: runForEach})
 	register(&Activity{Key: "end", Kind: "flow", Terminal: true, Description: "Completes the run.", run: func(*env, map[string]any) (outcome, error) { return outcome{End: true}, nil }})
 	register(&Activity{Key: "fail", Kind: "flow", Terminal: true, Description: "Fails the run with a message.",
 		InputSchema: inputs(`"message": {"type": "string", "title": "Message"}`, "message"), run: runFail})
 	register(&Activity{Key: "item.get", Kind: "action", Description: "Reads an item; its fields become the output.",
-		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(itemOutput), run: runItemGet})
+		InputSchema: inputs(itemIDProp), OutputSchema: forms.MustParse(itemOutput), run: runItemGet})
 	register(&Activity{Key: "item.update", Kind: "action", Description: "Changes an item's content type, name, tags or field values. Values are merged; null removes a value.",
 		InputSchema:  inputs(itemIDProp + `, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`),
-		OutputSchema: mustSchema(itemOutput), run: runItemUpdate})
+		OutputSchema: forms.MustParse(itemOutput), run: runItemUpdate})
 	register(&Activity{Key: "item.create", Kind: "action", Description: "Creates an item; the output has its item_id.",
 		InputSchema:  inputs(collectProp+`, "parent_id": {"type": "string", "title": "Folder", "description": "Defaults to the collection."}, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`, "collection_id", "name"),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"item_id": {"type": "string"}, "item": ` + itemOutput + `}}`), run: runItemCreate})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"item_id": {"type": "string"}, "item": ` + itemOutput + `}}`), run: runItemCreate})
 	register(&Activity{Key: "items.query", Kind: "action", Description: "Queries a collection's items (head surface); the output has items and count.",
 		InputSchema:  inputs(collectProp+`, "filter": `+filterProp+`, "sort": {"type": "array", "title": "Sort", "maxItems": 8, "items": {"type": "object", "properties": {"field": {"type": "string"}, "direction": {"type": "string", "enum": ["asc", "desc"]}}, "required": ["field"]}}, "limit": {"type": "integer", "title": "Limit", "minimum": 1, "maximum": 100, "default": 50}`, "collection_id"),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"items": {"type": "array", "items": ` + itemOutput + `}, "count": {"type": "integer"}}}`), run: runItemsQuery})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"items": {"type": "array", "items": ` + itemOutput + `}, "count": {"type": "integer"}}}`), run: runItemsQuery})
 	register(&Activity{Key: "item.has_terms", Kind: "flow", Ports: []string{"matched", "unmatched"}, Description: "Follows matched when the item's term and keywords fields hold the terms (or descendants, or terms merged into them): any of them, or all with match all.",
 		InputSchema:  inputs(itemIDProp+`, "terms": {"type": "array", "title": "Terms", "items": {"type": "string"}, "minItems": 1, "maxItems": 20, "x-papergo": {"kind": "terms"}}, "match": {"type": "string", "title": "Match", "enum": ["any", "all"], "default": "any"}`, "terms"),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"matched": {"type": "boolean"}, "terms": {"type": "array", "items": {"type": "string"}, "description": "The given terms the item holds."}}}`), run: runItemHasTerms})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"matched": {"type": "boolean"}, "terms": {"type": "array", "items": {"type": "string"}, "description": "The given terms the item holds."}}}`), run: runItemHasTerms})
 	register(&Activity{Key: "item.publish", Kind: "action", Description: "Publishes the item's head revision; nothing happens when it is already published.",
-		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(`{"type": "object", "properties": {"published": {"type": "boolean"}, "publication_id": {"type": "string"}}}`), run: runItemPublish})
+		InputSchema: inputs(itemIDProp), OutputSchema: forms.MustParse(`{"type": "object", "properties": {"published": {"type": "boolean"}, "publication_id": {"type": "string"}}}`), run: runItemPublish})
 	register(&Activity{Key: "item.unpublish", Kind: "action", Description: "Unpublishes the item; nothing happens when it is not published.",
-		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(`{"type": "object", "properties": {"unpublished": {"type": "boolean"}}}`), run: runItemUnpublish})
+		InputSchema: inputs(itemIDProp), OutputSchema: forms.MustParse(`{"type": "object", "properties": {"unpublished": {"type": "boolean"}}}`), run: runItemUnpublish})
 	register(&Activity{Key: "item.delete", Kind: "action", Description: "Deletes the item.",
-		InputSchema: inputs(itemIDProp), OutputSchema: mustSchema(`{"type": "object", "properties": {"deleted": {"type": "boolean"}}}`), run: runItemDelete})
+		InputSchema: inputs(itemIDProp), OutputSchema: forms.MustParse(`{"type": "object", "properties": {"deleted": {"type": "boolean"}}}`), run: runItemDelete})
 }
 
 // target resolves the item an action works on.
@@ -280,7 +281,7 @@ func (e *env) load(id string) (*ent.Resource, error) {
 
 // snapshot is the token and output view of an item.
 func snapshot(r *ent.Resource) map[string]any {
-	out := map[string]any{"id": r.ID, "name": r.Name, "tags": anyList(r.Tags), "values": jsonish(r.Values), "version": r.Version, "created_by": r.CreatedBy, "updated_by": r.UpdatedBy, "created_at": r.CreatedAt.UTC().Format(time.RFC3339Nano), "updated_at": r.UpdatedAt.UTC().Format(time.RFC3339Nano), "published": r.PublishedRevisionID != nil}
+	out := map[string]any{"id": r.ID, "name": r.Name, "tags": anyList(r.Tags), "values": forms.Plain(r.Values), "version": r.Version, "created_by": r.CreatedBy, "updated_by": r.UpdatedBy, "created_at": r.CreatedAt.UTC().Format(time.RFC3339Nano), "updated_at": r.UpdatedAt.UTC().Format(time.RFC3339Nano), "published": r.PublishedRevisionID != nil}
 	if r.ContainerID != nil {
 		out["collection_id"] = *r.ContainerID
 	}
@@ -295,18 +296,6 @@ func anyList(tags []string) []any {
 	for i, t := range tags {
 		out[i] = t
 	}
-	return out
-}
-
-// jsonish gives values the shapes they have after a JSON round trip, so a
-// first run and a replay see the same types.
-func jsonish(v any) any {
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return nil
-	}
-	var out any
-	_ = json.Unmarshal(raw, &out)
 	return out
 }
 
@@ -476,7 +465,7 @@ func runSetVariable(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	if !inputNamePattern.MatchString(name) {
+	if !forms.NamePattern.MatchString(name) {
 		return outcome{}, fmt.Errorf("invalid variable name %q", name)
 	}
 	v, err := e.scope.resolve(in["value"])

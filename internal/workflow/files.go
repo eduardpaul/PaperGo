@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"papergo/internal/dms"
+	"papergo/internal/forms"
 	"papergo/internal/model"
 	"papergo/internal/storage"
 )
@@ -18,10 +19,10 @@ const stagedProp = `"staged_file_id": {"type": "string", "title": "Staged file",
 func init() {
 	register(&Activity{Key: "file.promote", Kind: "action", Description: "Makes a staged file of this run its item's current file, as a new file version. Fails when a file it was made from is no longer current.",
 		InputSchema:  inputs(stagedProp, "staged_file_id"),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"item_id": {"type": "string"}, "blob_id": {"type": "string"}, "file_version": {"type": "integer"}}}`), run: runFilePromote})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"item_id": {"type": "string"}, "blob_id": {"type": "string"}, "file_version": {"type": "integer"}}}`), run: runFilePromote})
 	register(&Activity{Key: "file.discard", Kind: "action", Description: "Discards a staged file of this run; the item keeps its current file.",
 		InputSchema:  inputs(stagedProp, "staged_file_id"),
-		OutputSchema: mustSchema(`{"type": "object", "properties": {"discarded": {"type": "boolean"}}}`), run: runFileDiscard})
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"discarded": {"type": "boolean"}}}`), run: runFileDiscard})
 }
 
 func (e *env) stagedID(in map[string]any) (string, error) {
