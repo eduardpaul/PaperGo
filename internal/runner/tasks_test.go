@@ -173,6 +173,26 @@ func TestParkingIsNotAFailure(t *testing.T) {
 	}
 }
 
+// Deleting the item a run works on cancels the run and the task it waits for.
+func TestDeletingTheItemCancelsAWaitingRun(t *testing.T) {
+	f := setup(t)
+	w := f.workflow(t, "Review", approvalFlow)
+	item := f.item(t, "alice", "Contract", nil)
+	ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{item.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, ids[0], "waiting")
+	if err = f.dms.Delete(ctx, "alice", item.ID, f.head(t, item.ID).Version, dms.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, ids[0], "cancelled")
+	all, err := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{})
+	if err != nil || len(all) != 1 || all[0].Status != "cancelled" {
+		t.Fatalf("tasks %v, %v", all, err)
+	}
+}
+
 func TestWaitingRunsHoldNoWorker(t *testing.T) {
 	f := setup(t)
 	review := f.workflow(t, "Review", approvalFlow)
