@@ -167,7 +167,7 @@ export function WorkflowEditor({
                           changeTrigger(index, {
                             type:
                               event.target.value === 'workflow-event' ? 'wf.workflow.completed' : event.target.value,
-                            collection_id: trigger.collection_id,
+                            collection_id: event.target.value.startsWith('term.') ? undefined : trigger.collection_id,
                           })
                         }
                       >
@@ -188,7 +188,7 @@ export function WorkflowEditor({
                           placeholder="wf.workflow-key.completed"
                         />
                       )}
-                      {trigger.type !== 'term.merged' && (
+                      {!trigger.type.startsWith('term.') && (
                         <Select
                           aria-label={`Trigger collection ${index + 1}`}
                           value={trigger.collection_id ?? ''}

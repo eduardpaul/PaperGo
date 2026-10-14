@@ -305,6 +305,12 @@ func (r *runState) once(name string, node Node) (outcome, error) {
 // node runs inside a step: tokens and the item are read in the node's
 // transaction, and the outcome is recorded.
 func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Event), name string, run func(*env) (outcome, error)) (json.RawMessage, error) {
+	// Each step rechecks live scopes, including after a durable wait or replay.
+	if r.in.Event.Type == dms.EventTermChanged {
+		if err := t.RequireScope(ctx, r.l.Author, "taxonomy.read"); err != nil {
+			return nil, fmt.Errorf("read term.changed trigger requires taxonomy.read: %w", err)
+		}
+	}
 	var item map[string]any
 	sc := &scope{ctx: ctx, trigger: forms.Plain(r.in.Event).(map[string]any), inputs: r.in.Inputs, vars: r.vars, steps: r.steps, now: time.Now().UTC(),
 		run: map[string]any{"id": r.in.RunID, "workflow_id": r.in.WorkflowID, "workflow_key": r.l.Key, "version": r.in.Version, "actor": r.in.Event.Actor, "items": r.items()}}

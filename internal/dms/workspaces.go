@@ -139,6 +139,11 @@ func (s *Service) SetWorkspaceMember(ctx context.Context, subject, id string, in
 		if err != nil {
 			return err
 		}
+		previousRole := ""
+		if old != nil {
+			previousRole = workspaceRole(old.Action)
+		}
+		t.emitPermissionsChanged(ctx, subject, w, map[string]any{"action": "member.set", "member_subject": in.Subject, "previous_role": previousRole, "role": in.Role})
 		return t.audit(ctx, subject, "workspace.member.set", w, map[string]any{"subject": in.Subject, "role": in.Role})
 	})
 }
@@ -178,6 +183,7 @@ func (s *Service) RemoveWorkspaceMember(ctx context.Context, subject, id, member
 		if err = t.Client.Grant.DeleteOne(g).Exec(ctx); err != nil {
 			return err
 		}
+		t.emitPermissionsChanged(ctx, subject, w, map[string]any{"action": "member.remove", "member_subject": member, "previous_role": workspaceRole(g.Action), "role": ""})
 		return t.audit(ctx, subject, "workspace.member.remove", w, map[string]any{"subject": member})
 	})
 }

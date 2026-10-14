@@ -1403,7 +1403,7 @@
             }
           }
         },
-        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes raise permissions.changed once for the edited scope, with resource_kind, action=replace and previous/current permission snapshots (inherit, grants, scope_id, effective_grants). Unchanged ACLs raise no event. The event and audit commit with the write.",
         "x-module-scopes": [
           "list.read"
         ]
@@ -9838,7 +9838,7 @@
       "put": {
         "summary": "Update Term",
         "operationId": "updateTerm",
-        "description": "Requires manage. Merged terms are read-only. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy.",
+        "description": "Requires manage. Merged terms are read-only. Organization taxonomy is shared across workspaces. Required module scopes: taxonomy.manage. Workspace membership and resource ACLs do not govern taxonomy. Changes to the name, localized labels or other editable properties raise term.changed in every live workspace, with term_id, term_set_id, version, sorted changed_fields and previous/current term properties. Unchanged values raise no event; failed writes roll back every event. The event has no item or resource_id.",
         "parameters": [
           {
             "name": "id",
@@ -11136,7 +11136,7 @@
       "post": {
         "operationId": "setWorkspaceMember",
         "summary": "Add a workspace member or change their role",
-        "description": "Owner access is required. Repeating the same subject/role is a no-op. The last owner cannot be demoted. Membership changes do not consume the workspace metadata ETag. Subject registration/active-user validation belongs to the external identity provider.",
+        "description": "Owner access is required. Repeating the same subject/role is a no-op. The last owner cannot be demoted. Membership changes do not consume the workspace metadata ETag. Subject registration/active-user validation belongs to the external identity provider. Membership additions and role changes raise permissions.changed on the workspace root, with resource_kind=workspace, action=member.set, member_subject, previous_role and role. Empty previous_role means no prior membership. Repeated assignments raise no event.",
         "requestBody": {
           "required": true,
           "content": {
@@ -11184,7 +11184,7 @@
       "delete": {
         "operationId": "removeWorkspaceMember",
         "summary": "Remove a workspace member",
-        "description": "Owner access is required. The last owner cannot be removed. No If-Match is needed. A missing member or inaccessible workspace returns 404.",
+        "description": "Owner access is required. The last owner cannot be removed. No If-Match is needed. A missing member or inaccessible workspace returns 404. Successful removal raises permissions.changed on the workspace root, with resource_kind=workspace, action=member.remove, member_subject, previous_role and an empty role. Failed removals raise no event.",
         "responses": {
           "204": {
             "description": "Membership removed"
@@ -18869,10 +18869,11 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, task.created, task.completed, task.cancelled, schedule, manual, term.merged, or wf.{key}.{event}."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.changed, or wf.{key}.{event}. permissions.changed takes only collection_id and no item condition; term.changed and term.merged take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
           },
           "collection_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Limits item, workflow-event, task and permission triggers to a collection; permission events include the collection itself and its folders/items. Not supported for term.changed or term.merged."
           },
           "content_type_id": {
             "type": "string"

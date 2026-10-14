@@ -46,19 +46,22 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | `item.restored` | a deleted item is restored from the recycle bin | the item |
 | `item.purged` | a deleted item is permanently purged | none (`{trigger:resource_id}` names it) |
 | `file.added` | a new file version becomes a library item's current file: a new document, a replacement, a restore, or a workflow's | the item |
+| `permissions.changed` | a collection, folder or item's ACL changes, or workspace membership changes | the item for an item ACL change; otherwise none (`{trigger:resource_id}` names the edited scope) |
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
 | `manual` | someone starts it through the API | each chosen item, the selection's primary item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
+| `term.changed` | a term's name, localized labels or other editable properties change through PUT `/v1/terms/{id}` | none |
 | `task.created`, `task.completed`, `task.cancelled` | a [task](#tasks) of the workspace is created, completed or cancelled | the task's item, or none |
 | `wf.{key}.{event}` | a run of workflow `key` raises `event`; `completed` and `failed` are raised when a run ends | that run's item |
 
 Fields of a trigger:
 
-- `collection_id` limits item and workflow-event triggers to one list or library.
+- `collection_id` limits item and workflow-event triggers to one list or library. On `permissions.changed`, it selects ACL changes to that collection and its folders/items; workspace membership changes reach workspace-wide subscriptions.
 - `content_type_id` (with `collection_id`) limits item triggers to one content type.
 - `terms` (1 to 20 term IDs) limits `item.created`, `item.updated` and `item.published` to revisions whose term and keywords fields hold one of the terms, a descendant of one, or a term merged into one. `term_change` says what counts: `present` (the default, the revision holds it), `added` (held now, not by the item's revision before) or `removed` (held before, not now).
 - `task_key` (on `task.*` triggers) limits them to tasks with that key, such as `legal_review`. With `collection_id`, only tasks about items of that collection start runs.
 - `sources` (on `file.added`) lists the file sources that start runs: `upload`, `webdav`, `restore` and `workflow`. The default is every source except `workflow`, so a workflow that replaces a file does not start itself again.
+- `permissions.changed` takes only `collection_id`; item conditions do not apply because scopes can be collections, folders or workspaces. `term.changed` and `term.merged` take no trigger options or item conditions.
 - For a schedule:
   - **With `collection_id`:** each occurrence starts one run per item of the collection that meets the condition, up to 500, on `surface` (`head` by default, or `published`).
   - **Without `collection_id`:** one run with no item.
@@ -83,15 +86,19 @@ The `data` for each event type:
 
 - `item.created` / `item.updated`: `revision_id`, `revision_number`, `content_type_id`, `blob_id`
 - `file.added`: `source`, `file_version`, `blob_id`, `content_type` (the file's media type), `size`, `revision_id`, `content_type_id`
+- `permissions.changed`: `resource_kind` and `action`. For `action: "replace"`, `previous` and `current` contain `inherit`, local `grants`, `scope_id` and `effective_grants`. For `action: "member.set"` or `"member.remove"`, data contains `member_subject`, `previous_role` and `role`; an empty role means no membership.
 - `item.published`: `revision_id`, `revision_number`, `publication_id`
 - `item.unpublished`: `revision_id`
 - `schedule`: `workflow_id`, `occurrence`
 - `manual`: `workflow_id`, `inputs`
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
+- `term.changed`: `term_id`, `term_set_id`, `version`, sorted `changed_fields`, and `previous` / `current` term properties (`name`, `parent_id`, `description`, `color`, `sort_order`, `labels`, `synonyms`, `deprecated`, `available_as_keyword`; absent optional fields mean unset). The event has no `resource_id` because the term is organization taxonomy, not a workspace resource.
 - `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.completed` adds `outcome` and `completed_by`
 - `wf.*`: `run_id` and the raised data; `completed`/`failed` add `status`, `node` and, on failure, `error`
 
-Only items raise item events. Folders, collections and settings do not; merging organization terms delivers `term.merged` to every live workspace so its workflow subscriptions can react.
+Only items raise item events. ACL changes raise one `permissions.changed` for the edited scope, without events for inheriting descendants. Workspace member additions, role changes and removals raise the same event on the workspace root. An unchanged ACL or term update, or a repeated membership assignment, raises no event. Failed writes leave no events. Permission events and term events retain the actor and workflow cause/depth, and commit with the write and audit.
+
+Updating organization terms delivers `term.changed` to every live workspace so its workflow subscriptions can react, including localized-label-only edits. Subscriptions to `term.changed` require `taxonomy.read`. Dispatch skips subscriptions whose workflow version author no longer has that scope; each executing node rechecks it before reading the trigger payload, including after a durable wait. Revocation stops subsequent nodes with an access error. These events describe taxonomy changes without changing item revisions. Term creation, moves, keyword promotion and merges do not raise `term.changed`; merges raise `term.merged` in every live workspace.
 
 ## Concurrency
 

@@ -279,9 +279,16 @@ func (d Definition) validate() error {
 			if d.Condition != nil {
 				return dms.Invalid(at + "a condition tests items; filter task triggers with task_key")
 			}
-		case t.Type == dms.EventTermMerged:
+		case t.Type == dms.EventPermissionsChanged:
+			if t.ContentTypeID != "" || t.Cron != "" || t.TimeZone != "" {
+				return dms.Invalid(at + "permissions.changed triggers take only collection_id")
+			}
+			if d.Condition != nil {
+				return dms.Invalid(at + "a condition tests items; permissions.changed also covers collections, folders and workspaces")
+			}
+		case t.Type == dms.EventTermMerged || t.Type == dms.EventTermChanged:
 			if t.CollectionID != "" || t.ContentTypeID != "" || t.Cron != "" || t.TimeZone != "" {
-				return dms.Invalid(at + "term.merged triggers take no options")
+				return dms.Invalid(at + t.Type + " triggers take no options")
 			}
 		case eventPattern.MatchString(t.Type):
 			if t.Cron != "" || t.TimeZone != "" {

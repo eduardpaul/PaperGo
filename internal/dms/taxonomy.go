@@ -527,6 +527,9 @@ func (s *Service) UpdateTerm(ctx context.Context, subject, termID string, versio
 			return e
 		}
 		out = views[0]
+		if e = t.emitTermChanged(ctx, subject, old, updated); e != nil {
+			return e
+		}
 		return t.auditTaxonomy(ctx, subject, "term.update", map[string]any{"term_id": termID, "deprecated": in.Deprecated})
 	})
 	return

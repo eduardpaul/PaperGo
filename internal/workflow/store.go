@@ -285,6 +285,11 @@ func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceI
 	checked := map[string]bool{}
 	for i, tr := range def.Triggers {
 		at := fmt.Sprintf("triggers[%d]: ", i)
+		if tr.Type == dms.EventTermChanged {
+			if err := t.RequireScope(ctx, subject, "taxonomy.read"); err != nil {
+				return def, nil, fmt.Errorf("%sterm.changed requires taxonomy.read: %w", at, err)
+			}
+		}
 		if tr.CollectionID != "" && !checked[tr.CollectionID] {
 			c, err := t.Authorize(ctx, subject, tr.CollectionID, "read")
 			if err != nil {
@@ -627,7 +632,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 		}
 		// Purge removes revision payloads. Older queued content events must not
 		// block dispatch or start actions against an item that no longer exists.
-		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded) {
+		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded || e.Type == dms.EventPermissionsChanged) {
 			exists, err := t.Client.Resource.Query().Where(resource.IDEQ(e.ResourceID)).Exist(ctx)
 			if err != nil {
 				return nil, nil, err
@@ -693,6 +698,13 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 			if !ok {
 				continue
 			}
+			if e.Type == dms.EventTermChanged {
+				if err := t.RequireScope(ctx, m.v.CreatedBy, "taxonomy.read"); errors.Is(err, dms.ErrForbidden) {
+					continue
+				} else if err != nil {
+					return nil, nil, err
+				}
+			}
 			conditionErr := ""
 			if m.def.Condition != nil && e.Type != TriggerManual && e.Type != TriggerSchedule {
 				if e.ResourceID == "" || e.CollectionID == "" {
@@ -733,16 +745,13 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 				continue
 			}
 			c := t.Client.WorkflowRun.Create().SetID(runID).SetWorkflowID(w.ID).SetWorkflowVersion(m.v.Number).SetWorkspaceID(w.WorkspaceID).SetEventID(e.ID).SetEventType(e.Type).SetDepth(e.Depth).SetActor(e.Actor)
-			if e.ResourceID != "" && e.Type != dms.EventItemDeleted && e.Type != dms.EventItemPurged {
-				c.SetItemID(e.ResourceID)
+			if itemID := eventItemID(e); itemID != "" {
+				c.SetItemID(itemID)
 			}
 			if _, err = c.Save(ctx); err != nil {
 				return nil, nil, err
 			}
-			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: e.ResourceID, Event: e, ConditionError: conditionErr}
-			if e.Type == dms.EventItemDeleted || e.Type == dms.EventItemPurged {
-				in.ItemID = ""
-			}
+			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: e, ConditionError: conditionErr}
 			if e.Type == TriggerManual {
 				if inputs, ok := e.Data["inputs"].(map[string]any); ok {
 					in.Inputs = inputs
@@ -778,10 +787,18 @@ func eventMembers(e dms.Event) []string {
 			return out
 		}
 	}
-	if e.ResourceID == "" || e.Type == dms.EventItemDeleted || e.Type == dms.EventItemPurged {
-		return nil
+	if itemID := eventItemID(e); itemID != "" {
+		return []string{itemID}
 	}
-	return []string{e.ResourceID}
+	return nil
+}
+
+func eventItemID(e dms.Event) string {
+	if e.Type == dms.EventItemDeleted || e.Type == dms.EventItemPurged ||
+		e.Type == dms.EventPermissionsChanged && e.Data["resource_kind"] != "item" {
+		return ""
+	}
+	return e.ResourceID
 }
 
 func overlaps(a, b []string) bool {

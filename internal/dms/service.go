@@ -1094,6 +1094,10 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 				return invalid("copied scope exceeds 200 grants")
 			}
 		}
+		previous, e := t.Permissions(ctx, subject, id)
+		if e != nil {
+			return e
+		}
 		if _, e = t.Client.Grant.Delete().Where(grant.ResourceIDEQ(id)).Exec(ctx); e != nil {
 			return e
 		}
@@ -1120,6 +1124,15 @@ func (s *Service) SetPermissions(ctx context.Context, subject, id string, versio
 			if e = t.overlayHead(ctx, out); e != nil {
 				return e
 			}
+		}
+		if !samePermissions(previous, in) {
+			current, e := t.Permissions(ctx, subject, id)
+			if e != nil {
+				return e
+			}
+			t.emitPermissionsChanged(ctx, subject, out, map[string]any{
+				"action": "replace", "previous": previous, "current": current,
+			})
 		}
 		return t.audit(ctx, subject, "permissions.replace", out, map[string]any{"inherit": in.Inherit, "grant_count": len(in.Grants)})
 	})

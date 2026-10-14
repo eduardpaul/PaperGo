@@ -60,6 +60,11 @@ func TestWorkflowRoutes(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"item.update"`) || !strings.Contains(w.Body.String(), `"items.expire"`) || !strings.Contains(w.Body.String(), `"type":"task.completed"`) {
 		t.Fatalf("catalog: %d %s", w.Code, w.Body)
 	}
+	for _, typ := range []string{"permissions.changed", "term.changed"} {
+		if !strings.Contains(w.Body.String(), `"type":"`+typ+`"`) {
+			t.Fatalf("catalog missing %s: %s", typ, w.Body)
+		}
+	}
 	body := `{"name": "Tag on demand", "definition": {
 		"triggers": [{"type": "manual", "collection_id": "` + list.ID + `"}],
 		"input_schema": {"type": "object", "required": ["tag"], "properties": {"tag": {"type": "string", "minLength": 1}}},

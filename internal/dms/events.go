@@ -21,7 +21,9 @@ const (
 	EventItemPurged      = "item.purged"
 	// EventFileAdded is raised when a new file version becomes an item's
 	// current file, with the revision that pins it.
-	EventFileAdded = "file.added"
+	EventFileAdded          = "file.added"
+	EventPermissionsChanged = "permissions.changed"
+	EventTermChanged        = "term.changed"
 )
 
 // File sources, the source of a file.added event.
