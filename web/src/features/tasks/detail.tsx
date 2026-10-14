@@ -91,7 +91,8 @@ function ResponseForm({ task }: { task: Task }) {
         method: 'POST',
         body: {
           outcome: outcome.key,
-          comment: comment.trim() || undefined,
+          // A note typed while weighing another outcome is not this one's.
+          comment: outcome.comment === 'none' ? undefined : comment.trim() || undefined,
           input: task.input_schema && !outcome.skip_form ? normalizeForm(task.input_schema, input) : undefined,
         },
       }),

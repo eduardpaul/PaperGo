@@ -135,3 +135,20 @@ it('lets an owner drop an assignee who can no longer answer', async () => {
   const [, init] = fetch.mock.calls.find(([url]) => String(url).endsWith('/reassign'))!;
   expect(parseJSON(String(init?.body))).toEqual({ assignees: ['bob'] });
 });
+
+it('sends no comment with an outcome that takes none', async () => {
+  const task: Task = {
+    ...base,
+    outcomes: [
+      { key: 'ok', label: 'OK', style: 'primary', comment: 'none' },
+      { key: 'fix', label: 'Fix', comment: 'required' },
+    ],
+  };
+  const fetch = stub((path) => (path.endsWith('/responses') ? new Response(stringifyJSON({ ...task, status: 'completed' })) : undefined));
+  show(task);
+  fireEvent.change(screen.getByLabelText('Comment'), { target: { value: 'maybe a fix' } });
+  fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/responses'))).toBe(true));
+  const [, init] = fetch.mock.calls.find(([url]) => String(url).endsWith('/responses'))!;
+  expect(parseJSON(String(init?.body))).toEqual({ outcome: 'ok' });
+});
