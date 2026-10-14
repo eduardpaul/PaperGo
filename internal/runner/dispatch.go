@@ -37,7 +37,7 @@ func (r *Runner) dispatchLoop(ctx context.Context) {
 			r.log.Error("observe workflow statuses", "error", err)
 		}
 		if err := r.ResumeDecided(ctx); err != nil && ctx.Err() == nil {
-			r.log.Error("resume decided approvals", "error", err)
+			r.log.Error("resume runs whose task completed", "error", err)
 		}
 		select {
 		case <-ctx.Done():

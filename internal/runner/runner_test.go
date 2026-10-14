@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +38,26 @@ type fixture struct {
 	list *ent.Resource
 	// store holds file content; workflows read and write it.
 	store storage.Store
+	// logs records what the runner logs.
+	logs *logBuffer
+}
+
+// logBuffer collects log output from the runner's goroutines.
+type logBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 var ctx = context.Background()
@@ -53,13 +75,13 @@ func open(t testing.TB, path, node string) *fixture {
 	} else {
 		db = testutil.DatabaseAt(t, path)
 	}
-	f := &fixture{path: path, db: db, dms: dms.NewService(db.SQL)}
+	f := &fixture{path: path, db: db, dms: dms.NewService(db.SQL), logs: &logBuffer{}}
 	var err error
 	if f.store, err = storage.NewLocal(filepath.Join(filepath.Dir(path), "blobs")); err != nil {
 		t.Fatal(err)
 	}
 	f.wf = &workflow.Service{DMS: f.dms, Tools: workflow.Tools{Storage: f.store, OCR: textEngine{}}}
-	f.r, err = New(Config{DatabasePath: path, NodeID: node, PollInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *"}, db.SQL, f.dms, f.wf)
+	f.r, err = New(Config{DatabasePath: path, NodeID: node, PollInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *", Logger: slog.New(slog.NewTextHandler(f.logs, nil))}, db.SQL, f.dms, f.wf)
 	if err != nil {
 		t.Fatal(err)
 	}

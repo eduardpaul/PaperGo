@@ -40,7 +40,8 @@ type Exec interface {
 	Step(name string, fn func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error)) (json.RawMessage, error)
 	Work(name string, fn func(ctx context.Context) (json.RawMessage, error)) (json.RawMessage, error)
 	// Await waits for task id, which node created, to be completed, and
-	// returns the node's output: tasks.Result's value.
+	// returns the node's output: tasks.Result's value. An error wrapping
+	// ErrStopped ends the execution: the run parked, or was cancelled.
 	Await(node, id string) (json.RawMessage, error)
 	Sleep(d time.Duration) error
 }
@@ -54,6 +55,10 @@ type Result struct {
 
 // ErrRunFailed wraps the reason a run failed.
 var ErrRunFailed = errors.New("workflow run failed")
+
+// ErrStopped wraps the reason a run's execution stopped without failing,
+// such as parking until a task completes.
+var ErrStopped = errors.New("workflow run stopped")
 
 type loaded struct {
 	Key        string     `json:"key"`
@@ -157,6 +162,9 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 		}
 		if o.Wait != "" {
 			raw, err := r.x.Await(name, o.Wait)
+			if errors.Is(err, ErrStopped) {
+				return Result{Status: "waiting", Node: name}, err
+			}
 			if err != nil {
 				if ctx.Err() != nil {
 					return Result{Status: "cancelled", Node: name}, ctx.Err()

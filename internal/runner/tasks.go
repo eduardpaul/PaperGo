@@ -25,10 +25,10 @@ import (
 // under way stops at the task node.
 
 // errParked ends the execution of a run that parked.
-var errParked = errors.New("the run waits for a task")
+var errParked = fmt.Errorf("%w: it waits for a task", workflow.ErrStopped)
 
-// errStopped ends the execution of a run cancelled while it was resuming.
-var errStopped = errors.New("the run was cancelled")
+// errCancelled ends the execution of a run cancelled while it was resuming.
+var errCancelled = fmt.Errorf("%w: it was cancelled", workflow.ErrStopped)
 
 // Await returns a task node's output once its task is completed.
 func (x *durable) Await(node, id string) (json.RawMessage, error) {
@@ -51,7 +51,7 @@ func (x *durable) Await(node, id string) (json.RawMessage, error) {
 			return nil, err
 		}
 		if cancelled {
-			return nil, x.stop(node, runID, errStopped)
+			return nil, x.stop(node, runID, errCancelled)
 		}
 		if result != nil {
 			return stepTx(x.ctx, x.r, node+" result", func(ctx context.Context, t *dms.Service, _ func(dms.Event)) (json.RawMessage, error) {
@@ -89,10 +89,9 @@ func (x *durable) stop(node, runID string, reason error) error {
 	if err := dbos.CancelWorkflow(x.r.ctx, runID); err != nil {
 		return fmt.Errorf("stop run %s: %w", runID, err)
 	}
-	// A cancelled workflow stops at the start of its next step.
-	if _, err := dbos.RunAsStep(x.ctx, func(context.Context) (string, error) { return "", reason }, dbos.WithStepName(node+" wait"), dbos.WithStepMaxRetries(0)); err != nil {
-		return err
-	}
+	// A cancelled workflow stops at the start of its next step; the engine
+	// keeps it cancelled whatever the run returns.
+	_, _ = dbos.RunAsStep(x.ctx, func(context.Context) (string, error) { return "", reason }, dbos.WithStepName(node+" wait"), dbos.WithStepMaxRetries(0))
 	return reason
 }
 

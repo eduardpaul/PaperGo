@@ -134,6 +134,45 @@ func TestCancellingARunWhoseTaskCompletedStopsIt(t *testing.T) {
 	}
 }
 
+// Parking is not a failure: a task node's error port is not followed and
+// nothing is logged as failed.
+func TestParkingIsNotAFailure(t *testing.T) {
+	f := setup(t)
+	w := f.workflow(t, "Review", `{
+		"triggers": [{"type": "manual", "collection_id": "$LIST"}],
+		"flow": {"start": "ask", "nodes": {
+			"ask": {"activity": "approval", "inputs": {"title": "Review", "assignees": ["bob"]}, "next": {"approved": "yes", "error": "oops"}},
+			"yes": {"activity": "item.update", "inputs": {"values": {"note": "approved"}}},
+			"oops": {"activity": "item.update", "inputs": {"values": {"note": "error port"}}}
+		}}
+	}`)
+	item := f.item(t, "alice", "Contract", nil)
+	ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{item.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, ids[0], "waiting")
+	mine, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"})
+	if err != nil || len(mine) != 1 {
+		t.Fatalf("bob's tasks: %v, %v", mine, err)
+	}
+	if _, err = f.tasks().Respond(ctx, "bob", mine[0].ID, tasks.Response{Outcome: "approved"}); err != nil {
+		t.Fatal(err)
+	}
+	run := f.status(t, ids[0], "completed")
+	if got := f.head(t, item.ID).Values["note"]; got != "approved" {
+		t.Fatalf("note %v", got)
+	}
+	for _, s := range run.Steps {
+		if strings.HasPrefix(s.Name, "oops") {
+			t.Fatalf("the error port ran: %+v", run.Steps)
+		}
+	}
+	if logs := f.logs.String(); strings.Contains(logs, "workflow run failed") {
+		t.Fatalf("parking logged a failure:\n%s", logs)
+	}
+}
+
 func TestWaitingRunsHoldNoWorker(t *testing.T) {
 	f := setup(t)
 	review := f.workflow(t, "Review", approvalFlow)

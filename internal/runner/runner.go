@@ -179,7 +179,7 @@ func (r *Runner) Ready(ctx context.Context) error {
 // run is the DBOS workflow of every PaperGo workflow run.
 func (r *Runner) run(ctx dbos.Context, in workflow.RunInput) (workflow.Result, error) {
 	res, err := r.workflows.Execute(ctx, &durable{r: r, ctx: ctx}, in)
-	if err != nil {
+	if err != nil && !errors.Is(err, workflow.ErrStopped) {
 		r.log.Warn("workflow run failed", "run_id", in.RunID, "workflow_id", in.WorkflowID, "error", err)
 	}
 	return res, err
