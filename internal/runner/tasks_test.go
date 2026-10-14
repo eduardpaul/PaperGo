@@ -9,6 +9,7 @@ import (
 
 	"papergo/internal/dms"
 	"papergo/internal/identity"
+	"papergo/internal/model"
 	"papergo/internal/tasks"
 	"papergo/internal/workflow"
 )
@@ -416,6 +417,30 @@ func TestAnsweringForEachEntryOfAnAssignee(t *testing.T) {
 	}
 	if _, err = f.tasks().Respond(ctx, "carol", tk.ID, tasks.Response{Outcome: "done"}); !errors.Is(err, dms.ErrConflict) {
 		t.Fatalf("answered a third time: %v", err)
+	}
+}
+
+// With completion all, the result's comment, input and completer come from
+// the latest answer with the outcome chosen most often.
+func TestAllModeResultComesFromTheWinningAnswer(t *testing.T) {
+	f := setup(t)
+	if err := f.dms.SetWorkspaceMember(ctx, "alice", f.ws.ID, dms.WorkspaceMember{Subject: "carol", Role: "member"}); err != nil {
+		t.Fatal(err)
+	}
+	tk, err := f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: "Count", Assignees: []string{"alice", "bob", "carol"}, Completion: tasks.CompletionAll,
+		Outcomes:    []model.TaskOutcome{{Key: "ok", Label: "OK", Comment: "optional"}, {Key: "fix", Label: "Fix", Comment: "optional"}},
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"n": map[string]any{"type": "string"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []struct{ who, outcome string }{{"alice", "ok"}, {"bob", "ok"}, {"carol", "fix"}} {
+		if _, err = f.tasks().Respond(ctx, a.who, tk.ID, tasks.Response{Outcome: a.outcome, Comment: a.who, Input: map[string]any{"n": a.who}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v, err := f.tasks().Get(ctx, "alice", tk.ID)
+	if err != nil || v.Status != "completed" || *v.Outcome != "ok" || v.Comment != "bob" || *v.CompletedBy != "bob" || !strings.Contains(string(v.Input), `"bob"`) {
+		t.Fatalf("result %+v %s, %v", v, v.Input, err)
 	}
 }
 

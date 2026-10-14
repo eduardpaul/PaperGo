@@ -630,18 +630,28 @@ func Respond(ctx context.Context, t *dms.Service, subject, id string, r Response
 	if _, err = c.Save(ctx); err != nil {
 		return nil, err
 	}
-	outcome, done := o.Key, true
+	// The result is the completing answer: this one, or with completion all
+	// the latest answer with the outcome chosen most often.
+	done, by, comment := true, subject, r.Comment
+	outcome := o.Key
 	if tk.Completion == task.CompletionAll && !o.Decisive {
-		responses, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(id)).All(ctx)
+		responses, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(id)).Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)
 		if err != nil {
 			return nil, err
 		}
 		done = len(responses) >= len(tk.Assignees)
-		outcome = mostChosen(tk.Outcomes, responses)
+		if outcome = mostChosen(tk.Outcomes, responses); outcome != o.Key {
+			for _, resp := range slices.Backward(responses) {
+				if resp.Outcome == outcome {
+					by, comment, input = resp.Subject, resp.Comment, json.RawMessage(resp.Input)
+					break
+				}
+			}
+		}
 	}
 	u := t.Client.Task.UpdateOne(tk).AddVersion(1)
 	if done {
-		u.SetStatus(task.StatusCompleted).SetOutcome(outcome).SetCompletedBy(subject).SetCompletedAt(time.Now().UTC()).SetComment(r.Comment)
+		u.SetStatus(task.StatusCompleted).SetOutcome(outcome).SetCompletedBy(by).SetCompletedAt(time.Now().UTC()).SetComment(comment)
 		if input != nil {
 			u.SetInput(input)
 		}

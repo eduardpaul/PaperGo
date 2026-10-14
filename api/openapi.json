@@ -21343,7 +21343,7 @@
           "input": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Form values of the completing answer."
+            "description": "Form values of the completing answer; with completion all, the latest answer with the outcome."
           },
           "created_by": {
             "type": "string"
