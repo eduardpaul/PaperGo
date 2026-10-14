@@ -12,6 +12,19 @@ on:
 permissions:
   contents: read
 jobs:
+  devcontainer:
+    name: Development container
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Build and smoke test the development environment
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: bash .devcontainer/smoke-test.sh
   staticcheck:
     name: Staticcheck
     runs-on: ubuntu-latest

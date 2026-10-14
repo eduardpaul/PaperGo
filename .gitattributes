@@ -1,3 +1,9 @@
 # Atlas checksums cover bytes, so migration files must retain LF on every host.
 migrations/*.sql text eol=lf
 migrations/atlas.sum text eol=lf
+
+# Shell scripts must retain LF for Bash in Linux containers on every host.
+*.sh text eol=lf
+
+# Formatting and generated-code checks use the same bytes on every host.
+*.go text eol=lf

@@ -1,0 +1,17 @@
+goos: linux
+goarch: amd64
+pkg: papergo/internal/dms
+cpu: Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
+BenchmarkCollectionQuery/id/head-4         	      20	   7255825 ns/op	  570430 B/op	   10968 allocs/op
+BenchmarkCollectionQuery/id/page2-4        	      20	   7191170 ns/op	  569788 B/op	   10989 allocs/op
+BenchmarkCollectionQuery/name/head-4       	      20	   7681160 ns/op	  567510 B/op	   10975 allocs/op
+BenchmarkCollectionQuery/modified-desc/auto-4         	      20	  30071385 ns/op	  607993 B/op	   11082 allocs/op
+BenchmarkCollectionQuery/n/auto-4                     	      20	  28333125 ns/op	  604625 B/op	   10978 allocs/op
+BenchmarkCollectionQuery/n-desc/page2-4               	      20	   9060050 ns/op	  569144 B/op	   10955 allocs/op
+BenchmarkCollectionQuery/n/reader-fragmented-4        	      20	  68738745 ns/op	  633693 B/op	   11112 allocs/op
+BenchmarkCollectionQuery/status-sort/missing-last-4   	      20	   6935665 ns/op	  569756 B/op	   11016 allocs/op
+BenchmarkCollectionQuery/broad-filter/n-4             	      20	  27606560 ns/op	  608162 B/op	   11020 allocs/op
+BenchmarkCollectionQuery/selective-filter/modified-4  	      20	  60889340 ns/op	  143800 B/op	    2004 allocs/op
+BenchmarkCollectionQuery/search/name-4                	      20	  84981700 ns/op	  636385 B/op	   11266 allocs/op
+BenchmarkCollectionQuery/total-4                      	      20	 612773212 ns/op	  687988 B/op	   11559 allocs/op
+PASS

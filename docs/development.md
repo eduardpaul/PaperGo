@@ -1,0 +1,141 @@
+# Development environment
+
+PaperGo's [devcontainer](../.devcontainer/devcontainer.json) provides Go 1.27.2,
+Node.js 24.15.0 with npm, Atlas Community 1.3.0, Python 3, SQLite's CLI and a C
+compiler. Go matches CI and the application Docker build; Node uses the same
+major version. Atlas is built from checksum-verified Community source with
+`sqlite_fts5` enabled so it can apply PaperGo's full-text search tables; the
+published Atlas 1.3.0 images do not enable this SQLite feature.
+The image also pins gopls 0.23.0, Delve 1.27.2, the CI Staticcheck revision
+and govulncheck 1.9.0. It supports Linux amd64 and arm64 through the upstream
+multi-platform images. The source checkout stays on the host; dependencies and
+Go/npm caches use separate Docker volumes for each checkout.
+
+## Open the container
+
+Install Docker and VS Code's Dev Containers extension. Open the repository root
+and select **Dev Containers: Reopen in Container**. Allocate at least two CPUs
+and 4 GB RAM to Docker. On Windows, keep the checkout in the WSL 2 filesystem.
+For rootless Docker on Linux, use **Dev Containers: Clone Repository in Container
+Volume** so the checkout belongs to the container user. Rootless Docker maps
+the host user to container root, so UID adjustment alone does not let `vscode`
+write a host-owned checkout. Cloning into a volume also avoids host filesystem
+overhead on Windows and macOS.
+
+The first build installs development tools. After the checkout is mounted, setup
+repairs volume permissions, downloads Go modules, installs the npm lockfile,
+builds `web/dist`, validates and applies the schema to `data/papergo.db`, and
+creates a random development token in `.cache/development.env` with mode 0600.
+The editor waits for setup because Go packages embed `web/dist` at compile time.
+Setup can be rerun with **PaperGo: setup** or `bash scripts/setup-dev.sh`, including
+after dependency changes. The shell scripts also work with native Go, Node/npm,
+Python 3 and Atlas installations; native Atlas must likewise enable SQLite FTS5.
+`.cache/development.env` is generated development
+configuration; it is distinct from the optional `.env.example` file, which the
+application does not load.
+
+Tools and application processes run as `vscode`, with the Dev Containers default
+UID/GID adjustment on Linux. Setup uses sudo only to repair ownership of the
+three dependency/cache volumes. The container has an init process to reap
+children and `SYS_PTRACE` for Go debugging. Docker's default seccomp profile is
+retained. No database service is needed for SQLite. Run Docker image builds and
+the optional Compose samples from the host.
+
+## Run and debug
+
+In one terminal, run:
+
+```sh
+bash scripts/dev.sh
+```
+
+This builds the embedded frontend and API, prints the development bearer token,
+then starts the API. Open forwarded port 8080 for the embedded UI. Paste the
+printed token into the development sign-in screen. The token persists across
+rebuilds and restarts; delete `.cache/development.env` and rerun setup to replace it.
+
+In a second terminal, run:
+
+```sh
+npm --prefix web run dev -- --host 0.0.0.0 --strictPort
+```
+
+Open forwarded port 5173 for frontend hot reload. Vite proxies `/v1`, `/auth` and
+`/health` to the API at `127.0.0.1:8080` inside the same container. Use the forwarded
+URL shown in VS Code's Ports view; if a host port is occupied, VS Code can choose
+another. For a Codespaces web URL, start Vite with
+`__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="${CODESPACE_NAME}-5173.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"`
+before the npm command so its exact forwarded hostname is accepted. Keep
+Codespaces ports private. API source changes require restarting the API command
+or debugger; frontend changes are handled by Vite.
+
+The **PaperGo: API** and **PaperGo: Vite** tasks run those commands. To debug,
+stop any running API, select **PaperGo API** in Run and Debug, and press F5. The
+debug configuration rebuilds the frontend and reads `.cache/development.env`.
+Run Vite alongside it for frontend work. Read the token file to sign in when
+starting through the debugger.
+
+## Check changes
+
+Run **PaperGo: check** or:
+
+```sh
+bash scripts/check.sh
+```
+
+This runs the frontend build, lint and tests, Python tests, module verification,
+Ent generation and drift check, Go formatting, vet, Staticcheck, Go tests and
+the application build. `govulncheck ./...` runs a dependency scan separately.
+Local checks use ordinary Go tests, as the PowerShell check script does. CI runs
+the full suite with race detection; run `go test -race -count=1 -timeout=15m ./...`
+to do that locally. Race instrumentation makes the pure-Go SQLite driver
+substantially slower, so allow for a longer run on a development machine.
+
+The devcontainer CI job builds the actual configuration and runs
+`bash .devcontainer/smoke-test.sh` as the non-root user. The smoke test uses its
+own disposable database and ports, verifies the toolchain and writable caches,
+starts the real API under Delve, checks the embedded UI, Vite client and all
+three proxy routes, verifies authentication and an authenticated write, and runs
+SQLite and embedded-frontend tests with race detection.
+
+To validate a host checkout with rootful Docker using the reference CLI:
+
+```sh
+npx --yes @devcontainers/cli@0.89.0 up --workspace-folder .
+npx --yes @devcontainers/cli@0.89.0 exec --workspace-folder . bash .devcontainer/smoke-test.sh
+```
+
+## Schema and generated files
+
+Edit the single `migrations/20261007000100_schema.sql` in place, keep
+`ent/schema` aligned, and run:
+
+```sh
+go generate ./ent
+atlas migrate hash --dir file://migrations
+```
+
+Stop the API or debugger before resetting local data. Local databases and blobs
+are disposable: delete `data/`, recreate the directory with `mkdir -p data/blobs`,
+then run `atlas migrate apply --env local`. Do not add migration files or backfills.
+
+Go/npm caches and `web/node_modules` survive container rebuilds. `npm ci` replaces
+the installed dependency tree with the lockfile contents. To clear a stale build
+cache, run `go clean -cache`; for module downloads use `go clean -modcache`.
+Rebuild the container after editing its Dockerfile or configuration. Review Go
+and Node updates alongside CI and the application Dockerfile, and update the
+pinned tools explicitly.
+
+## Design references
+
+The configuration follows the official [Development Container specification](https://github.com/devcontainers/spec/blob/main/docs/specs/devcontainerjson-reference.md)
+for lifecycle readiness, users, init and forwarded ports; VS Code's
+[non-root user guidance](https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user)
+for Linux bind-mount ownership; and its [disk performance guidance](https://code.visualstudio.com/remote/advancedcontainers/improve-performance)
+for dependency volumes. [Atlas Community](https://atlasgo.io/community-edition)
+provides the local versioned migration commands without an account.
+The [reference CLI](https://code.visualstudio.com/docs/devcontainers/devcontainer-cli)
+and official [devcontainers/ci action](https://github.com/devcontainers/ci)
+exercise the environment independently of an interactive editor session.
+[Vite's server options](https://vite.dev/config/server-options) describe host
+binding and the environment variable for allowing a forwarded hostname.

@@ -34,8 +34,17 @@ provide a native ARM runner with an appropriate label.
 
 If a build fails, fix it and tag a new version. If a transient failure occurs,
 rerun the failed workflow or use the release workflow's manual dispatch with the
-same existing tag. Only drafts may have their assets replaced. A published
-release cannot be rerun or changed; publish another version. Protect `v*` tags
+same existing tag. For a fix to the workflow itself, start a new manual run from
+`main` and enter the original version tag. Rerunning an old execution uses that
+execution's workflow revision. Release tooling comes from the selected workflow
+revision, while application code is checked out at the original tag.
+
+An existing published release with no uploaded assets can receive its binaries
+if it is mutable, so creating a release through GitHub's UI also works. Completed
+published releases are successful no-ops on rerun. Only drafts may have their
+assets replaced. Partially populated published releases cannot be rebuilt over
+existing files: complete them with the original build artifacts or publish a new
+version. Immutable releases missing assets require a new version. Protect `v*` tags
 from updates/deletion and enable GitHub immutable releases in repository
 settings. Uploading assets to the draft before publication works with immutable
 releases. See [GitHub's immutable release documentation](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).

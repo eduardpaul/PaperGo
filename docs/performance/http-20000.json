@@ -1,0 +1,846 @@
+{
+  "measured_at_utc": "2026-10-13T16:49:18.408920+00:00",
+  "source_commit": "5947e8706ced55f9f798720a28000cb36316cf08",
+  "platform": "Linux-6.18.54.1-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+  "logical_cpus": 4,
+  "go_version": "go version go1.26.0 linux/amd64",
+  "binary_bytes": 43188386,
+  "initial_items": 20000,
+  "configuration": {
+    "auth_mode": "development",
+    "max_in_flight": 32,
+    "request_timeout": "30s",
+    "max_upload_mib": 64,
+    "extended": true
+  },
+  "fixture_storage": {
+    "page_count": 38622,
+    "page_size": 4096,
+    "database_mib": 150.765625,
+    "wal_mib": 18.83238983154297,
+    "rows": {
+      "resources": 20002,
+      "item_revisions": 20000,
+      "audit_events": 20005,
+      "domain_events": 40000,
+      "workflow_runs": 0
+    }
+  },
+  "startup_ready_s": 0.204060179003136,
+  "stages": [
+    {
+      "name": "idle-empty",
+      "concurrency": 0,
+      "elapsed_s": 10.000104614002339,
+      "requests": 0,
+      "successes": 0,
+      "statuses": {},
+      "successful_requests_per_s": 0.0,
+      "latency_ms_all": {
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "max": null
+      },
+      "latency_ms_by_status": {},
+      "cpu_pct_one_core": 0.29999686161276173,
+      "cpu_ms_per_success": null,
+      "client_cpu_pct_one_core": 0.7920547139986298,
+      "rss_mean_mib": 42.80080087939699,
+      "rss_peak_sampled_mib": 43.03125,
+      "rss_process_hwm_mib": 43.03125,
+      "threads_max": 9,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.0
+    },
+    {
+      "name": "seed-bulk-100",
+      "concurrency": 1,
+      "elapsed_s": 83.28467625600024,
+      "requests": 200,
+      "successes": 200,
+      "statuses": {
+        "200": 200
+      },
+      "successful_requests_per_s": 2.401402142517076,
+      "latency_ms_all": {
+        "p50": 416.4091809980164,
+        "p95": 464.792694998323,
+        "p99": 514.4784990006883,
+        "max": 534.2361980001442
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 200,
+          "p50": 416.4091809980164,
+          "p95": 464.792694998323
+        }
+      },
+      "cpu_pct_one_core": 125.47326194651721,
+      "cpu_ms_per_success": 522.5,
+      "client_cpu_pct_one_core": 0.8140711238595394,
+      "rss_mean_mib": 62.56059647067715,
+      "rss_peak_sampled_mib": 70.45703125,
+      "rss_process_hwm_mib": 70.12890625,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.017430373865792718
+    },
+    {
+      "name": "idle-seeded",
+      "concurrency": 0,
+      "elapsed_s": 10.00014239400116,
+      "requests": 0,
+      "successes": 0,
+      "statuses": {},
+      "successful_requests_per_s": 0.0,
+      "latency_ms_all": {
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "max": null
+      },
+      "latency_ms_by_status": {},
+      "cpu_pct_one_core": 0.3999943043209771,
+      "cpu_ms_per_success": null,
+      "client_cpu_pct_one_core": 0.8000916071754759,
+      "rss_mean_mib": 57.77286824748744,
+      "rss_peak_sampled_mib": 57.77734375,
+      "rss_process_hwm_mib": 70.12890625,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.0
+    },
+    {
+      "name": "idle-four-live-streams",
+      "concurrency": 0,
+      "elapsed_s": 10.000240042998485,
+      "requests": 0,
+      "successes": 0,
+      "statuses": {},
+      "successful_requests_per_s": 0.0,
+      "latency_ms_all": {
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "max": null
+      },
+      "latency_ms_by_status": {},
+      "cpu_pct_one_core": 0.5999855977658292,
+      "cpu_ms_per_success": null,
+      "client_cpu_pct_one_core": 0.7636756685002678,
+      "rss_mean_mib": 57.89287109375,
+      "rss_peak_sampled_mib": 57.92578125,
+      "rss_process_hwm_mib": 70.12890625,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.0
+    },
+    {
+      "name": "browse-c1",
+      "concurrency": 1,
+      "elapsed_s": 5.001152759999968,
+      "requests": 735,
+      "successes": 735,
+      "statuses": {
+        "200": 735
+      },
+      "successful_requests_per_s": 146.96611666787092,
+      "latency_ms_all": {
+        "p50": 6.614299996726913,
+        "p95": 8.769000000029337,
+        "p99": 11.265900000580586,
+        "max": 17.576900998392375
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 735,
+          "p50": 6.614299996726913,
+          "p95": 8.769000000029337
+        }
+      },
+      "cpu_pct_one_core": 122.17183303954984,
+      "cpu_ms_per_success": 8.312925170068025,
+      "client_cpu_pct_one_core": 5.46533995494274,
+      "rss_mean_mib": 58.306350556930695,
+      "rss_peak_sampled_mib": 59.23828125,
+      "rss_process_hwm_mib": 70.12890625,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 5.975207792076753
+    },
+    {
+      "name": "browse-c8",
+      "concurrency": 8,
+      "elapsed_s": 5.013976311001898,
+      "requests": 1407,
+      "successes": 1407,
+      "statuses": {
+        "200": 1407
+      },
+      "successful_requests_per_s": 280.61560580425873,
+      "latency_ms_all": {
+        "p50": 27.209302999835927,
+        "p95": 39.968701003090246,
+        "p99": 57.52180200215662,
+        "max": 90.29661100066733
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 1407,
+          "p50": 27.209302999835927,
+          "p95": 39.968701003090246
+        }
+      },
+      "cpu_pct_one_core": 302.3548389475882,
+      "cpu_ms_per_success": 10.77469793887705,
+      "client_cpu_pct_one_core": 8.597445884499248,
+      "rss_mean_mib": 83.7496484375,
+      "rss_peak_sampled_mib": 88.15625,
+      "rss_process_hwm_mib": 88.265625,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 11.4090008799049
+    },
+    {
+      "name": "browse-c32",
+      "concurrency": 32,
+      "elapsed_s": 5.100617310999951,
+      "requests": 1587,
+      "successes": 1587,
+      "statuses": {
+        "200": 1587
+      },
+      "successful_requests_per_s": 311.13880991963237,
+      "latency_ms_all": {
+        "p50": 94.23031199912657,
+        "p95": 185.94882199977292,
+        "p99": 242.92412900103955,
+        "max": 296.7001360011636
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 1587,
+          "p50": 94.23031199912657,
+          "p95": 185.94882199977292
+        }
+      },
+      "cpu_pct_one_core": 318.7849432446893,
+      "cpu_ms_per_success": 10.24574669187145,
+      "client_cpu_pct_one_core": 8.789277310281317,
+      "rss_mean_mib": 86.10160079656863,
+      "rss_peak_sampled_mib": 87.87109375,
+      "rss_process_hwm_mib": 88.296875,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 12.649984116071478
+    },
+    {
+      "name": "indexed-sort",
+      "concurrency": 1,
+      "elapsed_s": 5.001940475001902,
+      "requests": 735,
+      "successes": 735,
+      "statuses": {
+        "200": 735
+      },
+      "successful_requests_per_s": 146.9429721671609,
+      "latency_ms_all": {
+        "p50": 6.670401002338622,
+        "p95": 8.547600999008864,
+        "p99": 10.413902000436792,
+        "max": 14.364501999807544
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 735,
+          "p50": 6.670401002338622,
+          "p95": 8.547600999008864
+        }
+      },
+      "cpu_pct_one_core": 122.3525156004116,
+      "cpu_ms_per_success": 8.326530612244904,
+      "client_cpu_pct_one_core": 5.773355389637861,
+      "rss_mean_mib": 82.58694306930693,
+      "rss_peak_sampled_mib": 84.86328125,
+      "rss_process_hwm_mib": 88.296875,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 5.977349791353302
+    },
+    {
+      "name": "selective-filter",
+      "concurrency": 1,
+      "elapsed_s": 5.016144843997608,
+      "requests": 101,
+      "successes": 101,
+      "statuses": {
+        "200": 101
+      },
+      "successful_requests_per_s": 20.13498476242329,
+      "latency_ms_all": {
+        "p50": 47.66830100197694,
+        "p95": 60.083607997512445,
+        "p99": 65.19970900262706,
+        "max": 65.56950799858896
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 101,
+          "p50": 47.66830100197694,
+          "p95": 60.083607997512445
+        }
+      },
+      "cpu_pct_one_core": 101.87106152077497,
+      "cpu_ms_per_success": 50.59405940594045,
+      "client_cpu_pct_one_core": 1.376894052065633,
+      "rss_mean_mib": 82.21720297029702,
+      "rss_peak_sampled_mib": 82.6640625,
+      "rss_process_hwm_mib": 88.296875,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.01691715390748493
+    },
+    {
+      "name": "fts-search",
+      "concurrency": 1,
+      "elapsed_s": 5.014080503999139,
+      "requests": 331,
+      "successes": 331,
+      "statuses": {
+        "200": 331
+      },
+      "successful_requests_per_s": 66.0140976468169,
+      "latency_ms_all": {
+        "p50": 14.940799999749288,
+        "p95": 17.10549999916111,
+        "p99": 19.01250000082655,
+        "max": 20.731600998260546
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 331,
+          "p50": 14.940799999749288,
+          "p95": 17.10549999916111
+        }
+      },
+      "cpu_pct_one_core": 110.08997553185137,
+      "cpu_ms_per_success": 16.67673716012079,
+      "client_cpu_pct_one_core": 2.85738930369644,
+      "rss_mean_mib": 82.28364789603961,
+      "rss_peak_sampled_mib": 83.01953125,
+      "rss_process_hwm_mib": 88.296875,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 2.6868969664273243
+    },
+    {
+      "name": "include-total",
+      "concurrency": 1,
+      "elapsed_s": 5.042271083002561,
+      "requests": 137,
+      "successes": 137,
+      "statuses": {
+        "200": 137
+      },
+      "successful_requests_per_s": 27.17029642889004,
+      "latency_ms_all": {
+        "p50": 36.00179499699152,
+        "p95": 42.64119500294328,
+        "p99": 46.60499400051776,
+        "max": 46.7067940007837
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 137,
+          "p50": 36.00179499699152,
+          "p95": 42.64119500294328
+        }
+      },
+      "cpu_pct_one_core": 105.50801240999623,
+      "cpu_ms_per_success": 38.832116788321116,
+      "client_cpu_pct_one_core": 1.5755678084783271,
+      "rss_mean_mib": 82.24360447303921,
+      "rss_peak_sampled_mib": 82.55078125,
+      "rss_process_hwm_mib": 88.296875,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 1.1101830964048327
+    },
+    {
+      "name": "browse-500-c1",
+      "concurrency": 1,
+      "elapsed_s": 5.017417393999494,
+      "requests": 147,
+      "successes": 147,
+      "statuses": {
+        "200": 147
+      },
+      "successful_requests_per_s": 29.29794124280002,
+      "latency_ms_all": {
+        "p50": 33.63279999757651,
+        "p95": 39.198994996695546,
+        "p99": 42.902893997961655,
+        "max": 43.50409399921773
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 147,
+          "p50": 33.63279999757651,
+          "p95": 39.198994996695546
+        }
+      },
+      "cpu_pct_one_core": 120.57996225778264,
+      "cpu_ms_per_success": 41.156462585034085,
+      "client_cpu_pct_one_core": 1.8779143252599273,
+      "rss_mean_mib": 84.42810179455445,
+      "rss_peak_sampled_mib": 86.6015625,
+      "rss_process_hwm_mib": 88.296875,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 11.865993668268707
+    },
+    {
+      "name": "edit-c1",
+      "concurrency": 1,
+      "elapsed_s": 5.003301969001768,
+      "requests": 511,
+      "successes": 511,
+      "statuses": {
+        "200": 511
+      },
+      "successful_requests_per_s": 102.13255229564966,
+      "latency_ms_all": {
+        "p50": 9.637899998779176,
+        "p95": 11.717099998350022,
+        "p99": 12.887099997897167,
+        "max": 13.629599998239428
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 511,
+          "p50": 9.637899998779176,
+          "p95": 11.717099998350022
+        }
+      },
+      "cpu_pct_one_core": 132.91222559022913,
+      "cpu_ms_per_success": 13.013698630136997,
+      "client_cpu_pct_one_core": 4.422491414088019,
+      "rss_mean_mib": 65.07476021039604,
+      "rss_peak_sampled_mib": 85.1328125,
+      "rss_process_hwm_mib": 88.296875,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.08612647984543333
+    },
+    {
+      "name": "browse-500-c8",
+      "concurrency": 8,
+      "elapsed_s": 5.086890164999204,
+      "requests": 314,
+      "successes": 314,
+      "statuses": {
+        "200": 314
+      },
+      "successful_requests_per_s": 61.72730092749096,
+      "latency_ms_all": {
+        "p50": 125.60179899810464,
+        "p95": 169.30459899958805,
+        "p99": 191.03789799919468,
+        "max": 205.29809900108376
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 314,
+          "p50": 125.60179899810464,
+          "p95": 169.30459899958805
+        }
+      },
+      "cpu_pct_one_core": 333.0128909909862,
+      "cpu_ms_per_success": 53.94904458598725,
+      "client_cpu_pct_one_core": 3.2828347887087923,
+      "rss_mean_mib": 147.26734834558823,
+      "rss_peak_sampled_mib": 170.2421875,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 25.0002468055644
+    },
+    {
+      "name": "edit-c8",
+      "concurrency": 8,
+      "elapsed_s": 5.059361465999245,
+      "requests": 638,
+      "successes": 638,
+      "statuses": {
+        "200": 638
+      },
+      "successful_requests_per_s": 126.10286975690366,
+      "latency_ms_all": {
+        "p50": 60.676398999930825,
+        "p95": 78.29029899949091,
+        "p99": 112.89369899895974,
+        "max": 125.6989989997237
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 638,
+          "p50": 60.676398999930825,
+          "p95": 78.29029899949091
+        }
+      },
+      "cpu_pct_one_core": 168.79600434544824,
+      "cpu_ms_per_success": 13.385579937304106,
+      "client_cpu_pct_one_core": 5.570313603681979,
+      "rss_mean_mib": 89.28132659313725,
+      "rss_peak_sampled_mib": 150.44921875,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.10613661300916317
+    },
+    {
+      "name": "mixed-80read-20create-c1",
+      "concurrency": 1,
+      "elapsed_s": 5.004104684001504,
+      "requests": 702,
+      "successes": 702,
+      "statuses": {
+        "201": 141,
+        "200": 561
+      },
+      "successful_requests_per_s": 140.2848350164109,
+      "latency_ms_all": {
+        "p50": 7.034499998553656,
+        "p95": 8.873400001903065,
+        "p99": 10.012499998993007,
+        "max": 11.96920000074897
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 561,
+          "p50": 7.054399000480771,
+          "p95": 8.873400001903065
+        },
+        "201": {
+          "count": 141,
+          "p50": 7.0071000009193085,
+          "p95": 8.795300000201678
+        }
+      },
+      "cpu_pct_one_core": 124.0981232837477,
+      "cpu_ms_per_success": 8.846153846153818,
+      "client_cpu_pct_one_core": 5.3155762478433415,
+      "rss_mean_mib": 87.36544709158416,
+      "rss_peak_sampled_mib": 88.71875,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 4.580133013259631
+    },
+    {
+      "name": "mixed-80read-20create-c8",
+      "concurrency": 8,
+      "elapsed_s": 5.02778936300092,
+      "requests": 1301,
+      "successes": 1301,
+      "statuses": {
+        "201": 264,
+        "200": 1037
+      },
+      "successful_requests_per_s": 258.7618346890086,
+      "latency_ms_all": {
+        "p50": 24.1926999988209,
+        "p95": 64.8163999976532,
+        "p99": 88.2960990020365,
+        "max": 138.1471929998952
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 1037,
+          "p50": 22.6412000010896,
+          "p95": 35.95510000013746
+        },
+        "201": {
+          "count": 264,
+          "p50": 55.90000000302098,
+          "p95": 88.2960990020365
+        }
+      },
+      "cpu_pct_one_core": 279.0490807599378,
+      "cpu_ms_per_success": 10.784012298232131,
+      "client_cpu_pct_one_core": 8.22735938470389,
+      "rss_mean_mib": 79.46178836633663,
+      "rss_peak_sampled_mib": 86.609375,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 8.426011517947265
+    },
+    {
+      "name": "mixed-80read-20create-c32",
+      "concurrency": 32,
+      "elapsed_s": 5.177057322001929,
+      "requests": 1407,
+      "successes": 1407,
+      "statuses": {
+        "201": 305,
+        "200": 1102
+      },
+      "successful_requests_per_s": 271.7760133774072,
+      "latency_ms_all": {
+        "p50": 23.525199001596775,
+        "p95": 493.6134739982663,
+        "p99": 567.7582690004783,
+        "max": 593.197168000188
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 1102,
+          "p50": 21.628898997732904,
+          "p95": 32.07519900024636
+        },
+        "201": {
+          "count": 305,
+          "p50": 473.7922749991412,
+          "p95": 567.2374689966091
+        }
+      },
+      "cpu_pct_one_core": 278.5366107251042,
+      "cpu_ms_per_success": 10.248756218905484,
+      "client_cpu_pct_one_core": 8.808697134990508,
+      "rss_mean_mib": 80.90294471153847,
+      "rss_peak_sampled_mib": 83.97265625,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 8.695571715906224
+    },
+    {
+      "name": "upload-16MiB-c1",
+      "concurrency": 1,
+      "elapsed_s": 0.16918449099830468,
+      "requests": 1,
+      "successes": 1,
+      "statuses": {
+        "201": 1
+      },
+      "successful_requests_per_s": 5.910707264592122,
+      "latency_ms_all": {
+        "p50": 168.5198910017789,
+        "p95": 168.5198910017789,
+        "p99": 168.5198910017789,
+        "max": 168.5198910017789
+      },
+      "latency_ms_by_status": {
+        "201": {
+          "count": 1,
+          "p50": 168.5198910017789,
+          "p95": 168.5198910017789
+        }
+      },
+      "cpu_pct_one_core": 100.48202349807549,
+      "cpu_ms_per_success": 170.00000000001592,
+      "client_cpu_pct_one_core": 5.912657797989532,
+      "rss_mean_mib": 74.76640625,
+      "rss_peak_sampled_mib": 74.8125,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.001747435810111578
+    },
+    {
+      "name": "upload-64MiB-c1",
+      "concurrency": 1,
+      "elapsed_s": 0.4847771830027341,
+      "requests": 1,
+      "successes": 1,
+      "statuses": {
+        "201": 1
+      },
+      "successful_requests_per_s": 2.062803355978823,
+      "latency_ms_all": {
+        "p50": 484.332882999297,
+        "p95": 484.332882999297,
+        "p99": 484.332882999297,
+        "max": 484.332882999297
+      },
+      "latency_ms_by_status": {
+        "201": {
+          "count": 1,
+          "p50": 484.332882999297,
+          "p95": 484.332882999297
+        }
+      },
+      "cpu_pct_one_core": 105.2029711549181,
+      "cpu_ms_per_success": 509.9999999999909,
+      "client_cpu_pct_one_core": 3.740048136691657,
+      "rss_mean_mib": 74.89630681818181,
+      "rss_peak_sampled_mib": 74.90234375,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.000609845199922023
+    },
+    {
+      "name": "upload-16MiB-c4",
+      "concurrency": 4,
+      "elapsed_s": 0.9744692750027752,
+      "requests": 4,
+      "successes": 4,
+      "statuses": {
+        "201": 4
+      },
+      "successful_requests_per_s": 4.104798481192348,
+      "latency_ms_all": {
+        "p50": 513.6498870015203,
+        "p95": 972.9702750009892,
+        "p99": 972.9702750009892,
+        "max": 972.9702750009892
+      },
+      "latency_ms_by_status": {
+        "201": {
+          "count": 4,
+          "p50": 513.6498870015203,
+          "p95": 972.9702750009892
+        }
+      },
+      "cpu_pct_one_core": 120.06535557487489,
+      "cpu_ms_per_success": 292.4999999999969,
+      "client_cpu_pct_one_core": 2.718330960196182,
+      "rss_mean_mib": 75.52008928571429,
+      "rss_peak_sampled_mib": 76.47265625,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.002244067887633813
+    },
+    {
+      "name": "download-16MiB-c1",
+      "concurrency": 1,
+      "elapsed_s": 5.004532768001809,
+      "requests": 338,
+      "successes": 338,
+      "statuses": {
+        "200": 338
+      },
+      "successful_requests_per_s": 67.53877248264185,
+      "latency_ms_all": {
+        "p50": 14.779000000999076,
+        "p95": 16.847199000039836,
+        "p99": 17.67669999753707,
+        "max": 18.57630000085919
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 338,
+          "p50": 14.779000000999076,
+          "p95": 16.847199000039836
+        }
+      },
+      "cpu_pct_one_core": 106.10381120793738,
+      "cpu_ms_per_success": 15.710059171597639,
+      "client_cpu_pct_one_core": 46.22896696355817,
+      "rss_mean_mib": 74.022265625,
+      "rss_peak_sampled_mib": 76.47265625,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 1080.6203597222695
+    },
+    {
+      "name": "download-16MiB-c4",
+      "concurrency": 4,
+      "elapsed_s": 5.014530809999997,
+      "requests": 975,
+      "successes": 975,
+      "statuses": {
+        "200": 975
+      },
+      "successful_requests_per_s": 194.43494056426002,
+      "latency_ms_all": {
+        "p50": 19.943199997214833,
+        "p95": 31.92899900022894,
+        "p99": 37.05869899931713,
+        "max": 44.775199003197486
+      },
+      "latency_ms_by_status": {
+        "200": {
+          "count": 975,
+          "p50": 19.943199997214833,
+          "p95": 31.92899900022894
+        }
+      },
+      "cpu_pct_one_core": 218.76423569127567,
+      "cpu_ms_per_success": 11.251282051282079,
+      "client_cpu_pct_one_core": 97.74189820961543,
+      "rss_mean_mib": 71.48883928571429,
+      "rss_peak_sampled_mib": 72.3359375,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 3110.9590490281603
+    },
+    {
+      "name": "idle-after-load",
+      "concurrency": 0,
+      "elapsed_s": 10.000091547997727,
+      "requests": 0,
+      "successes": 0,
+      "statuses": {},
+      "successful_requests_per_s": 0.0,
+      "latency_ms_all": {
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "max": null
+      },
+      "latency_ms_by_status": {},
+      "cpu_pct_one_core": 0.49999542264213215,
+      "cpu_ms_per_success": null,
+      "client_cpu_pct_one_core": 0.7774448826477725,
+      "rss_mean_mib": 71.087109375,
+      "rss_peak_sampled_mib": 71.18359375,
+      "rss_process_hwm_mib": 170.0859375,
+      "threads_max": 15,
+      "disk_read_mib": null,
+      "disk_write_mib": null,
+      "response_mib_per_s": 0.0
+    }
+  ],
+  "final_table_rows": {
+    "resources": 20726,
+    "item_revisions": 20729,
+    "audit_events": 21884,
+    "domain_events": 43756,
+    "workflow_runs": 0,
+    "blobs": 6
+  },
+  "database_mib": 158.890625,
+  "wal_mib": 100.36200714111328,
+  "blob_mib": 144.0,
+  "server_log_mib": 2.7364845275878906
+}

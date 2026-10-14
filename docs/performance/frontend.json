@@ -1,0 +1,15 @@
+{
+  "initial_asset_bytes": 499532,
+  "initial_asset_gzip_bytes": 148821,
+  "all_dist_bytes": 1034253,
+  "files": [
+    "assets/index-B7_uTdWt.js",
+    "assets/auth-CS1gBnB_.js",
+    "assets/link-DT48RKvE.js",
+    "assets/useSelector-BgQUWpBD.js",
+    "assets/useNavigate-U72wAWF_.js",
+    "assets/lazyRouteComponent-DLz5I1dD.js",
+    "assets/oidc-CsacgV5S.js",
+    "assets/index-DcfqemlA.css"
+  ]
+}

@@ -1,0 +1,27 @@
+goos: linux
+goarch: amd64
+pkg: papergo/internal/dms
+cpu: Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
+BenchmarkItemUpdates/individual/1-4         	      20	   5384420 ns/op	       185.7 items/s	  379812 B/op	    7681 allocs/op
+BenchmarkItemUpdates/bulk/1-4               	      20	   6318325 ns/op	       158.3 items/s	  435453 B/op	    8260 allocs/op
+BenchmarkItemUpdates/individual/10-4        	      20	  65471423 ns/op	       152.7 items/s	 3780820 B/op	   76771 allocs/op
+BenchmarkItemUpdates/bulk/10-4              	      20	  61581308 ns/op	       162.4 items/s	 3637317 B/op	   70313 allocs/op
+BenchmarkItemUpdates/individual/100-4       	      20	1907461295 ns/op	        52.43 items/s	37836403 B/op	  767791 allocs/op
+BenchmarkItemUpdates/bulk/100-4             	      20	2031982724 ns/op	        49.21 items/s	35658468 B/op	  690779 allocs/op
+BenchmarkBulkCreate-4                       	      20	 390713208 ns/op	       255.9 items/s	20379473 B/op	  354390 allocs/op
+BenchmarkCollectionQuery/id/head-4          	      20	   6438826 ns/op	  569293 B/op	   10964 allocs/op
+BenchmarkCollectionQuery/id/page2-4         	      20	   5399545 ns/op	  568781 B/op	   10978 allocs/op
+BenchmarkCollectionQuery/name/head-4        	      20	   5370340 ns/op	  567633 B/op	   10974 allocs/op
+BenchmarkCollectionQuery/modified-desc/auto-4         	      20	   8764426 ns/op	  608041 B/op	   11081 allocs/op
+BenchmarkCollectionQuery/n/auto-4                     	      20	   8662016 ns/op	  605394 B/op	   10981 allocs/op
+BenchmarkCollectionQuery/n-desc/page2-4               	      20	   5554055 ns/op	  568717 B/op	   10953 allocs/op
+BenchmarkCollectionQuery/n/reader-fragmented-4        	      20	  26081757 ns/op	  629344 B/op	   11060 allocs/op
+BenchmarkCollectionQuery/status-sort/missing-last-4   	      20	   5646145 ns/op	  569996 B/op	   10998 allocs/op
+BenchmarkCollectionQuery/broad-filter/n-4             	      20	   9778016 ns/op	  608934 B/op	   11027 allocs/op
+BenchmarkCollectionQuery/selective-filter/modified-4  	      20	   5981265 ns/op	  143402 B/op	    2003 allocs/op
+BenchmarkCollectionQuery/search/name-4                	      20	  25053912 ns/op	  634004 B/op	   11208 allocs/op
+BenchmarkCollectionQuery/total-4                      	      20	  13596186 ns/op	  661318 B/op	   11476 allocs/op
+BenchmarkWriteDuringIndexBuild/idle-4                 	      20	   5242401 ns/op	         7.783 max-write-ms	         5.242 mean-write-ms	         9.010 wal-MiB	  315670 B/op	    6339 allocs/op
+BenchmarkWriteDuringIndexBuild/building-4             	      20	  11432425 ns/op	        15.01 max-write-ms	        11.43 mean-write-ms	         9.155 wal-MiB	  883694 B/op	   14163 allocs/op
+BenchmarkSmartFolderQuery100Collections-4             	      20	  65725721 ns/op	 8169171 B/op	   75337 allocs/op
+PASS
