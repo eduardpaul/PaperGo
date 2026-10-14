@@ -5,6 +5,7 @@ import (
 
 	"papergo/internal/dms"
 	"papergo/internal/runner"
+	"papergo/internal/tasks"
 	"papergo/internal/workflow"
 )
 
@@ -37,6 +38,9 @@ var triggerTypes = []map[string]string{
 	{"type": workflow.TriggerSchedule, "description": "A cron occurrence (cron, time_zone). With collection_id, one run per item that meets the condition."},
 	{"type": workflow.TriggerManual, "description": "Started through POST /v1/workflows/{id}/runs, on items or (without collection_id) with no item."},
 	{"type": dms.EventTermMerged, "description": "A term was merged into another; data has source_term_id, target_term_id and term_set_id; the run has no item."},
+	{"type": tasks.EventCreated, "description": "A task was created; data has task_id, kind, key, assignees, source, item_id and run_id, and the run has the task's item. task_key limits it to tasks with that key."},
+	{"type": tasks.EventCompleted, "description": "A task was completed; data as for task.created, with outcome and completed_by. task_key as for task.created."},
+	{"type": tasks.EventCancelled, "description": "A task was cancelled; data as for task.created. task_key as for task.created."},
 	{"type": "wf.{key}.{event}", "description": "Raised by runs of workflow key: completed, failed, or an event.raise node's event; carries the run's item."},
 }
 

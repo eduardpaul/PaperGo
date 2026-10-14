@@ -281,6 +281,14 @@ export function WorkflowEditor({
                           })}
                         </fieldset>
                       )}
+                      {trigger.type.startsWith('task.') && (
+                        <Input
+                          aria-label="Task key"
+                          placeholder="Optional task key, such as legal_review"
+                          value={trigger.task_key ?? ''}
+                          onChange={(event) => changeTrigger(index, { ...trigger, task_key: event.target.value || undefined })}
+                        />
+                      )}
                       {['item.created', 'item.updated', 'item.published'].includes(trigger.type) && (
                         <>
                           <Input

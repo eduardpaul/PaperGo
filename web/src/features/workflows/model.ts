@@ -47,6 +47,7 @@ export interface Trigger {
   terms?: string[];
   term_change?: string;
   sources?: string[];
+  task_key?: string;
 }
 export interface FlowNode {
   activity: string;
