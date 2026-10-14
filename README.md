@@ -4,7 +4,17 @@ DMS and CMS application with its React frontend and Go API in one executable. Us
 
 ## Run locally
 
-Building requires Go 1.26+ (CI and the Docker build use Go 1.27.2), Node.js 24 with npm, and Atlas for schema setup. This workspace has isolated tools under `.tools/`; they are ignored by Git. No Docker or database service is required.
+[Self-hosting performance](docs/performance.md) records measured CPU, memory,
+query latency and storage costs, sizing estimates, and a reproducible load test.
+
+Building requires Go 1.26+ (CI and the Docker build use Go 1.27.2), Node.js 24 with npm, and Atlas with SQLite FTS5 support for schema setup. Optional local tools live under `.tools/`, which is ignored by Git. No Docker or database service is required for native development.
+
+For a ready-to-use Linux development environment, open the repository in VS Code
+and run **Dev Containers: Reopen in Container**. The [development guide](docs/development.md)
+covers the pinned toolchain, automatic setup, hot reload, debugging and checks.
+For rootless Docker on Linux, use **Dev Containers: Clone Repository in Container Volume**.
+With tools installed on Linux or macOS, run `bash scripts/setup-dev.sh`, then
+`bash scripts/dev.sh`; `bash scripts/check.sh` runs the development checks.
 
 PowerShell, from the repository root:
 

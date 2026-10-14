@@ -13,6 +13,7 @@ const clients: QueryClient[] = [];
 afterEach(() => {
   cleanup();
   clients.splice(0).forEach((client) => client.clear());
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -35,7 +36,7 @@ describe('items table', () => {
   it('renders only the rows near the screen in long tables', () => {
     const rows = Array.from({ length: 1000 }, (_, index) => row(`r${index}`, `Row ${index}`));
     // jsdom has no layout: give rows a height so they can be measured.
-    vi.spyOn(HTMLTableRowElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 800, 41));
+    vi.spyOn(HTMLTableRowElement.prototype, 'offsetHeight', 'get').mockReturnValue(41);
     renderWithClient(
       <ItemsTable
         rows={rows}
@@ -58,7 +59,6 @@ describe('items table', () => {
     expect(rendered.length).toBeLessThan(rows.length);
     expect(Number(rendered[0].getAttribute('aria-rowindex'))).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole('table').getAttribute('aria-rowcount')).toBe('1001');
-    vi.restoreAllMocks();
   });
 
   it('opens a row on click, selects with its checkbox and selects all from the header', () => {

@@ -1,0 +1,39 @@
+{
+  "name": "PaperGo",
+  "build": { "dockerfile": "Dockerfile", "context": "." },
+  "remoteUser": "vscode",
+  "containerUser": "vscode",
+  "init": true,
+  "capAdd": ["SYS_PTRACE"],
+  "mounts": [
+    "source=papergo-${devcontainerId}-cache,target=/home/vscode/.cache,type=volume",
+    "source=papergo-${devcontainerId}-modules,target=/home/vscode/go/pkg/mod,type=volume",
+    "source=papergo-${devcontainerId}-node-modules,target=${containerWorkspaceFolder}/web/node_modules,type=volume"
+  ],
+  "postCreateCommand": ["bash", ".devcontainer/post-create.sh"],
+  "waitFor": "postCreateCommand",
+  "forwardPorts": [8080, 5173],
+  "portsAttributes": {
+    "8080": { "label": "PaperGo API and embedded UI", "onAutoForward": "notify" },
+    "5173": { "label": "PaperGo Vite", "onAutoForward": "notify" }
+  },
+  "otherPortsAttributes": { "onAutoForward": "ignore" },
+  "hostRequirements": { "cpus": 2, "memory": "4gb" },
+  "customizations": {
+    "vscode": {
+      "extensions": ["golang.go", "dbaeumer.vscode-eslint"],
+      "settings": {
+        "go.toolsManagement.autoUpdate": false,
+        "go.gopath": "/home/vscode/go",
+        "go.useLanguageServer": true,
+        "eslint.workingDirectories": ["web"],
+        "files.watcherExclude": {
+          "**/web/node_modules/**": true,
+          "**/web/dist/**": true,
+          "**/.cache/**": true,
+          "**/data/**": true
+        }
+      }
+    }
+  }
+}

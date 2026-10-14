@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "PaperGo: setup",
+      "type": "process", "command": "bash", "args": ["scripts/setup-dev.sh"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: API",
+      "type": "process", "command": "bash", "args": ["scripts/dev.sh"],
+      "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: Vite",
+      "type": "process", "command": "npm",
+      "args": ["--prefix", "web", "run", "dev", "--", "--host", "0.0.0.0", "--strictPort"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: build frontend",
+      "type": "process", "command": "npm", "args": ["--prefix", "web", "run", "build"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: check",
+      "type": "process", "command": "bash", "args": ["scripts/check.sh"],
+      "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "test", "isDefault": true }
+    }
+  ]
+}
