@@ -52,6 +52,9 @@ type View struct {
 	Answered bool `json:"answered,omitempty"`
 	// CanRespond tells the reader whether they may answer now.
 	CanRespond bool `json:"can_respond"`
+	// CanReassign tells the reader of an open task whether they may change
+	// its assignees; set when one task is read.
+	CanReassign bool `json:"can_reassign,omitempty"`
 }
 
 // ResponseView is an answer as the API shows it.
@@ -245,6 +248,7 @@ func view(ctx context.Context, t *dms.Service, tk *ent.Task, subject string, gro
 		v.CanRespond = tk.Status == task.StatusOpen && entry != ""
 	}
 	if responses {
+		v.CanReassign = tk.Status == task.StatusOpen && (tk.CreatedBy == subject && tk.Source != task.SourceWorkflow || manages(ctx, t, subject, tk.WorkspaceID))
 		rows, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(tk.ID)).Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)
 		if err != nil {
 			return View{}, err
@@ -285,6 +289,20 @@ func (s *Service) Respond(ctx context.Context, subject, id string, r Response) (
 			return err
 		}
 		out, err = view(ctx, t, tk, subject, groups, true)
+		return err
+	})
+	return out, err
+}
+
+// Reassign replaces an open task's assignees.
+func (s *Service) Reassign(ctx context.Context, subject, id string, assignees []string) (View, error) {
+	var out View
+	err := s.DMS.Write(ctx, func(t *dms.Service) error {
+		tk, err := Reassign(ctx, t, subject, id, assignees)
+		if err != nil {
+			return err
+		}
+		out, err = view(ctx, t, tk, subject, nil, true)
 		return err
 	})
 	return out, err

@@ -121,3 +121,17 @@ it('shows a stale review of an approval and the answers given, read only', async
   expect(answers.textContent).toContain('carol for group:legal: Approve');
   expect(answers.textContent).toContain('readable');
 });
+
+it('lets an owner drop an assignee who can no longer answer', async () => {
+  const task: Task = { ...base, assignees: ['bob', 'carol'], completion: 'all', can_respond: false, can_reassign: true };
+  const fetch = stub((path, init) =>
+    path.endsWith('/reassign') ? new Response(stringifyJSON({ ...task, ...(parseJSON(String(init?.body)) as object) })) : new Response('[]'),
+  );
+  show(task);
+  fireEvent.click(screen.getByRole('button', { name: 'Reassign' }));
+  fireEvent.click(screen.getByLabelText('carol'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save assignees' }));
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/reassign'))).toBe(true));
+  const [, init] = fetch.mock.calls.find(([url]) => String(url).endsWith('/reassign'))!;
+  expect(parseJSON(String(init?.body))).toEqual({ assignees: ['bob'] });
+});

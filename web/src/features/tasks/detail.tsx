@@ -55,6 +55,7 @@ export function TaskDetail({ task }: { task: Task }) {
       </header>
       <Review task={task} />
       {task.can_respond && <ResponseForm task={task} />}
+      {task.can_reassign && <Reassign task={task} />}
       {task.answered && !task.can_respond && task.status === 'open' && (
         <p className="text-[13px] text-muted">You answered; the task waits for the other assignees.</p>
       )}
@@ -134,6 +135,90 @@ function ResponseForm({ task }: { task: Task }) {
             {outcome.label}
           </Button>
         ))}
+      </div>
+    </form>
+  );
+}
+
+const addPeopleSchema: FormSchema = {
+  type: 'object',
+  properties: {
+    people: {
+      type: 'array',
+      title: 'Add people',
+      items: { type: 'string' },
+      maxItems: 50,
+      'x-papergo': { kind: 'people', access: 'read' },
+    },
+  },
+};
+
+/**
+ * Owners change who a task waits for, such as when an assignee left: they
+ * keep or drop each assignee and add people.
+ */
+function Reassign({ task }: { task: Task }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [kept, setKept] = useState<string[]>(task.assignees);
+  const [added, setAdded] = useState<Record<string, unknown>>({});
+  const reassign = useMutation({
+    mutationFn: () => {
+      const people = Array.isArray(added.people) ? (added.people as string[]) : [];
+      return api<Task>(`/v1/tasks/${task.id}/reassign`, {
+        method: 'POST',
+        body: { assignees: [...new Set([...kept, ...people])] },
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setOpen(false);
+    },
+  });
+  if (!open) {
+    return (
+      <div>
+        <Button variant="secondary" onClick={() => setOpen(true)}>
+          Reassign
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="grid gap-3 rounded-md border p-3"
+      aria-label="Reassign"
+      onSubmit={(event) => {
+        event.preventDefault();
+        reassign.mutate();
+      }}
+    >
+      <fieldset className="grid gap-1">
+        <legend className="text-[13px] font-medium">Assignees</legend>
+        {task.assignees.map((a) => (
+          <label key={a} className="flex items-center gap-2 text-[13px]">
+            <input
+              type="checkbox"
+              checked={kept.includes(a)}
+              onChange={(event) => setKept(event.target.checked ? [...kept, a] : kept.filter((k) => k !== a))}
+            />
+            {a}
+          </label>
+        ))}
+      </fieldset>
+      <SchemaFields schema={addPeopleSchema} data={added} onChange={setAdded} workspaceId={task.workspace_id} />
+      <p className="text-xs text-muted">
+        Answers of assignees you keep count; with every assignee answering, the task completes once everyone left has
+        answered. No assignees means the workspace owners.
+      </p>
+      {reassign.error && <Alert>{problemMessage(reassign.error)}</Alert>}
+      <div className="flex gap-2">
+        <Button type="submit" disabled={reassign.isPending}>
+          Save assignees
+        </Button>
+        <Button variant="secondary" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
       </div>
     </form>
   );

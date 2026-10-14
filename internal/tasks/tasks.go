@@ -636,34 +636,18 @@ func Respond(ctx context.Context, t *dms.Service, subject, id string, r Response
 	if input != nil {
 		c.SetInput(input)
 	}
-	if _, err = c.Save(ctx); err != nil {
+	completing, err := c.Save(ctx)
+	if err != nil {
 		return nil, err
 	}
-	// The result is the completing answer: this one, or with completion all
-	// the latest answer with the outcome chosen most often.
-	done, by, comment := true, subject, r.Comment
-	outcome := o.Key
 	if tk.Completion == task.CompletionAll && !o.Decisive {
-		responses, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(id)).Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)
-		if err != nil {
+		if completing, err = settled(ctx, t, tk); err != nil {
 			return nil, err
-		}
-		done = len(responses) >= len(tk.Assignees)
-		if outcome = mostChosen(tk.Outcomes, responses); outcome != o.Key {
-			for _, resp := range slices.Backward(responses) {
-				if resp.Outcome == outcome {
-					by, comment, input = resp.Subject, resp.Comment, json.RawMessage(resp.Input)
-					break
-				}
-			}
 		}
 	}
 	u := t.Client.Task.UpdateOne(tk).AddVersion(1)
-	if done {
-		u.SetStatus(task.StatusCompleted).SetOutcome(outcome).SetCompletedBy(by).SetCompletedAt(time.Now().UTC()).SetComment(comment)
-		if input != nil {
-			u.SetInput(input)
-		}
+	if completing != nil {
+		completeWith(u, completing)
 	}
 	if tk, err = u.Save(ctx); err != nil {
 		return nil, err
@@ -675,7 +659,100 @@ func Respond(ctx context.Context, t *dms.Service, subject, id string, r Response
 	if err = t.Record(ctx, subject, "task.respond", ws, map[string]any{"task_id": id, "outcome": o.Key, "assignee": entry}); err != nil {
 		return nil, err
 	}
-	if done {
+	if completing != nil {
+		if err = raise(ctx, t, tk, EventCompleted, subject); err != nil {
+			return nil, err
+		}
+	}
+	return tk, nil
+}
+
+// settled returns the answer that completes a task with completion all once
+// every assignee entry has answered: the latest answer with the outcome
+// chosen most often. Answers of entries no longer assigned do not count.
+func settled(ctx context.Context, t *dms.Service, tk *ent.Task) (*ent.TaskResponse, error) {
+	rows, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(tk.ID), taskresponse.AssigneeIn(tk.Assignees...)).
+		Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)
+	if err != nil || len(rows) < len(tk.Assignees) {
+		return nil, err
+	}
+	outcome := mostChosen(tk.Outcomes, rows)
+	for _, r := range slices.Backward(rows) {
+		if r.Outcome == outcome {
+			return r, nil
+		}
+	}
+	return nil, nil
+}
+
+// completeWith completes a task with an answer as its result.
+func completeWith(u *ent.TaskUpdateOne, r *ent.TaskResponse) {
+	u.SetStatus(task.StatusCompleted).SetOutcome(r.Outcome).SetCompletedBy(r.Subject).SetCompletedAt(time.Now().UTC()).SetComment(r.Comment)
+	if len(r.Input) > 0 {
+		u.SetInput(r.Input)
+	}
+}
+
+// Reassign replaces an open task's assignees, as an owner of its workspace
+// or the creator of a person's task does when someone can no longer answer.
+// Answers of entries that stay assigned count; a task with completion all
+// completes when every entry left has answered.
+func Reassign(ctx context.Context, t *dms.Service, subject, id string, entries []string) (*ent.Task, error) {
+	tk, err := t.Client.Task.Get(ctx, id)
+	if ent.IsNotFound(err) {
+		return nil, dms.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	groups, err := t.GroupIDs(ctx, subject)
+	if err != nil {
+		return nil, err
+	}
+	if !visibleTo(ctx, t, tk, subject, groups) {
+		return nil, dms.ErrNotFound
+	}
+	if !manages(ctx, t, subject, tk.WorkspaceID) && (tk.CreatedBy != subject || tk.Source == task.SourceWorkflow) {
+		return nil, dms.ErrForbidden
+	}
+	if tk.Status != task.StatusOpen {
+		return nil, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
+	}
+	assignees, err := Resolve(ctx, t, subject, entries, tk.WorkspaceID, deref(tk.ItemID), "")
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range assignees {
+		if !strings.HasPrefix(a, "group:") {
+			if err = CanReview(ctx, t, a, tk.WorkspaceID, deref(tk.ItemID)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if tk, err = t.Client.Task.UpdateOne(tk).SetAssignees(assignees).AddVersion(1).Save(ctx); err != nil {
+		return nil, err
+	}
+	var completing *ent.TaskResponse
+	if tk.Completion == task.CompletionAll {
+		if completing, err = settled(ctx, t, tk); err != nil {
+			return nil, err
+		}
+	}
+	if completing != nil {
+		u := t.Client.Task.UpdateOne(tk).AddVersion(1)
+		completeWith(u, completing)
+		if tk, err = u.Save(ctx); err != nil {
+			return nil, err
+		}
+	}
+	ws, err := t.Client.Resource.Get(ctx, tk.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if err = t.Record(ctx, subject, "task.reassign", ws, map[string]any{"task_id": id, "assignees": assignees}); err != nil {
+		return nil, err
+	}
+	if completing != nil {
 		if err = raise(ctx, t, tk, EventCompleted, subject); err != nil {
 			return nil, err
 		}

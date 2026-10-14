@@ -113,6 +113,12 @@ func TestTaskRoutes(t *testing.T) {
 	}
 	w = request(h, "POST", "/v1/workspaces/"+ws.ID+"/tasks", `{"title": "Later"}`, testToken, "", json_)
 	_ = json.Unmarshal(w.Body.Bytes(), &standalone)
+	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/reassign", `{"assignees": ["nobody"]}`, testToken, "", json_); w.Code != 422 {
+		t.Fatalf("reassign to an unknown person: %d %s", w.Code, w.Body)
+	}
+	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/reassign", `{"assignees": ["role:owners"]}`, testToken, "", json_); w.Code != 200 || !strings.Contains(w.Body.String(), `"assignees":["alice"]`) {
+		t.Fatalf("reassign: %d %s", w.Code, w.Body)
+	}
 	if w = request(h, "POST", "/v1/tasks/"+standalone.ID+"/cancel", "", testToken, "", json_); w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"cancelled"`) {
 		t.Fatalf("cancel: %d %s", w.Code, w.Body)
 	}

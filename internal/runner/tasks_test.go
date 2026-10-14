@@ -473,6 +473,57 @@ func TestAllModeResultComesFromTheWinningAnswer(t *testing.T) {
 	}
 }
 
+// An assignee who can no longer answer leaves an all-mode task waiting; an
+// owner reassigns it, and the task completes once everyone left answered.
+func TestReassigningATaskSomeoneCannotAnswer(t *testing.T) {
+	f := setup(t)
+	if err := f.dms.SetWorkspaceMember(ctx, "alice", f.ws.ID, dms.WorkspaceMember{Subject: "carol", Role: "member"}); err != nil {
+		t.Fatal(err)
+	}
+	w := f.workflow(t, "Sign-off", `{
+		"triggers": [{"type": "manual", "collection_id": "$LIST"}],
+		"flow": {"start": "ask", "nodes": {
+			"ask": {"activity": "approval", "inputs": {"title": "Sign {item:name}", "assignees": ["bob", "carol"], "completion": "all"}, "next": {"approved": "yes"}},
+			"yes": {"activity": "item.update", "inputs": {"values": {"note": "signed by {step:ask.completed_by}"}}}
+		}}
+	}`)
+	item := f.item(t, "alice", "Lease", nil)
+	ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{item.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, ids[0], "waiting")
+	mine, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Waiting: true})
+	if err != nil || len(mine) != 1 {
+		t.Fatalf("bob's tasks: %v, %v", mine, err)
+	}
+	id := mine[0].ID
+	if _, err = f.tasks().Respond(ctx, "bob", id, tasks.Response{Outcome: "approved"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.dms.Directory().SetUserActive(ctx, "organization-admin", "carol", false); err != nil {
+		t.Fatal(err)
+	}
+	// Only owners and the creator of a person's task reassign.
+	if _, err = f.tasks().Reassign(ctx, "bob", id, []string{"bob"}); !errors.Is(err, dms.ErrForbidden) {
+		t.Fatalf("an assignee reassigned: %v", err)
+	}
+	if _, err = f.tasks().Reassign(ctx, "alice", id, []string{"bob", "nobody"}); err == nil {
+		t.Fatal("reassigned to an unknown person")
+	}
+	v, err := f.tasks().Reassign(ctx, "alice", id, []string{"bob"})
+	if err != nil || v.Status != "completed" || *v.Outcome != "approved" || *v.CompletedBy != "bob" {
+		t.Fatalf("reassigned: %+v, %v", v, err)
+	}
+	f.status(t, ids[0], "completed")
+	if got := f.head(t, item.ID).Values["note"]; got != "signed by bob" {
+		t.Fatalf("note %v", got)
+	}
+	if _, err = f.tasks().Reassign(ctx, "alice", id, []string{"carol"}); !errors.Is(err, dms.ErrConflict) {
+		t.Fatalf("reassigned a completed task: %v", err)
+	}
+}
+
 func TestTaskWithoutWaitingAndTaskTriggers(t *testing.T) {
 	f := setup(t)
 	follow := f.workflow(t, "File it", `{

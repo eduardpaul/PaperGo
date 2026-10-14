@@ -18,6 +18,7 @@ func (a *API) registerTasks(api *http.ServeMux) {
 	api.HandleFunc("GET /v1/items/{id}/tasks", a.itemTasks)
 	api.HandleFunc("GET /v1/tasks/{id}", a.getTask)
 	api.HandleFunc("POST /v1/tasks/{id}/responses", a.respondTask)
+	api.HandleFunc("POST /v1/tasks/{id}/reassign", a.reassignTask)
 	api.HandleFunc("POST /v1/tasks/{id}/cancel", a.cancelTask)
 	api.HandleFunc("GET /v1/staged-files/{id}", a.getStagedFile)
 	api.HandleFunc("GET /v1/staged-files/{id}/content", a.stagedFileContent)
@@ -104,6 +105,21 @@ func (a *API) respondTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := a.tasks().Respond(r.Context(), subject(r), r.PathValue("id"), in)
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	respond(w, r, 200, out)
+}
+
+func (a *API) reassignTask(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Assignees []string `json:"assignees"`
+	}
+	if !a.decode(w, r, &in) {
+		return
+	}
+	out, err := a.tasks().Reassign(r.Context(), subject(r), r.PathValue("id"), in.Assignees)
 	if err != nil {
 		a.failure(w, r, err)
 		return

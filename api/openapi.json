@@ -15028,6 +15028,135 @@
         }
       }
     },
+    "/v1/tasks/{id}/reassign": {
+      "post": {
+        "summary": "Reassign Task",
+        "operationId": "reassignTask",
+        "description": "Replaces an open task's assignees, entries as when a task is created, for example when an assignee was deactivated or lost access. A workspace owner may, and the creator of a person's task. Answers of entries that stay assigned count: a task with completion all completes once every entry left has answered, and a run waiting for it continues.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskReassign"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/tasks/{id}/cancel": {
       "post": {
         "summary": "Cancel Task",
@@ -21374,6 +21503,10 @@
           "can_respond": {
             "type": "boolean",
             "description": "The caller may answer now."
+          },
+          "can_reassign": {
+            "type": "boolean",
+            "description": "Whether the caller may change the open task's assignees; set when one task is read."
           }
         },
         "required": [
@@ -21577,6 +21710,23 @@
         "required": [
           "outcome"
         ],
+        "additionalProperties": false
+      },
+      "TaskReassign": {
+        "type": "object",
+        "required": [
+          "assignees"
+        ],
+        "properties": {
+          "assignees": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string"
+            },
+            "description": "People, group:<id>, role:owners, role:members, creator or field:<key>; none means the workspace's owners."
+          }
+        },
         "additionalProperties": false
       },
       "StagedFile": {

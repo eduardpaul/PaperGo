@@ -1,6 +1,6 @@
 # Tasks and notifications (plan)
 
-Status: **phase 1 (tasks core) implemented**, documented in [workflows](../workflows.md#tasks). Phases 2 to 4 are planned. It designs two core building blocks that workflows and the rest of PaperGo share:
+Status: **phase 1 (tasks core) implemented**, with owners' reassignment from phase 3, documented in [workflows](../workflows.md#tasks). Phases 2 to 4 are planned. It designs two core building blocks that workflows and the rest of PaperGo share:
 
 - **Tasks:** *action required.* Someone has to do something and say so: approve, reject, fill in a form, confirm. A workflow can wait for the answer.
 - **Notifications:** *something happened.* People are told; nobody has to answer, and nothing waits.
@@ -93,7 +93,7 @@ Tokens work too (`{item:values.reviewer}`). An empty list means the workspace's 
 - **Seeing a task:** its assignees (members of an assigned group included), its creator, and the workspace's owners. When it concerns an item, an assignee must also be able to read the item's draft. This is checked when the task is created (the node fails, naming who cannot) and again when someone responds.
 - **Responding:** only assignees. Owners can reassign, not respond for others.
 - **Changing:** the creator and the workspace's owners can change the title, due time and assignees of an open task (with `If-Match`), and cancel it. A workflow's task belongs to its run: cancel the run instead, or let a workflow cancel it with `task.cancel`.
-- **Reassigning:** an assignee can hand their part to someone else when the task allows it (`allow_reassign`). Owners always can. The new assignee needs the same access.
+- **Reassigning:** owners, and the creator of a person's task, replace an open task's assignees (implemented, `POST /v1/tasks/{id}/reassign` with `{assignees}`); answers of entries that stay count, and a task with completion `all` completes once every entry left has answered. Planned: an assignee hands their part to someone else when the task allows it (`allow_reassign`). The new assignee needs the same access.
 
 ### Waiting
 
@@ -179,7 +179,7 @@ A standalone task is not a to-do list. PaperDotNet's TSK features (boards, subta
 | `GET /v1/tasks/{id}` | a task with its responses |
 | `PATCH /v1/tasks/{id}` | title, description, due time, reminders and assignees (`If-Match`) |
 | `POST /v1/tasks/{id}/responses` | `{outcome, comment, input}` |
-| `POST /v1/tasks/{id}/reassign` | `{from, to}` |
+| `POST /v1/tasks/{id}/reassign` | `{assignees}`, by owners (implemented); an assignee's hand-off adds `{from, to}` |
 | `POST /v1/tasks/{id}/cancel` | cancels a standalone task |
 | `GET /v1/staged-files/{id}`, `/content` | unchanged: the staged file a review shows |
 
@@ -310,7 +310,7 @@ Each phase ships with its tests, OpenAPI contract, docs and web screens, and edi
 2. **Notifications core.**
    - `notifications` and `internal/notify`; the `notify` activity; the inbox API, live frames, bell and *Notifications* tab.
    - System notifications for tasks and failed runs; the item Tasks panel.
-3. **Due times.** `due`, `reminders` and `on_due` with the dispatch-loop pass, the `expired` port, reassignment, and editing open tasks.
+3. **Due times.** `due`, `reminders` and `on_due` with the dispatch-loop pass, the `expired` port, an assignee's hand-off, and editing open tasks.
 4. **External channels.** Notification settings; the delivery queue; webhooks; email through a maintained SMTP library such as `github.com/wneessen/go-mail` (MIT), off unless configured; quiet hours and daily digests.
 
 Follows and change subscriptions (PaperDotNet NTF-03, API-06) build on phase 4's delivery queue and are planned separately.

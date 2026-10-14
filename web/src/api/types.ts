@@ -406,6 +406,8 @@ export interface Task {
   responses?: TaskAnswer[];
   answered?: boolean;
   can_respond: boolean;
+  /** Set when one task is read: the caller may change its assignees. */
+  can_reassign?: boolean;
 }
 
 export interface StagedFile {
