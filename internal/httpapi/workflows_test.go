@@ -57,7 +57,7 @@ func TestWorkflowRoutes(t *testing.T) {
 	const json_ = "application/json"
 
 	w := request(h, "GET", "/v1/workflow-catalog", "", testToken, "", "")
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"item.update"`) || !strings.Contains(w.Body.String(), `"items.expire"`) {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"item.update"`) || !strings.Contains(w.Body.String(), `"items.expire"`) || !strings.Contains(w.Body.String(), `"type":"task.completed"`) {
 		t.Fatalf("catalog: %d %s", w.Code, w.Body)
 	}
 	body := `{"name": "Tag on demand", "definition": {

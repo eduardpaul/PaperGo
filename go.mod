@@ -9,12 +9,15 @@ require (
 	entgo.io/ent v0.14.6
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/dbos-inc/dbos-transact-golang v1.6.0
+	github.com/ebitengine/purego v0.11.1
+	github.com/gen2brain/webp v0.6.4
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/uuid v1.6.0
 	github.com/robfig/cron/v3 v3.0.1
+	golang.org/x/image v0.47.0
 	golang.org/x/oauth2 v0.28.0
-	golang.org/x/sys v0.48.0
-	golang.org/x/text v0.41.0
+	golang.org/x/sys v0.49.0
+	golang.org/x/text v0.43.0
 	modernc.org/sqlite v1.60.1
 )
 
@@ -53,7 +56,7 @@ require (
 	github.com/zclconf/go-cty v1.14.4 // indirect
 	github.com/zclconf/go-cty-yaml v1.1.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/tools v0.51.0 // indirect
 	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

@@ -40,7 +40,7 @@ Paths resolve by the caller's visible names, using head names for draft readers 
 
 Relationships connect items across workspaces. A link may reference a directed or symmetric relationship type or use an untyped scalar property bag. Types define validated scalar attributes and optional directional cardinality; edge mutations use their own concurrency version. They are live edges with their own audit events. Both endpoints must be readable and have a visible content surface to appear in a query. Publishing an item does not publish its linked target or freeze its relationship graph. A future release requiring reproducible relationship graphs should add immutable relationship revisions and published-edge projections explicitly.
 
-Keep HTTP decoding/authentication in `internal/httpapi`, the WebDAV protocol in `internal/webdav`, business invariants in `internal/dms`, workflow definitions, matching and interpretation in `internal/workflow`, durable execution in `internal/runner` (the only package that imports the engine), database initialization/migration checks in `internal/database`, and object persistence behind `internal/storage.Store`. Ent is the current persistence implementation, not an API contract for consumers.
+Keep HTTP decoding/authentication in `internal/httpapi`, the WebDAV protocol in `internal/webdav`, business invariants in `internal/dms`, workflow definitions, matching and interpretation in `internal/workflow`, durable execution in `internal/runner` (the only package that imports the engine), database initialization/migration checks in `internal/database`, text recognition behind `internal/ocr.Engine` (`internal/ocr/paddle` is the only package that loads ONNX Runtime), and object persistence behind `internal/storage.Store`. Ent is the current persistence implementation, not an API contract for consumers.
 
 ## Workflows
 
@@ -52,7 +52,7 @@ When scale warrants PostgreSQL, replace SQLite-specific authorization/search ada
 
 The complete schema is one Atlas migration file, edited in place until the first release; there are no upgrade paths or compatibility layers (see [AGENTS.md](../AGENTS.md)). Each resource stores its nearest exclusive permission scope (`scope_id`), maintained by triggers, so authorization is an indexed lookup rather than a hierarchy walk.
 
-Tests apply that schema file. Coverage includes ownership and move constraints, permission-scope maintenance, nested group and role revocation, deletion tombstones, WebDAV protocol behavior and locking, exact values through REST, head/published search and blobs, typed index rebuilds, schema/history immutability, authorized pagination, and concurrent optimistic updates. Concurrent-client load testing, restoration exercises, approval and task activities, quotas, malware scanning, idempotency keys and observability exports remain deployment/application work.
+Tests apply that schema file. Coverage includes ownership and move constraints, permission-scope maintenance, nested group and role revocation, deletion tombstones, WebDAV protocol behavior and locking, exact values through REST, head/published search and blobs, typed index rebuilds, schema/history immutability, authorized pagination, and concurrent optimistic updates. Concurrent-client load testing, restoration exercises, quotas, malware scanning, idempotency keys and observability exports remain deployment/application work.
 
 ## Application configuration
 

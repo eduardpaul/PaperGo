@@ -1,4 +1,4 @@
-package workflow
+package forms
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,9 +20,9 @@ import (
 	"papergo/internal/dms"
 )
 
-// Forms are JSON Schema (a draft-07 subset) objects. Workflows use them for
-// launch inputs (input_schema), built-ins for their parameters, and
-// activities to describe their inputs and outputs. A UI renders them with
+// Package forms is PaperGo's form system. Forms are JSON Schema (a draft-07
+// subset) objects: workflow launch forms, built-in parameters, task forms
+// and the activity catalog's input and output descriptions all use them. A UI renders them with
 // any JSON Schema form library; the server applies defaults and validates
 // every value itself, so a form never needs to be trusted.
 //
@@ -74,22 +75,47 @@ var domainKinds = map[string]map[string]bool{
 
 var selectionHints = map[string]bool{"preview": true, "item_label": true, "order_label": true, "primary_description": true}
 
-// mustSchema parses a schema written in code.
-func mustSchema(raw string) map[string]any {
+// NamePattern is the pattern of property names: lowercase identifiers.
+var NamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
+// Plain gives values the shapes they have after a JSON round trip, so
+// values read from storage and values just submitted compare alike.
+func Plain(v any) any {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var out any
+	_ = json.Unmarshal(raw, &out)
+	return out
+}
+
+// MustParse parses a schema written in code.
+func MustParse(raw string) map[string]any {
 	var s map[string]any
 	dec := json.NewDecoder(strings.NewReader(raw))
 	dec.UseNumber()
 	if err := dec.Decode(&s); err != nil {
 		panic(err)
 	}
-	if err := validateSchema(s, "schema", 0, true); err != nil {
+	if err := validateSchema(s, "schema", 0, true, true); err != nil {
 		panic(err)
 	}
 	return s
 }
 
+// Validate checks a form's schema: the root of a task form, built-in
+// parameters or an activity's inputs.
+func Validate(s map[string]any, path string) error { return validateSchema(s, path, 0, true, false) }
+
+// ValidateLaunch checks a workflow's launch form, whose root may also hold
+// x-papergo-selection hints.
+func ValidateLaunch(s map[string]any, path string) error {
+	return validateSchema(s, path, 0, true, true)
+}
+
 // validateSchema checks a form schema when it is saved.
-func validateSchema(s map[string]any, path string, depth int, root bool) error {
+func validateSchema(s map[string]any, path string, depth int, root, launch bool) error {
 	if depth > maxSchemaDepth {
 		return fmt.Errorf("%s nests deeper than %d levels", path, maxSchemaDepth)
 	}
@@ -108,7 +134,7 @@ func validateSchema(s map[string]any, path string, depth int, root bool) error {
 				return err
 			}
 		case key == "x-papergo-selection":
-			if !root {
+			if !root || !launch {
 				return fmt.Errorf("%s: x-papergo-selection belongs to the root of a launch schema", path)
 			}
 			hints, ok := value.(map[string]any)
@@ -127,14 +153,14 @@ func validateSchema(s map[string]any, path string, depth int, root bool) error {
 	}
 	for _, key := range []string{"minLength", "maxLength", "minItems", "maxItems"} {
 		if v, ok := s[key]; ok {
-			if n, ok := wholeNumber(v); !ok || n < 0 {
+			if n, ok := WholeNumber(v); !ok || n < 0 {
 				return fmt.Errorf("%s.%s must be a nonnegative integer", path, key)
 			}
 		}
 	}
 	for _, key := range []string{"minimum", "maximum"} {
 		if v, ok := s[key]; ok {
-			if _, ok := number(v); !ok {
+			if _, ok := Number(v); !ok {
 				return fmt.Errorf("%s.%s must be a number", path, key)
 			}
 		}
@@ -159,10 +185,10 @@ func validateSchema(s map[string]any, path string, depth int, root bool) error {
 		}
 		for name, p := range props {
 			child, ok := p.(map[string]any)
-			if !ok || !inputNamePattern.MatchString(name) {
+			if !ok || !NamePattern.MatchString(name) {
 				return fmt.Errorf("%s.%s: property names are lowercase identifiers and properties are schemas", path, name)
 			}
-			if err := validateSchema(child, path+"."+name, depth+1, false); err != nil {
+			if err := validateSchema(child, path+"."+name, depth+1, false, false); err != nil {
 				return err
 			}
 		}
@@ -184,7 +210,7 @@ func validateSchema(s map[string]any, path string, depth int, root bool) error {
 		if !ok {
 			return fmt.Errorf("%s.items must be a schema", path)
 		}
-		if err := validateSchema(child, path+"[]", depth+1, false); err != nil {
+		if err := validateSchema(child, path+"[]", depth+1, false, false); err != nil {
 			return err
 		}
 	}
@@ -271,7 +297,7 @@ func withoutKey(s map[string]any, key string) map[string]any {
 	return out
 }
 
-func number(v any) (float64, bool) {
+func Number(v any) (float64, bool) {
 	switch n := v.(type) {
 	case json.Number:
 		f, err := n.Float64()
@@ -286,8 +312,8 @@ func number(v any) (float64, bool) {
 	return 0, false
 }
 
-func wholeNumber(v any) (int, bool) {
-	f, ok := number(v)
+func WholeNumber(v any) (int, bool) {
+	f, ok := Number(v)
 	if !ok || f != math.Trunc(f) || f > math.MaxInt32 {
 		return 0, false
 	}
@@ -306,7 +332,7 @@ func withDefaults(s map[string]any, values map[string]any) map[string]any {
 		child, _ := p.(map[string]any)
 		if _, set := out[name]; !set {
 			if d, ok := child["default"]; ok {
-				out[name] = jsonish(d)
+				out[name] = Plain(d)
 			}
 		}
 		if obj, ok := out[name].(map[string]any); ok && child["type"] == "object" {
@@ -367,9 +393,9 @@ func checkValue(s map[string]any, v any, path string) error {
 	case "string":
 		_, fits = v.(string)
 	case "number":
-		_, fits = number(v)
+		_, fits = Number(v)
 	case "integer":
-		f, ok := number(v)
+		f, ok := Number(v)
 		fits = ok && f == math.Trunc(f)
 	case "boolean":
 		_, fits = v.(bool)
@@ -396,17 +422,17 @@ func checkValue(s map[string]any, v any, path string) error {
 	switch t := v.(type) {
 	case string:
 		n := utf8.RuneCountInString(t)
-		if min, ok := wholeNumber(s["minLength"]); ok && n < min {
+		if min, ok := WholeNumber(s["minLength"]); ok && n < min {
 			return fmt.Errorf("%s needs at least %d characters", path, min)
 		}
-		if max, ok := wholeNumber(s["maxLength"]); ok && n > max {
+		if max, ok := WholeNumber(s["maxLength"]); ok && n > max {
 			return fmt.Errorf("%s takes at most %d characters", path, max)
 		}
 	case []any:
-		if min, ok := wholeNumber(s["minItems"]); ok && len(t) < min {
+		if min, ok := WholeNumber(s["minItems"]); ok && len(t) < min {
 			return fmt.Errorf("%s needs at least %d entries", path, min)
 		}
-		if max, ok := wholeNumber(s["maxItems"]); ok && len(t) > max {
+		if max, ok := WholeNumber(s["maxItems"]); ok && len(t) > max {
 			return fmt.Errorf("%s takes at most %d entries", path, max)
 		}
 		if s["uniqueItems"] == true {
@@ -433,11 +459,11 @@ func checkValue(s map[string]any, v any, path string) error {
 			return err
 		}
 	default:
-		if f, ok := number(v); ok {
-			if min, ok := number(s["minimum"]); ok && f < min {
+		if f, ok := Number(v); ok {
+			if min, ok := Number(s["minimum"]); ok && f < min {
 				return fmt.Errorf("%s must be at least %v", path, s["minimum"])
 			}
-			if max, ok := number(s["maximum"]); ok && f > max {
+			if max, ok := Number(s["maximum"]); ok && f > max {
 				return fmt.Errorf("%s must be at most %v", path, s["maximum"])
 			}
 		}
@@ -446,15 +472,15 @@ func checkValue(s map[string]any, v any, path string) error {
 }
 
 func sameJSON(a, b any) bool {
-	if fa, ok := number(a); ok {
-		fb, ok := number(b)
+	if fa, ok := Number(a); ok {
+		fb, ok := Number(b)
 		return ok && fa == fb
 	}
-	return reflect.DeepEqual(jsonish(a), jsonish(b))
+	return reflect.DeepEqual(Plain(a), Plain(b))
 }
 
-// formValues applies defaults to submitted values and validates them.
-func formValues(s map[string]any, values map[string]any, path string) (map[string]any, error) {
+// Values applies defaults to submitted values and validates them.
+func Values(s map[string]any, values map[string]any, path string) (map[string]any, error) {
 	if s == nil {
 		if len(values) > 0 {
 			return nil, dms.Invalid(path + " takes no values")
@@ -518,9 +544,9 @@ func domainFields(s map[string]any, values any, path string, out *[]domainField)
 	}
 }
 
-// checkDomainConfig checks, when a workflow is saved, that its pickers
+// CheckConfig checks, when a workflow is saved, that its pickers
 // point at workspace collections/relationships and organization taxonomy.
-func checkDomainConfig(ctx context.Context, t *dms.Service, subject, workspaceID string, s map[string]any, path string) error {
+func CheckConfig(ctx context.Context, t *dms.Service, subject, workspaceID string, s map[string]any, path string) error {
 	var fields []domainField
 	domainFields(s, nil, path, &fields)
 	for _, f := range fields {
@@ -604,10 +630,10 @@ func checkTerm(ctx context.Context, t *dms.Service, group, set string, allowed [
 	return nil
 }
 
-// checkDomainValues checks, before a run starts (and later before an
+// CheckValues checks, before a run starts (and later before an
 // approval is decided), that every picked ID exists and is allowed for
 // subject, the person who submits the form.
-func checkDomainValues(ctx context.Context, t *dms.Service, subject, workspaceID string, s map[string]any, values map[string]any, path string) error {
+func CheckValues(ctx context.Context, t *dms.Service, subject, workspaceID string, s map[string]any, values map[string]any, path string) error {
 	var fields []domainField
 	domainFields(s, values, path, &fields)
 	for _, f := range fields {

@@ -426,17 +426,21 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	}
 	details := map[string]any{"kind": in.Kind}
 	if contentKind(out.Kind) {
+		var file *ent.Blob
 		var blobID *string
 		if content != nil {
-			b, e := s.createBlob(ctx, subject, out.ID, *content, true)
-			if e != nil {
+			if file, e = s.createBlob(ctx, subject, out.ID, *content, true); e != nil {
 				return nil, e
 			}
-			blobID = &b.ID
-			details["blob_id"] = b.ID
+			blobID = &file.ID
+			details["blob_id"] = file.ID
 		}
-		if _, e = s.recordRevision(ctx, subject, out, blobID, false); e != nil {
+		rev, e := s.recordRevision(ctx, subject, out, blobID, false)
+		if e != nil {
 			return nil, e
+		}
+		if file != nil {
+			s.emitFileAdded(ctx, subject, out, file, rev, content.Source)
 		}
 	}
 	out, e = s.Client.Resource.Get(ctx, out.ID)

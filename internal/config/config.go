@@ -49,7 +49,14 @@ type Config struct {
 	// (authorization code with PKCE). Empty disables browser sign-in.
 	ClientID string
 	// ClientScopes are the scopes the web frontend requests from the issuer.
-	ClientScopes      string
+	ClientScopes string
+	// OCRLibrary is the ONNX Runtime shared library OCR loads; empty turns
+	// OCR, and the workflow activities that need it, off.
+	OCRLibrary string
+	// OCRModels is the directory of the PaddleOCR model files.
+	OCRModels string
+	// OCRThreads is the CPU threads one OCR inference uses.
+	OCRThreads        int
 	ProxySecret       string
 	ProxyTrustedCIDRs []netip.Prefix
 }
@@ -91,6 +98,14 @@ func Load() (Config, error) {
 			return c, fmt.Errorf("RUN_RETENTION must be a duration between 1h and 87600h")
 		}
 		c.RunRetention = d
+	}
+	c.OCRLibrary, c.OCRModels, c.OCRThreads = os.Getenv("ONNXRUNTIME_LIB"), value("OCR_MODELS", "models/paddleocr"), 1
+	if v := os.Getenv("OCR_THREADS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 32 {
+			return c, fmt.Errorf("OCR_THREADS must be between 1 and 32")
+		}
+		c.OCRThreads = n
 	}
 	if v := os.Getenv("PUBLIC_URL"); v != "" {
 		u, err := url.Parse(v)

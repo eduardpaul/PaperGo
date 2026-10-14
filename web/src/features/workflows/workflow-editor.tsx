@@ -11,10 +11,14 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@
 import { QueryFeedback } from '@/features/admin/common';
 import { FilterEditor, normalizeFilter, systemFields } from '@/features/lists/filter-editor';
 import { problemMessage } from '@/lib/errors';
-import { formDefaults, normalizeForm, renameNode } from './model';
+import { formDefaults, nodePorts, normalizeForm, renameNode } from './model';
 import type { Activity, FlowNode, Trigger, WorkflowCatalog, WorkflowDefinition } from './model';
 import { JsonInput, SchemaFields } from './schema-form';
 
+
+const fileSources = ['upload', 'webdav', 'restore', 'workflow'];
+// A file.added trigger without sources ignores files that workflows write.
+const defaultFileSources = ['upload', 'webdav', 'restore'];
 export function WorkflowEditor({
   workspaceId,
   workflow,
@@ -207,7 +211,7 @@ export function WorkflowEditor({
                         </Select>
                       )}
                       {trigger.collection_id &&
-                        (trigger.type.startsWith('item.') || trigger.type.startsWith('wf.')) && (
+                        (trigger.type.startsWith('item.') || trigger.type.startsWith('wf.') || trigger.type === 'file.added') && (
                           <Input
                             aria-label="Trigger content type"
                             value={trigger.content_type_id ?? ''}
@@ -255,6 +259,35 @@ export function WorkflowEditor({
                           <option value="per_item">One run per item</option>
                           <option value="selection">One run for the ordered selection</option>
                         </Select>
+                      )}
+                      {trigger.type === 'file.added' && (
+                        <fieldset className="flex flex-wrap gap-3 text-sm">
+                          <legend className="sr-only">File sources</legend>
+                          {fileSources.map((source) => {
+                            const chosen = trigger.sources ?? defaultFileSources;
+                            return (
+                              <label key={source} className="flex items-center gap-1">
+                                <Checkbox
+                                  aria-label={`File source ${source}`}
+                                  checked={chosen.includes(source)}
+                                  onChange={(event) => {
+                                    const next = event.target.checked ? [...chosen, source] : chosen.filter((s) => s !== source);
+                                    changeTrigger(index, { ...trigger, sources: next.length ? next : undefined });
+                                  }}
+                                />
+                                {source}
+                              </label>
+                            );
+                          })}
+                        </fieldset>
+                      )}
+                      {trigger.type.startsWith('task.') && (
+                        <Input
+                          aria-label="Task key"
+                          placeholder="Optional task key, such as legal_review"
+                          value={trigger.task_key ?? ''}
+                          onChange={(event) => changeTrigger(index, { ...trigger, task_key: event.target.value || undefined })}
+                        />
                       )}
                       {['item.created', 'item.updated', 'item.published'].includes(trigger.type) && (
                         <>
@@ -311,6 +344,23 @@ export function WorkflowEditor({
                   >
                     Add trigger
                   </Button>
+                </section>
+                <section className="grid gap-2">
+                  <h3 className="font-semibold">While a run on the same item is active</h3>
+                  <Select
+                    aria-label="Concurrency"
+                    value={definition.concurrency ?? 'parallel'}
+                    onChange={(event) =>
+                      setDefinition((current) => ({
+                        ...current,
+                        concurrency: event.target.value === 'parallel' ? undefined : event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="parallel">Start another run</option>
+                    <option value="skip">Skip the new run</option>
+                    <option value="replace">Cancel the active run</option>
+                  </Select>
                 </section>
                 <section className="grid gap-2">
                   <h3 className="font-semibold">Only when</h3>
@@ -431,7 +481,7 @@ function FlowEditor({
         onClick={() => {
           let name = `Step ${Object.keys(nodes).length + 1}`;
           while (nodes[name]) name += '_';
-          const port = activity?.ports[0] ?? 'done';
+          const port = nodePorts(activity, node?.inputs)[0] ?? 'done';
           const target = activity?.terminal ? selected : node?.next?.[port];
           const next: FlowNode = { activity: 'item.get', inputs: {}, next: target ? { done: target } : undefined };
           const updated = Object.fromEntries(
@@ -520,10 +570,11 @@ function FlowEditor({
             value={node.activity}
             onChange={(event) => {
               const activity = activities.find((activity) => activity.key === event.target.value)!;
-              const ports = ['done', 'error', ...activity.ports];
+              const inputs = formDefaults(activity.input_schema);
+              const ports = ['done', 'error', ...nodePorts(activity, inputs)];
               changeNode({
                 activity: activity.key,
-                inputs: formDefaults(activity.input_schema),
+                inputs,
                 next: activity.terminal
                   ? undefined
                   : Object.fromEntries(Object.entries(node.next ?? {}).filter(([port]) => ports.includes(port))),
@@ -548,7 +599,7 @@ function FlowEditor({
             />
           )}
           {!activity?.terminal &&
-            [...new Set(['done', 'error', ...(activity?.ports ?? [])])].map((port) => (
+            [...new Set(['done', 'error', ...nodePorts(activity, node.inputs)])].map((port) => (
               <label key={port} className="grid grid-cols-[5rem_1fr] items-center gap-2">
                 {port}
                 <Select

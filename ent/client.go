@@ -44,9 +44,12 @@ import (
 	"papergo/ent/schemarevision"
 	"papergo/ent/schematemplate"
 	"papergo/ent/smartfolder"
+	"papergo/ent/stagedfile"
 	"papergo/ent/syncstate"
 	"papergo/ent/synctoken"
 	"papergo/ent/syncview"
+	"papergo/ent/task"
+	"papergo/ent/taskresponse"
 	"papergo/ent/term"
 	"papergo/ent/termgroup"
 	"papergo/ent/termset"
@@ -136,12 +139,18 @@ type Client struct {
 	SchemaTemplate *SchemaTemplateClient
 	// SmartFolder is the client for interacting with the SmartFolder builders.
 	SmartFolder *SmartFolderClient
+	// StagedFile is the client for interacting with the StagedFile builders.
+	StagedFile *StagedFileClient
 	// SyncState is the client for interacting with the SyncState builders.
 	SyncState *SyncStateClient
 	// SyncToken is the client for interacting with the SyncToken builders.
 	SyncToken *SyncTokenClient
 	// SyncView is the client for interacting with the SyncView builders.
 	SyncView *SyncViewClient
+	// Task is the client for interacting with the Task builders.
+	Task *TaskClient
+	// TaskResponse is the client for interacting with the TaskResponse builders.
+	TaskResponse *TaskResponseClient
 	// Term is the client for interacting with the Term builders.
 	Term *TermClient
 	// TermGroup is the client for interacting with the TermGroup builders.
@@ -204,9 +213,12 @@ func (c *Client) init() {
 	c.SchemaRevision = NewSchemaRevisionClient(c.config)
 	c.SchemaTemplate = NewSchemaTemplateClient(c.config)
 	c.SmartFolder = NewSmartFolderClient(c.config)
+	c.StagedFile = NewStagedFileClient(c.config)
 	c.SyncState = NewSyncStateClient(c.config)
 	c.SyncToken = NewSyncTokenClient(c.config)
 	c.SyncView = NewSyncViewClient(c.config)
+	c.Task = NewTaskClient(c.config)
+	c.TaskResponse = NewTaskResponseClient(c.config)
 	c.Term = NewTermClient(c.config)
 	c.TermGroup = NewTermGroupClient(c.config)
 	c.TermSet = NewTermSetClient(c.config)
@@ -341,9 +353,12 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SchemaRevision:       NewSchemaRevisionClient(cfg),
 		SchemaTemplate:       NewSchemaTemplateClient(cfg),
 		SmartFolder:          NewSmartFolderClient(cfg),
+		StagedFile:           NewStagedFileClient(cfg),
 		SyncState:            NewSyncStateClient(cfg),
 		SyncToken:            NewSyncTokenClient(cfg),
 		SyncView:             NewSyncViewClient(cfg),
+		Task:                 NewTaskClient(cfg),
+		TaskResponse:         NewTaskResponseClient(cfg),
 		Term:                 NewTermClient(cfg),
 		TermGroup:            NewTermGroupClient(cfg),
 		TermSet:              NewTermSetClient(cfg),
@@ -405,9 +420,12 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SchemaRevision:       NewSchemaRevisionClient(cfg),
 		SchemaTemplate:       NewSchemaTemplateClient(cfg),
 		SmartFolder:          NewSmartFolderClient(cfg),
+		StagedFile:           NewStagedFileClient(cfg),
 		SyncState:            NewSyncStateClient(cfg),
 		SyncToken:            NewSyncTokenClient(cfg),
 		SyncView:             NewSyncViewClient(cfg),
+		Task:                 NewTaskClient(cfg),
+		TaskResponse:         NewTaskResponseClient(cfg),
 		Term:                 NewTermClient(cfg),
 		TermGroup:            NewTermGroupClient(cfg),
 		TermSet:              NewTermSetClient(cfg),
@@ -453,9 +471,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
 		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.SyncState, c.SyncToken, c.SyncView, c.Term,
-		c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun,
-		c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken,
+		c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup, c.TermSet,
+		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -472,9 +491,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
 		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
 		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.SyncState, c.SyncToken, c.SyncView, c.Term,
-		c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun,
-		c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken,
+		c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup, c.TermSet,
+		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -549,12 +569,18 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SchemaTemplate.mutate(ctx, m)
 	case *SmartFolderMutation:
 		return c.SmartFolder.mutate(ctx, m)
+	case *StagedFileMutation:
+		return c.StagedFile.mutate(ctx, m)
 	case *SyncStateMutation:
 		return c.SyncState.mutate(ctx, m)
 	case *SyncTokenMutation:
 		return c.SyncToken.mutate(ctx, m)
 	case *SyncViewMutation:
 		return c.SyncView.mutate(ctx, m)
+	case *TaskMutation:
+		return c.Task.mutate(ctx, m)
+	case *TaskResponseMutation:
+		return c.TaskResponse.mutate(ctx, m)
 	case *TermMutation:
 		return c.Term.mutate(ctx, m)
 	case *TermGroupMutation:
@@ -5735,6 +5761,139 @@ func (c *SmartFolderClient) mutate(ctx context.Context, m *SmartFolderMutation) 
 	}
 }
 
+// StagedFileClient is a client for the StagedFile schema.
+type StagedFileClient struct {
+	config
+}
+
+// NewStagedFileClient returns a client for the StagedFile from the given config.
+func NewStagedFileClient(c config) *StagedFileClient {
+	return &StagedFileClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `stagedfile.Hooks(f(g(h())))`.
+func (c *StagedFileClient) Use(hooks ...Hook) {
+	c.hooks.StagedFile = append(c.hooks.StagedFile, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `stagedfile.Intercept(f(g(h())))`.
+func (c *StagedFileClient) Intercept(interceptors ...Interceptor) {
+	c.inters.StagedFile = append(c.inters.StagedFile, interceptors...)
+}
+
+// Create returns a builder for creating a StagedFile entity.
+func (c *StagedFileClient) Create() *StagedFileCreate {
+	mutation := newStagedFileMutation(c.config, OpCreate)
+	return &StagedFileCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of StagedFile entities.
+func (c *StagedFileClient) CreateBulk(builders ...*StagedFileCreate) *StagedFileCreateBulk {
+	return &StagedFileCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *StagedFileClient) MapCreateBulk(slice any, setFunc func(*StagedFileCreate, int)) *StagedFileCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &StagedFileCreateBulk{err: fmt.Errorf("calling to StagedFileClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*StagedFileCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &StagedFileCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for StagedFile.
+func (c *StagedFileClient) Update() *StagedFileUpdate {
+	mutation := newStagedFileMutation(c.config, OpUpdate)
+	return &StagedFileUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *StagedFileClient) UpdateOne(_m *StagedFile) *StagedFileUpdateOne {
+	mutation := newStagedFileMutation(c.config, OpUpdateOne, withStagedFile(_m))
+	return &StagedFileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *StagedFileClient) UpdateOneID(id string) *StagedFileUpdateOne {
+	mutation := newStagedFileMutation(c.config, OpUpdateOne, withStagedFileID(id))
+	return &StagedFileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for StagedFile.
+func (c *StagedFileClient) Delete() *StagedFileDelete {
+	mutation := newStagedFileMutation(c.config, OpDelete)
+	return &StagedFileDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *StagedFileClient) DeleteOne(_m *StagedFile) *StagedFileDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *StagedFileClient) DeleteOneID(id string) *StagedFileDeleteOne {
+	builder := c.Delete().Where(stagedfile.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &StagedFileDeleteOne{builder}
+}
+
+// Query returns a query builder for StagedFile.
+func (c *StagedFileClient) Query() *StagedFileQuery {
+	return &StagedFileQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeStagedFile},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a StagedFile entity by its id.
+func (c *StagedFileClient) Get(ctx context.Context, id string) (*StagedFile, error) {
+	return c.Query().Where(stagedfile.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *StagedFileClient) GetX(ctx context.Context, id string) *StagedFile {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *StagedFileClient) Hooks() []Hook {
+	return c.hooks.StagedFile
+}
+
+// Interceptors returns the client interceptors.
+func (c *StagedFileClient) Interceptors() []Interceptor {
+	return c.inters.StagedFile
+}
+
+func (c *StagedFileClient) mutate(ctx context.Context, m *StagedFileMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&StagedFileCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&StagedFileUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&StagedFileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&StagedFileDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown StagedFile mutation op: %q", m.Op())
+	}
+}
+
 // SyncStateClient is a client for the SyncState schema.
 type SyncStateClient struct {
 	config
@@ -6163,6 +6322,272 @@ func (c *SyncViewClient) mutate(ctx context.Context, m *SyncViewMutation) (Value
 		return (&SyncViewDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown SyncView mutation op: %q", m.Op())
+	}
+}
+
+// TaskClient is a client for the Task schema.
+type TaskClient struct {
+	config
+}
+
+// NewTaskClient returns a client for the Task from the given config.
+func NewTaskClient(c config) *TaskClient {
+	return &TaskClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `task.Hooks(f(g(h())))`.
+func (c *TaskClient) Use(hooks ...Hook) {
+	c.hooks.Task = append(c.hooks.Task, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `task.Intercept(f(g(h())))`.
+func (c *TaskClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Task = append(c.inters.Task, interceptors...)
+}
+
+// Create returns a builder for creating a Task entity.
+func (c *TaskClient) Create() *TaskCreate {
+	mutation := newTaskMutation(c.config, OpCreate)
+	return &TaskCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Task entities.
+func (c *TaskClient) CreateBulk(builders ...*TaskCreate) *TaskCreateBulk {
+	return &TaskCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TaskClient) MapCreateBulk(slice any, setFunc func(*TaskCreate, int)) *TaskCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TaskCreateBulk{err: fmt.Errorf("calling to TaskClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TaskCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TaskCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Task.
+func (c *TaskClient) Update() *TaskUpdate {
+	mutation := newTaskMutation(c.config, OpUpdate)
+	return &TaskUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TaskClient) UpdateOne(_m *Task) *TaskUpdateOne {
+	mutation := newTaskMutation(c.config, OpUpdateOne, withTask(_m))
+	return &TaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TaskClient) UpdateOneID(id string) *TaskUpdateOne {
+	mutation := newTaskMutation(c.config, OpUpdateOne, withTaskID(id))
+	return &TaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Task.
+func (c *TaskClient) Delete() *TaskDelete {
+	mutation := newTaskMutation(c.config, OpDelete)
+	return &TaskDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TaskClient) DeleteOne(_m *Task) *TaskDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TaskClient) DeleteOneID(id string) *TaskDeleteOne {
+	builder := c.Delete().Where(task.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TaskDeleteOne{builder}
+}
+
+// Query returns a query builder for Task.
+func (c *TaskClient) Query() *TaskQuery {
+	return &TaskQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTask},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Task entity by its id.
+func (c *TaskClient) Get(ctx context.Context, id string) (*Task, error) {
+	return c.Query().Where(task.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TaskClient) GetX(ctx context.Context, id string) *Task {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TaskClient) Hooks() []Hook {
+	return c.hooks.Task
+}
+
+// Interceptors returns the client interceptors.
+func (c *TaskClient) Interceptors() []Interceptor {
+	return c.inters.Task
+}
+
+func (c *TaskClient) mutate(ctx context.Context, m *TaskMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TaskCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TaskUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Task mutation op: %q", m.Op())
+	}
+}
+
+// TaskResponseClient is a client for the TaskResponse schema.
+type TaskResponseClient struct {
+	config
+}
+
+// NewTaskResponseClient returns a client for the TaskResponse from the given config.
+func NewTaskResponseClient(c config) *TaskResponseClient {
+	return &TaskResponseClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `taskresponse.Hooks(f(g(h())))`.
+func (c *TaskResponseClient) Use(hooks ...Hook) {
+	c.hooks.TaskResponse = append(c.hooks.TaskResponse, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `taskresponse.Intercept(f(g(h())))`.
+func (c *TaskResponseClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TaskResponse = append(c.inters.TaskResponse, interceptors...)
+}
+
+// Create returns a builder for creating a TaskResponse entity.
+func (c *TaskResponseClient) Create() *TaskResponseCreate {
+	mutation := newTaskResponseMutation(c.config, OpCreate)
+	return &TaskResponseCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TaskResponse entities.
+func (c *TaskResponseClient) CreateBulk(builders ...*TaskResponseCreate) *TaskResponseCreateBulk {
+	return &TaskResponseCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TaskResponseClient) MapCreateBulk(slice any, setFunc func(*TaskResponseCreate, int)) *TaskResponseCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TaskResponseCreateBulk{err: fmt.Errorf("calling to TaskResponseClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TaskResponseCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TaskResponseCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TaskResponse.
+func (c *TaskResponseClient) Update() *TaskResponseUpdate {
+	mutation := newTaskResponseMutation(c.config, OpUpdate)
+	return &TaskResponseUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TaskResponseClient) UpdateOne(_m *TaskResponse) *TaskResponseUpdateOne {
+	mutation := newTaskResponseMutation(c.config, OpUpdateOne, withTaskResponse(_m))
+	return &TaskResponseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TaskResponseClient) UpdateOneID(id string) *TaskResponseUpdateOne {
+	mutation := newTaskResponseMutation(c.config, OpUpdateOne, withTaskResponseID(id))
+	return &TaskResponseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TaskResponse.
+func (c *TaskResponseClient) Delete() *TaskResponseDelete {
+	mutation := newTaskResponseMutation(c.config, OpDelete)
+	return &TaskResponseDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TaskResponseClient) DeleteOne(_m *TaskResponse) *TaskResponseDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TaskResponseClient) DeleteOneID(id string) *TaskResponseDeleteOne {
+	builder := c.Delete().Where(taskresponse.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TaskResponseDeleteOne{builder}
+}
+
+// Query returns a query builder for TaskResponse.
+func (c *TaskResponseClient) Query() *TaskResponseQuery {
+	return &TaskResponseQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTaskResponse},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TaskResponse entity by its id.
+func (c *TaskResponseClient) Get(ctx context.Context, id string) (*TaskResponse, error) {
+	return c.Query().Where(taskresponse.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TaskResponseClient) GetX(ctx context.Context, id string) *TaskResponse {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TaskResponseClient) Hooks() []Hook {
+	return c.hooks.TaskResponse
+}
+
+// Interceptors returns the client interceptors.
+func (c *TaskResponseClient) Interceptors() []Interceptor {
+	return c.inters.TaskResponse
+}
+
+func (c *TaskResponseClient) mutate(ctx context.Context, m *TaskResponseMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TaskResponseCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TaskResponseUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TaskResponseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TaskResponseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TaskResponse mutation op: %q", m.Op())
 	}
 }
 
@@ -7500,9 +7925,9 @@ type (
 		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
 		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,
 		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
-		SchemaTemplate, SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup,
-		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
-		WorkflowTrigger, WorkflowVersion []ent.Hook
+		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task,
+		TaskResponse, Term, TermGroup, TermSet, WebDAVCredential, Workflow,
+		WorkflowRun, WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
@@ -7511,9 +7936,10 @@ type (
 		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
 		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,
 		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
-		SchemaTemplate, SmartFolder, SyncState, SyncToken, SyncView, Term, TermGroup,
-		TermSet, WebDAVCredential, Workflow, WorkflowRun, WorkflowRunItem,
-		WorkflowTrigger, WorkflowVersion []ent.Interceptor
+		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task,
+		TaskResponse, Term, TermGroup, TermSet, WebDAVCredential, Workflow,
+		WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		WorkflowVersion []ent.Interceptor
 	}
 )
 

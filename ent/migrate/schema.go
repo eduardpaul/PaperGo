@@ -1390,6 +1390,47 @@ var (
 			},
 		},
 	}
+	// StagedFilesColumns holds the columns for the "staged_files" table.
+	StagedFilesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "workspace_id", Type: field.TypeString},
+		{Name: "item_id", Type: field.TypeString},
+		{Name: "run_id", Type: field.TypeString},
+		{Name: "sources", Type: field.TypeJSON},
+		{Name: "object_key", Type: field.TypeString},
+		{Name: "filename", Type: field.TypeString, Size: 255},
+		{Name: "content_type", Type: field.TypeString, Size: 255},
+		{Name: "size", Type: field.TypeInt64},
+		{Name: "sha256", Type: field.TypeString},
+		{Name: "metrics", Type: field.TypeJSON},
+		{Name: "state", Type: field.TypeEnum, Enums: []string{"pending", "promoted", "discarded"}, Default: "pending"},
+		{Name: "created_by", Type: field.TypeString},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// StagedFilesTable holds the schema information for the "staged_files" table.
+	StagedFilesTable = &schema.Table{
+		Name:       "staged_files",
+		Columns:    StagedFilesColumns,
+		PrimaryKey: []*schema.Column{StagedFilesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "stagedfile_run_id",
+				Unique:  false,
+				Columns: []*schema.Column{StagedFilesColumns[4]},
+			},
+			{
+				Name:    "stagedfile_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{StagedFilesColumns[3]},
+			},
+			{
+				Name:    "stagedfile_object_key_state",
+				Unique:  false,
+				Columns: []*schema.Column{StagedFilesColumns[6], StagedFilesColumns[12]},
+			},
+		},
+	}
 	// SyncStatesColumns holds the columns for the "sync_states" table.
 	SyncStatesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -1493,6 +1534,92 @@ var (
 				Name:    "syncview_subject_container_id",
 				Unique:  true,
 				Columns: []*schema.Column{SyncViewsColumns[2], SyncViewsColumns[3]},
+			},
+		},
+	}
+	// TasksColumns holds the columns for the "tasks" table.
+	TasksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "workspace_id", Type: field.TypeString},
+		{Name: "item_id", Type: field.TypeString, Nullable: true},
+		{Name: "kind", Type: field.TypeEnum, Enums: []string{"task", "approval"}, Default: "task"},
+		{Name: "key", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "title", Type: field.TypeString, Size: 500},
+		{Name: "description", Type: field.TypeString, Size: 4000, Default: ""},
+		{Name: "assignees", Type: field.TypeJSON},
+		{Name: "completion", Type: field.TypeEnum, Enums: []string{"any", "all"}, Default: "any"},
+		{Name: "outcomes", Type: field.TypeJSON},
+		{Name: "input_schema", Type: field.TypeJSON, Nullable: true},
+		{Name: "values", Type: field.TypeJSON, Nullable: true},
+		{Name: "review", Type: field.TypeJSON, Nullable: true},
+		{Name: "priority", Type: field.TypeEnum, Enums: []string{"low", "normal", "high"}, Default: "normal"},
+		{Name: "due_at", Type: field.TypeTime, Nullable: true},
+		{Name: "source", Type: field.TypeEnum, Enums: []string{"workflow", "user", "system"}},
+		{Name: "workflow_id", Type: field.TypeString, Nullable: true},
+		{Name: "run_id", Type: field.TypeString, Nullable: true},
+		{Name: "node", Type: field.TypeString, Nullable: true},
+		{Name: "wait", Type: field.TypeBool, Default: false},
+		{Name: "parked", Type: field.TypeBool, Default: false},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "completed", "cancelled", "expired"}, Default: "open"},
+		{Name: "outcome", Type: field.TypeString, Nullable: true},
+		{Name: "completed_by", Type: field.TypeString, Nullable: true},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "comment", Type: field.TypeString, Size: 4000, Default: ""},
+		{Name: "input", Type: field.TypeJSON, Nullable: true},
+		{Name: "created_by", Type: field.TypeString},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+	}
+	// TasksTable holds the schema information for the "tasks" table.
+	TasksTable = &schema.Table{
+		Name:       "tasks",
+		Columns:    TasksColumns,
+		PrimaryKey: []*schema.Column{TasksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "task_run_id",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[18]},
+			},
+			{
+				Name:    "task_workspace_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[2], TasksColumns[22]},
+			},
+			{
+				Name:    "task_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[3]},
+			},
+			{
+				Name:    "task_parked_status",
+				Unique:  false,
+				Columns: []*schema.Column{TasksColumns[21], TasksColumns[22]},
+			},
+		},
+	}
+	// TaskResponsesColumns holds the columns for the "task_responses" table.
+	TaskResponsesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "task_id", Type: field.TypeString},
+		{Name: "subject", Type: field.TypeString},
+		{Name: "assignee", Type: field.TypeString},
+		{Name: "outcome", Type: field.TypeString},
+		{Name: "comment", Type: field.TypeString, Size: 4000, Default: ""},
+		{Name: "input", Type: field.TypeJSON, Nullable: true},
+	}
+	// TaskResponsesTable holds the schema information for the "task_responses" table.
+	TaskResponsesTable = &schema.Table{
+		Name:       "task_responses",
+		Columns:    TaskResponsesColumns,
+		PrimaryKey: []*schema.Column{TaskResponsesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "taskresponse_task_id_assignee",
+				Unique:  true,
+				Columns: []*schema.Column{TaskResponsesColumns[2], TaskResponsesColumns[4]},
 			},
 		},
 	}
@@ -1901,9 +2028,12 @@ var (
 		SchemaRevisionsTable,
 		SchemaTemplatesTable,
 		SmartFoldersTable,
+		StagedFilesTable,
 		SyncStatesTable,
 		SyncTokensTable,
 		SyncViewsTable,
+		TasksTable,
+		TaskResponsesTable,
 		TermsTable,
 		TermGroupsTable,
 		TermSetsTable,

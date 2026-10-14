@@ -163,30 +163,53 @@ type BlobInput struct {
 	Size        int64
 	SHA256      string
 	Languages   string
+	// Source says where the file came from, for file.added events:
+	// FileWebDAV, FileRestore or FileWorkflow; empty is an upload.
+	Source string
+}
+
+// emitFileAdded raises file.added for a file version that rev pins.
+func (s *Service) emitFileAdded(ctx context.Context, actor string, r *ent.Resource, b *ent.Blob, rev *ent.ItemRevision, source string) {
+	if source == "" {
+		source = FileUpload
+	}
+	s.emit(ctx, EventFileAdded, actor, r.WorkspaceID, r.ContainerID, r.ID, map[string]any{
+		"source": source, "file_version": b.Version, "blob_id": b.ID, "content_type": b.ContentType, "size": b.Size,
+		"revision_id": rev.ID, "content_type_id": rev.ContentTypeID,
+	})
 }
 
 func (s *Service) CanUpload(ctx context.Context, subject, id string, version int) error {
-	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
-		return err
-	}
-	r, err := s.authorize(ctx, subject, id, "write")
+	r, err := s.canWriteFile(ctx, subject, id)
 	if err != nil {
 		return err
 	}
 	if r.Version != version {
 		return ErrPreconditionFailed
 	}
+	return nil
+}
+
+// canWriteFile checks that subject may change the file of library item id.
+func (s *Service) canWriteFile(ctx context.Context, subject, id string) (*ent.Resource, error) {
+	if err := s.RequireScope(ctx, subject, "document.write"); err != nil {
+		return nil, err
+	}
+	r, err := s.authorize(ctx, subject, id, "write")
+	if err != nil {
+		return nil, err
+	}
 	if r.Kind != resource.KindItem || r.ContainerID == nil {
-		return invalid("blob must belong to a library item")
+		return nil, invalid("blob must belong to a library item")
 	}
 	c, err := s.Client.Resource.Get(ctx, *r.ContainerID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if c.Kind != resource.KindLibrary {
-		return invalid("only library items accept blobs")
+		return nil, invalid("only library items accept blobs")
 	}
-	return nil
+	return r, nil
 }
 func (s *Service) AttachBlob(ctx context.Context, subject, id string, version int, in BlobInput) (out *BlobUpload, err error) {
 	err = s.write(ctx, func(t *Service) error {
@@ -229,9 +252,11 @@ func (s *Service) writeBlob(ctx context.Context, subject, id string, version int
 	if e != nil {
 		return nil, e
 	}
-	if _, e = s.recordRevision(ctx, subject, r, &out.ID, true); e != nil {
+	rev, e := s.recordRevision(ctx, subject, r, &out.ID, true)
+	if e != nil {
 		return nil, e
 	}
+	s.emitFileAdded(ctx, subject, r, out, rev, in.Source)
 	details := map[string]any{"blob_id": out.ID, "size": in.Size, "sha256": in.SHA256}
 	if sourceVersion != nil {
 		details["source_version"] = *sourceVersion
@@ -253,7 +278,7 @@ func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, v
 		if e != nil {
 			return e
 		}
-		out, e = t.writeBlob(ctx, subject, id, version, BlobInput{ObjectKey: source.ObjectKey, Filename: source.Filename, ContentType: source.ContentType, Size: source.Size, SHA256: source.Sha256}, "blob.restore", &number)
+		out, e = t.writeBlob(ctx, subject, id, version, BlobInput{ObjectKey: source.ObjectKey, Filename: source.Filename, ContentType: source.ContentType, Size: source.Size, SHA256: source.Sha256, Source: FileRestore}, "blob.restore", &number)
 		return e
 	})
 	return

@@ -8,9 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
+
+	entsql "entgo.io/ent/dialect/sql"
 
 	"papergo/ent"
 	"papergo/ent/collectiontype"
@@ -18,15 +21,19 @@ import (
 	"papergo/ent/term"
 	"papergo/ent/workflow"
 	"papergo/ent/workflowrun"
+	"papergo/ent/workflowrunitem"
 	"papergo/ent/workflowtrigger"
 	"papergo/ent/workflowversion"
 	"papergo/internal/dms"
+	"papergo/internal/forms"
 )
 
 // Service manages workflow definitions on top of the DMS: the same writer,
 // authorization and audit trail as every other change.
 type Service struct {
 	DMS *dms.Service
+	// Tools are what activities with heavy work use outside transactions.
+	Tools Tools
 }
 
 // Workflow is a workflow with its current definition.
@@ -319,8 +326,15 @@ func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceI
 		}
 	}
 	if def.InputSchema != nil {
-		if err = checkDomainConfig(ctx, t, subject, workspaceID, def.InputSchema, "input_schema"); err != nil {
+		if err = forms.CheckConfig(ctx, t, subject, workspaceID, def.InputSchema, "input_schema"); err != nil {
 			return def, nil, err
+		}
+	}
+	for name, node := range def.Flow.Nodes {
+		if schema, ok := node.Inputs["input_schema"].(map[string]any); ok && (node.Activity == "task" || node.Activity == "approval") {
+			if err = forms.CheckConfig(ctx, t, subject, workspaceID, schema, "flow.nodes."+name+".inputs.input_schema"); err != nil {
+				return def, nil, err
+			}
 		}
 	}
 	normalized, err := json.Marshal(def)
@@ -508,7 +522,7 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			return err
 		}
 		if def.InputSchema != nil {
-			if err = checkDomainValues(ctx, t, subject, w.WorkspaceID, def.InputSchema, inputs, "inputs"); err != nil {
+			if err = forms.CheckValues(ctx, t, subject, w.WorkspaceID, def.InputSchema, inputs, "inputs"); err != nil {
 				return err
 			}
 		}
@@ -595,8 +609,15 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 // that keep triggering each other. A condition that cannot be evaluated
 // (a field no longer indexed, the author lost access) still starts the run,
 // which then fails with the reason, so the problem is visible.
-func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput, error) {
+func Match(ctx context.Context, t *dms.Service, events []dms.Event, active ActiveFunc) ([]RunInput, []string, error) {
 	var out []RunInput
+	var cancel []string
+	// started are the runs this call starts, with their members, by workflow.
+	type startedRun struct {
+		id      string
+		members []string
+	}
+	started := map[string][]startedRun{}
 	versions := map[string]*matchable{}
 	// A bulk write raises many events of few kinds; look each kind up once.
 	lookups := map[[3]string][]*ent.Workflow{}
@@ -606,10 +627,10 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 		}
 		// Purge removes revision payloads. Older queued content events must not
 		// block dispatch or start actions against an item that no longer exists.
-		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored) {
+		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded) {
 			exists, err := t.Client.Resource.Query().Where(resource.IDEQ(e.ResourceID)).Exist(ctx)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if !exists {
 				continue
@@ -621,7 +642,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 			id, _ := e.Data["workflow_id"].(string)
 			w, err := live(ctx, t, id)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			candidates = []*ent.Workflow{w}
 		default:
@@ -633,7 +654,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 			rows, err := t.Client.WorkflowTrigger.Query().Where(workflowtrigger.TypeEQ(e.Type), workflowtrigger.WorkspaceIDEQ(e.WorkspaceID),
 				workflowtrigger.Or(workflowtrigger.CollectionIDIsNil(), workflowtrigger.CollectionIDEQ(e.CollectionID))).All(ctx)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			ids := map[string]bool{}
 			for _, r := range rows {
@@ -646,7 +667,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 				}
 				sort.Strings(list)
 				if candidates, err = t.Client.Workflow.Query().Where(workflow.IDIn(list...), workflow.EnabledEQ(true), workflow.DeletedAtIsNil()).Order(ent.Asc(workflow.FieldID)).All(ctx); err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			}
 			lookups[key] = candidates
@@ -656,18 +677,18 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 			if m == nil {
 				v, err := current(ctx, t, w)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				def, err := ParseDefinition(v.Definition)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				m = &matchable{w: w, v: v, def: def}
 				versions[w.ID] = m
 			}
 			ok, err := m.accepts(ctx, t, e)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if !ok {
 				continue
@@ -684,10 +705,29 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 					continue
 				}
 			}
+			members := eventMembers(e)
+			if c := m.def.Concurrency; (c == ConcurrencySkip || c == ConcurrencyReplace) && len(members) > 0 {
+				busy, err := activeRuns(ctx, t, w.ID, members, active)
+				if err != nil {
+					return nil, nil, err
+				}
+				busy = slices.DeleteFunc(busy, func(id string) bool { return id == RunID(w.ID, e.ID) })
+				// Runs this batch starts are not in the runner's statuses yet.
+				for _, earlier := range started[w.ID] {
+					if overlaps(earlier.members, members) {
+						busy = append(busy, earlier.id)
+					}
+				}
+				if c == ConcurrencySkip && len(busy) > 0 {
+					continue
+				}
+				cancel = append(cancel, busy...)
+			}
 			runID := RunID(w.ID, e.ID)
+			started[w.ID] = append(started[w.ID], startedRun{id: runID, members: members})
 			exists, err := t.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(w.ID), workflowrun.EventIDEQ(e.ID)).Exist(ctx)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if exists {
 				continue
@@ -697,7 +737,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 				c.SetItemID(e.ResourceID)
 			}
 			if _, err = c.Save(ctx); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: e.ResourceID, Event: e, ConditionError: conditionErr}
 			if e.Type == dms.EventItemDeleted || e.Type == dms.EventItemPurged {
@@ -712,14 +752,77 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event) ([]RunInput,
 					itemID, _ := m.(string)
 					in.Items = append(in.Items, itemID)
 					if err = t.Client.WorkflowRunItem.Create().SetID(fmt.Sprintf("%s:%d", runID, position)).SetRunID(runID).SetItemID(itemID).SetPosition(position).Exec(ctx); err != nil {
-						return nil, err
+						return nil, nil, err
 					}
 				}
 			}
 			out = append(out, in)
 		}
 	}
+	return out, cancel, nil
+}
+
+// ActiveFunc reports which of the given runs are still queued or running.
+type ActiveFunc func(runIDs []string) (map[string]bool, error)
+
+// eventMembers are the items a run started by e works on.
+func eventMembers(e dms.Event) []string {
+	if e.Type == TriggerManual {
+		if list, _ := e.Data["items"].([]any); len(list) > 0 {
+			out := make([]string, 0, len(list))
+			for _, v := range list {
+				if id, _ := v.(string); id != "" {
+					out = append(out, id)
+				}
+			}
+			return out
+		}
+	}
+	if e.ResourceID == "" || e.Type == dms.EventItemDeleted || e.Type == dms.EventItemPurged {
+		return nil
+	}
+	return []string{e.ResourceID}
+}
+
+func overlaps(a, b []string) bool {
+	for _, x := range a {
+		if slices.Contains(b, x) {
+			return true
+		}
+	}
+	return false
+}
+
+// activeRuns returns the queued, running or waiting runs of a workflow that
+// work on any of items, as primary item or selection member. Recorded
+// statuses lag behind the runner, so active confirms them.
+func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []string, active ActiveFunc) ([]string, error) {
+	rows, err := t.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(workflowID), workflowrun.LiveStatusIn("queued", "running", "waiting"),
+		workflowrun.Or(workflowrun.ItemIDIn(items...), func(s *entsql.Selector) {
+			s.Where(entsql.In(s.C(workflowrun.FieldID), entsql.Select(workflowrunitem.FieldRunID).From(entsql.Table(workflowrunitem.Table)).Where(entsql.In(workflowrunitem.FieldItemID, anyStrings(items)...))))
+		})).IDs(ctx)
+	if err != nil || len(rows) == 0 || active == nil {
+		return rows, err
+	}
+	live, err := active(rows)
+	if err != nil {
+		return nil, err
+	}
+	out := rows[:0]
+	for _, id := range rows {
+		if live[id] {
+			out = append(out, id)
+		}
+	}
 	return out, nil
+}
+
+func anyStrings(v []string) []any {
+	out := make([]any, len(v))
+	for i, s := range v {
+		out[i] = s
+	}
+	return out
 }
 
 type matchable struct {
@@ -738,6 +841,17 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 	for _, tr := range m.def.Triggers {
 		if tr.Type != e.Type || tr.CollectionID != "" && tr.CollectionID != e.CollectionID {
 			continue
+		}
+		if tr.TaskKey != "" {
+			if key, _ := e.Data["key"].(string); key != tr.TaskKey {
+				continue
+			}
+		}
+		if e.Type == dms.EventFileAdded {
+			source, _ := e.Data["source"].(string)
+			if !slices.Contains(tr.sources(), source) {
+				continue
+			}
 		}
 		if tr.ContentTypeID != "" {
 			typ, _ := e.Data["content_type_id"].(string)

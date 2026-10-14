@@ -16,6 +16,7 @@ import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppTasksRouteImport } from './routes/_app/tasks'
 import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppAdminAuditRouteImport } from './routes/_app/admin/audit'
@@ -80,6 +81,11 @@ const AppSearchRoute = AppSearchRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTasksRoute = AppTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
   getParentRoute: () => AppRoute,
 } as any)
 const LoginCallbackRoute = LoginCallbackRouteImport.update({
@@ -258,6 +264,7 @@ export interface FileRoutesByFullPath {
   '/inbox': typeof AppInboxRoute
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRouteWithChildren
+  '/tasks': typeof AppTasksRoute
   '/login/callback': typeof LoginCallbackRoute
   '/admin/audit': typeof AppAdminAuditRoute
   '/admin/content-types': typeof AppAdminContentTypesRoute
@@ -294,6 +301,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/inbox': typeof AppInboxRoute
   '/search': typeof AppSearchRoute
+  '/tasks': typeof AppTasksRoute
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AppIndexRoute
   '/admin/audit': typeof AppAdminAuditRoute
@@ -333,6 +341,7 @@ export interface FileRoutesById {
   '/_app/inbox': typeof AppInboxRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
+  '/_app/tasks': typeof AppTasksRoute
   '/login_/callback': typeof LoginCallbackRoute
   '/_app/': typeof AppIndexRoute
   '/_app/admin/audit': typeof AppAdminAuditRoute
@@ -375,6 +384,7 @@ export interface FileRouteTypes {
     | '/inbox'
     | '/search'
     | '/settings'
+    | '/tasks'
     | '/login/callback'
     | '/admin/audit'
     | '/admin/content-types'
@@ -411,6 +421,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/inbox'
     | '/search'
+    | '/tasks'
     | '/login/callback'
     | '/'
     | '/admin/audit'
@@ -449,6 +460,7 @@ export interface FileRouteTypes {
     | '/_app/inbox'
     | '/_app/search'
     | '/_app/settings'
+    | '/_app/tasks'
     | '/login_/callback'
     | '/_app/'
     | '/_app/admin/audit'
@@ -538,6 +550,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tasks': {
+      id: '/_app/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof AppTasksRouteImport
       parentRoute: typeof AppRoute
     }
     '/login_/callback': {
@@ -859,6 +878,7 @@ interface AppRouteChildren {
   AppInboxRoute: typeof AppInboxRoute
   AppSearchRoute: typeof AppSearchRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
+  AppTasksRoute: typeof AppTasksRoute
   AppIndexRoute: typeof AppIndexRoute
   AppFFolderIdRoute: typeof AppFFolderIdRoute
   AppWIndexRoute: typeof AppWIndexRoute
@@ -875,6 +895,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppInboxRoute: AppInboxRoute,
   AppSearchRoute: AppSearchRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
+  AppTasksRoute: AppTasksRoute,
   AppIndexRoute: AppIndexRoute,
   AppFFolderIdRoute: AppFFolderIdRoute,
   AppWIndexRoute: AppWIndexRoute,

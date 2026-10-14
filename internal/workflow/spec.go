@@ -9,12 +9,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
 
 	"papergo/internal/dms"
+	"papergo/internal/forms"
+	"papergo/internal/tasks"
 )
 
 // Trigger types. Item triggers react to committed item writes, schedule
@@ -26,14 +29,17 @@ const (
 )
 
 // ItemTriggers are the trigger types raised by item writes.
-var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged}
+var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged, dms.EventFileAdded}
 
 // Limits keep definitions and runs bounded.
 const (
-	MaxTriggers    = 10
-	MaxNodes       = 100
-	MaxDepth       = 5
+	MaxTriggers = 10
+	MaxNodes    = 100
+	MaxDepth    = 5
+	// MaxNodeVisits bounds the nodes a run visits outside forEach passes,
+	// and those of each pass; MaxRunVisits bounds them all.
 	MaxNodeVisits  = 1000
+	MaxRunVisits   = 100_000
 	MaxOutputBytes = 64 * 1024
 	MaxRetries     = 10
 	MaxRetryDelay  = 24 * time.Hour
@@ -47,8 +53,20 @@ type Definition struct {
 	// InputSchema is the launch form of manual starts (see forms.go).
 	InputSchema map[string]any `json:"input_schema,omitempty"`
 	Variables   map[string]any `json:"variables,omitempty"`
-	Flow        Flow           `json:"flow"`
+	// Concurrency decides what a start does while a run of the workflow on
+	// the same item is still active: parallel (the default) starts anyway,
+	// skip starts nothing, replace cancels the active run. Selection runs
+	// compare every member.
+	Concurrency string `json:"concurrency,omitempty"`
+	Flow        Flow   `json:"flow"`
 }
+
+// Concurrency policies.
+const (
+	ConcurrencyParallel = "parallel"
+	ConcurrencySkip     = "skip"
+	ConcurrencyReplace  = "replace"
+)
 
 // Trigger starts runs. CollectionID limits item and workflow-event triggers
 // to one list or library, and makes a schedule start one run per item of
@@ -71,6 +89,21 @@ type Trigger struct {
 	// or removed (held before, not now).
 	Terms      []string `json:"terms,omitempty"`
 	TermChange string   `json:"term_change,omitempty"`
+	// Sources, on file.added triggers, are the file sources that start runs
+	// (dms.FileSources). The default is every source except workflow, so a
+	// workflow that replaces a file does not start itself again.
+	Sources []string `json:"sources,omitempty"`
+	// TaskKey, on task.created, task.completed and task.cancelled triggers,
+	// limits them to tasks with this key.
+	TaskKey string `json:"task_key,omitempty"`
+}
+
+// sources returns the file sources a file.added trigger accepts.
+func (t Trigger) sources() []string {
+	if len(t.Sources) > 0 {
+		return t.Sources
+	}
+	return []string{dms.FileUpload, dms.FileWebDAV, dms.FileRestore}
 }
 
 // Term changes a trigger's terms filter reacts to.
@@ -117,11 +150,10 @@ const (
 )
 
 var (
-	keyPattern       = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
-	eventPattern     = regexp.MustCompile(`^wf\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)$`)
-	nodeNamePattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 _-]{0,99}$`)
-	inputNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
-	cronParser       = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	keyPattern      = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+	eventPattern    = regexp.MustCompile(`^wf\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)$`)
+	nodeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 _-]{0,99}$`)
+	cronParser      = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 )
 
 // WorkflowEvent is the event type a run of workflow key raises.
@@ -205,6 +237,21 @@ func (d Definition) validate() error {
 				return dms.Invalid(at + "term_change is present, added or removed")
 			}
 		}
+		if len(t.Sources) > 0 {
+			if t.Type != dms.EventFileAdded {
+				return dms.Invalid(at + "sources belong to file.added triggers")
+			}
+			seen := map[string]bool{}
+			for _, s := range t.Sources {
+				if !slices.Contains(dms.FileSources, s) || seen[s] {
+					return dms.Invalid(at + "sources are distinct values of " + strings.Join(dms.FileSources, ", "))
+				}
+				seen[s] = true
+			}
+		}
+		if t.TaskKey != "" && (!slices.Contains(tasks.Events, t.Type) || !tasks.ValidKey(t.TaskKey)) {
+			return dms.Invalid(at + "task_key is a task key, on task.created, task.completed and task.cancelled triggers")
+		}
 		switch {
 		case isItemTrigger(t.Type):
 			if t.Cron != "" || t.TimeZone != "" {
@@ -224,6 +271,13 @@ func (d Definition) validate() error {
 			manual++
 			if t.Cron != "" || t.TimeZone != "" || t.ContentTypeID != "" {
 				return dms.Invalid(at + "manual triggers take only collection_id and selection")
+			}
+		case slices.Contains(tasks.Events, t.Type):
+			if t.Cron != "" || t.TimeZone != "" || t.ContentTypeID != "" {
+				return dms.Invalid(at + "task triggers take collection_id and task_key")
+			}
+			if d.Condition != nil {
+				return dms.Invalid(at + "a condition tests items; filter task triggers with task_key")
 			}
 		case t.Type == dms.EventTermMerged:
 			if t.CollectionID != "" || t.ContentTypeID != "" || t.Cron != "" || t.TimeZone != "" {
@@ -250,15 +304,20 @@ func (d Definition) validate() error {
 		if manual == 0 {
 			return dms.Invalid("input_schema belongs to workflows with a manual trigger")
 		}
-		if err := validateSchema(d.InputSchema, "input_schema", 0, true); err != nil {
+		if err := forms.ValidateLaunch(d.InputSchema, "input_schema"); err != nil {
 			return dms.Invalid(err.Error())
 		}
 		if _, hints := d.InputSchema["x-papergo-selection"]; hints && !d.selection() {
 			return dms.Invalid("input_schema: x-papergo-selection belongs to selection workflows")
 		}
 	}
+	switch d.Concurrency {
+	case "", ConcurrencyParallel, ConcurrencySkip, ConcurrencyReplace:
+	default:
+		return dms.Invalid("concurrency is parallel, skip or replace")
+	}
 	for name := range d.Variables {
-		if !inputNamePattern.MatchString(name) {
+		if !forms.NamePattern.MatchString(name) {
 			return dms.Invalid("invalid variable name " + name)
 		}
 	}
@@ -282,7 +341,7 @@ func (f Flow) validate() error {
 			return dms.Invalid(at + "unknown activity " + n.Activity)
 		}
 		ports := map[string]bool{PortDone: true, PortError: true}
-		for _, p := range a.Ports {
+		for _, p := range a.NodePorts(n.Inputs) {
 			ports[p] = true
 		}
 		for port, target := range n.Next {
@@ -292,6 +351,9 @@ func (f Flow) validate() error {
 			if _, ok := f.Nodes[target]; !ok {
 				return dms.Invalid(at + "port " + port + " leads to unknown node " + target)
 			}
+		}
+		if n.Activity == forEachKey && n.Next[portBody] == "" {
+			return dms.Invalid(at + "forEach needs its body port connected")
 		}
 		if a.Terminal && len(n.Next) > 0 {
 			return dms.Invalid(at + n.Activity + " ends the run and has no next nodes")
@@ -345,5 +407,5 @@ func (d Definition) selection() bool {
 // launchInputs applies the launch form's defaults to a manual start's
 // values and checks them.
 func (d Definition) launchInputs(values map[string]any) (map[string]any, error) {
-	return formValues(d.InputSchema, values, "inputs")
+	return forms.Values(d.InputSchema, values, "inputs")
 }

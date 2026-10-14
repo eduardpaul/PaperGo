@@ -1,3 +1,5 @@
+import type { FormSchema } from '@/features/workflows/model';
+
 export type Kind = 'workspace' | 'list' | 'library' | 'folder' | 'item';
 
 export type AccessAction = 'read' | 'read_draft' | 'write' | 'publish' | 'manage';
@@ -286,7 +288,9 @@ export interface BuiltInState {
   name: string;
   description: string;
   per_collection?: boolean;
-  parameters_schema?: { properties?: Record<string, { title?: string; description?: string; default?: unknown }> };
+  parameters_schema?: {
+    properties?: Record<string, { type?: string; title?: string; description?: string; default?: unknown }>;
+  };
   workflows?: Workflow[] | null;
 }
 
@@ -345,4 +349,78 @@ export interface DocumentUpload {
 export interface Scope {
   name: string;
   granted_to_members: boolean;
+}
+
+/** An answer a task offers; each is a workflow port. */
+export interface TaskOutcome {
+  key: string;
+  label: string;
+  style?: 'primary' | 'danger' | 'default';
+  comment?: 'none' | 'optional' | 'required';
+  skip_form?: boolean;
+  allow_stale?: boolean;
+  decisive?: boolean;
+}
+
+export interface TaskAnswer {
+  subject: string;
+  /** The entry answered for: the subject, or group:<id>. */
+  assignee: string;
+  outcome: string;
+  comment?: string;
+  input?: Record<string, unknown>;
+  created_at: string;
+}
+
+/** An action request: an approval, or any task a workflow, person or the system created. */
+export interface Task {
+  id: string;
+  workspace_id: string;
+  item_id?: string;
+  kind: 'task' | 'approval';
+  key?: string;
+  title: string;
+  description?: string;
+  assignees: string[];
+  completion: 'any' | 'all';
+  outcomes: TaskOutcome[];
+  input_schema?: FormSchema;
+  values?: Record<string, unknown>;
+  review?: { type: 'file.compare' | 'file.preview'; staged_file_id: string };
+  priority: 'low' | 'normal' | 'high';
+  due_at?: string;
+  source: 'workflow' | 'user' | 'system';
+  workflow_id?: string;
+  run_id?: string;
+  node?: string;
+  status: 'open' | 'completed' | 'cancelled' | 'expired';
+  outcome?: string;
+  completed_by?: string;
+  completed_at?: string;
+  comment?: string;
+  input?: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  version: number;
+  responses?: TaskAnswer[];
+  answered?: boolean;
+  can_respond: boolean;
+  /** Set when one task is read: the caller may change its assignees. */
+  can_reassign?: boolean;
+}
+
+export interface StagedFile {
+  id: string;
+  item_id: string;
+  run_id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  sha256: string;
+  metrics: Record<string, unknown>;
+  sources: { item_id: string; blob_id: string }[];
+  state: 'pending' | 'promoted' | 'discarded';
+  fresh: boolean;
+  created_at: string;
 }

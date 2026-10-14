@@ -87,8 +87,11 @@ This runs the frontend build, lint and tests, Python tests, module verification,
 Ent generation and drift check, Go formatting, vet, Staticcheck, Go tests and
 the application build. `govulncheck ./...` runs a dependency scan separately.
 Local checks use ordinary Go tests, as the PowerShell check script does. CI runs
-the full suite with race detection; run `go test -race -count=1 -timeout=15m ./...`
-to do that locally. Race instrumentation makes the pure-Go SQLite driver
+the full suite with race detection across three jobs. Each job discovers the Go
+tests, fuzz seeds and examples, then runs a distinct shard with a 15-minute
+timeout per package. Run a shard locally with
+`python3 scripts/test-race.py --shard 1 --shards 3`, repeating with shards 2 and 3
+for the complete suite. Race instrumentation makes the pure-Go SQLite driver
 substantially slower, so allow for a longer run on a development machine.
 
 The devcontainer CI job builds the actual configuration and runs

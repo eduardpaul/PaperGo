@@ -178,8 +178,8 @@ func (r *Runner) Ready(ctx context.Context) error {
 
 // run is the DBOS workflow of every PaperGo workflow run.
 func (r *Runner) run(ctx dbos.Context, in workflow.RunInput) (workflow.Result, error) {
-	res, err := workflow.Execute(ctx, &durable{r: r, ctx: ctx}, in)
-	if err != nil {
+	res, err := r.workflows.Execute(ctx, &durable{r: r, ctx: ctx}, in)
+	if err != nil && !errors.Is(err, workflow.ErrStopped) {
 		r.log.Warn("workflow run failed", "run_id", in.RunID, "workflow_id", in.WorkflowID, "error", err)
 	}
 	return res, err
@@ -213,6 +213,18 @@ type durable struct {
 
 func (x *durable) Step(name string, fn func(context.Context, *dms.Service, func(dms.Event)) (json.RawMessage, error)) (json.RawMessage, error) {
 	return stepTx(x.ctx, x.r, name, fn)
+}
+
+// Work runs fn as a DBOS step without a PaperGo transaction; DBOS records
+// its result, so a replay returns it without running fn again.
+func (x *durable) Work(name string, fn func(context.Context) (json.RawMessage, error)) (json.RawMessage, error) {
+	return dbos.RunAsStep(x.ctx, func(ctx context.Context) (json.RawMessage, error) {
+		out, err := fn(ctx)
+		if err == nil && len(out) == 0 {
+			out = json.RawMessage("null")
+		}
+		return out, err
+	}, dbos.WithStepName(name), dbos.WithStepMaxRetries(0))
 }
 
 func (x *durable) Sleep(d time.Duration) error {

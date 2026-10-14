@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +22,8 @@ import (
 	"papergo/internal/database"
 	"papergo/internal/dms"
 	"papergo/internal/model"
+	"papergo/internal/storage"
+	"papergo/internal/tasks"
 	"papergo/internal/testutil"
 	"papergo/internal/workflow"
 )
@@ -31,6 +36,28 @@ type fixture struct {
 	r    *Runner
 	ws   *ent.Resource
 	list *ent.Resource
+	// store holds file content; workflows read and write it.
+	store storage.Store
+	// logs records what the runner logs.
+	logs *logBuffer
+}
+
+// logBuffer collects log output from the runner's goroutines.
+type logBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 var ctx = context.Background()
@@ -48,10 +75,13 @@ func open(t testing.TB, path, node string) *fixture {
 	} else {
 		db = testutil.DatabaseAt(t, path)
 	}
-	f := &fixture{path: path, db: db, dms: dms.NewService(db.SQL)}
-	f.wf = &workflow.Service{DMS: f.dms}
+	f := &fixture{path: path, db: db, dms: dms.NewService(db.SQL), logs: &logBuffer{}}
 	var err error
-	f.r, err = New(Config{DatabasePath: path, NodeID: node, PollInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *"}, db.SQL, f.dms, f.wf)
+	if f.store, err = storage.NewLocal(filepath.Join(filepath.Dir(path), "blobs")); err != nil {
+		t.Fatal(err)
+	}
+	f.wf = &workflow.Service{DMS: f.dms, Tools: workflow.Tools{Storage: f.store, OCR: textEngine{}}}
+	f.r, err = New(Config{DatabasePath: path, NodeID: node, PollInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *", Logger: slog.New(slog.NewTextHandler(f.logs, nil))}, db.SQL, f.dms, f.wf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,6 +122,11 @@ func setup(t testing.TB) *fixture {
 	}
 	return f
 }
+
+func (f *fixture) tasks() *tasks.Service { return &tasks.Service{DMS: f.dms} }
+
+// data returns a page's tasks.
+func pageData(p dms.Page[tasks.View], err error) ([]tasks.View, error) { return p.Data, err }
 
 func (f *fixture) workflow(t testing.TB, name string, def string) workflow.Workflow {
 	t.Helper()
@@ -302,8 +337,12 @@ func TestBuiltInExpiryOnSchedule(t *testing.T) {
 		t.Fatalf("copy: %+v %v", copied, err)
 	}
 	states, err := f.wf.ListBuiltIns(ctx, "alice", f.ws.ID)
-	if err != nil || len(states) == 0 || len(states[0].Workflows) != 1 || states[0].Workflows[0].Enabled {
-		t.Fatalf("built-in after copy: %+v %v", states, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(states, func(s workflow.BuiltInState) bool { return s.Key == "items.expire" })
+	if i < 0 || len(states[i].Workflows) != 1 || states[i].Workflows[0].Enabled {
+		t.Fatalf("built-in after copy: %+v", states)
 	}
 }
 

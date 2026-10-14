@@ -1,7 +1,8 @@
-import { queryOptions } from '@tanstack/react-query';
-import { api, isApiError, listOf } from './http';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
+import { api, continuation, isApiError, listOf } from './http';
 import { searchRequest, smartFolderQueryRequest } from './requests';
 import type {
+  Task,
   BuiltInState,
   CollectionTemplate,
   ContentType,
@@ -21,6 +22,7 @@ import type {
   SmartFolder,
   SmartFolderEntry,
   SmartFolderGroup,
+  StagedFile,
   Term,
   UserProfile,
   WebDAVCredential,
@@ -46,7 +48,44 @@ export const keys = {
   templates: ['collection-templates'] as const,
   people: ['people'] as const,
   users: ['users'] as const,
+  tasks: (filter: TaskFilter) => ['tasks', filter] as const,
+  task: (id: string) => ['tasks', 'one', id] as const,
+  stagedFile: (id: string) => ['staged-files', id] as const,
 };
+
+/** Which of the caller's tasks to list: waiting for them, or by status. */
+export interface TaskFilter {
+  waiting?: boolean;
+  status?: string;
+  kind?: string;
+}
+
+export const myTasksQuery = (filter: TaskFilter) =>
+  infiniteQueryOptions({
+    queryKey: keys.tasks(filter),
+    initialPageParam: '/v1/me/tasks',
+    queryFn: async ({ pageParam }) =>
+      (
+        await api<Page<Task>>(pageParam, {
+          query: pageParam === '/v1/me/tasks'
+            ? { waiting: filter.waiting ? 'true' : undefined, status: filter.status, kind: filter.kind }
+            : undefined,
+        })
+      ).data,
+    getNextPageParam: (page) => continuation(page['@odata.nextLink']) ?? undefined,
+  });
+
+export const taskQuery = (id: string) =>
+  queryOptions({
+    queryKey: keys.task(id),
+    queryFn: async () => (await api<Task>(`/v1/tasks/${id}`)).data,
+  });
+
+export const stagedFileQuery = (id: string) =>
+  queryOptions({
+    queryKey: keys.stagedFile(id),
+    queryFn: async () => (await api<StagedFile>(`/v1/staged-files/${id}`)).data,
+  });
 
 export const meQuery = queryOptions({
   queryKey: keys.me,

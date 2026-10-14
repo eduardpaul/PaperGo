@@ -19,6 +19,9 @@ cleanup() {
 trap cleanup EXIT
 
 docker build --tag papergo:ci-smoke .
+# Check both executables in the final image before database or port setup.
+docker run --rm papergo:ci-smoke --version
+docker run --rm --entrypoint /papergo-admin papergo:ci-smoke --version
 if ! CGO_ENABLED=0 go run ./cmd/admin initialize --database "$task_dir/papergo.db" --schema migrations > "$task_dir/migrations.log" 2>&1; then
   cat "$task_dir/migrations.log" >&2
   exit 1
@@ -81,4 +84,38 @@ if [[ "$task_status" != 201 ]]; then
   echo "Expected workspace creation to return 201, got $task_status." >&2
   exit 1
 fi
-echo 'Docker embedded frontend, readiness, liveness, API authentication and database write passed.'
+
+# OCR: an image upload runs the image optimization built-in, whose text
+# detection loads the image's ONNX Runtime and models.
+json() { python3 -c 'import json, sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1"; }
+api() { curl --fail --silent --show-error --max-time 30 --header "Authorization: Bearer $task_token" "$@"; }
+workspace_id=$(json id < "$task_dir/workspace.json")
+library_id=$(api --header 'Content-Type: application/json' --data '{"kind":"library","name":"Scans"}' \
+  "$task_address/v1/resources/$workspace_id/children" | json id)
+api --request PUT --header 'Content-Type: application/json' --data "{\"collection_id\":\"$library_id\",\"enabled\":true}" \
+  "$task_address/v1/workspaces/$workspace_id/workflow-builtins/documents.optimize" > /dev/null
+python3 - "$task_dir/page.png" <<'PNG'
+import struct, sys, zlib
+w, h = 800, 600
+rows = b"".join(b"\x00" + b"\xff" * w for _ in range(h))
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+open(sys.argv[1], "wb").write(png)
+PNG
+api --form "file=@$task_dir/page.png;type=image/png" "$task_address/v1/resources/$library_id/documents" > /dev/null
+run_status=
+for (( attempt=0; attempt<60; attempt++ )); do
+  api "$task_address/v1/workspaces/$workspace_id/workflow-runs" > "$task_dir/runs.json"
+  run_status=$(python3 -c 'import json, sys; runs = json.load(open(sys.argv[1])).get("value") or [{}]; print(runs[0].get("status", ""))' "$task_dir/runs.json")
+  if [[ "$run_status" == completed || "$run_status" == failed ]]; then
+    break
+  fi
+  sleep 1
+done
+if [[ "$run_status" != completed ]]; then
+  cat "$task_dir/runs.json" >&2
+  echo "Expected the optimization run on a blank page to complete (OCR finds no text), got '$run_status'." >&2
+  exit 1
+fi
+echo 'Docker embedded frontend, readiness, liveness, API authentication, database write and OCR passed.'

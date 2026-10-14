@@ -13,7 +13,7 @@ import (
 func (r *Runner) SyncLiveRuns(ctx context.Context) error {
 	after := ""
 	for ctx.Err() == nil {
-		rows, err := r.dms.Client.WorkflowRun.Query().Where(workflowrun.LiveStatusIn("queued", "running"), workflowrun.IDGT(after)).Order(ent.Asc(workflowrun.FieldID)).Limit(200).All(ctx)
+		rows, err := r.dms.Client.WorkflowRun.Query().Where(workflowrun.LiveStatusIn("queued", "running", "waiting"), workflowrun.IDGT(after)).Order(ent.Asc(workflowrun.FieldID)).Limit(200).All(ctx)
 		if err != nil {
 			return err
 		}
@@ -32,6 +32,10 @@ func (r *Runner) SyncLiveRuns(ctx context.Context) error {
 		for _, entry := range statuses {
 			byID[entry.ID] = entry
 		}
+		parked, err := parkedRuns(ctx, r.dms, ids)
+		if err != nil {
+			return err
+		}
 		err = r.dms.Write(ctx, func(t *dms.Service) error {
 			for _, row := range rows {
 				entry, exists := byID[row.ID]
@@ -39,6 +43,9 @@ func (r *Runner) SyncLiveRuns(ctx context.Context) error {
 					continue
 				}
 				state := status(entry.Status)
+				if parked[row.ID] && state == "cancelled" {
+					state = "waiting"
+				}
 				at := entry.UpdatedAt.UnixMilli()
 				if at < 0 {
 					at = 0
@@ -47,8 +54,15 @@ func (r *Runner) SyncLiveRuns(ctx context.Context) error {
 					continue
 				}
 				// A source may have been purged after the status read.
-				if _, err := t.Client.WorkflowRun.Update().Where(workflowrun.IDEQ(row.ID), workflowrun.LiveStatusIn("queued", "running")).SetLiveStatus(state).SetLiveUpdatedAt(at).Save(ctx); err != nil {
+				if _, err := t.Client.WorkflowRun.Update().Where(workflowrun.IDEQ(row.ID), workflowrun.LiveStatusIn("queued", "running", "waiting")).SetLiveStatus(state).SetLiveUpdatedAt(at).Save(ctx); err != nil {
 					return err
+				}
+				// A finished or cancelled run promotes nothing more. A failed
+				// run keeps its staged files for a retry until it is purged.
+				if state == "completed" || state == "cancelled" {
+					if err := t.DiscardRunStagedFiles(ctx, row.ID); err != nil {
+						return err
+					}
 				}
 			}
 			return nil

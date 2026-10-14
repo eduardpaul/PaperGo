@@ -80,12 +80,18 @@ type Tx struct {
 	SchemaTemplate *SchemaTemplateClient
 	// SmartFolder is the client for interacting with the SmartFolder builders.
 	SmartFolder *SmartFolderClient
+	// StagedFile is the client for interacting with the StagedFile builders.
+	StagedFile *StagedFileClient
 	// SyncState is the client for interacting with the SyncState builders.
 	SyncState *SyncStateClient
 	// SyncToken is the client for interacting with the SyncToken builders.
 	SyncToken *SyncTokenClient
 	// SyncView is the client for interacting with the SyncView builders.
 	SyncView *SyncViewClient
+	// Task is the client for interacting with the Task builders.
+	Task *TaskClient
+	// TaskResponse is the client for interacting with the TaskResponse builders.
+	TaskResponse *TaskResponseClient
 	// Term is the client for interacting with the Term builders.
 	Term *TermClient
 	// TermGroup is the client for interacting with the TermGroup builders.
@@ -268,9 +274,12 @@ func (tx *Tx) init() {
 	tx.SchemaRevision = NewSchemaRevisionClient(tx.config)
 	tx.SchemaTemplate = NewSchemaTemplateClient(tx.config)
 	tx.SmartFolder = NewSmartFolderClient(tx.config)
+	tx.StagedFile = NewStagedFileClient(tx.config)
 	tx.SyncState = NewSyncStateClient(tx.config)
 	tx.SyncToken = NewSyncTokenClient(tx.config)
 	tx.SyncView = NewSyncViewClient(tx.config)
+	tx.Task = NewTaskClient(tx.config)
+	tx.TaskResponse = NewTaskResponseClient(tx.config)
 	tx.Term = NewTermClient(tx.config)
 	tx.TermGroup = NewTermGroupClient(tx.config)
 	tx.TermSet = NewTermSetClient(tx.config)

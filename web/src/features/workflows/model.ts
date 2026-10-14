@@ -28,6 +28,13 @@ export interface FormSchema {
     access?: string;
     relationship_type_id?: string;
   };
+  /** Launch screen hints of a selection run. */
+  'x-papergo-selection'?: {
+    preview?: string;
+    item_label?: string;
+    order_label?: string;
+    primary_description?: string;
+  };
 }
 export interface Trigger {
   type: string;
@@ -39,6 +46,8 @@ export interface Trigger {
   selection?: string;
   terms?: string[];
   term_change?: string;
+  sources?: string[];
+  task_key?: string;
 }
 export interface FlowNode {
   activity: string;
@@ -51,6 +60,7 @@ export interface WorkflowDefinition {
   condition?: FilterExpr;
   input_schema?: FormSchema;
   variables?: Record<string, unknown>;
+  concurrency?: string;
   flow: { start: string; nodes: Record<string, FlowNode> };
 }
 export interface Activity {
@@ -58,8 +68,19 @@ export interface Activity {
   kind: string;
   description: string;
   ports: string[];
+  /** A node's ports come from this input instead: a task node's outcomes. */
+  ports_from?: 'outcomes';
   terminal?: boolean;
   input_schema: FormSchema;
+}
+
+/** The ports a node can connect besides done and error, as the server checks them. */
+export function nodePorts(activity: Activity | undefined, inputs: Record<string, unknown> | undefined): string[] {
+  if (!activity) return [];
+  if (activity.ports_from !== 'outcomes') return activity.ports;
+  if (inputs?.wait === false) return [];
+  const outcomes = Array.isArray(inputs?.outcomes) ? (inputs.outcomes as { key?: unknown }[]) : [{ key: 'done' }];
+  return outcomes.map((o) => (typeof o?.key === 'string' ? o.key : '')).filter(Boolean);
 }
 export interface WorkflowCatalog {
   triggers: { type: string; description: string }[];

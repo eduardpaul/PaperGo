@@ -67,3 +67,46 @@ it('preserves an ordered selection, explicit primary item and exact typed launch
   expect(String(body.inputs.amount)).toBe('9007199254740993');
   client.clear();
 });
+
+it('shows selection hints and image previews of the ordered items', async () => {
+  const fetch = vi.fn(async (url: URL | string) =>
+    String(url).includes('/content')
+      ? new Response('image bytes', { headers: { 'Content-Type': 'image/png' } })
+      : new Response(stringifyJSON({ value: [{ id: 'first', name: 'First', kind: 'item' }, { id: 'second', name: 'Second', kind: 'item' }] })),
+  );
+  vi.stubGlobal('fetch', fetch);
+  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:preview', revokeObjectURL: vi.fn() }));
+  const workflow: Workflow = {
+    id: 'workflow',
+    key: 'photos',
+    workspace_id: 'workspace',
+    name: 'Photos to PDF',
+    description: '',
+    enabled: true,
+    version: 1,
+    current_version: 1,
+    definition: {
+      triggers: [{ type: 'manual', collection_id: 'collection', selection: 'selection' }],
+      input_schema: {
+        type: 'object',
+        properties: {},
+        'x-papergo-selection': { preview: 'image', item_label: 'page', order_label: 'Page order', primary_description: 'Gets the PDF.' },
+      },
+      flow: { start: 'end', nodes: { end: { activity: 'end' } } },
+    },
+  };
+  const client = new QueryClient();
+  render(
+    <QueryClientProvider client={client}>
+      <LaunchWorkflow workflow={workflow} itemIds={['first', 'second']} onClose={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByLabelText('Primary page')).toBeTruthy();
+  expect(screen.getByText('Gets the PDF.')).toBeTruthy();
+  const order = screen.getByRole('list', { name: 'Page order' });
+  expect(order.textContent).toContain('page 1:');
+  expect(order.textContent).toContain('page 2:');
+  await waitFor(() => expect(order.querySelectorAll('img[src="blob:preview"]')).toHaveLength(2));
+  expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/v1/items/second/content'))).toBe(true);
+  client.clear();
+});
