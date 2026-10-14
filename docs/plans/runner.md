@@ -157,7 +157,7 @@ New capabilities the runner unlocks. Each will be designed separately:
 3. **Workflow parts and system workflows.** `forEach` (including over `{run:items}`), approvals (durable `Recv` waits) whose answers use the same forms as launches (`input_schema`, domain pickers checked against the decider), concurrency policies (`skip` for sweeps; they compare every member of selection runs, from `workflow_run_items`), run-again activities, and the system-workflow model below; then the maintenance processes as system built-ins (credential purge, orphan reconciliation).
 4. **Long work.** Move index and business-key rebuilds and `publishAllHeads` to partitioned jobs, with the pending-index contract.
 5. **Multi-node.** Node heartbeats and recovery of nodes that never return, delivered with the PostgreSQL adapter.
-6. **Consumers.** Notifications, then tasks and approval of publishing, as activities and built-in workflows.
+6. **Consumers.** Notifications, then tasks and approval of publishing, as activities and built-in workflows. The [tasks and notifications plan](tasks-and-notifications.md) designs both blocks.
 
 ## Tests
 
