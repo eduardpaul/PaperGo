@@ -69,6 +69,8 @@ func entityETag(w http.ResponseWriter, v any) {
 		etag(w, x.Version)
 	case *ent.ListView:
 		etag(w, x.Version)
+	case *ent.ListIntegration:
+		etag(w, x.Version)
 	case dms.RelationshipTypeView:
 		etag(w, x.Version)
 	case *ent.Relationship:

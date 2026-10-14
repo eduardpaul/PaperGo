@@ -632,6 +632,43 @@ var (
 		Columns:    IdentityUsersColumns,
 		PrimaryKey: []*schema.Column{IdentityUsersColumns[0]},
 	}
+	// IntegrationItemsColumns holds the columns for the "integration_items" table.
+	IntegrationItemsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "item_id", Type: field.TypeString, Unique: true},
+		{Name: "integration_id", Type: field.TypeString, Nullable: true},
+		{Name: "provider_kind", Type: field.TypeString, Size: 64},
+		{Name: "external_id", Type: field.TypeString, Size: 4096},
+		{Name: "managed_fields", Type: field.TypeJSON},
+	}
+	// IntegrationItemsTable holds the schema information for the "integration_items" table.
+	IntegrationItemsTable = &schema.Table{
+		Name:       "integration_items",
+		Columns:    IntegrationItemsColumns,
+		PrimaryKey: []*schema.Column{IntegrationItemsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "integrationitem_integration_id_external_id",
+				Unique:  true,
+				Columns: []*schema.Column{IntegrationItemsColumns[3], IntegrationItemsColumns[5]},
+			},
+		},
+	}
+	// IntegrationRevisionDataColumns holds the columns for the "integration_revision_data" table.
+	IntegrationRevisionDataColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "revision_id", Type: field.TypeString, Unique: true},
+		{Name: "provider_kind", Type: field.TypeString, Size: 64},
+		{Name: "data", Type: field.TypeJSON},
+	}
+	// IntegrationRevisionDataTable holds the schema information for the "integration_revision_data" table.
+	IntegrationRevisionDataTable = &schema.Table{
+		Name:       "integration_revision_data",
+		Columns:    IntegrationRevisionDataColumns,
+		PrimaryKey: []*schema.Column{IntegrationRevisionDataColumns[0]},
+	}
 	// ItemHistoriesColumns holds the columns for the "item_histories" table.
 	ItemHistoriesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -808,6 +845,43 @@ var (
 				Name:    "itemsurface_revision_id",
 				Unique:  false,
 				Columns: []*schema.Column{ItemSurfacesColumns[14]},
+			},
+		},
+	}
+	// ListIntegrationsColumns holds the columns for the "list_integrations" table.
+	ListIntegrationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "container_id", Type: field.TypeString},
+		{Name: "kind", Type: field.TypeString, Size: 64},
+		{Name: "name", Type: field.TypeString, Size: 255},
+		{Name: "paused", Type: field.TypeBool, Default: false},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "generation", Type: field.TypeString},
+		{Name: "config_ciphertext", Type: field.TypeBytes},
+		{Name: "config_hash", Type: field.TypeString},
+		{Name: "configured_by", Type: field.TypeString},
+		{Name: "credential_id", Type: field.TypeString, Default: ""},
+		{Name: "credential_scopes", Type: field.TypeJSON},
+		{Name: "state", Type: field.TypeJSON},
+		{Name: "last_attempt_at", Type: field.TypeTime, Nullable: true},
+		{Name: "last_success_at", Type: field.TypeTime, Nullable: true},
+		{Name: "error", Type: field.TypeString, Size: 1000, Default: ""},
+		{Name: "item_count", Type: field.TypeInt, Default: 0},
+		{Name: "lease_token", Type: field.TypeString, Default: ""},
+		{Name: "lease_until", Type: field.TypeTime, Nullable: true},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ListIntegrationsTable holds the schema information for the "list_integrations" table.
+	ListIntegrationsTable = &schema.Table{
+		Name:       "list_integrations",
+		Columns:    ListIntegrationsColumns,
+		PrimaryKey: []*schema.Column{ListIntegrationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "listintegration_container_id_kind_config_hash",
+				Unique:  true,
+				Columns: []*schema.Column{ListIntegrationsColumns[2], ListIntegrationsColumns[3], ListIntegrationsColumns[9]},
 			},
 		},
 	}
@@ -2014,9 +2088,12 @@ var (
 		IdentityRestTokensTable,
 		IdentityRolesTable,
 		IdentityUsersTable,
+		IntegrationItemsTable,
+		IntegrationRevisionDataTable,
 		ItemHistoriesTable,
 		ItemRevisionsTable,
 		ItemSurfacesTable,
+		ListIntegrationsTable,
 		ListViewsTable,
 		LiveChangesTable,
 		OperationsTable,

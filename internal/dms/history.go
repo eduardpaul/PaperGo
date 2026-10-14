@@ -173,6 +173,9 @@ func (s *Service) RestoreRevision(ctx context.Context, subject, id string, numbe
 				values[key] = nil
 			}
 		}
+		if err = t.restoreIntegrationData(ctx, old.ID, id); err != nil {
+			return err
+		}
 		out, err = t.update(ctx, subject, id, version, UpdateResource{Name: &old.Name, Tags: &old.Tags, Values: &values, ContentTypeID: &old.ContentTypeID})
 		if err != nil {
 			return err

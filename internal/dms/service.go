@@ -25,15 +25,18 @@ type Service struct {
 	// Set only while provisioning the caller's fixed Home resources.
 	homeProvisioning bool
 	// operations wakes RunOperations when work is queued.
-	operations          chan struct{}
-	onCommit            func()
-	tx                  *sql.Tx
-	pending             *[]Event
-	collectionTemplates map[string]CollectionTemplate
-	auditProperties     map[string]map[string]bool
-	traceID             string
-	operationHandlers   map[string]OperationHandler
-	runPurger           func(context.Context, *sql.Tx, string) error
+	operations             chan struct{}
+	onCommit               func()
+	tx                     *sql.Tx
+	pending                *[]Event
+	collectionTemplates    map[string]CollectionTemplate
+	auditProperties        map[string]map[string]bool
+	traceID                string
+	operationHandlers      map[string]OperationHandler
+	integrations           *integrationRuntime
+	integrationWrite       bool
+	pendingIntegrationData *IntegrationData
+	runPurger              func(context.Context, *sql.Tx, string) error
 	// batch is set while one request applies many operations in a transaction.
 	batch *batchCache
 }
@@ -98,6 +101,7 @@ func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error)
 	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
 	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, runPurger: s.runPurger}
+	t.integrations = s.integrations
 	t.traceID = requestmeta.Trace(ctx)
 	t.captureAuditProperties()
 	if err := fn(t); err != nil {
@@ -136,7 +140,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers})
+	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, integrations: s.integrations})
 	if err != nil {
 		return out, err
 	}
@@ -567,6 +571,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		if e = s.overlayHead(ctx, r); e != nil {
 			return nil, e
 		}
+	}
+	if e = s.protectIntegrationFields(ctx, r, in); e != nil {
+		return nil, e
 	}
 	if in.Values != nil && (!contentKind(r.Kind) || r.ContainerID == nil) {
 		return nil, invalid("only items and folders support custom values")

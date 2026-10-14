@@ -23,9 +23,12 @@ import (
 	"papergo/ent/identityresttoken"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
+	"papergo/ent/integrationitem"
+	"papergo/ent/integrationrevisiondata"
 	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
+	"papergo/ent/listintegration"
 	"papergo/ent/listview"
 	"papergo/ent/livechange"
 	"papergo/ent/operation"
@@ -922,6 +925,102 @@ func init() {
 			return nil
 		}
 	}()
+	integrationitemMixin := schema.IntegrationItem{}.Mixin()
+	integrationitemMixinFields0 := integrationitemMixin[0].Fields()
+	_ = integrationitemMixinFields0
+	integrationitemFields := schema.IntegrationItem{}.Fields()
+	_ = integrationitemFields
+	// integrationitemDescCreatedAt is the schema descriptor for created_at field.
+	integrationitemDescCreatedAt := integrationitemMixinFields0[1].Descriptor()
+	// integrationitem.DefaultCreatedAt holds the default value on creation for the created_at field.
+	integrationitem.DefaultCreatedAt = integrationitemDescCreatedAt.Default.(func() time.Time)
+	// integrationitemDescItemID is the schema descriptor for item_id field.
+	integrationitemDescItemID := integrationitemFields[0].Descriptor()
+	// integrationitem.ItemIDValidator is a validator for the "item_id" field. It is called by the builders before save.
+	integrationitem.ItemIDValidator = integrationitemDescItemID.Validators[0].(func(string) error)
+	// integrationitemDescProviderKind is the schema descriptor for provider_kind field.
+	integrationitemDescProviderKind := integrationitemFields[2].Descriptor()
+	// integrationitem.ProviderKindValidator is a validator for the "provider_kind" field. It is called by the builders before save.
+	integrationitem.ProviderKindValidator = func() func(string) error {
+		validators := integrationitemDescProviderKind.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(provider_kind string) error {
+			for _, fn := range fns {
+				if err := fn(provider_kind); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// integrationitemDescExternalID is the schema descriptor for external_id field.
+	integrationitemDescExternalID := integrationitemFields[3].Descriptor()
+	// integrationitem.ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
+	integrationitem.ExternalIDValidator = func() func(string) error {
+		validators := integrationitemDescExternalID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(external_id string) error {
+			for _, fn := range fns {
+				if err := fn(external_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// integrationitemDescManagedFields is the schema descriptor for managed_fields field.
+	integrationitemDescManagedFields := integrationitemFields[4].Descriptor()
+	// integrationitem.DefaultManagedFields holds the default value on creation for the managed_fields field.
+	integrationitem.DefaultManagedFields = integrationitemDescManagedFields.Default.([]string)
+	// integrationitemDescID is the schema descriptor for id field.
+	integrationitemDescID := integrationitemMixinFields0[0].Descriptor()
+	// integrationitem.DefaultID holds the default value on creation for the id field.
+	integrationitem.DefaultID = integrationitemDescID.Default.(func() string)
+	// integrationitem.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	integrationitem.IDValidator = integrationitemDescID.Validators[0].(func(string) error)
+	integrationrevisiondataMixin := schema.IntegrationRevisionData{}.Mixin()
+	integrationrevisiondataMixinFields0 := integrationrevisiondataMixin[0].Fields()
+	_ = integrationrevisiondataMixinFields0
+	integrationrevisiondataFields := schema.IntegrationRevisionData{}.Fields()
+	_ = integrationrevisiondataFields
+	// integrationrevisiondataDescCreatedAt is the schema descriptor for created_at field.
+	integrationrevisiondataDescCreatedAt := integrationrevisiondataMixinFields0[1].Descriptor()
+	// integrationrevisiondata.DefaultCreatedAt holds the default value on creation for the created_at field.
+	integrationrevisiondata.DefaultCreatedAt = integrationrevisiondataDescCreatedAt.Default.(func() time.Time)
+	// integrationrevisiondataDescRevisionID is the schema descriptor for revision_id field.
+	integrationrevisiondataDescRevisionID := integrationrevisiondataFields[0].Descriptor()
+	// integrationrevisiondata.RevisionIDValidator is a validator for the "revision_id" field. It is called by the builders before save.
+	integrationrevisiondata.RevisionIDValidator = integrationrevisiondataDescRevisionID.Validators[0].(func(string) error)
+	// integrationrevisiondataDescProviderKind is the schema descriptor for provider_kind field.
+	integrationrevisiondataDescProviderKind := integrationrevisiondataFields[1].Descriptor()
+	// integrationrevisiondata.ProviderKindValidator is a validator for the "provider_kind" field. It is called by the builders before save.
+	integrationrevisiondata.ProviderKindValidator = func() func(string) error {
+		validators := integrationrevisiondataDescProviderKind.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(provider_kind string) error {
+			for _, fn := range fns {
+				if err := fn(provider_kind); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// integrationrevisiondataDescID is the schema descriptor for id field.
+	integrationrevisiondataDescID := integrationrevisiondataMixinFields0[0].Descriptor()
+	// integrationrevisiondata.DefaultID holds the default value on creation for the id field.
+	integrationrevisiondata.DefaultID = integrationrevisiondataDescID.Default.(func() string)
+	// integrationrevisiondata.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	integrationrevisiondata.IDValidator = integrationrevisiondataDescID.Validators[0].(func(string) error)
 	itemhistoryMixin := schema.ItemHistory{}.Mixin()
 	itemhistoryMixinFields0 := itemhistoryMixin[0].Fields()
 	_ = itemhistoryMixinFields0
@@ -1002,6 +1101,113 @@ func init() {
 	itemsurface.DefaultID = itemsurfaceDescID.Default.(func() string)
 	// itemsurface.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	itemsurface.IDValidator = itemsurfaceDescID.Validators[0].(func(string) error)
+	listintegrationMixin := schema.ListIntegration{}.Mixin()
+	listintegrationMixinFields0 := listintegrationMixin[0].Fields()
+	_ = listintegrationMixinFields0
+	listintegrationFields := schema.ListIntegration{}.Fields()
+	_ = listintegrationFields
+	// listintegrationDescCreatedAt is the schema descriptor for created_at field.
+	listintegrationDescCreatedAt := listintegrationMixinFields0[1].Descriptor()
+	// listintegration.DefaultCreatedAt holds the default value on creation for the created_at field.
+	listintegration.DefaultCreatedAt = listintegrationDescCreatedAt.Default.(func() time.Time)
+	// listintegrationDescContainerID is the schema descriptor for container_id field.
+	listintegrationDescContainerID := listintegrationFields[0].Descriptor()
+	// listintegration.ContainerIDValidator is a validator for the "container_id" field. It is called by the builders before save.
+	listintegration.ContainerIDValidator = listintegrationDescContainerID.Validators[0].(func(string) error)
+	// listintegrationDescKind is the schema descriptor for kind field.
+	listintegrationDescKind := listintegrationFields[1].Descriptor()
+	// listintegration.KindValidator is a validator for the "kind" field. It is called by the builders before save.
+	listintegration.KindValidator = func() func(string) error {
+		validators := listintegrationDescKind.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(kind string) error {
+			for _, fn := range fns {
+				if err := fn(kind); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// listintegrationDescName is the schema descriptor for name field.
+	listintegrationDescName := listintegrationFields[2].Descriptor()
+	// listintegration.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	listintegration.NameValidator = func() func(string) error {
+		validators := listintegrationDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// listintegrationDescPaused is the schema descriptor for paused field.
+	listintegrationDescPaused := listintegrationFields[3].Descriptor()
+	// listintegration.DefaultPaused holds the default value on creation for the paused field.
+	listintegration.DefaultPaused = listintegrationDescPaused.Default.(bool)
+	// listintegrationDescVersion is the schema descriptor for version field.
+	listintegrationDescVersion := listintegrationFields[4].Descriptor()
+	// listintegration.DefaultVersion holds the default value on creation for the version field.
+	listintegration.DefaultVersion = listintegrationDescVersion.Default.(int)
+	// listintegration.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	listintegration.VersionValidator = listintegrationDescVersion.Validators[0].(func(int) error)
+	// listintegrationDescGeneration is the schema descriptor for generation field.
+	listintegrationDescGeneration := listintegrationFields[5].Descriptor()
+	// listintegration.GenerationValidator is a validator for the "generation" field. It is called by the builders before save.
+	listintegration.GenerationValidator = listintegrationDescGeneration.Validators[0].(func(string) error)
+	// listintegrationDescConfiguredBy is the schema descriptor for configured_by field.
+	listintegrationDescConfiguredBy := listintegrationFields[8].Descriptor()
+	// listintegration.ConfiguredByValidator is a validator for the "configured_by" field. It is called by the builders before save.
+	listintegration.ConfiguredByValidator = listintegrationDescConfiguredBy.Validators[0].(func(string) error)
+	// listintegrationDescCredentialID is the schema descriptor for credential_id field.
+	listintegrationDescCredentialID := listintegrationFields[9].Descriptor()
+	// listintegration.DefaultCredentialID holds the default value on creation for the credential_id field.
+	listintegration.DefaultCredentialID = listintegrationDescCredentialID.Default.(string)
+	// listintegrationDescCredentialScopes is the schema descriptor for credential_scopes field.
+	listintegrationDescCredentialScopes := listintegrationFields[10].Descriptor()
+	// listintegration.DefaultCredentialScopes holds the default value on creation for the credential_scopes field.
+	listintegration.DefaultCredentialScopes = listintegrationDescCredentialScopes.Default.([]string)
+	// listintegrationDescState is the schema descriptor for state field.
+	listintegrationDescState := listintegrationFields[11].Descriptor()
+	// listintegration.DefaultState holds the default value on creation for the state field.
+	listintegration.DefaultState = listintegrationDescState.Default.(jsontext.Value)
+	// listintegrationDescError is the schema descriptor for error field.
+	listintegrationDescError := listintegrationFields[14].Descriptor()
+	// listintegration.DefaultError holds the default value on creation for the error field.
+	listintegration.DefaultError = listintegrationDescError.Default.(string)
+	// listintegration.ErrorValidator is a validator for the "error" field. It is called by the builders before save.
+	listintegration.ErrorValidator = listintegrationDescError.Validators[0].(func(string) error)
+	// listintegrationDescItemCount is the schema descriptor for item_count field.
+	listintegrationDescItemCount := listintegrationFields[15].Descriptor()
+	// listintegration.DefaultItemCount holds the default value on creation for the item_count field.
+	listintegration.DefaultItemCount = listintegrationDescItemCount.Default.(int)
+	// listintegration.ItemCountValidator is a validator for the "item_count" field. It is called by the builders before save.
+	listintegration.ItemCountValidator = listintegrationDescItemCount.Validators[0].(func(int) error)
+	// listintegrationDescLeaseToken is the schema descriptor for lease_token field.
+	listintegrationDescLeaseToken := listintegrationFields[16].Descriptor()
+	// listintegration.DefaultLeaseToken holds the default value on creation for the lease_token field.
+	listintegration.DefaultLeaseToken = listintegrationDescLeaseToken.Default.(string)
+	// listintegrationDescUpdatedAt is the schema descriptor for updated_at field.
+	listintegrationDescUpdatedAt := listintegrationFields[18].Descriptor()
+	// listintegration.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	listintegration.DefaultUpdatedAt = listintegrationDescUpdatedAt.Default.(func() time.Time)
+	// listintegration.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	listintegration.UpdateDefaultUpdatedAt = listintegrationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// listintegrationDescID is the schema descriptor for id field.
+	listintegrationDescID := listintegrationMixinFields0[0].Descriptor()
+	// listintegration.DefaultID holds the default value on creation for the id field.
+	listintegration.DefaultID = listintegrationDescID.Default.(func() string)
+	// listintegration.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	listintegration.IDValidator = listintegrationDescID.Validators[0].(func(string) error)
 	listviewMixin := schema.ListView{}.Mixin()
 	listviewMixinFields0 := listviewMixin[0].Fields()
 	_ = listviewMixinFields0

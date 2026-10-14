@@ -44,6 +44,11 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 			out, e = t.update(ctx, subject, id, version, UpdateResource{ParentID: &parent})
 			return e
 		}
+		if managed, e := t.integrationManaged(ctx, id); e != nil {
+			return e
+		} else if managed {
+			return invalid("remove the list integration before moving its item to another list")
+		}
 		if r.Kind != resource.KindItem {
 			return invalid("cross-collection moves support content items only")
 		}

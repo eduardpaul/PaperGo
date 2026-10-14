@@ -7,6 +7,7 @@ import { parseJSON, stringifyJSON } from '@/api/json';
 import type { FieldDefinition, ListView, Resource } from '@/api/types';
 import { FieldEditor } from '@/features/fields/editor';
 import { createFormatter } from '@/lib/format';
+import { PreferencesProvider } from '@/lib/preferences';
 import { ItemsBoard, ItemsCalendar, calendarDay, calendarRangeFilter } from './items-layouts';
 
 const clients: QueryClient[] = [];
@@ -14,6 +15,7 @@ afterEach(() => {
   cleanup();
   clients.splice(0).forEach((client) => client.clear());
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function renderWithClient(children: ReactNode) {
@@ -120,6 +122,26 @@ it('widens moment ranges by the largest time zone offsets', () => {
       { field: 'meeting', op: 'gte', value: '2026-02-22T10:00:00.000Z' },
       { field: 'meeting', op: 'lt', value: '2026-04-06T14:00:00.000Z' },
     ],
+  });
+});
+
+it.each(['event_start', 'event_start_date'])('keeps all-day occurrences on their dates when grouped by %s', async (key) => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-14T12:00:00Z') });
+  mockAPI(({ path }) => {
+    if (path === '/v1/identity/me/preferences') return { time_zone: 'America/New_York' };
+    if (path.endsWith('/calendar/occurrences')) return [
+      { key: 'holiday', name: 'Holiday', start: '2026-10-14T00:00:00Z', end: '2026-10-15T00:00:00Z', all_day: true, start_date: '2026-10-14', item: item('holiday', 'Holiday', { event_all_day: true }) },
+      { key: 'meeting', name: 'Meeting', start: '2026-10-14T00:30:00Z', end: '2026-10-14T01:30:00Z', all_day: false, item: item('meeting', 'Meeting') },
+    ];
+    return { value: [] };
+  });
+  renderWithClient(
+    <PreferencesProvider><ItemsCalendar collectionId="list" view={view({ group_by: key }, 'calendar')} dateField={{ id: key, key, label: 'Start', type: key === 'event_start' ? 'datetime' : 'date' }} onOpen={vi.fn()} /></PreferencesProvider>,
+  );
+  await waitFor(() => {
+    const dayOf = (name: string) => within(screen.getByRole('button', { name }).closest('ul')!.parentElement!);
+    expect(dayOf('Holiday').getByText('14')).toBeTruthy();
+    expect(dayOf('Meeting').getByText('13')).toBeTruthy();
   });
 });
 

@@ -38,7 +38,7 @@ var packageTables = []string{
 	"identity_users", "identity_groups", "identity_roles", "identity_memberships", "identity_assignments", "identity_preferences",
 	"term_groups", "term_sets", "terms", "relationship_types", "field_definitions", "content_types",
 	"resources", "collection_types", "schema_revisions", "schema_templates", "list_views", "smart_folders",
-	"blobs", "item_revisions", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
+	"blobs", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
 	"workflows", "workflow_versions", "workflow_triggers", "group_inboxes",
 }
 
@@ -51,7 +51,14 @@ type packageObject struct {
 	Size   int64  `json:"size"`
 	SHA256 string `json:"sha256"`
 }
+type portableIntegration struct {
+	ContainerID string `json:"container_id"`
+	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+}
+
 type corePackage struct {
+	Integrations []portableIntegration   `json:"integrations"`
 	Format       string                  `json:"format"`
 	Organization map[string]any          `json:"organization"`
 	Tables       map[string]packageTable `json:"tables"`
@@ -62,6 +69,7 @@ type packagePayload struct {
 	DryRun    bool   `json:"dry_run,omitempty"`
 }
 type PackageResult struct {
+	Warnings   []string   `json:"warnings,omitempty"`
 	Valid      bool       `json:"valid"`
 	DryRun     bool       `json:"dry_run,omitempty"`
 	Rows       int        `json:"rows,omitempty"`
@@ -159,11 +167,25 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store) (s
 		return storage.Object{}, err
 	}
 	p.Organization = map[string]any{"identifier": identifier, "display_name": name, "description": description}
+	sources, err := s.Client.ListIntegration.Query().All(ctx)
+	if err != nil {
+		return storage.Object{}, err
+	}
+	for _, source := range sources {
+		p.Integrations = append(p.Integrations, portableIntegration{source.ContainerID, source.Kind, source.Name})
+	}
 	count := 0
 	for _, table := range packageTables {
 		columns, expressions, err := s.packageColumns(ctx, table)
 		if err != nil {
 			return storage.Object{}, err
+		}
+		if table == "integration_items" {
+			for i, column := range columns {
+				if column == "integration_id" {
+					expressions[i] = "NULL"
+				}
+			}
 		}
 		rows, err := s.tx.QueryContext(ctx, "SELECT "+strings.Join(expressions, ",")+" FROM "+quotePackageColumn(table)+" ORDER BY id")
 		if err != nil {
@@ -340,6 +362,9 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	reader.Close()
 	if err != nil || p.Format != "papergo-core" || len(p.Tables) != len(packageTables) {
 		return result, invalid("invalid core package manifest")
+	}
+	for _, integration := range p.Integrations {
+		result.Warnings = append(result.Warnings, "Reconfigure "+integration.Name+" on list "+integration.ContainerID+": integration secrets are omitted from portable packages.")
 	}
 	if len(entries) != 1+len(p.Objects) {
 		return result, invalid("package contains unexpected entries")
@@ -563,6 +588,9 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 		}
 		rows := packageMaps(p.Tables[table])
 		for _, row := range rows {
+			if table == "integration_items" && row["integration_id"] != nil {
+				return invalid("portable integration items must be detached")
+			}
 			if table == "item_revisions" {
 				if err = validateTitle(fmt.Sprint(row["name"])); err != nil {
 					return err

@@ -210,6 +210,9 @@ func (s *Service) fieldCollections(ctx context.Context, id string) ([]*ent.Resou
 // adopt a partial catalog update, including collections the curator cannot read.
 func (s *Service) refreshCollections(ctx context.Context, subject string, collections []*ent.Resource) error {
 	for _, c := range collections {
+		if e := s.validateIntegrationSchema(ctx, c); e != nil {
+			return e
+		}
 		defs, e := s.collectionFields(ctx, c.ID)
 		if e != nil {
 			return e
@@ -289,6 +292,21 @@ func (s *Service) UpdateContentType(ctx context.Context, subject, id string, ver
 }
 func (s *Service) AttachContentType(ctx context.Context, subject, collection string, version int, in AttachContentTypeInput) (out *ent.Resource, err error) {
 	err = s.write(ctx, func(t *Service) error {
+		if e := t.RequireScope(ctx, subject, "contentType.read"); e != nil {
+			return e
+		}
+		var e error
+		out, e = t.attachContentType(ctx, subject, collection, version, in)
+		return e
+	})
+	return
+}
+
+// attachContentType also serves automatic provisioning of a fixed type. It
+// enforces list Manage; choosing a catalog type through the public API requires
+// contentType.read as well.
+func (s *Service) attachContentType(ctx context.Context, subject, collection string, version int, in AttachContentTypeInput) (out *ent.Resource, err error) {
+	err = s.write(ctx, func(t *Service) error {
 		if e := t.RequireScope(ctx, subject, "list.read"); e != nil {
 			return e
 		}
@@ -301,9 +319,6 @@ func (s *Service) AttachContentType(ctx context.Context, subject, collection str
 		}
 		if c.Version != version {
 			return ErrPreconditionFailed
-		}
-		if e = t.RequireScope(ctx, subject, "contentType.read"); e != nil {
-			return e
 		}
 		if _, e = t.Client.ContentType.Get(ctx, in.ContentTypeID); ent.IsNotFound(e) {
 			return ErrNotFound

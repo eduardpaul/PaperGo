@@ -6,6 +6,35 @@
 -- runner launches; their names are reserved (docs/workflows.md).
 
 -- Tables
+CREATE TABLE list_integrations (
+ id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
+ container_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL CHECK(length(kind) BETWEEN 1 AND 64), name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 255),
+ paused BOOLEAN NOT NULL DEFAULT 0 CHECK(paused IN (0,1)), version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
+ generation TEXT NOT NULL, config_ciphertext BLOB NOT NULL, config_hash TEXT NOT NULL,
+ configured_by TEXT NOT NULL, credential_id TEXT NOT NULL DEFAULT '', credential_scopes JSON NOT NULL DEFAULT '[]',
+ state JSON NOT NULL DEFAULT '{}' CHECK(json_valid(state) AND json_type(state)='object'),
+ last_attempt_at DATETIME, last_success_at DATETIME, error TEXT NOT NULL DEFAULT '', item_count INTEGER NOT NULL DEFAULT 0 CHECK(item_count>=0),
+ lease_token TEXT NOT NULL DEFAULT '', lease_until DATETIME, updated_at DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX listintegration_container_id_kind_config_hash ON list_integrations(container_id,kind,config_hash);
+CREATE TRIGGER list_integration_container BEFORE INSERT ON list_integrations BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.container_id AND kind='list' AND deleted_at IS NULL) THEN RAISE(ABORT,'integrations require a live list') END;
+END;
+CREATE TRIGGER list_integration_identity BEFORE UPDATE OF container_id,kind ON list_integrations BEGIN SELECT RAISE(ABORT,'integration identity is immutable'); END;
+CREATE TABLE integration_items (
+ id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
+ item_id TEXT NOT NULL UNIQUE REFERENCES resources(id) ON DELETE CASCADE,
+ integration_id TEXT REFERENCES list_integrations(id) ON DELETE SET NULL,
+ external_id TEXT NOT NULL CHECK(length(external_id) BETWEEN 1 AND 4096),
+ provider_kind TEXT NOT NULL CHECK(length(provider_kind) BETWEEN 1 AND 64),
+ managed_fields JSON NOT NULL DEFAULT '[]' CHECK(json_valid(managed_fields) AND json_type(managed_fields)='array')
+);
+CREATE UNIQUE INDEX integrationitem_integration_id_external_id ON integration_items(integration_id,external_id);
+CREATE TRIGGER integration_item_container BEFORE INSERT ON integration_items BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources r WHERE r.id=new.item_id AND r.kind='item' AND (new.integration_id IS NULL OR EXISTS(SELECT 1 FROM list_integrations i WHERE i.id=new.integration_id AND r.container_id=i.container_id AND i.kind=new.provider_kind))) THEN RAISE(ABORT,'integration item must belong to its integration list') END;
+END;
+CREATE TRIGGER integration_item_identity BEFORE UPDATE OF item_id,provider_kind,external_id ON integration_items BEGIN SELECT RAISE(ABORT,'integration item identity is immutable'); END;
 CREATE TABLE identity_preferences (id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, owner_type TEXT NOT NULL CHECK(owner_type IN ('user','organization')), owner_id TEXT NOT NULL CHECK(length(owner_id)<=255 AND (owner_type='user' AND owner_id<>'' OR owner_type='organization' AND owner_id='')), `values` JSON NOT NULL DEFAULT '{}' CHECK(json_valid(`values`) AND json_type(`values`)='object'), version INTEGER NOT NULL DEFAULT 1 CHECK(version>0));
 CREATE UNIQUE INDEX identitypreference_owner_type_owner_id ON identity_preferences(owner_type,owner_id);
 CREATE TRIGGER identity_preference_owner BEFORE INSERT ON identity_preferences WHEN new.owner_type='user' BEGIN
@@ -14,6 +43,14 @@ END;
 CREATE TRIGGER identity_preference_owner_immutable BEFORE UPDATE OF owner_type,owner_id ON identity_preferences BEGIN
  SELECT RAISE(ABORT,'preference owner is immutable');
 END;
+
+CREATE TABLE integration_revision_data (
+ id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
+ revision_id TEXT NOT NULL UNIQUE REFERENCES item_revisions(id) ON DELETE CASCADE,
+ provider_kind TEXT NOT NULL CHECK(length(provider_kind) BETWEEN 1 AND 64),
+ data JSON NOT NULL CHECK(json_valid(data) AND json_type(data)='object')
+);
+CREATE TRIGGER integration_revision_data_immutable BEFORE UPDATE ON integration_revision_data BEGIN SELECT RAISE(ABORT,'integration revision data is immutable'); END;
 
 CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NULL, `resource_id` text NULL, `subject` text NOT NULL, `action` text NOT NULL, entity_type TEXT NOT NULL CHECK(length(entity_type)>0), entity_id TEXT NULL, properties JSON NOT NULL DEFAULT '[]' CHECK(json_valid(properties) AND json_type(properties)='array'), trace_id TEXT NOT NULL CHECK(length(trace_id)>0), `details` json NOT NULL, PRIMARY KEY (`id`));
 CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL CHECK(content_type IN ('application/pdf','image/tiff','image/jpeg','image/png','image/webp')), languages TEXT NOT NULL DEFAULT '' CHECK(length(languages)<=191), `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);

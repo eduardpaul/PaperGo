@@ -77,7 +77,7 @@ func paths(in Options) (Options, error) {
 	}
 	equal := func(a, b string) bool { rel, e := filepath.Rel(a, b); return e == nil && rel == "." }
 	reserved := false
-	for _, suffix := range []string{"", "-wal", "-shm", "-journal", ".lease"} {
+	for _, suffix := range []string{"", "-wal", "-shm", "-journal", ".lease", ".integrations.key"} {
 		reserved = reserved || equal(in.ArchivePath, in.DatabasePath+suffix) || equal(in.BlobPath, in.DatabasePath+suffix)
 	}
 	if inside(in.DatabasePath, in.BlobPath) || inside(in.ArchivePath, in.BlobPath) || reserved || equal(in.DatabasePath, in.BlobPath+".lease") || equal(in.ArchivePath, in.BlobPath+".lease") {
@@ -152,6 +152,27 @@ func Create(ctx context.Context, in Options) (err error) {
 		return err
 	}
 	m := manifest{Format: format, CreatedAt: time.Now().UTC(), SchemaHash: migrations.SchemaHash(), Files: append([]fileEntry{{Path: "database.sqlite", Size: size, SHA256: hash}}, blobs...)}
+	keyPath := in.DatabasePath + ".integrations.key"
+	if _, e := os.Lstat(keyPath); e == nil {
+		keySize, keyHash, e := digest(ctx, keyPath)
+		if e != nil {
+			return e
+		}
+		if keySize != 32 {
+			return errors.New("invalid integration encryption key")
+		}
+		m.Files = append(m.Files, fileEntry{Path: "integrations.key", Size: keySize, SHA256: keyHash})
+	} else if !errors.Is(e, os.ErrNotExist) {
+		return e
+	} else {
+		var configured bool
+		if e = db.SQL.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM list_integrations)").Scan(&configured); e != nil {
+			return e
+		}
+		if configured {
+			return errors.New("integration encryption key is missing")
+		}
+	}
 	meta, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -175,7 +196,9 @@ func Create(ctx context.Context, in Options) (err error) {
 	}
 	for _, entry := range m.Files {
 		source := snapshot
-		if entry.Path != "database.sqlite" {
+		if entry.Path == "integrations.key" {
+			source = keyPath
+		} else if entry.Path != "database.sqlite" {
 			source = filepath.Join(in.BlobPath, strings.TrimPrefix(entry.Path, "blobs/"))
 		}
 		if err = archiveFile(ctx, tw, source, entry); err != nil {
@@ -360,7 +383,7 @@ func Restore(ctx context.Context, in Options) (err error) {
 		return err
 	}
 	defer release()
-	for _, target := range []string{in.DatabasePath, in.BlobPath, in.DatabasePath + "-wal", in.DatabasePath + "-shm", in.DatabasePath + "-journal"} {
+	for _, target := range []string{in.DatabasePath, in.BlobPath, in.DatabasePath + "-wal", in.DatabasePath + "-shm", in.DatabasePath + "-journal", in.DatabasePath + ".integrations.key"} {
 		info, e := os.Lstat(target)
 		if e != nil && !errors.Is(e, os.ErrNotExist) {
 			return e
@@ -431,7 +454,11 @@ func extract(ctx context.Context, archive, work, blobs string) error {
 		if _, duplicate := expected[entry.Path]; duplicate || entry.Size < 0 || !validDigest(entry.SHA256) {
 			return errors.New("invalid or duplicate archive file metadata")
 		}
-		if entry.Path != "database.sqlite" {
+		if entry.Path == "integrations.key" {
+			if entry.Size != 32 {
+				return errors.New("invalid integration encryption key")
+			}
+		} else if entry.Path != "database.sqlite" {
 			key := strings.TrimPrefix(entry.Path, "blobs/")
 			id, e := uuid.Parse(key)
 			if !strings.HasPrefix(entry.Path, "blobs/") || e != nil || id.String() != key {
@@ -458,7 +485,9 @@ func extract(ctx context.Context, archive, work, blobs string) error {
 		}
 		seen[header.Name] = true
 		target := filepath.Join(work, "database.sqlite")
-		if header.Name != "database.sqlite" {
+		if header.Name == "integrations.key" {
+			target = filepath.Join(work, "integrations.key")
+		} else if header.Name != "database.sqlite" {
 			target = filepath.Join(blobs, strings.TrimPrefix(header.Name, "blobs/"))
 		}
 		out, e := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
@@ -498,7 +527,7 @@ func extract(ctx context.Context, archive, work, blobs string) error {
 	}
 	want := []fileEntry{}
 	for _, entry := range m.Files {
-		if entry.Path != "database.sqlite" {
+		if entry.Path != "database.sqlite" && entry.Path != "integrations.key" {
 			want = append(want, entry)
 		}
 	}
@@ -539,7 +568,7 @@ func install(in Options, snapshot, blobs string) (err error) {
 			}
 		}
 	}()
-	for _, target := range []string{in.DatabasePath, in.DatabasePath + "-wal", in.DatabasePath + "-shm", in.DatabasePath + "-journal", in.BlobPath} {
+	for _, target := range []string{in.DatabasePath, in.DatabasePath + "-wal", in.DatabasePath + "-shm", in.DatabasePath + "-journal", in.BlobPath, in.DatabasePath + ".integrations.key"} {
 		if _, e := os.Lstat(target); errors.Is(e, os.ErrNotExist) {
 			continue
 		} else if e != nil {
@@ -559,5 +588,14 @@ func install(in Options, snapshot, blobs string) (err error) {
 		return err
 	}
 	installed = append(installed, in.BlobPath)
+	keySource := filepath.Join(filepath.Dir(snapshot), "integrations.key")
+	if _, e := os.Stat(keySource); e == nil {
+		if err = os.Rename(keySource, in.DatabasePath+".integrations.key"); err != nil {
+			return err
+		}
+		installed = append(installed, in.DatabasePath+".integrations.key")
+	} else if !errors.Is(e, os.ErrNotExist) {
+		return e
+	}
 	return nil
 }

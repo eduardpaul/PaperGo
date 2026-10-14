@@ -285,3 +285,23 @@ func TestInstallRollsBackBothDestinationsOnFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBackupRestoresIntegrationEncryptionKey(t *testing.T) {
+	in, _, _, _ := fixture(t)
+	key := bytes.Repeat([]byte{42}, 32)
+	if err := os.WriteFile(in.DatabasePath+".integrations.key", key, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Create(t.Context(), in); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	dest := Options{DatabasePath: filepath.Join(root, "restored.db"), BlobPath: filepath.Join(root, "blobs"), ArchivePath: in.ArchivePath}
+	if err := Restore(t.Context(), dest); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := os.ReadFile(dest.DatabasePath + ".integrations.key")
+	if err != nil || !bytes.Equal(restored, key) {
+		t.Fatal("key was not restored", err)
+	}
+}

@@ -10,10 +10,12 @@ require (
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/dbos-inc/dbos-transact-golang v1.6.0
 	github.com/ebitengine/purego v0.11.1
+	github.com/emersion/go-ical v0.0.0-20250609112844-439c63cef608
 	github.com/gen2brain/webp v0.6.4
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/uuid v1.6.0
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/teambition/rrule-go v1.8.2
 	golang.org/x/image v0.47.0
 	golang.org/x/oauth2 v0.28.0
 	golang.org/x/sys v0.49.0

@@ -15537,6 +15537,339 @@
           }
         }
       }
+    },
+    "/v1/resources/{id}/integrations": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listIntegrations",
+        "summary": "Read configuration and status of integrations on an ordinary list",
+        "description": "Requires list read access. Private configuration, provider state and credentials are omitted.",
+        "responses": {
+          "200": {
+            "description": "List integrations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ListIntegration"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createListIntegration",
+        "summary": "Configure an HTTPS iCalendar integration on a list",
+        "description": "Requires list Manage access and list.read/list.write scopes. Automatically attaches the Event content type without requiring contentType.read, queues a first refresh, and activates the workspace refresh workflow once. Same-list duplicate URLs are rejected; separate lists and sources have independent identities.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateListIntegration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created; first refresh queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListIntegration"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate configuration or integration limit reached"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/resources/{id}/integrations/{integrationID}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "integrationID",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateListIntegration",
+        "summary": "Rename, pause, resume or replace integration configuration",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Quoted integration configuration version."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateListIntegration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListIntegration"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Integration has an active refresh lease, or duplicate configuration"
+          },
+          "412": {
+            "description": "Integration version changed"
+          },
+          "428": {
+            "description": "If-Match required"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeListIntegration",
+        "summary": "Remove configuration, retaining its items as editable local content",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Quoted integration configuration version."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed; retained items detached"
+          },
+          "409": {
+            "description": "Integration has an active refresh lease"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/resources/{id}/integrations/{integrationID}/refresh": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "integrationID",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "refreshListIntegration",
+        "summary": "Queue a refresh of this integration only",
+        "description": "Requires list Manage and list.write; paused integrations must be resumed. The durable operation carries only the integration ID.",
+        "responses": {
+          "202": {
+            "description": "Refresh queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/integration": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "itemIntegration",
+        "summary": "Read item integration ownership and source-managed field keys",
+        "responses": {
+          "200": {
+            "description": "Ownership, or null integration_id and empty managed_fields for local items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemIntegration"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/resources/{id}/calendar/occurrences": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "calendarOccurrences",
+        "summary": "Query visible calendar occurrences with recurrence and moved exceptions",
+        "description": "Expands Event content in a range of at most 93 days, up to 10000 series and 10000 occurrences. Uses ordinary field filters, list permissions and head/published selection. Does not truncate on limits.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalendarQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Visible occurrences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CalendarOccurrence"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/resources/{id}/calendar/export": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "exportListCalendar",
+        "summary": "Export visible Event items as iCalendar",
+        "parameters": [
+          {
+            "name": "surface",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "head",
+                "published"
+              ],
+              "default": "auto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "iCalendar with distinct item-based UIDs and source recurrence/exception behavior",
+            "content": {
+              "text/calendar": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -21825,6 +22158,235 @@
           "state",
           "fresh",
           "created_at"
+        ]
+      },
+      "ListIntegration": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "container_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ical_https"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "item_count": {
+            "type": "integer"
+          },
+          "last_attempt_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_success_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "container_id",
+          "kind",
+          "name",
+          "paused",
+          "version"
+        ]
+      },
+      "CreateListIntegration": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "ical_https"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "configuration": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "writeOnly": true,
+                "description": "Public HTTPS iCalendar URL on port 443. Encrypted at rest; never returned."
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "additionalProperties": false,
+            "writeOnly": true,
+            "description": "Provider-owned private configuration. For ical_https, supply an HTTPS iCalendar URL."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "name",
+          "configuration"
+        ]
+      },
+      "UpdateListIntegration": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "reset": {
+            "type": "boolean",
+            "description": "Requires configuration. Detach existing replicas and start new external identities for a different feed."
+          },
+          "configuration": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "writeOnly": true
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "additionalProperties": false,
+            "writeOnly": true,
+            "description": "Provider-owned private configuration. For ical_https, supply an HTTPS iCalendar URL."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ItemIntegration": {
+        "type": "object",
+        "properties": {
+          "integration_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "managed_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "integration_id",
+          "managed_fields"
+        ]
+      },
+      "CalendarQuery": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ],
+            "default": "auto"
+          },
+          "query": {
+            "$ref": "#/components/schemas/QuerySpec"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to"
+        ]
+      },
+      "CalendarOccurrence": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "all_day": {
+            "type": "boolean"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "item": {
+            "$ref": "#/components/schemas/Resource"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "name",
+          "start",
+          "end",
+          "all_day",
+          "item"
         ]
       }
     }

@@ -89,6 +89,7 @@ export function BulkEditDialog({
 
 const operationKinds: Record<string, string> = {
   bulk_update: 'Field update on many items',
+  'integration.refresh': 'Refresh integration',
   field_index: 'Column index build',
 };
 

@@ -115,6 +115,7 @@ func (s *Service) runOperations(ctx context.Context) error {
 // bulk item. An operation error fails it; item errors are bulk results.
 func (s *Service) operationStep(ctx context.Context) (bool, error) {
 	var op *ent.Operation
+	var external func(context.Context, *Service, *ent.Operation) error
 	err := s.write(ctx, func(t *Service) error {
 		var e error
 		op, e = t.Client.Operation.Query().Where(operation.StatusEQ(operation.StatusPending)).Order(ent.Asc(operation.FieldCreatedAt), ent.Asc(operation.FieldID)).First(ctx)
@@ -145,6 +146,10 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 				return e
 			}
 		}
+		if handler.ExternalStep != nil {
+			external = handler.ExternalStep
+			return nil
+		}
 		previousState := operationCheckpoint(op)
 		if e = executeOperation(ctx, t, handler, op); e != nil {
 			return e
@@ -165,6 +170,12 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 		}
 		return nil
 	})
+	if err == nil && external != nil {
+		err = executeExternalOperation(ctx, s, external, op)
+		if errors.Is(err, ErrIntegrationBusy) {
+			return false, nil
+		}
+	}
 	if op == nil || err == nil || ctx.Err() != nil {
 		return op != nil, err
 	}

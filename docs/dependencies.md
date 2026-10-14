@@ -35,3 +35,5 @@ Web numeric transport, long tables and component tests use these direct packages
 | `@tanstack/react-virtual` | rendering only the visible rows of long list tables | MIT |
 | `@testing-library/react` | tests of rendered forms and user interactions | MIT |
 | `jsdom` | DOM environment for component tests | MIT |
+
+HTTPS iCalendar integrations use `github.com/emersion/go-ical` for RFC 5545 decoding/encoding and `github.com/teambition/rrule-go` for bounded recurrence expansion.

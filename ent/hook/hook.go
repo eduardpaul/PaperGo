@@ -236,6 +236,30 @@ func (f IdentityUserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityUserMutation", m)
 }
 
+// The IntegrationItemFunc type is an adapter to allow the use of ordinary
+// function as IntegrationItem mutator.
+type IntegrationItemFunc func(context.Context, *ent.IntegrationItemMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationItemMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationItemMutation", m)
+}
+
+// The IntegrationRevisionDataFunc type is an adapter to allow the use of ordinary
+// function as IntegrationRevisionData mutator.
+type IntegrationRevisionDataFunc func(context.Context, *ent.IntegrationRevisionDataMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationRevisionDataFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationRevisionDataMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationRevisionDataMutation", m)
+}
+
 // The ItemHistoryFunc type is an adapter to allow the use of ordinary
 // function as ItemHistory mutator.
 type ItemHistoryFunc func(context.Context, *ent.ItemHistoryMutation) (ent.Value, error)
@@ -270,6 +294,18 @@ func (f ItemSurfaceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ItemSurfaceMutation", m)
+}
+
+// The ListIntegrationFunc type is an adapter to allow the use of ordinary
+// function as ListIntegration mutator.
+type ListIntegrationFunc func(context.Context, *ent.ListIntegrationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ListIntegrationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ListIntegrationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ListIntegrationMutation", m)
 }
 
 // The ListViewFunc type is an adapter to allow the use of ordinary

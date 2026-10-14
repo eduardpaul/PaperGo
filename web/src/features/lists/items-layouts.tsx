@@ -317,6 +317,14 @@ export function ItemsCalendar({
     end: endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 }),
   }).map((date) => dateKey(date, 'yyyy-MM-dd'));
   const valid = !!dateField && ['date', 'datetime'].includes(dateField.type);
+  const eventCalendar = dateField?.key === 'event_start' || dateField?.key === 'event_start_date';
+  const from = new Date(Date.parse(`${days[0]}T00:00:00Z`) - 14 * 3_600_000).toISOString();
+  const to = new Date(Date.parse(`${days.at(-1)}T00:00:00Z`) + 38 * 3_600_000).toISOString();
+  const occurrences = useQuery({
+    queryKey: ['resources', collectionId, 'calendar-occurrences', from, to, view.query],
+    queryFn: async () => (await api<{ key: string; name: string; start: string; end: string; all_day: boolean; start_date?: string; item: Resource }[]>(`/v1/resources/${collectionId}/calendar/occurrences`, { method: 'POST', body: { from, to, query: view.query } })).data,
+    enabled: eventCalendar,
+  });
   const ranged = valid
     ? viewRowsRequest(
         collectionId,
@@ -328,7 +336,7 @@ export function ItemsCalendar({
   const items = useApiPages<Resource>(['resources', collectionId, 'calendar'], ranged?.path ?? '', {
     query: ranged?.query,
     body: ranged?.body,
-    enabled: valid,
+    enabled: valid && !eventCalendar,
   });
   // Custom date fields can be empty; created and modified dates never are.
   const undatedCall =
@@ -346,9 +354,22 @@ export function ItemsCalendar({
     if (hasNextPage && !isFetchingNextPage && loaded < calendarLimit) void fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, loaded, fetchNextPage]);
   if (!valid) return <Alert>This calendar needs a date grouping field. Choose one in Manage views.</Alert>;
-  const byDay = new Map<string, Resource[]>();
-  for (const item of items.items) {
-    const day = calendarDay(item, dateField, format.dayKey);
+  const byDay = new Map<string, (Resource & { occurrence_key?: string })[]>();
+  const visibleItems = eventCalendar ? (occurrences.data ?? []).map((o) => ({
+    ...o.item,
+    name: o.name,
+    occurrence_key: o.key,
+    values: {
+      ...o.item.values,
+      event_start: o.start,
+      event_all_day: o.all_day,
+      event_start_date: o.all_day ? o.start_date : format.dayKey(new Date(o.start)),
+    },
+  })) : items.items;
+  for (const item of visibleItems) {
+    const day = eventCalendar && item.values?.event_all_day === true
+      ? item.values.event_start_date as string | undefined
+      : calendarDay(item, dateField, format.dayKey);
     if (day) byDay.set(day, [...(byDay.get(day) ?? []), item]);
   }
   const inMonth = [...byDay.entries()].filter(([day]) => day.startsWith(cursor)).reduce((sum, [, list]) => sum + list.length, 0);
@@ -368,7 +389,7 @@ export function ItemsCalendar({
         </Button>
         <Button onClick={() => show(parseISO(`${today.slice(0, 7)}-01`))}>Today</Button>
         <span role="status" className="text-xs text-muted">
-          {items.isPending || (hasNextPage && loaded < calendarLimit)
+          {(eventCalendar ? occurrences.isPending : items.isPending || (hasNextPage && loaded < calendarLimit))
             ? 'Loading…'
             : hasNextPage
               ? `Showing the first ${format.number(loaded)} items of these weeks. Filter the view to see the rest.`
@@ -376,6 +397,7 @@ export function ItemsCalendar({
         </span>
       </div>
       {items.isError && <QueryFeedback query={items} />}
+      {eventCalendar && <QueryFeedback query={occurrences} />}
       <div className="overflow-auto rounded border bg-surface">
         <div className="grid min-w-[600px] grid-cols-7">
           {days.slice(0, 7).map((day) => (
@@ -395,7 +417,7 @@ export function ItemsCalendar({
                 <span className={`text-xs ${day === today ? 'font-bold text-accent' : ''}`}>{Number(day.slice(8))}</span>
                 <ul className="mt-1 grid gap-1">
                   {visible.map((item) => (
-                    <li key={item.id}>
+                    <li key={`${item.id}:${item.occurrence_key ?? ''}`}>
                       <button
                         type="button"
                         className="w-full truncate rounded px-1 text-left text-xs hover:bg-accent-soft"

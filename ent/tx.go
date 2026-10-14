@@ -52,12 +52,18 @@ type Tx struct {
 	IdentityRole *IdentityRoleClient
 	// IdentityUser is the client for interacting with the IdentityUser builders.
 	IdentityUser *IdentityUserClient
+	// IntegrationItem is the client for interacting with the IntegrationItem builders.
+	IntegrationItem *IntegrationItemClient
+	// IntegrationRevisionData is the client for interacting with the IntegrationRevisionData builders.
+	IntegrationRevisionData *IntegrationRevisionDataClient
 	// ItemHistory is the client for interacting with the ItemHistory builders.
 	ItemHistory *ItemHistoryClient
 	// ItemRevision is the client for interacting with the ItemRevision builders.
 	ItemRevision *ItemRevisionClient
 	// ItemSurface is the client for interacting with the ItemSurface builders.
 	ItemSurface *ItemSurfaceClient
+	// ListIntegration is the client for interacting with the ListIntegration builders.
+	ListIntegration *ListIntegrationClient
 	// ListView is the client for interacting with the ListView builders.
 	ListView *ListViewClient
 	// LiveChange is the client for interacting with the LiveChange builders.
@@ -260,9 +266,12 @@ func (tx *Tx) init() {
 	tx.IdentityRESTToken = NewIdentityRESTTokenClient(tx.config)
 	tx.IdentityRole = NewIdentityRoleClient(tx.config)
 	tx.IdentityUser = NewIdentityUserClient(tx.config)
+	tx.IntegrationItem = NewIntegrationItemClient(tx.config)
+	tx.IntegrationRevisionData = NewIntegrationRevisionDataClient(tx.config)
 	tx.ItemHistory = NewItemHistoryClient(tx.config)
 	tx.ItemRevision = NewItemRevisionClient(tx.config)
 	tx.ItemSurface = NewItemSurfaceClient(tx.config)
+	tx.ListIntegration = NewListIntegrationClient(tx.config)
 	tx.ListView = NewListViewClient(tx.config)
 	tx.LiveChange = NewLiveChangeClient(tx.config)
 	tx.Operation = NewOperationClient(tx.config)

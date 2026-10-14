@@ -63,6 +63,12 @@ type IdentityRole func(*sql.Selector)
 // IdentityUser is the predicate function for identityuser builders.
 type IdentityUser func(*sql.Selector)
 
+// IntegrationItem is the predicate function for integrationitem builders.
+type IntegrationItem func(*sql.Selector)
+
+// IntegrationRevisionData is the predicate function for integrationrevisiondata builders.
+type IntegrationRevisionData func(*sql.Selector)
+
 // ItemHistory is the predicate function for itemhistory builders.
 type ItemHistory func(*sql.Selector)
 
@@ -71,6 +77,9 @@ type ItemRevision func(*sql.Selector)
 
 // ItemSurface is the predicate function for itemsurface builders.
 type ItemSurface func(*sql.Selector)
+
+// ListIntegration is the predicate function for listintegration builders.
+type ListIntegration func(*sql.Selector)
 
 // ListView is the predicate function for listview builders.
 type ListView func(*sql.Selector)

@@ -23,6 +23,7 @@ export interface Operation {
     valid?: boolean;
     dry_run?: boolean;
     errors?: string[];
+    warnings?: string[];
     expires_at?: string;
   };
 }
@@ -84,6 +85,7 @@ export function OperationProgress({ id, label }: { id: string; label: string }) 
             </p>
           )}
           <ul>
+            {data.result.warnings?.map((warning, index) => <li key={`warning-${index}`}>{warning}</li>)}
             {data.result.errors?.map((error, index) => (
               <li key={index} className="text-danger">
                 {error}

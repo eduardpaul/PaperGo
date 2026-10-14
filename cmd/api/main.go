@@ -14,6 +14,7 @@ import (
 	"papergo/internal/database"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
+	"papergo/internal/integration"
 	"papergo/internal/ocr/paddle"
 	"papergo/internal/runner"
 	"papergo/internal/storage"
@@ -112,6 +113,15 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("initialize authentication: %w", err)
 	}
 	service := dms.NewService(db.SQL)
+	configuredIntegrations, err := service.Client.ListIntegration.Query().Exist(startup)
+	if err != nil {
+		return err
+	}
+	secrets, err := integration.LoadSecrets(c.DatabasePath+".integrations.key", !configuredIntegrations)
+	if err != nil {
+		return fmt.Errorf("configure list integration encryption: %w", err)
+	}
+	service.ConfigureIntegrations(secrets)
 	if err = service.Directory().Initialize(startup, c.AdminSubject, c.AdminGroup); err != nil {
 		return fmt.Errorf("initialize organization directory: %w", err)
 	}
@@ -129,6 +139,7 @@ func run(log *slog.Logger) error {
 		log.Info("ocr enabled", "engine", engine.Info().Engine, "library", c.OCRLibrary, "models", c.OCRModels)
 	}
 	workflows := &workflow.Service{DMS: service, Tools: tools}
+	service.OnIntegrationCreated(workflows.EnsureIntegrationWorkflow)
 	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, NodeID: c.NodeID, Retention: c.RunRetention, Logger: log}, db.SQL, service, workflows)
 	if err != nil {
 		return err

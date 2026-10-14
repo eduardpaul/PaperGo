@@ -67,6 +67,7 @@ func (a *API) Handler() http.Handler {
 	a.registerPortability(api)
 	a.registerIdentity(api)
 	a.registerFoundation(api)
+	a.registerIntegrations(api)
 	a.registerSmartFolders(api)
 	a.registerWorkflows(api)
 	a.registerTasks(api)
@@ -351,6 +352,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(409, "folder_not_empty", "The folder is not empty.")
 	case errors.Is(err, dms.ErrPreconditionFailed) || errors.Is(err, identity.ErrPreconditionFailed):
 		problem(412, "precondition_failed", "resource changed; read its current ETag before retrying")
+	case errors.Is(err, dms.ErrIntegrationBusy):
+		problem(409, "integration_busy", err.Error())
 	case errors.Is(err, dms.ErrConflict) || identity.IsConstraint(err):
 		problem(409, "conflict", "resource conflicts with existing state")
 	case errors.Is(err, storage.ErrUnsupportedFile):

@@ -193,8 +193,12 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	if err != nil {
 		return nil, err
 	}
-	rev, err := s.Client.ItemRevision.Create().SetItemID(r.ID).SetContainerID(c.ID).SetContentTypeID(*r.ContentTypeID).SetSchemaRevisionID(schema.ID).SetRevisionNumber(r.NextRevisionNumber).SetName(r.Name).SetTags(r.Tags).SetPayload(raw).SetCreatedBy(actor).SetNillableBlobID(blobID).Save(ctx)
+	builder := s.Client.ItemRevision.Create().SetItemID(r.ID).SetContainerID(c.ID).SetContentTypeID(*r.ContentTypeID).SetSchemaRevisionID(schema.ID).SetRevisionNumber(r.NextRevisionNumber).SetName(r.Name).SetTags(r.Tags).SetPayload(raw).SetCreatedBy(actor).SetNillableBlobID(blobID)
+	rev, err := builder.Save(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err = s.recordIntegrationData(ctx, rev, previousRevision); err != nil {
 		return nil, err
 	}
 	if err = s.Client.Resource.UpdateOneID(r.ID).SetHeadRevisionID(rev.ID).SetValues(r.Values).SetUpdatedBy(actor).AddNextRevisionNumber(1).Exec(ctx); err != nil {

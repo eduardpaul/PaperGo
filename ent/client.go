@@ -30,9 +30,12 @@ import (
 	"papergo/ent/identityresttoken"
 	"papergo/ent/identityrole"
 	"papergo/ent/identityuser"
+	"papergo/ent/integrationitem"
+	"papergo/ent/integrationrevisiondata"
 	"papergo/ent/itemhistory"
 	"papergo/ent/itemrevision"
 	"papergo/ent/itemsurface"
+	"papergo/ent/listintegration"
 	"papergo/ent/listview"
 	"papergo/ent/livechange"
 	"papergo/ent/operation"
@@ -111,12 +114,18 @@ type Client struct {
 	IdentityRole *IdentityRoleClient
 	// IdentityUser is the client for interacting with the IdentityUser builders.
 	IdentityUser *IdentityUserClient
+	// IntegrationItem is the client for interacting with the IntegrationItem builders.
+	IntegrationItem *IntegrationItemClient
+	// IntegrationRevisionData is the client for interacting with the IntegrationRevisionData builders.
+	IntegrationRevisionData *IntegrationRevisionDataClient
 	// ItemHistory is the client for interacting with the ItemHistory builders.
 	ItemHistory *ItemHistoryClient
 	// ItemRevision is the client for interacting with the ItemRevision builders.
 	ItemRevision *ItemRevisionClient
 	// ItemSurface is the client for interacting with the ItemSurface builders.
 	ItemSurface *ItemSurfaceClient
+	// ListIntegration is the client for interacting with the ListIntegration builders.
+	ListIntegration *ListIntegrationClient
 	// ListView is the client for interacting with the ListView builders.
 	ListView *ListViewClient
 	// LiveChange is the client for interacting with the LiveChange builders.
@@ -199,9 +208,12 @@ func (c *Client) init() {
 	c.IdentityRESTToken = NewIdentityRESTTokenClient(c.config)
 	c.IdentityRole = NewIdentityRoleClient(c.config)
 	c.IdentityUser = NewIdentityUserClient(c.config)
+	c.IntegrationItem = NewIntegrationItemClient(c.config)
+	c.IntegrationRevisionData = NewIntegrationRevisionDataClient(c.config)
 	c.ItemHistory = NewItemHistoryClient(c.config)
 	c.ItemRevision = NewItemRevisionClient(c.config)
 	c.ItemSurface = NewItemSurfaceClient(c.config)
+	c.ListIntegration = NewListIntegrationClient(c.config)
 	c.ListView = NewListViewClient(c.config)
 	c.LiveChange = NewLiveChangeClient(c.config)
 	c.Operation = NewOperationClient(c.config)
@@ -318,56 +330,59 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                  ctx,
-		config:               cfg,
-		AuditEvent:           NewAuditEventClient(cfg),
-		Blob:                 NewBlobClient(cfg),
-		BlobDeletion:         NewBlobDeletionClient(cfg),
-		BusinessKey:          NewBusinessKeyClient(cfg),
-		CollectionType:       NewCollectionTypeClient(cfg),
-		ContentType:          NewContentTypeClient(cfg),
-		DomainEvent:          NewDomainEventClient(cfg),
-		FieldDefinition:      NewFieldDefinitionClient(cfg),
-		FieldValue:           NewFieldValueClient(cfg),
-		Grant:                NewGrantClient(cfg),
-		GroupInbox:           NewGroupInboxClient(cfg),
-		IdentityAssignment:   NewIdentityAssignmentClient(cfg),
-		IdentityGroup:        NewIdentityGroupClient(cfg),
-		IdentityMembership:   NewIdentityMembershipClient(cfg),
-		IdentityOrganization: NewIdentityOrganizationClient(cfg),
-		IdentityPreference:   NewIdentityPreferenceClient(cfg),
-		IdentityRESTToken:    NewIdentityRESTTokenClient(cfg),
-		IdentityRole:         NewIdentityRoleClient(cfg),
-		IdentityUser:         NewIdentityUserClient(cfg),
-		ItemHistory:          NewItemHistoryClient(cfg),
-		ItemRevision:         NewItemRevisionClient(cfg),
-		ItemSurface:          NewItemSurfaceClient(cfg),
-		ListView:             NewListViewClient(cfg),
-		LiveChange:           NewLiveChangeClient(cfg),
-		Operation:            NewOperationClient(cfg),
-		OperationItem:        NewOperationItemClient(cfg),
-		Publication:          NewPublicationClient(cfg),
-		Relationship:         NewRelationshipClient(cfg),
-		RelationshipType:     NewRelationshipTypeClient(cfg),
-		Resource:             NewResourceClient(cfg),
-		SchemaRevision:       NewSchemaRevisionClient(cfg),
-		SchemaTemplate:       NewSchemaTemplateClient(cfg),
-		SmartFolder:          NewSmartFolderClient(cfg),
-		StagedFile:           NewStagedFileClient(cfg),
-		SyncState:            NewSyncStateClient(cfg),
-		SyncToken:            NewSyncTokenClient(cfg),
-		SyncView:             NewSyncViewClient(cfg),
-		Task:                 NewTaskClient(cfg),
-		TaskResponse:         NewTaskResponseClient(cfg),
-		Term:                 NewTermClient(cfg),
-		TermGroup:            NewTermGroupClient(cfg),
-		TermSet:              NewTermSetClient(cfg),
-		WebDAVCredential:     NewWebDAVCredentialClient(cfg),
-		Workflow:             NewWorkflowClient(cfg),
-		WorkflowRun:          NewWorkflowRunClient(cfg),
-		WorkflowRunItem:      NewWorkflowRunItemClient(cfg),
-		WorkflowTrigger:      NewWorkflowTriggerClient(cfg),
-		WorkflowVersion:      NewWorkflowVersionClient(cfg),
+		ctx:                     ctx,
+		config:                  cfg,
+		AuditEvent:              NewAuditEventClient(cfg),
+		Blob:                    NewBlobClient(cfg),
+		BlobDeletion:            NewBlobDeletionClient(cfg),
+		BusinessKey:             NewBusinessKeyClient(cfg),
+		CollectionType:          NewCollectionTypeClient(cfg),
+		ContentType:             NewContentTypeClient(cfg),
+		DomainEvent:             NewDomainEventClient(cfg),
+		FieldDefinition:         NewFieldDefinitionClient(cfg),
+		FieldValue:              NewFieldValueClient(cfg),
+		Grant:                   NewGrantClient(cfg),
+		GroupInbox:              NewGroupInboxClient(cfg),
+		IdentityAssignment:      NewIdentityAssignmentClient(cfg),
+		IdentityGroup:           NewIdentityGroupClient(cfg),
+		IdentityMembership:      NewIdentityMembershipClient(cfg),
+		IdentityOrganization:    NewIdentityOrganizationClient(cfg),
+		IdentityPreference:      NewIdentityPreferenceClient(cfg),
+		IdentityRESTToken:       NewIdentityRESTTokenClient(cfg),
+		IdentityRole:            NewIdentityRoleClient(cfg),
+		IdentityUser:            NewIdentityUserClient(cfg),
+		IntegrationItem:         NewIntegrationItemClient(cfg),
+		IntegrationRevisionData: NewIntegrationRevisionDataClient(cfg),
+		ItemHistory:             NewItemHistoryClient(cfg),
+		ItemRevision:            NewItemRevisionClient(cfg),
+		ItemSurface:             NewItemSurfaceClient(cfg),
+		ListIntegration:         NewListIntegrationClient(cfg),
+		ListView:                NewListViewClient(cfg),
+		LiveChange:              NewLiveChangeClient(cfg),
+		Operation:               NewOperationClient(cfg),
+		OperationItem:           NewOperationItemClient(cfg),
+		Publication:             NewPublicationClient(cfg),
+		Relationship:            NewRelationshipClient(cfg),
+		RelationshipType:        NewRelationshipTypeClient(cfg),
+		Resource:                NewResourceClient(cfg),
+		SchemaRevision:          NewSchemaRevisionClient(cfg),
+		SchemaTemplate:          NewSchemaTemplateClient(cfg),
+		SmartFolder:             NewSmartFolderClient(cfg),
+		StagedFile:              NewStagedFileClient(cfg),
+		SyncState:               NewSyncStateClient(cfg),
+		SyncToken:               NewSyncTokenClient(cfg),
+		SyncView:                NewSyncViewClient(cfg),
+		Task:                    NewTaskClient(cfg),
+		TaskResponse:            NewTaskResponseClient(cfg),
+		Term:                    NewTermClient(cfg),
+		TermGroup:               NewTermGroupClient(cfg),
+		TermSet:                 NewTermSetClient(cfg),
+		WebDAVCredential:        NewWebDAVCredentialClient(cfg),
+		Workflow:                NewWorkflowClient(cfg),
+		WorkflowRun:             NewWorkflowRunClient(cfg),
+		WorkflowRunItem:         NewWorkflowRunItemClient(cfg),
+		WorkflowTrigger:         NewWorkflowTriggerClient(cfg),
+		WorkflowVersion:         NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -385,56 +400,59 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                  ctx,
-		config:               cfg,
-		AuditEvent:           NewAuditEventClient(cfg),
-		Blob:                 NewBlobClient(cfg),
-		BlobDeletion:         NewBlobDeletionClient(cfg),
-		BusinessKey:          NewBusinessKeyClient(cfg),
-		CollectionType:       NewCollectionTypeClient(cfg),
-		ContentType:          NewContentTypeClient(cfg),
-		DomainEvent:          NewDomainEventClient(cfg),
-		FieldDefinition:      NewFieldDefinitionClient(cfg),
-		FieldValue:           NewFieldValueClient(cfg),
-		Grant:                NewGrantClient(cfg),
-		GroupInbox:           NewGroupInboxClient(cfg),
-		IdentityAssignment:   NewIdentityAssignmentClient(cfg),
-		IdentityGroup:        NewIdentityGroupClient(cfg),
-		IdentityMembership:   NewIdentityMembershipClient(cfg),
-		IdentityOrganization: NewIdentityOrganizationClient(cfg),
-		IdentityPreference:   NewIdentityPreferenceClient(cfg),
-		IdentityRESTToken:    NewIdentityRESTTokenClient(cfg),
-		IdentityRole:         NewIdentityRoleClient(cfg),
-		IdentityUser:         NewIdentityUserClient(cfg),
-		ItemHistory:          NewItemHistoryClient(cfg),
-		ItemRevision:         NewItemRevisionClient(cfg),
-		ItemSurface:          NewItemSurfaceClient(cfg),
-		ListView:             NewListViewClient(cfg),
-		LiveChange:           NewLiveChangeClient(cfg),
-		Operation:            NewOperationClient(cfg),
-		OperationItem:        NewOperationItemClient(cfg),
-		Publication:          NewPublicationClient(cfg),
-		Relationship:         NewRelationshipClient(cfg),
-		RelationshipType:     NewRelationshipTypeClient(cfg),
-		Resource:             NewResourceClient(cfg),
-		SchemaRevision:       NewSchemaRevisionClient(cfg),
-		SchemaTemplate:       NewSchemaTemplateClient(cfg),
-		SmartFolder:          NewSmartFolderClient(cfg),
-		StagedFile:           NewStagedFileClient(cfg),
-		SyncState:            NewSyncStateClient(cfg),
-		SyncToken:            NewSyncTokenClient(cfg),
-		SyncView:             NewSyncViewClient(cfg),
-		Task:                 NewTaskClient(cfg),
-		TaskResponse:         NewTaskResponseClient(cfg),
-		Term:                 NewTermClient(cfg),
-		TermGroup:            NewTermGroupClient(cfg),
-		TermSet:              NewTermSetClient(cfg),
-		WebDAVCredential:     NewWebDAVCredentialClient(cfg),
-		Workflow:             NewWorkflowClient(cfg),
-		WorkflowRun:          NewWorkflowRunClient(cfg),
-		WorkflowRunItem:      NewWorkflowRunItemClient(cfg),
-		WorkflowTrigger:      NewWorkflowTriggerClient(cfg),
-		WorkflowVersion:      NewWorkflowVersionClient(cfg),
+		ctx:                     ctx,
+		config:                  cfg,
+		AuditEvent:              NewAuditEventClient(cfg),
+		Blob:                    NewBlobClient(cfg),
+		BlobDeletion:            NewBlobDeletionClient(cfg),
+		BusinessKey:             NewBusinessKeyClient(cfg),
+		CollectionType:          NewCollectionTypeClient(cfg),
+		ContentType:             NewContentTypeClient(cfg),
+		DomainEvent:             NewDomainEventClient(cfg),
+		FieldDefinition:         NewFieldDefinitionClient(cfg),
+		FieldValue:              NewFieldValueClient(cfg),
+		Grant:                   NewGrantClient(cfg),
+		GroupInbox:              NewGroupInboxClient(cfg),
+		IdentityAssignment:      NewIdentityAssignmentClient(cfg),
+		IdentityGroup:           NewIdentityGroupClient(cfg),
+		IdentityMembership:      NewIdentityMembershipClient(cfg),
+		IdentityOrganization:    NewIdentityOrganizationClient(cfg),
+		IdentityPreference:      NewIdentityPreferenceClient(cfg),
+		IdentityRESTToken:       NewIdentityRESTTokenClient(cfg),
+		IdentityRole:            NewIdentityRoleClient(cfg),
+		IdentityUser:            NewIdentityUserClient(cfg),
+		IntegrationItem:         NewIntegrationItemClient(cfg),
+		IntegrationRevisionData: NewIntegrationRevisionDataClient(cfg),
+		ItemHistory:             NewItemHistoryClient(cfg),
+		ItemRevision:            NewItemRevisionClient(cfg),
+		ItemSurface:             NewItemSurfaceClient(cfg),
+		ListIntegration:         NewListIntegrationClient(cfg),
+		ListView:                NewListViewClient(cfg),
+		LiveChange:              NewLiveChangeClient(cfg),
+		Operation:               NewOperationClient(cfg),
+		OperationItem:           NewOperationItemClient(cfg),
+		Publication:             NewPublicationClient(cfg),
+		Relationship:            NewRelationshipClient(cfg),
+		RelationshipType:        NewRelationshipTypeClient(cfg),
+		Resource:                NewResourceClient(cfg),
+		SchemaRevision:          NewSchemaRevisionClient(cfg),
+		SchemaTemplate:          NewSchemaTemplateClient(cfg),
+		SmartFolder:             NewSmartFolderClient(cfg),
+		StagedFile:              NewStagedFileClient(cfg),
+		SyncState:               NewSyncStateClient(cfg),
+		SyncToken:               NewSyncTokenClient(cfg),
+		SyncView:                NewSyncViewClient(cfg),
+		Task:                    NewTaskClient(cfg),
+		TaskResponse:            NewTaskResponseClient(cfg),
+		Term:                    NewTermClient(cfg),
+		TermGroup:               NewTermGroupClient(cfg),
+		TermSet:                 NewTermSetClient(cfg),
+		WebDAVCredential:        NewWebDAVCredentialClient(cfg),
+		Workflow:                NewWorkflowClient(cfg),
+		WorkflowRun:             NewWorkflowRunClient(cfg),
+		WorkflowRunItem:         NewWorkflowRunItemClient(cfg),
+		WorkflowTrigger:         NewWorkflowTriggerClient(cfg),
+		WorkflowVersion:         NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -468,13 +486,13 @@ func (c *Client) Use(hooks ...Hook) {
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
 		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
 		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
-		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
-		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
-		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken,
-		c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup, c.TermSet,
-		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.IdentityRole, c.IdentityUser, c.IntegrationItem, c.IntegrationRevisionData,
+		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListIntegration, c.ListView,
+		c.LiveChange, c.Operation, c.OperationItem, c.Publication, c.Relationship,
+		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
+		c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken, c.SyncView, c.Task,
+		c.TaskResponse, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -488,13 +506,13 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
 		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
 		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
-		c.IdentityRole, c.IdentityUser, c.ItemHistory, c.ItemRevision, c.ItemSurface,
-		c.ListView, c.LiveChange, c.Operation, c.OperationItem, c.Publication,
-		c.Relationship, c.RelationshipType, c.Resource, c.SchemaRevision,
-		c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken,
-		c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup, c.TermSet,
-		c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.IdentityRole, c.IdentityUser, c.IntegrationItem, c.IntegrationRevisionData,
+		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListIntegration, c.ListView,
+		c.LiveChange, c.Operation, c.OperationItem, c.Publication, c.Relationship,
+		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
+		c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken, c.SyncView, c.Task,
+		c.TaskResponse, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -541,12 +559,18 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdentityRole.mutate(ctx, m)
 	case *IdentityUserMutation:
 		return c.IdentityUser.mutate(ctx, m)
+	case *IntegrationItemMutation:
+		return c.IntegrationItem.mutate(ctx, m)
+	case *IntegrationRevisionDataMutation:
+		return c.IntegrationRevisionData.mutate(ctx, m)
 	case *ItemHistoryMutation:
 		return c.ItemHistory.mutate(ctx, m)
 	case *ItemRevisionMutation:
 		return c.ItemRevision.mutate(ctx, m)
 	case *ItemSurfaceMutation:
 		return c.ItemSurface.mutate(ctx, m)
+	case *ListIntegrationMutation:
+		return c.ListIntegration.mutate(ctx, m)
 	case *ListViewMutation:
 		return c.ListView.mutate(ctx, m)
 	case *LiveChangeMutation:
@@ -3323,6 +3347,272 @@ func (c *IdentityUserClient) mutate(ctx context.Context, m *IdentityUserMutation
 	}
 }
 
+// IntegrationItemClient is a client for the IntegrationItem schema.
+type IntegrationItemClient struct {
+	config
+}
+
+// NewIntegrationItemClient returns a client for the IntegrationItem from the given config.
+func NewIntegrationItemClient(c config) *IntegrationItemClient {
+	return &IntegrationItemClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationitem.Hooks(f(g(h())))`.
+func (c *IntegrationItemClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationItem = append(c.hooks.IntegrationItem, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationitem.Intercept(f(g(h())))`.
+func (c *IntegrationItemClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationItem = append(c.inters.IntegrationItem, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationItem entity.
+func (c *IntegrationItemClient) Create() *IntegrationItemCreate {
+	mutation := newIntegrationItemMutation(c.config, OpCreate)
+	return &IntegrationItemCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationItem entities.
+func (c *IntegrationItemClient) CreateBulk(builders ...*IntegrationItemCreate) *IntegrationItemCreateBulk {
+	return &IntegrationItemCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationItemClient) MapCreateBulk(slice any, setFunc func(*IntegrationItemCreate, int)) *IntegrationItemCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationItemCreateBulk{err: fmt.Errorf("calling to IntegrationItemClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationItemCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationItemCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationItem.
+func (c *IntegrationItemClient) Update() *IntegrationItemUpdate {
+	mutation := newIntegrationItemMutation(c.config, OpUpdate)
+	return &IntegrationItemUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationItemClient) UpdateOne(_m *IntegrationItem) *IntegrationItemUpdateOne {
+	mutation := newIntegrationItemMutation(c.config, OpUpdateOne, withIntegrationItem(_m))
+	return &IntegrationItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationItemClient) UpdateOneID(id string) *IntegrationItemUpdateOne {
+	mutation := newIntegrationItemMutation(c.config, OpUpdateOne, withIntegrationItemID(id))
+	return &IntegrationItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationItem.
+func (c *IntegrationItemClient) Delete() *IntegrationItemDelete {
+	mutation := newIntegrationItemMutation(c.config, OpDelete)
+	return &IntegrationItemDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationItemClient) DeleteOne(_m *IntegrationItem) *IntegrationItemDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationItemClient) DeleteOneID(id string) *IntegrationItemDeleteOne {
+	builder := c.Delete().Where(integrationitem.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationItemDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationItem.
+func (c *IntegrationItemClient) Query() *IntegrationItemQuery {
+	return &IntegrationItemQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationItem},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationItem entity by its id.
+func (c *IntegrationItemClient) Get(ctx context.Context, id string) (*IntegrationItem, error) {
+	return c.Query().Where(integrationitem.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationItemClient) GetX(ctx context.Context, id string) *IntegrationItem {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationItemClient) Hooks() []Hook {
+	return c.hooks.IntegrationItem
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationItemClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationItem
+}
+
+func (c *IntegrationItemClient) mutate(ctx context.Context, m *IntegrationItemMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationItemCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationItemUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationItemDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationItem mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationRevisionDataClient is a client for the IntegrationRevisionData schema.
+type IntegrationRevisionDataClient struct {
+	config
+}
+
+// NewIntegrationRevisionDataClient returns a client for the IntegrationRevisionData from the given config.
+func NewIntegrationRevisionDataClient(c config) *IntegrationRevisionDataClient {
+	return &IntegrationRevisionDataClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationrevisiondata.Hooks(f(g(h())))`.
+func (c *IntegrationRevisionDataClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationRevisionData = append(c.hooks.IntegrationRevisionData, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationrevisiondata.Intercept(f(g(h())))`.
+func (c *IntegrationRevisionDataClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationRevisionData = append(c.inters.IntegrationRevisionData, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationRevisionData entity.
+func (c *IntegrationRevisionDataClient) Create() *IntegrationRevisionDataCreate {
+	mutation := newIntegrationRevisionDataMutation(c.config, OpCreate)
+	return &IntegrationRevisionDataCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationRevisionData entities.
+func (c *IntegrationRevisionDataClient) CreateBulk(builders ...*IntegrationRevisionDataCreate) *IntegrationRevisionDataCreateBulk {
+	return &IntegrationRevisionDataCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationRevisionDataClient) MapCreateBulk(slice any, setFunc func(*IntegrationRevisionDataCreate, int)) *IntegrationRevisionDataCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationRevisionDataCreateBulk{err: fmt.Errorf("calling to IntegrationRevisionDataClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationRevisionDataCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationRevisionDataCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationRevisionData.
+func (c *IntegrationRevisionDataClient) Update() *IntegrationRevisionDataUpdate {
+	mutation := newIntegrationRevisionDataMutation(c.config, OpUpdate)
+	return &IntegrationRevisionDataUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationRevisionDataClient) UpdateOne(_m *IntegrationRevisionData) *IntegrationRevisionDataUpdateOne {
+	mutation := newIntegrationRevisionDataMutation(c.config, OpUpdateOne, withIntegrationRevisionData(_m))
+	return &IntegrationRevisionDataUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationRevisionDataClient) UpdateOneID(id string) *IntegrationRevisionDataUpdateOne {
+	mutation := newIntegrationRevisionDataMutation(c.config, OpUpdateOne, withIntegrationRevisionDataID(id))
+	return &IntegrationRevisionDataUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationRevisionData.
+func (c *IntegrationRevisionDataClient) Delete() *IntegrationRevisionDataDelete {
+	mutation := newIntegrationRevisionDataMutation(c.config, OpDelete)
+	return &IntegrationRevisionDataDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationRevisionDataClient) DeleteOne(_m *IntegrationRevisionData) *IntegrationRevisionDataDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationRevisionDataClient) DeleteOneID(id string) *IntegrationRevisionDataDeleteOne {
+	builder := c.Delete().Where(integrationrevisiondata.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationRevisionDataDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationRevisionData.
+func (c *IntegrationRevisionDataClient) Query() *IntegrationRevisionDataQuery {
+	return &IntegrationRevisionDataQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationRevisionData},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationRevisionData entity by its id.
+func (c *IntegrationRevisionDataClient) Get(ctx context.Context, id string) (*IntegrationRevisionData, error) {
+	return c.Query().Where(integrationrevisiondata.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationRevisionDataClient) GetX(ctx context.Context, id string) *IntegrationRevisionData {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationRevisionDataClient) Hooks() []Hook {
+	return c.hooks.IntegrationRevisionData
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationRevisionDataClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationRevisionData
+}
+
+func (c *IntegrationRevisionDataClient) mutate(ctx context.Context, m *IntegrationRevisionDataMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationRevisionDataCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationRevisionDataUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationRevisionDataUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationRevisionDataDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationRevisionData mutation op: %q", m.Op())
+	}
+}
+
 // ItemHistoryClient is a client for the ItemHistory schema.
 type ItemHistoryClient struct {
 	config
@@ -3847,6 +4137,139 @@ func (c *ItemSurfaceClient) mutate(ctx context.Context, m *ItemSurfaceMutation) 
 		return (&ItemSurfaceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ItemSurface mutation op: %q", m.Op())
+	}
+}
+
+// ListIntegrationClient is a client for the ListIntegration schema.
+type ListIntegrationClient struct {
+	config
+}
+
+// NewListIntegrationClient returns a client for the ListIntegration from the given config.
+func NewListIntegrationClient(c config) *ListIntegrationClient {
+	return &ListIntegrationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `listintegration.Hooks(f(g(h())))`.
+func (c *ListIntegrationClient) Use(hooks ...Hook) {
+	c.hooks.ListIntegration = append(c.hooks.ListIntegration, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `listintegration.Intercept(f(g(h())))`.
+func (c *ListIntegrationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ListIntegration = append(c.inters.ListIntegration, interceptors...)
+}
+
+// Create returns a builder for creating a ListIntegration entity.
+func (c *ListIntegrationClient) Create() *ListIntegrationCreate {
+	mutation := newListIntegrationMutation(c.config, OpCreate)
+	return &ListIntegrationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ListIntegration entities.
+func (c *ListIntegrationClient) CreateBulk(builders ...*ListIntegrationCreate) *ListIntegrationCreateBulk {
+	return &ListIntegrationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ListIntegrationClient) MapCreateBulk(slice any, setFunc func(*ListIntegrationCreate, int)) *ListIntegrationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ListIntegrationCreateBulk{err: fmt.Errorf("calling to ListIntegrationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ListIntegrationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ListIntegrationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ListIntegration.
+func (c *ListIntegrationClient) Update() *ListIntegrationUpdate {
+	mutation := newListIntegrationMutation(c.config, OpUpdate)
+	return &ListIntegrationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ListIntegrationClient) UpdateOne(_m *ListIntegration) *ListIntegrationUpdateOne {
+	mutation := newListIntegrationMutation(c.config, OpUpdateOne, withListIntegration(_m))
+	return &ListIntegrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ListIntegrationClient) UpdateOneID(id string) *ListIntegrationUpdateOne {
+	mutation := newListIntegrationMutation(c.config, OpUpdateOne, withListIntegrationID(id))
+	return &ListIntegrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ListIntegration.
+func (c *ListIntegrationClient) Delete() *ListIntegrationDelete {
+	mutation := newListIntegrationMutation(c.config, OpDelete)
+	return &ListIntegrationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ListIntegrationClient) DeleteOne(_m *ListIntegration) *ListIntegrationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ListIntegrationClient) DeleteOneID(id string) *ListIntegrationDeleteOne {
+	builder := c.Delete().Where(listintegration.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ListIntegrationDeleteOne{builder}
+}
+
+// Query returns a query builder for ListIntegration.
+func (c *ListIntegrationClient) Query() *ListIntegrationQuery {
+	return &ListIntegrationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeListIntegration},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ListIntegration entity by its id.
+func (c *ListIntegrationClient) Get(ctx context.Context, id string) (*ListIntegration, error) {
+	return c.Query().Where(listintegration.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ListIntegrationClient) GetX(ctx context.Context, id string) *ListIntegration {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ListIntegrationClient) Hooks() []Hook {
+	return c.hooks.ListIntegration
+}
+
+// Interceptors returns the client interceptors.
+func (c *ListIntegrationClient) Interceptors() []Interceptor {
+	return c.inters.ListIntegration
+}
+
+func (c *ListIntegrationClient) mutate(ctx context.Context, m *ListIntegrationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ListIntegrationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ListIntegrationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ListIntegrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ListIntegrationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ListIntegration mutation op: %q", m.Op())
 	}
 }
 
@@ -7922,8 +8345,9 @@ type (
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
 		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
 		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
-		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
-		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,
+		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser,
+		IntegrationItem, IntegrationRevisionData, ItemHistory, ItemRevision,
+		ItemSurface, ListIntegration, ListView, LiveChange, Operation, OperationItem,
 		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
 		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task,
 		TaskResponse, Term, TermGroup, TermSet, WebDAVCredential, Workflow,
@@ -7933,8 +8357,9 @@ type (
 		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
 		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
 		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
-		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser, ItemHistory,
-		ItemRevision, ItemSurface, ListView, LiveChange, Operation, OperationItem,
+		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser,
+		IntegrationItem, IntegrationRevisionData, ItemHistory, ItemRevision,
+		ItemSurface, ListIntegration, ListView, LiveChange, Operation, OperationItem,
 		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
 		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task,
 		TaskResponse, Term, TermGroup, TermSet, WebDAVCredential, Workflow,

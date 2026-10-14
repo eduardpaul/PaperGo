@@ -261,6 +261,9 @@ function Details({
   onDirty: (dirty: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+  const ownership = useQuery({ queryKey: ['resources', item.id, 'integration'], queryFn: async () => (await api<{ integration_id: string | null; name?: string; managed_fields: string[] }>(`/v1/items/${item.id}/integration`)).data, enabled: item.kind === 'item' });
+  const managed = new Set(ownership.data?.managed_fields ?? []);
+  const ownershipPending = item.kind === 'item' && !ownership.data;
   const [name, setName] = useState(item.name);
   const [tags, setTags] = useState<string[]>(item.tags ?? []);
   const [contentTypeId, setContentTypeId] = useState(item.content_type_id ?? '');
@@ -300,11 +303,11 @@ function Details({
       <fieldset disabled={readOnly} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
         {readOnly && <p className="text-xs text-muted">You can read this item but not change it.</p>}
         <Label htmlFor="item-name">Name</Label>
-        <Input id="item-name" value={name} onChange={(event) => setName(event.target.value)} required />
+        <Input id="item-name" disabled={ownershipPending || managed.has('$name')} value={name} onChange={(event) => setName(event.target.value)} required />
         {contentTypes.length > 1 && item.kind === 'item' && (
           <>
             <Label htmlFor="item-type">Content type</Label>
-            <Select id="item-type" value={contentTypeId} onChange={(event) => setContentTypeId(event.target.value)}>
+            <Select id="item-type" disabled={ownershipPending || managed.has('$content_type')} value={contentTypeId} onChange={(event) => setContentTypeId(event.target.value)}>
               {!item.content_type_id && <option value="">Default</option>}
               {contentTypes.map((type) => (
                 <option key={type.id} value={type.id}>
@@ -314,13 +317,15 @@ function Details({
             </Select>
           </>
         )}
+        {ownership.data?.integration_id && <p className="text-xs text-muted">{ownership.data.name} manages the event details. Local metadata stays editable.</p>}
+        <QueryFeedback query={ownership} />
         {visible.map((field) => (
-          <FieldEditor
+          <fieldset key={field.id} disabled={ownershipPending || managed.has(field.key)}><FieldEditor
             key={field.id}
             field={field}
             value={values[field.key]}
             onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
-          />
+          />{managed.has(field.key) && <p className="text-xs text-muted">Managed by integration</p>}</fieldset>
         ))}
         <Label htmlFor="item-tags">Tags</Label>
         <TagInput id="item-tags" value={tags} onChange={setTags} workspaceId={item.workspace_id} disabled={readOnly} />

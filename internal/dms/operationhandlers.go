@@ -24,11 +24,15 @@ type OperationHandler struct {
 	Scope    string
 	Validate func(context.Context, *Service, string, string, json.RawMessage) error
 	Step     func(context.Context, *Service, *ent.Operation) error
-	Failed   func(context.Context, *Service, *ent.Operation, error) error
+	// ExternalStep runs outside the database writer, and owns its checkpoint
+	// transactions. Network integrations must never fetch in a write transaction.
+	ExternalStep func(context.Context, *Service, *ent.Operation) error
+	Failed       func(context.Context, *Service, *ent.Operation, error) error
 }
 
 func builtInOperationHandlers() map[string]OperationHandler {
 	return map[string]OperationHandler{
+		OperationKindIntegrationRefresh: integrationOperationHandler(),
 		OperationKindFieldIndex: {Step: func(ctx context.Context, s *Service, op *ent.Operation) error { return s.fieldIndexBatch(ctx, op) }, Failed: func(ctx context.Context, s *Service, op *ent.Operation, cause error) error {
 			err := s.Client.FieldDefinition.UpdateOneID(op.FieldID).SetIndexStatus(fielddefinition.IndexStatusFailed).Exec(ctx)
 			if ent.IsNotFound(err) {
@@ -46,7 +50,7 @@ func builtInOperationHandlers() map[string]OperationHandler {
 var operationKind = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,63}$`)
 
 func (s *Service) RegisterOperationHandler(kind string, handler OperationHandler) error {
-	if !operationKind.MatchString(kind) || handler.Step == nil || handler.Validate == nil {
+	if !operationKind.MatchString(kind) || (handler.Step == nil && handler.ExternalStep == nil) || handler.Validate == nil {
 		return invalid("operation handlers require a kind, validator and step")
 	}
 	known := false
@@ -191,6 +195,15 @@ func executeOperation(ctx context.Context, s *Service, handler OperationHandler,
 		}
 	}()
 	return handler.Step(ctx, s, op)
+}
+
+func executeExternalOperation(ctx context.Context, s *Service, step func(context.Context, *Service, *ent.Operation) error, op *ent.Operation) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = errors.New("operation handler panicked")
+		}
+	}()
+	return step(ctx, s, op)
 }
 
 func operationCheckpoint(op *ent.Operation) string {
