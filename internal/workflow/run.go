@@ -122,6 +122,8 @@ type loopFrame struct {
 	items []any
 	index int
 	as    string
+	// visits are the nodes visited before the loop, in the enclosing pass.
+	visits int
 }
 
 func (r *runState) loopVars(f loopFrame) {
@@ -132,20 +134,25 @@ func (r *runState) loopVars(f loopFrame) {
 func (r *runState) execute(ctx context.Context) (Result, error) {
 	flow := r.l.Definition.Flow
 	name := flow.Start
-	for visits := 1; ; visits++ {
-		if visits > MaxNodeVisits {
-			return r.finish(name, fmt.Errorf("the run visited more than %d nodes", MaxNodeVisits))
-		}
+	// visits counts the nodes of the current loop pass, or outside loops.
+	visits := 0
+	for total := 1; ; total++ {
 		node := flow.Nodes[name]
 		if node.Activity == forEachKey {
 			// Reaching a loop through a port starts it again, also when an
 			// outer loop's next pass reaches an inner one.
 			for i, f := range r.loops {
 				if f.node == name {
-					r.loops = r.loops[:i]
+					r.loops, visits = r.loops[:i], f.visits
 					break
 				}
 			}
+		}
+		if visits++; visits > MaxNodeVisits {
+			return r.finish(name, fmt.Errorf("the run visited more than %d nodes without starting a loop pass", MaxNodeVisits))
+		}
+		if total > MaxRunVisits {
+			return r.finish(name, fmt.Errorf("the run visited more than %d nodes", MaxRunVisits))
 		}
 		o, err := r.attempt(ctx, name, node)
 		if err != nil {
@@ -206,9 +213,10 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 			out, _ := o.Output.(map[string]any)
 			items, _ := out["items"].([]any)
 			as, _ := out["as"].(string)
-			f := loopFrame{node: name, items: items, as: as}
+			f := loopFrame{node: name, items: items, as: as, visits: visits}
 			r.loops = append(r.loops, f)
 			r.loopVars(f)
+			visits = 0
 		}
 		next, ok := node.Next[port]
 		if !ok && port != PortError {
@@ -220,11 +228,11 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 			f := &r.loops[len(r.loops)-1]
 			if f.index++; f.index < len(f.items) {
 				r.loopVars(*f)
-				next, ok = flow.Nodes[f.node].Next[portBody], true
+				next, ok, visits = flow.Nodes[f.node].Next[portBody], true, 0
 				break
 			}
 			loop := flow.Nodes[f.node]
-			r.loops = r.loops[:len(r.loops)-1]
+			r.loops, visits = r.loops[:len(r.loops)-1], f.visits
 			next, ok = loop.Next[PortDone]
 		}
 		if !ok {

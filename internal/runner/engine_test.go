@@ -1,6 +1,8 @@
 package runner
 
 import (
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +37,57 @@ func TestForEachRunsNestedLoopsInOrder(t *testing.T) {
 	vars := run.Result.(map[string]any)["variables"].(map[string]any)
 	if got, want := vars["log"], "1a0;1b1;2a0;2b1;end"; got != want {
 		t.Fatalf("loops logged %q, want %q", got, want)
+	}
+}
+
+// Loop passes have their own node budget: a loop over hundreds of items
+// with a body of several nodes runs to the end.
+func TestForEachPassesHaveTheirOwnNodeBudget(t *testing.T) {
+	f := setup(t)
+	items := make([]string, 600)
+	for i := range items {
+		items[i] = strconv.Itoa(i)
+	}
+	w := f.workflow(t, "Loop", `{
+		"triggers": [{"type": "manual"}],
+		"flow": {"start": "loop", "nodes": {
+			"loop": {"activity": "forEach", "inputs": {"items": [`+strings.Join(items, ",")+`], "as": "n"}, "next": {"body": "a"}},
+			"a": {"activity": "set_variable", "inputs": {"name": "last", "value": "{var:n}"}, "next": {"done": "b"}},
+			"b": {"activity": "set_variable", "inputs": {"name": "passes", "value": "{var:n_index}"}}
+		}}
+	}`)
+	if _, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{}); err != nil {
+		t.Fatal(err)
+	}
+	runs := f.runs(t, w.ID, 1)
+	run, err := f.r.Run(ctx, "alice", runs[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "completed" {
+		t.Fatalf("run %s: %s", run.Status, run.Error)
+	}
+	if got := run.Result.(map[string]any)["variables"].(map[string]any)["last"]; got != "599" && got != 599.0 {
+		t.Fatalf("last %v", got)
+	}
+}
+
+// A cycle without a loop still stops.
+func TestACycleStopsAtTheNodeLimit(t *testing.T) {
+	f := setup(t)
+	w := f.workflow(t, "Cycle", `{
+		"triggers": [{"type": "manual"}],
+		"flow": {"start": "a", "nodes": {
+			"a": {"activity": "set_variable", "inputs": {"name": "x", "value": "1"}, "next": {"done": "b"}},
+			"b": {"activity": "set_variable", "inputs": {"name": "x", "value": "2"}, "next": {"done": "a"}}
+		}}
+	}`)
+	if _, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{}); err != nil {
+		t.Fatal(err)
+	}
+	runs := f.runs(t, w.ID, 1)
+	if runs[0].Status != "failed" || !strings.Contains(runs[0].Error, "nodes") {
+		t.Fatalf("run %s: %s", runs[0].Status, runs[0].Error)
 	}
 }
 

@@ -134,7 +134,7 @@ After a node runs:
 - When a node fails, it is retried by its `retry` policy. After that, the run follows its `error` port (the node output is `{"error": "..."}`), or fails at that node.
 - `end` completes the run; `fail` fails it with a message.
 
-Node names use letters, digits, spaces, `_` and `-`. Every node must be reachable from `start`. Loops are allowed: a run visits at most 1,000 nodes, and a node's output is limited to 64 KB.
+Node names use letters, digits, spaces, `_` and `-`. Every node must be reachable from `start`. Cycles are allowed: a run visits at most 1,000 nodes outside [loop](#loops) passes and 1,000 in each pass, 100,000 in all, and a node's output is limited to 64 KB.
 
 ### Loops
 

@@ -36,7 +36,10 @@ const (
 	MaxTriggers    = 10
 	MaxNodes       = 100
 	MaxDepth       = 5
+	// MaxNodeVisits bounds the nodes a run visits outside forEach passes,
+	// and those of each pass; MaxRunVisits bounds them all.
 	MaxNodeVisits  = 1000
+	MaxRunVisits   = 100_000
 	MaxOutputBytes = 64 * 1024
 	MaxRetries     = 10
 	MaxRetryDelay  = 24 * time.Hour
