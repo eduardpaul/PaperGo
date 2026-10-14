@@ -47,7 +47,8 @@ type View struct {
 	Version     int                 `json:"version"`
 	// Responses are the answers so far, oldest first; only in single reads.
 	Responses []ResponseView `json:"responses,omitempty"`
-	// Answered tells the reader that they, or their group, already answered.
+	// Answered tells the reader that they, or their group, already answered;
+	// one assigned several ways may still answer for the others.
 	Answered bool `json:"answered,omitempty"`
 	// CanRespond tells the reader whether they may answer now.
 	CanRespond bool `json:"can_respond"`
@@ -235,14 +236,13 @@ func (s *Service) Get(ctx context.Context, subject, id string) (View, error) {
 
 func view(ctx context.Context, t *dms.Service, tk *ent.Task, subject string, groups []string, responses bool) (View, error) {
 	v := toView(tk)
-	entry, assigned := entryOf(tk, subject, groups)
-	if assigned {
-		answered, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(tk.ID), taskresponse.AssigneeEQ(entry)).Exist(ctx)
+	if entries := entriesOf(tk, subject, groups); len(entries) > 0 {
+		entry, answered, err := unanswered(ctx, t, tk.ID, entries)
 		if err != nil {
 			return View{}, err
 		}
 		v.Answered = answered
-		v.CanRespond = tk.Status == task.StatusOpen && !answered
+		v.CanRespond = tk.Status == task.StatusOpen && entry != ""
 	}
 	if responses {
 		rows, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(tk.ID)).Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)

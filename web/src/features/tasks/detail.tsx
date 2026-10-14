@@ -55,7 +55,7 @@ export function TaskDetail({ task }: { task: Task }) {
       </header>
       <Review task={task} />
       {task.can_respond && <ResponseForm task={task} />}
-      {task.answered && task.status === 'open' && (
+      {task.answered && !task.can_respond && task.status === 'open' && (
         <p className="text-[13px] text-muted">You answered; the task waits for the other assignees.</p>
       )}
       <Answers task={task} />

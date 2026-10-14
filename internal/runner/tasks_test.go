@@ -387,6 +387,38 @@ func TestAllModeTaskWithGroupsAndDecisiveOutcome(t *testing.T) {
 	}
 }
 
+// A person assigned by name and through a group answers once for each.
+func TestAnsweringForEachEntryOfAnAssignee(t *testing.T) {
+	f := setup(t)
+	if err := f.dms.SetWorkspaceMember(ctx, "alice", f.ws.ID, dms.WorkspaceMember{Subject: "carol", Role: "member"}); err != nil {
+		t.Fatal(err)
+	}
+	group, err := f.dms.Directory().SaveGroup(ctx, "alice", "", 0, identity.GroupInput{Name: "Legal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.dms.Directory().SetMember(ctx, "alice", group.ID, identity.Principal{Type: "user", ID: "carol"}, false); err != nil {
+		t.Fatal(err)
+	}
+	tk, err := f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: "Sign off", Assignees: []string{"carol", "group:" + group.ID}, Completion: tasks.CompletionAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, err := f.tasks().Respond(ctx, "carol", tk.ID, tasks.Response{Outcome: "done"}); err != nil || v.Status != "open" || !v.CanRespond {
+		t.Fatalf("after carol's first answer: %+v, %v", v, err)
+	}
+	if mine, _ := f.tasks().Mine(ctx, "carol", tasks.Filter{Waiting: true}); len(mine) != 1 {
+		t.Fatalf("the task no longer waits for carol's group: %v", mine)
+	}
+	v, err := f.tasks().Respond(ctx, "carol", tk.ID, tasks.Response{Outcome: "done"})
+	if err != nil || v.Status != "completed" || len(v.Responses) != 2 || v.Responses[1].Assignee != "group:"+group.ID || v.CanRespond || !v.Answered {
+		t.Fatalf("after carol's second answer: %+v, %v", v, err)
+	}
+	if _, err = f.tasks().Respond(ctx, "carol", tk.ID, tasks.Response{Outcome: "done"}); !errors.Is(err, dms.ErrConflict) {
+		t.Fatalf("answered a third time: %v", err)
+	}
+}
+
 func TestTaskWithoutWaitingAndTaskTriggers(t *testing.T) {
 	f := setup(t)
 	follow := f.workflow(t, "File it", `{

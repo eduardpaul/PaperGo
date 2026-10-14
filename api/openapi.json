@@ -14167,7 +14167,7 @@
       "get": {
         "summary": "List My Tasks",
         "operationId": "listMyTasks",
-        "description": "Tasks assigned to the caller or their groups that they may still see. waiting=true keeps the open ones they have not answered. Open tasks come by due time, others newest first.",
+        "description": "Tasks assigned to the caller or their groups that they may still see. waiting=true keeps the open ones they may still answer. Open tasks come by due time, others newest first.",
         "parameters": [
           {
             "name": "waiting",
@@ -14903,7 +14903,7 @@
       "post": {
         "summary": "Respond to Task",
         "operationId": "respondTask",
-        "description": "An assignee answers with one of the task's outcomes, its comment when the outcome asks for one, and the values of the task's form unless the outcome skips it. 409 when the task is no longer open, the caller or their group already answered, or the outcome acts on a review whose staged file was made from a file that is no longer current.",
+        "description": "An assignee answers with one of the task's outcomes, its comment when the outcome asks for one, and the values of the task's form unless the outcome skips it. 409 when the task is no longer open, the caller already answered for every entry they hold, or the outcome acts on a review whose staged file was made from a file that is no longer current.",
         "parameters": [
           {
             "name": "id",
@@ -21369,7 +21369,7 @@
           },
           "answered": {
             "type": "boolean",
-            "description": "The caller, or their group, already answered."
+            "description": "The caller, or their group, already answered; someone assigned several ways may still answer for the others (can_respond)."
           },
           "can_respond": {
             "type": "boolean",

@@ -492,18 +492,35 @@ func CanReview(ctx context.Context, t *dms.Service, subject, workspaceID, itemID
 	return nil
 }
 
-// entryOf returns the assignee entry subject answers a task for: their own,
-// else the first of their groups'. groups are subject's groups.
-func entryOf(tk *ent.Task, subject string, groups []string) (string, bool) {
-	if slices.Contains(tk.Assignees, subject) {
-		return subject, true
-	}
+// entriesOf returns the assignee entries subject answers a task for, in the
+// task's order: their own and their groups'. groups are subject's groups.
+// A person holding several entries answers once for each.
+func entriesOf(tk *ent.Task, subject string, groups []string) []string {
+	var out []string
 	for _, a := range tk.Assignees {
-		if g, ok := strings.CutPrefix(a, "group:"); ok && slices.Contains(groups, g) {
-			return a, true
+		if g, ok := strings.CutPrefix(a, "group:"); a == subject || ok && slices.Contains(groups, g) {
+			out = append(out, a)
 		}
 	}
-	return "", false
+	return out
+}
+
+// unanswered returns the first of entries that has not answered the task,
+// and whether one of them has.
+func unanswered(ctx context.Context, t *dms.Service, taskID string, entries []string) (next string, answered bool, err error) {
+	if len(entries) == 0 {
+		return "", false, nil
+	}
+	done, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(taskID), taskresponse.AssigneeIn(entries...)).Select(taskresponse.FieldAssignee).Strings(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	for _, e := range entries {
+		if !slices.Contains(done, e) {
+			return e, len(done) > 0, nil
+		}
+	}
+	return "", len(done) > 0, nil
 }
 
 func deref(s *string) string {
@@ -538,8 +555,8 @@ func Respond(ctx context.Context, t *dms.Service, subject, id string, r Response
 	if err != nil {
 		return nil, err
 	}
-	entry, assigned := entryOf(tk, subject, groups)
-	if !assigned || CanReview(ctx, t, subject, tk.WorkspaceID, deref(tk.ItemID)) != nil {
+	entries := entriesOf(tk, subject, groups)
+	if len(entries) == 0 || CanReview(ctx, t, subject, tk.WorkspaceID, deref(tk.ItemID)) != nil {
 		if visibleTo(ctx, t, tk, subject, groups) {
 			return nil, dms.ErrForbidden
 		}
@@ -548,12 +565,12 @@ func Respond(ctx context.Context, t *dms.Service, subject, id string, r Response
 	if tk.Status != task.StatusOpen {
 		return nil, fmt.Errorf("%w: the task is %s", dms.ErrConflict, tk.Status)
 	}
-	answered, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(id), taskresponse.AssigneeEQ(entry)).Exist(ctx)
+	entry, _, err := unanswered(ctx, t, id, entries)
 	if err != nil {
 		return nil, err
 	}
-	if answered {
-		return nil, fmt.Errorf("%w: %s already answered this task", dms.ErrConflict, entry)
+	if entry == "" {
+		return nil, fmt.Errorf("%w: you already answered this task", dms.ErrConflict)
 	}
 	i := slices.IndexFunc(tk.Outcomes, func(o model.TaskOutcome) bool { return o.Key == r.Outcome })
 	if i < 0 {
@@ -793,7 +810,7 @@ func manages(ctx context.Context, t *dms.Service, subject, workspaceID string) b
 // visibleTo reports whether subject may see a task: an assignee who may
 // review it, its creator, or an owner of its workspace.
 func visibleTo(ctx context.Context, t *dms.Service, tk *ent.Task, subject string, groups []string) bool {
-	if _, ok := entryOf(tk, subject, groups); ok && CanReview(ctx, t, subject, tk.WorkspaceID, deref(tk.ItemID)) == nil {
+	if len(entriesOf(tk, subject, groups)) > 0 && CanReview(ctx, t, subject, tk.WorkspaceID, deref(tk.ItemID)) == nil {
 		return true
 	}
 	if tk.CreatedBy == subject {
