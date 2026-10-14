@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { ClipboardCheck, Plus } from 'lucide-react';
 import { useState } from 'react';
@@ -46,8 +46,8 @@ function TasksPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const view = views.find((v) => v.value === search.view) ?? views[0];
-  const list = useQuery(myTasksQuery(view.filter));
-  const rows = list.data ?? [];
+  const list = useInfiniteQuery(myTasksQuery(view.filter));
+  const rows = list.data?.pages.flatMap((page) => page.value ?? []) ?? [];
   const selectedId = search.id ?? rows[0]?.id;
   const [creating, setCreating] = useState(false);
   return (
@@ -77,20 +77,27 @@ function TasksPage() {
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
-        <ul className="flex flex-col gap-1" aria-label="Tasks">
+        <div className="flex flex-col gap-3">
           {list.isLoading && <Skeleton className="h-16" />}
           {list.error && <Alert>{problemMessage(list.error)}</Alert>}
-          {rows.map((task) => (
-            <li key={task.id}>
-              <TaskRow
-                task={task}
-                selected={task.id === selectedId}
-                onSelect={() => navigate({ search: { view: view.value, id: task.id } })}
-              />
-            </li>
-          ))}
-        </ul>
-        {list.isFetched && rows.length === 0 ? (
+          <ul className="flex flex-col gap-1" aria-label="Tasks">
+            {rows.map((task) => (
+              <li key={task.id}>
+                <TaskRow
+                  task={task}
+                  selected={task.id === selectedId}
+                  onSelect={() => navigate({ search: { view: view.value, id: task.id } })}
+                />
+              </li>
+            ))}
+          </ul>
+          {list.hasNextPage && (
+            <Button disabled={list.isFetching} onClick={() => void list.fetchNextPage()}>
+              {list.isFetchingNextPage ? 'Loading…' : 'Load more'}
+            </Button>
+          )}
+        </div>
+        {list.isSuccess && rows.length === 0 ? (
           <EmptyState
             icon={ClipboardCheck}
             title={view.filter.waiting ? 'Nothing is waiting for you' : 'No tasks yet'}

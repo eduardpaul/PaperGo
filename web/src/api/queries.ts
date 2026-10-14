@@ -1,5 +1,5 @@
-import { queryOptions } from '@tanstack/react-query';
-import { api, isApiError, listOf } from './http';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
+import { api, continuation, isApiError, listOf } from './http';
 import { searchRequest, smartFolderQueryRequest } from './requests';
 import type {
   Task,
@@ -61,16 +61,18 @@ export interface TaskFilter {
 }
 
 export const myTasksQuery = (filter: TaskFilter) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: keys.tasks(filter),
-    queryFn: async () =>
-      listOf(
-        (
-          await api<Page<Task>>('/v1/me/tasks', {
-            query: { waiting: filter.waiting ? 'true' : undefined, status: filter.status, kind: filter.kind },
-          })
-        ).data,
-      ),
+    initialPageParam: '/v1/me/tasks',
+    queryFn: async ({ pageParam }) =>
+      (
+        await api<Page<Task>>(pageParam, {
+          query: pageParam === '/v1/me/tasks'
+            ? { waiting: filter.waiting ? 'true' : undefined, status: filter.status, kind: filter.kind }
+            : undefined,
+        })
+      ).data,
+    getNextPageParam: (page) => continuation(page['@odata.nextLink']) ?? undefined,
   });
 
 export const taskQuery = (id: string) =>

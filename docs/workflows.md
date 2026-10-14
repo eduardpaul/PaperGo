@@ -296,6 +296,8 @@ Saving a workflow checks that collections and relationship types belong to the w
 
 A task asks people to do something and say so: approve, confirm data, fill in a form. Workflows create tasks with the `task` and `approval` nodes; people create them with the API and the web app's Tasks screen. An approval is a task of kind `approval`. The model and its rules live in `internal/tasks`, shared by workflows, the API and PaperGo itself.
 
+The Tasks screen offers Waiting for me, Approvals, Completed and All views. **Load more** appends the next page of the selected view while keeping the current task open.
+
 ```json
 "check": {"activity": "task", "inputs": {
   "title": "Check the invoice data of {item:name}",

@@ -5,7 +5,9 @@ RUN npm ci
 COPY web ./
 RUN npm run build
 
-FROM golang:1.27.2-alpine AS build
+# purego uses a dynamic loader even with CGO disabled. Build on the same
+# glibc distribution as the runtime so the binary does not require musl.
+FROM golang:1.27.2-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -37,7 +39,7 @@ COPY --from=build /out/papergo-admin /papergo-admin
 COPY migrations /schema
 COPY --from=build --chown=65532:65532 /state /data
 USER 65532:65532
-ENV HTTP_ADDR=0.0.0.0:8080 DATABASE_PATH=/data/papergo.db BLOB_PATH=/data/blobs APP_ENV=production AUTH_MODE=oidc \
+ENV HTTP_ADDR=0.0.0.0:8080 DATABASE_PATH=/data/papergo.db BLOB_PATH=/data/blobs APP_ENV=production \
 	ONNXRUNTIME_LIB=/usr/lib/papergo/libonnxruntime.so OCR_MODELS=/usr/share/papergo/models/paddleocr
 EXPOSE 8080
 ENTRYPOINT ["/papergo"]
