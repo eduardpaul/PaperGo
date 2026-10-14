@@ -3,6 +3,7 @@ package runner
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -50,7 +51,7 @@ func TestApprovalParksAndResumes(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "waiting")
-	mine, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"})
+	mine, err := pageData(f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"}))
 	if err != nil || len(mine) != 1 {
 		t.Fatalf("bob's approvals: %v, %v", mine, err)
 	}
@@ -75,7 +76,7 @@ func TestApprovalParksAndResumes(t *testing.T) {
 	if got := f.head(t, item.ID).Values["note"]; got != "approved by bob: fine" {
 		t.Fatalf("note %v; run %+v", got, run)
 	}
-	if got, _ := f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"}); len(got) != 0 {
+	if got, _ := pageData(f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"})); len(got) != 0 {
 		t.Fatalf("open approvals after the decision: %v", got)
 	}
 }
@@ -93,7 +94,7 @@ func TestCancellingAWaitingRunClosesItsApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "cancelled")
-	all, err := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{})
+	all, err := pageData(f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{}))
 	if err != nil || len(all) != 1 || all[0].Status != "cancelled" {
 		t.Fatalf("approvals %v, %v", all, err)
 	}
@@ -113,7 +114,7 @@ func TestCancellingARunWhoseTaskCompletedStopsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "waiting")
-	mine, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"})
+	mine, err := pageData(f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"}))
 	if err != nil || len(mine) != 1 {
 		t.Fatalf("bob's tasks: %v, %v", mine, err)
 	}
@@ -153,7 +154,7 @@ func TestParkingIsNotAFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "waiting")
-	mine, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"})
+	mine, err := pageData(f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"}))
 	if err != nil || len(mine) != 1 {
 		t.Fatalf("bob's tasks: %v, %v", mine, err)
 	}
@@ -188,7 +189,7 @@ func TestDeletingTheItemCancelsAWaitingRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "cancelled")
-	all, err := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{})
+	all, err := pageData(f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{}))
 	if err != nil || len(all) != 1 || all[0].Status != "cancelled" {
 		t.Fatalf("tasks %v, %v", all, err)
 	}
@@ -274,7 +275,7 @@ func TestCustomTaskOutcomesFormsAndPrefill(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.status(t, ids[0], "waiting")
-		mine, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Waiting: true, ItemID: item.ID})
+		mine, err := pageData(f.tasks().Mine(ctx, "bob", tasks.Filter{Waiting: true, ItemID: item.ID}))
 		if err != nil || len(mine) != 1 {
 			t.Fatalf("bob's tasks: %v %v", mine, err)
 		}
@@ -308,10 +309,10 @@ func TestCustomTaskOutcomesFormsAndPrefill(t *testing.T) {
 	if _, err = f.tasks().Get(ctx, "carol", id); !errors.Is(err, dms.ErrNotFound) {
 		t.Errorf("a stranger read the task: %v", err)
 	}
-	if theirs, _ := f.tasks().Mine(ctx, "carol", tasks.Filter{}); len(theirs) != 0 {
+	if theirs, _ := pageData(f.tasks().Mine(ctx, "carol", tasks.Filter{})); len(theirs) != 0 {
 		t.Errorf("a stranger lists %v", theirs)
 	}
-	if _, err = f.tasks().Workspace(ctx, "bob", f.ws.ID, tasks.Filter{}); !errors.Is(err, dms.ErrForbidden) {
+	if _, err = pageData(f.tasks().Workspace(ctx, "bob", f.ws.ID, tasks.Filter{})); !errors.Is(err, dms.ErrForbidden) {
 		t.Errorf("a member listed the workspace's tasks: %v", err)
 	}
 	if _, err = f.tasks().Respond(ctx, "bob", id, tasks.Response{Outcome: "correct", Input: map[string]any{"total": 125}}); err != nil {
@@ -375,7 +376,7 @@ func TestAllModeTaskWithGroupsAndDecisiveOutcome(t *testing.T) {
 		}
 		f.status(t, ids[0], "waiting")
 		// carol sees the group's task.
-		mine, err := f.tasks().Mine(ctx, "carol", tasks.Filter{Waiting: true, ItemID: item.ID})
+		mine, err := pageData(f.tasks().Mine(ctx, "carol", tasks.Filter{Waiting: true, ItemID: item.ID}))
 		if err != nil || len(mine) != 1 || mine[0].Kind != "approval" {
 			t.Fatalf("carol's tasks: %v %v", mine, err)
 		}
@@ -390,7 +391,7 @@ func TestAllModeTaskWithGroupsAndDecisiveOutcome(t *testing.T) {
 	if _, err = f.tasks().Respond(ctx, "carol", id, tasks.Response{Outcome: "approved"}); !errors.Is(err, dms.ErrConflict) {
 		t.Fatalf("the group answered twice: %v", err)
 	}
-	if mine, _ := f.tasks().Mine(ctx, "carol", tasks.Filter{Waiting: true}); len(mine) != 0 {
+	if mine, _ := pageData(f.tasks().Mine(ctx, "carol", tasks.Filter{Waiting: true})); len(mine) != 0 {
 		t.Fatalf("an answered task still waits for carol: %v", mine)
 	}
 	f.status(t, run, "waiting")
@@ -437,7 +438,7 @@ func TestAnsweringForEachEntryOfAnAssignee(t *testing.T) {
 	if v, err := f.tasks().Respond(ctx, "carol", tk.ID, tasks.Response{Outcome: "done"}); err != nil || v.Status != "open" || !v.CanRespond {
 		t.Fatalf("after carol's first answer: %+v, %v", v, err)
 	}
-	if mine, _ := f.tasks().Mine(ctx, "carol", tasks.Filter{Waiting: true}); len(mine) != 1 {
+	if mine, _ := pageData(f.tasks().Mine(ctx, "carol", tasks.Filter{Waiting: true})); len(mine) != 1 {
 		t.Fatalf("the task no longer waits for carol's group: %v", mine)
 	}
 	v, err := f.tasks().Respond(ctx, "carol", tk.ID, tasks.Response{Outcome: "done"})
@@ -493,7 +494,7 @@ func TestReassigningATaskSomeoneCannotAnswer(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "waiting")
-	mine, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Waiting: true})
+	mine, err := pageData(f.tasks().Mine(ctx, "bob", tasks.Filter{Waiting: true}))
 	if err != nil || len(mine) != 1 {
 		t.Fatalf("bob's tasks: %v, %v", mine, err)
 	}
@@ -524,6 +525,44 @@ func TestReassigningATaskSomeoneCannotAnswer(t *testing.T) {
 	}
 }
 
+// A page of tasks waiting for someone holds only tasks they may still
+// answer, however many they already answered, and links to the next page.
+func TestWaitingTasksPageAfterAnsweredOnes(t *testing.T) {
+	f := setup(t)
+	var ids []string
+	for i := range 4 {
+		tk, err := f.tasks().Create(ctx, "alice", tasks.Input{WorkspaceID: f.ws.ID, Title: fmt.Sprintf("Task %d", i), Assignees: []string{"alice", "bob"}, Completion: tasks.CompletionAll})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, tk.ID)
+	}
+	// bob answered the two oldest; they still wait for alice.
+	for _, id := range ids[:2] {
+		if _, err := f.tasks().Respond(ctx, "bob", id, tasks.Response{Outcome: "done"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Waiting: true, Limit: 1})
+	if err != nil || len(page.Data) != 1 || page.Data[0].ID != ids[2] || page.NextCursor == "" {
+		t.Fatalf("first page %+v, %v", page, err)
+	}
+	page, err = f.tasks().Mine(ctx, "bob", tasks.Filter{Waiting: true, Limit: 1, After: page.NextCursor})
+	if err != nil || len(page.Data) != 1 || page.Data[0].ID != ids[3] || page.NextCursor != "" {
+		t.Fatalf("last page %+v, %v", page, err)
+	}
+	if page, err = f.tasks().Mine(ctx, "alice", tasks.Filter{Waiting: true}); err != nil || len(page.Data) != 4 {
+		t.Fatalf("alice's waiting tasks %+v, %v", page, err)
+	}
+	// Lost access hides them.
+	if err = f.dms.RemoveWorkspaceMember(ctx, "alice", f.ws.ID, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	if page, err = f.tasks().Mine(ctx, "bob", tasks.Filter{}); err != nil || len(page.Data) != 0 {
+		t.Fatalf("bob's tasks without access %+v, %v", page, err)
+	}
+}
+
 func TestTaskWithoutWaitingAndTaskTriggers(t *testing.T) {
 	f := setup(t)
 	follow := f.workflow(t, "File it", `{
@@ -542,7 +581,7 @@ func TestTaskWithoutWaitingAndTaskTriggers(t *testing.T) {
 	}
 	// The run does not wait; the task stays open.
 	f.status(t, ids[0], "completed")
-	mine, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Waiting: true})
+	mine, err := pageData(f.tasks().Mine(ctx, "bob", tasks.Filter{Waiting: true}))
 	if err != nil || len(mine) != 1 || mine[0].Outcomes[0].Key != "done" {
 		t.Fatalf("bob's tasks: %v %v", mine, err)
 	}
@@ -592,7 +631,7 @@ func TestTaskNodeValidationAndRecipients(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "completed")
-	all, err := f.tasks().Item(ctx, "alice", bobs.ID, tasks.Filter{})
+	all, err := pageData(f.tasks().Item(ctx, "alice", bobs.ID, tasks.Filter{}))
 	if err != nil || len(all) != 1 || all[0].Assignees[0] != "bob" || all[0].Status != "cancelled" {
 		t.Fatalf("tasks %+v %v", all, err)
 	}
@@ -641,7 +680,7 @@ func TestTaskCancelRefusesATaskARunWaitsFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "waiting")
-	open, err := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{Status: "open"})
+	open, err := pageData(f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{Status: "open"}))
 	if err != nil || len(open) != 1 {
 		t.Fatalf("open tasks %v %v", open, err)
 	}

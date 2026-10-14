@@ -427,7 +427,7 @@ Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default
 | GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `$skiptoken`, `$top`) |
 | GET | /v1/workflow-runs/{id} | A run with result and steps |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
-| GET | /v1/me/tasks | The caller's tasks (`waiting=true` for those still to answer, `status`, `kind`, `key`, `workspace_id`, `item_id`, `$top`); open ones by due time |
+| GET | /v1/me/tasks | The caller's tasks (`waiting=true` for those still to answer, `status`, `kind`, `key`, `workspace_id`, `item_id`, `$top`); open ones by due time, in pages linked by `@odata.nextLink` like the other task lists |
 | GET / POST | /v1/workspaces/{id}/tasks | A workspace's tasks, for its owners; create a task: `{"title", "description", "assignees", "item_id", "kind", "key", "completion", "outcomes", "input_schema", "values", "priority", "due_at"}` |
 | GET | /v1/items/{id}/tasks | The tasks about an item the caller may see |
 | GET | /v1/tasks/{id} | A task with its answers, `can_respond` and `answered` |

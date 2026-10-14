@@ -125,6 +125,9 @@ func setup(t testing.TB) *fixture {
 
 func (f *fixture) tasks() *tasks.Service { return &tasks.Service{DMS: f.dms} }
 
+// data returns a page's tasks.
+func pageData(p dms.Page[tasks.View], err error) ([]tasks.View, error) { return p.Data, err }
+
 func (f *fixture) workflow(t testing.TB, name string, def string) workflow.Workflow {
 	t.Helper()
 	def = strings.ReplaceAll(def, "$LIST", f.list.ID)

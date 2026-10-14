@@ -3,6 +3,8 @@ package tasks
 import (
 	"context"
 	"encoding/json"
+	"slices"
+	"strconv"
 	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
@@ -83,14 +85,21 @@ type Filter struct {
 	Key         string
 	WorkspaceID string
 	ItemID      string
-	// Waiting keeps the open tasks the reader still has to answer.
+	// Waiting keeps the open tasks the reader may still answer.
 	Waiting bool
 	Limit   int
+	// After continues from a previous page's NextCursor.
+	After string
 }
 
-func (f Filter) apply(q *ent.TaskQuery) (*ent.TaskQuery, error) {
+// maxScans bounds the rows a page reads past tasks the reader cannot see;
+// a page cut short still links to the next.
+const maxScans = 10
+
+func (f Filter) apply(q *ent.TaskQuery, subject string, groups []string) (*ent.TaskQuery, error) {
 	if f.Waiting {
 		f.Status = string(task.StatusOpen)
+		q.Where(waitingFor(subject, groups))
 	}
 	if f.Status != "" {
 		if task.StatusValidator(task.Status(f.Status)) != nil {
@@ -113,15 +122,116 @@ func (f Filter) apply(q *ent.TaskQuery) (*ent.TaskQuery, error) {
 	if f.ItemID != "" {
 		q.Where(task.ItemIDEQ(f.ItemID))
 	}
+	if f.Status == string(task.StatusOpen) {
+		// Open tasks by due time, those without one last, then oldest first.
+		return q.Order(task.ByDueAt(entsql.OrderNullsLast()), task.ByCreatedAt(), task.ByID()), nil
+	}
+	return q.Order(ent.Desc(task.FieldCreatedAt), ent.Desc(task.FieldID)), nil
+}
+
+// page reads a page of the tasks q selects, keeping those visible says the
+// reader may see (all when visible is nil). The cursor counts the rows read.
+func page(ctx context.Context, t *dms.Service, q *ent.TaskQuery, f Filter, subject string, groups []string,
+	visible func([]*ent.Task) (map[string]bool, error)) (dms.Page[View], error) {
 	limit := f.Limit
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	if f.Status == string(task.StatusOpen) {
-		// Open tasks by due time, those without one last, then oldest first.
-		return q.Order(task.ByDueAt(entsql.OrderNullsLast()), task.ByCreatedAt(), task.ByID()).Limit(limit), nil
+	offset := 0
+	if f.After != "" {
+		n, err := strconv.Atoi(f.After)
+		if err != nil || n < 0 {
+			return dms.Page[View]{}, dms.Invalid("$skiptoken is not a cursor of this list")
+		}
+		offset = n
 	}
-	return q.Order(ent.Desc(task.FieldCreatedAt), ent.Desc(task.FieldID)).Limit(limit), nil
+	out := dms.Page[View]{Data: []View{}}
+	for scans := 1; ; scans++ {
+		rows, err := q.Clone().Offset(offset).Limit(limit + 1).All(ctx)
+		if err != nil {
+			return out, err
+		}
+		more := len(rows) > limit
+		if more {
+			rows = rows[:limit]
+		}
+		var keep map[string]bool
+		if visible != nil {
+			if keep, err = visible(rows); err != nil {
+				return out, err
+			}
+		}
+		answered, err := answersOf(ctx, t, rows)
+		if err != nil {
+			return out, err
+		}
+		for i, tk := range rows {
+			if keep != nil && !keep[tk.ID] {
+				continue
+			}
+			if len(out.Data) == limit {
+				out.NextCursor = strconv.Itoa(offset + i)
+				return out, nil
+			}
+			out.Data = append(out.Data, viewOf(tk, subject, groups, answered[tk.ID]))
+		}
+		offset += len(rows)
+		if !more {
+			return out, nil
+		}
+		if len(out.Data) == limit || scans == maxScans {
+			out.NextCursor = strconv.Itoa(offset)
+			return out, nil
+		}
+	}
+}
+
+// answersOf returns the entries that answered each task.
+func answersOf(ctx context.Context, t *dms.Service, rows []*ent.Task) (map[string][]string, error) {
+	out := map[string][]string{}
+	if len(rows) == 0 {
+		return out, nil
+	}
+	ids := make([]string, len(rows))
+	for i, tk := range rows {
+		ids[i] = tk.ID
+	}
+	var answers []struct {
+		TaskID   string `json:"task_id"`
+		Assignee string `json:"assignee"`
+	}
+	if err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDIn(ids...)).Select(taskresponse.FieldTaskID, taskresponse.FieldAssignee).Scan(ctx, &answers); err != nil {
+		return nil, err
+	}
+	for _, a := range answers {
+		out[a.TaskID] = append(out[a.TaskID], a.Assignee)
+	}
+	return out, nil
+}
+
+// reviewable reports which tasks subject may still review, as CanReview
+// does for each, in two queries.
+func reviewable(ctx context.Context, t *dms.Service, subject string, rows []*ent.Task) (map[string]bool, error) {
+	var workspaces, items []string
+	for _, tk := range rows {
+		workspaces = append(workspaces, tk.WorkspaceID)
+		if tk.ItemID != nil {
+			items = append(items, *tk.ItemID)
+		}
+	}
+	readable, err := t.AuthorizeMany(ctx, subject, "read", workspaces)
+	if err != nil {
+		return nil, err
+	}
+	drafts, err := t.AuthorizeMany(ctx, subject, "read_draft", items)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, tk := range rows {
+		out[tk.ID] = readable[tk.WorkspaceID] && (tk.ItemID == nil || drafts[*tk.ItemID])
+	}
+	return out, nil
 }
 
 // Service reads and writes tasks for the API, each call in its own
@@ -130,90 +240,72 @@ type Service struct {
 	DMS *dms.Service
 }
 
-// Mine lists the tasks assigned to subject or their groups.
-func (s *Service) Mine(ctx context.Context, subject string, f Filter) ([]View, error) {
-	return dms.Read(ctx, s.DMS, func(t *dms.Service) ([]View, error) {
+// Mine lists the tasks assigned to subject or their groups. Lost access
+// hides a task without changing it.
+func (s *Service) Mine(ctx context.Context, subject string, f Filter) (dms.Page[View], error) {
+	return dms.Read(ctx, s.DMS, func(t *dms.Service) (dms.Page[View], error) {
 		groups, err := t.GroupIDs(ctx, subject)
 		if err != nil {
-			return nil, err
+			return dms.Page[View]{}, err
 		}
-		q, err := f.apply(t.Client.Task.Query().Where(assignedTo(subject, groups)))
+		q, err := f.apply(t.Client.Task.Query().Where(assignedTo(subject, groups)), subject, groups)
 		if err != nil {
-			return nil, err
+			return dms.Page[View]{}, err
 		}
-		rows, err := q.All(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out := make([]View, 0, len(rows))
-		for _, tk := range rows {
-			// Lost access hides a task without changing it.
-			if CanReview(ctx, t, subject, tk.WorkspaceID, deref(tk.ItemID)) != nil {
-				continue
-			}
-			v, err := view(ctx, t, tk, subject, groups, false)
-			if err != nil {
-				return nil, err
-			}
-			if f.Waiting && !v.CanRespond {
-				continue
-			}
-			out = append(out, v)
-		}
-		return out, nil
+		return page(ctx, t, q, f, subject, groups, func(rows []*ent.Task) (map[string]bool, error) { return reviewable(ctx, t, subject, rows) })
 	})
 }
 
 // Workspace lists a workspace's tasks to its owners.
-func (s *Service) Workspace(ctx context.Context, subject, workspaceID string, f Filter) ([]View, error) {
-	return dms.Read(ctx, s.DMS, func(t *dms.Service) ([]View, error) {
+func (s *Service) Workspace(ctx context.Context, subject, workspaceID string, f Filter) (dms.Page[View], error) {
+	return dms.Read(ctx, s.DMS, func(t *dms.Service) (dms.Page[View], error) {
 		if !manages(ctx, t, subject, workspaceID) {
 			if _, err := t.Authorize(ctx, subject, workspaceID, "read"); err != nil {
-				return nil, err
+				return dms.Page[View]{}, err
 			}
-			return nil, dms.ErrForbidden
+			return dms.Page[View]{}, dms.ErrForbidden
+		}
+		groups, err := t.GroupIDs(ctx, subject)
+		if err != nil {
+			return dms.Page[View]{}, err
 		}
 		f.WorkspaceID = workspaceID
-		return list(ctx, t, subject, f, false)
+		q, err := f.apply(t.Client.Task.Query(), subject, groups)
+		if err != nil {
+			return dms.Page[View]{}, err
+		}
+		return page(ctx, t, q, f, subject, groups, nil)
 	})
 }
 
-// Item lists the tasks about an item that subject may see.
-func (s *Service) Item(ctx context.Context, subject, itemID string, f Filter) ([]View, error) {
-	return dms.Read(ctx, s.DMS, func(t *dms.Service) ([]View, error) {
-		if _, err := t.Authorize(ctx, subject, itemID, "read_draft"); err != nil {
-			return nil, err
+// Item lists the tasks about an item that subject may see: those assigned
+// to them, those they created, or all to the workspace's owners.
+func (s *Service) Item(ctx context.Context, subject, itemID string, f Filter) (dms.Page[View], error) {
+	return dms.Read(ctx, s.DMS, func(t *dms.Service) (dms.Page[View], error) {
+		item, err := t.Authorize(ctx, subject, itemID, "read_draft")
+		if err != nil {
+			return dms.Page[View]{}, err
+		}
+		groups, err := t.GroupIDs(ctx, subject)
+		if err != nil {
+			return dms.Page[View]{}, err
 		}
 		f.ItemID = itemID
-		return list(ctx, t, subject, f, true)
-	})
-}
-
-func list(ctx context.Context, t *dms.Service, subject string, f Filter, check bool) ([]View, error) {
-	groups, err := t.GroupIDs(ctx, subject)
-	if err != nil {
-		return nil, err
-	}
-	q, err := f.apply(t.Client.Task.Query())
-	if err != nil {
-		return nil, err
-	}
-	rows, err := q.All(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]View, 0, len(rows))
-	for _, tk := range rows {
-		if check && !visibleTo(ctx, t, tk, subject, groups) {
-			continue
-		}
-		v, err := view(ctx, t, tk, subject, groups, false)
+		q, err := f.apply(t.Client.Task.Query(), subject, groups)
 		if err != nil {
-			return nil, err
+			return dms.Page[View]{}, err
 		}
-		out = append(out, v)
-	}
-	return out, nil
+		owner := manages(ctx, t, subject, item.WorkspaceID)
+		_, err = t.Authorize(ctx, subject, item.WorkspaceID, "read")
+		member := err == nil
+		return page(ctx, t, q, f, subject, groups, func(rows []*ent.Task) (map[string]bool, error) {
+			out := map[string]bool{}
+			for _, tk := range rows {
+				out[tk.ID] = owner || member && (tk.CreatedBy == subject || len(entriesOf(tk, subject, groups)) > 0)
+			}
+			return out, nil
+		})
+	})
 }
 
 // Get returns a task with its responses to whoever may see it.
@@ -233,30 +325,38 @@ func (s *Service) Get(ctx context.Context, subject, id string) (View, error) {
 		if !visibleTo(ctx, t, tk, subject, groups) {
 			return View{}, dms.ErrNotFound
 		}
-		return view(ctx, t, tk, subject, groups, true)
+		return view(ctx, t, tk, subject, groups)
 	})
 }
 
-func view(ctx context.Context, t *dms.Service, tk *ent.Task, subject string, groups []string, responses bool) (View, error) {
+// viewOf shows a task to subject, given the entries that answered it.
+func viewOf(tk *ent.Task, subject string, groups []string, answered []string) View {
 	v := toView(tk)
-	if entries := entriesOf(tk, subject, groups); len(entries) > 0 {
-		entry, answered, err := unanswered(ctx, t, tk.ID, entries)
-		if err != nil {
-			return View{}, err
+	for _, e := range entriesOf(tk, subject, groups) {
+		if slices.Contains(answered, e) {
+			v.Answered = true
+		} else if tk.Status == task.StatusOpen {
+			v.CanRespond = true
 		}
-		v.Answered = answered
-		v.CanRespond = tk.Status == task.StatusOpen && entry != ""
 	}
-	if responses {
-		v.CanReassign = tk.Status == task.StatusOpen && (tk.CreatedBy == subject && tk.Source != task.SourceWorkflow || manages(ctx, t, subject, tk.WorkspaceID))
-		rows, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(tk.ID)).Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)
-		if err != nil {
-			return View{}, err
-		}
-		v.Responses = make([]ResponseView, len(rows))
-		for i, r := range rows {
-			v.Responses[i] = ResponseView{Subject: r.Subject, Assignee: r.Assignee, Outcome: r.Outcome, Comment: r.Comment, Input: r.Input, CreatedAt: r.CreatedAt}
-		}
+	return v
+}
+
+// view shows one task to subject with its responses.
+func view(ctx context.Context, t *dms.Service, tk *ent.Task, subject string, groups []string) (View, error) {
+	rows, err := t.Client.TaskResponse.Query().Where(taskresponse.TaskIDEQ(tk.ID)).Order(ent.Asc(taskresponse.FieldCreatedAt), ent.Asc(taskresponse.FieldID)).All(ctx)
+	if err != nil {
+		return View{}, err
+	}
+	answered := make([]string, len(rows))
+	for i, r := range rows {
+		answered[i] = r.Assignee
+	}
+	v := viewOf(tk, subject, groups, answered)
+	v.CanReassign = tk.Status == task.StatusOpen && (tk.CreatedBy == subject && tk.Source != task.SourceWorkflow || manages(ctx, t, subject, tk.WorkspaceID))
+	v.Responses = make([]ResponseView, len(rows))
+	for i, r := range rows {
+		v.Responses[i] = ResponseView{Subject: r.Subject, Assignee: r.Assignee, Outcome: r.Outcome, Comment: r.Comment, Input: r.Input, CreatedAt: r.CreatedAt}
 	}
 	return v, nil
 }
@@ -270,7 +370,7 @@ func (s *Service) Create(ctx context.Context, subject string, in Input) (View, e
 		if err != nil {
 			return err
 		}
-		out, err = view(ctx, t, tk, subject, nil, true)
+		out, err = view(ctx, t, tk, subject, nil)
 		return err
 	})
 	return out, err
@@ -288,7 +388,7 @@ func (s *Service) Respond(ctx context.Context, subject, id string, r Response) (
 		if err != nil {
 			return err
 		}
-		out, err = view(ctx, t, tk, subject, groups, true)
+		out, err = view(ctx, t, tk, subject, groups)
 		return err
 	})
 	return out, err
@@ -302,7 +402,7 @@ func (s *Service) Reassign(ctx context.Context, subject, id string, assignees []
 		if err != nil {
 			return err
 		}
-		out, err = view(ctx, t, tk, subject, nil, true)
+		out, err = view(ctx, t, tk, subject, nil)
 		return err
 	})
 	return out, err
@@ -316,7 +416,7 @@ func (s *Service) Cancel(ctx context.Context, subject, id string) (View, error) 
 		if err != nil {
 			return err
 		}
-		out, err = view(ctx, t, tk, subject, nil, true)
+		out, err = view(ctx, t, tk, subject, nil)
 		return err
 	})
 	return out, err

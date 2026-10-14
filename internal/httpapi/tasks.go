@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"papergo/internal/dms"
 	"papergo/internal/model"
 	"papergo/internal/tasks"
 	"papergo/internal/transfer"
@@ -28,19 +29,19 @@ func (a *API) tasks() *tasks.Service { return &tasks.Service{DMS: a.DMS} }
 
 func taskFilter(r *http.Request) tasks.Filter {
 	q := r.URL.Query()
-	f := tasks.Filter{Status: q.Get("status"), Kind: q.Get("kind"), Key: q.Get("key"), WorkspaceID: q.Get("workspace_id"), ItemID: q.Get("item_id"), Waiting: q.Get("waiting") == "true"}
+	f := tasks.Filter{Status: q.Get("status"), Kind: q.Get("kind"), Key: q.Get("key"), WorkspaceID: q.Get("workspace_id"), ItemID: q.Get("item_id"), Waiting: q.Get("waiting") == "true", After: q.Get("$skiptoken")}
 	if n, err := strconv.Atoi(q.Get("$top")); err == nil {
 		f.Limit = n
 	}
 	return f
 }
 
-func (a *API) listTasks(w http.ResponseWriter, r *http.Request, out []tasks.View, err error) {
+func (a *API) listTasks(w http.ResponseWriter, r *http.Request, out dms.Page[tasks.View], err error) {
 	if err != nil {
 		a.failure(w, r, err)
 		return
 	}
-	respond(w, r, 200, map[string]any{"value": out, "@odata.nextLink": nil})
+	respond(w, r, 200, out)
 }
 
 func (a *API) myTasks(w http.ResponseWriter, r *http.Request) {

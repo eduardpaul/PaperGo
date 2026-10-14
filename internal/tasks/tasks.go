@@ -917,6 +917,20 @@ func visibleTo(ctx context.Context, t *dms.Service, tk *ent.Task, subject string
 	return manages(ctx, t, subject, tk.WorkspaceID)
 }
 
+// waitingFor selects the tasks with an entry of subject or one of groups
+// that has not answered.
+func waitingFor(subject string, groups []string) func(*entsql.Selector) {
+	return func(s *entsql.Selector) {
+		entries := []any{subject}
+		for _, g := range groups {
+			entries = append(entries, "group:"+g)
+		}
+		marks := strings.TrimSuffix(strings.Repeat("?,", len(entries)), ",")
+		s.Where(entsql.ExprP("EXISTS (SELECT 1 FROM json_each("+s.C(task.FieldAssignees)+") j WHERE j.value IN ("+marks+") AND NOT EXISTS (SELECT 1 FROM "+taskresponse.Table+
+			" r WHERE r."+taskresponse.FieldTaskID+" = "+s.C(task.FieldID)+" AND r."+taskresponse.FieldAssignee+" = j.value))", entries...))
+	}
+}
+
 // assignedTo selects the tasks assigned to subject or one of groups.
 func assignedTo(subject string, groups []string) func(*entsql.Selector) {
 	return func(s *entsql.Selector) {

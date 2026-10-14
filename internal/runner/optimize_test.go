@@ -75,7 +75,7 @@ func (f *fixture) upload(t *testing.T, libraryID, name, contentType string, data
 func (f *fixture) approvalOf(t *testing.T, runID string) tasks.View {
 	t.Helper()
 	f.status(t, runID, "waiting")
-	all, err := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{Status: "open"})
+	all, err := pageData(f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{Status: "open"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestOptimizeImageBuiltIn(t *testing.T) {
 	f.upload(t, lib.ID, "contract.pdf", "application/pdf", []byte("%PDF-1.7 test"))
 	pdfRun := f.runsOf(t, w.ID, 4)[0]
 	done := f.status(t, pdfRun, "completed")
-	if open, _ := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{Status: "open"}); len(open) != 0 {
+	if open, _ := pageData(f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{Status: "open"})); len(open) != 0 {
 		t.Fatalf("a PDF asked for review: %+v (run %+v)", open, done)
 	}
 }
@@ -207,7 +207,7 @@ func (f *fixture) runsOf(t *testing.T, workflowID string, want int) []string {
 // approvalFor returns the run's approval in any status.
 func (f *fixture) approvalFor(t *testing.T, runID string) tasks.View {
 	t.Helper()
-	all, err := f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{})
+	all, err := pageData(f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"papergo/ent"
+	"papergo/ent/resource"
 	"papergo/internal/identity"
 )
 
@@ -17,6 +18,32 @@ func (s *Service) Authorize(ctx context.Context, subject, id, action string) (*e
 		return read(ctx, s, func(t *Service) (*ent.Resource, error) { return t.authorize(ctx, subject, id, action) })
 	}
 	return s.authorize(ctx, subject, id, action)
+}
+
+// AuthorizeMany reports which of the resources subject may act on, as
+// Authorize allows them one by one, in one query; missing and deleted
+// resources are not allowed.
+func (s *Service) AuthorizeMany(ctx context.Context, subject, action string, ids []string) (map[string]bool, error) {
+	if !s.transaction {
+		return read(ctx, s, func(t *Service) (map[string]bool, error) { return t.AuthorizeMany(ctx, subject, action, ids) })
+	}
+	if len(ids) == 0 {
+		return map[string]bool{}, nil
+	}
+	rows, err := s.Client.Resource.Query().Where(resource.IDIn(ids...), resource.DeletedAtIsNil()).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if s.homeProvisioning {
+		out := map[string]bool{}
+		for _, r := range rows {
+			if _, err := s.authorize(ctx, subject, r.ID, action); err == nil {
+				out[r.ID] = true
+			}
+		}
+		return out, nil
+	}
+	return s.allowedMany(ctx, subject, action, rows)
 }
 
 // Write runs fn as one write transaction, like every DMS mutation; inside a
