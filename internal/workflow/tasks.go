@@ -172,7 +172,7 @@ func (e *env) createTask(in map[string]any, kind string, outcomes []model.TaskOu
 		}
 	}
 	if v, ok := in["assignees"]; ok {
-		if ti.Assignees, err = e.strings(v); err != nil {
+		if ti.Assignees, err = e.strings("assignees", v); err != nil {
 			return outcome{}, err
 		}
 	}

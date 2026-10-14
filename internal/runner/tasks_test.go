@@ -671,6 +671,22 @@ func TestTaskFormsCheckTheirPickers(t *testing.T) {
 	}
 }
 
+// A token that is not a list fails the node naming the input.
+func TestAssigneesThatAreNotTextNameTheInput(t *testing.T) {
+	f := setup(t)
+	w := f.workflow(t, "Count", `{"triggers": [{"type": "manual"}],
+		"flow": {"start": "n", "nodes": {
+			"n": {"activity": "set_variable", "inputs": {"name": "n", "value": 5}, "next": {"done": "a"}},
+			"a": {"activity": "task", "inputs": {"title": "x", "assignees": "{var:n}"}}}}}`)
+	ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run := f.status(t, ids[0], "failed"); !strings.Contains(run.Error, "assignees must be a list of text") {
+		t.Fatalf("run %+v", run.Error)
+	}
+}
+
 func TestTaskCancelRefusesATaskARunWaitsFor(t *testing.T) {
 	f := setup(t)
 	waiting := f.workflow(t, "Waits", approvalFlow)

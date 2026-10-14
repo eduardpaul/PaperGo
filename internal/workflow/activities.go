@@ -546,7 +546,8 @@ func runItemGet(e *env, in map[string]any) (outcome, error) {
 	return outcome{Output: snapshot(r)}, nil
 }
 
-func (e *env) strings(v any) ([]string, error) {
+// strings resolves the input name to a list of text.
+func (e *env) strings(name string, v any) ([]string, error) {
 	r, err := e.scope.resolve(v)
 	if err != nil {
 		return nil, err
@@ -568,7 +569,7 @@ func (e *env) strings(v any) ([]string, error) {
 		}
 		return out, nil
 	}
-	return nil, errors.New("tags must be a list of text")
+	return nil, fmt.Errorf("%s must be a list of text", name)
 }
 
 func (e *env) object(v any) (map[string]any, error) {
@@ -631,7 +632,7 @@ func runItemUpdate(e *env, in map[string]any) (outcome, error) {
 		u.Name = &name
 	}
 	if v, ok := in["tags"]; ok {
-		tags, err := e.strings(v)
+		tags, err := e.strings("tags", v)
 		if err != nil {
 			return outcome{}, err
 		}
@@ -675,7 +676,7 @@ func runItemCreate(e *env, in map[string]any) (outcome, error) {
 		}
 	}
 	if v, ok := in["tags"]; ok {
-		if c.Tags, err = e.strings(v); err != nil {
+		if c.Tags, err = e.strings("tags", v); err != nil {
 			return outcome{}, err
 		}
 	}
