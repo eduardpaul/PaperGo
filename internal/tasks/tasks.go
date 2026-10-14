@@ -762,17 +762,23 @@ func cancel(ctx context.Context, t *dms.Service, tk *ent.Task, actor string) (*e
 	return tk, nil
 }
 
-// CancelRun cancels the open tasks a cancelled or deleted run waits for.
-// Tasks created without waiting stay open: they outlive their run. It
-// reports whether one of the cancelled tasks had parked the run.
+// CancelRun cancels the open tasks a cancelled or deleted run waits for, and
+// releases a task that completed but has not resumed the run yet. Tasks
+// created without waiting stay open: they outlive their run. It reports
+// whether one of the tasks had parked the run.
 func CancelRun(ctx context.Context, t *dms.Service, runID string) (parked bool, err error) {
-	open, err := t.Client.Task.Query().Where(task.RunIDEQ(runID), task.StatusEQ(task.StatusOpen), task.Wait(true)).All(ctx)
+	rows, err := t.Client.Task.Query().Where(task.RunIDEQ(runID), task.Or(task.And(task.StatusEQ(task.StatusOpen), task.Wait(true)), task.Parked(true))).All(ctx)
 	if err != nil {
 		return false, err
 	}
-	for _, tk := range open {
+	for _, tk := range rows {
 		parked = parked || tk.Parked
-		if _, err = cancel(ctx, t, tk, tk.CreatedBy); err != nil {
+		if tk.Status != task.StatusOpen {
+			err = t.Client.Task.UpdateOne(tk).SetParked(false).Exec(ctx)
+		} else {
+			_, err = cancel(ctx, t, tk, tk.CreatedBy)
+		}
+		if err != nil {
 			return false, err
 		}
 	}

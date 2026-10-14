@@ -101,6 +101,39 @@ func TestCancellingAWaitingRunClosesItsApproval(t *testing.T) {
 	}
 }
 
+// A run cancelled after its task completed, before or while it resumes,
+// stays cancelled and runs nothing after the task node.
+func TestCancellingARunWhoseTaskCompletedStopsIt(t *testing.T) {
+	f := setup(t)
+	w := f.workflow(t, "Review", approvalFlow)
+	item := f.item(t, "alice", "Contract", nil)
+	ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{item.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, ids[0], "waiting")
+	mine, err := f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"})
+	if err != nil || len(mine) != 1 {
+		t.Fatalf("bob's tasks: %v, %v", mine, err)
+	}
+	if _, err = f.tasks().Respond(ctx, "bob", mine[0].ID, tasks.Response{Outcome: "approved", Input: map[string]any{"reason": "fine"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.r.Cancel(ctx, "alice", ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, ids[0], "cancelled")
+	// Give a resume that was under way time to run on.
+	time.Sleep(500 * time.Millisecond)
+	f.status(t, ids[0], "cancelled")
+	if got := f.head(t, item.ID).Values["note"]; got != nil {
+		t.Fatalf("the cancelled run went on: note %v", got)
+	}
+	if parked, err := parkedRuns(ctx, f.dms, ids); err != nil || parked[ids[0]] {
+		t.Fatalf("the run is still parked: %v, %v", parked, err)
+	}
+}
+
 func TestWaitingRunsHoldNoWorker(t *testing.T) {
 	f := setup(t)
 	review := f.workflow(t, "Review", approvalFlow)

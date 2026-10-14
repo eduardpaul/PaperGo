@@ -18,21 +18,40 @@ import (
 // A run waiting for a task holds no worker. While the task is open, Await
 // parks the run: it marks the task parked and cancels its own execution.
 // Once the task completes, ResumeDecided resumes the run, which replays its
-// recorded steps and continues from the task node. A parked run shows as
-// waiting, counts as active for concurrency policies, and is kept by
-// retention.
+// recorded steps and continues from the task node; the task node's result
+// step releases the park. A parked run shows as waiting, counts as active
+// for concurrency policies, and is kept by retention. Cancelling a parked
+// run releases the park and marks the run cancelled, so a resume already
+// under way stops at the task node.
 
 // errParked ends the execution of a run that parked.
 var errParked = errors.New("the run waits for a task")
 
+// errStopped ends the execution of a run cancelled while it was resuming.
+var errStopped = errors.New("the run was cancelled")
+
 // Await returns a task node's output once its task is completed.
 func (x *durable) Await(node, id string) (json.RawMessage, error) {
+	runID, err := dbos.GetWorkflowID(x.ctx)
+	if err != nil {
+		return nil, err
+	}
 	for {
 		// Not a step: a completed task never changes, so a replay of a
 		// resumed run reads the same result and records it as a step below.
-		result, err := dms.Read(x.ctx, x.r.dms, func(t *dms.Service) (map[string]any, error) { return tasks.Result(x.ctx, t, id) })
+		var cancelled bool
+		result, err := dms.Read(x.ctx, x.r.dms, func(t *dms.Service) (map[string]any, error) {
+			var err error
+			if cancelled, err = t.Client.WorkflowRun.Query().Where(workflowrun.IDEQ(runID), workflowrun.LiveStatusEQ("cancelled")).Exist(x.ctx); err != nil {
+				return nil, err
+			}
+			return tasks.Result(x.ctx, t, id)
+		})
 		if err != nil {
 			return nil, err
+		}
+		if cancelled {
+			return nil, x.stop(node, runID, errStopped)
 		}
 		if result != nil {
 			return stepTx(x.ctx, x.r, node+" result", func(ctx context.Context, t *dms.Service, _ func(dms.Event)) (json.RawMessage, error) {
@@ -41,6 +60,9 @@ func (x *durable) Await(node, id string) (json.RawMessage, error) {
 					err = errors.New("the task is still open")
 				}
 				if err != nil {
+					return nil, err
+				}
+				if err = t.Client.Task.Update().Where(task.IDEQ(id), task.Parked(true)).SetParked(false).Exec(ctx); err != nil {
 					return nil, err
 				}
 				return json.Marshal(r)
@@ -58,23 +80,25 @@ func (x *durable) Await(node, id string) (json.RawMessage, error) {
 			// Completed meanwhile.
 			continue
 		}
-		runID, err := dbos.GetWorkflowID(x.ctx)
-		if err != nil {
-			return nil, err
-		}
-		if err = dbos.CancelWorkflow(x.r.ctx, runID); err != nil {
-			return nil, fmt.Errorf("park run %s: %w", runID, err)
-		}
-		// A cancelled workflow stops at the start of its next step.
-		if _, err = dbos.RunAsStep(x.ctx, func(context.Context) (string, error) { return "", errParked }, dbos.WithStepName(node+" wait"), dbos.WithStepMaxRetries(0)); err == nil {
-			err = errParked
-		}
-		return nil, err
+		return nil, x.stop(node, runID, errParked)
 	}
 }
 
+// stop cancels the run's own execution and ends it with reason.
+func (x *durable) stop(node, runID string, reason error) error {
+	if err := dbos.CancelWorkflow(x.r.ctx, runID); err != nil {
+		return fmt.Errorf("stop run %s: %w", runID, err)
+	}
+	// A cancelled workflow stops at the start of its next step.
+	if _, err := dbos.RunAsStep(x.ctx, func(context.Context) (string, error) { return "", reason }, dbos.WithStepName(node+" wait"), dbos.WithStepMaxRetries(0)); err != nil {
+		return err
+	}
+	return reason
+}
+
 // ResumeDecided resumes the parked runs whose task completed. A run that is
-// still parking (not cancelled yet) is resumed on a later pass.
+// still parking (not cancelled yet) or already resuming is left for a later
+// pass; the resumed run releases the park itself.
 func (r *Runner) ResumeDecided(ctx context.Context) error {
 	rows, err := r.dms.Client.Task.Query().Where(task.Parked(true), task.StatusIn(task.StatusCompleted, task.StatusExpired)).Limit(100).All(ctx)
 	if err != nil || len(rows) == 0 {
@@ -95,22 +119,25 @@ func (r *Runner) ResumeDecided(ctx context.Context) error {
 	for _, row := range rows {
 		runID := *row.RunID
 		switch byID[runID] {
-		case dbos.WorkflowStatusPending:
-			// Still parking; resumed on a later pass.
+		case dbos.WorkflowStatusPending, dbos.WorkflowStatusEnqueued:
 			continue
 		case dbos.WorkflowStatusCancelled:
 			if _, err = dbos.ResumeWorkflow[workflow.Result](r.ctx, runID, dbos.WithResumeQueue(runQueue)); err != nil {
 				return fmt.Errorf("resume run %s: %w", runID, err)
 			}
-		}
-		if err = r.dms.Write(ctx, func(t *dms.Service) error {
-			if err := t.Client.Task.UpdateOneID(row.ID).SetParked(false).Exec(ctx); err != nil {
+			if err = r.dms.Write(ctx, func(t *dms.Service) error {
+				_, err := t.Client.WorkflowRun.Update().Where(workflowrun.IDEQ(runID), workflowrun.LiveStatusEQ("waiting")).SetLiveStatus("queued").Save(ctx)
+				return err
+			}); err != nil {
 				return err
 			}
-			_, err := t.Client.WorkflowRun.Update().Where(workflowrun.IDEQ(runID), workflowrun.LiveStatusEQ("waiting")).SetLiveStatus("queued").Save(ctx)
-			return err
-		}); err != nil {
-			return err
+		default:
+			// The run ended without reaching the task node again.
+			if err = r.dms.Write(ctx, func(t *dms.Service) error {
+				return t.Client.Task.UpdateOneID(row.ID).SetParked(false).Exec(ctx)
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -133,8 +160,8 @@ func parkedRuns(ctx context.Context, t *dms.Service, runIDs []string) (map[strin
 }
 
 // cancelRun stops a run and cancels its open tasks. A parked run is already
-// stopped: its staged files are discarded and it shows as cancelled. Any
-// other run is cancelled in the engine.
+// stopped: its staged files are discarded and it shows as cancelled, which
+// also stops a resume under way. Any other run is cancelled in the engine.
 func (r *Runner) cancelRun(ctx context.Context, id string) error {
 	parked := false
 	if err := r.dms.Write(ctx, func(t *dms.Service) error {
@@ -150,8 +177,6 @@ func (r *Runner) cancelRun(ctx context.Context, id string) error {
 	}); err != nil {
 		return err
 	}
-	if parked {
-		return nil
-	}
+	// A parked run may be resuming already: cancel that execution too.
 	return dbos.CancelWorkflow(r.ctx, id)
 }
