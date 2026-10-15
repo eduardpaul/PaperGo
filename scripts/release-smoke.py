@@ -110,7 +110,7 @@ def main():
     assert current["version"] in subprocess.check_output([str(binary), "--version"], text=True)
     assert current["version"] in subprocess.check_output([str(admin), "--version"], text=True)
     with tempfile.TemporaryDirectory(prefix="papergo-release-smoke-") as temp:
-        fresh = Path(temp) / "fresh"
+        fresh = (Path(temp) / "fresh").resolve()
         fresh.mkdir()
         exercise(binary, admin, fresh, current["schema_hash"])
     print("Packaged native libraries, versions, embedded UI, fresh startup, writes and online backup passed.")

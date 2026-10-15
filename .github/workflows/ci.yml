@@ -175,6 +175,13 @@ jobs:
           go-version: '1.27.2'
           cache: true
       - uses: ./.github/actions/native
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build embedded frontend
+        run: npm ci --prefix web && npm --prefix web run build
       - name: Native conformance, lifecycle, backup and offline copy
         run: go test -race ./internal/search/zvecstore ./internal/backup ./cmd/admin
       - name: Service, HTTP and workflow parity

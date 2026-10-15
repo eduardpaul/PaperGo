@@ -95,7 +95,7 @@ func TestConcurrencySkipAndReplace(t *testing.T) {
 	f := setup(t)
 	def := func(policy string) string {
 		return `{"triggers": [{"type": "item.updated", "collection_id": "$LIST"}], "concurrency": "` + policy + `",
-			"flow": {"start": "wait", "nodes": {"wait": {"activity": "delay", "inputs": {"duration": "1s"}}}}}`
+			"flow": {"start": "wait", "nodes": {"wait": {"activity": "delay", "inputs": {"duration": "5s"}}}}}`
 	}
 	skip := f.workflow(t, "Skip", def("skip"))
 	replace := f.workflow(t, "Replace", def("replace"))
@@ -107,8 +107,36 @@ func TestConcurrencySkipAndReplace(t *testing.T) {
 			t.Fatal(err)
 		}
 		if i == 0 {
-			// Let the first run start before the second change.
-			time.Sleep(300 * time.Millisecond)
+			// Wait until each first run is inside its delay before triggering again.
+			for _, w := range []workflow.Workflow{skip, replace, parallel} {
+				deadline := time.Now().Add(20 * time.Second)
+				started := false
+				for !started {
+					page, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{WorkflowID: w.ID, Limit: 1})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(page.Data) == 1 {
+						run, err := f.r.Run(ctx, "alice", page.Data[0].ID)
+						if err != nil {
+							t.Fatal(err)
+						}
+						for _, step := range run.Steps {
+							if step.Name == "DBOS.sleep" && step.CompletedAt != nil && step.CompletedAt.After(time.Now()) {
+								started = true
+								break
+							}
+						}
+					}
+					if started {
+						break
+					}
+					if time.Now().After(deadline) {
+						t.Fatalf("workflow %s did not start its first run: %+v", w.ID, page.Data)
+					}
+					time.Sleep(20 * time.Millisecond)
+				}
+			}
 		}
 	}
 	if got := f.runs(t, skip.ID, 1); got[0].Status != "completed" {
