@@ -68,6 +68,7 @@ func TestCollectionsWithoutPublishingKeepOneSurface(t *testing.T) {
 		t.Fatal("reader read head content", q, err)
 	}
 	for _, subject := range []string{"alice", "reader"} {
+		indexSearch(t, s)
 		page, err := s.Browse(testContext, subject, Browse{ParentID: list.ID, Search: "alph"})
 		if err != nil || len(page.Data) != 1 || page.Data[0].ID != item.ID {
 			t.Fatal("search", subject, page, err)

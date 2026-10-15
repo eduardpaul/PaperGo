@@ -103,7 +103,7 @@ func TestCancellingAWaitingRunClosesItsApproval(t *testing.T) {
 	}
 }
 
-// A run cancelled after its task completed, before or while it resumes,
+// A run cancelled after its task completed, before it resumes,
 // stays cancelled and runs nothing after the task node.
 func TestCancellingARunWhoseTaskCompletedStopsIt(t *testing.T) {
 	f := setup(t)
@@ -114,6 +114,10 @@ func TestCancellingARunWhoseTaskCompletedStopsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "waiting")
+	// Hold automatic resumption until the decision and cancellation are
+	// recorded. Otherwise the run can finish before Cancel is called.
+	f.r.stop()
+	<-f.r.stopped
 	mine, err := pageData(f.tasks().Mine(ctx, "bob", tasks.Filter{Status: "open"}))
 	if err != nil || len(mine) != 1 {
 		t.Fatalf("bob's tasks: %v, %v", mine, err)
@@ -124,9 +128,9 @@ func TestCancellingARunWhoseTaskCompletedStopsIt(t *testing.T) {
 	if _, err = f.r.Cancel(ctx, "alice", ids[0]); err != nil {
 		t.Fatal(err)
 	}
-	f.status(t, ids[0], "cancelled")
-	// Give a resume that was under way time to run on.
-	time.Sleep(500 * time.Millisecond)
+	if err = f.r.ResumeDecided(ctx); err != nil {
+		t.Fatal(err)
+	}
 	f.status(t, ids[0], "cancelled")
 	if got := f.head(t, item.ID).Values["note"]; got != nil {
 		t.Fatalf("the cancelled run went on: note %v", got)
@@ -198,6 +202,7 @@ func TestDeletingTheItemCancelsAWaitingRun(t *testing.T) {
 // Retention keeps parked runs and still deletes the finished runs after them.
 func TestPurgeSkipsParkedRuns(t *testing.T) {
 	f := setup(t)
+	f.searchOff(t)
 	defer func(n int) { purgePage = n }(purgePage)
 	purgePage = 1
 	f.r.cfg.Retention = time.Millisecond

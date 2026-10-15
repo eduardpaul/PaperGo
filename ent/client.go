@@ -14,7 +14,9 @@ import (
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
+	"papergo/ent/blobtext"
 	"papergo/ent/businesskey"
+	"papergo/ent/cachedresult"
 	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
 	"papergo/ent/domainevent"
@@ -82,8 +84,12 @@ type Client struct {
 	Blob *BlobClient
 	// BlobDeletion is the client for interacting with the BlobDeletion builders.
 	BlobDeletion *BlobDeletionClient
+	// BlobText is the client for interacting with the BlobText builders.
+	BlobText *BlobTextClient
 	// BusinessKey is the client for interacting with the BusinessKey builders.
 	BusinessKey *BusinessKeyClient
+	// CachedResult is the client for interacting with the CachedResult builders.
+	CachedResult *CachedResultClient
 	// CollectionType is the client for interacting with the CollectionType builders.
 	CollectionType *CollectionTypeClient
 	// ContentType is the client for interacting with the ContentType builders.
@@ -192,7 +198,9 @@ func (c *Client) init() {
 	c.AuditEvent = NewAuditEventClient(c.config)
 	c.Blob = NewBlobClient(c.config)
 	c.BlobDeletion = NewBlobDeletionClient(c.config)
+	c.BlobText = NewBlobTextClient(c.config)
 	c.BusinessKey = NewBusinessKeyClient(c.config)
+	c.CachedResult = NewCachedResultClient(c.config)
 	c.CollectionType = NewCollectionTypeClient(c.config)
 	c.ContentType = NewContentTypeClient(c.config)
 	c.DomainEvent = NewDomainEventClient(c.config)
@@ -335,7 +343,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AuditEvent:              NewAuditEventClient(cfg),
 		Blob:                    NewBlobClient(cfg),
 		BlobDeletion:            NewBlobDeletionClient(cfg),
+		BlobText:                NewBlobTextClient(cfg),
 		BusinessKey:             NewBusinessKeyClient(cfg),
+		CachedResult:            NewCachedResultClient(cfg),
 		CollectionType:          NewCollectionTypeClient(cfg),
 		ContentType:             NewContentTypeClient(cfg),
 		DomainEvent:             NewDomainEventClient(cfg),
@@ -405,7 +415,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AuditEvent:              NewAuditEventClient(cfg),
 		Blob:                    NewBlobClient(cfg),
 		BlobDeletion:            NewBlobDeletionClient(cfg),
+		BlobText:                NewBlobTextClient(cfg),
 		BusinessKey:             NewBusinessKeyClient(cfg),
+		CachedResult:            NewCachedResultClient(cfg),
 		CollectionType:          NewCollectionTypeClient(cfg),
 		ContentType:             NewContentTypeClient(cfg),
 		DomainEvent:             NewDomainEventClient(cfg),
@@ -482,17 +494,18 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
-		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
-		c.IdentityRole, c.IdentityUser, c.IntegrationItem, c.IntegrationRevisionData,
-		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListIntegration, c.ListView,
-		c.LiveChange, c.Operation, c.OperationItem, c.Publication, c.Relationship,
-		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
-		c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken, c.SyncView, c.Task,
-		c.TaskResponse, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
-		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.AuditEvent, c.Blob, c.BlobDeletion, c.BlobText, c.BusinessKey, c.CachedResult,
+		c.CollectionType, c.ContentType, c.DomainEvent, c.FieldDefinition,
+		c.FieldValue, c.Grant, c.GroupInbox, c.IdentityAssignment, c.IdentityGroup,
+		c.IdentityMembership, c.IdentityOrganization, c.IdentityPreference,
+		c.IdentityRESTToken, c.IdentityRole, c.IdentityUser, c.IntegrationItem,
+		c.IntegrationRevisionData, c.ItemHistory, c.ItemRevision, c.ItemSurface,
+		c.ListIntegration, c.ListView, c.LiveChange, c.Operation, c.OperationItem,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
+		c.SyncToken, c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -502,17 +515,18 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuditEvent, c.Blob, c.BlobDeletion, c.BusinessKey, c.CollectionType,
-		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
-		c.IdentityRole, c.IdentityUser, c.IntegrationItem, c.IntegrationRevisionData,
-		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListIntegration, c.ListView,
-		c.LiveChange, c.Operation, c.OperationItem, c.Publication, c.Relationship,
-		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
-		c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken, c.SyncView, c.Task,
-		c.TaskResponse, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
-		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.AuditEvent, c.Blob, c.BlobDeletion, c.BlobText, c.BusinessKey, c.CachedResult,
+		c.CollectionType, c.ContentType, c.DomainEvent, c.FieldDefinition,
+		c.FieldValue, c.Grant, c.GroupInbox, c.IdentityAssignment, c.IdentityGroup,
+		c.IdentityMembership, c.IdentityOrganization, c.IdentityPreference,
+		c.IdentityRESTToken, c.IdentityRole, c.IdentityUser, c.IntegrationItem,
+		c.IntegrationRevisionData, c.ItemHistory, c.ItemRevision, c.ItemSurface,
+		c.ListIntegration, c.ListView, c.LiveChange, c.Operation, c.OperationItem,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
+		c.SyncToken, c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -527,8 +541,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Blob.mutate(ctx, m)
 	case *BlobDeletionMutation:
 		return c.BlobDeletion.mutate(ctx, m)
+	case *BlobTextMutation:
+		return c.BlobText.mutate(ctx, m)
 	case *BusinessKeyMutation:
 		return c.BusinessKey.mutate(ctx, m)
+	case *CachedResultMutation:
+		return c.CachedResult.mutate(ctx, m)
 	case *CollectionTypeMutation:
 		return c.CollectionType.mutate(ctx, m)
 	case *ContentTypeMutation:
@@ -1043,6 +1061,139 @@ func (c *BlobDeletionClient) mutate(ctx context.Context, m *BlobDeletionMutation
 	}
 }
 
+// BlobTextClient is a client for the BlobText schema.
+type BlobTextClient struct {
+	config
+}
+
+// NewBlobTextClient returns a client for the BlobText from the given config.
+func NewBlobTextClient(c config) *BlobTextClient {
+	return &BlobTextClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `blobtext.Hooks(f(g(h())))`.
+func (c *BlobTextClient) Use(hooks ...Hook) {
+	c.hooks.BlobText = append(c.hooks.BlobText, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `blobtext.Intercept(f(g(h())))`.
+func (c *BlobTextClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BlobText = append(c.inters.BlobText, interceptors...)
+}
+
+// Create returns a builder for creating a BlobText entity.
+func (c *BlobTextClient) Create() *BlobTextCreate {
+	mutation := newBlobTextMutation(c.config, OpCreate)
+	return &BlobTextCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BlobText entities.
+func (c *BlobTextClient) CreateBulk(builders ...*BlobTextCreate) *BlobTextCreateBulk {
+	return &BlobTextCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BlobTextClient) MapCreateBulk(slice any, setFunc func(*BlobTextCreate, int)) *BlobTextCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BlobTextCreateBulk{err: fmt.Errorf("calling to BlobTextClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BlobTextCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BlobTextCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BlobText.
+func (c *BlobTextClient) Update() *BlobTextUpdate {
+	mutation := newBlobTextMutation(c.config, OpUpdate)
+	return &BlobTextUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BlobTextClient) UpdateOne(_m *BlobText) *BlobTextUpdateOne {
+	mutation := newBlobTextMutation(c.config, OpUpdateOne, withBlobText(_m))
+	return &BlobTextUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BlobTextClient) UpdateOneID(id string) *BlobTextUpdateOne {
+	mutation := newBlobTextMutation(c.config, OpUpdateOne, withBlobTextID(id))
+	return &BlobTextUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BlobText.
+func (c *BlobTextClient) Delete() *BlobTextDelete {
+	mutation := newBlobTextMutation(c.config, OpDelete)
+	return &BlobTextDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BlobTextClient) DeleteOne(_m *BlobText) *BlobTextDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BlobTextClient) DeleteOneID(id string) *BlobTextDeleteOne {
+	builder := c.Delete().Where(blobtext.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BlobTextDeleteOne{builder}
+}
+
+// Query returns a query builder for BlobText.
+func (c *BlobTextClient) Query() *BlobTextQuery {
+	return &BlobTextQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBlobText},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BlobText entity by its id.
+func (c *BlobTextClient) Get(ctx context.Context, id string) (*BlobText, error) {
+	return c.Query().Where(blobtext.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BlobTextClient) GetX(ctx context.Context, id string) *BlobText {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BlobTextClient) Hooks() []Hook {
+	return c.hooks.BlobText
+}
+
+// Interceptors returns the client interceptors.
+func (c *BlobTextClient) Interceptors() []Interceptor {
+	return c.inters.BlobText
+}
+
+func (c *BlobTextClient) mutate(ctx context.Context, m *BlobTextMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BlobTextCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BlobTextUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BlobTextUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BlobTextDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BlobText mutation op: %q", m.Op())
+	}
+}
+
 // BusinessKeyClient is a client for the BusinessKey schema.
 type BusinessKeyClient struct {
 	config
@@ -1205,6 +1356,139 @@ func (c *BusinessKeyClient) mutate(ctx context.Context, m *BusinessKeyMutation) 
 		return (&BusinessKeyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown BusinessKey mutation op: %q", m.Op())
+	}
+}
+
+// CachedResultClient is a client for the CachedResult schema.
+type CachedResultClient struct {
+	config
+}
+
+// NewCachedResultClient returns a client for the CachedResult from the given config.
+func NewCachedResultClient(c config) *CachedResultClient {
+	return &CachedResultClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `cachedresult.Hooks(f(g(h())))`.
+func (c *CachedResultClient) Use(hooks ...Hook) {
+	c.hooks.CachedResult = append(c.hooks.CachedResult, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `cachedresult.Intercept(f(g(h())))`.
+func (c *CachedResultClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CachedResult = append(c.inters.CachedResult, interceptors...)
+}
+
+// Create returns a builder for creating a CachedResult entity.
+func (c *CachedResultClient) Create() *CachedResultCreate {
+	mutation := newCachedResultMutation(c.config, OpCreate)
+	return &CachedResultCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CachedResult entities.
+func (c *CachedResultClient) CreateBulk(builders ...*CachedResultCreate) *CachedResultCreateBulk {
+	return &CachedResultCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CachedResultClient) MapCreateBulk(slice any, setFunc func(*CachedResultCreate, int)) *CachedResultCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CachedResultCreateBulk{err: fmt.Errorf("calling to CachedResultClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CachedResultCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CachedResultCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CachedResult.
+func (c *CachedResultClient) Update() *CachedResultUpdate {
+	mutation := newCachedResultMutation(c.config, OpUpdate)
+	return &CachedResultUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CachedResultClient) UpdateOne(_m *CachedResult) *CachedResultUpdateOne {
+	mutation := newCachedResultMutation(c.config, OpUpdateOne, withCachedResult(_m))
+	return &CachedResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CachedResultClient) UpdateOneID(id string) *CachedResultUpdateOne {
+	mutation := newCachedResultMutation(c.config, OpUpdateOne, withCachedResultID(id))
+	return &CachedResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CachedResult.
+func (c *CachedResultClient) Delete() *CachedResultDelete {
+	mutation := newCachedResultMutation(c.config, OpDelete)
+	return &CachedResultDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CachedResultClient) DeleteOne(_m *CachedResult) *CachedResultDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CachedResultClient) DeleteOneID(id string) *CachedResultDeleteOne {
+	builder := c.Delete().Where(cachedresult.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CachedResultDeleteOne{builder}
+}
+
+// Query returns a query builder for CachedResult.
+func (c *CachedResultClient) Query() *CachedResultQuery {
+	return &CachedResultQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCachedResult},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CachedResult entity by its id.
+func (c *CachedResultClient) Get(ctx context.Context, id string) (*CachedResult, error) {
+	return c.Query().Where(cachedresult.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CachedResultClient) GetX(ctx context.Context, id string) *CachedResult {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CachedResultClient) Hooks() []Hook {
+	return c.hooks.CachedResult
+}
+
+// Interceptors returns the client interceptors.
+func (c *CachedResultClient) Interceptors() []Interceptor {
+	return c.inters.CachedResult
+}
+
+func (c *CachedResultClient) mutate(ctx context.Context, m *CachedResultMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CachedResultCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CachedResultUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CachedResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CachedResultDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CachedResult mutation op: %q", m.Op())
 	}
 }
 
@@ -8342,28 +8626,29 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
-		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
-		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
-		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser,
-		IntegrationItem, IntegrationRevisionData, ItemHistory, ItemRevision,
-		ItemSurface, ListIntegration, ListView, LiveChange, Operation, OperationItem,
-		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
-		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task,
-		TaskResponse, Term, TermGroup, TermSet, WebDAVCredential, Workflow,
-		WorkflowRun, WorkflowRunItem, WorkflowTrigger, WorkflowVersion []ent.Hook
+		AuditEvent, Blob, BlobDeletion, BlobText, BusinessKey, CachedResult,
+		CollectionType, ContentType, DomainEvent, FieldDefinition, FieldValue, Grant,
+		GroupInbox, IdentityAssignment, IdentityGroup, IdentityMembership,
+		IdentityOrganization, IdentityPreference, IdentityRESTToken, IdentityRole,
+		IdentityUser, IntegrationItem, IntegrationRevisionData, ItemHistory,
+		ItemRevision, ItemSurface, ListIntegration, ListView, LiveChange, Operation,
+		OperationItem, Publication, Relationship, RelationshipType, Resource,
+		SchemaRevision, SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken,
+		SyncView, Task, TaskResponse, Term, TermGroup, TermSet, WebDAVCredential,
+		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		WorkflowVersion []ent.Hook
 	}
 	inters struct {
-		AuditEvent, Blob, BlobDeletion, BusinessKey, CollectionType, ContentType,
-		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
-		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
-		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser,
-		IntegrationItem, IntegrationRevisionData, ItemHistory, ItemRevision,
-		ItemSurface, ListIntegration, ListView, LiveChange, Operation, OperationItem,
-		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
-		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task,
-		TaskResponse, Term, TermGroup, TermSet, WebDAVCredential, Workflow,
-		WorkflowRun, WorkflowRunItem, WorkflowTrigger,
+		AuditEvent, Blob, BlobDeletion, BlobText, BusinessKey, CachedResult,
+		CollectionType, ContentType, DomainEvent, FieldDefinition, FieldValue, Grant,
+		GroupInbox, IdentityAssignment, IdentityGroup, IdentityMembership,
+		IdentityOrganization, IdentityPreference, IdentityRESTToken, IdentityRole,
+		IdentityUser, IntegrationItem, IntegrationRevisionData, ItemHistory,
+		ItemRevision, ItemSurface, ListIntegration, ListView, LiveChange, Operation,
+		OperationItem, Publication, Relationship, RelationshipType, Resource,
+		SchemaRevision, SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken,
+		SyncView, Task, TaskResponse, Term, TermGroup, TermSet, WebDAVCredential,
+		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
 		WorkflowVersion []ent.Interceptor
 	}
 )

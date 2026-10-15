@@ -109,6 +109,11 @@ func CollectionID(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldCollectionID, v))
 }
 
+// Role applies equality check predicate on the "role" field. It's identical to RoleEQ.
+func Role(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldRole, v))
+}
+
 // CurrentVersion applies equality check predicate on the "current_version" field. It's identical to CurrentVersionEQ.
 func CurrentVersion(v int) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldCurrentVersion, v))
@@ -632,6 +637,81 @@ func CollectionIDEqualFold(v string) predicate.Workflow {
 // CollectionIDContainsFold applies the ContainsFold predicate on the "collection_id" field.
 func CollectionIDContainsFold(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldContainsFold(FieldCollectionID, v))
+}
+
+// RoleEQ applies the EQ predicate on the "role" field.
+func RoleEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldRole, v))
+}
+
+// RoleNEQ applies the NEQ predicate on the "role" field.
+func RoleNEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldRole, v))
+}
+
+// RoleIn applies the In predicate on the "role" field.
+func RoleIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldIn(FieldRole, vs...))
+}
+
+// RoleNotIn applies the NotIn predicate on the "role" field.
+func RoleNotIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotIn(FieldRole, vs...))
+}
+
+// RoleGT applies the GT predicate on the "role" field.
+func RoleGT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGT(FieldRole, v))
+}
+
+// RoleGTE applies the GTE predicate on the "role" field.
+func RoleGTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGTE(FieldRole, v))
+}
+
+// RoleLT applies the LT predicate on the "role" field.
+func RoleLT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLT(FieldRole, v))
+}
+
+// RoleLTE applies the LTE predicate on the "role" field.
+func RoleLTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLTE(FieldRole, v))
+}
+
+// RoleContains applies the Contains predicate on the "role" field.
+func RoleContains(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContains(FieldRole, v))
+}
+
+// RoleHasPrefix applies the HasPrefix predicate on the "role" field.
+func RoleHasPrefix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasPrefix(FieldRole, v))
+}
+
+// RoleHasSuffix applies the HasSuffix predicate on the "role" field.
+func RoleHasSuffix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasSuffix(FieldRole, v))
+}
+
+// RoleIsNil applies the IsNil predicate on the "role" field.
+func RoleIsNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldIsNull(FieldRole))
+}
+
+// RoleNotNil applies the NotNil predicate on the "role" field.
+func RoleNotNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotNull(FieldRole))
+}
+
+// RoleEqualFold applies the EqualFold predicate on the "role" field.
+func RoleEqualFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEqualFold(FieldRole, v))
+}
+
+// RoleContainsFold applies the ContainsFold predicate on the "role" field.
+func RoleContainsFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContainsFold(FieldRole, v))
 }
 
 // CurrentVersionEQ applies the EQ predicate on the "current_version" field.

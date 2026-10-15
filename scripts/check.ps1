@@ -1,6 +1,9 @@
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $taskRoot
+& python scripts/native.py
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+. (Join-Path $taskRoot '.tools/native/env.ps1')
 $taskGo = Join-Path $taskRoot '.tools/go/bin/go.exe'
 if (Test-Path -LiteralPath $taskGo) {
     $env:PATH = (Split-Path -Parent $taskGo) + ';' + $env:PATH

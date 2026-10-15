@@ -1,0 +1,78 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"os"
+	"runtime"
+	"strings"
+	"time"
+
+	"papergo/internal/embedding"
+	"papergo/internal/ocr/paddle"
+)
+
+var start = time.Now()
+
+func mark(stage string) {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	status, _ := os.ReadFile("/proc/self/status")
+	rss := ""
+	for _, line := range strings.Split(string(status), "\n") {
+		if strings.HasPrefix(line, "VmRSS:") {
+			rss = strings.TrimSpace(strings.TrimPrefix(line, "VmRSS:"))
+		}
+	}
+	r := map[string]any{"stage": stage, "elapsed_s": time.Since(start).Seconds(), "rss": rss, "go_heap_bytes": m.HeapAlloc}
+	b, _ := json.Marshal(r)
+	fmt.Println(string(b))
+}
+func main() {
+	ctx := context.Background()
+	mark("start")
+	e, err := embedding.New(embedding.Config{Model: embedding.Gemma2, Models: os.Getenv("EMBEDDING_MODELS_ROOT") + "/embeddinggemma-2", Library: os.Getenv("ONNXRUNTIME_LIB")})
+	if err != nil {
+		panic(err)
+	}
+	defer e.Close()
+	o, err := paddle.New(paddle.Config{Models: "models/paddleocr", Library: os.Getenv("ONNXRUNTIME_LIB")})
+	if err != nil {
+		panic(err)
+	}
+	defer o.Close()
+	mark("configured")
+	v, err := e.EmbedQuery(ctx, "invoice")
+	if err != nil {
+		panic(err)
+	}
+	blank := image.NewGray(image.Rect(0, 0, 640, 480))
+	draw.Draw(blank, blank.Rect, image.NewUniform(color.White), image.Point{}, draw.Src)
+	if _, err = o.Recognize(ctx, blank); err != nil {
+		panic(err)
+	}
+	mark("both-models-used")
+	time.Sleep(60 * time.Second)
+	mark("idle-1-minute")
+	time.Sleep(250 * time.Second)
+	mark("idle-5-minutes-10-seconds")
+	got, err := e.EmbedQuery(ctx, "invoice")
+	if err != nil {
+		panic(err)
+	}
+	if len(got) != len(v) {
+		panic("wrong reloaded dimensions")
+	}
+	mark("embedding-reloaded")
+	if err = e.Close(); err != nil {
+		panic(err)
+	}
+	if err = o.Close(); err != nil {
+		panic(err)
+	}
+	mark("closed")
+}

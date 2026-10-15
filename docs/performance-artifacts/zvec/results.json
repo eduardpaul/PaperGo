@@ -1,0 +1,20 @@
+{
+  "cached_vector_bytes": 6144000,
+  "dimensions": 768,
+  "disk_bytes": 41599004,
+  "documents": 2000,
+  "load_ms": 5058,
+  "process_rss": "341236 kB",
+  "query_count": 100,
+  "query_p50_us": 25685,
+  "query_p95_us": 34899,
+  "readable_scopes": 20000,
+  "reopen_ms": 608,
+  "native_revision": "8321c1314a559fd5f909e92498f43e5194bf9b99",
+  "native_version": "v0.7.0",
+  "go_binding_revision": "dbf998ca01f1",
+  "platform": "linux/amd64",
+  "go_version": "go1.26.0",
+  "compiler": "GCC 15.2.0",
+  "library_sha256": "b41fe8aba208b74b083e37849572284e7c091180869cba876b34c89e5833e514"
+}

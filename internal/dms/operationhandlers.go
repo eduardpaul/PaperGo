@@ -40,6 +40,7 @@ func builtInOperationHandlers() map[string]OperationHandler {
 			}
 			return err
 		}},
+		OperationKindSearchReindex: searchReindexHandler(),
 		OperationKindBulkUpdate: {Scope: "list.write", Step: func(ctx context.Context, s *Service, op *ent.Operation) error { return s.bulkUpdateStep(ctx, op) }, Failed: func(ctx context.Context, s *Service, op *ent.Operation, cause error) error {
 			_, err := s.Client.OperationItem.Delete().Where(operationitem.OperationIDEQ(op.ID)).Exec(ctx)
 			return err

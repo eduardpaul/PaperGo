@@ -10,10 +10,13 @@ import (
 	"papergo/ent/fielddefinition"
 	"papergo/ent/grant"
 	"papergo/ent/resource"
+	"papergo/internal/ai"
 	"papergo/internal/identity"
 	"papergo/internal/model"
 	"papergo/internal/requestmeta"
+	"papergo/internal/search"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,11 +42,19 @@ type Service struct {
 	runPurger              func(context.Context, *sql.Tx, string) error
 	// batch is set while one request applies many operations in a transaction.
 	batch *batchCache
+	// search is the search store, set with SetSearch.
+	search search.Store
+	// embeddings embeds searches for semantic and hybrid search; nil when
+	// no embedding model is configured.
+	embeddings ai.Embedder
+	// searchRebuild is set while the search store is rebuilt from scratch:
+	// searches answer ErrSearchUnavailable until it is done.
+	searchRebuild *atomic.Bool
 }
 
 // NewService serves the PaperGo database db.
 func NewService(db *sql.DB) *Service {
-	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates(), operationHandlers: builtInOperationHandlers()}
+	return &Service{Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), db: db, writeMu: make(chan struct{}, 1), operations: make(chan struct{}, 1), collectionTemplates: builtInCollectionTemplates(), operationHandlers: builtInOperationHandlers(), searchRebuild: &atomic.Bool{}}
 }
 
 // OnCommit calls f after each committed write that recorded domain events,
@@ -100,7 +111,7 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, fn func(*Service) error) (int, error) {
 	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
-	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, runPurger: s.runPurger}
+	t := &Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, pending: &pending, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, runPurger: s.runPurger, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}
 	t.integrations = s.integrations
 	t.traceID = requestmeta.Trace(ctx)
 	t.captureAuditProperties()
@@ -140,7 +151,7 @@ func read[T any](ctx context.Context, s *Service, fn func(*Service) (T, error)) 
 		return out, err
 	}
 	defer tx.Rollback()
-	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, integrations: s.integrations})
+	out, err = fn(&Service{Client: entClient(tx), db: s.db, writeMu: s.writeMu, transaction: true, operations: s.operations, tx: tx, collectionTemplates: s.collectionTemplates, operationHandlers: s.operationHandlers, integrations: s.integrations, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild})
 	if err != nil {
 		return out, err
 	}
@@ -734,6 +745,12 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	if moved {
 		details["from_parent_id"] = *r.ParentID
 		details["parent_id"] = *in.ParentID
+		// A folder's move without a content change records no revision, so
+		// it raises its own event.
+		if out.Kind == resource.KindFolder && !content {
+			s.emit(ctx, EventFolderUpdated, subject, out.WorkspaceID, out.ContainerID, out.ID, map[string]any{"from_parent_id": *r.ParentID, "parent_id": *in.ParentID})
+		}
+		s.emitScopeMoved(ctx, subject, r, out)
 	}
 	return out, s.audit(ctx, subject, "resource.update", out, details)
 }
@@ -862,14 +879,18 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 		return err
 	}
 	if s.pending != nil {
-		items, err := s.Client.Resource.Query().Where(resource.KindEQ(resource.KindItem), resource.DeletedAtIsNil(), func(sel *entsql.Selector) {
+		entries, err := s.Client.Resource.Query().Where(resource.KindIn(resource.KindItem, resource.KindFolder), resource.DeletedAtIsNil(), func(sel *entsql.Selector) {
 			sel.Where(entsql.ExprP(sel.C(resource.FieldID)+" IN ("+subtree+")", id))
-		}).Select(resource.FieldID, resource.FieldWorkspaceID, resource.FieldContainerID).All(ctx)
+		}).Select(resource.FieldID, resource.FieldKind, resource.FieldWorkspaceID, resource.FieldContainerID).All(ctx)
 		if err != nil {
 			return err
 		}
-		for _, item := range items {
-			s.emit(ctx, EventItemDeleted, subject, item.WorkspaceID, item.ContainerID, item.ID, nil)
+		for _, entry := range entries {
+			typ := EventItemDeleted
+			if entry.Kind == resource.KindFolder {
+				typ = EventFolderDeleted
+			}
+			s.emit(ctx, typ, subject, entry.WorkspaceID, entry.ContainerID, entry.ID, nil)
 		}
 	}
 	now := time.Now().UTC()

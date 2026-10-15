@@ -16,7 +16,8 @@ import (
 	"image/png"
 	"math"
 
-	"github.com/gen2brain/webp"
+	"github.com/kolesa-team/go-webp/encoder"
+	"github.com/kolesa-team/go-webp/webp"
 	xdraw "golang.org/x/image/draw"
 
 	"papergo/internal/storage"
@@ -66,7 +67,7 @@ func Decode(data []byte, maxPixels int64) (Image, error) {
 	var err error
 	switch media {
 	case "image/webp":
-		cfg, err = webp.DecodeConfig(bytes.NewReader(data))
+		cfg, err = webp.DecodeConfig(bytes.NewReader(data), nil)
 	case "image/png":
 		cfg, err = png.DecodeConfig(bytes.NewReader(data))
 	default:
@@ -81,7 +82,7 @@ func Decode(data []byte, maxPixels int64) (Image, error) {
 	var img image.Image
 	switch media {
 	case "image/webp":
-		img, err = webp.Decode(bytes.NewReader(data))
+		img, err = webp.Decode(bytes.NewReader(data), nil)
 	case "image/png":
 		img, err = png.Decode(bytes.NewReader(data))
 	default:
@@ -211,7 +212,12 @@ func Resize(img image.Image, w, h int) *image.RGBA {
 // EncodeWebP encodes img as lossy WebP at quality 1 to 100.
 func EncodeWebP(img image.Image, quality int) ([]byte, error) {
 	var buf bytes.Buffer
-	if err := webp.Encode(&buf, img, webp.Options{Quality: quality, Method: 4}); err != nil {
+	options, err := encoder.NewLossyEncoderOptions(encoder.PresetDefault, float32(quality))
+	if err != nil {
+		return nil, err
+	}
+	options.Method = 4
+	if err := webp.Encode(&buf, img, options); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

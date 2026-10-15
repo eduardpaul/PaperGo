@@ -38,6 +38,8 @@ type DomainEvent struct {
 	CauseRunID *string `json:"cause_run_id,omitempty"`
 	// DispatchedAt holds the value of the "dispatched_at" field.
 	DispatchedAt *time.Time `json:"dispatched_at,omitempty"`
+	// FanoutCursor holds the value of the "fanout_cursor" field.
+	FanoutCursor *string `json:"fanout_cursor,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -50,7 +52,7 @@ func (*DomainEvent) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case domainevent.FieldDepth:
 			values[i] = new(sql.NullInt64)
-		case domainevent.FieldID, domainevent.FieldType, domainevent.FieldWorkspaceID, domainevent.FieldCollectionID, domainevent.FieldResourceID, domainevent.FieldActor, domainevent.FieldCauseRunID:
+		case domainevent.FieldID, domainevent.FieldType, domainevent.FieldWorkspaceID, domainevent.FieldCollectionID, domainevent.FieldResourceID, domainevent.FieldActor, domainevent.FieldCauseRunID, domainevent.FieldFanoutCursor:
 			values[i] = new(sql.NullString)
 		case domainevent.FieldCreatedAt, domainevent.FieldDispatchedAt:
 			values[i] = new(sql.NullTime)
@@ -141,6 +143,13 @@ func (_m *DomainEvent) assignValues(columns []string, values []any) error {
 				_m.DispatchedAt = new(time.Time)
 				*_m.DispatchedAt = value.Time
 			}
+		case domainevent.FieldFanoutCursor:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field fanout_cursor", values[i])
+			} else if value.Valid {
+				_m.FanoutCursor = new(string)
+				*_m.FanoutCursor = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -213,6 +222,11 @@ func (_m *DomainEvent) String() string {
 	if v := _m.DispatchedAt; v != nil {
 		builder.WriteString("dispatched_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.FanoutCursor; v != nil {
+		builder.WriteString("fanout_cursor=")
+		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')
 	return builder.String()

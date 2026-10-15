@@ -85,20 +85,6 @@ func (_c *ItemSurfaceCreate) SetPayload(v jsontext.Value) *ItemSurfaceCreate {
 	return _c
 }
 
-// SetTermText sets the "term_text" field.
-func (_c *ItemSurfaceCreate) SetTermText(v string) *ItemSurfaceCreate {
-	_c.mutation.SetTermText(v)
-	return _c
-}
-
-// SetNillableTermText sets the "term_text" field if the given value is not nil.
-func (_c *ItemSurfaceCreate) SetNillableTermText(v *string) *ItemSurfaceCreate {
-	if v != nil {
-		_c.SetTermText(*v)
-	}
-	return _c
-}
-
 // SetItemCreatedAt sets the "item_created_at" field.
 func (_c *ItemSurfaceCreate) SetItemCreatedAt(v string) *ItemSurfaceCreate {
 	_c.mutation.SetItemCreatedAt(v)
@@ -186,10 +172,6 @@ func (_c *ItemSurfaceCreate) defaults() {
 		v := itemsurface.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.TermText(); !ok {
-		v := itemsurface.DefaultTermText
-		_c.mutation.SetTermText(v)
-	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := itemsurface.DefaultID()
 		_c.mutation.SetID(v)
@@ -229,9 +211,6 @@ func (_c *ItemSurfaceCreate) check() error {
 	}
 	if _, ok := _c.mutation.Payload(); !ok {
 		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "ItemSurface.payload"`)}
-	}
-	if _, ok := _c.mutation.TermText(); !ok {
-		return &ValidationError{Name: "term_text", err: errors.New(`ent: missing required field "ItemSurface.term_text"`)}
 	}
 	if _, ok := _c.mutation.ItemCreatedAt(); !ok {
 		return &ValidationError{Name: "item_created_at", err: errors.New(`ent: missing required field "ItemSurface.item_created_at"`)}
@@ -318,10 +297,6 @@ func (_c *ItemSurfaceCreate) createSpec() (*ItemSurface, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Payload(); ok {
 		_spec.SetField(itemsurface.FieldPayload, field.TypeJSON, value)
 		_node.Payload = value
-	}
-	if value, ok := _c.mutation.TermText(); ok {
-		_spec.SetField(itemsurface.FieldTermText, field.TypeString, value)
-		_node.TermText = value
 	}
 	if value, ok := _c.mutation.ItemCreatedAt(); ok {
 		_spec.SetField(itemsurface.FieldItemCreatedAt, field.TypeString, value)

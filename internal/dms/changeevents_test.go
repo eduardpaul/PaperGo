@@ -3,6 +3,7 @@ package dms
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"papergo/ent"
@@ -200,4 +201,84 @@ func TestTermChangedEventsFanOutAndRollback(t *testing.T) {
 	if err != nil || stored.Name != "Accounting" || stored.Version != updated.Version || len(changeEvents(t, s, EventTermChanged)) != 2 {
 		t.Fatal("failed or unchanged update persisted an event", stored, err)
 	}
+}
+
+func TestPermissionTargets(t *testing.T) {
+	s, w, list := fixture(t)
+	outer := create(t, s, list.ID, "folder", "Outer", nil)
+	inner := create(t, s, outer.ID, "folder", "Inner", nil)
+	deep := create(t, s, inner.ID, "item", "Deep", nil)
+	near := create(t, s, outer.ID, "item", "Near", nil)
+	loose := create(t, s, list.ID, "item", "Loose", nil)
+	targets := func(e Event, limit int) []string {
+		t.Helper()
+		var ids []string
+		for after := ""; ; {
+			page, err := s.PermissionTargets(testContext, e, after, limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, p := range page {
+				ids = append(ids, p.ID)
+			}
+			if len(page) < limit {
+				break
+			}
+			after = page[len(page)-1].ID
+		}
+		slices.Sort(ids)
+		return ids
+	}
+	sorted := func(ids ...string) []string { slices.Sort(ids); return ids }
+	setPermissions := func(r *ent.Resource, in Permissions) Event {
+		t.Helper()
+		current, err := s.Get(testContext, "alice", r.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.SetPermissions(testContext, "alice", r.ID, current.Version, in); err != nil {
+			t.Fatal(err)
+		}
+		events := changeEvents(t, s, EventPermissionsChanged)
+		row := events[len(events)-1]
+		e := Event{ID: row.ID, Type: row.Type, WorkspaceID: row.WorkspaceID, ResourceID: *row.ResourceID, Data: row.Data}
+		if row.CollectionID != nil {
+			e.CollectionID = *row.CollectionID
+		}
+		return e
+	}
+	// The inner folder gets its own scope: it and what is inside it.
+	if got := targets(setPermissions(inner, Permissions{CopyInherited: true}), 1); !slices.Equal(got, sorted(inner.ID, deep.ID)) {
+		t.Fatalf("inner scope: %v", got)
+	}
+	// The list's own scope stops at the inner folder's.
+	if got := targets(setPermissions(list, Permissions{CopyInherited: true}), 2); !slices.Equal(got, sorted(outer.ID, near.ID, loose.ID)) {
+		t.Fatalf("list scope: %v", got)
+	}
+	// The inner folder inherits again: only its subtree, not the rest of the
+	// list that shares the scope.
+	if got := targets(setPermissions(inner, Permissions{Inherit: true}), 10); !slices.Equal(got, sorted(inner.ID, deep.ID)) {
+		t.Fatalf("inner reset: %v", got)
+	}
+	// Membership reaches every entry of the workspace; deleted entries none.
+	member := Event{Type: EventPermissionsChanged, WorkspaceID: w.ID, ResourceID: w.ID, Data: map[string]any{"action": "member.set"}}
+	if got := targets(member, 3); !slices.Equal(got, sorted(outer.ID, inner.ID, deep.ID, near.ID, loose.ID)) {
+		t.Fatalf("membership: %v", got)
+	}
+	loose = mustGet(t, s, loose.ID)
+	if err := s.Delete(testContext, "alice", loose.ID, loose.Version, DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := targets(member, 3); slices.Contains(got, loose.ID) {
+		t.Fatalf("deleted entry delivered: %v", got)
+	}
+}
+
+func mustGet(t *testing.T, s *Service, id string) *ent.Resource {
+	t.Helper()
+	r, err := s.Get(testContext, "alice", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }

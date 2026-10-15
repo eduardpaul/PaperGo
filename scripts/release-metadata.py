@@ -37,7 +37,7 @@ def expected_assets(tag):
         f"papergo_{tag}_{platform}_{arch}.{extension}"
         for platform, arch, extension in [
             ("linux", "amd64", "tar.gz"), ("linux", "arm64", "tar.gz"),
-            ("darwin", "amd64", "tar.gz"), ("darwin", "arm64", "tar.gz"),
+            ("darwin", "arm64", "tar.gz"),
             ("windows", "amd64", "zip"),
         ]
     } | {"release-database.json", "SHA256SUMS"}
@@ -72,7 +72,7 @@ def publish(tag, previous, state, directory):
     directory = Path(directory)
     paths = {p.name: p for p in directory.iterdir() if p.is_file()}
     if set(paths) != expected_assets(tag) or any(p.stat().st_size == 0 for p in paths.values()):
-        raise ValueError("Publication requires all five archives, the database bundle and SHA256SUMS")
+        raise ValueError("Publication requires all four archives, the database bundle and SHA256SUMS")
     if state == "new":
         args = ["gh", "release", "create", tag, "--draft", "--verify-tag",
                 "--title", f"PaperGo {tag}", "--generate-notes"]

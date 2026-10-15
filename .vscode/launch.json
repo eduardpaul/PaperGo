@@ -8,7 +8,10 @@
       "mode": "debug",
       "program": "${workspaceFolder}/cmd/api",
       "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.cache/development.env",
+      "envFile": [
+        "${workspaceFolder}/.tools/native/native.env",
+        "${workspaceFolder}/.cache/development.env"
+      ],
       "preLaunchTask": "PaperGo: build frontend"
     }
   ]

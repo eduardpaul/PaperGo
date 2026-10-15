@@ -40,7 +40,7 @@ Phase 1 of the [runner](runner.md) is done. The pieces both workflows need are c
 - **One node is one write transaction, and that is the main constraint.** It gives exactly-once writes cheaply, and it should stay the rule for writes. CPU-heavy work needs a second kind of step that runs outside the transaction (see [work steps](#1-work-steps-heavy-work-outside-the-write-transaction)).
 - **The storage collector would delete staged files.** The collector deletes unreferenced objects older than one hour. A candidate waiting days for review is unreferenced by `blobs`, so it would be deleted. Staged files need their own references.
 - **File history is immutable.** PaperDotNet frees the original's bytes once an optimization is accepted, as an explicit exception to keeping every file version (ADR-0046). In PaperGo, item revisions pin their blob, and revisions cannot be updated or deleted. A "reclaim the original" option is therefore a schema decision (see [decisions](#decisions-needed)). Without it, an accepted optimization makes the item's current file smaller but frees no disk space until the original file version leaves history.
-- **OCR needs a native library.** PaperDotNet runs PaddleOCR ONNX models in-process. PaperGo now does too, through [the OCR layer](../ocr.md): ONNX Runtime loaded through purego, so builds stay CGO-free. A binary that uses it is dynamically linked, though, so the API image moves from `scratch` to a glibc base when the first OCR activity ships.
+- **OCR needs a native library.** PaperDotNet runs PaddleOCR ONNX models in-process. PaperGo now does too, through [the OCR layer](../ocr.md): ONNX Runtime loaded through cgo SDKs, using the shared cgo ONNX SDK. The API image uses a glibc base and bundles native libraries.
 
 ## Engine additions
 
@@ -220,19 +220,19 @@ All new direct dependencies must be added to [dependencies](../dependencies.md).
 | --- | --- | --- | --- | --- |
 | Decode JPEG and PNG | standard library | BSD-3-Clause | no | |
 | Decode WebP, resample | `golang.org/x/image` (`webp`, `draw.CatmullRom`) | BSD-3-Clause | no | `x/image/webp` decodes only, and has no animation API. Detect `ANIM`/`ANMF` chunks before decoding. |
-| Encode WebP with a quality setting | `github.com/gen2brain/webp` | MIT (libwebp BSD-3-Clause, run by `tetratelabs/wazero` Apache-2.0) | no | libwebp compiled to WASM and run in-process. It is the only CGO-free lossy WebP encoder found. |
+| Encode WebP with a quality setting | `github.com/kolesa-team/go-webp` | MIT; libwebp BSD-3-Clause | yes | Statically linked libwebp 1.6.0, installed by `scripts/native.py`. |
 | EXIF orientation | `github.com/rwcarlsen/goexif` | BSD-2-Clause | no | Unmaintained since 2019. Alternatively, a small parser for tag 0x0112 only, with fuzz tests. |
-| Text detection and recognition | **Implemented:** PaddleOCR PP-OCRv6 small with PaperDotNet's models, in ONNX Runtime loaded through `github.com/ebitengine/purego` ([OCR](../ocr.md)) | Apache-2.0, models Apache-2.0, ONNX Runtime MIT (with an Eigen MPL-2.0 part) | no, but the binary is dynamically linked and needs `libonnxruntime` | Same models, preprocessing and thresholds as PaperDotNet. |
+| Text detection and recognition | PaddleOCR PP-OCRv6 small through `github.com/yalue/onnxruntime_go` | Binding MIT; models Apache-2.0; ONNX Runtime MIT with Eigen MPL-2.0 notices | yes | Same models, preprocessing and thresholds as PaperDotNet. |
 | Write PDFs with an image and invisible text | `github.com/pdfcpu/pdfcpu` (Apache-2.0) or `github.com/signintech/gopdf` (MIT) | | no | To be confirmed in a spike: JPEG and Flate images, text render mode 3 and a Unicode font subset. |
 
 **Decision.**
 
-- Image work stays in pure Go: the standard library, `x/image` and `gen2brain/webp`.
+- Image work uses the standard library, `x/image` and statically linked libwebp through cgo.
 - OCR is the `internal/ocr` port with the PaddleOCR engine (`internal/ocr/paddle`), implemented:
   - `Detect` gives text regions for optimization;
   - `Recognize` gives lines and words with their positions for the PDF text layer.
 - When the first OCR activity ships:
-  - the API image moves to a glibc base with the pinned ONNX Runtime (`scripts/fetch-onnxruntime.sh`) and `models/paddleocr`;
+  - the API image moves to a glibc base with the pinned ONNX Runtime (`scripts/native.py`) and `models/paddleocr`;
   - the activities fail with "OCR is not available in this deployment" when no library is configured.
 
 Detection measures line boxes, as PaperDotNet's default strategy does, so PaperDotNet's default parameters apply unchanged. A manager review stays mandatory.
@@ -241,7 +241,7 @@ Detection measures line boxes, as PaperDotNet's default strategy does, so PaperD
 
 PaperDotNet's `script` activity (ADR-0037) runs sandboxed JavaScript for data work, with a contract shared with its TypeScript SDK. Neither ported workflow needs it: `forEach` and the generic activities cover them. A `script` node is still the right PaperGo answer to the same problem, data reshaping without one activity per need, and [goja](https://github.com/dop251/goja) is the fitting engine:
 
-- pure Go, so the build stays CGO-free;
+- cgo SDKs own the native bindings;
 - MIT, and it links `dlclark/regexp2` (MIT), `go-sourcemap/sourcemap` (BSD-2-Clause), `google/pprof` (Apache-2.0) and `golang.org/x/text`;
 - goja has no tagged releases, so pin a pseudo-version.
 
@@ -317,7 +317,7 @@ Status: phases 1 to 3 are done, except the container image with ONNX Runtime and
 
 ## Decisions needed
 
-The OCR engine is decided and implemented: PaddleOCR in ONNX Runtime through purego, with PaperDotNet's models ([OCR](../ocr.md)).
+The OCR engine is decided and implemented: PaddleOCR in ONNX Runtime through cgo SDKs, with PaperDotNet's models ([OCR](../ocr.md)).
 
 
 1. **Reclaiming originals after an accepted optimization.** The options are:

@@ -248,6 +248,9 @@ func (_u *WorkflowUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.CollectionIDCleared() {
 		_spec.ClearField(workflow.FieldCollectionID, field.TypeString)
 	}
+	if _u.mutation.RoleCleared() {
+		_spec.ClearField(workflow.FieldRole, field.TypeString)
+	}
 	if value, ok := _u.mutation.Parameters(); ok {
 		_spec.SetField(workflow.FieldParameters, field.TypeJSON, value)
 	}
@@ -541,6 +544,9 @@ func (_u *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err 
 	}
 	if _u.mutation.CollectionIDCleared() {
 		_spec.ClearField(workflow.FieldCollectionID, field.TypeString)
+	}
+	if _u.mutation.RoleCleared() {
+		_spec.ClearField(workflow.FieldRole, field.TypeString)
 	}
 	if value, ok := _u.mutation.Parameters(); ok {
 		_spec.SetField(workflow.FieldParameters, field.TypeJSON, value)

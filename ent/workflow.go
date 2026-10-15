@@ -36,6 +36,8 @@ type Workflow struct {
 	BuiltinKey *string `json:"builtin_key,omitempty"`
 	// CollectionID holds the value of the "collection_id" field.
 	CollectionID *string `json:"collection_id,omitempty"`
+	// Role holds the value of the "role" field.
+	Role *string `json:"role,omitempty"`
 	// Parameters holds the value of the "parameters" field.
 	Parameters map[string]interface{} `json:"parameters,omitempty"`
 	// CurrentVersion holds the value of the "current_version" field.
@@ -62,7 +64,7 @@ func (*Workflow) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case workflow.FieldCurrentVersion, workflow.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case workflow.FieldID, workflow.FieldWorkspaceID, workflow.FieldKey, workflow.FieldName, workflow.FieldDescription, workflow.FieldBuiltinKey, workflow.FieldCollectionID, workflow.FieldCreatedBy, workflow.FieldUpdatedBy:
+		case workflow.FieldID, workflow.FieldWorkspaceID, workflow.FieldKey, workflow.FieldName, workflow.FieldDescription, workflow.FieldBuiltinKey, workflow.FieldCollectionID, workflow.FieldRole, workflow.FieldCreatedBy, workflow.FieldUpdatedBy:
 			values[i] = new(sql.NullString)
 		case workflow.FieldCreatedAt, workflow.FieldUpdatedAt, workflow.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -142,6 +144,13 @@ func (_m *Workflow) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CollectionID = new(string)
 				*_m.CollectionID = value.String
+			}
+		case workflow.FieldRole:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field role", values[i])
+			} else if value.Valid {
+				_m.Role = new(string)
+				*_m.Role = value.String
 			}
 		case workflow.FieldParameters:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -246,6 +255,11 @@ func (_m *Workflow) String() string {
 	builder.WriteString(", ")
 	if v := _m.CollectionID; v != nil {
 		builder.WriteString("collection_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Role; v != nil {
+		builder.WriteString("role=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

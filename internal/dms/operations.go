@@ -135,7 +135,8 @@ func (s *Service) operationStep(ctx context.Context) (bool, error) {
 			return e
 		}
 		t.traceID = op.TraceID
-		if op.Kind != OperationKindFieldIndex {
+		// Field index builds and PaperGo's own search rebuilds act for no one.
+		if op.Kind != OperationKindFieldIndex && (op.Kind != OperationKindSearchReindex || op.CreatedBy != systemSubject) {
 			if e = t.operationPermission(ctx, op.CreatedBy, op.ContainerID, handler.Scope); e != nil {
 				return e
 			}

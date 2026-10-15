@@ -71,6 +71,7 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 		{Search: "item"},
 	}
 	sorts := []string{"", "$name", "$modified_at", "$created_by", "n", "label", "x"}
+	indexSearch(t, s)
 	compared := 0
 	for _, subject := range []string{"alice", "reader"} {
 		for _, surface := range []string{"auto", "head", "published"} {

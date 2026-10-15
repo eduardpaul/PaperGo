@@ -3,14 +3,17 @@
 Measured on 13 October 2026 against application commit `5947e87`. PaperGo's
 small process footprint suits self-hosting; CPU and query shape are the main
 constraints under sustained load. The measurements and sizing estimates below
-cover the current application, including its embedded workflow runner.
+include its embedded workflow runner. Updated cgo idle-memory measurements,
+including zvec and five-minute model unloading, are in the
+[native memory report](performance-artifacts/memory/README.md); the request-load
+measurements below have not been rerun with that allocator policy.
 
 ## Measurement conditions
 
 - Linux x86-64 under WSL2, four logical CPUs on an Intel Core i7-10870H,
   approximately 9.7 GiB VM memory, ext4 storage on a virtual disk. No CPU or
   memory cgroup limit was applied. Other host activity was not controlled.
-- Go 1.26.0, native `CGO_ENABLED=0` binaries built with `-trimpath` and
+- Go 1.26.0, native binaries built with `-trimpath` and
   `-ldflags='-s -w'`. The Dockerfile currently builds with Go 1.27.2; the image
   itself and ARM devices were not measured.
 - Fresh temporary databases initialized using the actual schema and admin
@@ -235,8 +238,9 @@ basic proxy overhead; an identity provider needs its own budget.
 | Small team / tested 20,000-item scale | **2 vCPU, 1 GiB RAM, local SSD** | Practical default; ordinary request rates should be comfortably below the saturation tests. |
 | Sustained heavy reads, broad queries or automation | 4 vCPU, 2 GiB+ RAM | Benchmark the real workload; extra cores will not remove the single-writer constraint. |
 
-For a container, **512 MiB is a reasonable initial PaperGo memory budget** with
-headroom above the measured 170 MiB peak. It was not tested as a hard limit;
+For the measured SQLite workloads with local inference disabled, **512 MiB is
+a reasonable initial PaperGo container budget**, with headroom above the
+measured 170 MiB peak. Those request-load tests did not enforce a hard limit;
 500-row pages at greater concurrency, exports, imports and active workflows
 can have larger footprints. Leave `MAX_IN_FLIGHT=32` initially, bound client
 and transfer concurrency, and avoid increasing it to chase throughput. A
@@ -270,8 +274,10 @@ Build the current frontend and binaries from the repository root:
 npm ci --prefix web
 npm --prefix web run build
 mkdir -p .cache/performance
-CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o .cache/performance/papergo ./cmd/api
-CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o .cache/performance/papergo-admin ./cmd/admin
+python3 scripts/native.py
+source .tools/native/env.sh
+go build -trimpath -ldflags='-s -w' -o .cache/performance/papergo ./cmd/api
+go build -trimpath -ldflags='-s -w' -o .cache/performance/papergo-admin ./cmd/admin
 go test -c -o .cache/performance/dms.test ./internal/dms
 ```
 

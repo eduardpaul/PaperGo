@@ -1,0 +1,9 @@
+{
+  "go.toolsEnvVars": {
+    "CGO_ENABLED": "1",
+    "CGO_CFLAGS": "-I${workspaceFolder}/.tools/native/include",
+    "CGO_LDFLAGS": "-L${workspaceFolder}/.tools/native/lib -lwebp -lsharpyuv -lm",
+    "PKG_CONFIG_PATH": "${workspaceFolder}/.tools/native/lib/pkgconfig"
+  },
+  "go.testEnvFile": "${workspaceFolder}/.tools/native/native.env"
+}

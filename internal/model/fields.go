@@ -15,4 +15,8 @@ type FieldOptions struct {
 	Multiple          bool            `json:"multiple,omitempty"`
 	LookupContainerID string          `json:"lookup_container_id,omitempty"`
 	TermSetID         string          `json:"term_set_id,omitempty"`
+	// SearchWeight places the field's text in search: high ranks it with
+	// names and keywords, none leaves it out (the field stays filterable);
+	// empty is normal.
+	SearchWeight string `json:"search_weight,omitempty"`
 }

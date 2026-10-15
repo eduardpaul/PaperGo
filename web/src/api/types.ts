@@ -48,6 +48,48 @@ export interface Resource {
   access?: AccessAction[];
 }
 
+/** A hit of global search (GET /v1/search). */
+export interface SearchHit {
+  id: string;
+  kind: 'item' | 'folder';
+  surface: 'head' | 'published';
+  workspace_id: string;
+  collection_id: string;
+  content_type_id?: string;
+  name: string;
+  snippet?: string;
+  /** UTF-8 byte ranges of matches in snippet. */
+  highlights?: [number, number][];
+  /** The page of the file the snippet is on, when the file's text matched. */
+  page?: number;
+  /** How the hit was found: by its words, by meaning (semantic search), or both. */
+  matched_by: ('keyword' | 'semantic')[];
+  rank: number;
+  modified_at: string;
+  modified_by: string;
+}
+
+export interface SearchFacetValue {
+  value: string;
+  count: number;
+}
+
+export interface SearchFacets {
+  workspace: SearchFacetValue[];
+  collection: SearchFacetValue[];
+  content_type: SearchFacetValue[];
+  term: SearchFacetValue[];
+  tag: SearchFacetValue[];
+}
+
+export interface SearchPage extends Page<SearchHit> {
+  /** Some matches were left out because the caller may no longer read them. */
+  total_estimated?: boolean;
+  facets?: SearchFacets;
+  /** The mode the search ran in: keyword when semantic search is off or failed. */
+  mode: 'keyword' | 'semantic' | 'hybrid';
+}
+
 export interface FieldOptions {
   unique?: boolean;
   description?: string;
@@ -59,6 +101,8 @@ export interface FieldOptions {
   multiple?: boolean;
   lookup_container_id?: string;
   term_set_id?: string;
+  /** Where the field's text goes in search; empty is normal. */
+  search_weight?: 'none' | 'normal' | 'high';
 }
 
 export interface FieldDefinition {
@@ -276,6 +320,7 @@ export interface Workflow {
   description: string;
   enabled: boolean;
   builtin_key?: string;
+  role?: string;
   collection_id?: string;
   parameters?: Record<string, unknown>;
   current_version: number;
@@ -288,6 +333,10 @@ export interface BuiltInState {
   name: string;
   description: string;
   per_collection?: boolean;
+  /** Role built-ins are workspace-wide; a collection can have its own, on or off. */
+  role?: string;
+  default?: boolean;
+  system?: boolean;
   parameters_schema?: {
     properties?: Record<string, { type?: string; title?: string; description?: string; default?: unknown }>;
   };

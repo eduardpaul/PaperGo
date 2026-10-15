@@ -70,6 +70,7 @@ func (a *API) Handler() http.Handler {
 	a.registerIntegrations(api)
 	a.registerSmartFolders(api)
 	a.registerWorkflows(api)
+	a.registerSearch(api)
 	a.registerTasks(api)
 	// Subrequests already share the outer admission slot; authenticating them
 	// separately preserves authorization overrides without recursively queueing.
@@ -112,6 +113,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("PUT /v1/items/{id}/content", a.upload)
 	api.HandleFunc("GET /v1/items/{id}/content", a.download)
 	api.HandleFunc("GET /v1/items/{id}/content/versions", a.fileVersions)
+	api.HandleFunc("GET /v1/items/{id}/text", a.itemText)
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
 	api.HandleFunc("GET /v1/audit", a.audit)
 	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
@@ -336,6 +338,12 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(409, "last_workspace_owner", err.Error())
 	case errors.As(err, &validation):
 		problem(422, "validation_failed", validation.Error())
+	case errors.Is(err, dms.ErrNoText):
+		problem(404, "text_not_read", "The file's text has not been read; a workflow with document.read_text reads it.")
+	case errors.Is(err, dms.ErrSearchOff):
+		problem(400, "search_off", "Search is turned off for this collection: its search.index workflow is disabled.")
+	case errors.Is(err, dms.ErrSearchUnavailable):
+		problem(503, "search_unavailable", "Search is unavailable while the search index is rebuilt; try again shortly.")
 	case errors.Is(err, dms.ErrLiveExpired):
 		problem(410, "live_cursor_expired", err.Error())
 	case errors.Is(err, dms.ErrDeltaExpired):

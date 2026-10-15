@@ -24,6 +24,13 @@ const (
 	EventFileAdded          = "file.added"
 	EventPermissionsChanged = "permissions.changed"
 	EventTermChanged        = "term.changed"
+	// Folder events mirror item events for folders: their name, tags and
+	// place change, they are deleted, restored and purged.
+	EventFolderCreated  = "folder.created"
+	EventFolderUpdated  = "folder.updated"
+	EventFolderDeleted  = "folder.deleted"
+	EventFolderRestored = "folder.restored"
+	EventFolderPurged   = "folder.purged"
 )
 
 // File sources, the source of a file.added event.
@@ -32,10 +39,13 @@ const (
 	FileWebDAV   = "webdav"
 	FileRestore  = "restore"
 	FileWorkflow = "workflow"
+	// FileReindex raises file.added again for a current file, when a search
+	// reindex asks the workflows that read files to read it.
+	FileReindex = "reindex"
 )
 
 // FileSources lists every file source.
-var FileSources = []string{FileUpload, FileWebDAV, FileRestore, FileWorkflow}
+var FileSources = []string{FileUpload, FileWebDAV, FileRestore, FileWorkflow, FileReindex}
 
 // Event is a domain event: something that happened in a committed write and
 // that workflows can react to. Events are separate from audit events, which

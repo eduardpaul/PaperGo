@@ -15,7 +15,7 @@ These areas have no PaperGo API, so the UI does not include them.
 - Comments, mentions and an item activity tab. The audit feed is organization-wide.
 - Note pages and `[[title]]` links.
 - Document page tools: thumbnails, OCR rerun, rotate, reorder, split, page images and processing status.
-- Search modes other than `q`, including semantic, exact and meaning search, facets, snippets and page hits.
+- Search modes other than keyword (semantic, hybrid), page hits, and field filters (`POST /v1/search` with `filter`, `GET /v1/search/fields`) on the search page.
 
 ## API exists, screen does not
 
@@ -55,7 +55,7 @@ All product screens in this section are implemented against the registered `/v1`
 - Actions follow `access` on `GET /v1/resources/{id}`: adding, editing, moving and deleting need `write`, publishing `publish`, settings and permissions `manage`. Selection and bulk actions use the list's access; an item with its own stricter permissions can still refuse them. Creating workspaces needs the `workspace.create` scope.
 - Resources are `/v1` and JSON fields are snake_case. Bearer deployments send `Authorization: Bearer`; proxy deployments use same-origin browser HTTP credentials. `/auth/config` selects the supported mode, and the OIDC client for provider sign-in, before the app mounts.
 - Live updates use `fetch` on `GET /v1/events`. The stream uses the same bearer or proxy credentials as other requests.
-- A personal home workspace is `personal_owner_id`. The sidebar hides it. Home and Inbox still open it through `GET /v1/identity/me/home` and `GET /v1/identity/me/inboxes`. Search includes it because search requires `workspace_id`.
+- A personal home workspace is `personal_owner_id`. The sidebar hides it. Home and Inbox still open it through `GET /v1/identity/me/home` and `GET /v1/identity/me/inboxes`. Global search (`GET /v1/search`) covers it with the other readable workspaces; the search page shows hits with snippets and workspace, collection and tag facets.
 - Preference writes send `If-Match`, including `"0"` when the user has no saved row. A stale preference write is 409.
 - One organization per deployment.
 - The API rejects a new relationship whose items are in different workspaces.

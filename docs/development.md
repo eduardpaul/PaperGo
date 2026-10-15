@@ -2,7 +2,7 @@
 
 PaperGo's [devcontainer](../.devcontainer/devcontainer.json) provides Go 1.27.2,
 Node.js 24.15.0 with npm, Atlas Community 1.3.0, Python 3, SQLite's CLI and a C
-compiler. Go matches CI and the application Docker build; Node uses the same
+compiler, pkg-config and CMake 3.31.10. Go matches CI and the application Docker build; Node uses the same
 major version. Atlas is built from checksum-verified Community source with
 `sqlite_fts5` enabled so it can apply PaperGo's full-text search tables; the
 published Atlas 1.3.0 images do not enable this SQLite feature.
@@ -23,13 +23,13 @@ write a host-owned checkout. Cloning into a volume also avoids host filesystem
 overhead on Windows and macOS.
 
 The first build installs development tools. After the checkout is mounted, setup
-repairs volume permissions, downloads Go modules, installs the npm lockfile,
+repairs volume permissions, installs the pinned native SDKs, downloads Go modules, installs the npm lockfile,
 builds `web/dist`, validates and applies the schema to `data/papergo.db`, and
 creates a random development token in `.cache/development.env` with mode 0600.
-The editor waits for setup because Go packages embed `web/dist` at compile time.
+The editor waits for setup because Go packages need the native SDK headers and embed `web/dist` at compile time. The Go extension and debugger use `.tools/native/native.env`; direct shell commands require `source .tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`).
 Setup can be rerun with **PaperGo: setup** or `bash scripts/setup-dev.sh`, including
 after dependency changes. The shell scripts also work with native Go, Node/npm,
-Python 3 and Atlas installations; native Atlas must likewise enable SQLite FTS5.
+Python 3.11+, a C compiler, CMake 3.26+, pkg-config and Atlas installations; native Atlas must likewise enable SQLite FTS5.
 `.cache/development.env` is generated development
 configuration; it is distinct from the optional `.env.example` file, which the
 application does not load.
@@ -71,7 +71,7 @@ or debugger; frontend changes are handled by Vite.
 
 The **PaperGo: API** and **PaperGo: Vite** tasks run those commands. To debug,
 stop any running API, select **PaperGo API** in Run and Debug, and press F5. The
-debug configuration rebuilds the frontend and reads `.cache/development.env`.
+debug configuration rebuilds the frontend and reads the native build environment plus `.cache/development.env`.
 Run Vite alongside it for frontend work. Read the token file to sign in when
 starting through the debugger.
 

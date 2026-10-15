@@ -122,6 +122,20 @@ func (_c *WorkflowCreate) SetNillableCollectionID(v *string) *WorkflowCreate {
 	return _c
 }
 
+// SetRole sets the "role" field.
+func (_c *WorkflowCreate) SetRole(v string) *WorkflowCreate {
+	_c.mutation.SetRole(v)
+	return _c
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_c *WorkflowCreate) SetNillableRole(v *string) *WorkflowCreate {
+	if v != nil {
+		_c.SetRole(*v)
+	}
+	return _c
+}
+
 // SetParameters sets the "parameters" field.
 func (_c *WorkflowCreate) SetParameters(v map[string]interface{}) *WorkflowCreate {
 	_c.mutation.SetParameters(v)
@@ -296,6 +310,11 @@ func (_c *WorkflowCreate) check() error {
 			return &ValidationError{Name: "collection_id", err: fmt.Errorf(`ent: validator failed for field "Workflow.collection_id": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.Role(); ok {
+		if err := workflow.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`ent: validator failed for field "Workflow.role": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Parameters(); !ok {
 		return &ValidationError{Name: "parameters", err: errors.New(`ent: missing required field "Workflow.parameters"`)}
 	}
@@ -396,6 +415,10 @@ func (_c *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CollectionID(); ok {
 		_spec.SetField(workflow.FieldCollectionID, field.TypeString, value)
 		_node.CollectionID = &value
+	}
+	if value, ok := _c.mutation.Role(); ok {
+		_spec.SetField(workflow.FieldRole, field.TypeString, value)
+		_node.Role = &value
 	}
 	if value, ok := _c.mutation.Parameters(); ok {
 		_spec.SetField(workflow.FieldParameters, field.TypeJSON, value)

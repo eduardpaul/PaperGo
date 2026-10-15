@@ -24,7 +24,6 @@ func (ItemSurface) Fields() []ent.Field {
 		field.JSON("payload", json.RawMessage{}),
 		// TermText holds the names, labels and synonyms of the payload's
 		// terms when the surface was written, for full-text search.
-		field.String("term_text").Default(""),
 		// Fixed UTC strings retain nanoseconds and compare chronologically in SQL.
 		field.String("item_created_at"),
 		field.String("item_created_by"),

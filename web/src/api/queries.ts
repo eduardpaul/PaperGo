@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { api, continuation, isApiError, listOf } from './http';
-import { searchRequest, smartFolderQueryRequest } from './requests';
+import { smartFolderQueryRequest } from './requests';
 import type {
   Task,
   BuiltInState,
@@ -261,12 +261,6 @@ export async function termsById(ids: string[]) {
 
 export async function keywords(q: string) {
   return listOf((await api<Page<Term>>('/v1/keywords', { query: { q, $top: 20 } })).data);
-}
-
-export async function searchResources(q: string, workspaceId: string, top?: number) {
-  const request = searchRequest(q, workspaceId);
-  const query = top ? { ...request.query, $top: top } : request.query;
-  return (await api<Page<Resource>>(request.path, { method: request.method, query })).data;
 }
 
 export async function countChildren(id: string) {

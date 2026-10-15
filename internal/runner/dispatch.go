@@ -61,7 +61,7 @@ func (r *Runner) dispatchLoop(ctx context.Context) {
 func (r *Runner) Dispatch(ctx context.Context) (int, error) {
 	total := 0
 	for ctx.Err() == nil {
-		n, cancel, err := r.dispatchBatch(ctx)
+		n, more, cancel, err := r.dispatchBatch(ctx)
 		total += n
 		// DBOS cancels on its own connection, so after the batch committed.
 		for _, id := range cancel {
@@ -69,16 +69,17 @@ func (r *Runner) Dispatch(ctx context.Context) (int, error) {
 				err = e
 			}
 		}
-		if err != nil || n < dispatchBatch {
+		if err != nil || n < dispatchBatch && !more {
 			return total, err
 		}
 	}
 	return total, ctx.Err()
 }
 
-// activeRuns reports which runs DBOS still has queued or running. It reads
-// on DBOS's own connection, which sees committed state only.
-func (r *Runner) activeRuns(ids []string) (map[string]bool, error) {
+// activeRuns reports the runs DBOS still has queued or running, and parked
+// runs as waiting. It reads on DBOS's own connection, which sees committed
+// state only.
+func (r *Runner) activeRuns(ids []string) (map[string]string, error) {
 	statuses, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterWorkflowIDs(ids...), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 	if err != nil {
 		return nil, err
@@ -87,10 +88,13 @@ func (r *Runner) activeRuns(ids []string) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]bool{}
+	out := map[string]string{}
 	for _, s := range statuses {
-		if state := status(s.Status); state == "queued" || state == "running" || parked[s.ID] {
-			out[s.ID] = true
+		switch state := status(s.Status); {
+		case parked[s.ID]:
+			out[s.ID] = "waiting"
+		case state == "queued" || state == "running":
+			out[s.ID] = state
 		}
 	}
 	return out, nil
@@ -108,28 +112,68 @@ func (r *Runner) cancelActive(id string) error {
 	return r.cancelRun(context.Background(), id)
 }
 
-func (r *Runner) dispatchBatch(ctx context.Context) (int, []string, error) {
-	var n int
-	var cancel []string
-	err := r.dms.Write(ctx, func(t *dms.Service) error {
+// dispatchBatch dispatches the oldest undispatched events. A permissions.changed
+// event is delivered to each item and folder it affects (workflow.Listens,
+// dms.PermissionTargets), PermissionBatch at a time: when more remain, its
+// fanout cursor records the last one delivered, nothing after it is
+// dispatched, and more is true, so events keep their order.
+func (r *Runner) dispatchBatch(ctx context.Context) (n int, more bool, cancel []string, err error) {
+	err = r.dms.Write(ctx, func(t *dms.Service) error {
+		more, cancel = false, nil
 		rows, err := t.Client.DomainEvent.Query().Where(domainevent.DispatchedAtIsNil()).Order(ent.Asc(domainevent.FieldCreatedAt), ent.Asc(domainevent.FieldID)).Limit(dispatchBatch).All(ctx)
 		if err != nil || len(rows) == 0 {
 			return err
 		}
-		events := make([]dms.Event, len(rows))
-		ids := make([]string, len(rows))
-		for i, row := range rows {
-			events[i] = dms.Event{ID: row.ID, Type: row.Type, WorkspaceID: row.WorkspaceID, Actor: row.Actor, Data: row.Data, Depth: row.Depth}
+		events := make([]dms.Event, 0, len(rows))
+		ids := make([]string, 0, len(rows))
+		// This cache belongs to the transaction, so a failed dispatch retries
+		// default creation along with the writes it rolled back.
+		ensured := map[string]bool{}
+		for _, row := range rows {
+			e := dms.Event{ID: row.ID, Type: row.Type, WorkspaceID: row.WorkspaceID, Actor: row.Actor, Data: row.Data, Depth: row.Depth}
 			if row.CollectionID != nil {
-				events[i].CollectionID = *row.CollectionID
+				e.CollectionID = *row.CollectionID
 			}
 			if row.ResourceID != nil {
-				events[i].ResourceID = *row.ResourceID
+				e.ResourceID = *row.ResourceID
 			}
 			if row.CauseRunID != nil {
-				events[i].CauseRunID = *row.CauseRunID
+				e.CauseRunID = *row.CauseRunID
 			}
-			ids[i] = row.ID
+			// Default built-ins exist before the workspace's first event matches.
+			if !ensured[e.WorkspaceID] {
+				if err := workflow.EnsureDefaults(ctx, t, e.WorkspaceID); err != nil {
+					return err
+				}
+				ensured[e.WorkspaceID] = true
+			}
+			if e.Type != dms.EventPermissionsChanged {
+				events, ids = append(events, e), append(ids, row.ID)
+				continue
+			}
+			listening, err := workflow.Listens(ctx, t, e)
+			if err != nil {
+				return err
+			}
+			if listening {
+				after := ""
+				if row.FanoutCursor != nil {
+					after = *row.FanoutCursor
+				}
+				targets, err := t.PermissionTargets(ctx, e, after, workflow.PermissionBatch)
+				if err != nil {
+					return err
+				}
+				events = append(events, workflow.PermissionDeliveries(e, targets)...)
+				if len(targets) == workflow.PermissionBatch {
+					if err = t.Client.DomainEvent.UpdateOneID(row.ID).SetFanoutCursor(targets[len(targets)-1].ID).Exec(ctx); err != nil {
+						return err
+					}
+					more = true
+					break
+				}
+			}
+			ids = append(ids, row.ID)
 		}
 		starts, replaced, err := workflow.Match(ctx, t, events, r.activeRuns)
 		if err != nil {
@@ -166,25 +210,42 @@ func (r *Runner) dispatchBatch(ctx context.Context) (int, []string, error) {
 			}
 		}
 		for _, in := range starts {
-			if _, err = dbos.Enqueue[workflow.Result](r.ctx, runQueue, runName, in, dbos.WithEnqueueWorkflowID(in.RunID), dbos.WithEnqueueTransaction(t.SQLTx())); err != nil {
+			queue, opts := runQueue, []dbos.EnqueueOption{dbos.WithEnqueueWorkflowID(in.RunID), dbos.WithEnqueueTransaction(t.SQLTx())}
+			switch {
+			case in.System:
+				// Coalesce runs of one item share a partition; others get their own.
+				partition := in.Partition
+				if partition == "" {
+					partition = in.RunID
+				}
+				queue, opts = systemQueue, append(opts, dbos.WithEnqueueQueuePartitionKey(partition))
+			case in.Partition != "":
+				// Coalesce: runs of one workflow on one item execute one at a time.
+				queue, opts = serialQueue, append(opts, dbos.WithEnqueueQueuePartitionKey(in.Partition))
+			}
+			if _, err = dbos.Enqueue[workflow.Result](r.ctx, queue, runName, in, opts...); err != nil {
 				return fmt.Errorf("start run %s: %w", in.RunID, err)
 			}
 		}
-		if err = t.Client.DomainEvent.Update().Where(domainevent.IDIn(ids...)).SetDispatchedAt(time.Now().UTC()).Exec(ctx); err != nil {
-			return err
+		if len(ids) > 0 {
+			if err = t.Client.DomainEvent.Update().Where(domainevent.IDIn(ids...)).SetDispatchedAt(time.Now().UTC()).Exec(ctx); err != nil {
+				return err
+			}
 		}
 		items := make([]string, 0, len(events))
 		for _, e := range events {
-			items = append(items, e.ResourceID)
+			if e.Type != dms.EventPermissionsChanged {
+				items = append(items, e.ResourceID)
+			}
 		}
 		if err = t.CollectItemRevisions(ctx, items); err != nil {
 			return err
 		}
-		n = len(rows)
+		n = len(ids)
 		return nil
 	})
 	if err != nil {
-		cancel = nil
+		cancel, more = nil, false
 	}
-	return n, cancel, err
+	return n, more, cancel, err
 }

@@ -20,10 +20,12 @@ func TestSearchMatchesTheLastWordAsAPrefix(t *testing.T) {
 		"---":             0,
 		"*":               0,
 	} {
+		indexSearch(t, s)
 		q, err := s.Query(testContext, "alice", c.ID, QueryRequest{Query: QuerySpec{Search: search}})
 		if err != nil || len(q.Data) != want {
 			t.Fatal("query search", search, len(q.Data), err)
 		}
+		indexSearch(t, s)
 		page, err := s.Browse(testContext, "alice", Browse{ParentID: c.ID, Search: search})
 		if err != nil || len(page.Data) != want {
 			t.Fatal("browse search", search, len(page.Data), err)

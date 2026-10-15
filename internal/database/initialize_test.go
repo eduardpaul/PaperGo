@@ -20,10 +20,6 @@ func TestInitializeCurrentSchemaAndRestart(t *testing.T) {
 	if err = db.CheckSchema(ctx); err != nil {
 		t.Fatal(err)
 	}
-	var tables int
-	if err = db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE name IN ('resource_search','item_surface_search') AND sql LIKE '%USING fts5%'").Scan(&tables); err != nil || tables != 2 {
-		t.Fatal(tables, err)
-	}
 	if _, err = db.SQL.ExecContext(ctx, "INSERT INTO identity_users(id,created_at,display_name) VALUES('persisted',CURRENT_TIMESTAMP,'Preserved')"); err != nil {
 		t.Fatal(err)
 	}

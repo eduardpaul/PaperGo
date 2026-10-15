@@ -19,6 +19,9 @@ import (
 type Page[T any] struct {
 	Data       []T    `json:"value"`
 	NextCursor string `json:"-"`
+	// SearchCapped means the search text matched more entries than a
+	// listing considers; narrow the words or filters for complete results.
+	SearchCapped bool `json:"search_capped,omitempty"`
 }
 type Browse struct {
 	ParentID    string
@@ -69,12 +72,25 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		return Page[*ent.Resource]{}, invalid("kind must be workspace, list, library, folder or item")
 	}
 	q := s.Client.Resource.Query().Where(resource.DeletedAtIsNil())
+	// Search text matches items and folders in the search store, within the
+	// parent's collection or the workspace, and other resources by name.
+	var matchCollection, matchWorkspace string
 	if in.ParentID != "" {
-		if _, err := s.authorize(ctx, subject, in.ParentID, "read"); err != nil {
+		parent, err := s.authorize(ctx, subject, in.ParentID, "read")
+		if err != nil {
 			return Page[*ent.Resource]{}, err
 		}
 		q.Where(resource.ParentIDEQ(in.ParentID))
+		switch {
+		case parent.Kind == resource.KindList || parent.Kind == resource.KindLibrary:
+			matchCollection = parent.ID
+		case parent.ContainerID != nil:
+			matchCollection = *parent.ContainerID
+		default:
+			matchWorkspace = parent.WorkspaceID
+		}
 	} else if in.WorkspaceID != "" {
+		matchWorkspace = in.WorkspaceID
 		w, err := s.authorize(ctx, subject, in.WorkspaceID, "read")
 		if err != nil {
 			return Page[*ent.Resource]{}, err
@@ -113,13 +129,19 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 			estimateArgs: []any{in.Tag, in.Tag},
 		})
 	}
+	var head, published, name string
+	capped := false
 	if strings.TrimSpace(in.Search) != "" {
-		phrase := ftsPhrase(in.Search)
+		var err error
+		if head, published, capped, err = s.searchMatches(ctx, subject, matchCollection, matchWorkspace, in.Search); err != nil {
+			return Page[*ent.Resource]{}, err
+		}
+		name = strings.ToLower(strings.TrimSpace(in.Search))
 		candidates = append(candidates, candidateSet{
-			sql:          "SELECT rr.id FROM resources rr WHERE rr.rowid IN (SELECT rowid FROM resource_search WHERE resource_search MATCH ?) AND rr.kind NOT IN ('item','folder') UNION ALL SELECT s.item_id FROM item_surfaces s WHERE s.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)",
-			args:         []any{phrase, phrase},
-			estimate:     "SELECT 1 FROM resource_search WHERE resource_search MATCH ? UNION ALL SELECT 1 FROM item_surface_search WHERE item_surface_search MATCH ?",
-			estimateArgs: []any{phrase, phrase},
+			sql:          "SELECT value FROM json_each(?) UNION ALL SELECT value FROM json_each(?) UNION ALL SELECT id FROM resources WHERE kind IN ('workspace','list','library') AND instr(lower(name),?)>0",
+			args:         []any{head, published, name},
+			estimate:     "SELECT 1 FROM json_each(?) UNION ALL SELECT 1 FROM json_each(?) UNION ALL SELECT 1 FROM resources WHERE kind IN ('workspace','list','library') AND instr(lower(name),?)>0",
+			estimateArgs: []any{head, published, name},
 		})
 	}
 	for _, c := range candidates {
@@ -153,14 +175,14 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		})
 	}
 	if strings.TrimSpace(in.Search) != "" {
-		phrase := ftsPhrase(in.Search)
 		q.Where(func(sel *entsql.Selector) {
 			selected, args := surfaceSQL(ctx, sel.C(resource.FieldID), subject, in.Surface)
-			// FTS rowids are content-table rowids; the UNINDEXED id column would cost a lookup per match.
-			query := "(" + sel.C(resource.FieldKind) + " NOT IN ('item','folder') AND " + sel.C("rowid") + " IN (SELECT rowid FROM resource_search WHERE resource_search MATCH ?) OR " + sel.C(resource.FieldKind) + " IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)))"
-			values := []any{phrase}
+			// An entry matches on the surface the caller reads.
+			query := "(" + sel.C(resource.FieldKind) + " NOT IN ('item','folder') AND instr(lower(" + sel.C(resource.FieldName) + "),?)>0 OR " + sel.C(resource.FieldKind) + " IN ('item','folder') AND " +
+				sel.C(resource.FieldID) + " IN (SELECT value FROM json_each(CASE " + selected + " WHEN 'head' THEN ? ELSE ? END)))"
+			values := []any{name}
 			values = append(values, args...)
-			values = append(values, phrase)
+			values = append(values, head, published)
 			sel.Where(entsql.ExprP(query, values...))
 		})
 	}
@@ -172,6 +194,7 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		return Page[*ent.Resource]{}, err
 	}
 	out := entityPage(rows, in.Limit, func(v *ent.Resource) string { return v.ID })
+	out.SearchCapped = capped
 	if _, err = s.overlayPage(ctx, subject, in.Surface, out.Data, nil); err != nil {
 		return out, err
 	}
@@ -202,12 +225,6 @@ func (s *Service) selective(ctx context.Context, c candidateSet) (bool, error) {
 		}
 	}
 	return n <= candidateDriveLimit, rows.Err()
-}
-
-// ftsPhrase treats input as a literal phrase, never as executable FTS query
-// syntax. Its last word matches as a prefix, so search works as people type.
-func ftsPhrase(search string) string {
-	return `"` + strings.ReplaceAll(strings.TrimSpace(search), `"`, `""`) + `"*`
 }
 
 // overlayPage applies each item's selected surface and returns the selected revision

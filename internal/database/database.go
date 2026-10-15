@@ -117,9 +117,6 @@ func (d *Database) CheckSchema(ctx context.Context) error {
 	if hash != migrations.SchemaHash() {
 		return fmt.Errorf("database schema checksum differs from this application")
 	}
-	if _, err := d.SQL.ExecContext(ctx, "SELECT id FROM item_surface_search LIMIT 0"); err != nil {
-		return fmt.Errorf("search migration is missing: %w", err)
-	}
 	if _, err := d.SQL.ExecContext(ctx, "SELECT g.principal_type,g.principal_id FROM grants g JOIN identity_roles r ON 1=0 JOIN identity_memberships m ON 1=0 LIMIT 0"); err != nil {
 		return fmt.Errorf("organization permissions schema is missing: %w", err)
 	}

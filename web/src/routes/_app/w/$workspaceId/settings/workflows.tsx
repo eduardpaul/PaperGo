@@ -202,21 +202,22 @@ function BuiltInForm({
     queryFn: () => collectionChildren(workspaceId),
   });
   const [collectionId, setCollectionId] = useState(builtin.workflows?.[0]?.collection_id ?? '');
+  const scoped = builtin.per_collection || Boolean(builtin.role);
   const existing = builtin.workflows?.find(
-    (workflow) => (workflow.collection_id ?? '') === (builtin.per_collection ? collectionId : ''),
+    (workflow) => (workflow.collection_id ?? '') === (scoped ? collectionId : ''),
   );
   return (
     <div className="rounded-md border p-3">
       <p className="text-sm font-medium">{builtin.name}</p>
       <p className="mt-0.5 text-xs text-muted">{builtin.description}</p>
-      {builtin.per_collection && (
+      {scoped && (
         <Select
           className="mt-2"
           value={collectionId}
           onChange={(event) => setCollectionId(event.target.value)}
           aria-label="Collection"
         >
-          <option value="">Collection…</option>
+          <option value="">{builtin.role ? 'Whole workspace' : 'Collection…'}</option>
           {collections.data?.map((collection) => (
             <option key={collection.id} value={collection.id}>
               {collection.name}
@@ -280,7 +281,7 @@ function BuiltInParameters({
         method: 'PUT',
         ifMatch: existing?.version,
         body: {
-          collection_id: builtin.per_collection ? collectionId : undefined,
+          collection_id: (builtin.per_collection || builtin.role) && collectionId ? collectionId : undefined,
           enabled,
           parameters: typed,
         },

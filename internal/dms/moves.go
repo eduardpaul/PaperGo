@@ -132,6 +132,7 @@ func (s *Service) MoveItem(ctx context.Context, subject, id string, version int,
 		if e != nil {
 			return e
 		}
+		t.emitScopeMoved(ctx, subject, r, out)
 		if out.PublishedRevisionID != nil {
 			rev, e := t.Client.ItemRevision.Get(ctx, *out.PublishedRevisionID)
 			if e != nil {

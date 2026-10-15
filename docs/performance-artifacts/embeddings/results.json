@@ -1,0 +1,223 @@
+{
+  "environment": {
+    "cpu": "Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz",
+    "go_version": "go version go1.26.0 linux/amd64",
+    "fixture_sha256": "1083ae57a14361fb94885b40f552edb5711a946b6f529aa98004b3d15678026d",
+    "binary_sha256": "08d59b5759e2baab3a8d6460752393e66a9d550ff2eaa5894749a353a13bd0d1",
+    "platform": "Linux-6.18.54.1-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "machine": "x86_64",
+    "logical_cpus": 4,
+    "threads": 1,
+    "repeats": 3,
+    "documents": 30,
+    "queries": 60,
+    "onnxruntime": "1.23.2",
+    "tokenizers": "daulet/tokenizers-v1.27.0",
+    "quantization": "Q4 weights with float32 activations",
+    "fixture": "Hand-labelled synthetic DMS smoke set; 30 passages, 60 queries (English, Spanish, Catalan); one relevant passage per query. Not MTEB or a production quality estimate."
+  },
+  "results": [
+    {
+      "model": "embeddinggemma-2:daa72c51243991dfcaf9f9137d2c573d8f7790c0:q4:d768:t512",
+      "configure_ms": 0.004,
+      "cold_query_ms": 1562.415803,
+      "warm_query_p50_ms": 100.16505000000001,
+      "warm_query_p95_ms": 116.230298,
+      "document_mean_ms": 169.86363213333334,
+      "documents_per_second": 5.887075340618271,
+      "peak_rss_mib": 364.01953125,
+      "artifact_mib": 197.11499404907227,
+      "quality": {
+        "768": {
+          "recall_at_1": 0.9333333333333333,
+          "recall_at_5": 1.0,
+          "mrr": 0.9638888888888889,
+          "by_language": {
+            "ca": {
+              "recall_at_1": 0.8571428571428571,
+              "recall_at_5": 1.0,
+              "mrr": 0.9285714285714286
+            },
+            "en": {
+              "recall_at_1": 1.0,
+              "recall_at_5": 1.0,
+              "mrr": 1.0
+            },
+            "es": {
+              "recall_at_1": 0.875,
+              "recall_at_5": 1.0,
+              "mrr": 0.9270833333333334
+            }
+          },
+          "misses": [
+            {
+              "query": "La factura de luz que ya está pagada",
+              "rank": 2,
+              "expected": [
+                "invoice-paid"
+              ],
+              "top": "invoice-unpaid"
+            },
+            {
+              "query": "Busca el abono por el cobro excesivo de energía",
+              "rank": 3,
+              "expected": [
+                "invoice-credit"
+              ],
+              "top": "invoice-unpaid"
+            },
+            {
+              "query": "De qui és el codi desenvolupat a mida un cop pagat?",
+              "rank": 2,
+              "expected": [
+                "contract-ip"
+              ],
+              "top": "receipt-payment"
+            },
+            {
+              "query": "Permís necessari per llegir una revisió encara no publicada",
+              "rank": 2,
+              "expected": [
+                "security-access"
+              ],
+              "top": "version"
+            }
+          ]
+        },
+        "256": {
+          "recall_at_1": 0.9333333333333333,
+          "recall_at_5": 1.0,
+          "mrr": 0.9638888888888889,
+          "by_language": {
+            "ca": {
+              "recall_at_1": 0.9285714285714286,
+              "recall_at_5": 1.0,
+              "mrr": 0.9642857142857143
+            },
+            "en": {
+              "recall_at_1": 0.9666666666666667,
+              "recall_at_5": 1.0,
+              "mrr": 0.9833333333333333
+            },
+            "es": {
+              "recall_at_1": 0.875,
+              "recall_at_5": 1.0,
+              "mrr": 0.9270833333333334
+            }
+          },
+          "misses": [
+            {
+              "query": "Find the electricity bill that has already been settled",
+              "rank": 2,
+              "expected": [
+                "invoice-paid"
+              ],
+              "top": "invoice-unpaid"
+            },
+            {
+              "query": "La factura de luz que ya está pagada",
+              "rank": 2,
+              "expected": [
+                "invoice-paid"
+              ],
+              "top": "invoice-unpaid"
+            },
+            {
+              "query": "Busca el abono por el cobro excesivo de energía",
+              "rank": 3,
+              "expected": [
+                "invoice-credit"
+              ],
+              "top": "invoice-unpaid"
+            },
+            {
+              "query": "Permís necessari per llegir una revisió encara no publicada",
+              "rank": 2,
+              "expected": [
+                "security-access"
+              ],
+              "top": "version"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "model": "harrier-oss-v1-0.6b:e4daffa011e666dcd2ff2a3c6c05084090ac314d:q4:d1024:t512",
+      "configure_ms": 0.004,
+      "cold_query_ms": 1711.612586,
+      "warm_query_p50_ms": 416.799601,
+      "warm_query_p95_ms": 499.691515,
+      "document_mean_ms": 519.6320210666667,
+      "documents_per_second": 1.9244387556164557,
+      "peak_rss_mib": 446.84375,
+      "artifact_mib": 389.4040746688843,
+      "quality": {
+        "1024": {
+          "recall_at_1": 0.9166666666666666,
+          "recall_at_5": 1.0,
+          "mrr": 0.9527777777777777,
+          "by_language": {
+            "ca": {
+              "recall_at_1": 0.9285714285714286,
+              "recall_at_5": 1.0,
+              "mrr": 0.9642857142857143
+            },
+            "en": {
+              "recall_at_1": 0.9333333333333333,
+              "recall_at_5": 1.0,
+              "mrr": 0.9611111111111111
+            },
+            "es": {
+              "recall_at_1": 0.875,
+              "recall_at_5": 1.0,
+              "mrr": 0.9270833333333334
+            }
+          },
+          "misses": [
+            {
+              "query": "Find the electricity bill that has already been settled",
+              "rank": 3,
+              "expected": [
+                "invoice-paid"
+              ],
+              "top": "invoice-credit"
+            },
+            {
+              "query": "Busca el abono por el cobro excesivo de energía",
+              "rank": 3,
+              "expected": [
+                "invoice-credit"
+              ],
+              "top": "invoice-unpaid"
+            },
+            {
+              "query": "What permission is needed to read an unpublished revision?",
+              "rank": 2,
+              "expected": [
+                "security-access"
+              ],
+              "top": "version"
+            },
+            {
+              "query": "Permís necessari per llegir una revisió encara no publicada",
+              "rank": 2,
+              "expected": [
+                "security-access"
+              ],
+              "top": "version"
+            },
+            {
+              "query": "Justificante de pago al proveedor de la orden PO-783",
+              "rank": 2,
+              "expected": [
+                "receipt-payment"
+              ],
+              "top": "shipping"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

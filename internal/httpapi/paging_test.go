@@ -30,6 +30,7 @@ func TestNextLinksPreserveFiltersAndTerminate(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	indexSearch(t, s)
 	path := "/v1/resources/" + l.ID + "/children?$top=1&q=Doc&surface=head"
 	seen := map[string]bool{}
 	for page := 0; page < 2; page++ {

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/goregular"
@@ -211,6 +212,33 @@ func TestBlankPage(t *testing.T) {
 	p, err := e.Recognize(context.Background(), blank)
 	if err != nil || len(p.Lines) != 0 || p.Text() != "" {
 		t.Fatalf("blank page: %v, %v", p.Lines, err)
+	}
+}
+
+func TestIdleUnloadAndReload(t *testing.T) {
+	e := testEngine(t)
+	e.idleTimeout = 50 * time.Millisecond
+	img := page(t, invoice[:2], 32, false)
+	want, err := e.Recognize(context.Background(), img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		gate <- struct{}{}
+		unloaded := e.models == nil && e.idleTimer == nil
+		release()
+		if unloaded {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("idle OCR models were not unloaded")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	got, err := e.Recognize(context.Background(), img)
+	if err != nil || got.Text() != want.Text() {
+		t.Fatalf("OCR after idle reload: %q, %v; want %q", got.Text(), err, want.Text())
 	}
 }
 

@@ -9,10 +9,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"papergo/ent"
+	"papergo/ent/resource"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
 	"papergo/internal/storage"
 	"papergo/internal/testutil"
+	"papergo/internal/testutil/searchstore"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -35,9 +38,25 @@ func setup(t *testing.T) (http.Handler, *dms.Service, string) {
 		t.Fatal(err)
 	}
 	s := dms.NewService(db.SQL)
+	index := searchstore.Open(t, filepath.Join(t.TempDir(), "search.db"), []string{"english"})
+	s.SetSearch(index)
 	a := &API{DMS: s, Auth: auth.Development{Token: testToken, Subject: "alice"}, Storage: store, Logger: slog.New(slog.NewJSONHandler(testLog{t}, nil)), Ready: db.SQL.PingContext, MaxUpload: 32}
 	return a.Handler(), s, path
 }
+
+// indexSearch brings the search store up to date with every live item and
+// folder, as the search.index workflow does in a running PaperGo.
+func indexSearch(t *testing.T, s *dms.Service) {
+	t.Helper()
+	ids, err := s.Client.Resource.Query().Where(resource.KindIn(resource.KindItem, resource.KindFolder), resource.DeletedAtIsNil()).IDs(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = s.SyncSearch(context.Background(), ids); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func request(h http.Handler, method, path, body, token, match, contentType string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	if token != "" {

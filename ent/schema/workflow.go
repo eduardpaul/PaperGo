@@ -25,6 +25,10 @@ func (Workflow) Fields() []ent.Field {
 		field.Bool("enabled").Default(true),
 		field.String("builtin_key").Optional().Nillable().Immutable(),
 		field.String("collection_id").Optional().Nillable().Immutable().MaxLen(36),
+		// Role is the product process the workflow fills, such as
+		// search.index: a built-in with that role, its copy or an alternative.
+		// One enabled filler per scope (the workspace, or CollectionID) runs.
+		field.String("role").Optional().Nillable().Immutable().MaxLen(100),
 		field.JSON("parameters", map[string]any{}).Default(map[string]any{}),
 		field.Int("current_version").Positive(),
 		field.String("created_by").Immutable(),
@@ -38,6 +42,7 @@ func (Workflow) Indexes() []ent.Index {
 		index.Fields("workspace_id", "key").Unique().Annotations(entsql.IndexWhere("deleted_at IS NULL")),
 		index.Fields("workspace_id", "name").Unique().Annotations(entsql.IndexWhere("deleted_at IS NULL")),
 		index.Fields("workspace_id", "id"),
+		index.Fields("workspace_id", "role", "collection_id").Annotations(entsql.IndexWhere("role IS NOT NULL AND deleted_at IS NULL")),
 	}
 }
 

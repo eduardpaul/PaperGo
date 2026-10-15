@@ -402,7 +402,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "type",
@@ -559,7 +559,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -657,6 +657,10 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "search_capped": {
+                      "type": "boolean",
+                      "description": "The search text matched more than 10,000 entries; the page covers only the first 10,000 matches. Narrow the search."
                     }
                   },
                   "required": [
@@ -690,7 +694,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "workspace_id",
@@ -1066,6 +1070,10 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "search_capped": {
+                      "type": "boolean",
+                      "description": "The search text matched more than 10,000 entries; the page covers only the first 10,000 matches. Narrow the search."
                     }
                   },
                   "required": [
@@ -1099,7 +1107,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "schema": {
@@ -1403,7 +1411,7 @@
             }
           }
         },
-        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes raise permissions.changed once for the edited scope, with resource_kind, action=replace and previous/current permission snapshots (inherit, grants, scope_id, effective_grants). Unchanged ACLs raise no event. The event and audit commit with the write.",
+        "description": "Break, copy or reset inheritance using typed user, group and workspace role principals. Copied group grants retain group IDs and resolve current nested memberships. Copying workspace inheritance retains dynamic visitor/member/owner role principals. Workspace owners and workspace.manage holders retain control. A permission change that removes the caller's manage access rolls back. list.read and resource manage access are required. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply. ACL changes deliver permissions.changed (action=replace) to the resource and every item and folder that inherits from it, with previous_scope_id and current_scope_id; the root event, with previous/current permission snapshots (inherit, grants, scope_id, effective_grants), commits with the write and audit, and the dispatcher delivers it in batches. Unchanged ACLs raise no event.",
         "x-module-scopes": [
           "list.read"
         ]
@@ -1475,7 +1483,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "direction",
@@ -1895,7 +1903,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "description": "Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
@@ -2071,7 +2079,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -2164,7 +2172,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -2454,7 +2462,7 @@
               "default": 50
             },
             "name": "$top",
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50.",
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
             "in": "query"
           }
         ]
@@ -2524,7 +2532,7 @@
               "default": 50
             },
             "name": "$top",
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50.",
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
             "in": "query"
           }
         ],
@@ -2672,7 +2680,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -3707,7 +3715,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -3963,7 +3971,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -5285,7 +5293,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -7299,7 +7307,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Only runs of this workflow."
+            "description": "Only runs of this workflow. Without it, runs of system built-ins such as search.index are left out."
           },
           {
             "name": "item_id",
@@ -7329,7 +7337,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -7816,7 +7824,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -8628,7 +8636,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -9335,7 +9343,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -10318,7 +10326,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -11136,7 +11144,7 @@
       "post": {
         "operationId": "setWorkspaceMember",
         "summary": "Add a workspace member or change their role",
-        "description": "Owner access is required. Repeating the same subject/role is a no-op. The last owner cannot be demoted. Membership changes do not consume the workspace metadata ETag. Subject registration/active-user validation belongs to the external identity provider. Membership additions and role changes raise permissions.changed on the workspace root, with resource_kind=workspace, action=member.set, member_subject, previous_role and role. Empty previous_role means no prior membership. Repeated assignments raise no event.",
+        "description": "Owner access is required. Repeating the same subject/role is a no-op. The last owner cannot be demoted. Membership changes do not consume the workspace metadata ETag. Subject registration/active-user validation belongs to the external identity provider. Membership additions and role changes deliver permissions.changed (action=member.set, member_subject, previous_role, role) to every item and folder of the workspace. Empty previous_role means no prior membership. Repeated assignments raise no event.",
         "requestBody": {
           "required": true,
           "content": {
@@ -11184,7 +11192,7 @@
       "delete": {
         "operationId": "removeWorkspaceMember",
         "summary": "Remove a workspace member",
-        "description": "Owner access is required. The last owner cannot be removed. No If-Match is needed. A missing member or inaccessible workspace returns 404. Successful removal raises permissions.changed on the workspace root, with resource_kind=workspace, action=member.remove, member_subject, previous_role and an empty role. Failed removals raise no event.",
+        "description": "Owner access is required. The last owner cannot be removed. No If-Match is needed. A missing member or inaccessible workspace returns 404. Successful removal delivers permissions.changed (action=member.remove, member_subject, previous_role, empty role) to every item and folder of the workspace. Failed removals raise no event.",
         "responses": {
           "204": {
             "description": "Membership removed"
@@ -12501,7 +12509,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -12895,7 +12903,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -13485,7 +13493,7 @@
         }
       ],
       "get": {
-        "summary": "Synchronize the caller’s visible collection",
+        "summary": "Synchronize the caller\u2019s visible collection",
         "description": "Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.",
         "parameters": [
           {
@@ -13513,7 +13521,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -13561,7 +13569,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "actor",
@@ -15870,6 +15878,635 @@
           }
         }
       }
+    },
+    "/v1/resources/{id}/workflow-roles": {
+      "get": {
+        "summary": "Workflow Roles of a Collection",
+        "operationId": "collectionWorkflowRoles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRoleStatePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Which workflow fills each role for a list or library: its own filler, else the workspace's, with its scope and whether it is enabled. Requires read access to the collection and the workspace."
+      }
+    },
+    "/v1/search": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "search",
+        "summary": "Search items and folders across readable workspaces",
+        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md.",
+        "x-required-scopes": [
+          "list.read"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "description": "Words (all must match), \"phrases\", a OR b, -word or NOT word, prefix*. Required unless a filter is given."
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "keyword",
+                "semantic",
+                "hybrid"
+              ]
+            },
+            "description": "keyword matches words; semantic finds file content close in meaning (an embedding model is required); hybrid fuses both by reciprocal rank. Default hybrid when an embedding model is configured and q is given, else keyword."
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "head",
+                "published"
+              ],
+              "default": "auto"
+            },
+            "description": "Auto chooses head where the caller reads drafts and published elsewhere."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "item"
+            },
+            "description": "item, folder, or both comma-separated."
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only this workspace."
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only this list or library."
+          },
+          {
+            "name": "content_type_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only this content type."
+          },
+          {
+            "name": "term_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Items holding this term, a descendant, or a term merged into it."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only entries with this tag."
+          },
+          {
+            "name": "created_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only entries created by this subject."
+          },
+          {
+            "name": "modified_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only entries last modified by this subject."
+          },
+          {
+            "name": "modified_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Modified at or after (RFC 3339)."
+          },
+          {
+            "name": "modified_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Modified at or before (RFC 3339)."
+          },
+          {
+            "name": "facets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "description": "false leaves out facet counts."
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "description": "Page size."
+          },
+          {
+            "name": "$skiptoken",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation from @odata.nextLink, bound to the caller and the query."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "description": "search_unavailable: no search store, or it is being rebuilt.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "searchWithFilter",
+        "summary": "Search items and folders with field filters",
+        "description": "Keyword search over the search index, trimmed to what the caller reads now and on the surface they read; every hit is rechecked against current permissions. File text participates in matching and snippets only with document.read; otherwise metadata is searched. Facets are omitted if any matching source fails current authorization. Indexing is asynchronous (the search.index workflow). See docs/search.md. The JSON body takes the GET parameters (kind as an array) and a filter on search fields; $top and $skiptoken stay in the URL, and a next page repeats the body.",
+        "x-required-scopes": [
+          "list.read"
+        ],
+        "parameters": [
+          {
+            "name": "$top",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "description": "Page size."
+          },
+          {
+            "name": "$skiptoken",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation from @odata.nextLink, bound to the caller and the query."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "description": "search_unavailable: no search store, or it is being rebuilt.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/search/reindex": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "reindexSearch",
+        "summary": "Rewrite every search document",
+        "description": "Rewrites the documents of every live item and folder in batches and removes documents of entries that no longer exist. With content, the workflow filling search.content reads, chunks and publishes again the current file of items whose file has no content (all of them with force); text read before is reused. Search keeps answering meanwhile.",
+        "x-required-scopes": [
+          "organization.manage"
+        ],
+        "responses": {
+          "202": {
+            "description": "Queued operation. Follow Location for progress.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Operation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Also index file content again, through file.added events with the reindex source."
+                  },
+                  "force": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "With content: every current file, not only those without content."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/search/status": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "searchStatus",
+        "summary": "Search store state",
+        "x-required-scopes": [
+          "organization.manage"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/search/fields": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "searchFields",
+        "summary": "Fields search can filter on",
+        "description": "The fields of the lists and libraries the caller may read, one per key, type and scale. Notes are text, not filters.",
+        "x-required-scopes": [
+          "list.read"
+        ],
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SearchField"
+                      }
+                    }
+                  },
+                  "required": [
+                    "value"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/items/{id}/text": {
+      "get": {
+        "tags": [
+          "Documents"
+        ],
+        "operationId": "itemText",
+        "summary": "Text read from an item's file",
+        "description": "The page texts a workflow with document.read_text read from the file version the caller may read: the current one, or blob_id. 404 text_not_read before it was read.",
+        "x-required-scopes": [
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blob_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemText"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -17354,6 +17991,15 @@
             "type": "string",
             "pattern": "^[A-Z]{3}$",
             "description": "Required for currency fields only. Three uppercase letters, such as EUR. Currency and number values are exact JSON decimals with a 96-bit coefficient and scale 0..28; excess fractional precision rounds to nearest, ties to even."
+          },
+          "search_weight": {
+            "type": "string",
+            "enum": [
+              "none",
+              "normal",
+              "high"
+            ],
+            "description": "Where the field's text goes in search: high ranks it with names and keywords, none leaves it out (the field stays filterable). Applies to entries as they are reindexed."
           }
         },
         "required": [],
@@ -17714,6 +18360,14 @@
               "null"
             ],
             "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
+          "total_capped": {
+            "type": "boolean",
+            "description": "More entries match than total_limit; total is the limit."
+          },
+          "search_capped": {
+            "type": "boolean",
+            "description": "The search text matched more than 10,000 entries; the page covers only the first 10,000 matches. Narrow the search."
           }
         },
         "required": [
@@ -17974,7 +18628,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Registered operation kind; field_index and bulk_update are built in."
+            "description": "Registered operation kind; field_index, bulk_update and search_reindex are built in."
           },
           "status": {
             "type": "string",
@@ -18083,6 +18737,10 @@
               "null"
             ],
             "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
+          "search_capped": {
+            "type": "boolean",
+            "description": "The search text matched more than 10,000 entries; the page covers only the first 10,000 matches. Narrow the search."
           }
         },
         "required": [
@@ -19202,7 +19860,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.changed, or wf.{key}.{event}. permissions.changed takes only collection_id and no item condition; term.changed and term.merged take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed and term.merged take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
           },
           "collection_id": {
             "type": "string",
@@ -19271,6 +19929,29 @@
           "task_key": {
             "type": "string",
             "description": "On task.* triggers: only tasks with this key."
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "replace",
+                "move",
+                "member.set",
+                "member.remove"
+              ]
+            },
+            "uniqueItems": true,
+            "description": "On permissions.changed: the changes that start runs. Default all."
+          },
+          "media_types": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/([a-z0-9][a-z0-9!#$&^_.+-]{0,62}|\\*)$"
+            },
+            "description": "On file.added: only files of these media types start runs, exact (application/pdf) or wildcards (image/*)."
           }
         },
         "required": [
@@ -19361,9 +20042,10 @@
             "enum": [
               "parallel",
               "skip",
-              "replace"
+              "replace",
+              "coalesce"
             ],
-            "description": "While a run on the same item (or selection member) is active: start anyway (parallel, default), start nothing (skip), or cancel the active run (replace)."
+            "description": "While a run on the same item (or selection member) is active: start anyway (parallel, default), start nothing (skip), cancel the active run (replace), or coalesce: start nothing while a run is queued, otherwise queue one run that starts when the active run ends. Selection workflows cannot coalesce."
           },
           "flow": {
             "$ref": "#/components/schemas/WorkflowFlow"
@@ -19375,6 +20057,19 @@
               }
             ],
             "description": "Launch form of manual starts. On selection workflows its root may carry x-papergo-selection hints (preview, item_label, order_label, primary_description)."
+          },
+          "output_schema": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowForm"
+              }
+            ],
+            "description": "Form of what a completed run returns. Every output must be one of its properties."
+          },
+          "outputs": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Values of the output_schema's properties, usually tokens. Evaluated when a run completes, checked against output_schema (defaults applied, at most 16 KB), and carried as result.outputs and as data.outputs of wf.{key}.completed."
           }
         },
         "required": [
@@ -19400,6 +20095,14 @@
           },
           "definition": {
             "$ref": "#/components/schemas/WorkflowDefinition"
+          },
+          "role": {
+            "type": "string",
+            "description": "Make the workflow a filler of this role; set at creation. Its outputs must fill the role's output_schema."
+          },
+          "collection_id": {
+            "type": "string",
+            "description": "With role: fill the role for this list or library only; set at creation."
           }
         },
         "required": [
@@ -19461,6 +20164,10 @@
           },
           "version": {
             "type": "integer"
+          },
+          "role": {
+            "type": "string",
+            "description": "The role this workflow fills."
           }
         },
         "required": [
@@ -19646,6 +20353,18 @@
           },
           "parameters_schema": {
             "$ref": "#/components/schemas/WorkflowForm"
+          },
+          "role": {
+            "type": "string",
+            "description": "The role the built-in fills; role built-ins are workspace-wide and may be set per collection."
+          },
+          "default": {
+            "type": "boolean",
+            "description": "On in every workspace until people turn it off, copy or replace it."
+          },
+          "system": {
+            "type": "boolean",
+            "description": "A product process: system queue, successful runs kept a day."
           }
         },
         "required": [
@@ -19688,12 +20407,19 @@
             "items": {
               "$ref": "#/components/schemas/WorkflowBuiltIn"
             }
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRole"
+            }
           }
         },
         "required": [
           "triggers",
           "activities",
-          "builtins"
+          "builtins",
+          "roles"
         ],
         "additionalProperties": false
       },
@@ -20259,7 +20985,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Ids from the root to the term: /root/…/term/."
+            "description": "Ids from the root to the term: /root/\u2026/term/."
           },
           "labels": {
             "type": "object",
@@ -20464,7 +21190,7 @@
       },
       "TermCSV": {
         "type": "string",
-        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term … Level 7 Term."
+        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term \u2026 Level 7 Term."
       },
       "PortableTerm": {
         "type": "object",
@@ -21180,7 +21906,7 @@
           "languages": {
             "type": "string",
             "maxLength": 191,
-            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
+            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2\u201331 letters/underscores."
           }
         }
       },
@@ -21617,7 +22343,7 @@
           "languages": {
             "type": "string",
             "maxLength": 191,
-            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
+            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2\u201331 letters/underscores."
           }
         }
       },
@@ -22388,6 +23114,529 @@
           "all_day",
           "item"
         ]
+      },
+      "WorkflowRole": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "output_schema": {
+            "$ref": "#/components/schemas/WorkflowForm"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "description"
+        ],
+        "additionalProperties": false
+      },
+      "WorkflowRoleState": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/WorkflowRole"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "collection",
+              "workspace"
+            ],
+            "description": "Where the filler comes from; absent when nothing fills the role."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "workflow": {
+            "$ref": "#/components/schemas/Workflow"
+          }
+        },
+        "required": [
+          "role",
+          "enabled"
+        ],
+        "additionalProperties": false
+      },
+      "WorkflowRoleStatePage": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRoleState"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "value",
+          "@odata.nextLink"
+        ],
+        "additionalProperties": false
+      },
+      "SearchFacetValue": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ],
+        "additionalProperties": false
+      },
+      "SearchFacets": {
+        "type": "object",
+        "description": "Counts of the matches the store holds per value, before the recheck of current permissions; the most frequent values of each.",
+        "properties": {
+          "workspace": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchFacetValue"
+            }
+          },
+          "collection": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchFacetValue"
+            }
+          },
+          "content_type": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchFacetValue"
+            }
+          },
+          "term": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchFacetValue"
+            }
+          },
+          "tag": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchFacetValue"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SearchHit": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "item",
+              "folder"
+            ]
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "head",
+              "published"
+            ]
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_type_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "Body text around the first match."
+          },
+          "highlights": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "description": "Byte ranges of matches in snippet."
+          },
+          "matched_by": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "keyword",
+                "semantic"
+              ]
+            },
+            "description": "How the hit was found: by its words, by meaning, or both; empty when no words were searched."
+          },
+          "rank": {
+            "type": "number"
+          },
+          "modified_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modified_by": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The page of the file the snippet is on, when the file's text matched."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "surface",
+          "workspace_id",
+          "collection_id",
+          "name",
+          "matched_by",
+          "rank",
+          "modified_at",
+          "modified_by"
+        ],
+        "additionalProperties": false
+      },
+      "SearchPage": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Matches in the store, before the recheck of current permissions."
+          },
+          "total_estimated": {
+            "type": "boolean",
+            "description": "The native candidate limit was reached or entries failed the current permission recheck; total and facets may be estimates."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "keyword",
+              "semantic",
+              "hybrid"
+            ],
+            "description": "The mode the search ran in: keyword when embedding the query failed."
+          },
+          "facets": {
+            "$ref": "#/components/schemas/SearchFacets",
+            "description": "Counts from matching sources verified against current permissions. Omitted if any source is no longer visible."
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page."
+          }
+        },
+        "required": [
+          "value",
+          "total",
+          "mode",
+          "@odata.nextLink"
+        ],
+        "additionalProperties": false
+      },
+      "SearchStatus": {
+        "type": "object",
+        "properties": {
+          "store": {
+            "type": "string",
+            "description": "The configured search store: sqlite or zvec."
+          },
+          "rebuilding": {
+            "type": "boolean",
+            "description": "A rebuild of a new store is running; search answers 503 until it completes."
+          },
+          "documents": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "chunks": {
+            "type": "integer",
+            "description": "Published chunks of file content."
+          },
+          "model": {
+            "type": "string",
+            "description": "The embedding model's vector space, e.g. openai:text-embedding-3-small:1536; absent without a model or while it is unavailable."
+          },
+          "embeddings": {
+            "type": "object",
+            "properties": {
+              "vectors": {
+                "type": "integer",
+                "description": "Stored vectors of the model."
+              },
+              "pending": {
+                "type": "integer",
+                "description": "Published chunk inputs without a vector of the model, which the embedding sweep embeds."
+              },
+              "memory_bytes": {
+                "type": "integer",
+                "description": "Cached normalized vector bytes for the model; native index and source-catalog overhead are additional."
+              }
+            },
+            "required": [
+              "vectors",
+              "pending",
+              "memory_bytes"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "store",
+          "rebuilding",
+          "documents",
+          "bytes",
+          "chunks"
+        ],
+        "additionalProperties": false
+      },
+      "SearchRequest": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "keyword",
+              "semantic",
+              "hybrid"
+            ],
+            "description": "keyword matches words; semantic finds file content close in meaning (an embedding model is required); hybrid fuses both by reciprocal rank. Default hybrid when an embedding model is configured and q is given, else keyword."
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "head",
+              "published"
+            ]
+          },
+          "kind": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "item",
+                "folder"
+              ]
+            }
+          },
+          "workspace_id": {
+            "type": "string"
+          },
+          "collection_id": {
+            "type": "string"
+          },
+          "content_type_id": {
+            "type": "string"
+          },
+          "term_id": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "modified_by": {
+            "type": "string"
+          },
+          "modified_from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modified_to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "facets": {
+            "type": "boolean",
+            "default": true
+          },
+          "filter": {
+            "$ref": "#/components/schemas/FilterExpr",
+            "description": "Filter on search fields (GET /v1/search/fields): at most 32 nodes and depth 6. Unknown fields, unsupported operators and mistyped values answer 422."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SearchField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "scale": {
+            "type": "integer"
+          },
+          "multiple": {
+            "type": "boolean"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "term_set_id": {
+            "type": "string"
+          },
+          "operators": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "eq",
+                "ne",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "in",
+                "under",
+                "present",
+                "missing"
+              ]
+            }
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type",
+          "operators"
+        ],
+        "additionalProperties": false
+      },
+      "ItemText": {
+        "type": "object",
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "blob_id": {
+            "type": "string",
+            "description": "The file version read."
+          },
+          "text_id": {
+            "type": "string"
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "integer"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "ocr": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "page",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "page_count": {
+            "type": "integer"
+          },
+          "chars": {
+            "type": "integer"
+          },
+          "language": {
+            "type": "string"
+          },
+          "ocr_pages": {
+            "type": "integer"
+          },
+          "skipped_pages": {
+            "type": "integer",
+            "description": "Pages without a text layer that were not OCRed."
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "read_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "item_id",
+          "blob_id",
+          "text_id",
+          "pages",
+          "page_count",
+          "chars",
+          "language",
+          "ocr_pages",
+          "skipped_pages",
+          "truncated",
+          "read_at"
+        ],
+        "additionalProperties": false
       }
     }
   }

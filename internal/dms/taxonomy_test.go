@@ -479,14 +479,17 @@ func TestTermAndKeywordsFieldValues(t *testing.T) {
 			t.Fatal("group labels", groups.Data)
 		}
 	}
+	indexSearch(t, s)
 	found, err := s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Search: "iberia"}})
 	if err != nil || len(found.Data) != 2 {
 		t.Fatal("search finds term synonyms", found, err)
 	}
+	indexSearch(t, s)
 	found, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Search: "españa"}})
 	if err != nil || len(found.Data) != 2 {
 		t.Fatal("search finds localized labels", found, err)
 	}
+	indexSearch(t, s)
 	found, err = s.Query(testContext, "alice", l.ID, QueryRequest{Query: QuerySpec{Search: "lunch"}})
 	if err != nil || len(found.Data) != 1 || found.Data[0].ID != madrid.ID {
 		t.Fatal("search finds keywords", found, err)

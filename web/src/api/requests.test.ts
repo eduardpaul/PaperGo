@@ -65,12 +65,13 @@ describe('listing and search requests', () => {
     });
   });
 
-  it('searches one workspace', () => {
-    expect(searchRequest('invoice', 'ws')).toEqual({
-      path: '/v1/resources',
+  it('searches every readable workspace, narrowed by facets', () => {
+    expect(searchRequest({ q: 'invoice', workspaceId: 'ws', tag: 'paid', kind: 'all' })).toEqual({
+      path: '/v1/search',
       method: 'GET',
-      query: { q: 'invoice', workspace_id: 'ws', $top: 50 },
+      query: { q: 'invoice', workspace_id: 'ws', collection_id: undefined, tag: 'paid', kind: 'item,folder', $top: 25 },
     });
+    expect(searchRequest({ q: 'invoice' }).query?.kind).toBeUndefined();
   });
 
   it('posts the smart-folder path with the same body a continuation reuses', () => {

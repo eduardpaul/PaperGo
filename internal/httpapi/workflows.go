@@ -21,6 +21,7 @@ func (a *API) registerWorkflows(api *http.ServeMux) {
 	api.HandleFunc("GET /v1/workspaces/{id}/workflow-builtins", a.workflowBuiltIns)
 	api.HandleFunc("PUT /v1/workspaces/{id}/workflow-builtins/{key}", a.setWorkflowBuiltIn)
 	api.HandleFunc("POST /v1/workspaces/{id}/workflow-builtins/{key}/copy", a.copyWorkflowBuiltIn)
+	api.HandleFunc("GET /v1/resources/{id}/workflow-roles", a.collectionWorkflowRoles)
 	api.HandleFunc("GET /v1/workspaces/{id}/workflow-runs", a.workflowRuns)
 	api.HandleFunc("GET /v1/workflow-runs/{id}", a.workflowRun)
 	api.HandleFunc("POST /v1/workflow-runs/{id}/cancel", a.cancelWorkflowRun)
@@ -34,8 +35,13 @@ var triggerTypes = []map[string]string{
 	{"type": dms.EventItemPublished, "description": "An item revision was published; data has revision_id, revision_number and publication_id. terms and term_change as for item.created."},
 	{"type": dms.EventItemUnpublished, "description": "An item was unpublished; data has revision_id."},
 	{"type": dms.EventItemDeleted, "description": "An item was deleted, alone or with its folder; the run has no item."},
+	{"type": dms.EventFolderCreated, "description": "A folder was created; data has revision_id, revision_number and content_type_id, and the run has the folder as its item."},
+	{"type": dms.EventFolderUpdated, "description": "A folder was renamed, retagged or moved; data has revision_id, revision_number and content_type_id for content changes, or from_parent_id and parent_id for a move. The run has the folder as its item."},
+	{"type": dms.EventFolderDeleted, "description": "A folder was deleted, alone or with a parent folder; the run has no item."},
+	{"type": dms.EventFolderRestored, "description": "A folder was restored from the recycle bin; the run has the folder as its item."},
+	{"type": dms.EventFolderPurged, "description": "A deleted folder was permanently purged; the run has no item."},
 	{"type": dms.EventFileAdded, "description": "A new file version became an item's current file; data has source (upload, webdav, restore or workflow), file_version, blob_id, content_type, size, revision_id and content_type_id. sources limits the sources; the default is all but workflow."},
-	{"type": dms.EventPermissionsChanged, "description": "A resource's ACL or workspace membership changed; data has resource_kind and action. ACL replacements include previous and current permissions; membership changes include member_subject, previous_role and role. collection_id limits it to a collection and its content. Only item ACL changes give the run an item."},
+	{"type": dms.EventPermissionsChanged, "description": "An item's or folder's effective permissions changed: its own or an ancestor's ACL was replaced (replace), it moved into another permission scope (move), or workspace membership changed (member.set, member.remove). Delivered once per affected item and folder, which is the run's item; data has resource_kind, action, root_id, root_kind, root_event_id, previous_scope_id and current_scope_id, and member_subject, previous_role and role for membership. actions limits the changes; collection_id, content_type_id and conditions apply as for item triggers."},
 	{"type": workflow.TriggerSchedule, "description": "A cron occurrence (cron, time_zone). With collection_id, one run per item that meets the condition."},
 	{"type": workflow.TriggerManual, "description": "Started through POST /v1/workflows/{id}/runs, on items or (without collection_id) with no item."},
 	{"type": dms.EventTermMerged, "description": "A term was merged into another; data has source_term_id, target_term_id and term_set_id; the run has no item."},
@@ -47,7 +53,18 @@ var triggerTypes = []map[string]string{
 }
 
 func (a *API) workflowCatalog(w http.ResponseWriter, r *http.Request) {
-	respond(w, r, 200, map[string]any{"triggers": triggerTypes, "activities": workflow.Activities(), "builtins": workflow.BuiltIns()})
+	respond(w, r, 200, map[string]any{"triggers": triggerTypes, "activities": workflow.Activities(), "builtins": workflow.BuiltIns(), "roles": workflow.Roles()})
+}
+
+// collectionWorkflowRoles shows which workflow fills each role for a list or
+// library: its own, else the workspace's.
+func (a *API) collectionWorkflowRoles(w http.ResponseWriter, r *http.Request) {
+	out, err := a.Workflows.CollectionRoles(r.Context(), subject(r), r.PathValue("id"))
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	respond(w, r, 200, map[string]any{"value": out, "@odata.nextLink": nil})
 }
 
 func (a *API) workflows(w http.ResponseWriter, r *http.Request) {

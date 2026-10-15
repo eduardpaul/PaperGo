@@ -33,9 +33,17 @@ const (
 	// guarded with dbos.Patch.
 	appVersion = "papergo-1"
 	runQueue   = "workflows"
-	runName    = "papergo.run"
-	tickName   = "papergo.tick"
-	purgeName  = "papergo.retention"
+	// serialQueue runs coalesce workflows: one run per workflow and item at
+	// a time, partitioned by RunInput.Partition.
+	serialQueue = "workflows-serial"
+	// systemQueue runs system built-ins, so product processes never delay
+	// people's workflows; partitioned like serialQueue for coalesce.
+	systemQueue     = "workflows-system"
+	runName         = "papergo.run"
+	tickName        = "papergo.tick"
+	purgeName       = "papergo.retention"
+	systemPurgeName = "papergo.system-retention"
+	searchEmbedName = "papergo.search_embed"
 )
 
 // Config configures the runner.
@@ -121,6 +129,14 @@ func New(cfg Config, db *sql.DB, service *dms.Service, workflows *workflow.Servi
 		return nil, fmt.Errorf("start the runner: %w", err)
 	}
 	r := &Runner{ctx: ctx, db: db, system: system, dms: service, workflows: workflows, log: cfg.Logger, cfg: cfg, wake: make(chan struct{}, 1)}
+	if _, err = dbos.RegisterQueue(ctx, serialQueue, dbos.WithWorkerConcurrency(cfg.Concurrency), dbos.WithPartitionConcurrency(1), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
+		system.Close()
+		return nil, err
+	}
+	if _, err = dbos.RegisterQueue(ctx, systemQueue, dbos.WithWorkerConcurrency(cfg.Concurrency), dbos.WithPartitionConcurrency(1), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
+		system.Close()
+		return nil, err
+	}
 	if _, err = dbos.RegisterQueue(ctx, runQueue, dbos.WithWorkerConcurrency(cfg.Concurrency), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
 		system.Close()
 		return nil, err
@@ -128,6 +144,8 @@ func New(cfg Config, db *sql.DB, service *dms.Service, workflows *workflow.Servi
 	dbos.RegisterWorkflow(ctx, r.run, dbos.WithWorkflowName(runName))
 	dbos.RegisterWorkflow(ctx, r.tick, dbos.WithWorkflowName(tickName))
 	dbos.RegisterWorkflow(ctx, r.purge, dbos.WithWorkflowName(purgeName))
+	dbos.RegisterWorkflow(ctx, r.purgeSystem, dbos.WithWorkflowName(systemPurgeName))
+	dbos.RegisterWorkflow(ctx, r.sweepEmbeddings, dbos.WithWorkflowName(searchEmbedName))
 	service.OnCommit(r.Wake)
 	return r, nil
 }
@@ -146,6 +164,8 @@ func (r *Runner) Launch(ctx context.Context) error {
 	if err := dbos.ApplySchedules(r.ctx, []dbos.ScheduleSpec{
 		{ScheduleName: tickName, Schedule: r.cfg.TickSchedule, Workflow: r.tick},
 		{ScheduleName: purgeName, Schedule: "0 30 3 * * *", Workflow: r.purge},
+		{ScheduleName: systemPurgeName, Schedule: "0 15 * * * *", Workflow: r.purgeSystem},
+		{ScheduleName: searchEmbedName, Schedule: "0 */15 * * * *", Workflow: r.sweepEmbeddings},
 	}); err != nil {
 		return fmt.Errorf("apply runner schedules: %w", err)
 	}
@@ -183,6 +203,17 @@ func (r *Runner) run(ctx dbos.Context, in workflow.RunInput) (workflow.Result, e
 		r.log.Warn("workflow run failed", "run_id", in.RunID, "workflow_id", in.WorkflowID, "error", err)
 	}
 	return res, err
+}
+
+// sweepEmbeddings embeds file content that search.embed deferred or that
+// has no vector of the current model; a provider failure waits for the next
+// sweep.
+func (r *Runner) sweepEmbeddings(ctx dbos.Context, _ dbos.ScheduledWorkflowInput) (any, error) {
+	n, err := r.workflows.SweepEmbeddings(ctx)
+	if err != nil {
+		r.log.Warn("embedding sweep stopped", "embedded", n, "error", err)
+	}
+	return n, nil
 }
 
 // tick raises due schedule triggers; DBOS runs it once per tick across nodes.

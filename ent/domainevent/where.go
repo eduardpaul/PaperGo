@@ -109,6 +109,11 @@ func DispatchedAt(v time.Time) predicate.DomainEvent {
 	return predicate.DomainEvent(sql.FieldEQ(FieldDispatchedAt, v))
 }
 
+// FanoutCursor applies equality check predicate on the "fanout_cursor" field. It's identical to FanoutCursorEQ.
+func FanoutCursor(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldFanoutCursor, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.DomainEvent {
 	return predicate.DomainEvent(sql.FieldEQ(FieldCreatedAt, v))
@@ -657,6 +662,81 @@ func DispatchedAtIsNil() predicate.DomainEvent {
 // DispatchedAtNotNil applies the NotNil predicate on the "dispatched_at" field.
 func DispatchedAtNotNil() predicate.DomainEvent {
 	return predicate.DomainEvent(sql.FieldNotNull(FieldDispatchedAt))
+}
+
+// FanoutCursorEQ applies the EQ predicate on the "fanout_cursor" field.
+func FanoutCursorEQ(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldFanoutCursor, v))
+}
+
+// FanoutCursorNEQ applies the NEQ predicate on the "fanout_cursor" field.
+func FanoutCursorNEQ(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNEQ(FieldFanoutCursor, v))
+}
+
+// FanoutCursorIn applies the In predicate on the "fanout_cursor" field.
+func FanoutCursorIn(vs ...string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIn(FieldFanoutCursor, vs...))
+}
+
+// FanoutCursorNotIn applies the NotIn predicate on the "fanout_cursor" field.
+func FanoutCursorNotIn(vs ...string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotIn(FieldFanoutCursor, vs...))
+}
+
+// FanoutCursorGT applies the GT predicate on the "fanout_cursor" field.
+func FanoutCursorGT(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGT(FieldFanoutCursor, v))
+}
+
+// FanoutCursorGTE applies the GTE predicate on the "fanout_cursor" field.
+func FanoutCursorGTE(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGTE(FieldFanoutCursor, v))
+}
+
+// FanoutCursorLT applies the LT predicate on the "fanout_cursor" field.
+func FanoutCursorLT(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLT(FieldFanoutCursor, v))
+}
+
+// FanoutCursorLTE applies the LTE predicate on the "fanout_cursor" field.
+func FanoutCursorLTE(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLTE(FieldFanoutCursor, v))
+}
+
+// FanoutCursorContains applies the Contains predicate on the "fanout_cursor" field.
+func FanoutCursorContains(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldContains(FieldFanoutCursor, v))
+}
+
+// FanoutCursorHasPrefix applies the HasPrefix predicate on the "fanout_cursor" field.
+func FanoutCursorHasPrefix(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldHasPrefix(FieldFanoutCursor, v))
+}
+
+// FanoutCursorHasSuffix applies the HasSuffix predicate on the "fanout_cursor" field.
+func FanoutCursorHasSuffix(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldHasSuffix(FieldFanoutCursor, v))
+}
+
+// FanoutCursorIsNil applies the IsNil predicate on the "fanout_cursor" field.
+func FanoutCursorIsNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIsNull(FieldFanoutCursor))
+}
+
+// FanoutCursorNotNil applies the NotNil predicate on the "fanout_cursor" field.
+func FanoutCursorNotNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotNull(FieldFanoutCursor))
+}
+
+// FanoutCursorEqualFold applies the EqualFold predicate on the "fanout_cursor" field.
+func FanoutCursorEqualFold(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEqualFold(FieldFanoutCursor, v))
+}
+
+// FanoutCursorContainsFold applies the ContainsFold predicate on the "fanout_cursor" field.
+func FanoutCursorContainsFold(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldContainsFold(FieldFanoutCursor, v))
 }
 
 // And groups predicates with the AND operator between them.

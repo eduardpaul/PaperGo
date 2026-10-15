@@ -309,6 +309,11 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 	if len(o.Description) > 4096 {
 		return invalid("description exceeds 4096 bytes")
 	}
+	switch o.SearchWeight {
+	case "", "none", "normal", "high":
+	default:
+		return invalid("search_weight must be none, normal or high")
+	}
 	if typ == "currency" {
 		if len(o.CurrencyCode) != 3 || strings.IndexFunc(o.CurrencyCode, func(r rune) bool { return r < 'A' || r > 'Z' }) >= 0 {
 			return invalid("currency_code requires three uppercase letters")

@@ -1,0 +1,28 @@
+{
+  "name": "Index contracts",
+  "description": "Indexes contracts by section, each chunk starting with its heading and carrying a model-written sentence on which contract and clause it is, so a search finds the clause with its page.",
+  "role": "search.content",
+  "collection_id": "$LIBRARY",
+  "definition": {
+    "triggers": [
+      {"type": "file.added", "collection_id": "$LIBRARY", "media_types": ["application/pdf"], "sources": ["upload", "webdav", "restore", "workflow", "reindex"]},
+      {"type": "manual", "collection_id": "$LIBRARY"}
+    ],
+    "concurrency": "coalesce",
+    "output_schema": {"type": "object", "required": ["blob_id"], "properties": {
+      "blob_id": {"type": "string"}, "text_id": {"type": "string"}, "pages": {"type": "integer"}, "language": {"type": "string"},
+      "generation": {"type": "string"}, "chunks": {"type": "integer"}}},
+    "outputs": {"blob_id": "{step:read.blob_id}", "text_id": "{step:read.text_id}", "pages": "{step:read.pages}", "language": "{step:read.language}",
+      "generation": "{step:chunk.generation}", "chunks": "{step:chunk.chunks}"},
+    "flow": {"start": "read", "nodes": {
+      "read": {"activity": "document.read_text", "inputs": {"ocr": "auto"}, "next": {"done": "chunk", "no_text": "end", "unsupported": "end"}},
+      "chunk": {"activity": "search.chunk", "inputs": {"text_id": "{step:read.text_id}", "blob_id": "{step:read.blob_id}", "chunker": "headings", "max_chars": 2000},
+        "next": {"done": "enrich"}},
+      "enrich": {"activity": "search.enrich", "inputs": {"generation": "{step:chunk.generation}", "scope": "document",
+        "instructions": "In one sentence: which contract this is, between whom, and which clause the passage is."}, "next": {"done": "embed"}},
+      "embed": {"activity": "search.embed", "inputs": {"generation": "{step:chunk.generation}"}, "next": {"done": "publish", "deferred": "publish"}},
+      "publish": {"activity": "search.publish", "inputs": {"generation": "{step:chunk.generation}", "blob_id": "{step:read.blob_id}"}, "next": {"done": "end", "stale": "end"}},
+      "end": {"activity": "end"}
+    }}
+  }
+}

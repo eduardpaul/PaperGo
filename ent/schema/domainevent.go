@@ -27,6 +27,10 @@ func (DomainEvent) Fields() []ent.Field {
 		// CauseRunID is the workflow run whose step made the change, if any.
 		field.String("cause_run_id").Optional().Nillable().Immutable(),
 		field.Time("dispatched_at").Optional().Nillable(),
+		// FanoutCursor is how far the dispatcher has expanded a root event that
+		// is delivered once per affected item (permissions.changed): the last
+		// resource ID delivered. Null until expansion starts.
+		field.String("fanout_cursor").Optional().Nillable(),
 	}
 }
 func (DomainEvent) Indexes() []ent.Index {

@@ -21,10 +21,13 @@ import (
 	"papergo/ent/workflowtrigger"
 	"papergo/internal/database"
 	"papergo/internal/dms"
+	"papergo/internal/doctext/pdfium"
 	"papergo/internal/model"
+	"papergo/internal/resultcache"
 	"papergo/internal/storage"
 	"papergo/internal/tasks"
 	"papergo/internal/testutil"
+	"papergo/internal/testutil/searchstore"
 	"papergo/internal/workflow"
 )
 
@@ -62,9 +65,12 @@ func (b *logBuffer) String() string {
 
 var ctx = context.Background()
 
+// pdfReader uses the linked native PDFium SDK in every fixture.
+var pdfReader = pdfium.New()
+
 // open starts PaperGo with a launched runner on the database at path,
-// creating the schema when the file is new.
-func open(t testing.TB, path, node string) *fixture {
+// creating the schema when the file is new; configure changes the tools.
+func open(t testing.TB, path, node string, configure ...func(*workflow.Tools)) *fixture {
 	t.Helper()
 	var db *database.Database
 	if _, err := os.Stat(path); err == nil {
@@ -80,7 +86,14 @@ func open(t testing.TB, path, node string) *fixture {
 	if f.store, err = storage.NewLocal(filepath.Join(filepath.Dir(path), "blobs")); err != nil {
 		t.Fatal(err)
 	}
-	f.wf = &workflow.Service{DMS: f.dms, Tools: workflow.Tools{Storage: f.store, OCR: textEngine{}}}
+	index := searchstore.Open(t, filepath.Join(filepath.Dir(path), "search.db"), []string{"english"})
+	f.dms.SetSearch(index)
+	tools := workflow.Tools{Storage: f.store, OCR: textEngine{}, PDF: pdfReader, Search: index, Results: resultcache.New(db.SQL), ResultTTL: 30 * 24 * time.Hour, Languages: []string{"english", "german"}}
+	for _, c := range configure {
+		c(&tools)
+	}
+	f.dms.SetEmbeddings(tools.Embeddings)
+	f.wf = &workflow.Service{DMS: f.dms, Tools: tools}
 	f.r, err = New(Config{DatabasePath: path, NodeID: node, PollInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *", Logger: slog.New(slog.NewTextHandler(f.logs, nil))}, db.SQL, f.dms, f.wf)
 	if err != nil {
 		t.Fatal(err)
@@ -96,9 +109,9 @@ func open(t testing.TB, path, node string) *fixture {
 	return f
 }
 
-func setup(t testing.TB) *fixture {
+func setup(t testing.TB, configure ...func(*workflow.Tools)) *fixture {
 	t.Helper()
-	f := open(t, filepath.Join(t.TempDir(), "papergo.db"), "node-a")
+	f := open(t, filepath.Join(t.TempDir(), "papergo.db"), "node-a", configure...)
 	var err error
 	if f.ws, err = f.dms.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Docs"}); err != nil {
 		t.Fatal(err)
@@ -136,6 +149,28 @@ func (f *fixture) workflow(t testing.TB, name string, def string) workflow.Workf
 		t.Fatalf("create workflow %s: %v", name, err)
 	}
 	return w
+}
+
+// searchOff turns the workspace's default search.index built-in off, for
+// tests that count every run or listener.
+func (f *fixture) searchOff(t testing.TB) {
+	t.Helper()
+	if _, err := f.r.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	all, err := f.wf.List(ctx, "alice", f.ws.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range all {
+		if w.BuiltInKey != nil && *w.BuiltInKey == workflow.RoleSearchIndex {
+			if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, *w.BuiltInKey, workflow.SetBuiltIn{Enabled: false, Version: w.Version}); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+	}
+	t.Fatal("no search.index built-in")
 }
 
 func (f *fixture) item(t testing.TB, subject, name string, values map[string]any) *ent.Resource {
@@ -242,6 +277,49 @@ func TestItemTriggerConditionAndChainedWorkflow(t *testing.T) {
 	// Runs are for workspace managers.
 	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{}); !errors.Is(err, dms.ErrNotFound) {
 		t.Fatalf("bob listed runs: %v", err)
+	}
+}
+
+func TestOutputsChainWorkflows(t *testing.T) {
+	f := setup(t)
+	source := f.workflow(t, "Measure", `{
+		"triggers": [{"type": "item.created", "collection_id": "$LIST"}],
+		"output_schema": {"type": "object", "required": ["name", "total"], "properties": {
+			"name": {"type": "string"}, "total": {"type": "integer"}, "note": {"type": "string"}, "kind": {"type": "string", "default": "contract"}}},
+		"outputs": {"name": "{item:name}", "total": "{step:read.values.total}", "note": "{step:read.values.missing}"},
+		"flow": {"start": "read", "nodes": {"read": {"activity": "item.get"}}}}`)
+	follower := f.workflow(t, "Follow", `{
+		"triggers": [{"type": "wf.`+source.Key+`.completed"}],
+		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": ["{trigger:data.outputs.name}", "{trigger:data.outputs.kind}"], "values": {"total": "{trigger:data.outputs.total}"}}}}}}`)
+	broken := f.workflow(t, "Broken", `{
+		"triggers": [{"type": "item.created", "collection_id": "$LIST"}],
+		"output_schema": {"type": "object", "properties": {"total": {"type": "string"}}},
+		"outputs": {"total": "{step:read.values.total}"},
+		"flow": {"start": "read", "nodes": {"read": {"activity": "item.get"}}}}`)
+
+	item := f.item(t, "bob", "Lease", map[string]any{"total": json.Number("7")})
+	runs := f.runs(t, source.ID, 1)
+	detail, err := f.r.Run(ctx, "alice", runs[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _ := detail.Result.(map[string]any)
+	outputs, _ := result["outputs"].(map[string]any)
+	if detail.Status != "completed" || outputs["name"] != "Lease" || outputs["total"] != float64(7) || outputs["kind"] != "contract" {
+		t.Fatalf("run: %+v", detail)
+	}
+	if _, ok := outputs["note"]; ok {
+		t.Fatalf("an output whose token finds nothing is set: %v", outputs)
+	}
+	f.runs(t, follower.ID, 1)
+	head := f.head(t, item.ID)
+	if strings.Join(head.Tags, ",") != "Lease,contract" || fmt.Sprint(head.Values["total"]) != "7" {
+		t.Fatalf("follower did not read the outputs: %v %v", head.Tags, head.Values)
+	}
+	// Outputs that fail their schema fail the run at finish.
+	runs = f.runs(t, broken.ID, 1)
+	if runs[0].Status != "failed" || !strings.Contains(runs[0].Error, "outputs.total") {
+		t.Fatalf("broken outputs: %+v", runs[0])
 	}
 }
 

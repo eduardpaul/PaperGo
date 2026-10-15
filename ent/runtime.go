@@ -7,7 +7,9 @@ import (
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
+	"papergo/ent/blobtext"
 	"papergo/ent/businesskey"
+	"papergo/ent/cachedresult"
 	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
 	"papergo/ent/domainevent"
@@ -237,6 +239,69 @@ func init() {
 	blobdeletion.DefaultID = blobdeletionDescID.Default.(func() string)
 	// blobdeletion.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	blobdeletion.IDValidator = blobdeletionDescID.Validators[0].(func(string) error)
+	blobtextMixin := schema.BlobText{}.Mixin()
+	blobtextMixinFields0 := blobtextMixin[0].Fields()
+	_ = blobtextMixinFields0
+	blobtextFields := schema.BlobText{}.Fields()
+	_ = blobtextFields
+	// blobtextDescCreatedAt is the schema descriptor for created_at field.
+	blobtextDescCreatedAt := blobtextMixinFields0[1].Descriptor()
+	// blobtext.DefaultCreatedAt holds the default value on creation for the created_at field.
+	blobtext.DefaultCreatedAt = blobtextDescCreatedAt.Default.(func() time.Time)
+	// blobtextDescSha256 is the schema descriptor for sha256 field.
+	blobtextDescSha256 := blobtextFields[0].Descriptor()
+	// blobtext.Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
+	blobtext.Sha256Validator = blobtextDescSha256.Validators[0].(func(string) error)
+	// blobtextDescSettings is the schema descriptor for settings field.
+	blobtextDescSettings := blobtextFields[1].Descriptor()
+	// blobtext.SettingsValidator is a validator for the "settings" field. It is called by the builders before save.
+	blobtext.SettingsValidator = blobtextDescSettings.Validators[0].(func(string) error)
+	// blobtextDescObjectKey is the schema descriptor for object_key field.
+	blobtextDescObjectKey := blobtextFields[2].Descriptor()
+	// blobtext.ObjectKeyValidator is a validator for the "object_key" field. It is called by the builders before save.
+	blobtext.ObjectKeyValidator = blobtextDescObjectKey.Validators[0].(func(string) error)
+	// blobtextDescObjectSize is the schema descriptor for object_size field.
+	blobtextDescObjectSize := blobtextFields[3].Descriptor()
+	// blobtext.ObjectSizeValidator is a validator for the "object_size" field. It is called by the builders before save.
+	blobtext.ObjectSizeValidator = blobtextDescObjectSize.Validators[0].(func(int64) error)
+	// blobtextDescObjectSha256 is the schema descriptor for object_sha256 field.
+	blobtextDescObjectSha256 := blobtextFields[4].Descriptor()
+	// blobtext.ObjectSha256Validator is a validator for the "object_sha256" field. It is called by the builders before save.
+	blobtext.ObjectSha256Validator = blobtextDescObjectSha256.Validators[0].(func(string) error)
+	// blobtextDescPages is the schema descriptor for pages field.
+	blobtextDescPages := blobtextFields[5].Descriptor()
+	// blobtext.PagesValidator is a validator for the "pages" field. It is called by the builders before save.
+	blobtext.PagesValidator = blobtextDescPages.Validators[0].(func(int) error)
+	// blobtextDescChars is the schema descriptor for chars field.
+	blobtextDescChars := blobtextFields[6].Descriptor()
+	// blobtext.CharsValidator is a validator for the "chars" field. It is called by the builders before save.
+	blobtext.CharsValidator = blobtextDescChars.Validators[0].(func(int) error)
+	// blobtextDescOcrPages is the schema descriptor for ocr_pages field.
+	blobtextDescOcrPages := blobtextFields[7].Descriptor()
+	// blobtext.OcrPagesValidator is a validator for the "ocr_pages" field. It is called by the builders before save.
+	blobtext.OcrPagesValidator = blobtextDescOcrPages.Validators[0].(func(int) error)
+	// blobtextDescSkippedPages is the schema descriptor for skipped_pages field.
+	blobtextDescSkippedPages := blobtextFields[8].Descriptor()
+	// blobtext.SkippedPagesValidator is a validator for the "skipped_pages" field. It is called by the builders before save.
+	blobtext.SkippedPagesValidator = blobtextDescSkippedPages.Validators[0].(func(int) error)
+	// blobtextDescLanguage is the schema descriptor for language field.
+	blobtextDescLanguage := blobtextFields[10].Descriptor()
+	// blobtext.DefaultLanguage holds the default value on creation for the language field.
+	blobtext.DefaultLanguage = blobtextDescLanguage.Default.(string)
+	// blobtextDescExtractor is the schema descriptor for extractor field.
+	blobtextDescExtractor := blobtextFields[11].Descriptor()
+	// blobtext.ExtractorValidator is a validator for the "extractor" field. It is called by the builders before save.
+	blobtext.ExtractorValidator = blobtextDescExtractor.Validators[0].(func(string) error)
+	// blobtextDescModels is the schema descriptor for models field.
+	blobtextDescModels := blobtextFields[12].Descriptor()
+	// blobtext.DefaultModels holds the default value on creation for the models field.
+	blobtext.DefaultModels = blobtextDescModels.Default.(jsontext.Value)
+	// blobtextDescID is the schema descriptor for id field.
+	blobtextDescID := blobtextMixinFields0[0].Descriptor()
+	// blobtext.DefaultID holds the default value on creation for the id field.
+	blobtext.DefaultID = blobtextDescID.Default.(func() string)
+	// blobtext.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	blobtext.IDValidator = blobtextDescID.Validators[0].(func(string) error)
 	businesskeyMixin := schema.BusinessKey{}.Mixin()
 	businesskeyMixinFields0 := businesskeyMixin[0].Fields()
 	_ = businesskeyMixinFields0
@@ -252,6 +317,79 @@ func init() {
 	businesskey.DefaultID = businesskeyDescID.Default.(func() string)
 	// businesskey.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	businesskey.IDValidator = businesskeyDescID.Validators[0].(func(string) error)
+	cachedresultMixin := schema.CachedResult{}.Mixin()
+	cachedresultMixinFields0 := cachedresultMixin[0].Fields()
+	_ = cachedresultMixinFields0
+	cachedresultFields := schema.CachedResult{}.Fields()
+	_ = cachedresultFields
+	// cachedresultDescCreatedAt is the schema descriptor for created_at field.
+	cachedresultDescCreatedAt := cachedresultMixinFields0[1].Descriptor()
+	// cachedresult.DefaultCreatedAt holds the default value on creation for the created_at field.
+	cachedresult.DefaultCreatedAt = cachedresultDescCreatedAt.Default.(func() time.Time)
+	// cachedresultDescNamespace is the schema descriptor for namespace field.
+	cachedresultDescNamespace := cachedresultFields[0].Descriptor()
+	// cachedresult.NamespaceValidator is a validator for the "namespace" field. It is called by the builders before save.
+	cachedresult.NamespaceValidator = func() func(string) error {
+		validators := cachedresultDescNamespace.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(namespace string) error {
+			for _, fn := range fns {
+				if err := fn(namespace); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// cachedresultDescScope is the schema descriptor for scope field.
+	cachedresultDescScope := cachedresultFields[1].Descriptor()
+	// cachedresult.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
+	cachedresult.ScopeValidator = func() func(string) error {
+		validators := cachedresultDescScope.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(scope string) error {
+			for _, fn := range fns {
+				if err := fn(scope); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// cachedresultDescKey is the schema descriptor for key field.
+	cachedresultDescKey := cachedresultFields[2].Descriptor()
+	// cachedresult.KeyValidator is a validator for the "key" field. It is called by the builders before save.
+	cachedresult.KeyValidator = func() func(string) error {
+		validators := cachedresultDescKey.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(key string) error {
+			for _, fn := range fns {
+				if err := fn(key); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// cachedresultDescUsedAt is the schema descriptor for used_at field.
+	cachedresultDescUsedAt := cachedresultFields[4].Descriptor()
+	// cachedresult.DefaultUsedAt holds the default value on creation for the used_at field.
+	cachedresult.DefaultUsedAt = cachedresultDescUsedAt.Default.(func() time.Time)
+	// cachedresultDescID is the schema descriptor for id field.
+	cachedresultDescID := cachedresultMixinFields0[0].Descriptor()
+	// cachedresult.DefaultID holds the default value on creation for the id field.
+	cachedresult.DefaultID = cachedresultDescID.Default.(func() string)
+	// cachedresult.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	cachedresult.IDValidator = cachedresultDescID.Validators[0].(func(string) error)
 	collectiontypeMixin := schema.CollectionType{}.Mixin()
 	collectiontypeMixinFields0 := collectiontypeMixin[0].Fields()
 	_ = collectiontypeMixinFields0
@@ -1091,10 +1229,6 @@ func init() {
 	itemsurfaceDescCreatedAt := itemsurfaceMixinFields0[1].Descriptor()
 	// itemsurface.DefaultCreatedAt holds the default value on creation for the created_at field.
 	itemsurface.DefaultCreatedAt = itemsurfaceDescCreatedAt.Default.(func() time.Time)
-	// itemsurfaceDescTermText is the schema descriptor for term_text field.
-	itemsurfaceDescTermText := itemsurfaceFields[8].Descriptor()
-	// itemsurface.DefaultTermText holds the default value on creation for the term_text field.
-	itemsurface.DefaultTermText = itemsurfaceDescTermText.Default.(string)
 	// itemsurfaceDescID is the schema descriptor for id field.
 	itemsurfaceDescID := itemsurfaceMixinFields0[0].Descriptor()
 	// itemsurface.DefaultID holds the default value on creation for the id field.
@@ -2496,16 +2630,20 @@ func init() {
 	workflowDescCollectionID := workflowFields[7].Descriptor()
 	// workflow.CollectionIDValidator is a validator for the "collection_id" field. It is called by the builders before save.
 	workflow.CollectionIDValidator = workflowDescCollectionID.Validators[0].(func(string) error)
+	// workflowDescRole is the schema descriptor for role field.
+	workflowDescRole := workflowFields[8].Descriptor()
+	// workflow.RoleValidator is a validator for the "role" field. It is called by the builders before save.
+	workflow.RoleValidator = workflowDescRole.Validators[0].(func(string) error)
 	// workflowDescParameters is the schema descriptor for parameters field.
-	workflowDescParameters := workflowFields[8].Descriptor()
+	workflowDescParameters := workflowFields[9].Descriptor()
 	// workflow.DefaultParameters holds the default value on creation for the parameters field.
 	workflow.DefaultParameters = workflowDescParameters.Default.(map[string]interface{})
 	// workflowDescCurrentVersion is the schema descriptor for current_version field.
-	workflowDescCurrentVersion := workflowFields[9].Descriptor()
+	workflowDescCurrentVersion := workflowFields[10].Descriptor()
 	// workflow.CurrentVersionValidator is a validator for the "current_version" field. It is called by the builders before save.
 	workflow.CurrentVersionValidator = workflowDescCurrentVersion.Validators[0].(func(int) error)
 	// workflowDescVersion is the schema descriptor for version field.
-	workflowDescVersion := workflowFields[13].Descriptor()
+	workflowDescVersion := workflowFields[14].Descriptor()
 	// workflow.DefaultVersion holds the default value on creation for the version field.
 	workflow.DefaultVersion = workflowDescVersion.Default.(int)
 	// workflow.VersionValidator is a validator for the "version" field. It is called by the builders before save.

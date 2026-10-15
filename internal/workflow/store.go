@@ -45,6 +45,7 @@ type Workflow struct {
 	Description    string         `json:"description"`
 	Enabled        bool           `json:"enabled"`
 	BuiltInKey     *string        `json:"builtin_key,omitempty"`
+	Role           *string        `json:"role,omitempty"`
 	CollectionID   *string        `json:"collection_id,omitempty"`
 	Parameters     map[string]any `json:"parameters,omitempty"`
 	CurrentVersion int            `json:"current_version"`
@@ -72,6 +73,11 @@ type Save struct {
 	Description string          `json:"description"`
 	Enabled     *bool           `json:"enabled,omitempty"`
 	Definition  json.RawMessage `json:"definition"`
+	// Role makes the workflow a filler of that role (see Role), in the
+	// workspace or, with CollectionID, for one collection. Both are set when
+	// the workflow is created.
+	Role         string `json:"role,omitempty"`
+	CollectionID string `json:"collection_id,omitempty"`
 }
 
 var nonKey = regexp.MustCompile(`[^a-z0-9]+`)
@@ -99,7 +105,7 @@ func toWorkflow(w *ent.Workflow, v *ent.WorkflowVersion) (Workflow, error) {
 	if err != nil {
 		return Workflow{}, err
 	}
-	out := Workflow{ID: w.ID, WorkspaceID: w.WorkspaceID, Key: w.Key, Name: w.Name, Description: w.Description, Enabled: w.Enabled, BuiltInKey: w.BuiltinKey, CollectionID: w.CollectionID,
+	out := Workflow{ID: w.ID, WorkspaceID: w.WorkspaceID, Key: w.Key, Name: w.Name, Description: w.Description, Enabled: w.Enabled, BuiltInKey: w.BuiltinKey, Role: w.Role, CollectionID: w.CollectionID,
 		CurrentVersion: w.CurrentVersion, Definition: def, CreatedBy: w.CreatedBy, UpdatedBy: w.UpdatedBy, CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, Version: w.Version}
 	if w.BuiltinKey != nil {
 		out.Parameters = w.Parameters
@@ -218,8 +224,11 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 		if err := validName(in.Name); err != nil {
 			return err
 		}
-		def, raw, err := s.check(ctx, t, subject, workspaceID, in.Definition)
+		def, raw, err := checkDefinition(ctx, t, subject, workspaceID, in.Definition)
 		if err != nil {
+			return err
+		}
+		if err = checkRole(ctx, t, subject, workspaceID, in.Role, in.CollectionID, def); err != nil {
 			return err
 		}
 		key := in.Key
@@ -231,7 +240,14 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 			return err
 		}
 		enabled := in.Enabled == nil || *in.Enabled
-		w, err := t.Client.Workflow.Create().SetWorkspaceID(workspaceID).SetKey(key).SetName(in.Name).SetDescription(in.Description).SetEnabled(enabled).SetCurrentVersion(1).SetCreatedBy(subject).SetUpdatedBy(subject).Save(ctx)
+		create := t.Client.Workflow.Create().SetWorkspaceID(workspaceID).SetKey(key).SetName(in.Name).SetDescription(in.Description).SetEnabled(enabled).SetCurrentVersion(1).SetCreatedBy(subject).SetUpdatedBy(subject)
+		if in.Role != "" {
+			create.SetRole(in.Role)
+		}
+		if in.CollectionID != "" {
+			create.SetCollectionID(in.CollectionID)
+		}
+		w, err := create.Save(ctx)
 		if err != nil {
 			return err
 		}
@@ -240,6 +256,9 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 			return err
 		}
 		if err = index(ctx, t, w, def); err != nil {
+			return err
+		}
+		if err = claimRole(ctx, t, subject, w); err != nil {
 			return err
 		}
 		if out, err = toWorkflow(w, v); err != nil {
@@ -271,7 +290,7 @@ func audit(ctx context.Context, t *dms.Service, subject, action string, w *ent.W
 
 // check validates a definition, including the collections, content types
 // and condition it references, and returns it with its normalized JSON.
-func (s *Service) check(ctx context.Context, t *dms.Service, subject, workspaceID string, raw json.RawMessage) (Definition, json.RawMessage, error) {
+func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID string, raw json.RawMessage) (Definition, json.RawMessage, error) {
 	if len(raw) == 0 {
 		return Definition{}, nil, dms.Invalid("definition is required")
 	}
@@ -367,12 +386,20 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 		if in.Key != "" && in.Key != w.Key {
 			return dms.Invalid("key is immutable")
 		}
+		if in.Role != "" && (w.Role == nil || in.Role != *w.Role) || in.CollectionID != "" && (w.CollectionID == nil || in.CollectionID != *w.CollectionID) {
+			return dms.Invalid("role and collection_id are set when a workflow is created")
+		}
 		if err = validName(in.Name); err != nil {
 			return err
 		}
-		def, raw, err := s.check(ctx, t, subject, w.WorkspaceID, in.Definition)
+		def, raw, err := checkDefinition(ctx, t, subject, w.WorkspaceID, in.Definition)
 		if err != nil {
 			return err
+		}
+		if w.Role != nil {
+			if err = roles[*w.Role].fills(def); err != nil {
+				return err
+			}
 		}
 		enabled := w.Enabled
 		if in.Enabled != nil {
@@ -383,6 +410,9 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 			return err
 		}
 		if err = index(ctx, t, w, def); err != nil {
+			return err
+		}
+		if err = claimRole(ctx, t, subject, w); err != nil {
 			return err
 		}
 		if out, err = toWorkflow(w, v); err != nil {
@@ -626,13 +656,16 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 	versions := map[string]*matchable{}
 	// A bulk write raises many events of few kinds; look each kind up once.
 	lookups := map[[3]string][]*ent.Workflow{}
+	// overrides caches whether a collection has its own filler of a role.
+	overrides := map[[3]string]bool{}
 	for _, e := range events {
 		if e.Depth >= MaxDepth {
 			continue
 		}
 		// Purge removes revision payloads. Older queued content events must not
 		// block dispatch or start actions against an item that no longer exists.
-		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded || e.Type == dms.EventPermissionsChanged) {
+		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded || e.Type == dms.EventPermissionsChanged ||
+			e.Type == dms.EventFolderCreated || e.Type == dms.EventFolderUpdated || e.Type == dms.EventFolderRestored) {
 			exists, err := t.Client.Resource.Query().Where(resource.IDEQ(e.ResourceID)).Exist(ctx)
 			if err != nil {
 				return nil, nil, err
@@ -678,6 +711,27 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 			lookups[key] = candidates
 		}
 		for _, w := range candidates {
+			if w.Role != nil && e.CollectionID != "" {
+				// A collection's own filler of a role replaces the workspace's
+				// for its items, and runs for no other collection.
+				if w.CollectionID != nil && *w.CollectionID != e.CollectionID {
+					continue
+				}
+				if w.CollectionID == nil {
+					key := [3]string{e.WorkspaceID, *w.Role, e.CollectionID}
+					over, ok := overrides[key]
+					if !ok {
+						var err error
+						if over, err = overridden(ctx, t, e.WorkspaceID, *w.Role, e.CollectionID); err != nil {
+							return nil, nil, err
+						}
+						overrides[key] = over
+					}
+					if over {
+						continue
+					}
+				}
+			}
 			m := versions[w.ID]
 			if m == nil {
 				v, err := current(ctx, t, w)
@@ -698,7 +752,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 			if !ok {
 				continue
 			}
-			if e.Type == dms.EventTermChanged {
+			if e.Type == dms.EventTermChanged && !systemWorkflow(w) {
 				if err := t.RequireScope(ctx, m.v.CreatedBy, "taxonomy.read"); errors.Is(err, dms.ErrForbidden) {
 					continue
 				} else if err != nil {
@@ -718,22 +772,40 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 				}
 			}
 			members := eventMembers(e)
-			if c := m.def.Concurrency; (c == ConcurrencySkip || c == ConcurrencyReplace) && len(members) > 0 {
+			if c := m.def.Concurrency; c != "" && c != ConcurrencyParallel && len(members) > 0 {
 				busy, err := activeRuns(ctx, t, w.ID, members, active)
 				if err != nil {
 					return nil, nil, err
 				}
-				busy = slices.DeleteFunc(busy, func(id string) bool { return id == RunID(w.ID, e.ID) })
+				delete(busy, RunID(w.ID, e.ID))
 				// Runs this batch starts are not in the runner's statuses yet.
 				for _, earlier := range started[w.ID] {
 					if overlaps(earlier.members, members) {
-						busy = append(busy, earlier.id)
+						busy[earlier.id] = "queued"
 					}
 				}
-				if c == ConcurrencySkip && len(busy) > 0 {
-					continue
+				switch c {
+				case ConcurrencySkip:
+					if len(busy) > 0 {
+						continue
+					}
+				case ConcurrencyReplace:
+					ids := make([]string, 0, len(busy))
+					for id := range busy {
+						ids = append(ids, id)
+					}
+					sort.Strings(ids)
+					cancel = append(cancel, ids...)
+				case ConcurrencyCoalesce:
+					// A queued run will read the item as it is when it starts.
+					queued := false
+					for _, state := range busy {
+						queued = queued || state == "queued"
+					}
+					if queued {
+						continue
+					}
 				}
-				cancel = append(cancel, busy...)
 			}
 			runID := RunID(w.ID, e.ID)
 			started[w.ID] = append(started[w.ID], startedRun{id: runID, members: members})
@@ -751,7 +823,10 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 			if _, err = c.Save(ctx); err != nil {
 				return nil, nil, err
 			}
-			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: e, ConditionError: conditionErr}
+			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: e, ConditionError: conditionErr, System: systemWorkflow(w)}
+			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 {
+				in.Partition = w.ID + ":" + members[0]
+			}
 			if e.Type == TriggerManual {
 				if inputs, ok := e.Data["inputs"].(map[string]any); ok {
 					in.Inputs = inputs
@@ -771,8 +846,9 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 	return out, cancel, nil
 }
 
-// ActiveFunc reports which of the given runs are still queued or running.
-type ActiveFunc func(runIDs []string) (map[string]bool, error)
+// ActiveFunc reports the status of the given runs that are still active:
+// queued, running or waiting. Runs that are not active are left out.
+type ActiveFunc func(runIDs []string) (map[string]string, error)
 
 // eventMembers are the items a run started by e works on.
 func eventMembers(e dms.Event) []string {
@@ -794,8 +870,7 @@ func eventMembers(e dms.Event) []string {
 }
 
 func eventItemID(e dms.Event) string {
-	if e.Type == dms.EventItemDeleted || e.Type == dms.EventItemPurged ||
-		e.Type == dms.EventPermissionsChanged && e.Data["resource_kind"] != "item" {
+	if e.Type == dms.EventItemDeleted || e.Type == dms.EventItemPurged || e.Type == dms.EventFolderDeleted || e.Type == dms.EventFolderPurged {
 		return ""
 	}
 	return e.ResourceID
@@ -813,25 +888,26 @@ func overlaps(a, b []string) bool {
 // activeRuns returns the queued, running or waiting runs of a workflow that
 // work on any of items, as primary item or selection member. Recorded
 // statuses lag behind the runner, so active confirms them.
-func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []string, active ActiveFunc) ([]string, error) {
+func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []string, active ActiveFunc) (map[string]string, error) {
 	rows, err := t.Client.WorkflowRun.Query().Where(workflowrun.WorkflowIDEQ(workflowID), workflowrun.LiveStatusIn("queued", "running", "waiting"),
 		workflowrun.Or(workflowrun.ItemIDIn(items...), func(s *entsql.Selector) {
 			s.Where(entsql.In(s.C(workflowrun.FieldID), entsql.Select(workflowrunitem.FieldRunID).From(entsql.Table(workflowrunitem.Table)).Where(entsql.In(workflowrunitem.FieldItemID, anyStrings(items)...))))
-		})).IDs(ctx)
-	if err != nil || len(rows) == 0 || active == nil {
-		return rows, err
+		})).All(ctx)
+	out := map[string]string{}
+	if err != nil || len(rows) == 0 {
+		return out, err
 	}
-	live, err := active(rows)
-	if err != nil {
-		return nil, err
-	}
-	out := rows[:0]
-	for _, id := range rows {
-		if live[id] {
-			out = append(out, id)
+	if active == nil {
+		for _, row := range rows {
+			out[row.ID] = row.LiveStatus
 		}
+		return out, nil
 	}
-	return out, nil
+	ids := make([]string, len(rows))
+	for i, row := range rows {
+		ids[i] = row.ID
+	}
+	return active(ids)
 }
 
 func anyStrings(v []string) []any {
@@ -864,9 +940,15 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 				continue
 			}
 		}
+		if e.Type == dms.EventPermissionsChanged {
+			if action, _ := e.Data["action"].(string); !tr.acceptsAction(action) {
+				continue
+			}
+		}
 		if e.Type == dms.EventFileAdded {
 			source, _ := e.Data["source"].(string)
-			if !slices.Contains(tr.sources(), source) {
+			media, _ := e.Data["content_type"].(string)
+			if !slices.Contains(tr.sources(), source) || !tr.acceptsMediaType(media) {
 				continue
 			}
 		}
@@ -1018,4 +1100,87 @@ func occurrence(ctx context.Context, t *dms.Service, row *ent.WorkflowTrigger, n
 		q.After = res.NextCursor
 	}
 	return events, next, nil
+}
+
+// PermissionBatch is how many items and folders the dispatcher delivers a
+// permissions.changed event to per batch. Tests lower it.
+var PermissionBatch = 500
+
+// Listens reports whether an enabled workflow of the root permissions.changed
+// event's workspace may accept a delivery of it: only then is it expanded to
+// the items and folders it affects.
+func Listens(ctx context.Context, t *dms.Service, root dms.Event) (bool, error) {
+	if root.Depth >= MaxDepth {
+		return false, nil
+	}
+	q := t.Client.WorkflowTrigger.Query().Where(workflowtrigger.TypeEQ(dms.EventPermissionsChanged), workflowtrigger.WorkspaceIDEQ(root.WorkspaceID))
+	if root.CollectionID != "" {
+		// A change inside one collection reaches only that collection.
+		q.Where(workflowtrigger.Or(workflowtrigger.CollectionIDIsNil(), workflowtrigger.CollectionIDEQ(root.CollectionID)))
+	}
+	rows, err := q.All(ctx)
+	if err != nil || len(rows) == 0 {
+		return false, err
+	}
+	list := make([]string, len(rows))
+	for i, r := range rows {
+		list[i] = r.WorkflowID
+	}
+	ids, err := t.Client.Workflow.Query().Where(workflow.IDIn(list...), workflow.EnabledEQ(true), workflow.DeletedAtIsNil()).All(ctx)
+	if err != nil {
+		return false, err
+	}
+	action, _ := root.Data["action"].(string)
+	for _, w := range ids {
+		v, err := current(ctx, t, w)
+		if err != nil {
+			return false, err
+		}
+		def, err := ParseDefinition(v.Definition)
+		if err != nil {
+			return false, err
+		}
+		for _, tr := range def.Triggers {
+			if tr.Type == dms.EventPermissionsChanged && tr.acceptsAction(action) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// PermissionDeliveries turns a root permissions.changed event into one event
+// per affected item or folder, which runs get as their item. Each carries
+// the change, the scope it moved between, and the root resource and event.
+func PermissionDeliveries(root dms.Event, targets []dms.PermissionTarget) []dms.Event {
+	data := map[string]any{"root_event_id": root.ID, "root_id": root.ResourceID, "root_kind": root.Data["resource_kind"], "action": root.Data["action"]}
+	previous, current := root.Data["previous_scope_id"], root.Data["current_scope_id"]
+	if p, ok := root.Data["previous"].(map[string]any); ok {
+		previous = p["scope_id"]
+	}
+	if c, ok := root.Data["current"].(map[string]any); ok {
+		current = c["scope_id"]
+	}
+	if previous != nil {
+		data["previous_scope_id"] = previous
+	}
+	if current != nil {
+		data["current_scope_id"] = current
+	}
+	for _, key := range []string{"member_subject", "previous_role", "role"} {
+		if v, ok := root.Data[key]; ok {
+			data[key] = v
+		}
+	}
+	out := make([]dms.Event, len(targets))
+	for i, target := range targets {
+		d := make(map[string]any, len(data)+1)
+		for k, v := range data {
+			d[k] = v
+		}
+		d["resource_kind"] = target.Kind
+		out[i] = dms.Event{ID: root.ID + ":" + target.ID, Type: root.Type, WorkspaceID: root.WorkspaceID, CollectionID: target.CollectionID, ResourceID: target.ID,
+			Actor: root.Actor, Data: d, Depth: root.Depth, CauseRunID: root.CauseRunID}
+	}
+	return out
 }

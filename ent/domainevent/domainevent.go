@@ -33,6 +33,8 @@ const (
 	FieldCauseRunID = "cause_run_id"
 	// FieldDispatchedAt holds the string denoting the dispatched_at field in the database.
 	FieldDispatchedAt = "dispatched_at"
+	// FieldFanoutCursor holds the string denoting the fanout_cursor field in the database.
+	FieldFanoutCursor = "fanout_cursor"
 	// Table holds the table name of the domainevent in the database.
 	Table = "domain_events"
 )
@@ -50,6 +52,7 @@ var Columns = []string{
 	FieldDepth,
 	FieldCauseRunID,
 	FieldDispatchedAt,
+	FieldFanoutCursor,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -126,4 +129,9 @@ func ByCauseRunID(opts ...sql.OrderTermOption) OrderOption {
 // ByDispatchedAt orders the results by the dispatched_at field.
 func ByDispatchedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDispatchedAt, opts...).ToFunc()
+}
+
+// ByFanoutCursor orders the results by the fanout_cursor field.
+func ByFanoutCursor(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFanoutCursor, opts...).ToFunc()
 }

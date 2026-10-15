@@ -127,3 +127,107 @@ func TestConcurrencySkipAndReplace(t *testing.T) {
 		}
 	}
 }
+
+// Coalesce starts nothing while a run on the item is queued, and otherwise
+// queues one run that starts when the active one ends: a burst of changes
+// costs at most two runs, one after the other.
+func TestConcurrencyCoalesce(t *testing.T) {
+	f := setup(t)
+	w := f.workflow(t, "Coalesce", `{"triggers": [{"type": "item.updated", "collection_id": "$LIST"}], "concurrency": "coalesce",
+		"flow": {"start": "wait", "nodes": {"wait": {"activity": "delay", "inputs": {"duration": "1s"}}}}}`)
+	item := f.item(t, "alice", "Contract", nil)
+	for i, note := range []string{"first", "second", "third"} {
+		r := f.head(t, item.ID)
+		if _, err := f.dms.Update(ctx, "alice", item.ID, r.Version, dms.UpdateResource{Values: &map[string]any{"note": note}}); err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			// Let the first run start before the next changes.
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	runs := f.runs(t, w.ID, 2)
+	details := make([]Run, len(runs))
+	for i, run := range runs {
+		if run.Status != "completed" {
+			t.Fatalf("coalesce run: %+v", run)
+		}
+		var err error
+		if details[i], err = f.r.Run(ctx, "alice", run.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, second := details[0], details[1]
+	if first.CreatedAt.After(second.CreatedAt) {
+		first, second = second, first
+	}
+	ended := first.Steps[len(first.Steps)-1].CompletedAt
+	started := second.Steps[0].StartedAt
+	if ended == nil || started == nil || started.Before(*ended) {
+		t.Fatalf("the follow-up started before the first run ended: %v %v", ended, started)
+	}
+}
+
+func TestFolderEvents(t *testing.T) {
+	f := setup(t)
+	w := f.workflow(t, "Folders", `{"triggers": [
+		{"type": "folder.created", "collection_id": "$LIST"}, {"type": "folder.updated", "collection_id": "$LIST"},
+		{"type": "folder.deleted", "collection_id": "$LIST"}, {"type": "folder.restored", "collection_id": "$LIST"},
+		{"type": "folder.purged", "collection_id": "$LIST"}],
+		"flow": {"start": "end", "nodes": {"end": {"activity": "end"}}}}`)
+	items := f.workflow(t, "Items", `{"triggers": [{"type": "item.created", "collection_id": "$LIST"}, {"type": "item.deleted", "collection_id": "$LIST"}],
+		"flow": {"start": "end", "nodes": {"end": {"activity": "end"}}}}`)
+	a, err := f.dms.Create(ctx, "alice", f.list.ID, dms.CreateResource{Kind: "folder", Name: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := f.dms.Create(ctx, "alice", f.list.ID, dms.CreateResource{Kind: "folder", Name: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "A2"
+	if a, err = f.dms.Update(ctx, "alice", a.ID, a.Version, dms.UpdateResource{Name: &name}); err != nil {
+		t.Fatal(err)
+	}
+	if a, err = f.dms.MoveItem(ctx, "alice", a.ID, a.Version, dms.MoveItem{CollectionID: f.list.ID, ParentID: b.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.dms.Create(ctx, "alice", a.ID, dms.CreateResource{Kind: "item", Name: "Inside"}); err != nil {
+		t.Fatal(err)
+	}
+	b = f.head(t, b.ID)
+	if err = f.dms.Delete(ctx, "alice", b.ID, b.Version, dms.DeleteOptions{Recursive: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.dms.RestoreDeleted(ctx, "alice", f.list.ID, b.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	b = f.head(t, b.ID)
+	if err = f.dms.Delete(ctx, "alice", b.ID, b.Version, dms.DeleteOptions{Recursive: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.dms.PurgeDeleted(ctx, "alice", f.list.ID, b.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	// Created A and B, renamed and moved A; deleted, restored, deleted and
+	// purged both.
+	counts := map[string]int{}
+	for _, run := range f.runs(t, w.ID, 12) {
+		if run.Status != "completed" {
+			t.Fatalf("run: %+v", run)
+		}
+		counts[run.EventType]++
+		hasItem := run.ItemID != nil
+		if wantItem := run.EventType == "folder.created" || run.EventType == "folder.updated"; hasItem != wantItem && run.EventType != "folder.restored" {
+			t.Fatalf("%s run item: %v", run.EventType, run.ItemID)
+		}
+	}
+	want := map[string]int{"folder.created": 2, "folder.updated": 2, "folder.deleted": 4, "folder.restored": 2, "folder.purged": 2}
+	for typ, n := range want {
+		if counts[typ] != n {
+			t.Fatalf("folder events %v, want %v", counts, want)
+		}
+	}
+	// Folder writes start no item workflows; the item inside still does.
+	f.runs(t, items.ID, 3)
+}

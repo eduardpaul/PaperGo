@@ -59,6 +59,9 @@ type QueryResult struct {
 	Total      *int            `json:"total,omitempty"`
 	// TotalCapped means more than total items match (see TotalLimit).
 	TotalCapped bool `json:"total_capped,omitempty"`
+	// SearchCapped means the search text matched more entries than a query
+	// considers; narrow the words or filters for complete results.
+	SearchCapped bool `json:"search_capped,omitempty"`
 }
 type QueryGroup struct {
 	Value any `json:"value"`
@@ -84,6 +87,9 @@ type compiledQuery struct {
 	orders      []queryOrder
 	projection  []string
 	includeTags bool
+	// searchCapped means the search text matched more entries than queries
+	// consider (searchMatchLimit).
+	searchCapped bool
 }
 type queryCursor struct {
 	Fingerprint string            `json:"fingerprint"`
@@ -473,12 +479,16 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		text += " AND EXISTS(SELECT 1 FROM item_surface_tags WHERE surface_id=p.id AND tag=?)"
 		args = append(args, in.Query.Tag)
 	}
+	searchCapped := false
 	if strings.TrimSpace(in.Query.Search) != "" {
-		phrase := ftsPhrase(in.Query.Search)
-		// FTS rowids are item_surfaces rowids; reading the UNINDEXED id column costs a content-table lookup per match.
-		// The unary + keeps SQLite from probing the surface index once per match for every row.
-		text += " AND +p.rowid IN (SELECT rowid FROM item_surface_search WHERE item_surface_search MATCH ?)"
-		args = append(args, phrase)
+		head, published, capped, e := s.searchMatches(ctx, subject, c.ID, "", in.Query.Search)
+		if e != nil {
+			return compiledQuery{}, e
+		}
+		// p is the surface the caller reads: match on that surface.
+		text += " AND p.item_id IN (SELECT value FROM json_each(CASE p.surface WHEN 'head' THEN ? ELSE ? END))"
+		args = append(args, head, published)
+		searchCapped = capped
 	}
 	conditions, conditionArgs := text, args
 	// Collection queries decide the caller's ACL scopes when a statement first
@@ -497,7 +507,7 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		Select                               []string
 	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.Select})
 	sum := sha256.Sum256(fingerprint)
-	q := compiledQuery{sql: text, args: args, eligible: eligible, fingerprint: hex.EncodeToString(sum[:]), descending: compiledOrders[0].descending, kind: compiledOrders[0].kind, rankDef: compiler.defs[rankField], orders: compiledOrders, projection: projection, includeTags: includeTags}
+	q := compiledQuery{sql: text, args: args, eligible: eligible, fingerprint: hex.EncodeToString(sum[:]), descending: compiledOrders[0].descending, kind: compiledOrders[0].kind, rankDef: compiler.defs[rankField], orders: compiledOrders, projection: projection, includeTags: includeTags, searchCapped: searchCapped}
 	if !grouped && len(compiledOrders) == 1 {
 		column, _ := systemField(rankField)
 		if column == "r.id" {
@@ -729,7 +739,7 @@ func (s *Service) queryCompiled(ctx context.Context, subject string, in QueryReq
 		for i, r := range page {
 			ids[i], ranks[i] = r.id, r.rank
 		}
-		out := QueryResult{Data: []*ent.Resource{}}
+		out := QueryResult{Data: []*ent.Resource{}, SearchCapped: q.searchCapped}
 		if len(ids) > limit {
 			out.NextCursor = cursorEncode(q, ids[limit-1], ranks[limit-1])
 			ids = ids[:limit]
@@ -784,9 +794,10 @@ func (s *Service) QueryGroups(ctx context.Context, subject, containerID string, 
 			return Page[QueryGroup]{}, e
 		}
 		if groups, ok, e := t.countedGroups(ctx, subject, containerID, in, q.rankDef); e != nil || ok {
-			return Page[QueryGroup]{Data: groups}, e
+			return Page[QueryGroup]{Data: groups, SearchCapped: q.searchCapped}, e
 		}
 		out, e := t.queryGroupsCompiled(ctx, in, q)
+		out.SearchCapped = q.searchCapped
 		if e != nil || q.rankDef == nil || q.rankDef.Type != "term" && q.rankDef.Type != "keywords" {
 			return out, e
 		}

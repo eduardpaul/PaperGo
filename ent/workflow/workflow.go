@@ -31,6 +31,8 @@ const (
 	FieldBuiltinKey = "builtin_key"
 	// FieldCollectionID holds the string denoting the collection_id field in the database.
 	FieldCollectionID = "collection_id"
+	// FieldRole holds the string denoting the role field in the database.
+	FieldRole = "role"
 	// FieldParameters holds the string denoting the parameters field in the database.
 	FieldParameters = "parameters"
 	// FieldCurrentVersion holds the string denoting the current_version field in the database.
@@ -59,6 +61,7 @@ var Columns = []string{
 	FieldEnabled,
 	FieldBuiltinKey,
 	FieldCollectionID,
+	FieldRole,
 	FieldParameters,
 	FieldCurrentVersion,
 	FieldCreatedBy,
@@ -94,6 +97,8 @@ var (
 	DefaultEnabled bool
 	// CollectionIDValidator is a validator for the "collection_id" field. It is called by the builders before save.
 	CollectionIDValidator func(string) error
+	// RoleValidator is a validator for the "role" field. It is called by the builders before save.
+	RoleValidator func(string) error
 	// DefaultParameters holds the default value on creation for the "parameters" field.
 	DefaultParameters map[string]interface{}
 	// CurrentVersionValidator is a validator for the "current_version" field. It is called by the builders before save.
@@ -159,6 +164,11 @@ func ByBuiltinKey(opts ...sql.OrderTermOption) OrderOption {
 // ByCollectionID orders the results by the collection_id field.
 func ByCollectionID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCollectionID, opts...).ToFunc()
+}
+
+// ByRole orders the results by the role field.
+func ByRole(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRole, opts...).ToFunc()
 }
 
 // ByCurrentVersion orders the results by the current_version field.

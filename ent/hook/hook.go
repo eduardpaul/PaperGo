@@ -44,6 +44,18 @@ func (f BlobDeletionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BlobDeletionMutation", m)
 }
 
+// The BlobTextFunc type is an adapter to allow the use of ordinary
+// function as BlobText mutator.
+type BlobTextFunc func(context.Context, *ent.BlobTextMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BlobTextFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BlobTextMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BlobTextMutation", m)
+}
+
 // The BusinessKeyFunc type is an adapter to allow the use of ordinary
 // function as BusinessKey mutator.
 type BusinessKeyFunc func(context.Context, *ent.BusinessKeyMutation) (ent.Value, error)
@@ -54,6 +66,18 @@ func (f BusinessKeyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BusinessKeyMutation", m)
+}
+
+// The CachedResultFunc type is an adapter to allow the use of ordinary
+// function as CachedResult mutator.
+type CachedResultFunc func(context.Context, *ent.CachedResultMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CachedResultFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CachedResultMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CachedResultMutation", m)
 }
 
 // The CollectionTypeFunc type is an adapter to allow the use of ordinary

@@ -1,0 +1,577 @@
+{
+  "description": "Hand-labelled synthetic DMS smoke set; 30 passages, 60 queries (English, Spanish, Catalan); one relevant passage per query. Not MTEB or a production quality estimate.",
+  "documents": [
+    {
+      "id": "invoice-paid",
+      "title": "Paid electricity invoice",
+      "text": "Electricity invoice INV-2026-091 for the Madrid office, September 2026. Amount EUR 245.80 including VAT. Paid in full by bank transfer on 3 October. No balance outstanding."
+    },
+    {
+      "id": "invoice-unpaid",
+      "title": "Outstanding electricity invoice",
+      "text": "Electricity invoice INV-2026-092 for the Barcelona office, September 2026. EUR 312.40 including VAT. Payment is due on 20 October; the invoice remains unpaid."
+    },
+    {
+      "id": "invoice-credit",
+      "title": "Supplier credit note",
+      "text": "The electricity supplier issued a EUR 75 credit note correcting an overcharge on a prior invoice. This is a refund adjustment, not a new bill or a receipt for payment."
+    },
+    {
+      "id": "expense-train",
+      "title": "Rail travel reimbursement",
+      "text": "Employee Ana travelled from Madrid to Valencia by train for a customer meeting. Rail fare EUR 84.50. Approved business travel expense; reimburse through payroll after submission of the ticket."
+    },
+    {
+      "id": "expense-meal",
+      "title": "Client dinner receipt",
+      "text": "Ana hosted a dinner with a customer in Valencia. Meal receipt EUR 84.50. The entertainment expense requires the attendee list and manager approval before reimbursement."
+    },
+    {
+      "id": "leave-paid",
+      "title": "Annual leave policy",
+      "text": "Employees receive 25 paid working days of annual holiday. Request holiday through the HR portal at least two weeks before the start date. Unused days may be carried over until March."
+    },
+    {
+      "id": "leave-parent",
+      "title": "Parental leave policy",
+      "text": "After a birth or adoption, employees may take parental leave under the applicable national employment rules. Contact HR with the expected date and supporting documents. This is separate from annual holiday."
+    },
+    {
+      "id": "leave-sick",
+      "title": "Sickness absence procedure",
+      "text": "If illness prevents work, tell your manager on the first day. Submit a medical certificate for absences longer than three days. Do not book sick days as annual vacation."
+    },
+    {
+      "id": "lease-office",
+      "title": "Office tenancy agreement",
+      "text": "The Madrid office lease runs until 31 December 2027. Monthly rent EUR 1800. Either party must give six months written notice before expiry to prevent automatic renewal."
+    },
+    {
+      "id": "lease-car",
+      "title": "Vehicle lease agreement",
+      "text": "Company vehicle leasing runs for 36 months with a limit of 20000 kilometres per year. Excess mileage costs EUR 0.12 per kilometre. Early termination incurs remaining instalments."
+    },
+    {
+      "id": "nda-mutual",
+      "title": "Mutual confidentiality agreement",
+      "text": "Both parties must protect shared commercial information for five years after disclosure. The mutual NDA excludes public information and independently developed knowledge. No intellectual property is transferred."
+    },
+    {
+      "id": "contract-ip",
+      "title": "Software ownership clause",
+      "text": "Under this development services contract, the client owns bespoke source code after full payment. The supplier retains its pre-existing libraries and grants a perpetual licence to those components."
+    },
+    {
+      "id": "security-mfa",
+      "title": "Account sign-in security",
+      "text": "All staff accounts require multifactor authentication. Lost security keys must be reported to IT; identity verification is required before registering a replacement. Password resets alone do not bypass MFA."
+    },
+    {
+      "id": "security-backup",
+      "title": "Backup restoration runbook",
+      "text": "Encrypted backups run nightly and are retained for 30 days. To recover accidentally deleted documents, IT restores a backup into an isolated environment and verifies the requested files before importing them."
+    },
+    {
+      "id": "security-retention",
+      "title": "Records retention schedule",
+      "text": "Finance invoices must be retained for six years. Personnel files are retained for the statutory employment period. At expiry, approved deletion removes records and follows the backup retention schedule."
+    },
+    {
+      "id": "security-access",
+      "title": "Workspace permission guide",
+      "text": "A workspace owner grants roles to groups. Read access permits published documents; draft access also permits unpublished revisions. Confidential collections use their own exclusive permission scope."
+    },
+    {
+      "id": "purchase-laptop",
+      "title": "Laptop procurement policy",
+      "text": "Employees may order a laptop up to EUR 1500 with manager approval. Purchases exceeding that ceiling require finance sign-off. Equipment is recorded in the asset register."
+    },
+    {
+      "id": "purchase-refund",
+      "title": "Equipment return procedure",
+      "text": "Return defective laptops to the supplier within 30 days of delivery with the original invoice. Request replacement or refund. Normal wear after this period is handled through the warranty process."
+    },
+    {
+      "id": "warranty",
+      "title": "Hardware warranty terms",
+      "text": "Computers carry a three-year warranty against manufacturing defects. Accidental damage and normal wear are excluded. Repairs require the serial number and proof of purchase."
+    },
+    {
+      "id": "minutes-approved",
+      "title": "Approved budget meeting minutes",
+      "text": "At the October finance committee meeting, members approved the 2027 operating budget. The signed minutes record the adopted EUR 420000 expenditure ceiling and the vote."
+    },
+    {
+      "id": "budget-draft",
+      "title": "Draft budget proposal",
+      "text": "The proposed 2027 operating budget totals EUR 450000. It is a draft pending committee review. These figures have not been approved and must not be treated as spending authority."
+    },
+    {
+      "id": "shipping",
+      "title": "Delivery confirmation",
+      "text": "The courier delivered purchase order PO-783 to the Barcelona office on 7 October. The delivery note bears the recipient's signature. Delivery does not establish that the supplier invoice was paid."
+    },
+    {
+      "id": "receipt-payment",
+      "title": "Supplier payment confirmation",
+      "text": "Bank remittance for purchase order PO-783: EUR 2350 transferred on 9 October. The bank confirmation establishes payment to the supplier; it is not a delivery note."
+    },
+    {
+      "id": "vat",
+      "title": "VAT invoice checklist",
+      "text": "A valid VAT invoice includes the supplier's tax identifier, invoice number, issue date, taxable amount, VAT rate and tax amount. A card payment slip alone is insufficient to deduct input VAT."
+    },
+    {
+      "id": "remote",
+      "title": "Remote working agreement",
+      "text": "Staff may work remotely two days per week with team approval. Use the company VPN for access to internal systems. Remote working outside the country requires prior HR authorization."
+    },
+    {
+      "id": "incident",
+      "title": "Personal data incident procedure",
+      "text": "Report a suspected personal data breach to the privacy officer immediately. Preserve evidence and do not notify external parties independently. The officer assesses regulatory notification deadlines."
+    },
+    {
+      "id": "consent",
+      "title": "Marketing consent record",
+      "text": "Customer Marta opted in to promotional email on 12 June. She withdrew consent on 2 September. Marketing must suppress further promotional messages while retaining evidence of withdrawal."
+    },
+    {
+      "id": "export",
+      "title": "Document export procedure",
+      "text": "To export records, choose the permitted collection and download a content package. The package contains document files and metadata. Access checks limit exports to readable entries."
+    },
+    {
+      "id": "ocr",
+      "title": "Searchable scanned documents",
+      "text": "The photo-to-PDF workflow runs OCR on scanned page images and adds invisible selectable text. A scan without this text layer may look readable but cannot be searched by its words."
+    },
+    {
+      "id": "version",
+      "title": "Published document revisions",
+      "text": "Editing a published item creates a draft head revision. Readers continue to see the published revision until the new draft is published. Draft readers can inspect both surfaces."
+    }
+  ],
+  "queries": [
+    {
+      "text": "Find the electricity bill that has already been settled",
+      "relevant": [
+        "invoice-paid"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "La factura de luz que ya está pagada",
+      "relevant": [
+        "invoice-paid"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Which electricity bill still needs payment?",
+      "relevant": [
+        "invoice-unpaid"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Quina factura d'electricitat està pendent de pagament?",
+      "relevant": [
+        "invoice-unpaid"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "Where is the adjustment refund for the energy overcharge?",
+      "relevant": [
+        "invoice-credit"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Busca el abono por el cobro excesivo de energía",
+      "relevant": [
+        "invoice-credit"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Can Ana claim the rail fare for her client visit?",
+      "relevant": [
+        "expense-train"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Reembolso del billete de tren para visitar al cliente",
+      "relevant": [
+        "expense-train"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Which expense requires a list of dinner guests?",
+      "relevant": [
+        "expense-meal"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Quina despesa necessita els noms dels assistents al sopar?",
+      "relevant": [
+        "expense-meal"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "How many days of paid vacation do staff get?",
+      "relevant": [
+        "leave-paid"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "¿Cuántos días de vacaciones pagadas tengo?",
+      "relevant": [
+        "leave-paid"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Find the leave policy for adopting a child",
+      "relevant": [
+        "leave-parent"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Permís laboral després d'adoptar un fill",
+      "relevant": [
+        "leave-parent"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "What document is required after four days of illness?",
+      "relevant": [
+        "leave-sick"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Documento necesario tras cuatro días de baja por enfermedad",
+      "relevant": [
+        "leave-sick"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "How do we stop the office tenancy from renewing?",
+      "relevant": [
+        "lease-office"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Evitar la renovación automática del alquiler de la oficina",
+      "relevant": [
+        "lease-office"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "What fee applies when the leased car exceeds its mileage allowance?",
+      "relevant": [
+        "lease-car"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Cost per quilòmetre addicional del cotxe de lísing",
+      "relevant": [
+        "lease-car"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "Which agreement obliges both sides to keep commercial information secret?",
+      "relevant": [
+        "nda-mutual"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Acuerdo de confidencialidad que obliga a ambas partes",
+      "relevant": [
+        "nda-mutual"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Who owns custom software once the development bill is paid?",
+      "relevant": [
+        "contract-ip"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "De qui és el codi desenvolupat a mida un cop pagat?",
+      "relevant": [
+        "contract-ip"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "I lost my login security key; how do I get access again?",
+      "relevant": [
+        "security-mfa"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "He perdido la llave de seguridad para iniciar sesión",
+      "relevant": [
+        "security-mfa"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "How can IT recover a document accidentally deleted yesterday?",
+      "relevant": [
+        "security-backup"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Recuperar un document esborrat ahir per error",
+      "relevant": [
+        "security-backup"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "How long must we keep finance invoices?",
+      "relevant": [
+        "security-retention"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "¿Durante cuánto tiempo conservamos las facturas contables?",
+      "relevant": [
+        "security-retention"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "What permission is needed to read an unpublished revision?",
+      "relevant": [
+        "security-access"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Permís necessari per llegir una revisió encara no publicada",
+      "relevant": [
+        "security-access"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "A new laptop costs 1700 euros; who must approve it?",
+      "relevant": [
+        "purchase-laptop"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "¿Quién autoriza comprar un portátil de 1700 euros?",
+      "relevant": [
+        "purchase-laptop"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Can a faulty laptop delivered last week be sent back for a refund?",
+      "relevant": [
+        "purchase-refund"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Retornar un portàtil defectuós rebut la setmana passada",
+      "relevant": [
+        "purchase-refund"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "Does the computer warranty cover accidental breakage?",
+      "relevant": [
+        "warranty"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "¿Cubre la garantía la rotura accidental de un ordenador?",
+      "relevant": [
+        "warranty"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Find the signed record approving next year's operating budget",
+      "relevant": [
+        "minutes-approved"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Acta signada d'aprovació del pressupost de l'any vinent",
+      "relevant": [
+        "minutes-approved"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "Where is the budget proposal that has not yet been approved?",
+      "relevant": [
+        "budget-draft"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Propuesta presupuestaria todavía pendiente de aprobación",
+      "relevant": [
+        "budget-draft"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Find proof that order PO-783 arrived at the Barcelona office",
+      "relevant": [
+        "shipping"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Comprovant de recepció de la comanda PO-783 a Barcelona",
+      "relevant": [
+        "shipping"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "Where is proof that the supplier for PO-783 was paid?",
+      "relevant": [
+        "receipt-payment"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Justificante de pago al proveedor de la orden PO-783",
+      "relevant": [
+        "receipt-payment"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Is a credit card slip enough to claim input VAT?",
+      "relevant": [
+        "vat"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Un rebut de targeta serveix per deduir l'IVA?",
+      "relevant": [
+        "vat"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "Can I work from another country without HR permission?",
+      "relevant": [
+        "remote"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Trabajar desde otro país sin permiso de recursos humanos",
+      "relevant": [
+        "remote"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "Who should be told immediately when personal data leaks?",
+      "relevant": [
+        "incident"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "A qui avisar si es filtren dades personals?",
+      "relevant": [
+        "incident"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "May we send Marta promotions after she withdrew consent?",
+      "relevant": [
+        "consent"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "¿Podemos mandar publicidad a Marta después de retirar el consentimiento?",
+      "relevant": [
+        "consent"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "How can I download a collection's files with their metadata?",
+      "relevant": [
+        "export"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Descarregar els fitxers d'una col·lecció amb les metadades",
+      "relevant": [
+        "export"
+      ],
+      "language": "ca"
+    },
+    {
+      "text": "Why can I see text in a scan but cannot search for its words?",
+      "relevant": [
+        "ocr"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Veo texto en el escaneo pero la búsqueda no encuentra sus palabras",
+      "relevant": [
+        "ocr"
+      ],
+      "language": "es"
+    },
+    {
+      "text": "What do readers see while a published document is being edited?",
+      "relevant": [
+        "version"
+      ],
+      "language": "en"
+    },
+    {
+      "text": "Què veuen els lectors mentre s'edita un document publicat?",
+      "relevant": [
+        "version"
+      ],
+      "language": "ca"
+    }
+  ]
+}

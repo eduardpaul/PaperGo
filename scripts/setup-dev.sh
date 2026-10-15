@@ -2,6 +2,9 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+python3 scripts/native.py
+source .tools/native/env.sh
+
 go mod download
 npm ci --prefix web
 npm --prefix web run build

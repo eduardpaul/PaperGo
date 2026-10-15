@@ -184,9 +184,7 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 				if _, e = t.publishRevision(ctx, subject, row, head, false, nil); e != nil {
 					return e
 				}
-				if row.Kind == resource.KindItem {
-					t.emit(ctx, EventItemRestored, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
-				}
+				t.emitRestored(ctx, subject, row)
 			} else if contentKind(row.Kind) {
 				// Restore the retained head and publication with their frozen
 				// schemas; without publishing only the published surface exists.
@@ -217,9 +215,7 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 						return e
 					}
 				}
-				if row.Kind == resource.KindItem {
-					t.emit(ctx, EventItemRestored, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
-				}
+				t.emitRestored(ctx, subject, row)
 			}
 			if e = t.audit(ctx, subject, "resource.restore", row, map[string]any{"parent_id": parent}); e != nil {
 				return e
@@ -332,8 +328,11 @@ func (s *Service) PurgeDeleted(ctx context.Context, subject, collection, id stri
 					return err
 				}
 			}
-			if row.Kind == resource.KindItem {
+			switch row.Kind {
+			case resource.KindItem:
 				t.emit(ctx, EventItemPurged, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
+			case resource.KindFolder:
+				t.emit(ctx, EventFolderPurged, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
 			}
 		}
 		return nil
@@ -346,6 +345,9 @@ type objectDeleter interface {
 
 // CleanupPurgedBlobs is restart-safe: failed storage deletes remain queued.
 func (s *Service) CleanupPurgedBlobs(ctx context.Context, store objectDeleter) error {
+	if err := s.collectBlobTexts(ctx); err != nil {
+		return err
+	}
 	rows, err := s.Client.BlobDeletion.Query().Limit(100).All(ctx)
 	if err != nil {
 		return err
@@ -365,7 +367,7 @@ func (s *Service) CleanupPurgedBlobs(ctx context.Context, store objectDeleter) e
 
 func (s *Service) deleteUnreferencedObject(ctx context.Context, store objectDeleter, key string) error {
 	var referenced bool
-	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=?) OR EXISTS(SELECT 1 FROM staged_files WHERE object_key=? AND state='pending') OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now')))`, key, key, OperationKindImport, key, OperationKindExport, key); err != nil {
+	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=?) OR EXISTS(SELECT 1 FROM blob_texts WHERE object_key=?) OR EXISTS(SELECT 1 FROM staged_files WHERE object_key=? AND state='pending') OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now')))`, key, key, key, OperationKindImport, key, OperationKindExport, key); err != nil {
 		return err
 	}
 	if referenced {
@@ -401,5 +403,15 @@ func (s *Service) RunBlobCleanup(ctx context.Context, store storage.Store, log *
 			return
 		case <-ticker.C:
 		}
+	}
+}
+
+// emitRestored raises item.restored or folder.restored for a restored entry.
+func (s *Service) emitRestored(ctx context.Context, subject string, row *ent.Resource) {
+	switch row.Kind {
+	case resource.KindItem:
+		s.emit(ctx, EventItemRestored, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
+	case resource.KindFolder:
+		s.emit(ctx, EventFolderRestored, subject, row.WorkspaceID, row.ContainerID, row.ID, nil)
 	}
 }

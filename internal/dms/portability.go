@@ -31,14 +31,16 @@ const PackageRetention = 7 * 24 * time.Hour
 const OperationKindExport = "portability.export"
 const OperationKindImport = "portability.import"
 
-// This catalog is the portable application graph. Search/tag projections are
-// rebuilt by database triggers. Credentials, audit, cursors and execution state
-// belong to this installation and are deliberately absent.
+// This catalog is the portable application graph. Tag projections are rebuilt
+// by database triggers and the search index by a reindex after the import.
+// Text read from files travels with their bytes: reading it again can mean
+// OCR. Credentials, audit, cursors and execution state belong to this
+// installation and are deliberately absent.
 var packageTables = []string{
 	"identity_users", "identity_groups", "identity_roles", "identity_memberships", "identity_assignments", "identity_preferences",
 	"term_groups", "term_sets", "terms", "relationship_types", "field_definitions", "content_types",
 	"resources", "collection_types", "schema_revisions", "schema_templates", "list_views", "smart_folders",
-	"blobs", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
+	"blobs", "blob_texts", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
 	"workflows", "workflow_versions", "workflow_triggers", "group_inboxes",
 }
 
@@ -227,6 +229,13 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store) (s
 		if !seen[key] {
 			seen[key] = true
 			p.Objects = append(p.Objects, packageObject{key, row["size"].(int64), row["sha256"].(string)})
+		}
+	}
+	for _, row := range packageMaps(p.Tables["blob_texts"]) {
+		key := row["object_key"].(string)
+		if !seen[key] {
+			seen[key] = true
+			p.Objects = append(p.Objects, packageObject{key, row["object_size"].(int64), row["object_sha256"].(string)})
 		}
 	}
 	raw, err := json.Marshal(p)
@@ -450,6 +459,17 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 			return result, invalid("packaged file signature does not match its supported media type")
 		}
 	}
+	fileHashes := map[any]bool{}
+	for _, blob := range packageMaps(p.Tables["blobs"]) {
+		fileHashes[blob["sha256"]] = true
+	}
+	for _, text := range packageMaps(p.Tables["blob_texts"]) {
+		key, _ := text["object_key"].(string)
+		obj, ok := objects[key]
+		if !ok || text["object_size"] != obj.Size || text["object_sha256"] != obj.SHA256 || !fileHashes[text["sha256"]] {
+			return result, invalid("file text does not match its packaged object or file")
+		}
+	}
 	if err = validatePackageGroups(p); err != nil {
 		return result, err
 	}
@@ -501,6 +521,14 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	}
 	if _, err = s.tx.ExecContext(ctx, "RELEASE core_package"); err != nil {
 		return result, err
+	}
+	// Imported entries raised no change events: rebuild the search index,
+	// file content included (the imported text is reused, not read again).
+	if s.search != nil {
+		raw, _ := json.Marshal(searchReindexPayload{Stamp: time.Now().UnixNano(), Content: true})
+		if _, err = s.Client.Operation.Create().SetKind(OperationKindSearchReindex).SetCreatedBy(systemSubject).SetPayload(raw).SetTraceID(s.traceID).Save(ctx); err != nil {
+			return result, err
+		}
 	}
 	return result, s.auditCatalog(ctx, subject, "portability.import", map[string]any{"rows": result.Rows, "objects": result.Objects})
 }
@@ -656,7 +684,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 					continue
 				}
 			}
-			if table == "blobs" {
+			if table == "blobs" || table == "blob_texts" {
 				if key, ok := objects[fmt.Sprint(row["object_key"])]; ok {
 					row["object_key"] = key
 				}

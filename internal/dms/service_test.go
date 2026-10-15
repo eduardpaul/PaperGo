@@ -64,6 +64,7 @@ func TestFieldsSearchPublishingAndOwnership(t *testing.T) {
 	if _, err = s.Create(testContext, "alice", item.ID, CreateResource{Kind: "library", Name: "Illegal"}); err == nil {
 		t.Fatal("item was allowed to own a library")
 	}
+	indexSearch(t, s)
 	page, err := s.Browse(testContext, "alice", Browse{WorkspaceID: w.ID, Search: "Quarterly"})
 	if err != nil || len(page.Data) != 1 || page.Data[0].ID != item.ID {
 		t.Fatalf("search: %+v %v", page, err)
@@ -84,6 +85,7 @@ func TestFieldsSearchPublishingAndOwnership(t *testing.T) {
 	if snapshot["name"] != "Quarterly invoice" || updated.Version != 3 {
 		t.Fatal("snapshot changed or version not incremented")
 	}
+	indexSearch(t, s)
 	page, err = s.Browse(testContext, "alice", Browse{WorkspaceID: w.ID, Search: "Quarterly"})
 	if err != nil || len(page.Data) != 0 {
 		t.Fatalf("stale search index: %+v %v", page, err)

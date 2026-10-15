@@ -48,6 +48,26 @@ func (_u *DomainEventUpdate) ClearDispatchedAt() *DomainEventUpdate {
 	return _u
 }
 
+// SetFanoutCursor sets the "fanout_cursor" field.
+func (_u *DomainEventUpdate) SetFanoutCursor(v string) *DomainEventUpdate {
+	_u.mutation.SetFanoutCursor(v)
+	return _u
+}
+
+// SetNillableFanoutCursor sets the "fanout_cursor" field if the given value is not nil.
+func (_u *DomainEventUpdate) SetNillableFanoutCursor(v *string) *DomainEventUpdate {
+	if v != nil {
+		_u.SetFanoutCursor(*v)
+	}
+	return _u
+}
+
+// ClearFanoutCursor clears the value of the "fanout_cursor" field.
+func (_u *DomainEventUpdate) ClearFanoutCursor() *DomainEventUpdate {
+	_u.mutation.ClearFanoutCursor()
+	return _u
+}
+
 // Mutation returns the DomainEventMutation object of the builder.
 func (_u *DomainEventUpdate) Mutation() *DomainEventMutation {
 	return _u.mutation
@@ -104,6 +124,12 @@ func (_u *DomainEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.DispatchedAtCleared() {
 		_spec.ClearField(domainevent.FieldDispatchedAt, field.TypeTime)
 	}
+	if value, ok := _u.mutation.FanoutCursor(); ok {
+		_spec.SetField(domainevent.FieldFanoutCursor, field.TypeString, value)
+	}
+	if _u.mutation.FanoutCursorCleared() {
+		_spec.ClearField(domainevent.FieldFanoutCursor, field.TypeString)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{domainevent.Label}
@@ -141,6 +167,26 @@ func (_u *DomainEventUpdateOne) SetNillableDispatchedAt(v *time.Time) *DomainEve
 // ClearDispatchedAt clears the value of the "dispatched_at" field.
 func (_u *DomainEventUpdateOne) ClearDispatchedAt() *DomainEventUpdateOne {
 	_u.mutation.ClearDispatchedAt()
+	return _u
+}
+
+// SetFanoutCursor sets the "fanout_cursor" field.
+func (_u *DomainEventUpdateOne) SetFanoutCursor(v string) *DomainEventUpdateOne {
+	_u.mutation.SetFanoutCursor(v)
+	return _u
+}
+
+// SetNillableFanoutCursor sets the "fanout_cursor" field if the given value is not nil.
+func (_u *DomainEventUpdateOne) SetNillableFanoutCursor(v *string) *DomainEventUpdateOne {
+	if v != nil {
+		_u.SetFanoutCursor(*v)
+	}
+	return _u
+}
+
+// ClearFanoutCursor clears the value of the "fanout_cursor" field.
+func (_u *DomainEventUpdateOne) ClearFanoutCursor() *DomainEventUpdateOne {
+	_u.mutation.ClearFanoutCursor()
 	return _u
 }
 
@@ -229,6 +275,12 @@ func (_u *DomainEventUpdateOne) sqlSave(ctx context.Context) (_node *DomainEvent
 	}
 	if _u.mutation.DispatchedAtCleared() {
 		_spec.ClearField(domainevent.FieldDispatchedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.FanoutCursor(); ok {
+		_spec.SetField(domainevent.FieldFanoutCursor, field.TypeString, value)
+	}
+	if _u.mutation.FanoutCursorCleared() {
+		_spec.ClearField(domainevent.FieldFanoutCursor, field.TypeString)
 	}
 	_node = &DomainEvent{config: _u.config}
 	_spec.Assign = _node.assignValues

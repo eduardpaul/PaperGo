@@ -99,11 +99,26 @@ func TestLiveBackupAndRestoreCompleteState(t *testing.T) {
 		t.Fatal(err)
 	}
 	dest.Force = true
+	// The search index described the replaced data: a restore removes it.
+	dest.SearchPath = filepath.Join(root, "search.db")
+	for _, suffix := range []string{"", "-wal"} {
+		if err = os.WriteFile(dest.SearchPath+suffix, []byte("stale index"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err = Restore(context.Background(), dest); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = os.Stat(filepath.Join(dest.BlobPath, "orphan")); !os.IsNotExist(err) {
 		t.Fatal("restore did not replace complete file store", err)
+	}
+	for _, suffix := range []string{"", "-wal"} {
+		if _, err = os.Stat(dest.SearchPath + suffix); !os.IsNotExist(err) {
+			t.Fatal("restore kept the search index", suffix, err)
+		}
+	}
+	if matches, _ := filepath.Glob(dest.SearchPath + "*.restore-*"); len(matches) != 0 {
+		t.Fatal("restore left the saved search index", matches)
 	}
 }
 
@@ -274,7 +289,7 @@ func TestInstallRollsBackBothDestinationsOnFailure(t *testing.T) {
 	if err := os.WriteFile(snapshot, []byte("new"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := install(in, snapshot, filepath.Join(root, "missing")); err == nil {
+	if err := install(in, snapshot, filepath.Join(root, "missing"), ""); err == nil {
 		t.Fatal("missing staged files accepted")
 	}
 	got, err := os.ReadFile(in.DatabasePath)

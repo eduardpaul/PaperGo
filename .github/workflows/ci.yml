@@ -37,6 +37,7 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
+      - uses: ./.github/actions/native
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -52,7 +53,7 @@ jobs:
   docker-smoke:
     name: Docker build and startup
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,6 +62,7 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
+      - uses: ./.github/actions/native
       - name: Build image and smoke test
         run: bash scripts/docker-smoke.sh
   verify:
@@ -74,6 +76,7 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
+      - uses: ./.github/actions/native
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -99,8 +102,33 @@ jobs:
         run: test -z "$(gofmt -l cmd internal ent/schema web/*.go)"
       - name: Vet
         run: go vet ./...
-      - name: Build single binary application
-        run: CGO_ENABLED=0 go build -trimpath -o bin/papergo ./cmd/api
+      - name: Build application
+        run: go build -trimpath -o bin/papergo ./cmd/api
+  embeddings:
+    name: Local embedding engines
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: ./.github/actions/native
+      - uses: actions/cache@v4
+        with:
+          path: .tools/embedding/models
+          key: embedding-q4-daa72c51243991df-e4daffa011e666dc
+      - name: Install pinned runtimes and text models
+        run: |
+          python3 scripts/fetch-embedding-models.py all
+          echo "EMBEDDING_MODELS_ROOT=$PWD/.tools/embedding/models" >> "$GITHUB_ENV"
+      - name: Check native embeddings, cancellation and shared OCR runtime
+        env:
+          PAPERGO_REQUIRE_EMBEDDING: '1'
+        run: go test -race ./internal/embedding ./internal/onnx ./cmd/embed
   race:
     name: Race tests (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
@@ -117,6 +145,7 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: true
+      - uses: ./.github/actions/native
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -124,9 +153,86 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Build embedded frontend
         run: npm ci --prefix web && npm --prefix web run build
-      - name: Install ONNX Runtime for the OCR tests
-        run: echo "ONNXRUNTIME_LIB=$(bash scripts/fetch-onnxruntime.sh)" >> "$GITHUB_ENV"
       - name: Test with race detection
         env:
           PAPERGO_REQUIRE_OCR: '1'
         run: python3 scripts/test-race.py --shard ${{ matrix.shard }} --shards 3
+
+  zvec:
+    name: Native zvec (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: ./.github/actions/native
+      - name: Native conformance, lifecycle, backup and offline copy
+        run: go test -race ./internal/search/zvecstore ./internal/backup ./cmd/admin
+      - name: Service, HTTP and workflow parity
+        env:
+          PAPERGO_TEST_SEARCH_STORE: zvec
+        run: go test -race ./internal/dms ./internal/httpapi ./internal/runner -run '(Search|Content|Receipt|Contract|AIComplete|Prefix|SmartFolder|View|Listing|Query)'
+      - name: Real dimensions soak
+        env:
+          PAPERGO_ZVEC_SOAK: '1'
+        run: go test ./internal/search/zvecstore -run '^TestRealDimensionsSoak$' -count=1 -v
+      - name: Fuzz native query builders
+        run: |
+          go test ./internal/search/zvecstore -run '^$' -fuzz '^FuzzNativeFilter$' -fuzztime=10s -parallel=2
+          go test ./internal/search/zvecstore -run '^$' -fuzz '^FuzzNativeText$' -fuzztime=10s -parallel=2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zvec-${{ runner.os }}-${{ runner.arch }}
+          path: .tools/native/installed.json
+
+  native-platforms:
+    name: Native SDK smoke (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, windows-2025]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache: true
+      - uses: ./.github/actions/native
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the embedded frontend and executables
+        shell: bash
+        run: |
+          npm ci --prefix web
+          npm --prefix web run build
+          go build ./cmd/api ./cmd/admin ./cmd/embed ./cmd/ocr
+      - name: Exercise native search, PDFs, images and OCR
+        shell: bash
+        run: go test ./internal/onnx ./internal/ocr/paddle ./internal/imaging ./internal/doctext/pdfium ./internal/search/zvecstore -run 'TestNativeABI|TestReadAndRender|TestRecognize$|TestDecode|TestWebPRoundTripAndResize|TestIdle|TestConcurrentIdle'
+      - name: Verify the packaged executable and library paths
+        shell: bash
+        run: |
+          go run ./cmd/release --version v0.0.0-rc.1
+          suffix=''
+          if [[ "$RUNNER_OS" == Windows ]]; then suffix='.exe'; fi
+          mkdir -p bin
+          go build -trimpath -ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1' -o "bin/papergo$suffix" ./cmd/api
+          go build -trimpath -ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1' -o "bin/papergo-admin$suffix" ./cmd/admin
+          python scripts/release-package.py --version v0.0.0-rc.1 --os "$(go env GOOS)" --arch "$(go env GOARCH)"
+          python scripts/release-smoke.py

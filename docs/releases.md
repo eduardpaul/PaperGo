@@ -18,16 +18,12 @@ git push origin v0.1.0
 Use `vX.Y.Z` for stable releases and `vX.Y.Z-rc.N` for release candidates.
 The release workflow runs the existing CI and vulnerability workflows against
 that tag, validates a forward-only published history, and prepares the database
-bundle. It builds and runs native smoke tests for Linux amd64/arm64, macOS Intel /
-Apple Silicon, and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
+bundle. It builds and runs native smoke tests for Linux amd64/arm64, macOS Apple Silicon, and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
 `papergo-admin`, the database bundle and this guide. Both executables support
 `--version`; version, commit and commit date are injected into the build.
-The Linux executables need glibc (the API loads ONNX Runtime through purego).
-The archives do not include ONNX Runtime or the OCR models: OCR workflows need
-`ONNXRUNTIME_LIB` and `OCR_MODELS` ([OCR](ocr.md#configuration)), which the
-Docker image sets.
+The Linux executables need glibc, and ONNX inference needs libstdc++. Archives include the cgo-linked PDFium and zvec libraries, ONNX Runtime and native license notices; WebP and tokenizers are statically linked. Linux and macOS locate libraries in `lib/` beside the executables; Windows places DLLs beside them. OCR additionally needs `ONNXRUNTIME_LIB` and `OCR_MODELS` ([OCR](ocr.md#configuration)). The Docker image bundles the OCR models and enables it by default. PDF text reading is always available.
 
-Publication creates a draft, uploads all five archives plus
+Publication creates a draft, uploads all four archives plus
 `release-database.json` and `SHA256SUMS`, then publishes it. Stable releases become
 Latest; release candidates are marked as prereleases. No personal access token
 is required: the publication job uses GitHub's repository token with

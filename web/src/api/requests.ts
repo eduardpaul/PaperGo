@@ -159,8 +159,28 @@ export function bulkUpdateRequests(
   return calls;
 }
 
-export function searchRequest(q: string, workspaceId: string): ApiCall {
-  return { path: '/v1/resources', method: 'GET', query: { q, workspace_id: workspaceId, $top: 50 } };
+export interface SearchParams {
+  q?: string;
+  workspaceId?: string;
+  collectionId?: string;
+  tag?: string;
+  kind?: 'item' | 'folder' | 'all';
+}
+
+/** Global search across the workspaces the caller reads. */
+export function searchRequest(params: SearchParams): ApiCall {
+  return {
+    path: '/v1/search',
+    method: 'GET',
+    query: {
+      q: params.q,
+      workspace_id: params.workspaceId,
+      collection_id: params.collectionId,
+      tag: params.tag,
+      kind: params.kind === 'all' ? 'item,folder' : params.kind,
+      $top: 25,
+    },
+  };
 }
 
 export function smartFolderQueryRequest(id: string, path: (string | null)[]): ApiCall {

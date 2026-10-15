@@ -7,7 +7,7 @@ PaperGo reads text in page images through an OCR layer:
 
 Engines never read storage or the database. Callers decode the file, apply EXIF orientation and pass an `image.Image` of at most 64 million pixels (`ocr.MaxPixels`). Workflow activities use the layer through the port only (see [workflows](workflows.md#building-features-on-workflows)).
 
-Workflow activities use it: [`file.optimize_image`](workflows.md#image-optimization) detects text to shrink images, and [`file.compose_pdf`](workflows.md#photos-to-pdf) also recognizes it for the text layer of searchable PDFs (`internal/pdf`).
+Workflow activities use it: [`file.optimize_image`](workflows.md#image-optimization) detects text to shrink images, [`file.compose_pdf`](workflows.md#photos-to-pdf) also recognizes it for the text layer of searchable PDFs (`internal/pdf`), and [`document.read_text`](workflows.md#reading-text) reads scanned PDF pages and photos, keeping their text for search.
 
 ## Configuration
 
@@ -15,7 +15,7 @@ OCR is off unless the server is given ONNX Runtime:
 
 | Setting | Meaning |
 | --- | --- |
-| `ONNXRUNTIME_LIB` | Path of the ONNX Runtime shared library (1.23 or newer). Empty turns OCR off; activities that need it fail with a message saying so. |
+| `ONNXRUNTIME_LIB` | Path of the ONNX Runtime shared library (pinned version 1.23.2). Empty turns OCR off; activities that need it fail with a message saying so. |
 | `OCR_MODELS` | Directory of the [model files](../models/paddleocr/README.md) (default `models/paddleocr`). The server checks them when it starts and loads them on first use. |
 | `OCR_THREADS` | CPU threads one inference uses, 1 to 32 (default 1). |
 
@@ -60,19 +60,9 @@ Limits:
 
 ### Runtime
 
-ONNX Runtime is loaded at run time through [purego](https://github.com/ebitengine/purego), so PaperGo still builds with `CGO_ENABLED=0`.
+`internal/onnx` uses [`yalue/onnxruntime_go` v1.25.0](https://github.com/yalue/onnxruntime_go/tree/v1.25.0), a cgo binding for ONNX Runtime 1.23.2. OCR and local embeddings share one environment. Models load from memory or a path, tensors use the SDK, and context cancellation terminates only the active run. CPU arenas and memory patterns are disabled to bound retained memory for varying image shapes.
 
-`internal/ocr/paddle` calls the ONNX Runtime C API (version 23, ONNX Runtime 1.23 or newer) directly:
-
-- Models load from memory, which works the same on every platform.
-- Input tensors live in ONNX Runtime's memory.
-- The CPU arena and memory patterns are off, because image shapes vary and retained buffers would grow a long-running process.
-
-What this means for deployments:
-
-- **A dynamically linked binary.** The API (`cmd/api`) and `cmd/ocr` import `internal/ocr/paddle`, so on Linux they are linked against glibc and cannot run in a `scratch` or Alpine image. They still build with `CGO_ENABLED=0`, and they run without ONNX Runtime when OCR is off.
-- **The Docker image** is based on `gcr.io/distroless/cc-debian12` (glibc and libstdc++, which ONNX Runtime needs). It holds the pinned ONNX Runtime at `/usr/lib/papergo/libonnxruntime.so`, with its licence and third-party notices in `/usr/share/doc/onnxruntime`, and the models in `/usr/share/papergo/models/paddleocr`, so OCR is on by default. Unset `ONNXRUNTIME_LIB` to turn it off. The Docker smoke test runs the image optimization built-in on an uploaded image, which loads both.
-- **The shared library:** `libonnxruntime.so` (Linux, glibc), `libonnxruntime.dylib` (macOS) or `onnxruntime.dll` (Windows). `scripts/fetch-onnxruntime.sh` downloads the pinned Linux release (1.23.2, x64 or arm64), checks its SHA-256 and prints the library's path.
+PaperGo builds with cgo. `python3 scripts/native.py` installs the pinned SDKs and writes `.tools/native/env.sh` and `env.ps1`. The Docker image and release archives include ONNX Runtime, PDFium and zvec. PDF reading is always available; ONNX Runtime inference is enabled with `ONNXRUNTIME_LIB` and the model paths. The Docker image enables OCR and includes its models. Native license notices are under `/usr/share/doc/papergo` in Docker and `notices/` in release archives.
 
 Configuration (`paddle.Config`):
 
@@ -83,7 +73,7 @@ Configuration (`paddle.Config`):
 | `Threads` | CPU threads per inference, 1 to 32 (default 1) |
 | `MaxDetectionDimension` | longest side of the detection preview, a multiple of 32 from 256 to 2600 (default 1536) |
 
-`New` checks the configuration and hashes the model files. The library and the models load on first use, and `Close` releases the models.
+`New` checks the configuration and hashes the model files. The library and the models load on first use. After five minutes without detection or recognition, the engine releases its model sessions; the next call reloads them. Running inference holds off eviction. `Close` releases the models immediately.
 
 ### Performance
 
@@ -100,7 +90,8 @@ Inference dominates; image preparation in Go takes about 15% of the time.
 `cmd/ocr` runs the engine on JPEG, PNG or WebP files and prints JSON. It does not apply EXIF orientation.
 
 ```bash
-export ONNXRUNTIME_LIB=$(bash scripts/fetch-onnxruntime.sh)
+python3 scripts/native.py
+source .tools/native/env.sh
 go run ./cmd/ocr receipt.jpg              # lines, words and text
 go run ./cmd/ocr -detect -min-score 0.5 receipt.jpg
 ```
@@ -113,3 +104,5 @@ go run ./cmd/ocr -detect -min-score 0.5 receipt.jpg
 - **Engine tests** render text with the Go fonts and check what the real models read. They cover upside-down and transparent pages, blank pages, concurrent use and cancellation.
 
 The engine tests need `ONNXRUNTIME_LIB`. They are skipped without it, unless `PAPERGO_REQUIRE_OCR` is set. CI installs the pinned release and requires them.
+
+The ONNX Runtime binding lives in `internal/onnx` and is shared with the [local embedding engine](embeddings.md). Both engines use one process-wide library and environment; configure the same library path for both.

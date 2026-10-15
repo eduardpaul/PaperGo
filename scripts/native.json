@@ -1,0 +1,80 @@
+{
+  "platforms": {
+    "linux-amd64": {
+      "zvec": {
+        "url": "https://github.com/zvec-ai/zvec-go/releases/download/v0.7.0/zvec-libs-linux-x64.tar.gz",
+        "sha256": "7a466f501050b7debe04fd64da52b98634910bb8a8d22083412fe511134cd088"
+      },
+      "pdfium": {
+        "url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8076/pdfium-linux-x64.tgz",
+        "sha256": "d9d67bc40af03aef4fe28a60b19b1086f28ace019c8c9caf19cb7fe3d14ceca3"
+      },
+      "tokenizers": {
+        "url": "https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.linux-amd64.tar.gz",
+        "sha256": "72556cdca798dd4ea7cdaba308e5f0d68a8cb93b67c96edf485b7a0edd7b07f4"
+      },
+      "onnxruntime": {
+        "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz",
+        "sha256": "1fa4dcaef22f6f7d5cd81b28c2800414350c10116f5fdd46a2160082551c5f9b"
+      }
+    },
+    "linux-arm64": {
+      "zvec": {
+        "url": "https://github.com/zvec-ai/zvec-go/releases/download/v0.7.0/zvec-libs-linux-arm64.tar.gz",
+        "sha256": "6dfa9e02be9a69309b20eb5660658c0b3cb3f41b3197ba2391fb43e804122971"
+      },
+      "pdfium": {
+        "url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8076/pdfium-linux-arm64.tgz",
+        "sha256": "d7247b33ae5545615a5e877235dd97afc879e3a8805689684f528cae3339d352"
+      },
+      "tokenizers": {
+        "url": "https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.linux-arm64.tar.gz",
+        "sha256": "e96545ad05930c26f51f63d932ee6d3bbd32bbed149e102c5290d587a2293067"
+      },
+      "onnxruntime": {
+        "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-aarch64-1.23.2.tgz",
+        "sha256": "7c63c73560ed76b1fac6cff8204ffe34fe180e70d6582b5332ec094810241e5c"
+      }
+    },
+    "darwin-arm64": {
+      "zvec": {
+        "url": "https://github.com/zvec-ai/zvec-go/releases/download/v0.7.0/zvec-libs-darwin-arm64.tar.gz",
+        "sha256": "c4ed1cc5b795c4538618e0e3b80953c8683e7a011265eaacc2af8192a67eb762"
+      },
+      "pdfium": {
+        "url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8076/pdfium-mac-arm64.tgz",
+        "sha256": "0d6781fe08906baff3d82c90953e519fbc4eb253fe76431e5ed53b157763b97c"
+      },
+      "tokenizers": {
+        "url": "https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.darwin-arm64.tar.gz",
+        "sha256": "fb84b8b2e349a5952767ffe80ccd862fc44084de47f3b0cc3f0b7c9d4e649cf7"
+      },
+      "onnxruntime": {
+        "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-osx-arm64-1.23.2.tgz",
+        "sha256": "b4d513ab2b26f088c66891dbbc1408166708773d7cc4163de7bdca0e9bbb7856"
+      }
+    },
+    "windows-amd64": {
+      "zvec": {
+        "url": "https://github.com/zvec-ai/zvec-go/releases/download/v0.7.0/zvec-libs-windows-x64.zip",
+        "sha256": "d24ab3e360e3ca3cf65bf42ae347ddce1e953b3f8ea58d34b8d4e6cf0dc0f2b3"
+      },
+      "pdfium": {
+        "url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8076/pdfium-win-x64.tgz",
+        "sha256": "808d36da9bc5a3104315fb307c80998121f565ee53953633bf33e80d7429e5ac"
+      },
+      "onnxruntime": {
+        "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-win-x64-1.23.2.zip",
+        "sha256": "0b38df9af21834e41e73d602d90db5cb06dbd1ca618948b8f1d66d607ac9f3cd"
+      }
+    }
+  },
+  "webp": {
+    "url": "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz",
+    "sha256": "e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564"
+  },
+  "tokenizers_source": {
+    "url": "https://codeload.github.com/daulet/tokenizers/tar.gz/refs/tags/v1.27.0",
+    "sha256": "c6c02ffcea10ab05df38aab1e7dd377f3a48b3b0bc50153784e56fae591323b0"
+  }
+}

@@ -33,8 +33,6 @@ const (
 	FieldTags = "tags"
 	// FieldPayload holds the string denoting the payload field in the database.
 	FieldPayload = "payload"
-	// FieldTermText holds the string denoting the term_text field in the database.
-	FieldTermText = "term_text"
 	// FieldItemCreatedAt holds the string denoting the item_created_at field in the database.
 	FieldItemCreatedAt = "item_created_at"
 	// FieldItemCreatedBy holds the string denoting the item_created_by field in the database.
@@ -77,7 +75,6 @@ var Columns = []string{
 	FieldName,
 	FieldTags,
 	FieldPayload,
-	FieldTermText,
 	FieldItemCreatedAt,
 	FieldItemCreatedBy,
 	FieldModifiedAt,
@@ -97,8 +94,6 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
-	// DefaultTermText holds the default value on creation for the "term_text" field.
-	DefaultTermText string
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() string
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -169,11 +164,6 @@ func ByRevisionID(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
-}
-
-// ByTermText orders the results by the term_text field.
-func ByTermText(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTermText, opts...).ToFunc()
 }
 
 // ByItemCreatedAt orders the results by the item_created_at field.

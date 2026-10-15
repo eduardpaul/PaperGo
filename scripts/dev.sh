@@ -2,6 +2,9 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+python3 scripts/native.py
+source .tools/native/env.sh
+
 if [[ ! -f .cache/development.env ]]; then
     printf 'Run bash scripts/setup-dev.sh first.\n' >&2
     exit 1

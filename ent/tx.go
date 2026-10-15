@@ -20,8 +20,12 @@ type Tx struct {
 	Blob *BlobClient
 	// BlobDeletion is the client for interacting with the BlobDeletion builders.
 	BlobDeletion *BlobDeletionClient
+	// BlobText is the client for interacting with the BlobText builders.
+	BlobText *BlobTextClient
 	// BusinessKey is the client for interacting with the BusinessKey builders.
 	BusinessKey *BusinessKeyClient
+	// CachedResult is the client for interacting with the CachedResult builders.
+	CachedResult *CachedResultClient
 	// CollectionType is the client for interacting with the CollectionType builders.
 	CollectionType *CollectionTypeClient
 	// ContentType is the client for interacting with the ContentType builders.
@@ -250,7 +254,9 @@ func (tx *Tx) init() {
 	tx.AuditEvent = NewAuditEventClient(tx.config)
 	tx.Blob = NewBlobClient(tx.config)
 	tx.BlobDeletion = NewBlobDeletionClient(tx.config)
+	tx.BlobText = NewBlobTextClient(tx.config)
 	tx.BusinessKey = NewBusinessKeyClient(tx.config)
+	tx.CachedResult = NewCachedResultClient(tx.config)
 	tx.CollectionType = NewCollectionTypeClient(tx.config)
 	tx.ContentType = NewContentTypeClient(tx.config)
 	tx.DomainEvent = NewDomainEventClient(tx.config)

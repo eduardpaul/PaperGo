@@ -5,8 +5,13 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
+	"papergo/internal/ai"
+	"papergo/internal/doctext"
 	"papergo/internal/ocr"
+	"papergo/internal/resultcache"
+	"papergo/internal/search"
 	"papergo/internal/storage"
 )
 
@@ -16,6 +21,25 @@ type Tools struct {
 	Storage storage.Store
 	// OCR reads text in images; nil when the deployment has no OCR.
 	OCR ocr.Engine
+	// PDF reads PDFs' text layers and renders their pages for OCR; nil
+	// leaves PDFs unread.
+	PDF doctext.PDF
+	// Search is the search store the search.* activities write file
+	// content to; nil when search is not configured.
+	Search search.Store
+	// Embeddings is the embedding model search.embed and the sweep use; nil
+	// when semantic search is off.
+	Embeddings ai.Embedder
+	// Chat is the chat model ai.complete and search.enrich use; nil when AI
+	// steps are off.
+	Chat ai.Chat
+	// Results holds reusable action results outside domain transactions.
+	Results resultcache.Cache
+	// ResultTTL is the idle lifetime of cached AI results.
+	ResultTTL time.Duration
+	// Languages are the languages search stems (SEARCH_LANGUAGES), among
+	// which document.read_text detects a text's language.
+	Languages []string
 	// MaxFileBytes bounds the files work steps produce; default 1 GiB.
 	MaxFileBytes int64
 	// MaxPixels bounds the images work steps decode; default ocr.MaxPixels.

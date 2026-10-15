@@ -9,6 +9,7 @@ import (
 	"papergo/ent/operation"
 	"papergo/internal/database"
 	"papergo/internal/identity"
+	"papergo/internal/search/sqlitestore"
 	"papergo/internal/storage"
 	"papergo/internal/testutil"
 	"path/filepath"
@@ -64,6 +65,15 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = s.Link(ctx, "alice", item.ID, CreateRelationship{TargetID: doc.Item.ID}); err != nil {
+		t.Fatal(err)
+	}
+	// Text read from the document travels with its bytes.
+	textObject, err := store.Put(ctx, strings.NewReader(`{"pages":[{"page":1,"text":"Receipt 42","ocr":true}]}`), 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SaveBlobText(ctx, BlobTextInput{SHA256: object.SHA256, Settings: "ocr", ObjectKey: textObject.Key, ObjectSize: textObject.Size, ObjectSHA256: textObject.SHA256,
+		Pages: 1, Chars: 10, OCRPages: 1, Language: "english", Extractor: "test"}); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.SetWorkspaceMember(ctx, "alice", w.ID, WorkspaceMember{Subject: "bob", Role: "member"}); err != nil {
@@ -126,7 +136,8 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(z.File) != 2 {
+	// The manifest, the file bytes once, and their text.
+	if len(z.File) != 3 {
 		t.Fatal("identical physical content should be packaged once", len(z.File))
 	}
 	for _, entry := range z.File {
@@ -203,6 +214,12 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if n, _ := target.Client.Resource.Query().Count(ctx); n != 0 {
 		t.Fatal("dry run wrote content", n)
 	}
+	index, err := sqlitestore.Open(ctx, filepath.Join(t.TempDir(), "search.db"), sqlitestore.Options{Languages: []string{"english"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer index.Close()
+	target.SetSearch(index)
 	real, err := target.StartImport(ctx, admin, upload.Key, false)
 	if err != nil {
 		t.Fatal(err)
@@ -241,6 +258,29 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	}
 	if n, _ := target.Client.Relationship.Query().Count(ctx); n != 1 {
 		t.Fatal("relationship not restored", n)
+	}
+	// The import queued a reindex, which the same worker ran.
+	reindexed, err := target.Client.Operation.Query().Where(operation.KindEQ(OperationKindSearchReindex)).Only(ctx)
+	if err != nil || reindexed.Status != operation.StatusSucceeded {
+		t.Fatal("no search reindex after the import", reindexed, err)
+	}
+	found, err := target.Search(ctx, admin, SearchRequest{Q: "invoice", Kinds: []string{"item"}})
+	if err != nil || len(found.Hits) == 0 {
+		t.Fatal("imported items are not searchable", found, err)
+	}
+	// The text came along: nothing is OCRed again.
+	_, text, err := target.ItemText(ctx, admin, doc.Item.ID, "")
+	if err != nil || text.OcrPages != 1 || text.Settings != "ocr" || text.Language != "english" {
+		t.Fatal("text not restored", text, err)
+	}
+	stored, err := targetStore.Open(ctx, text.ObjectKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pages, _ := io.ReadAll(stored)
+	stored.Close()
+	if !strings.Contains(string(pages), "Receipt 42") {
+		t.Fatal(string(pages))
 	}
 	if n, _ := target.Client.ItemHistory.Query().Count(ctx); n == 0 {
 		t.Fatal("history not restored")

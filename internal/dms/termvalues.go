@@ -3,13 +3,11 @@ package dms
 import (
 	"context"
 	"encoding/json"
-	"maps"
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
 	"papergo/ent/itemrevision"
 	"papergo/ent/term"
 	"papergo/ent/termset"
-	"slices"
 	"strings"
 
 	entsql "entgo.io/ent/dialect/sql"
@@ -135,55 +133,6 @@ func (s *Service) termInScope(ctx context.Context, d *ent.FieldDefinition, set *
 		return false, nil
 	}
 	return s.Client.TermSet.Query().Where(termset.IDEQ(t.TermSetID)).Exist(ctx)
-}
-
-// termText is the search text of a revision's terms: the names, labels and
-// synonyms of the terms its term and keywords fields hold (for a merged term,
-// also those of the term it was merged into). It is captured when a surface is
-// written, so a later rename shows in search after the item's next write.
-func (s *Service) termText(ctx context.Context, payload []byte, defs []*ent.FieldDefinition) (string, error) {
-	var values map[string]any
-	ids := []string{}
-	for _, d := range defs {
-		if d.Type != "term" && d.Type != "keywords" {
-			continue
-		}
-		if values == nil {
-			var e error
-			if values, e = decodeValues(payload); e != nil {
-				return "", e
-			}
-		}
-		list := []any{values[d.Key]}
-		if d.Options.Multiple {
-			list, _ = values[d.Key].([]any)
-		}
-		for _, v := range list {
-			if id, ok := v.(string); ok {
-				ids = append(ids, id)
-			}
-		}
-	}
-	if len(ids) == 0 {
-		return "", nil
-	}
-	rows, e := s.Client.Term.Query().Where(term.IDIn(ids...)).WithMergedInto().All(ctx)
-	if e != nil {
-		return "", e
-	}
-	words := []string{}
-	add := func(t *ent.Term) {
-		words = append(words, t.Name)
-		words = append(words, slices.Sorted(maps.Values(t.Labels))...)
-		words = append(words, t.Synonyms...)
-	}
-	for _, t := range rows {
-		add(t)
-		if t.Edges.MergedInto != nil {
-			add(t.Edges.MergedInto)
-		}
-	}
-	return strings.Join(words, " "), nil
 }
 
 // ItemTerms returns the term IDs that values hold in the term and keywords

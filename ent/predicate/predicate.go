@@ -15,8 +15,14 @@ type Blob func(*sql.Selector)
 // BlobDeletion is the predicate function for blobdeletion builders.
 type BlobDeletion func(*sql.Selector)
 
+// BlobText is the predicate function for blobtext builders.
+type BlobText func(*sql.Selector)
+
 // BusinessKey is the predicate function for businesskey builders.
 type BusinessKey func(*sql.Selector)
+
+// CachedResult is the predicate function for cachedresult builders.
+type CachedResult func(*sql.Selector)
 
 // CollectionType is the predicate function for collectiontype builders.
 type CollectionType func(*sql.Selector)

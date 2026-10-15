@@ -112,6 +112,42 @@ var (
 		Columns:    BlobDeletionsColumns,
 		PrimaryKey: []*schema.Column{BlobDeletionsColumns[0]},
 	}
+	// BlobTextsColumns holds the columns for the "blob_texts" table.
+	BlobTextsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "sha256", Type: field.TypeString},
+		{Name: "settings", Type: field.TypeString},
+		{Name: "object_key", Type: field.TypeString},
+		{Name: "object_size", Type: field.TypeInt64},
+		{Name: "object_sha256", Type: field.TypeString},
+		{Name: "pages", Type: field.TypeInt},
+		{Name: "chars", Type: field.TypeInt},
+		{Name: "ocr_pages", Type: field.TypeInt},
+		{Name: "skipped_pages", Type: field.TypeInt},
+		{Name: "truncated", Type: field.TypeBool},
+		{Name: "language", Type: field.TypeString, Default: ""},
+		{Name: "extractor", Type: field.TypeString},
+		{Name: "models", Type: field.TypeJSON},
+	}
+	// BlobTextsTable holds the schema information for the "blob_texts" table.
+	BlobTextsTable = &schema.Table{
+		Name:       "blob_texts",
+		Columns:    BlobTextsColumns,
+		PrimaryKey: []*schema.Column{BlobTextsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "blobtext_sha256_settings",
+				Unique:  true,
+				Columns: []*schema.Column{BlobTextsColumns[2], BlobTextsColumns[3]},
+			},
+			{
+				Name:    "blobtext_object_key",
+				Unique:  false,
+				Columns: []*schema.Column{BlobTextsColumns[4]},
+			},
+		},
+	}
 	// BusinessKeysColumns holds the columns for the "business_keys" table.
 	BusinessKeysColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -150,6 +186,35 @@ var (
 				Name:    "businesskey_item_id",
 				Unique:  false,
 				Columns: []*schema.Column{BusinessKeysColumns[4]},
+			},
+		},
+	}
+	// CachedResultsColumns holds the columns for the "cached_results" table.
+	CachedResultsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "namespace", Type: field.TypeString, Size: 64},
+		{Name: "scope", Type: field.TypeString, Size: 255},
+		{Name: "key", Type: field.TypeString, Size: 4096},
+		{Name: "payload", Type: field.TypeJSON, SchemaType: map[string]string{"sqlite3": "text"}},
+		{Name: "used_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime},
+	}
+	// CachedResultsTable holds the schema information for the "cached_results" table.
+	CachedResultsTable = &schema.Table{
+		Name:       "cached_results",
+		Columns:    CachedResultsColumns,
+		PrimaryKey: []*schema.Column{CachedResultsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "cachedresult_namespace_scope_key",
+				Unique:  true,
+				Columns: []*schema.Column{CachedResultsColumns[2], CachedResultsColumns[3], CachedResultsColumns[4]},
+			},
+			{
+				Name:    "cachedresult_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{CachedResultsColumns[7]},
 			},
 		},
 	}
@@ -239,6 +304,7 @@ var (
 		{Name: "depth", Type: field.TypeInt},
 		{Name: "cause_run_id", Type: field.TypeString, Nullable: true},
 		{Name: "dispatched_at", Type: field.TypeTime, Nullable: true},
+		{Name: "fanout_cursor", Type: field.TypeString, Nullable: true},
 	}
 	// DomainEventsTable holds the schema information for the "domain_events" table.
 	DomainEventsTable = &schema.Table{
@@ -773,7 +839,6 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "tags", Type: field.TypeJSON},
 		{Name: "payload", Type: field.TypeJSON},
-		{Name: "term_text", Type: field.TypeString, Default: ""},
 		{Name: "item_created_at", Type: field.TypeString},
 		{Name: "item_created_by", Type: field.TypeString},
 		{Name: "modified_at", Type: field.TypeString},
@@ -789,13 +854,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "item_surfaces_resources_item",
-				Columns:    []*schema.Column{ItemSurfacesColumns[13]},
+				Columns:    []*schema.Column{ItemSurfacesColumns[12]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "item_surfaces_item_revisions_revision",
-				Columns:    []*schema.Column{ItemSurfacesColumns[14]},
+				Columns:    []*schema.Column{ItemSurfacesColumns[13]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -804,47 +869,47 @@ var (
 			{
 				Name:    "itemsurface_item_id_surface",
 				Unique:  true,
-				Columns: []*schema.Column{ItemSurfacesColumns[13], ItemSurfacesColumns[4]},
+				Columns: []*schema.Column{ItemSurfacesColumns[12], ItemSurfacesColumns[4]},
 			},
 			{
 				Name:    "itemsurface_workspace_id_surface_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[3], ItemSurfacesColumns[4], ItemSurfacesColumns[13]},
+				Columns: []*schema.Column{ItemSurfacesColumns[3], ItemSurfacesColumns[4], ItemSurfacesColumns[12]},
 			},
 			{
 				Name:    "itemsurface_container_id_surface_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[13]},
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[12]},
 			},
 			{
 				Name:    "itemsurface_container_id_surface_modified_at_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[11], ItemSurfacesColumns[13]},
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[10], ItemSurfacesColumns[12]},
 			},
 			{
 				Name:    "itemsurface_container_id_surface_modified_by_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[12], ItemSurfacesColumns[13]},
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[11], ItemSurfacesColumns[12]},
 			},
 			{
 				Name:    "itemsurface_container_id_surface_item_created_at_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[9], ItemSurfacesColumns[13]},
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[8], ItemSurfacesColumns[12]},
 			},
 			{
 				Name:    "itemsurface_container_id_surface_item_created_by_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[10], ItemSurfacesColumns[13]},
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[9], ItemSurfacesColumns[12]},
 			},
 			{
 				Name:    "itemsurface_container_id_surface_name_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[5], ItemSurfacesColumns[13]},
+				Columns: []*schema.Column{ItemSurfacesColumns[2], ItemSurfacesColumns[4], ItemSurfacesColumns[5], ItemSurfacesColumns[12]},
 			},
 			{
 				Name:    "itemsurface_revision_id",
 				Unique:  false,
-				Columns: []*schema.Column{ItemSurfacesColumns[14]},
+				Columns: []*schema.Column{ItemSurfacesColumns[13]},
 			},
 		},
 	}
@@ -1290,6 +1355,11 @@ var (
 				Name:    "resource_container_id_id",
 				Unique:  false,
 				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[0]},
+			},
+			{
+				Name:    "resource_scope_id_id",
+				Unique:  false,
+				Columns: []*schema.Column{ResourcesColumns[23], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_content_type_id_id",
@@ -1893,6 +1963,7 @@ var (
 		{Name: "enabled", Type: field.TypeBool, Default: true},
 		{Name: "builtin_key", Type: field.TypeString, Nullable: true},
 		{Name: "collection_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "role", Type: field.TypeString, Nullable: true, Size: 100},
 		{Name: "parameters", Type: field.TypeJSON},
 		{Name: "current_version", Type: field.TypeInt},
 		{Name: "created_by", Type: field.TypeString},
@@ -1926,6 +1997,14 @@ var (
 				Name:    "workflow_workspace_id_id",
 				Unique:  false,
 				Columns: []*schema.Column{WorkflowsColumns[3], WorkflowsColumns[0]},
+			},
+			{
+				Name:    "workflow_workspace_id_role_collection_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowsColumns[3], WorkflowsColumns[10], WorkflowsColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "role IS NOT NULL AND deleted_at IS NULL",
+				},
 			},
 		},
 	}
@@ -2072,7 +2151,9 @@ var (
 		AuditEventsTable,
 		BlobsTable,
 		BlobDeletionsTable,
+		BlobTextsTable,
 		BusinessKeysTable,
+		CachedResultsTable,
 		CollectionTypesTable,
 		ContentTypesTable,
 		DomainEventsTable,

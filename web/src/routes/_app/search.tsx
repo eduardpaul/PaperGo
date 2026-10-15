@@ -1,11 +1,11 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { File, Folder, Library, List, Search as SearchIcon, Briefcase } from 'lucide-react';
+import { Briefcase, File, Folder, Search as SearchIcon, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useApiPages } from '@/api/pages';
-import { searchResources, workspacesQuery } from '@/api/queries';
+import { workspacesQuery } from '@/api/queries';
 import { searchRequest } from '@/api/requests';
-import type { Resource } from '@/api/types';
+import type { SearchFacetValue, SearchHit, SearchPage } from '@/api/types';
 import { Page, PageHeader } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
@@ -13,57 +13,60 @@ import { Input, Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
 import { useResourceNames } from '@/features/fields/names';
-import { recentWorkspace } from '@/lib/recent-workspace';
+import { highlightParts } from '@/lib/highlight';
+import { useFormat } from '@/lib/preferences';
 import { textParam } from '@/lib/search';
 import { useDebounced } from '@/lib/use-debounced';
+
+type Kind = 'item' | 'folder' | 'all';
 
 export const Route = createFileRoute('/_app/search')({
   validateSearch: (search: Record<string, unknown>) => ({
     q: textParam(search.q),
-    /** A workspace id, or "all". */
     workspace: textParam(search.workspace),
+    collection: textParam(search.collection),
+    tag: textParam(search.tag),
+    kind: (['item', 'folder', 'all'] as const).find((kind) => kind === search.kind),
   }),
   component: SearchPage,
 });
 
-/** With every workspace, each shows its first few hits and a link to the rest. */
-const perWorkspace = 5;
-/** Searching every workspace runs one request each; beyond this many, people pick one. */
-const allWorkspacesLimit = 20;
-
 function SearchPage() {
-  const { q, workspace } = Route.useSearch();
+  const params = Route.useSearch();
+  const { q, workspace, collection, tag } = params;
+  const kind: Kind = params.kind ?? 'item';
   const navigate = useNavigate({ from: Route.fullPath });
   const workspaces = useQuery(workspacesQuery);
-  const list = workspaces.data ?? [];
   const [text, setText] = useState(q ?? '');
   const typed = useDebounced(text.trim(), 300);
-  // Searching starts in the workspace given, else the one last opened, else the only one, else all of them.
-  const remembered = recentWorkspace();
-  const scope =
-    workspace ??
-    (remembered && list.some((entry) => entry.id === remembered)
-      ? remembered
-      : list.length === 1
-        ? list[0].id
-        : 'all');
   useEffect(() => {
-    if (typed !== (q ?? '')) void navigate({ search: (current) => ({ ...current, q: typed || undefined }), replace: true });
+    if (typed !== (q ?? ''))
+      void navigate({
+        search: (current) => ({ ...current, q: typed || undefined }),
+        replace: true,
+      });
   }, [typed, q, navigate]);
-  const name = (id: string) => {
-    const entry = list.find((candidate) => candidate.id === id);
+  const workspaceName = (id: string) => {
+    const entry = workspaces.data?.find((candidate) => candidate.id === id);
     return entry?.personal_owner_id ? 'Home' : (entry?.name ?? 'Workspace');
   };
+  const filtered = !!(workspace || collection || tag);
+  // Workspaces are not in the search index: their names match here.
+  const places = q
+    ? (workspaces.data ?? []).filter((entry) => workspaceName(entry.id).toLowerCase().includes(q.toLowerCase())).slice(0, 8)
+    : [];
 
   return (
     <Page>
-      <PageHeader icon={SearchIcon} title="Search" description="Find items, documents, folders, lists and libraries by name and content." />
+      <PageHeader icon={SearchIcon} title="Search" description="Find items and folders across your workspaces by name, fields and tags." />
       <form
         role="search"
         className="mb-4 flex flex-wrap items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          void navigate({ search: (current) => ({ ...current, q: text.trim() || undefined }) });
+          void navigate({
+            search: (current) => ({ ...current, q: text.trim() || undefined }),
+          });
         }}
       >
         <div className="min-w-48 flex-1">
@@ -72,153 +75,241 @@ function SearchPage() {
             id="search-q"
             className="mt-1"
             autoFocus
-            placeholder="Words, or the start of a word…"
+            placeholder={'Words, "a phrase", word*, -exclude'}
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
         </div>
-        <div className="w-56">
-          <Label htmlFor="search-workspace">In</Label>
+        <div className="w-48">
+          <Label htmlFor="search-kind">Find</Label>
           <Select
-            id="search-workspace"
+            id="search-kind"
             className="mt-1"
-            value={scope}
-            onChange={(event) => void navigate({ search: (current) => ({ ...current, workspace: event.target.value }) })}
+            value={kind}
+            onChange={(event) =>
+              void navigate({
+                search: (current) => ({
+                  ...current,
+                  kind: event.target.value === 'item' ? undefined : (event.target.value as Kind),
+                }),
+              })
+            }
           >
-            {list.length > 1 && list.length <= allWorkspacesLimit && <option value="all">All workspaces</option>}
-            {list.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {name(entry.id)}
-              </option>
-            ))}
+            <option value="item">Items</option>
+            <option value="folder">Folders</option>
+            <option value="all">Items and folders</option>
           </Select>
         </div>
         <Button type="submit" variant="primary">
           Search
         </Button>
       </form>
-      {!q ? (
+      {places.length > 0 && (
+        <nav aria-label="Workspaces" className="mb-4 flex flex-wrap gap-2">
+          {places.map((entry) => (
+            <Link
+              key={entry.id}
+              to="/w/$workspaceId"
+              params={{ workspaceId: entry.id }}
+              className="flex items-center gap-1.5 rounded-md border bg-surface px-2.5 py-1 text-[13px] hover:bg-surface-muted"
+            >
+              <Briefcase className="size-3.5 text-muted" /> {workspaceName(entry.id)}
+            </Link>
+          ))}
+        </nav>
+      )}
+      {!q && !filtered ? (
         <EmptyState icon={SearchIcon} title="Type to search">
-          Words match anywhere in names and content; the last word may be the start of a word.
+          Every word must match, in names, fields or tags; other forms of a word match too. Use quotes for a phrase, * for the start of a
+          word and - to leave a word out.
         </EmptyState>
-      ) : workspaces.isPending ? (
-        <Skeleton className="h-16" />
-      ) : scope === 'all' && list.length > 1 ? (
-        <AllWorkspaces q={q} workspaces={list.slice(0, allWorkspacesLimit)} name={name} />
       ) : (
-        <OneWorkspace q={q} workspaceId={scope === 'all' ? (list[0]?.id ?? '') : scope} />
+        <Results q={q} workspace={workspace} collection={collection} tag={tag} kind={kind} workspaceName={workspaceName} />
       )}
     </Page>
   );
 }
 
-function OneWorkspace({ q, workspaceId }: { q: string; workspaceId: string }) {
-  const request = searchRequest(q, workspaceId);
-  const results = useApiPages<Resource>(['search', workspaceId, q], request.path, { query: request.query, enabled: !!workspaceId });
+function Results({
+  q,
+  workspace,
+  collection,
+  tag,
+  kind,
+  workspaceName,
+}: {
+  q?: string;
+  workspace?: string;
+  collection?: string;
+  tag?: string;
+  kind: Kind;
+  workspaceName: (id: string) => string;
+}) {
+  const navigate = useNavigate({ from: Route.fullPath });
+  const request = searchRequest({
+    q,
+    workspaceId: workspace,
+    collectionId: collection,
+    tag,
+    kind,
+  });
+  const results = useApiPages<SearchHit>(['search', q, workspace, collection, tag, kind], request.path, { query: request.query });
+  const first = results.data?.pages[0] as SearchPage | undefined;
+  const facets = first?.facets;
+  const collectionIds = [
+    ...new Set([
+      ...results.items.map((hit) => hit.collection_id),
+      ...(facets?.collection ?? []).map((value) => value.value),
+      ...(collection ? [collection] : []),
+    ]),
+  ].sort();
+  const collectionNames = useResourceNames(collectionIds);
+  const collectionName = (id: string) => collectionNames.get(id) ?? 'List';
+  const filter = (patch: { workspace?: string; collection?: string; tag?: string }) =>
+    void navigate({ search: (current) => ({ ...current, ...patch }) });
+
   if (results.isPending) return <Skeleton className="h-16" />;
   if (results.isError) return <QueryFeedback query={results} />;
-  if (results.items.length === 0) return <EmptyState icon={SearchIcon} title={`Nothing matches “${q}”`} />;
-  return (
-    <>
-      <Results resources={results.items} />
-      {results.hasNextPage && (
-        <Button className="mt-3" disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
-          {results.isFetchingNextPage ? 'Loading…' : 'More results'}
-        </Button>
-      )}
-    </>
-  );
-}
+  const chips = [
+    workspace && {
+      label: workspaceName(workspace),
+      clear: { workspace: undefined, collection: undefined },
+    },
+    collection && {
+      label: collectionName(collection),
+      clear: { collection: undefined },
+    },
+    tag && { label: `#${tag}`, clear: { tag: undefined } },
+  ].filter((chip) => !!chip);
+  const total = first?.total ?? results.items.length;
 
-function AllWorkspaces({ q, workspaces, name }: { q: string; workspaces: Resource[]; name: (id: string) => string }) {
-  const results = useQueries({
-    queries: workspaces.map((workspace) => ({
-      queryKey: ['search', workspace.id, q, perWorkspace],
-      queryFn: () => searchResources(q, workspace.id, perWorkspace),
-    })),
-  });
-  if (results.every((result) => result.isPending)) return <Skeleton className="h-16" />;
-  const found = workspaces.flatMap((workspace, index) => {
-    const page = results[index].data;
-    return page?.value?.length ? [{ workspace, page }] : [];
-  });
-  if (found.length === 0 && results.every((result) => !result.isPending))
-    return <EmptyState icon={SearchIcon} title={`Nothing matches “${q}” in any workspace`} />;
   return (
-    <div className="flex flex-col gap-5">
-      {found.map(({ workspace, page }) => (
-        <section key={workspace.id} aria-label={name(workspace.id)}>
-          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-            <Briefcase className="size-4 text-muted" /> {name(workspace.id)}
-          </h2>
-          <Results resources={page.value ?? []} />
-          {page['@odata.nextLink'] && (
-            <Link
-              to="/search"
-              search={{ q, workspace: workspace.id }}
-              className="mt-2 inline-block text-[13px] text-accent hover:underline"
+    <div className="grid gap-5 md:grid-cols-[1fr_14rem]">
+      <section aria-label="Results" className="min-w-0">
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px] text-muted">
+          <span>
+            {first?.total_estimated ? 'About ' : ''}
+            {total} {total === 1 ? 'result' : 'results'}
+          </span>
+          {chips.map((chip) => (
+            <button
+              key={chip.label}
+              type="button"
+              className="flex items-center gap-1 rounded-full border bg-surface px-2 py-0.5 text-xs text-fg hover:bg-surface-muted"
+              aria-label={`Remove filter ${chip.label}`}
+              onClick={() => filter(chip.clear)}
             >
-              All results in {name(workspace.id)}
-            </Link>
+              {chip.label} <X className="size-3" />
+            </button>
+          ))}
+        </div>
+        {results.items.length === 0 ? (
+          <EmptyState icon={SearchIcon} title={q ? `Nothing matches “${q}”` : 'Nothing matches these filters'} />
+        ) : (
+          <ul className="overflow-hidden rounded-lg border bg-surface">
+            {results.items.map((hit) => (
+              <li key={`${hit.id}:${hit.surface}`} className="border-b last:border-0">
+                <Hit hit={hit} where={`${collectionName(hit.collection_id)} · ${workspaceName(hit.workspace_id)}`} />
+              </li>
+            ))}
+          </ul>
+        )}
+        {results.hasNextPage && (
+          <Button className="mt-3" disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
+            {results.isFetchingNextPage ? 'Loading…' : 'More results'}
+          </Button>
+        )}
+      </section>
+      {facets && (
+        <aside aria-label="Refine" className="flex flex-col gap-4">
+          {!workspace && (
+            <Facet title="Workspaces" values={facets.workspace} label={workspaceName} onPick={(value) => filter({ workspace: value })} />
           )}
-        </section>
-      ))}
+          {!collection && (
+            <Facet
+              title="Lists and libraries"
+              values={facets.collection}
+              label={collectionName}
+              onPick={(value) => filter({ collection: value })}
+            />
+          )}
+          {!tag && <Facet title="Tags" values={facets.tag} label={(value) => `#${value}`} onPick={(value) => filter({ tag: value })} />}
+        </aside>
+      )}
     </div>
   );
 }
 
-const kinds: Record<string, { label: string; icon: typeof File }> = {
-  item: { label: 'Item', icon: File },
-  folder: { label: 'Folder', icon: Folder },
-  list: { label: 'List', icon: List },
-  library: { label: 'Library', icon: Library },
-  workspace: { label: 'Workspace', icon: Briefcase },
-};
-
-/** Hits with what they are and where: "Item in Invoices". */
-function Results({ resources }: { resources: Resource[] }) {
-  const containers = useResourceNames(
-    [...new Set(resources.flatMap((resource) => (resource.container_id ? [resource.container_id] : [])))].sort(),
-  );
+function Facet({
+  title,
+  values,
+  label,
+  onPick,
+}: {
+  title: string;
+  values: SearchFacetValue[];
+  label: (value: string) => string;
+  onPick: (value: string) => void;
+}) {
+  if (values.length === 0) return null;
   return (
-    <ul className="overflow-hidden rounded-lg border bg-surface">
-      {resources.map((resource) => (
-        <li key={resource.id} className="border-b last:border-0">
-          <Result resource={resource} where={resource.container_id ? containers.get(resource.container_id) : undefined} />
-        </li>
-      ))}
-    </ul>
+    <section aria-label={title}>
+      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
+      <ul className="flex flex-col">
+        {values.slice(0, 10).map((value) => (
+          <li key={value.value}>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 rounded px-1.5 py-1 text-left text-[13px] hover:bg-surface-muted"
+              onClick={() => onPick(value.value)}
+            >
+              <span className="truncate">{label(value.value)}</span>
+              <span className="text-xs text-muted">{value.count}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
-function Result({ resource, where }: { resource: Resource; where?: string }) {
+/** A hit with where it is, when it changed, and the matching text. */
+export function Hit({ hit, where }: { hit: SearchHit; where: string }) {
   const navigate = useNavigate();
-  const kind = kinds[resource.kind] ?? kinds.item;
-  const Icon = kind.icon;
-  const open = () => {
-    if ((resource.kind === 'item' || resource.kind === 'folder') && resource.container_id) {
-      void navigate({
-        to: '/w/$workspaceId/l/$listId',
-        params: { workspaceId: resource.workspace_id, listId: resource.container_id },
-        search: resource.kind === 'folder' ? { folder: resource.id } : { item: resource.id },
-      });
-      return;
-    }
-    if (resource.kind === 'list' || resource.kind === 'library') {
-      void navigate({ to: '/w/$workspaceId/l/$listId', params: { workspaceId: resource.workspace_id, listId: resource.id } });
-      return;
-    }
-    void navigate({ to: '/w/$workspaceId', params: { workspaceId: resource.id } });
-  };
+  const format = useFormat();
+  const Icon = hit.kind === 'folder' ? Folder : File;
+  const open = () =>
+    void navigate({
+      to: '/w/$workspaceId/l/$listId',
+      params: { workspaceId: hit.workspace_id, listId: hit.collection_id },
+      search: hit.kind === 'folder' ? { folder: hit.id } : { item: hit.id },
+    });
   return (
-    <button type="button" className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-muted" onClick={open}>
-      <Icon className="size-4 shrink-0 text-muted" />
+    <button type="button" className="flex w-full items-start gap-3 px-4 py-2.5 text-left hover:bg-surface-muted" onClick={open}>
+      <Icon className="mt-0.5 size-4 shrink-0 text-muted" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{resource.name}</span>
-        <span className="text-xs text-muted">
-          {kind.label}
-          {where ? ` in ${where}` : ''}
+        <span className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium">{hit.name}</span>
+          {hit.surface === 'head' && <span className="rounded bg-surface-muted px-1.5 text-[11px] text-muted">Draft</span>}
         </span>
+        <span className="block text-xs text-muted">
+          {hit.kind === 'folder' ? 'Folder' : 'Item'} in {where} · {format.dateTime(hit.modified_at)}
+          {hit.page ? ` · page ${hit.page}` : ''}
+          {hit.matched_by.length === 1 && hit.matched_by[0] === 'semantic' ? ' · similar meaning' : ''}
+        </span>
+        {hit.snippet && (
+          <span className="mt-1 block text-[13px] text-fg/80" data-testid="snippet">
+            {highlightParts(hit.snippet, hit.highlights).map((part, index) =>
+              part.mark ? (
+                <mark key={index} className="rounded-sm bg-accent/20 text-fg">
+                  {part.text}
+                </mark>
+              ) : (
+                <span key={index}>{part.text}</span>
+              ),
+            )}
+          </span>
+        )}
       </span>
     </button>
   );

@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -77,6 +78,26 @@ func (s *Service) currentBlobID(ctx context.Context, itemID string) (string, err
 		return "", nil
 	}
 	return *rev.BlobID, nil
+}
+
+// ItemFiles lists the file versions the surfaces of a live item reference:
+// its current file, and the published one when it differs. A deleted or
+// missing item has none.
+func (s *Service) ItemFiles(ctx context.Context, itemID string) ([]string, error) {
+	rows, err := s.Client.QueryContext(ctx, `SELECT DISTINCT v.blob_id FROM resources r JOIN item_revisions v ON v.id IN (r.head_revision_id, r.published_revision_id)
+ WHERE r.id=? AND r.deleted_at IS NULL AND v.blob_id IS NOT NULL`, itemID)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			break
+		}
+		out = append(out, id)
+	}
+	return out, errors.Join(err, rows.Err(), rows.Close())
 }
 
 // fresh reports whether every source is still its item's current file.

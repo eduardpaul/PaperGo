@@ -1,7 +1,7 @@
 // Package paddle is the PaddleOCR engine: PP-OCRv6 small detection and
 // recognition with the PP-LCNet text-line orientation classifier, the same
 // models and parameters as PaperDotNet. Inference runs on CPU in ONNX Runtime,
-// loaded at run time through purego, so PaperGo builds without CGO. Running
+// loaded through the shared cgo ONNX SDK. Running
 // it needs the ONNX Runtime shared library (1.23 or newer) and glibc.
 package paddle
 
@@ -20,10 +20,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	xdraw "golang.org/x/image/draw"
 
+	"papergo/internal/nativeheap"
 	"papergo/internal/ocr"
+	"papergo/internal/onnx"
 )
 
 // The bundled model files, in Config.Models.
@@ -81,13 +84,15 @@ var gate = make(chan struct{}, 1)
 
 // Engine is the PaddleOCR engine. Models load on first use.
 type Engine struct {
-	cfg    Config
-	info   ocr.Info
-	models *models
+	cfg         Config
+	info        ocr.Info
+	models      *models
+	idleTimer   *time.Timer
+	idleTimeout time.Duration
 }
 
 type models struct {
-	det, cls, rec *session
+	det, cls, rec *onnx.Session
 	keys          []string
 	clsW, clsH    int
 	// maxDimension is Config.MaxDetectionDimension.
@@ -113,7 +118,7 @@ func New(cfg Config) (*Engine, error) {
 	case cfg.MaxDetectionDimension < 256 || cfg.MaxDetectionDimension > 2600 || cfg.MaxDetectionDimension%32 != 0:
 		return nil, errors.New("the maximum detection dimension must be a multiple of 32 between 256 and 2600")
 	}
-	e := &Engine{cfg: cfg, info: ocr.Info{Engine: "paddleocr"}}
+	e := &Engine{cfg: cfg, info: ocr.Info{Engine: "paddleocr"}, idleTimeout: 5 * time.Minute}
 	for _, name := range []string{DetectorModel, RecognizerModel, ClassifierModel, Dictionary} {
 		f, err := os.Open(filepath.Join(cfg.Models, name))
 		if err != nil {
@@ -148,13 +153,43 @@ func release() { <-gate }
 func (e *Engine) Close() error {
 	gate <- struct{}{}
 	defer release()
+	e.stopIdle()
+	e.unload()
+	nativeheap.Release()
+	return nil
+}
+
+func (e *Engine) unload() {
 	if m := e.models; m != nil {
-		m.det.close()
-		m.cls.close()
-		m.rec.close()
+		m.det.Close()
+		m.cls.Close()
+		m.rec.Close()
 		e.models = nil
 	}
-	return nil
+}
+
+func (e *Engine) stopIdle() {
+	if e.idleTimer != nil {
+		e.idleTimer.Stop()
+		e.idleTimer = nil
+	}
+}
+
+func (e *Engine) release() {
+	if e.models != nil {
+		var timer *time.Timer
+		timer = time.AfterFunc(e.idleTimeout, func() {
+			gate <- struct{}{}
+			defer release()
+			if e.idleTimer == timer {
+				e.idleTimer = nil
+				e.unload()
+				nativeheap.Release()
+			}
+		})
+		e.idleTimer = timer
+	}
+	release()
 }
 
 // load opens the sessions; the caller holds the gate.
@@ -162,16 +197,16 @@ func (e *Engine) load() (*models, error) {
 	if e.models != nil {
 		return e.models, nil
 	}
-	rt, err := loadRuntime(e.cfg.Library)
+	rt, err := onnx.Load(e.cfg.Library)
 	if err != nil {
 		return nil, err
 	}
-	open := func(name string) (*session, error) {
+	open := func(name string) (*onnx.Session, error) {
 		data, err := os.ReadFile(filepath.Join(e.cfg.Models, name))
 		if err != nil {
 			return nil, err
 		}
-		s, err := rt.newSession(data, e.cfg.Threads)
+		s, err := rt.NewSession(data, e.cfg.Threads)
 		if err != nil {
 			return nil, fmt.Errorf("load %s: %w", name, err)
 		}
@@ -180,9 +215,9 @@ func (e *Engine) load() (*models, error) {
 	m := &models{maxDimension: e.cfg.MaxDetectionDimension}
 	defer func() {
 		if e.models == nil {
-			for _, s := range []*session{m.det, m.cls, m.rec} {
+			for _, s := range []*onnx.Session{m.det, m.cls, m.rec} {
 				if s != nil {
-					s.close()
+					s.Close()
 				}
 			}
 		}
@@ -200,10 +235,10 @@ func (e *Engine) load() (*models, error) {
 		return nil, err
 	}
 	// The recognizer's classes are the CTC blank, the dictionary and a space.
-	if s := m.rec.outputShape; len(s) != 3 || s[2] != int64(len(m.keys)) {
+	if s := m.rec.OutputShapes[0]; len(s) != 3 || s[2] != int64(len(m.keys)) {
 		return nil, fmt.Errorf("the recognition model's output %v does not match the dictionary's %d characters", s, len(m.keys)-2)
 	}
-	s := m.cls.inputShape
+	s := m.cls.InputShapes[0]
 	if len(s) != 4 || s[2] <= 0 || s[3] <= 0 {
 		return nil, fmt.Errorf("the classifier input %v has no fixed size", s)
 	}
@@ -235,7 +270,8 @@ func (e *Engine) Detect(ctx context.Context, img image.Image, opts ocr.DetectOpt
 	if err := acquire(ctx); err != nil {
 		return ocr.Detection{}, err
 	}
-	defer release()
+	e.stopIdle()
+	defer e.release()
 	m, err := e.load()
 	if err != nil {
 		return ocr.Detection{}, err
@@ -258,7 +294,8 @@ func (e *Engine) Recognize(ctx context.Context, img image.Image) (ocr.Page, erro
 	if err := acquire(ctx); err != nil {
 		return ocr.Page{}, err
 	}
-	defer release()
+	e.stopIdle()
+	defer e.release()
 	m, err := e.load()
 	if err != nil {
 		return ocr.Page{}, err
@@ -332,7 +369,7 @@ func (m *models) detect(ctx context.Context, img image.Image, dimension int, min
 	}
 	nw, nh := networkDimension(pw), networkDimension(ph)
 	input, shape := tensor(resize(preview, nw, nh, color.White), detMean, detStd)
-	out, dims, err := m.det.run(ctx, input, shape)
+	out, dims, err := m.det.RunFloat(ctx, input, shape)
 	if err != nil {
 		return ocr.Detection{}, err
 	}
@@ -400,7 +437,7 @@ func (m *models) upsideDown(ctx context.Context, line *image.RGBA) (bool, error)
 	canvas := filled(m.clsW, m.clsH, color.Gray{Y: 128})
 	mitchell.Scale(canvas, image.Rect(0, 0, w, m.clsH), line, line.Rect, xdraw.Src, nil)
 	input, shape := tensor(canvas, lineMean, lineStd)
-	out, _, err := m.cls.run(ctx, input, shape)
+	out, _, err := m.cls.RunFloat(ctx, input, shape)
 	if err != nil {
 		return false, err
 	}
@@ -416,7 +453,7 @@ func (m *models) read(ctx context.Context, line *image.RGBA) ([]string, []float3
 	scale := float32(recHeight) / float32(line.Rect.Dy())
 	w := max(1, int(float32(line.Rect.Dx())*scale))
 	input, shape := tensor(resize(line, w, recHeight, color.White), lineMean, lineStd)
-	out, dims, err := m.rec.run(ctx, input, shape)
+	out, dims, err := m.rec.RunFloat(ctx, input, shape)
 	if err != nil {
 		return nil, nil, nil, 0, err
 	}

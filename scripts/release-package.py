@@ -23,6 +23,21 @@ def main():
         "release-database.json": root / "migrations" / "release.json",
         "RELEASES.md": root / "docs" / "releases.md",
     }
+    native = root / '.tools/native'
+    libraries = {
+        'linux': ['libonnxruntime.so', 'libpdfium.so', 'libzvec_c_api.so'],
+        'darwin': ['libonnxruntime.dylib', 'libpdfium.dylib', 'libzvec_c_api.dylib'],
+        'windows': ['onnxruntime.dll', 'pdfium.dll', 'zvec_c_api.dll'],
+    }[args.os]
+    for name in libraries:
+        library = native / 'lib' / name
+        if not library.is_file():
+            raise ValueError(f'Missing {name}; run scripts/native.py')
+        prefix = '' if args.os == 'windows' else 'lib/'
+        inputs[prefix + name] = library
+    for notice in sorted((native / 'notices').rglob('*')):
+        if notice.is_file():
+            inputs['notices/' + notice.relative_to(native / 'notices').as_posix()] = notice
     bundle = json.loads(inputs["release-database.json"].read_text())
     if bundle["releases"][-1]["version"] != args.version:
         raise ValueError("Packaged bundle does not match release tag")

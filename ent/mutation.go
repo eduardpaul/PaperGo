@@ -10,7 +10,9 @@ import (
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
+	"papergo/ent/blobtext"
 	"papergo/ent/businesskey"
+	"papergo/ent/cachedresult"
 	"papergo/ent/collectiontype"
 	"papergo/ent/contenttype"
 	"papergo/ent/domainevent"
@@ -79,7 +81,9 @@ const (
 	TypeAuditEvent              = "AuditEvent"
 	TypeBlob                    = "Blob"
 	TypeBlobDeletion            = "BlobDeletion"
+	TypeBlobText                = "BlobText"
 	TypeBusinessKey             = "BusinessKey"
+	TypeCachedResult            = "CachedResult"
 	TypeCollectionType          = "CollectionType"
 	TypeContentType             = "ContentType"
 	TypeDomainEvent             = "DomainEvent"
@@ -2296,6 +2300,1224 @@ func (m *BlobDeletionMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown BlobDeletion edge %s", name)
 }
 
+// BlobTextMutation represents an operation that mutates the BlobText nodes in the graph.
+type BlobTextMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	created_at       *time.Time
+	sha256           *string
+	settings         *string
+	object_key       *string
+	object_size      *int64
+	addobject_size   *int64
+	object_sha256    *string
+	pages            *int
+	addpages         *int
+	chars            *int
+	addchars         *int
+	ocr_pages        *int
+	addocr_pages     *int
+	skipped_pages    *int
+	addskipped_pages *int
+	truncated        *bool
+	language         *string
+	extractor        *string
+	models           *jsontext.Value
+	appendmodels     jsontext.Value
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*BlobText, error)
+	predicates       []predicate.BlobText
+}
+
+var _ ent.Mutation = (*BlobTextMutation)(nil)
+
+// blobtextOption allows management of the mutation configuration using functional options.
+type blobtextOption func(*BlobTextMutation)
+
+// newBlobTextMutation creates new mutation for the BlobText entity.
+func newBlobTextMutation(c config, op Op, opts ...blobtextOption) *BlobTextMutation {
+	m := &BlobTextMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBlobText,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBlobTextID sets the ID field of the mutation.
+func withBlobTextID(id string) blobtextOption {
+	return func(m *BlobTextMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BlobText
+		)
+		m.oldValue = func(ctx context.Context) (*BlobText, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BlobText.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBlobText sets the old BlobText of the mutation.
+func withBlobText(node *BlobText) blobtextOption {
+	return func(m *BlobTextMutation) {
+		m.oldValue = func(context.Context) (*BlobText, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BlobTextMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BlobTextMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of BlobText entities.
+func (m *BlobTextMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BlobTextMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BlobTextMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BlobText.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BlobTextMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BlobTextMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BlobTextMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetSha256 sets the "sha256" field.
+func (m *BlobTextMutation) SetSha256(s string) {
+	m.sha256 = &s
+}
+
+// Sha256 returns the value of the "sha256" field in the mutation.
+func (m *BlobTextMutation) Sha256() (r string, exists bool) {
+	v := m.sha256
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSha256 returns the old "sha256" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldSha256(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSha256 is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSha256 requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSha256: %w", err)
+	}
+	return oldValue.Sha256, nil
+}
+
+// ResetSha256 resets all changes to the "sha256" field.
+func (m *BlobTextMutation) ResetSha256() {
+	m.sha256 = nil
+}
+
+// SetSettings sets the "settings" field.
+func (m *BlobTextMutation) SetSettings(s string) {
+	m.settings = &s
+}
+
+// Settings returns the value of the "settings" field in the mutation.
+func (m *BlobTextMutation) Settings() (r string, exists bool) {
+	v := m.settings
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSettings returns the old "settings" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldSettings(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSettings is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSettings requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSettings: %w", err)
+	}
+	return oldValue.Settings, nil
+}
+
+// ResetSettings resets all changes to the "settings" field.
+func (m *BlobTextMutation) ResetSettings() {
+	m.settings = nil
+}
+
+// SetObjectKey sets the "object_key" field.
+func (m *BlobTextMutation) SetObjectKey(s string) {
+	m.object_key = &s
+}
+
+// ObjectKey returns the value of the "object_key" field in the mutation.
+func (m *BlobTextMutation) ObjectKey() (r string, exists bool) {
+	v := m.object_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectKey returns the old "object_key" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldObjectKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectKey: %w", err)
+	}
+	return oldValue.ObjectKey, nil
+}
+
+// ResetObjectKey resets all changes to the "object_key" field.
+func (m *BlobTextMutation) ResetObjectKey() {
+	m.object_key = nil
+}
+
+// SetObjectSize sets the "object_size" field.
+func (m *BlobTextMutation) SetObjectSize(i int64) {
+	m.object_size = &i
+	m.addobject_size = nil
+}
+
+// ObjectSize returns the value of the "object_size" field in the mutation.
+func (m *BlobTextMutation) ObjectSize() (r int64, exists bool) {
+	v := m.object_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectSize returns the old "object_size" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldObjectSize(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectSize: %w", err)
+	}
+	return oldValue.ObjectSize, nil
+}
+
+// AddObjectSize adds i to the "object_size" field.
+func (m *BlobTextMutation) AddObjectSize(i int64) {
+	if m.addobject_size != nil {
+		*m.addobject_size += i
+	} else {
+		m.addobject_size = &i
+	}
+}
+
+// AddedObjectSize returns the value that was added to the "object_size" field in this mutation.
+func (m *BlobTextMutation) AddedObjectSize() (r int64, exists bool) {
+	v := m.addobject_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetObjectSize resets all changes to the "object_size" field.
+func (m *BlobTextMutation) ResetObjectSize() {
+	m.object_size = nil
+	m.addobject_size = nil
+}
+
+// SetObjectSha256 sets the "object_sha256" field.
+func (m *BlobTextMutation) SetObjectSha256(s string) {
+	m.object_sha256 = &s
+}
+
+// ObjectSha256 returns the value of the "object_sha256" field in the mutation.
+func (m *BlobTextMutation) ObjectSha256() (r string, exists bool) {
+	v := m.object_sha256
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectSha256 returns the old "object_sha256" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldObjectSha256(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectSha256 is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectSha256 requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectSha256: %w", err)
+	}
+	return oldValue.ObjectSha256, nil
+}
+
+// ResetObjectSha256 resets all changes to the "object_sha256" field.
+func (m *BlobTextMutation) ResetObjectSha256() {
+	m.object_sha256 = nil
+}
+
+// SetPages sets the "pages" field.
+func (m *BlobTextMutation) SetPages(i int) {
+	m.pages = &i
+	m.addpages = nil
+}
+
+// Pages returns the value of the "pages" field in the mutation.
+func (m *BlobTextMutation) Pages() (r int, exists bool) {
+	v := m.pages
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPages returns the old "pages" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldPages(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPages is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPages requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPages: %w", err)
+	}
+	return oldValue.Pages, nil
+}
+
+// AddPages adds i to the "pages" field.
+func (m *BlobTextMutation) AddPages(i int) {
+	if m.addpages != nil {
+		*m.addpages += i
+	} else {
+		m.addpages = &i
+	}
+}
+
+// AddedPages returns the value that was added to the "pages" field in this mutation.
+func (m *BlobTextMutation) AddedPages() (r int, exists bool) {
+	v := m.addpages
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPages resets all changes to the "pages" field.
+func (m *BlobTextMutation) ResetPages() {
+	m.pages = nil
+	m.addpages = nil
+}
+
+// SetChars sets the "chars" field.
+func (m *BlobTextMutation) SetChars(i int) {
+	m.chars = &i
+	m.addchars = nil
+}
+
+// Chars returns the value of the "chars" field in the mutation.
+func (m *BlobTextMutation) Chars() (r int, exists bool) {
+	v := m.chars
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldChars returns the old "chars" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldChars(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldChars is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldChars requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldChars: %w", err)
+	}
+	return oldValue.Chars, nil
+}
+
+// AddChars adds i to the "chars" field.
+func (m *BlobTextMutation) AddChars(i int) {
+	if m.addchars != nil {
+		*m.addchars += i
+	} else {
+		m.addchars = &i
+	}
+}
+
+// AddedChars returns the value that was added to the "chars" field in this mutation.
+func (m *BlobTextMutation) AddedChars() (r int, exists bool) {
+	v := m.addchars
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetChars resets all changes to the "chars" field.
+func (m *BlobTextMutation) ResetChars() {
+	m.chars = nil
+	m.addchars = nil
+}
+
+// SetOcrPages sets the "ocr_pages" field.
+func (m *BlobTextMutation) SetOcrPages(i int) {
+	m.ocr_pages = &i
+	m.addocr_pages = nil
+}
+
+// OcrPages returns the value of the "ocr_pages" field in the mutation.
+func (m *BlobTextMutation) OcrPages() (r int, exists bool) {
+	v := m.ocr_pages
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOcrPages returns the old "ocr_pages" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldOcrPages(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOcrPages is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOcrPages requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOcrPages: %w", err)
+	}
+	return oldValue.OcrPages, nil
+}
+
+// AddOcrPages adds i to the "ocr_pages" field.
+func (m *BlobTextMutation) AddOcrPages(i int) {
+	if m.addocr_pages != nil {
+		*m.addocr_pages += i
+	} else {
+		m.addocr_pages = &i
+	}
+}
+
+// AddedOcrPages returns the value that was added to the "ocr_pages" field in this mutation.
+func (m *BlobTextMutation) AddedOcrPages() (r int, exists bool) {
+	v := m.addocr_pages
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOcrPages resets all changes to the "ocr_pages" field.
+func (m *BlobTextMutation) ResetOcrPages() {
+	m.ocr_pages = nil
+	m.addocr_pages = nil
+}
+
+// SetSkippedPages sets the "skipped_pages" field.
+func (m *BlobTextMutation) SetSkippedPages(i int) {
+	m.skipped_pages = &i
+	m.addskipped_pages = nil
+}
+
+// SkippedPages returns the value of the "skipped_pages" field in the mutation.
+func (m *BlobTextMutation) SkippedPages() (r int, exists bool) {
+	v := m.skipped_pages
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSkippedPages returns the old "skipped_pages" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldSkippedPages(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSkippedPages is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSkippedPages requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSkippedPages: %w", err)
+	}
+	return oldValue.SkippedPages, nil
+}
+
+// AddSkippedPages adds i to the "skipped_pages" field.
+func (m *BlobTextMutation) AddSkippedPages(i int) {
+	if m.addskipped_pages != nil {
+		*m.addskipped_pages += i
+	} else {
+		m.addskipped_pages = &i
+	}
+}
+
+// AddedSkippedPages returns the value that was added to the "skipped_pages" field in this mutation.
+func (m *BlobTextMutation) AddedSkippedPages() (r int, exists bool) {
+	v := m.addskipped_pages
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSkippedPages resets all changes to the "skipped_pages" field.
+func (m *BlobTextMutation) ResetSkippedPages() {
+	m.skipped_pages = nil
+	m.addskipped_pages = nil
+}
+
+// SetTruncated sets the "truncated" field.
+func (m *BlobTextMutation) SetTruncated(b bool) {
+	m.truncated = &b
+}
+
+// Truncated returns the value of the "truncated" field in the mutation.
+func (m *BlobTextMutation) Truncated() (r bool, exists bool) {
+	v := m.truncated
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTruncated returns the old "truncated" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldTruncated(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTruncated is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTruncated requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTruncated: %w", err)
+	}
+	return oldValue.Truncated, nil
+}
+
+// ResetTruncated resets all changes to the "truncated" field.
+func (m *BlobTextMutation) ResetTruncated() {
+	m.truncated = nil
+}
+
+// SetLanguage sets the "language" field.
+func (m *BlobTextMutation) SetLanguage(s string) {
+	m.language = &s
+}
+
+// Language returns the value of the "language" field in the mutation.
+func (m *BlobTextMutation) Language() (r string, exists bool) {
+	v := m.language
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLanguage returns the old "language" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldLanguage(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLanguage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLanguage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLanguage: %w", err)
+	}
+	return oldValue.Language, nil
+}
+
+// ResetLanguage resets all changes to the "language" field.
+func (m *BlobTextMutation) ResetLanguage() {
+	m.language = nil
+}
+
+// SetExtractor sets the "extractor" field.
+func (m *BlobTextMutation) SetExtractor(s string) {
+	m.extractor = &s
+}
+
+// Extractor returns the value of the "extractor" field in the mutation.
+func (m *BlobTextMutation) Extractor() (r string, exists bool) {
+	v := m.extractor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExtractor returns the old "extractor" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldExtractor(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExtractor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExtractor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExtractor: %w", err)
+	}
+	return oldValue.Extractor, nil
+}
+
+// ResetExtractor resets all changes to the "extractor" field.
+func (m *BlobTextMutation) ResetExtractor() {
+	m.extractor = nil
+}
+
+// SetModels sets the "models" field.
+func (m *BlobTextMutation) SetModels(j jsontext.Value) {
+	m.models = &j
+	m.appendmodels = nil
+}
+
+// Models returns the value of the "models" field in the mutation.
+func (m *BlobTextMutation) Models() (r jsontext.Value, exists bool) {
+	v := m.models
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModels returns the old "models" field's value of the BlobText entity.
+// If the BlobText object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobTextMutation) OldModels(ctx context.Context) (v jsontext.Value, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModels is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModels requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModels: %w", err)
+	}
+	return oldValue.Models, nil
+}
+
+// AppendModels adds j to the "models" field.
+func (m *BlobTextMutation) AppendModels(j jsontext.Value) {
+	m.appendmodels = append(m.appendmodels, j...)
+}
+
+// AppendedModels returns the list of values that were appended to the "models" field in this mutation.
+func (m *BlobTextMutation) AppendedModels() (jsontext.Value, bool) {
+	if len(m.appendmodels) == 0 {
+		return nil, false
+	}
+	return m.appendmodels, true
+}
+
+// ResetModels resets all changes to the "models" field.
+func (m *BlobTextMutation) ResetModels() {
+	m.models = nil
+	m.appendmodels = nil
+}
+
+// Where appends a list predicates to the BlobTextMutation builder.
+func (m *BlobTextMutation) Where(ps ...predicate.BlobText) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BlobTextMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BlobTextMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BlobText, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BlobTextMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BlobTextMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BlobText).
+func (m *BlobTextMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BlobTextMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.created_at != nil {
+		fields = append(fields, blobtext.FieldCreatedAt)
+	}
+	if m.sha256 != nil {
+		fields = append(fields, blobtext.FieldSha256)
+	}
+	if m.settings != nil {
+		fields = append(fields, blobtext.FieldSettings)
+	}
+	if m.object_key != nil {
+		fields = append(fields, blobtext.FieldObjectKey)
+	}
+	if m.object_size != nil {
+		fields = append(fields, blobtext.FieldObjectSize)
+	}
+	if m.object_sha256 != nil {
+		fields = append(fields, blobtext.FieldObjectSha256)
+	}
+	if m.pages != nil {
+		fields = append(fields, blobtext.FieldPages)
+	}
+	if m.chars != nil {
+		fields = append(fields, blobtext.FieldChars)
+	}
+	if m.ocr_pages != nil {
+		fields = append(fields, blobtext.FieldOcrPages)
+	}
+	if m.skipped_pages != nil {
+		fields = append(fields, blobtext.FieldSkippedPages)
+	}
+	if m.truncated != nil {
+		fields = append(fields, blobtext.FieldTruncated)
+	}
+	if m.language != nil {
+		fields = append(fields, blobtext.FieldLanguage)
+	}
+	if m.extractor != nil {
+		fields = append(fields, blobtext.FieldExtractor)
+	}
+	if m.models != nil {
+		fields = append(fields, blobtext.FieldModels)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BlobTextMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case blobtext.FieldCreatedAt:
+		return m.CreatedAt()
+	case blobtext.FieldSha256:
+		return m.Sha256()
+	case blobtext.FieldSettings:
+		return m.Settings()
+	case blobtext.FieldObjectKey:
+		return m.ObjectKey()
+	case blobtext.FieldObjectSize:
+		return m.ObjectSize()
+	case blobtext.FieldObjectSha256:
+		return m.ObjectSha256()
+	case blobtext.FieldPages:
+		return m.Pages()
+	case blobtext.FieldChars:
+		return m.Chars()
+	case blobtext.FieldOcrPages:
+		return m.OcrPages()
+	case blobtext.FieldSkippedPages:
+		return m.SkippedPages()
+	case blobtext.FieldTruncated:
+		return m.Truncated()
+	case blobtext.FieldLanguage:
+		return m.Language()
+	case blobtext.FieldExtractor:
+		return m.Extractor()
+	case blobtext.FieldModels:
+		return m.Models()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BlobTextMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case blobtext.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case blobtext.FieldSha256:
+		return m.OldSha256(ctx)
+	case blobtext.FieldSettings:
+		return m.OldSettings(ctx)
+	case blobtext.FieldObjectKey:
+		return m.OldObjectKey(ctx)
+	case blobtext.FieldObjectSize:
+		return m.OldObjectSize(ctx)
+	case blobtext.FieldObjectSha256:
+		return m.OldObjectSha256(ctx)
+	case blobtext.FieldPages:
+		return m.OldPages(ctx)
+	case blobtext.FieldChars:
+		return m.OldChars(ctx)
+	case blobtext.FieldOcrPages:
+		return m.OldOcrPages(ctx)
+	case blobtext.FieldSkippedPages:
+		return m.OldSkippedPages(ctx)
+	case blobtext.FieldTruncated:
+		return m.OldTruncated(ctx)
+	case blobtext.FieldLanguage:
+		return m.OldLanguage(ctx)
+	case blobtext.FieldExtractor:
+		return m.OldExtractor(ctx)
+	case blobtext.FieldModels:
+		return m.OldModels(ctx)
+	}
+	return nil, fmt.Errorf("unknown BlobText field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BlobTextMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case blobtext.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case blobtext.FieldSha256:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSha256(v)
+		return nil
+	case blobtext.FieldSettings:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSettings(v)
+		return nil
+	case blobtext.FieldObjectKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectKey(v)
+		return nil
+	case blobtext.FieldObjectSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectSize(v)
+		return nil
+	case blobtext.FieldObjectSha256:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectSha256(v)
+		return nil
+	case blobtext.FieldPages:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPages(v)
+		return nil
+	case blobtext.FieldChars:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetChars(v)
+		return nil
+	case blobtext.FieldOcrPages:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOcrPages(v)
+		return nil
+	case blobtext.FieldSkippedPages:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSkippedPages(v)
+		return nil
+	case blobtext.FieldTruncated:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTruncated(v)
+		return nil
+	case blobtext.FieldLanguage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLanguage(v)
+		return nil
+	case blobtext.FieldExtractor:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExtractor(v)
+		return nil
+	case blobtext.FieldModels:
+		v, ok := value.(jsontext.Value)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModels(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BlobText field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BlobTextMutation) AddedFields() []string {
+	var fields []string
+	if m.addobject_size != nil {
+		fields = append(fields, blobtext.FieldObjectSize)
+	}
+	if m.addpages != nil {
+		fields = append(fields, blobtext.FieldPages)
+	}
+	if m.addchars != nil {
+		fields = append(fields, blobtext.FieldChars)
+	}
+	if m.addocr_pages != nil {
+		fields = append(fields, blobtext.FieldOcrPages)
+	}
+	if m.addskipped_pages != nil {
+		fields = append(fields, blobtext.FieldSkippedPages)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BlobTextMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case blobtext.FieldObjectSize:
+		return m.AddedObjectSize()
+	case blobtext.FieldPages:
+		return m.AddedPages()
+	case blobtext.FieldChars:
+		return m.AddedChars()
+	case blobtext.FieldOcrPages:
+		return m.AddedOcrPages()
+	case blobtext.FieldSkippedPages:
+		return m.AddedSkippedPages()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BlobTextMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case blobtext.FieldObjectSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddObjectSize(v)
+		return nil
+	case blobtext.FieldPages:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPages(v)
+		return nil
+	case blobtext.FieldChars:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddChars(v)
+		return nil
+	case blobtext.FieldOcrPages:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOcrPages(v)
+		return nil
+	case blobtext.FieldSkippedPages:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSkippedPages(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BlobText numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BlobTextMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BlobTextMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BlobTextMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown BlobText nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BlobTextMutation) ResetField(name string) error {
+	switch name {
+	case blobtext.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case blobtext.FieldSha256:
+		m.ResetSha256()
+		return nil
+	case blobtext.FieldSettings:
+		m.ResetSettings()
+		return nil
+	case blobtext.FieldObjectKey:
+		m.ResetObjectKey()
+		return nil
+	case blobtext.FieldObjectSize:
+		m.ResetObjectSize()
+		return nil
+	case blobtext.FieldObjectSha256:
+		m.ResetObjectSha256()
+		return nil
+	case blobtext.FieldPages:
+		m.ResetPages()
+		return nil
+	case blobtext.FieldChars:
+		m.ResetChars()
+		return nil
+	case blobtext.FieldOcrPages:
+		m.ResetOcrPages()
+		return nil
+	case blobtext.FieldSkippedPages:
+		m.ResetSkippedPages()
+		return nil
+	case blobtext.FieldTruncated:
+		m.ResetTruncated()
+		return nil
+	case blobtext.FieldLanguage:
+		m.ResetLanguage()
+		return nil
+	case blobtext.FieldExtractor:
+		m.ResetExtractor()
+		return nil
+	case blobtext.FieldModels:
+		m.ResetModels()
+		return nil
+	}
+	return fmt.Errorf("unknown BlobText field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BlobTextMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BlobTextMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BlobTextMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BlobTextMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BlobTextMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BlobTextMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BlobTextMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown BlobText unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BlobTextMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown BlobText edge %s", name)
+}
+
 // BusinessKeyMutation represents an operation that mutates the BusinessKey nodes in the graph.
 type BusinessKeyMutation struct {
 	config
@@ -2942,6 +4164,678 @@ func (m *BusinessKeyMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown BusinessKey edge %s", name)
+}
+
+// CachedResultMutation represents an operation that mutates the CachedResult nodes in the graph.
+type CachedResultMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *string
+	created_at    *time.Time
+	namespace     *string
+	scope         *string
+	key           *string
+	payload       *jsontext.Value
+	appendpayload jsontext.Value
+	used_at       *time.Time
+	expires_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*CachedResult, error)
+	predicates    []predicate.CachedResult
+}
+
+var _ ent.Mutation = (*CachedResultMutation)(nil)
+
+// cachedresultOption allows management of the mutation configuration using functional options.
+type cachedresultOption func(*CachedResultMutation)
+
+// newCachedResultMutation creates new mutation for the CachedResult entity.
+func newCachedResultMutation(c config, op Op, opts ...cachedresultOption) *CachedResultMutation {
+	m := &CachedResultMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCachedResult,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCachedResultID sets the ID field of the mutation.
+func withCachedResultID(id string) cachedresultOption {
+	return func(m *CachedResultMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CachedResult
+		)
+		m.oldValue = func(ctx context.Context) (*CachedResult, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CachedResult.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCachedResult sets the old CachedResult of the mutation.
+func withCachedResult(node *CachedResult) cachedresultOption {
+	return func(m *CachedResultMutation) {
+		m.oldValue = func(context.Context) (*CachedResult, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CachedResultMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CachedResultMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of CachedResult entities.
+func (m *CachedResultMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CachedResultMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CachedResultMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CachedResult.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CachedResultMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CachedResultMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CachedResult entity.
+// If the CachedResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CachedResultMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CachedResultMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetNamespace sets the "namespace" field.
+func (m *CachedResultMutation) SetNamespace(s string) {
+	m.namespace = &s
+}
+
+// Namespace returns the value of the "namespace" field in the mutation.
+func (m *CachedResultMutation) Namespace() (r string, exists bool) {
+	v := m.namespace
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNamespace returns the old "namespace" field's value of the CachedResult entity.
+// If the CachedResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CachedResultMutation) OldNamespace(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNamespace is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNamespace requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNamespace: %w", err)
+	}
+	return oldValue.Namespace, nil
+}
+
+// ResetNamespace resets all changes to the "namespace" field.
+func (m *CachedResultMutation) ResetNamespace() {
+	m.namespace = nil
+}
+
+// SetScope sets the "scope" field.
+func (m *CachedResultMutation) SetScope(s string) {
+	m.scope = &s
+}
+
+// Scope returns the value of the "scope" field in the mutation.
+func (m *CachedResultMutation) Scope() (r string, exists bool) {
+	v := m.scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScope returns the old "scope" field's value of the CachedResult entity.
+// If the CachedResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CachedResultMutation) OldScope(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScope: %w", err)
+	}
+	return oldValue.Scope, nil
+}
+
+// ResetScope resets all changes to the "scope" field.
+func (m *CachedResultMutation) ResetScope() {
+	m.scope = nil
+}
+
+// SetKey sets the "key" field.
+func (m *CachedResultMutation) SetKey(s string) {
+	m.key = &s
+}
+
+// Key returns the value of the "key" field in the mutation.
+func (m *CachedResultMutation) Key() (r string, exists bool) {
+	v := m.key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKey returns the old "key" field's value of the CachedResult entity.
+// If the CachedResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CachedResultMutation) OldKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKey: %w", err)
+	}
+	return oldValue.Key, nil
+}
+
+// ResetKey resets all changes to the "key" field.
+func (m *CachedResultMutation) ResetKey() {
+	m.key = nil
+}
+
+// SetPayload sets the "payload" field.
+func (m *CachedResultMutation) SetPayload(j jsontext.Value) {
+	m.payload = &j
+	m.appendpayload = nil
+}
+
+// Payload returns the value of the "payload" field in the mutation.
+func (m *CachedResultMutation) Payload() (r jsontext.Value, exists bool) {
+	v := m.payload
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPayload returns the old "payload" field's value of the CachedResult entity.
+// If the CachedResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CachedResultMutation) OldPayload(ctx context.Context) (v jsontext.Value, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPayload is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPayload requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPayload: %w", err)
+	}
+	return oldValue.Payload, nil
+}
+
+// AppendPayload adds j to the "payload" field.
+func (m *CachedResultMutation) AppendPayload(j jsontext.Value) {
+	m.appendpayload = append(m.appendpayload, j...)
+}
+
+// AppendedPayload returns the list of values that were appended to the "payload" field in this mutation.
+func (m *CachedResultMutation) AppendedPayload() (jsontext.Value, bool) {
+	if len(m.appendpayload) == 0 {
+		return nil, false
+	}
+	return m.appendpayload, true
+}
+
+// ResetPayload resets all changes to the "payload" field.
+func (m *CachedResultMutation) ResetPayload() {
+	m.payload = nil
+	m.appendpayload = nil
+}
+
+// SetUsedAt sets the "used_at" field.
+func (m *CachedResultMutation) SetUsedAt(t time.Time) {
+	m.used_at = &t
+}
+
+// UsedAt returns the value of the "used_at" field in the mutation.
+func (m *CachedResultMutation) UsedAt() (r time.Time, exists bool) {
+	v := m.used_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsedAt returns the old "used_at" field's value of the CachedResult entity.
+// If the CachedResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CachedResultMutation) OldUsedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsedAt: %w", err)
+	}
+	return oldValue.UsedAt, nil
+}
+
+// ResetUsedAt resets all changes to the "used_at" field.
+func (m *CachedResultMutation) ResetUsedAt() {
+	m.used_at = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *CachedResultMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *CachedResultMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the CachedResult entity.
+// If the CachedResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CachedResultMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *CachedResultMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// Where appends a list predicates to the CachedResultMutation builder.
+func (m *CachedResultMutation) Where(ps ...predicate.CachedResult) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CachedResultMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CachedResultMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CachedResult, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CachedResultMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CachedResultMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CachedResult).
+func (m *CachedResultMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CachedResultMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.created_at != nil {
+		fields = append(fields, cachedresult.FieldCreatedAt)
+	}
+	if m.namespace != nil {
+		fields = append(fields, cachedresult.FieldNamespace)
+	}
+	if m.scope != nil {
+		fields = append(fields, cachedresult.FieldScope)
+	}
+	if m.key != nil {
+		fields = append(fields, cachedresult.FieldKey)
+	}
+	if m.payload != nil {
+		fields = append(fields, cachedresult.FieldPayload)
+	}
+	if m.used_at != nil {
+		fields = append(fields, cachedresult.FieldUsedAt)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, cachedresult.FieldExpiresAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CachedResultMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case cachedresult.FieldCreatedAt:
+		return m.CreatedAt()
+	case cachedresult.FieldNamespace:
+		return m.Namespace()
+	case cachedresult.FieldScope:
+		return m.Scope()
+	case cachedresult.FieldKey:
+		return m.Key()
+	case cachedresult.FieldPayload:
+		return m.Payload()
+	case cachedresult.FieldUsedAt:
+		return m.UsedAt()
+	case cachedresult.FieldExpiresAt:
+		return m.ExpiresAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CachedResultMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case cachedresult.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case cachedresult.FieldNamespace:
+		return m.OldNamespace(ctx)
+	case cachedresult.FieldScope:
+		return m.OldScope(ctx)
+	case cachedresult.FieldKey:
+		return m.OldKey(ctx)
+	case cachedresult.FieldPayload:
+		return m.OldPayload(ctx)
+	case cachedresult.FieldUsedAt:
+		return m.OldUsedAt(ctx)
+	case cachedresult.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CachedResult field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CachedResultMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case cachedresult.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case cachedresult.FieldNamespace:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNamespace(v)
+		return nil
+	case cachedresult.FieldScope:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScope(v)
+		return nil
+	case cachedresult.FieldKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKey(v)
+		return nil
+	case cachedresult.FieldPayload:
+		v, ok := value.(jsontext.Value)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPayload(v)
+		return nil
+	case cachedresult.FieldUsedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsedAt(v)
+		return nil
+	case cachedresult.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CachedResult field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CachedResultMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CachedResultMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CachedResultMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown CachedResult numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CachedResultMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CachedResultMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CachedResultMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown CachedResult nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CachedResultMutation) ResetField(name string) error {
+	switch name {
+	case cachedresult.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case cachedresult.FieldNamespace:
+		m.ResetNamespace()
+		return nil
+	case cachedresult.FieldScope:
+		m.ResetScope()
+		return nil
+	case cachedresult.FieldKey:
+		m.ResetKey()
+		return nil
+	case cachedresult.FieldPayload:
+		m.ResetPayload()
+		return nil
+	case cachedresult.FieldUsedAt:
+		m.ResetUsedAt()
+		return nil
+	case cachedresult.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CachedResult field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CachedResultMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CachedResultMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CachedResultMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CachedResultMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CachedResultMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CachedResultMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CachedResultMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CachedResult unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CachedResultMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CachedResult edge %s", name)
 }
 
 // CollectionTypeMutation represents an operation that mutates the CollectionType nodes in the graph.
@@ -4355,6 +6249,7 @@ type DomainEventMutation struct {
 	adddepth      *int
 	cause_run_id  *string
 	dispatched_at *time.Time
+	fanout_cursor *string
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*DomainEvent, error)
@@ -4897,6 +6792,55 @@ func (m *DomainEventMutation) ResetDispatchedAt() {
 	delete(m.clearedFields, domainevent.FieldDispatchedAt)
 }
 
+// SetFanoutCursor sets the "fanout_cursor" field.
+func (m *DomainEventMutation) SetFanoutCursor(s string) {
+	m.fanout_cursor = &s
+}
+
+// FanoutCursor returns the value of the "fanout_cursor" field in the mutation.
+func (m *DomainEventMutation) FanoutCursor() (r string, exists bool) {
+	v := m.fanout_cursor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFanoutCursor returns the old "fanout_cursor" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldFanoutCursor(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFanoutCursor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFanoutCursor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFanoutCursor: %w", err)
+	}
+	return oldValue.FanoutCursor, nil
+}
+
+// ClearFanoutCursor clears the value of the "fanout_cursor" field.
+func (m *DomainEventMutation) ClearFanoutCursor() {
+	m.fanout_cursor = nil
+	m.clearedFields[domainevent.FieldFanoutCursor] = struct{}{}
+}
+
+// FanoutCursorCleared returns if the "fanout_cursor" field was cleared in this mutation.
+func (m *DomainEventMutation) FanoutCursorCleared() bool {
+	_, ok := m.clearedFields[domainevent.FieldFanoutCursor]
+	return ok
+}
+
+// ResetFanoutCursor resets all changes to the "fanout_cursor" field.
+func (m *DomainEventMutation) ResetFanoutCursor() {
+	m.fanout_cursor = nil
+	delete(m.clearedFields, domainevent.FieldFanoutCursor)
+}
+
 // Where appends a list predicates to the DomainEventMutation builder.
 func (m *DomainEventMutation) Where(ps ...predicate.DomainEvent) {
 	m.predicates = append(m.predicates, ps...)
@@ -4931,7 +6875,7 @@ func (m *DomainEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DomainEventMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.created_at != nil {
 		fields = append(fields, domainevent.FieldCreatedAt)
 	}
@@ -4962,6 +6906,9 @@ func (m *DomainEventMutation) Fields() []string {
 	if m.dispatched_at != nil {
 		fields = append(fields, domainevent.FieldDispatchedAt)
 	}
+	if m.fanout_cursor != nil {
+		fields = append(fields, domainevent.FieldFanoutCursor)
+	}
 	return fields
 }
 
@@ -4990,6 +6937,8 @@ func (m *DomainEventMutation) Field(name string) (ent.Value, bool) {
 		return m.CauseRunID()
 	case domainevent.FieldDispatchedAt:
 		return m.DispatchedAt()
+	case domainevent.FieldFanoutCursor:
+		return m.FanoutCursor()
 	}
 	return nil, false
 }
@@ -5019,6 +6968,8 @@ func (m *DomainEventMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldCauseRunID(ctx)
 	case domainevent.FieldDispatchedAt:
 		return m.OldDispatchedAt(ctx)
+	case domainevent.FieldFanoutCursor:
+		return m.OldFanoutCursor(ctx)
 	}
 	return nil, fmt.Errorf("unknown DomainEvent field %s", name)
 }
@@ -5098,6 +7049,13 @@ func (m *DomainEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDispatchedAt(v)
 		return nil
+	case domainevent.FieldFanoutCursor:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFanoutCursor(v)
+		return nil
 	}
 	return fmt.Errorf("unknown DomainEvent field %s", name)
 }
@@ -5155,6 +7113,9 @@ func (m *DomainEventMutation) ClearedFields() []string {
 	if m.FieldCleared(domainevent.FieldDispatchedAt) {
 		fields = append(fields, domainevent.FieldDispatchedAt)
 	}
+	if m.FieldCleared(domainevent.FieldFanoutCursor) {
+		fields = append(fields, domainevent.FieldFanoutCursor)
+	}
 	return fields
 }
 
@@ -5180,6 +7141,9 @@ func (m *DomainEventMutation) ClearField(name string) error {
 		return nil
 	case domainevent.FieldDispatchedAt:
 		m.ClearDispatchedAt()
+		return nil
+	case domainevent.FieldFanoutCursor:
+		m.ClearFanoutCursor()
 		return nil
 	}
 	return fmt.Errorf("unknown DomainEvent nullable field %s", name)
@@ -5218,6 +7182,9 @@ func (m *DomainEventMutation) ResetField(name string) error {
 		return nil
 	case domainevent.FieldDispatchedAt:
 		m.ResetDispatchedAt()
+		return nil
+	case domainevent.FieldFanoutCursor:
+		m.ResetFanoutCursor()
 		return nil
 	}
 	return fmt.Errorf("unknown DomainEvent field %s", name)
@@ -16680,7 +18647,6 @@ type ItemSurfaceMutation struct {
 	appendtags      []string
 	payload         *jsontext.Value
 	appendpayload   jsontext.Value
-	term_text       *string
 	item_created_at *string
 	item_created_by *string
 	modified_at     *string
@@ -17153,42 +19119,6 @@ func (m *ItemSurfaceMutation) ResetPayload() {
 	m.appendpayload = nil
 }
 
-// SetTermText sets the "term_text" field.
-func (m *ItemSurfaceMutation) SetTermText(s string) {
-	m.term_text = &s
-}
-
-// TermText returns the value of the "term_text" field in the mutation.
-func (m *ItemSurfaceMutation) TermText() (r string, exists bool) {
-	v := m.term_text
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTermText returns the old "term_text" field's value of the ItemSurface entity.
-// If the ItemSurface object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ItemSurfaceMutation) OldTermText(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTermText is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTermText requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTermText: %w", err)
-	}
-	return oldValue.TermText, nil
-}
-
-// ResetTermText resets all changes to the "term_text" field.
-func (m *ItemSurfaceMutation) ResetTermText() {
-	m.term_text = nil
-}
-
 // SetItemCreatedAt sets the "item_created_at" field.
 func (m *ItemSurfaceMutation) SetItemCreatedAt(s string) {
 	m.item_created_at = &s
@@ -17421,7 +19351,7 @@ func (m *ItemSurfaceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ItemSurfaceMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 13)
 	if m.created_at != nil {
 		fields = append(fields, itemsurface.FieldCreatedAt)
 	}
@@ -17448,9 +19378,6 @@ func (m *ItemSurfaceMutation) Fields() []string {
 	}
 	if m.payload != nil {
 		fields = append(fields, itemsurface.FieldPayload)
-	}
-	if m.term_text != nil {
-		fields = append(fields, itemsurface.FieldTermText)
 	}
 	if m.item_created_at != nil {
 		fields = append(fields, itemsurface.FieldItemCreatedAt)
@@ -17490,8 +19417,6 @@ func (m *ItemSurfaceMutation) Field(name string) (ent.Value, bool) {
 		return m.Tags()
 	case itemsurface.FieldPayload:
 		return m.Payload()
-	case itemsurface.FieldTermText:
-		return m.TermText()
 	case itemsurface.FieldItemCreatedAt:
 		return m.ItemCreatedAt()
 	case itemsurface.FieldItemCreatedBy:
@@ -17527,8 +19452,6 @@ func (m *ItemSurfaceMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldTags(ctx)
 	case itemsurface.FieldPayload:
 		return m.OldPayload(ctx)
-	case itemsurface.FieldTermText:
-		return m.OldTermText(ctx)
 	case itemsurface.FieldItemCreatedAt:
 		return m.OldItemCreatedAt(ctx)
 	case itemsurface.FieldItemCreatedBy:
@@ -17608,13 +19531,6 @@ func (m *ItemSurfaceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPayload(v)
-		return nil
-	case itemsurface.FieldTermText:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTermText(v)
 		return nil
 	case itemsurface.FieldItemCreatedAt:
 		v, ok := value.(string)
@@ -17719,9 +19635,6 @@ func (m *ItemSurfaceMutation) ResetField(name string) error {
 		return nil
 	case itemsurface.FieldPayload:
 		m.ResetPayload()
-		return nil
-	case itemsurface.FieldTermText:
-		m.ResetTermText()
 		return nil
 	case itemsurface.FieldItemCreatedAt:
 		m.ResetItemCreatedAt()
@@ -41607,6 +43520,7 @@ type WorkflowMutation struct {
 	enabled            *bool
 	builtin_key        *string
 	collection_id      *string
+	role               *string
 	parameters         *map[string]interface{}
 	current_version    *int
 	addcurrent_version *int
@@ -42075,6 +43989,55 @@ func (m *WorkflowMutation) ResetCollectionID() {
 	delete(m.clearedFields, workflow.FieldCollectionID)
 }
 
+// SetRole sets the "role" field.
+func (m *WorkflowMutation) SetRole(s string) {
+	m.role = &s
+}
+
+// Role returns the value of the "role" field in the mutation.
+func (m *WorkflowMutation) Role() (r string, exists bool) {
+	v := m.role
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRole returns the old "role" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldRole(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRole is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRole requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRole: %w", err)
+	}
+	return oldValue.Role, nil
+}
+
+// ClearRole clears the value of the "role" field.
+func (m *WorkflowMutation) ClearRole() {
+	m.role = nil
+	m.clearedFields[workflow.FieldRole] = struct{}{}
+}
+
+// RoleCleared returns if the "role" field was cleared in this mutation.
+func (m *WorkflowMutation) RoleCleared() bool {
+	_, ok := m.clearedFields[workflow.FieldRole]
+	return ok
+}
+
+// ResetRole resets all changes to the "role" field.
+func (m *WorkflowMutation) ResetRole() {
+	m.role = nil
+	delete(m.clearedFields, workflow.FieldRole)
+}
+
 // SetParameters sets the "parameters" field.
 func (m *WorkflowMutation) SetParameters(value map[string]interface{}) {
 	m.parameters = &value
@@ -42378,7 +44341,7 @@ func (m *WorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
 	if m.created_at != nil {
 		fields = append(fields, workflow.FieldCreatedAt)
 	}
@@ -42405,6 +44368,9 @@ func (m *WorkflowMutation) Fields() []string {
 	}
 	if m.collection_id != nil {
 		fields = append(fields, workflow.FieldCollectionID)
+	}
+	if m.role != nil {
+		fields = append(fields, workflow.FieldRole)
 	}
 	if m.parameters != nil {
 		fields = append(fields, workflow.FieldParameters)
@@ -42450,6 +44416,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 		return m.BuiltinKey()
 	case workflow.FieldCollectionID:
 		return m.CollectionID()
+	case workflow.FieldRole:
+		return m.Role()
 	case workflow.FieldParameters:
 		return m.Parameters()
 	case workflow.FieldCurrentVersion:
@@ -42489,6 +44457,8 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldBuiltinKey(ctx)
 	case workflow.FieldCollectionID:
 		return m.OldCollectionID(ctx)
+	case workflow.FieldRole:
+		return m.OldRole(ctx)
 	case workflow.FieldParameters:
 		return m.OldParameters(ctx)
 	case workflow.FieldCurrentVersion:
@@ -42572,6 +44542,13 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCollectionID(v)
+		return nil
+	case workflow.FieldRole:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRole(v)
 		return nil
 	case workflow.FieldParameters:
 		v, ok := value.(map[string]interface{})
@@ -42678,6 +44655,9 @@ func (m *WorkflowMutation) ClearedFields() []string {
 	if m.FieldCleared(workflow.FieldCollectionID) {
 		fields = append(fields, workflow.FieldCollectionID)
 	}
+	if m.FieldCleared(workflow.FieldRole) {
+		fields = append(fields, workflow.FieldRole)
+	}
 	if m.FieldCleared(workflow.FieldDeletedAt) {
 		fields = append(fields, workflow.FieldDeletedAt)
 	}
@@ -42700,6 +44680,9 @@ func (m *WorkflowMutation) ClearField(name string) error {
 		return nil
 	case workflow.FieldCollectionID:
 		m.ClearCollectionID()
+		return nil
+	case workflow.FieldRole:
+		m.ClearRole()
 		return nil
 	case workflow.FieldDeletedAt:
 		m.ClearDeletedAt()
@@ -42738,6 +44721,9 @@ func (m *WorkflowMutation) ResetField(name string) error {
 		return nil
 	case workflow.FieldCollectionID:
 		m.ResetCollectionID()
+		return nil
+	case workflow.FieldRole:
+		m.ResetRole()
 		return nil
 	case workflow.FieldParameters:
 		m.ResetParameters()

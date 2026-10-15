@@ -16,10 +16,13 @@ import (
 
 	"papergo/ent"
 	"papergo/ent/domainevent"
+	entworkflow "papergo/ent/workflow"
 	"papergo/ent/workflowrun"
 	"papergo/ent/workflowrunitem"
 	"papergo/internal/dms"
+	"papergo/internal/resultcache"
 	"papergo/internal/tasks"
+	"papergo/internal/workflow"
 )
 
 // Run is a workflow run as the API shows it.
@@ -57,7 +60,8 @@ type Step struct {
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 }
 
-// RunFilter selects runs of a workspace.
+// RunFilter selects runs of a workspace. Without a WorkflowID, the runs of
+// system built-ins (search.index) are left out.
 type RunFilter struct {
 	WorkflowID string
 	ItemID     string
@@ -163,6 +167,16 @@ func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFil
 		q := t.Client.WorkflowRun.Query().Where(workflowrun.WorkspaceIDEQ(workspaceID))
 		if f.WorkflowID != "" {
 			q.Where(workflowrun.WorkflowIDEQ(f.WorkflowID))
+		} else if keys := workflow.SystemBuiltIns(); len(keys) > 0 {
+			// System built-ins run on every change; their runs are listed
+			// only when asked for by workflow.
+			system, err := t.Client.Workflow.Query().Where(entworkflow.WorkspaceIDEQ(workspaceID), entworkflow.BuiltinKeyIn(keys...)).IDs(ctx)
+			if err != nil {
+				return RunPage{}, err
+			}
+			if len(system) > 0 {
+				q.Where(workflowrun.WorkflowIDNotIn(system...))
+			}
 		}
 		if f.ItemID != "" {
 			// Selection runs count for every member, not only their primary item.
@@ -423,7 +437,8 @@ func (r *Runner) Retry(ctx context.Context, subject, id string) (Run, error) {
 // purge deletes runs that finished more than the retention ago, with their
 // step markers first: a crash in between leaves only finished runs without
 // markers, which never replay, and markers never outlive their run. Events
-// dispatched before the retention go too.
+// dispatched before the retention go too. Reusable results have their own
+// expiry and are collected independently of run retention.
 func (r *Runner) purge(ctx dbos.Context, _ dbos.ScheduledWorkflowInput) (any, error) {
 	return r.Purge(ctx)
 }
@@ -433,6 +448,9 @@ var purgePage = 200
 
 // Purge applies the retention now.
 func (r *Runner) Purge(ctx context.Context) (int, error) {
+	if _, err := resultcache.New(r.db).PurgeExpired(ctx, time.Now()); err != nil {
+		return 0, err
+	}
 	cutoff := time.Now().Add(-r.cfg.Retention)
 	if err := r.dms.Write(ctx, func(t *dms.Service) error {
 		_, err := t.Client.DomainEvent.Delete().Where(domainevent.DispatchedAtLT(cutoff)).Exec(ctx)
@@ -465,32 +483,91 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 		if len(ids) == 0 {
 			continue
 		}
-		if err = r.dms.Write(ctx, func(t *dms.Service) error {
-			args := make([]any, len(ids))
-			marks := make([]string, len(ids))
-			for i, id := range ids {
-				args[i], marks[i] = id, "?"
-			}
-			if _, err := t.Client.ExecContext(ctx, `DELETE FROM runner_step_results WHERE run_id IN (`+strings.Join(marks, ",")+`)`, args...); err != nil {
-				return err
-			}
-			if err := t.DiscardRunStagedFiles(ctx, ids...); err != nil {
-				return err
-			}
-			// Tasks outlive their runs as a record; one still waiting closes.
-			for _, id := range ids {
-				if _, err := tasks.CancelRun(ctx, t, id); err != nil {
-					return err
-				}
-			}
-			_, err := t.Client.WorkflowRun.Delete().Where(workflowrun.IDIn(ids...)).Exec(ctx)
-			return err
-		}); err != nil {
-			return deleted, err
-		}
-		if err = dbos.DeleteWorkflows(r.ctx, ids); err != nil {
+		if err = r.deleteRuns(ctx, ids); err != nil {
 			return deleted, err
 		}
 		deleted += len(ids)
 	}
+}
+
+func (r *Runner) purgeSystem(ctx dbos.Context, _ dbos.ScheduledWorkflowInput) (any, error) {
+	return r.PurgeSystemRuns(ctx)
+}
+
+// systemRetention is how long successful runs of system built-ins are kept.
+// Tests lower it.
+var systemRetention = 24 * time.Hour
+
+// PurgeSystemRuns deletes the successful runs of system built-ins finished
+// more than a day ago: they run on every change, and failures stay for the
+// full retention.
+func (r *Runner) PurgeSystemRuns(ctx context.Context) (int, error) {
+	keys := workflow.SystemBuiltIns()
+	if len(keys) == 0 {
+		return 0, nil
+	}
+	cutoff := time.Now().Add(-min(systemRetention, r.cfg.Retention))
+	deleted, after := 0, ""
+	for {
+		var ids []string
+		err := r.dms.Write(ctx, func(t *dms.Service) error {
+			var err error
+			system, err := t.Client.Workflow.Query().Where(entworkflow.BuiltinKeyIn(keys...)).IDs(ctx)
+			if err != nil || len(system) == 0 {
+				return err
+			}
+			ids, err = t.Client.WorkflowRun.Query().Where(workflowrun.IDGT(after), workflowrun.CreatedAtLT(cutoff), workflowrun.WorkflowIDIn(system...)).
+				Order(ent.Asc(workflowrun.FieldID)).Limit(purgePage).IDs(ctx)
+			return err
+		})
+		if err != nil || len(ids) == 0 {
+			return deleted, err
+		}
+		after = ids[len(ids)-1]
+		done, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterWorkflowIDs(ids...), dbos.WithFilterStatus(dbos.WorkflowStatusSuccess), dbos.WithFilterCompletedBefore(cutoff),
+			dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
+		if err != nil {
+			return deleted, err
+		}
+		finished := make([]string, 0, len(done))
+		for _, s := range done {
+			finished = append(finished, s.ID)
+		}
+		if len(finished) == 0 {
+			continue
+		}
+		if err = r.deleteRuns(ctx, finished); err != nil {
+			return deleted, err
+		}
+		deleted += len(finished)
+	}
+}
+
+// deleteRuns removes finished runs: their step markers, staged files, the
+// tasks they wait for, their rows and DBOS's records.
+func (r *Runner) deleteRuns(ctx context.Context, ids []string) error {
+	if err := r.dms.Write(ctx, func(t *dms.Service) error {
+		args := make([]any, len(ids))
+		marks := make([]string, len(ids))
+		for i, id := range ids {
+			args[i], marks[i] = id, "?"
+		}
+		if _, err := t.Client.ExecContext(ctx, `DELETE FROM runner_step_results WHERE run_id IN (`+strings.Join(marks, ",")+`)`, args...); err != nil {
+			return err
+		}
+		if err := t.DiscardRunStagedFiles(ctx, ids...); err != nil {
+			return err
+		}
+		// Tasks outlive their runs as a record; one still waiting closes.
+		for _, id := range ids {
+			if _, err := tasks.CancelRun(ctx, t, id); err != nil {
+				return err
+			}
+		}
+		_, err := t.Client.WorkflowRun.Delete().Where(workflowrun.IDIn(ids...)).Exec(ctx)
+		return err
+	}); err != nil {
+		return err
+	}
+	return dbos.DeleteWorkflows(r.ctx, ids)
 }

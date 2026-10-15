@@ -27,6 +27,12 @@ type RunInput struct {
 	// ConditionError fails the run at once: the condition could not be
 	// evaluated when the event was dispatched.
 	ConditionError string `json:"condition_error,omitempty"`
+	// Partition, for coalesce workflows, names the workflow and item: runs
+	// of one partition execute one at a time.
+	Partition string `json:"partition,omitempty"`
+	// System runs belong to a system built-in: they use the runner's system
+	// queue and are kept a day once they succeed.
+	System bool `json:"system,omitempty"`
 }
 
 // Exec makes a run durable. Step runs fn once: the writes it makes through t
@@ -51,6 +57,8 @@ type Result struct {
 	Status    string         `json:"status"`
 	Node      string         `json:"node,omitempty"`
 	Variables map[string]any `json:"variables,omitempty"`
+	// Outputs are a completed run's declared outputs (Definition.Outputs).
+	Outputs map[string]any `json:"outputs,omitempty"`
 }
 
 // ErrRunFailed wraps the reason a run failed.
@@ -61,8 +69,12 @@ var ErrRunFailed = errors.New("workflow run failed")
 var ErrStopped = errors.New("workflow run stopped")
 
 type loaded struct {
-	Key        string     `json:"key"`
-	Author     string     `json:"author"`
+	Key    string `json:"key"`
+	Author string `json:"author"`
+	System bool   `json:"system,omitempty"`
+	// Role is the role the workflow fills: its runs also raise the role's
+	// events.
+	Role       string     `json:"role,omitempty"`
 	Definition Definition `json:"definition"`
 }
 
@@ -88,7 +100,11 @@ func (s *Service) Execute(ctx context.Context, x Exec, in RunInput) (Result, err
 		if in.ConditionError != "" {
 			return nil, fmt.Errorf("condition could not be evaluated: %s", in.ConditionError)
 		}
-		return json.Marshal(loaded{Key: w.Key, Author: v.CreatedBy, Definition: def})
+		l := loaded{Key: w.Key, Author: v.CreatedBy, System: systemWorkflow(w), Definition: def}
+		if w.Role != nil {
+			l.Role = *w.Role
+		}
+		return json.Marshal(l)
 	})
 	if err != nil {
 		return Result{Status: "failed"}, err
@@ -306,11 +322,33 @@ func (r *runState) once(name string, node Node) (outcome, error) {
 // transaction, and the outcome is recorded.
 func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Event), name string, run func(*env) (outcome, error)) (json.RawMessage, error) {
 	// Each step rechecks live scopes, including after a durable wait or replay.
-	if r.in.Event.Type == dms.EventTermChanged {
+	// System built-ins run release definitions, which never expose the payload.
+	if r.in.Event.Type == dms.EventTermChanged && !r.l.System {
 		if err := t.RequireScope(ctx, r.l.Author, "taxonomy.read"); err != nil {
 			return nil, fmt.Errorf("read term.changed trigger requires taxonomy.read: %w", err)
 		}
 	}
+	sc := r.scope(ctx, t)
+	e := &env{ctx: dms.WithCause(ctx, r.in.Event.Depth, r.in.RunID), t: t, author: r.l.Author, itemID: r.in.ItemID, items: r.in.Items, runID: r.in.RunID, workspaceID: r.in.WorkspaceID, workflowID: r.in.WorkflowID, node: name, scope: sc, tools: r.tools,
+		raise: func(event string, data map[string]any) { raise(r.event(WorkflowEvent(r.l.Key, event), data)) }}
+	o, err := run(e)
+	if err != nil {
+		return nil, err
+	}
+	o.Output = forms.Plain(o.Output)
+	out, err := json.Marshal(o)
+	if err != nil {
+		return nil, err
+	}
+	if len(out) > MaxOutputBytes {
+		return nil, fmt.Errorf("node %s output is larger than %d bytes", name, MaxOutputBytes)
+	}
+	return out, nil
+}
+
+// scope is what tokens read in a step: the run's data, and its item read
+// once through t when a token or activity needs it.
+func (r *runState) scope(ctx context.Context, t *dms.Service) *scope {
 	var item map[string]any
 	sc := &scope{ctx: ctx, trigger: forms.Plain(r.in.Event).(map[string]any), inputs: r.in.Inputs, vars: r.vars, steps: r.steps, now: time.Now().UTC(),
 		run: map[string]any{"id": r.in.RunID, "workflow_id": r.in.WorkflowID, "workflow_key": r.l.Key, "version": r.in.Version, "actor": r.in.Event.Actor, "items": r.items()}}
@@ -326,21 +364,7 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 			return item, nil
 		}
 	}
-	e := &env{ctx: dms.WithCause(ctx, r.in.Event.Depth, r.in.RunID), t: t, author: r.l.Author, itemID: r.in.ItemID, items: r.in.Items, runID: r.in.RunID, workspaceID: r.in.WorkspaceID, workflowID: r.in.WorkflowID, node: name, scope: sc,
-		raise: func(event string, data map[string]any) { raise(r.event(WorkflowEvent(r.l.Key, event), data)) }}
-	o, err := run(e)
-	if err != nil {
-		return nil, err
-	}
-	o.Output = forms.Plain(o.Output)
-	out, err := json.Marshal(o)
-	if err != nil {
-		return nil, err
-	}
-	if len(out) > MaxOutputBytes {
-		return nil, fmt.Errorf("node %s output is larger than %d bytes", name, MaxOutputBytes)
-	}
-	return out, nil
+	return sc
 }
 
 // items lists the run's items in order: a selection's members, else the
@@ -364,26 +388,87 @@ func (r *runState) event(typ string, data map[string]any) dms.Event {
 	return dms.Event{ID: dms.NewEventID(), Type: typ, WorkspaceID: r.in.WorkspaceID, CollectionID: r.in.Event.CollectionID, ResourceID: r.in.ItemID, Actor: r.in.Event.Actor, Data: data, Depth: r.in.Event.Depth + 1, CauseRunID: r.in.RunID}
 }
 
-// finish raises wf.{key}.completed or wf.{key}.failed in one last step.
+// finished is what the finish step records: a completed run's outputs, or
+// the reason they failed it.
+type finished struct {
+	Outputs map[string]any `json:"outputs,omitempty"`
+	Error   string         `json:"error,omitempty"`
+}
+
+// finish evaluates a completed run's outputs and raises wf.{key}.completed
+// or wf.{key}.failed in one last step. Outputs that fail their schema fail
+// the run, so a broken chain shows where it broke.
 func (r *runState) finish(node string, failure error) (Result, error) {
-	res := Result{Status: "completed", Node: node, Variables: r.vars}
-	data := map[string]any{"status": "completed", "node": node}
-	if failure != nil {
-		res.Status = "failed"
-		data["status"] = "failed"
-		data["error"] = failure.Error()
-	}
-	_, err := r.x.Step("finish", func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error) {
+	raw, err := r.x.Step("finish", func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error) {
+		var f finished
+		if failure == nil && r.l.Definition.OutputSchema != nil {
+			outputs, err := r.outputs(r.scope(ctx, t))
+			if err != nil {
+				f.Error = err.Error()
+			}
+			f.Outputs = outputs
+		}
+		data := map[string]any{"status": "completed", "node": node}
+		switch {
+		case failure != nil:
+			data["status"], data["error"] = "failed", failure.Error()
+		case f.Error != "":
+			data["status"], data["error"] = "failed", f.Error
+		case f.Outputs != nil:
+			data["outputs"] = f.Outputs
+		}
 		raise(r.event(WorkflowEvent(r.l.Key, data["status"].(string)), data))
-		return json.RawMessage(`{}`), nil
+		// Followers of a role hear every filler, whichever fills it for the
+		// item's collection.
+		if r.l.Role != "" {
+			raise(r.event(RoleEvent(r.l.Role, data["status"].(string)), data))
+		}
+		return json.Marshal(f)
 	})
+	res := Result{Status: "completed", Node: node, Variables: r.vars}
 	if err != nil {
+		res.Status = "failed"
 		return res, err
 	}
+	var f finished
+	if err = decode(raw, &f); err != nil {
+		res.Status = "failed"
+		return res, err
+	}
+	if failure == nil && f.Error != "" {
+		failure = errors.New(f.Error)
+	}
 	if failure != nil {
+		res.Status = "failed"
 		return res, fmt.Errorf("%w at node %s: %v", ErrRunFailed, node, failure)
 	}
+	res.Outputs = f.Outputs
 	return res, nil
+}
+
+// outputs resolves the definition's outputs and checks them against its
+// output schema, defaults applied.
+func (r *runState) outputs(sc *scope) (map[string]any, error) {
+	resolved, err := sc.resolve(forms.Plain(r.l.Definition.Outputs))
+	if err != nil {
+		return nil, fmt.Errorf("outputs: %w", err)
+	}
+	values, _ := resolved.(map[string]any)
+	// A token that finds nothing leaves the output unset, so an optional
+	// output can be absent.
+	for name, v := range values {
+		if v == nil {
+			delete(values, name)
+		}
+	}
+	out, err := forms.Values(r.l.Definition.OutputSchema, values, "outputs")
+	if err != nil {
+		return nil, err
+	}
+	if raw, err := json.Marshal(out); err != nil || len(raw) > MaxRunOutputBytes {
+		return nil, fmt.Errorf("outputs are larger than %d bytes; pass references such as IDs instead of content", MaxRunOutputBytes)
+	}
+	return forms.Plain(out).(map[string]any), nil
 }
 
 func decode(raw json.RawMessage, v any) error {

@@ -223,6 +223,11 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 		if err == nil {
 			err = s.collectRevisions(ctx, r.ID)
 		}
+		typ := EventFolderUpdated
+		if rev.RevisionNumber == 1 {
+			typ = EventFolderCreated
+		}
+		s.emit(ctx, typ, actor, r.WorkspaceID, r.ContainerID, r.ID, map[string]any{"revision_id": rev.ID, "revision_number": rev.RevisionNumber, "content_type_id": rev.ContentTypeID})
 		return rev, err
 	}
 	typ := EventItemUpdated
@@ -249,16 +254,12 @@ func (s *Service) replaceSurface(ctx context.Context, r *ent.Resource, rev *ent.
 	if err != nil {
 		return err
 	}
-	terms, err := s.termText(ctx, rev.Payload, defs)
-	if err != nil {
-		return err
-	}
 	existing, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(r.ID), itemsurface.SurfaceEQ(surface)).Only(ctx)
 	var projection *ent.ItemSurface
 	if ent.IsNotFound(err) {
-		projection, err = s.Client.ItemSurface.Create().SetItemID(r.ID).SetContainerID(*r.ContainerID).SetWorkspaceID(r.WorkspaceID).SetSurface(surface).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetTermText(terms).SetItemCreatedAt(queryTime(r.CreatedAt)).SetItemCreatedBy(r.CreatedBy).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
+		projection, err = s.Client.ItemSurface.Create().SetItemID(r.ID).SetContainerID(*r.ContainerID).SetWorkspaceID(r.WorkspaceID).SetSurface(surface).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetItemCreatedAt(queryTime(r.CreatedAt)).SetItemCreatedBy(r.CreatedBy).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
 	} else if err == nil {
-		projection, err = s.Client.ItemSurface.UpdateOne(existing).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetTermText(terms).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
+		projection, err = s.Client.ItemSurface.UpdateOne(existing).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
 	}
 	if err != nil {
 		return err

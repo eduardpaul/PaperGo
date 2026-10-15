@@ -2,6 +2,9 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+python3 scripts/native.py
+source .tools/native/env.sh
 task_dir=$(mktemp -d)
 container_id=
 
@@ -22,7 +25,7 @@ docker build --tag papergo:ci-smoke .
 # Check both executables in the final image before database or port setup.
 docker run --rm papergo:ci-smoke --version
 docker run --rm --entrypoint /papergo-admin papergo:ci-smoke --version
-if ! CGO_ENABLED=0 go run ./cmd/admin initialize --database "$task_dir/papergo.db" --schema migrations > "$task_dir/migrations.log" 2>&1; then
+if ! go run ./cmd/admin initialize --database "$task_dir/papergo.db" --schema migrations > "$task_dir/migrations.log" 2>&1; then
   cat "$task_dir/migrations.log" >&2
   exit 1
 fi
@@ -119,3 +122,41 @@ if [[ "$run_status" != completed ]]; then
   exit 1
 fi
 echo 'Docker embedded frontend, readiness, liveness, API authentication, database write and OCR passed.'
+
+# Load and write through zvec in the final runtime image as well. Reuse the
+# initialized main database; the native index itself must be built at startup.
+docker rm --force "$container_id" >/dev/null
+container_id=$(docker create --memory=512m --publish 127.0.0.1::8080 --env APP_ENV=test --env AUTH_MODE=development \
+  --env "DEV_TOKEN=$task_token" --env SEARCH_STORE=zvec papergo:ci-smoke)
+tar --owner=65532 --group=65532 -C "$task_dir" -cf - papergo.db | docker cp --archive - "$container_id:/data"
+docker start "$container_id" >/dev/null
+task_address="http://$(docker port "$container_id" 8080/tcp)"
+task_ready=false
+for (( attempt=0; attempt<30; attempt++ )); do
+  if curl --fail --silent --max-time 2 "$task_address/health/ready" > /dev/null; then task_ready=true; break; fi
+  if [[ "$(docker inspect --format '{{.State.Running}}' "$container_id")" != true ]]; then break; fi
+  sleep 1
+done
+if [[ "$task_ready" != true ]]; then echo 'zvec container did not become ready.' >&2; exit 1; fi
+api "$task_address/v1/search/status" > "$task_dir/zvec-status.json"
+python3 - "$task_dir/zvec-status.json" <<'PY'
+import json, sys
+status = json.load(open(sys.argv[1]))
+assert status['store'] == 'zvec', status
+PY
+native_workspace=$(api --header 'Content-Type: application/json' --data '{"name":"Native search"}' "$task_address/v1/workspaces" | json id)
+native_list=$(api --header 'Content-Type: application/json' --data '{"kind":"list","name":"Native items"}' "$task_address/v1/resources/$native_workspace/children" | json id)
+api --header 'Content-Type: application/json' --data '{"kind":"item","name":"Copper native invoice"}' "$task_address/v1/resources/$native_list/children" > /dev/null
+native_found=false
+for (( attempt=0; attempt<30; attempt++ )); do
+  api "$task_address/v1/search?q=copper" > "$task_dir/zvec-search.json"
+  if python3 - "$task_dir/zvec-search.json" <<'PY'
+import json, sys
+hits = json.load(open(sys.argv[1])).get('value') or []
+sys.exit(0 if any(hit['name'] == 'Copper native invoice' for hit in hits) else 1)
+PY
+  then native_found=true; break; fi
+  sleep 1
+done
+if [[ "$native_found" != true ]]; then cat "$task_dir/zvec-search.json" >&2; exit 1; fi
+echo 'Docker zvec runtime loading, indexing and full-text query passed under a 512 MiB memory limit.'

@@ -35,9 +35,9 @@ func init() {
 			}
 			return outcome{Output: map[string]any{"queued": n}}, err
 		}})
-	registerBuiltIn(&BuiltIn{Key: IntegrationRefreshBuiltIn, Name: "Refresh list integrations", Description: "Every 15 minutes in UTC, refreshes active HTTPS iCalendar integrations using each integration's configuring user's current list permissions.",
+	RegisterBuiltIn(&BuiltIn{Key: IntegrationRefreshBuiltIn, Name: "Refresh list integrations", Description: "Every 15 minutes in UTC, refreshes active HTTPS iCalendar integrations using each integration's configuring user's current list permissions.",
 		ParametersSchema: forms.MustParse(`{"type":"object","properties":{}}`),
-		definition:       `{"triggers":[{"type":"schedule","cron":"*/15 * * * *","time_zone":"UTC"}],"flow":{"start":"refresh","nodes":{"refresh":{"activity":"integration.refresh"}}}}`})
+		Definition:       `{"triggers":[{"type":"schedule","cron":"*/15 * * * *","time_zone":"UTC"}],"flow":{"start":"refresh","nodes":{"refresh":{"activity":"integration.refresh"}}}}`})
 }
 
 // EnsureIntegrationWorkflow activates the workspace schedule once, atomically
@@ -56,7 +56,7 @@ func (s *Service) EnsureIntegrationWorkflow(ctx context.Context, t *dms.Service,
 	if err != nil {
 		return err
 	}
-	def, raw, err := s.check(ctx, t, subject, list.WorkspaceID, raw)
+	def, raw, err := checkDefinition(ctx, t, subject, list.WorkspaceID, raw)
 	if err != nil {
 		return err
 	}

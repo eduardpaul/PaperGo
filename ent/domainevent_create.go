@@ -120,6 +120,20 @@ func (_c *DomainEventCreate) SetNillableDispatchedAt(v *time.Time) *DomainEventC
 	return _c
 }
 
+// SetFanoutCursor sets the "fanout_cursor" field.
+func (_c *DomainEventCreate) SetFanoutCursor(v string) *DomainEventCreate {
+	_c.mutation.SetFanoutCursor(v)
+	return _c
+}
+
+// SetNillableFanoutCursor sets the "fanout_cursor" field if the given value is not nil.
+func (_c *DomainEventCreate) SetNillableFanoutCursor(v *string) *DomainEventCreate {
+	if v != nil {
+		_c.SetFanoutCursor(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *DomainEventCreate) SetID(v string) *DomainEventCreate {
 	_c.mutation.SetID(v)
@@ -280,6 +294,10 @@ func (_c *DomainEventCreate) createSpec() (*DomainEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DispatchedAt(); ok {
 		_spec.SetField(domainevent.FieldDispatchedAt, field.TypeTime, value)
 		_node.DispatchedAt = &value
+	}
+	if value, ok := _c.mutation.FanoutCursor(); ok {
+		_spec.SetField(domainevent.FieldFanoutCursor, field.TypeString, value)
+		_node.FanoutCursor = &value
 	}
 	return _node, _spec
 }

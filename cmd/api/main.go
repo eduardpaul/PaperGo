@@ -8,15 +8,21 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"papergo/internal/ai"
 	"papergo/internal/auth"
 	"papergo/internal/buildinfo"
 	"papergo/internal/config"
 	"papergo/internal/database"
 	"papergo/internal/dms"
+	"papergo/internal/doctext/pdfium"
 	"papergo/internal/httpapi"
 	"papergo/internal/integration"
 	"papergo/internal/ocr/paddle"
+	"papergo/internal/resultcache"
 	"papergo/internal/runner"
+	"papergo/internal/search"
+	"papergo/internal/search/sqlitestore"
+	"papergo/internal/search/zvecstore"
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
@@ -122,13 +128,55 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("configure list integration encryption: %w", err)
 	}
 	service.ConfigureIntegrations(secrets)
+
+	var index interface {
+		search.Store
+		Fresh() bool
+	}
+	if c.SearchStore == "zvec" {
+		index, err = zvecstore.Open(startup, c.ZvecPath, zvecstore.Options{Languages: c.SearchLanguages, KeywordCandidates: c.ZvecKeywordCandidates})
+	} else {
+		index, err = sqlitestore.Open(startup, c.SearchPath, sqlitestore.Options{Languages: c.SearchLanguages})
+	}
+	if err != nil {
+		return fmt.Errorf("open the search store: %w", err)
+	}
+	defer index.Close()
+	service.SetSearch(index)
+	embeddings, err := ai.NewEmbedder(c.Embeddings, nil)
+	if err != nil {
+		return fmt.Errorf("configure embeddings: %w", err)
+	}
+	if embeddings != nil {
+		defer embeddings.Close()
+		service.SetEmbeddings(embeddings)
+		log.Info("semantic search enabled", "provider", c.Embeddings.Provider, "model", c.Embeddings.Model)
+	}
+	if index.Fresh() {
+		// A new or recreated store: rebuild it from the database.
+		err = service.RebuildSearch(startup)
+	} else {
+		err = service.ResumeSearchRebuild(startup)
+	}
+	if err != nil {
+		return fmt.Errorf("start the search index: %w", err)
+	}
 	if err = service.Directory().Initialize(startup, c.AdminSubject, c.AdminGroup); err != nil {
 		return fmt.Errorf("initialize organization directory: %w", err)
 	}
 	if err = service.RegisterPortability(store); err != nil {
 		return err
 	}
-	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload}
+	chat, err := ai.NewChat(c.Chat, nil)
+	if err != nil {
+		return fmt.Errorf("configure the chat model: %w", err)
+	}
+	if chat != nil {
+		log.Info("ai steps enabled", "model", chat.Key())
+	}
+	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload, Search: index, Embeddings: embeddings, Chat: chat, Results: resultcache.New(db.SQL), ResultTTL: c.RunRetention, Languages: c.SearchLanguages}
+	tools.PDF = pdfium.New()
+	log.Info("pdf reading enabled", "reader", tools.PDF.Name())
 	if c.OCRLibrary != "" {
 		engine, e := paddle.New(paddle.Config{Library: c.OCRLibrary, Models: c.OCRModels, Threads: c.OCRThreads})
 		if e != nil {

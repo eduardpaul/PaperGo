@@ -6,7 +6,8 @@ A workflow has:
 
 - **triggers**: what starts a run, such as an item being created, a cron schedule, a manual start, or another workflow's event;
 - an optional **condition**: a query filter the run's item must meet;
-- a **flow**: nodes that each run one **activity**, connected by outcome **ports**.
+- a **flow**: nodes that each run one **activity**, connected by outcome **ports**;
+- optional **outputs**: what a completed run returns, for the workflows that follow it.
 
 Every save that changes the definition creates a new immutable **version**. A run always executes the version it started with.
 
@@ -46,22 +47,28 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | `item.restored` | a deleted item is restored from the recycle bin | the item |
 | `item.purged` | a deleted item is permanently purged | none (`{trigger:resource_id}` names it) |
 | `file.added` | a new file version becomes a library item's current file: a new document, a replacement, a restore, or a workflow's | the item |
-| `permissions.changed` | a collection, folder or item's ACL changes, or workspace membership changes | the item for an item ACL change; otherwise none (`{trigger:resource_id}` names the edited scope) |
+| `folder.created`, `folder.updated` | a folder is created, or renamed, retagged or moved | the folder |
+| `folder.deleted`, `folder.purged` | a folder is deleted (alone or with a parent folder), or permanently purged | none (`{trigger:resource_id}` names it) |
+| `folder.restored` | a deleted folder is restored from the recycle bin | the folder |
+| `permissions.changed` | an item's or folder's effective permissions change: its own or an ancestor's ACL is replaced, it moves into another permission scope, or workspace membership changes. Delivered once **per affected item and folder** (see below) | the item or folder |
 | `schedule` | a cron occurrence: `cron` (5 fields) and `time_zone` (IANA, default UTC) | see below |
 | `manual` | someone starts it through the API | each chosen item, the selection's primary item, or none |
 | `term.merged` | a term is merged into another (see [taxonomy](application-foundation.md#controlled-taxonomy)) | none |
 | `term.changed` | a term's name, localized labels or other editable properties change through PUT `/v1/terms/{id}` | none |
 | `task.created`, `task.completed`, `task.cancelled` | a [task](#tasks) of the workspace is created, completed or cancelled | the task's item, or none |
 | `wf.{key}.{event}` | a run of workflow `key` raises `event`; `completed` and `failed` are raised when a run ends | that run's item |
+| `role.{role}.completed`, `role.{role}.failed` | a run of any workflow filling the [role](#roles) ends, with its `outputs` in `data`; the same data as its `wf.{key}` event | that run's item |
 
 Fields of a trigger:
 
-- `collection_id` limits item and workflow-event triggers to one list or library. On `permissions.changed`, it selects ACL changes to that collection and its folders/items; workspace membership changes reach workspace-wide subscriptions.
+- `collection_id` limits item and workflow-event triggers to one list or library. On `permissions.changed`, it limits deliveries to that collection's items and folders.
 - `content_type_id` (with `collection_id`) limits item triggers to one content type.
 - `terms` (1 to 20 term IDs) limits `item.created`, `item.updated` and `item.published` to revisions whose term and keywords fields hold one of the terms, a descendant of one, or a term merged into one. `term_change` says what counts: `present` (the default, the revision holds it), `added` (held now, not by the item's revision before) or `removed` (held before, not now).
 - `task_key` (on `task.*` triggers) limits them to tasks with that key, such as `legal_review`. With `collection_id`, only tasks about items of that collection start runs.
-- `sources` (on `file.added`) lists the file sources that start runs: `upload`, `webdav`, `restore` and `workflow`. The default is every source except `workflow`, so a workflow that replaces a file does not start itself again.
-- `permissions.changed` takes only `collection_id`; item conditions do not apply because scopes can be collections, folders or workspaces. `term.changed` and `term.merged` take no trigger options or item conditions.
+- `sources` (on `file.added`) lists the file sources that start runs: `upload`, `webdav`, `restore`, `workflow` and `reindex` (a [search reindex with content](search.md#the-store)). The default is `upload`, `webdav` and `restore`, so a workflow that replaces a file does not start itself again.
+- `media_types` (on `file.added`) limits the trigger to files of these media types: exact (`application/pdf`) or a wildcard (`image/*`), up to 20. Other files start no run; a flow can also branch on `{trigger:data.content_type}`.
+- Folder triggers take `collection_id` and `content_type_id`, and no condition: conditions test item fields.
+- `actions` (on `permissions.changed`) lists the changes that start runs: `replace` (an ACL was replaced), `move` (a move gave the entry another permission scope), `member.set` and `member.remove` (workspace membership). The default is all. `permissions.changed` also takes `collection_id`, `content_type_id` and a condition, which folders never meet. `term.changed` and `term.merged` take no trigger options or item conditions.
 - For a schedule:
   - **With `collection_id`:** each occurrence starts one run per item of the collection that meets the condition, up to 500, on `surface` (`head` by default, or `published`).
   - **Without `collection_id`:** one run with no item.
@@ -86,7 +93,8 @@ The `data` for each event type:
 
 - `item.created` / `item.updated`: `revision_id`, `revision_number`, `content_type_id`, `blob_id`
 - `file.added`: `source`, `file_version`, `blob_id`, `content_type` (the file's media type), `size`, `revision_id`, `content_type_id`
-- `permissions.changed`: `resource_kind` and `action`. For `action: "replace"`, `previous` and `current` contain `inherit`, local `grants`, `scope_id` and `effective_grants`. For `action: "member.set"` or `"member.remove"`, data contains `member_subject`, `previous_role` and `role`; an empty role means no membership.
+- `permissions.changed`: `resource_kind` (`item` or `folder`), `action`, `root_id` and `root_kind` (the resource whose ACL changed, that moved, or the workspace), `root_event_id`, and `previous_scope_id` / `current_scope_id` for `replace` and `move` (the permission scope the entry read through before and after). Membership actions add `member_subject`, `previous_role` and `role`; an empty role means no membership.
+- `folder.created` / `folder.updated`: `revision_id`, `revision_number`, `content_type_id` for a new name or tags; `from_parent_id` and `parent_id` for a move
 - `item.published`: `revision_id`, `revision_number`, `publication_id`
 - `item.unpublished`: `revision_id`
 - `schedule`: `workflow_id`, `occurrence`
@@ -94,9 +102,18 @@ The `data` for each event type:
 - `term.merged`: `source_term_id`, `target_term_id`, `term_set_id`
 - `term.changed`: `term_id`, `term_set_id`, `version`, sorted `changed_fields`, and `previous` / `current` term properties (`name`, `parent_id`, `description`, `color`, `sort_order`, `labels`, `synonyms`, `deprecated`, `available_as_keyword`; absent optional fields mean unset). The event has no `resource_id` because the term is organization taxonomy, not a workspace resource.
 - `task.*`: `task_id`, `kind`, `key`, `assignees`, `source`, `item_id`, `run_id`; `task.completed` adds `outcome` and `completed_by`
-- `wf.*`: `run_id` and the raised data; `completed`/`failed` add `status`, `node` and, on failure, `error`
+- `wf.*`: `run_id` and the raised data; `completed`/`failed` add `status`, `node` and, on failure, `error`; `completed` adds the run's [`outputs`](#outputs) when the workflow declares them
 
-Only items raise item events. ACL changes raise one `permissions.changed` for the edited scope, without events for inheriting descendants. Workspace member additions, role changes and removals raise the same event on the workspace root. An unchanged ACL or term update, or a repeated membership assignment, raises no event. Failed writes leave no events. Permission events and term events retain the actor and workflow cause/depth, and commit with the write and audit.
+Only items raise item events; folders raise folder events.
+
+**Permission changes reach every entry they affect.** The write itself commits one root event, so replacing the ACL of a library with 200,000 items stays a small write. The dispatcher then delivers `permissions.changed` to each affected item and folder, 500 per batch, and nothing logged after the root is dispatched before all its deliveries are, so events keep their order. A crash resumes after the last delivery. The affected entries are:
+
+- for an ACL replace or a move: the resource and every entry below it that inherits from it, stopping at entries with their own permissions;
+- for a membership change: every item and folder of the workspace, because grants to workspace roles can appear in any scope.
+
+The entries are those the change reaches when the root is dispatched. An entry that a later change gave its own permissions, or moved, before then gets that later change's delivery instead, which arrives after both. A workflow that reads the entry's current state, such as `search.index`, therefore always sees its final permissions.
+
+A change is expanded only when an enabled workflow of the workspace subscribes to it (its `collection_id` and `actions` match), so permission changes cost nothing when no workflow listens. An unchanged ACL or term update, or a repeated membership assignment, raises no event. Failed writes leave no events. Permission events and term events retain the actor and workflow cause/depth, and commit with the write and audit.
 
 Updating organization terms delivers `term.changed` to every live workspace so its workflow subscriptions can react, including localized-label-only edits. Subscriptions to `term.changed` require `taxonomy.read`. Dispatch skips subscriptions whose workflow version author no longer has that scope; each executing node rechecks it before reading the trigger payload, including after a durable wait. Revocation stops subsequent nodes with an access error. These events describe taxonomy changes without changing item revisions. Term creation, moves, keyword promotion and merges do not raise `term.changed`; merges raise `term.merged` in every live workspace.
 
@@ -109,8 +126,11 @@ Updating organization terms delivers `term.changed` to every live workspace so i
 | `parallel` (default) | runs beside the active run |
 | `skip` | starts nothing |
 | `replace` | cancels the active run and starts |
+| `coalesce` | starts nothing while a run is **queued**; while one is running, queues one run that starts when it ends |
 
-Selection runs compare every member: a start overlaps an active run when they share an item. A start that `skip` drops creates no run. Cancelling a run discards its staged files and cancels the tasks it waits for.
+Selection runs compare every member: a start overlaps an active run when they share an item. A start that `skip` or `coalesce` drops creates no run.
+
+`coalesce` suits workflows that rebuild something from the item as it is when they run, such as an index: a burst of changes costs at most two runs, and the last one sees the final state. Runs of one workflow on one item never overlap, except that a run waiting for a task does not hold its place, so the next run starts at once. Selection workflows cannot coalesce. Cancelling a run discards its staged files and cancels the tasks it waits for.
 
 ## Conditions
 
@@ -173,6 +193,27 @@ Strings in node inputs can read run data:
 
 A string that is exactly one token keeps the value's JSON type: `"total": "{input:total}"` writes a number. Tokens inside longer text become text, and lists are joined with `, `. A missing path is empty. Write `{{` and `}}` for literal braces.
 
+## Outputs
+
+A workflow can declare what a completed run returns, so other workflows can follow it with typed data:
+
+```json
+"output_schema": {"type": "object", "required": ["total"], "properties": {
+  "total": {"type": "integer"}, "reviewer": {"type": "string"}, "kind": {"type": "string", "default": "contract"}}},
+"outputs": {"total": "{step:read.values.total}", "reviewer": "{trigger:actor}"}
+```
+
+- `output_schema` is a [form](#forms). `outputs` maps its properties to values, usually [tokens](#tokens). Every output must be a property of the schema; `outputs` without `output_schema` is refused.
+- Outputs are evaluated when the run **completes**, in its `finish` step, and checked against the schema with its defaults applied. A token that finds nothing leaves its output unset. Outputs that fail the schema fail the run at `finish`, with the failing path, so a broken chain shows where it broke.
+- Outputs are limited to 16 KB. Pass references, such as item or file IDs, rather than content.
+- A completed run's outputs are in its `result.outputs` (`GET /v1/workflow-runs/{id}`) and in its `wf.{key}.completed` event as `data.outputs`. A workflow that follows reads them as `{trigger:data.outputs.total}`.
+- Failed runs have no outputs.
+
+```json
+"triggers": [{"type": "wf.measure.completed"}],
+"flow": {"start": "set", "nodes": {"set": {"activity": "item.update", "inputs": {"values": {"total": "{trigger:data.outputs.total}"}}}}}
+```
+
 ## Activities
 
 `GET /v1/workflow-catalog` lists every activity with its ports, an `input_schema` describing its node inputs and an `output_schema` describing what `{step:node...}` can read. Both are [forms](#forms), so an editor can render a node's settings without knowing the activity. Node inputs may be tokens, so saving checks only that required inputs are present and every input is known; types are checked when the node runs.
@@ -200,8 +241,49 @@ A string that is exactly one token keeps the value's JSON type: `"total": "{inpu
 | `file.discard` | action | discards a staged file of this run; the item keeps its file | `discarded` |
 | `file.compose_pdf` | action | combines the current files of the run's items (JPEG, PNG or WebP photos of one list or library) into one searchable PDF in the run's order, staged for the primary item; see [photos to PDF](#photos-to-pdf). Heavy work. | `staged_file_id`, `item_id`, `others` (the other items, in order), `pages`, `bytes`, `metrics` |
 | `file.optimize_image` | action | analyzes the text of the item's current JPEG, PNG or WebP image with [OCR](ocr.md) and stages a smaller WebP copy whose smallest text keeps `target_height`; ports `candidate`/`skipped`; see [image optimization](#image-optimization). Heavy work. | `staged_file_id` (candidate) or `reason` (skipped), `item_id`, `blob_id`, `file_version`, `metrics` |
+| `ai.complete` | action | asks the [chat model](#ai-steps) to do what `prompt` says with `input` (text) or `text_id` (from `document.read_text` for the item's file, `blob_id` optional), cut at `max_chars` (default 20,000): summarize, extract, clean up. With `output_schema` (a form schema of an object), the answer is a JSON object checked against it, else text. Equal requests reuse the cached answer. Heavy work | `text` or `json`, `cached`, `model` |
+| `document.read_text` | action | reads the text of the item's current file page by page (see [reading text](#reading-text)): `ocr` (`auto`, `always`, `never`), `max_pages` (default 500, at most 2,000), `languages` (OCR codes such as `eng+deu`; default the file's). Ports `done`, `no_text` (the file holds none) and `unsupported` (another format, a protected or broken PDF). Heavy work | `text_id`, `item_id`, `blob_id`, `pages`, `chars`, `language`, `ocr_pages`, `skipped_pages`, `truncated`, `reused`, `reason` (unsupported) |
+| `search.chunk` | action | splits the text of the item's file (`text_id` of `document.read_text`, or `text` given directly, such as a summary) with a `chunker` (`window`, `pages`, `paragraphs`, `headings`, `whole`; `max_chars`, `overlap`, `max_chunks`) into chunks of a `kind` (`content`, `summary`, `extract`), and stages them in the search index under a new `generation`, or one of this run given to add to. See [file content steps](#file-content-steps). Heavy work | `generation`, `chunks`, `truncated`, `item_id`, `blob_id` |
+| `search.enrich` | action | asks the [chat model](#ai-steps) to write context for each chunk of `generation` following `instructions`, such as which contract and clause a passage is; `scope` `chunk` (default) shows the model the chunk, `document` also the beginning of the document (`context_chars`, default 6,000). The context is searched and embedded with the chunk. Answers are cached per chunk text, instructions and context. Heavy work | `generation`, `enriched`, `cached`, `model` |
+| `search.embed` | action | gives the chunks of `generation` their embedding vectors for semantic search, reusing vectors of identical chunk inputs; `mode` `immediate` (default) or `later`. Port `deferred` for `later` or a failing model, which the embedding sweep covers; without a model, `done` with nothing embedded. See [file content steps](#file-content-steps). Heavy work | `generation`, `embedded`, `reused`, `model`, `reason` |
+| `search.publish` | action | makes `generation` the searchable content of the item's file (`blob_id`, default the current one); port `stale` when it is not this run's generation or the item no longer has that file. Heavy work | `published`, `generation`, `item_id`, `blob_id`, `reason` |
+| `search.sync` | action | writes the [search](search.md) documents of an item or folder (`item_id`, default the run's item or the event's `resource_id`) as it is now, or removes them when it is gone; safe to run again | `written`, `removed` |
+| `search.items_with_term` | action | lists, 500 at a time after `after`, the items of the workspace (or of `collection_id`) holding the term of the `term.changed` (name, labels or synonyms) or `term.merged` event that started the run; without `collection_id` it skips collections with their own `search.index` filler | `items`, `next` |
 
 Item actions work on the run's item unless `item_id` is given. They use the same validation, permissions, revisions, audit records and events as API requests.
+
+### Reading text
+
+`document.read_text` reads a file's text with `internal/doctext`:
+
+- **PDFs:** each page's text layer is read with the linked PDFium SDK. With `ocr: auto`, a page without a text layer is rendered at 200 DPI and read by [OCR](ocr.md); `always` OCRs every page; `never` reads text layers only. PaperGo's own searchable PDFs (Photos to PDF) carry their OCR text, so they are not OCRed again.
+- **Images** (JPEG, PNG, WebP, and the first page of a TIFF) are turned upright and read by OCR.
+- **Without OCR** configured, `auto` reads text layers only and counts the pages it could not read in `skipped_pages`; `always` fails.
+- **Language:** the file's language hint (`languages` on upload, `X-OCR-Languages`) when it names one language, else the language detected among the hinted ones or `SEARCH_LANGUAGES`, else none.
+
+The text is kept once per file bytes and reading settings (reader, OCR engine and models, mode, page bound, languages): an identical file, or the same file in a later run, reuses it without reading again (`reused`). Later steps refer to it by `text_id`. `GET /v1/items/{id}/text` returns it ([documents](documents.md)), content packages carry it with the file, and it is deleted when no file with its bytes remains.
+### File content steps
+
+`search.chunk`, `search.embed` and `search.publish` build the file content of [search](search.md#file-content) in steps people can recompose:
+
+- **Chunkers.** `window` (default) cuts each page into windows of about `max_chars` characters (1,200) that end at word boundaries and overlap by `overlap` (150), as PaperDotNet's passages; `pages` makes a chunk per page; `paragraphs` merges paragraphs up to the size; `headings` splits at headings (numbered, `§`, or capitals) and starts each chunk with its heading; `whole` makes the whole text one chunk (up to 20,000 characters). At most `max_chunks` (400) per text.
+- **Generations.** A `search.chunk` node starts a generation named by the run and the node; staging again replaces only that node's chunks, and another `search.chunk` can add to the same generation (`generation: "{step:chunk.generation}"`), such as a `summary` chunk. Nothing is searched until `search.publish`.
+- **Hashes.** Each chunk's input hash covers its kind, text and enrichment, not the file's name, so renaming never makes chunks new.
+- **Embedding.** `search.embed` gives a generation's chunks their vectors for [semantic search](search.md#semantic-and-hybrid-search): chunks whose input already has a vector reuse it (`reused`), the others are embedded (`embedded`). `mode: later`, or a failing model, follows `deferred` instead of failing the run, and the embedding sweep embeds the chunks once published. Without an embedding model it does nothing and follows `done`.
+
+### AI steps
+
+`ai.complete` and `search.enrich` ask a chat model behind any OpenAI-compatible `/v1/chat/completions` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp). They are off until it is configured: `AI_CHAT_PROVIDER=openai`, `AI_CHAT_MODEL`, `AI_CHAT_ENDPOINT` (default OpenAI's) and, if the server needs one, `AI_CHAT_API_KEY_FILE`; without it they fail saying so.
+
+- **Requests** run at temperature 0, time out after two minutes, and are retried on 429 and 5xx, honouring `Retry-After` up to 30 seconds. With an `output_schema` they ask for a JSON answer of that schema; an answer that does not match fails the step.
+- **Cached results.** Answers are cached by the model, endpoint and request (prompt, schema and input; for `search.enrich` the chunk text, instructions and context). A rerun, reindex or identical file reuses an unexpired answer. Each validated answer is saved immediately, so a failed enrichment keeps the answers of its completed chunks for retry. Concurrent misses or a crash between a provider response and saving it can repeat a request. Answers expire after the idle lifetime set by `RUN_RETENTION`. Backups keep them with the database; content packages leave them out.
+- **Samples.** [`samples/workflows`](../samples/workflows/README.md) has two `search.content` fillers for a library: receipts with a model-written summary chunk, and contracts split at headings with context per section.
+
+### Reusable action results
+
+Actions use `Tools.Results` (`internal/resultcache`) for results shared across runs. The main database's `cached_results` table stores a namespace, sharing scope, caller-defined key, opaque JSON payload, creation/use timestamps and expiry. Each namespace owns its keys and payload validation; the store accepts JSON within 1 MiB and has no action-specific columns. `Get` treats expired entries as misses and extends live entries' expiry on access, at most once a day or half their lifetime. `PutIfAbsent` atomically returns the first live payload, replacing expired entries. The retention job collects expired entries independently of run age.
+
+`ai.complete` and `search.enrich` use separate namespaces and the `installation` scope, with `RUN_RETENTION` as their idle lifetime. Their keys include model endpoint identity and request hashes. Cache operations run in the work phase outside domain transactions. Scope controls reuse, grants no permissions and is selected by trusted action code after authorizing its inputs. Workflow configuration and run outputs stay in their existing stores; durable integration state, revision-bound content and search vectors keep their own lifecycles.
 
 ### Staged files
 
@@ -376,6 +458,8 @@ Built-in workflows are processes PaperGo ships, in the same model.
 | --- | --- | --- | --- |
 | `documents.optimize` | Optimize image storage: when an image is added (uploaded, through WebDAV or restored), or on demand, `file.optimize_image` proposes a smaller copy and an `approval` asks the `approvers` to compare it with the current file at full size; approving promotes it as a new file version, rejecting discards it. `concurrency: replace`, so a newer file cancels a waiting review. | per library | `target_height`, `min_confidence`, `percentile`, `max_analysis_dimension`, `minimum_scale`, `quality` (see [image optimization](#image-optimization)), `approvers` (people; none means the workspace's owners) |
 | `documents.photos_to_pdf` | Photos to PDF: started on a selection (`selection: "selection"`, launch screen with image previews and a page order), `file.compose_pdf` combines the photos into one searchable PDF and an `approval` asks the `approvers` to review it (`file.preview`). Approving atomically promotes it as the primary item's new file version, keeping its metadata and history, and sends the other photos to the recycle bin; rejecting discards it. `concurrency: skip`, so a second conversion with any of the same photos is not started while one waits. | per library | `target_height` (default 32), `quality` (default 80), `approvers` (people; none means the workspace's owners) |
+| `search.content` | Index file content: when a PDF or an image is added (also through WebDAV, a restore, a workflow or a content reindex), `document.read_text`, `search.chunk`, `search.embed` and `search.publish` make its text searchable with pages and, with an embedding model, by meaning ([search](search.md#file-content)). `concurrency: coalesce`. A system built-in filling the `search.content` role, on by default; outputs `blob_id`, `text_id`, `pages`, `language`, `generation`, `chunks` | role (workspace, or per list or library) | `ocr`, `max_pages`, `chunker`, `max_chars`, `overlap`, `max_chunks`, `embed` |
+| `search.index` | Index for search: on item and folder changes, `permissions.changed` (`replace`, `move`), `term.changed`, `term.merged` and manual starts, `search.sync` rewrites the entry's [search](search.md) documents; term events reindex every item holding the term. `concurrency: coalesce`. A system built-in filling the `search.index` role, on by default. | role (workspace, or per list or library) | none |
 | `items.expire` | Unpublish expired items: every day, unpublishes the published items whose date `field` is before today | per list or library | `field` (an indexed date field), `cron` (default `0 1 * * *`), `time_zone` (default `UTC`) |
 
 How people use them:
@@ -385,6 +469,17 @@ How people use them:
   - The workflow's definition is the release definition with the parameters filled in. Its runs, versions and history work like any workflow's.
 - **Edit freely:** a built-in's definition cannot be edited in place. `POST .../workflow-builtins/{key}/copy` creates an ordinary workflow from it and turns the built-in off where it was on, so the copy replaces it.
 - **Release updates:** when PaperGo starts, every built-in workflow is brought to the running release, and a changed release definition becomes a new version. A built-in no longer shipped, or whose parameters no longer validate, is turned off.
+
+### Roles
+
+Some processes are **roles**: product processes that one workflow fills, which people can turn off or replace with their own process. The catalog lists them in `roles`, each with the `output_schema` its fillers return.
+
+- **Fillers.** A role's built-in fills it by default. A copy of the built-in fills it too, and so does any workflow created with `"role": "<role>"`. A filler declares outputs compatible with the role's `output_schema` (the same names and types, and every required one), which saving checks. Workflows that follow a role trigger on `role.{role}.completed` (or `failed`), which every filler raises with its outputs, whichever fills the role for the item's collection.
+- **Scopes.** A filler fills its role for the whole workspace or, created with `collection_id`, for one list or library. For an item, a folder or a file of a collection, the collection's own filler runs instead of the workspace's; a collection whose own filler is turned off has the role off. `PUT .../workflow-builtins/{key}` with `collection_id` gives a collection its own copy of a role built-in, on or off.
+- **One per scope.** Turning a filler on, or creating one enabled, turns the other enabled fillers of the role in the same scope off.
+- **Defaults.** Default role built-ins are turned on in every workspace, by the workspace's creator, before its first change is dispatched. A built-in people turned off, copied, replaced or deleted stays as they left it.
+- **What fills a collection's role:** `GET /v1/resources/{id}/workflow-roles` lists each role with the workflow that fills it for the list or library, its `scope` (`collection` or `workspace`) and whether it is `enabled`.
+- **System built-ins** (`system` in the catalog) are product processes. Their runs use a queue of their own, so they never delay people's workflows; their successful runs are kept a day. Their release definitions receive `term.changed` whatever their author's scopes, because they never expose its data.
 
 ## Runs
 
@@ -397,7 +492,7 @@ How people use them:
 | `failed` | a node failed with no `error` port, or `fail` ran |
 | `cancelled` | stopped by a manager |
 
-`GET /v1/workflow-runs/{id}` shows the run's result and its recorded steps: `load`, each node attempt, and `finish`, each with output or error.
+`GET /v1/workflow-runs/{id}` shows the run's result (its status, last node, variables and [outputs](#outputs)) and its recorded steps: `load`, each node attempt, and `finish`, each with output or error.
 
 - **Retry** (`POST .../retry`) runs a failed run again from the failed step as a new run with `retry_of`. Steps before it keep their recorded results, so nothing they wrote is written twice.
 - **Cancel** (`POST .../cancel`) stops a queued or running run.
@@ -405,6 +500,8 @@ How people use them:
 **How runs start.** A change and its events commit together in the domain event log (`domain_events`), so a change that rolls back raises nothing, and the write does no workflow work. A dispatcher in the runner takes logged events in order, matches them to workflows, and queues the runs. The runs and the events' dispatched mark commit together, and each event starts at most one run per workflow, so a crash dispatches events again without duplicates. Queued runs execute on whichever server's workers take them. The dispatcher wakes when a change commits and also checks every second, so it picks up events that other servers or a restart left behind.
 
 A manual start returns run IDs at once. Until its event is dispatched, the run shows as `queued`.
+
+Run lists leave out the runs of system built-ins, which run on every change, unless `workflow_id` selects their workflow.
 
 Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default 30 days). Deleting a workflow stops it from matching triggers; its versions and runs are kept, and running runs finish with their version.
 

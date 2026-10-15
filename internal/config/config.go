@@ -5,7 +5,10 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"papergo/internal/ai"
 	"papergo/internal/identity"
+	"papergo/internal/search"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -16,13 +19,24 @@ type Config struct {
 	Address      string
 	DatabasePath string
 	BlobPath     string
-	AuthMode     string
-	DevToken     string
-	DevSubject   string
-	AdminSubject string
-	Issuer       string
-	Audience     string
-	MaxUpload    int64
+	// SearchPath is the search store's SQLite file (SEARCH_DATABASE_PATH),
+	// by default search.db next to the database.
+	SearchPath string
+	// SearchStore selects sqlite (default) or the optional native zvec store.
+	SearchStore           string
+	ZvecPath              string
+	ZvecKeywordCandidates int
+	// SearchLanguages are the languages whose word stems search indexes
+	// (SEARCH_LANGUAGES, comma-separated Snowball names; default english,
+	// none for no stemming).
+	SearchLanguages []string
+	AuthMode        string
+	DevToken        string
+	DevSubject      string
+	AdminSubject    string
+	Issuer          string
+	Audience        string
+	MaxUpload       int64
 	// MaxInFlight bounds concurrent API requests; excess requests are shed with 503.
 	MaxInFlight int
 	// RequestTimeout cancels API reads that outlive it; mutations and blob transfers are exempt.
@@ -56,13 +70,51 @@ type Config struct {
 	// OCRModels is the directory of the PaddleOCR model files.
 	OCRModels string
 	// OCRThreads is the CPU threads one OCR inference uses.
-	OCRThreads        int
+	OCRThreads int
+	// Embeddings is the embedding model of semantic search
+	// (AI_EMBEDDINGS_*); off by default.
+	Embeddings ai.EmbeddingsConfig
+	// Chat is the chat model of AI workflow steps (AI_CHAT_*); off by
+	// default.
+	Chat              ai.ChatConfig
 	ProxySecret       string
 	ProxyTrustedCIDRs []netip.Prefix
 }
 
 func Load() (Config, error) {
 	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "oidc"), DevToken: os.Getenv("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: os.Getenv("OIDC_ISSUER"), Audience: os.Getenv("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour}
+	c.SearchPath = value("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search.db"))
+	c.SearchStore = value("SEARCH_STORE", "sqlite")
+	if c.SearchStore != "sqlite" && c.SearchStore != "zvec" {
+		return c, fmt.Errorf("SEARCH_STORE must be sqlite or zvec")
+	}
+	c.ZvecPath = value("SEARCH_ZVEC_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search", "zvec"))
+	c.ZvecKeywordCandidates = 10000
+	if raw := os.Getenv("SEARCH_ZVEC_KEYWORD_CANDIDATES"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > 99999 {
+			return c, fmt.Errorf("SEARCH_ZVEC_KEYWORD_CANDIDATES must be between 1 and 99999")
+		}
+		c.ZvecKeywordCandidates = n
+	}
+	if c.SearchStore == "zvec" {
+		if err := distinctZvecPath(c.ZvecPath, c.DatabasePath, c.BlobPath, c.SearchPath); err != nil {
+			return c, err
+		}
+	}
+	if err := distinctSearchPath(c.DatabasePath, c.SearchPath); err != nil {
+		return c, err
+	}
+	if languages := strings.ToLower(strings.TrimSpace(value("SEARCH_LANGUAGES", "english"))); languages != "none" {
+		for _, l := range strings.Split(languages, ",") {
+			if l = strings.TrimSpace(l); l != "" {
+				c.SearchLanguages = append(c.SearchLanguages, l)
+			}
+		}
+	}
+	if _, err := search.NewStemmer(c.SearchLanguages); err != nil {
+		return c, fmt.Errorf("SEARCH_LANGUAGES: %w", err)
+	}
 	c.AdminSubject = os.Getenv("ADMIN_SUBJECT")
 	c.GroupsClaim = os.Getenv("OIDC_GROUPS_CLAIM")
 	c.GroupsPrefix = os.Getenv("OIDC_GROUPS_PREFIX")
@@ -100,6 +152,12 @@ func Load() (Config, error) {
 		c.RunRetention = d
 	}
 	c.OCRLibrary, c.OCRModels, c.OCRThreads = os.Getenv("ONNXRUNTIME_LIB"), value("OCR_MODELS", "models/paddleocr"), 1
+	if err := c.loadEmbeddings(); err != nil {
+		return c, err
+	}
+	if err := c.loadChat(); err != nil {
+		return c, err
+	}
 	if v := os.Getenv("OCR_THREADS"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 32 {
@@ -207,6 +265,80 @@ func Load() (Config, error) {
 	return c, nil
 }
 
+func canonicalPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	var suffix []string
+	for {
+		resolved, err := filepath.EvalSymlinks(abs)
+		if err == nil {
+			for i := len(suffix) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, suffix[i])
+			}
+			return resolved, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		suffix = append(suffix, filepath.Base(abs))
+		abs = filepath.Dir(abs)
+	}
+}
+
+// distinctSearchPath resolves existing symlinks, including parent directories
+// of files not created yet, and detects hard links to the application database.
+func distinctSearchPath(databasePath, searchPath string) error {
+
+	db, err := canonicalPath(databasePath)
+	if err != nil {
+		return err
+	}
+	index, err := canonicalPath(searchPath)
+	if err != nil {
+		return err
+	}
+	for _, suffix := range []string{"", "-wal", "-shm", "-journal", ".lease"} {
+		path := db + suffix
+		if path == index {
+			return fmt.Errorf("SEARCH_DATABASE_PATH must not overlap DATABASE_PATH or its sidecar files")
+		}
+		left, lerr := os.Stat(path)
+		right, rerr := os.Stat(index)
+		if lerr == nil && rerr == nil && os.SameFile(left, right) {
+			return fmt.Errorf("SEARCH_DATABASE_PATH must not overlap DATABASE_PATH or its sidecar files")
+		}
+	}
+	return nil
+}
+
+// Native stores are disposable directories; never allow them to contain, or
+// sit inside, another data store. Resolve aliases before comparing parents.
+func distinctZvecPath(indexPath string, otherPaths ...string) error {
+	index, err := canonicalPath(indexPath)
+	if err != nil {
+		return err
+	}
+	for _, p := range otherPaths {
+		other, err := canonicalPath(p)
+		if err != nil {
+			return err
+		}
+		contains := func(parent, child string) bool {
+			relative, err := filepath.Rel(parent, child)
+			return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator))
+		}
+		if contains(index, other) || contains(other, index) {
+			return fmt.Errorf("SEARCH_ZVEC_PATH must not overlap DATABASE_PATH, BLOB_PATH or SEARCH_DATABASE_PATH")
+		}
+		if err = distinctSearchPath(p, index); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // DefaultClientScopes request an ID token, profile and group claims, and a
 // refresh token so the browser renews access without another redirect.
 const DefaultClientScopes = "openid profile email offline_access"
@@ -248,4 +380,87 @@ func value(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// loadEmbeddings reads AI_EMBEDDINGS_*: the provider (none, local or
+// openai), the model and optional dimensions; for local, the model directory,
+// threads and token limit, with ONNX Runtime from ONNXRUNTIME_LIB and a
+// statically linked tokenizer; for openai, an endpoint and an API key
+// file.
+func (c *Config) loadEmbeddings() error {
+	e := ai.EmbeddingsConfig{Provider: strings.ToLower(value("AI_EMBEDDINGS_PROVIDER", ai.ProviderNone)), Model: os.Getenv("AI_EMBEDDINGS_MODEL")}
+	numbers := []struct {
+		key      string
+		into     *int
+		min, max int
+	}{{"AI_EMBEDDINGS_DIMENSIONS", &e.Dimensions, 1, ai.MaxDimensions}, {"AI_EMBEDDINGS_THREADS", &e.Threads, 1, 32}, {"AI_EMBEDDINGS_MAX_TOKENS", &e.MaxTokens, 2, 32768}}
+	switch e.Provider {
+	case ai.ProviderNone:
+		c.Embeddings = e
+		return nil
+	case ai.ProviderLocal:
+		e.Model = value("AI_EMBEDDINGS_MODEL", "embeddinggemma-2")
+		e.Models = value("AI_EMBEDDINGS_MODELS_PATH", filepath.Join("models", "embedding", e.Model))
+		e.Library = c.OCRLibrary
+		if e.Library == "" {
+			return fmt.Errorf("AI_EMBEDDINGS_PROVIDER=local requires ONNXRUNTIME_LIB")
+		}
+	case ai.ProviderOpenAI:
+		e.Endpoint = value("AI_EMBEDDINGS_ENDPOINT", ai.DefaultEndpoint)
+		numbers = numbers[:1]
+		if path := os.Getenv("AI_EMBEDDINGS_API_KEY_FILE"); path != "" {
+			key, err := readAPIKey(path)
+			if err != nil {
+				return fmt.Errorf("AI_EMBEDDINGS_API_KEY_FILE: %w", err)
+			}
+			e.APIKey = key
+		}
+	default:
+		return fmt.Errorf("AI_EMBEDDINGS_PROVIDER must be none, local or openai")
+	}
+	for _, n := range numbers {
+		if v := os.Getenv(n.key); v != "" {
+			parsed, err := strconv.Atoi(v)
+			if err != nil || parsed < n.min || parsed > n.max {
+				return fmt.Errorf("%s must be between %d and %d", n.key, n.min, n.max)
+			}
+			*n.into = parsed
+		}
+	}
+	if err := e.Validate(); err != nil {
+		return fmt.Errorf("AI_EMBEDDINGS: %w", err)
+	}
+	c.Embeddings = e
+	return nil
+}
+
+// loadChat reads AI_CHAT_*: the provider (none or openai), an
+// OpenAI-compatible endpoint, the model and an API key file.
+func (c *Config) loadChat() error {
+	chat := ai.ChatConfig{Provider: strings.ToLower(value("AI_CHAT_PROVIDER", ai.ProviderNone)), Endpoint: value("AI_CHAT_ENDPOINT", ai.DefaultEndpoint), Model: os.Getenv("AI_CHAT_MODEL")}
+	if path := os.Getenv("AI_CHAT_API_KEY_FILE"); path != "" && chat.Enabled() {
+		key, err := readAPIKey(path)
+		if err != nil {
+			return fmt.Errorf("AI_CHAT_API_KEY_FILE: %w", err)
+		}
+		chat.APIKey = key
+	}
+	if err := chat.Validate(); err != nil {
+		return fmt.Errorf("AI_CHAT: %w", err)
+	}
+	c.Chat = chat
+	return nil
+}
+
+// readAPIKey reads an API key file: one line of at most 4096 bytes.
+func readAPIKey(path string) (string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	key := strings.TrimSpace(string(raw))
+	if key == "" || len(key) > 4096 || strings.ContainsAny(key, "\r\n\x00") {
+		return "", fmt.Errorf("the API key must be one line of at most 4096 bytes")
+	}
+	return key, nil
 }

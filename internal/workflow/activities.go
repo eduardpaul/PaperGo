@@ -134,6 +134,8 @@ type env struct {
 	node        string
 	scope       *scope
 	raise       func(typ string, data map[string]any)
+	// tools are the deployment's file, OCR and PDF tools.
+	tools Tools
 }
 
 const (

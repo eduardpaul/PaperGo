@@ -1,0 +1,36 @@
+name: Native SDKs
+description: Install the pinned cgo SDKs and export build/runtime paths
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - uses: msys2/setup-msys2@v2
+      if: runner.os == 'Windows'
+      with:
+        msystem: MINGW64
+        install: mingw-w64-x86_64-gcc mingw-w64-x86_64-pkgconf mingw-w64-x86_64-ninja
+    - name: Select the Windows GNU compiler
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        echo 'C:/msys64/mingw64/bin' >> "$GITHUB_PATH"
+        echo 'CC=C:/msys64/mingw64/bin/gcc.exe' >> "$GITHUB_ENV"
+        echo 'CXX=C:/msys64/mingw64/bin/g++.exe' >> "$GITHUB_ENV"
+        echo 'CMAKE_GENERATOR=Ninja' >> "$GITHUB_ENV"
+    - uses: dtolnay/rust-toolchain@1.90.0
+      if: runner.os == 'Windows'
+      with:
+        targets: x86_64-pc-windows-gnu
+    - uses: actions/cache@v4
+      with:
+        path: |
+          .tools/native
+          .tools/native-downloads
+        key: native-${{ runner.os }}-${{ runner.arch }}-${{ env.ImageOS }}-${{ hashFiles('scripts/native.py', 'scripts/native.json', 'scripts/native-notices/**') }}
+    - name: Install native SDKs
+      shell: bash
+      run: |
+        python -m pip install cmake==3.31.10
+        python scripts/native.py --github-env

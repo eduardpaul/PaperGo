@@ -230,6 +230,21 @@ export function FieldDialog({
             onChange={(event) => patchOptions({ description: event.target.value || undefined })}
           />
         </Field>
+        <Field id="field-search-weight" label="In search">
+          <Select
+            id="field-search-weight"
+            value={options.search_weight ?? 'normal'}
+            onChange={(event) =>
+              patchOptions({
+                search_weight: event.target.value === 'normal' ? undefined : (event.target.value as FieldOptions['search_weight']),
+              })
+            }
+          >
+            <option value="normal">Searchable</option>
+            <option value="high">Searchable, ranked with names</option>
+            <option value="none">Not searchable (filters only)</option>
+          </Select>
+        </Field>
         {['text', 'note', 'email', 'url'].includes(type) && (
           <Field id="field-length" label="Maximum length">
             <Input

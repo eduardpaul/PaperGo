@@ -179,7 +179,7 @@ func TestIntegrationRefreshIdentityOwnershipAndReconciliation(t *testing.T) {
 		t.Fatal("source field changed locally")
 	}
 	tags := []string{"local"}
-	item, err = s.Update(ctx, "alice", itemID, item.Version, UpdateResource{Tags: &tags})
+	_, err = s.Update(ctx, "alice", itemID, item.Version, UpdateResource{Tags: &tags})
 	if err != nil {
 		t.Fatal(err)
 	}

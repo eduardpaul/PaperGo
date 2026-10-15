@@ -2,7 +2,8 @@
 """Measure a disposable PaperGo server on Linux; never opens the deployment DB.
 
 Requires built current-source API/admin binaries and the embedded frontend.
-CPU percentages use one logical core = 100%; RSS excludes OS file cache.
+CPU percentages use one logical core = 100%; RSS includes resident mappings
+but excludes unmapped kernel file cache.
 The stdlib HTTP client runs on the same host, so throughput is a lower bound
 when client CPU is saturated. This is a closed-loop load test, not an SLO test.
 """
@@ -167,6 +168,7 @@ def main():
     parser.add_argument("--idle-seconds", type=float, default=30)
     parser.add_argument("--concurrency", type=int, nargs="+", default=[1, 8, 32])
     parser.add_argument("--extended", action="store_true", help="also measure 500-row pages and repeated edits")
+    parser.add_argument("--search-store", choices=["sqlite", "zvec"], default="sqlite")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if platform.system() != "Linux":
@@ -175,9 +177,10 @@ def main():
         parser.error("items, durations and concurrency must be positive")
     args.binary, args.admin = args.binary.resolve(), args.admin.resolve()
     # Explicitly clear deployment configuration; the benchmark must be isolated.
-    env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "TMPDIR", "LANG", "TZ", "SYSTEMROOT")}
+    env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "TMPDIR", "LANG", "TZ", "SYSTEMROOT", "LD_LIBRARY_PATH")}
     env.update(APP_ENV="test", AUTH_MODE="development", DEV_TOKEN=TOKEN,
-               DEV_SUBJECT="performance-admin", ADMIN_SUBJECT="performance-admin", NODE_ID="performance")
+               DEV_SUBJECT="performance-admin", ADMIN_SUBJECT="performance-admin", NODE_ID="performance",
+               SEARCH_STORE=args.search_store)
     with tempfile.TemporaryDirectory(prefix="papergo-performance-") as temp:
         directory = Path(temp)
         dbpath = directory / "papergo.db"
@@ -315,7 +318,8 @@ def main():
                     "go_version": subprocess.check_output(["go", "version"], text=True).strip(),
                     "binary_bytes": args.binary.stat().st_size, "initial_items": args.items,
                     "configuration": {"auth_mode": "development", "max_in_flight": 32, "request_timeout": "30s",
-                                      "max_upload_mib": 64, "extended": args.extended},
+                                      "max_upload_mib": 64, "extended": args.extended,
+                                      "search_store": args.search_store},
                     "fixture_storage": fixture,
                     "startup_ready_s": ready_s, "stages": server.results, "final_table_rows": counts,
                     "database_mib": dbpath.stat().st_size / 2**20,

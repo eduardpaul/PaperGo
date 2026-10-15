@@ -15,13 +15,16 @@ func TestDefinitionValidation(t *testing.T) {
 	for name, tc := range map[string]struct{ def, err string }{
 		"valid":                    {ok, ""},
 		"permissions changed":      {strings.Replace(ok, "item.created", "permissions.changed", 1), ""},
-		"permissions content type": {strings.Replace(strings.Replace(ok, "item.created", "permissions.changed", 1), `"collection_id": "c"`, `"collection_id": "c", "content_type_id": "ct"`, 1), "take only collection_id"},
-		"permissions condition":    {`{"triggers":[{"type":"permissions.changed","collection_id":"c"}],"condition":{"field":"x","op":"eq","value":1},"flow":{"start":"a","nodes":{"a":{"activity":"end"}}}}`, "a condition tests items"},
+		"permissions content type": {strings.Replace(strings.Replace(ok, "item.created", "permissions.changed", 1), `"collection_id": "c"`, `"collection_id": "c", "content_type_id": "ct"`, 1), ""},
+		"permissions condition":    {`{"triggers":[{"type":"permissions.changed","collection_id":"c"}],"condition":{"field":"x","op":"eq","value":1},"flow":{"start":"a","nodes":{"a":{"activity":"end"}}}}`, ""},
+		"permissions actions":      {`{"triggers":[{"type":"permissions.changed","actions":["replace","move"]}],"flow":{"start":"a","nodes":{"a":{"activity":"end"}}}}`, ""},
+		"unknown action":           {`{"triggers":[{"type":"permissions.changed","actions":["grant"]}],"flow":{"start":"a","nodes":{"a":{"activity":"end"}}}}`, "distinct values"},
+		"actions on items":         {`{"triggers":[{"type":"item.created","actions":["replace"]}],"flow":{"start":"a","nodes":{"a":{"activity":"end"}}}}`, "belong to permissions.changed"},
 		"term changed":             {`{"triggers":[{"type":"term.changed"}],"flow":{"start":"a","nodes":{"a":{"activity":"end"}}}}`, ""},
 		"term changed options":     {strings.Replace(ok, "item.created", "term.changed", 1), "take no options"},
 		"permissions terms":        {`{"triggers":[{"type":"permissions.changed","terms":["t"]}],"flow":{"start":"a","nodes":{"a":{"activity":"end"}}}}`, "terms belong"},
 		"unknown field":            {strings.Replace(ok, `"flow"`, `"flwo"`, 1), "unknown field"},
-		"no triggers":              {`{"triggers": [], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "1 to 10 triggers"},
+		"no triggers":              {`{"triggers": [], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "1 to 20 triggers"},
 		"unknown trigger":          {strings.Replace(ok, "item.created", "item.renamed", 1), "unknown trigger type"},
 		"workflow event":           {strings.Replace(ok, "item.created", "wf.other-flow.done", 1), ""},
 		"bad cron":                 {`{"triggers": [{"type": "schedule", "cron": "every day"}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "invalid cron"},
@@ -47,7 +50,12 @@ func TestDefinitionValidation(t *testing.T) {
 		"bad selection":            {`{"triggers": [{"type": "manual", "collection_id": "c", "selection": "all"}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "per_item or selection"},
 		"bad duration":             {`{"triggers": [{"type": "manual"}], "flow": {"start": "a", "nodes": {"a": {"activity": "delay", "inputs": {"duration": "soon"}}}}}`, "duration"},
 		"concurrency":              {strings.Replace(ok, `"flow"`, `"concurrency": "replace", "flow"`, 1), ""},
-		"bad concurrency":          {strings.Replace(ok, `"flow"`, `"concurrency": "queue", "flow"`, 1), "parallel, skip or replace"},
+		"bad concurrency":          {strings.Replace(ok, `"flow"`, `"concurrency": "queue", "flow"`, 1), "parallel, skip, replace or coalesce"},
+		"coalesce":                 {strings.Replace(ok, `"flow"`, `"concurrency": "coalesce", "flow"`, 1), ""},
+		"coalesce selection":       {`{"triggers": [{"type": "manual", "collection_id": "c", "selection": "selection"}], "concurrency": "coalesce", "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "one item at a time"},
+		"folder trigger":           {strings.Replace(ok, "item.created", "folder.updated", 1), ""},
+		"folder condition":         {`{"triggers": [{"type": "folder.created", "collection_id": "c"}], "condition": {"field": "x", "op": "eq", "value": 1}, "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "folder triggers take"},
+		"folder cron":              {`{"triggers": [{"type": "folder.created", "cron": "0 1 * * *"}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "cron and time_zone"},
 		"loop":                     {`{"triggers": [{"type": "manual"}], "flow": {"start": "a", "nodes": {"a": {"activity": "forEach", "inputs": {"items": "{run:items}", "as": "member"}, "next": {"body": "b"}}, "b": {"activity": "end"}}}}`, ""},
 		"loop without body":        {`{"triggers": [{"type": "manual"}], "flow": {"start": "a", "nodes": {"a": {"activity": "forEach", "inputs": {"items": [1], "as": "x"}}}}}`, "body port"},
 		"loop variable":            {`{"triggers": [{"type": "manual"}], "flow": {"start": "a", "nodes": {"a": {"activity": "forEach", "inputs": {"items": [1], "as": "Bad Name"}, "next": {"body": "a"}}}}}`, "variable name"},
@@ -55,7 +63,15 @@ func TestDefinitionValidation(t *testing.T) {
 		"file sources":             {`{"triggers": [{"type": "file.added", "collection_id": "c", "sources": ["upload", "workflow"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, ""},
 		"sources on items":         {`{"triggers": [{"type": "item.created", "sources": ["upload"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "belong to file.added"},
 		"unknown source":           {`{"triggers": [{"type": "file.added", "sources": ["email"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "distinct values"},
+		"media types":              {`{"triggers": [{"type": "file.added", "media_types": ["application/pdf", "image/*"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, ""},
+		"media types on items":     {`{"triggers": [{"type": "item.created", "media_types": ["image/*"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "belong to file.added"},
+		"bad media type":           {`{"triggers": [{"type": "file.added", "media_types": ["*/*"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "media_types are"},
+		"repeated media type":      {`{"triggers": [{"type": "file.added", "media_types": ["image/png", "image/png"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "media_types are"},
 		"repeated source":          {`{"triggers": [{"type": "file.added", "sources": ["upload", "upload"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "distinct values"},
+		"outputs":                  {strings.Replace(ok, `"flow"`, `"output_schema": {"type": "object", "properties": {"total": {"type": "integer"}}}, "outputs": {"total": "{step:a.total}"}, "flow"`, 1), ""},
+		"outputs without schema":   {strings.Replace(ok, `"flow"`, `"outputs": {"total": 1}, "flow"`, 1), "need an output_schema"},
+		"unknown output":           {strings.Replace(ok, `"flow"`, `"output_schema": {"type": "object", "properties": {"total": {"type": "integer"}}}, "outputs": {"sum": 1}, "flow"`, 1), "outputs.sum is not a property"},
+		"bad output schema":        {strings.Replace(ok, `"flow"`, `"output_schema": {"type": "string"}, "flow"`, 1), "must describe an object"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			def, err := ParseDefinition(json.RawMessage(tc.def))
@@ -213,5 +229,17 @@ func TestActivityCatalogSchemas(t *testing.T) {
 	}
 	if err := activities["item.create"].Validate(map[string]any{"name": "x"}); err == nil || !strings.Contains(err.Error(), "collection_id") {
 		t.Fatalf("required from schema: %v", err)
+	}
+}
+
+func TestTriggerMediaTypes(t *testing.T) {
+	tr := Trigger{MediaTypes: []string{"application/pdf", "image/*"}}
+	for media, want := range map[string]bool{"application/pdf": true, "image/png": true, "image/tiff": true, "application/zip": false, "imagex/png": false, "": false} {
+		if got := tr.acceptsMediaType(media); got != want {
+			t.Errorf("%q: %v", media, got)
+		}
+	}
+	if !(Trigger{}).acceptsMediaType("application/zip") {
+		t.Error("no media_types accepts every file")
 	}
 }

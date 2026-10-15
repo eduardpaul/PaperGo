@@ -15,12 +15,22 @@ func numberedPage[T any](rows []T, limit int, number func(T) int) Page[T] {
 // APIPage exposes data and an opaque continuation to the HTTP layer, which
 // constructs links from the request URL without coupling services to HTTP.
 func (p Page[T]) APIPage() (map[string]any, string) {
-	return map[string]any{"value": p.Data}, p.NextCursor
+	result := map[string]any{"value": p.Data}
+	if p.SearchCapped {
+		result["search_capped"] = true
+	}
+	return result, p.NextCursor
 }
 func (p QueryResult) APIPage() (map[string]any, string) {
 	result := map[string]any{"value": p.Data}
 	if p.Total != nil {
 		result["total"] = p.Total
+	}
+	if p.TotalCapped {
+		result["total_capped"] = true
+	}
+	if p.SearchCapped {
+		result["search_capped"] = true
 	}
 	return result, p.NextCursor
 }

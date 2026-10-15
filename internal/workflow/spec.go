@@ -31,11 +31,17 @@ const (
 // ItemTriggers are the trigger types raised by item writes.
 var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged, dms.EventFileAdded}
 
+// FolderTriggers are the trigger types raised by folder writes.
+var FolderTriggers = []string{dms.EventFolderCreated, dms.EventFolderUpdated, dms.EventFolderDeleted, dms.EventFolderRestored, dms.EventFolderPurged}
+
 // Limits keep definitions and runs bounded.
 const (
-	MaxTriggers = 10
-	MaxNodes    = 100
-	MaxDepth    = 5
+	// MaxRunOutputBytes bounds a run's outputs: large data travels as
+	// references, such as IDs, never as content.
+	MaxRunOutputBytes = 16 * 1024
+	MaxTriggers       = 20
+	MaxNodes          = 100
+	MaxDepth          = 5
 	// MaxNodeVisits bounds the nodes a run visits outside forEach passes,
 	// and those of each pass; MaxRunVisits bounds them all.
 	MaxNodeVisits  = 1000
@@ -55,10 +61,17 @@ type Definition struct {
 	Variables   map[string]any `json:"variables,omitempty"`
 	// Concurrency decides what a start does while a run of the workflow on
 	// the same item is still active: parallel (the default) starts anyway,
-	// skip starts nothing, replace cancels the active run. Selection runs
-	// compare every member.
+	// skip starts nothing, replace cancels the active run, and coalesce starts
+	// nothing while a run is queued and otherwise queues one run that starts
+	// when the active one ends. Selection runs compare every member.
 	Concurrency string `json:"concurrency,omitempty"`
 	Flow        Flow   `json:"flow"`
+	// OutputSchema is the form of what a completed run returns; Outputs maps
+	// its properties to values, usually tokens. Outputs are evaluated when the
+	// run completes, checked against the schema and carried in
+	// wf.{key}.completed as data.outputs, so other workflows can follow.
+	OutputSchema map[string]any `json:"output_schema,omitempty"`
+	Outputs      map[string]any `json:"outputs,omitempty"`
 }
 
 // Concurrency policies.
@@ -66,6 +79,7 @@ const (
 	ConcurrencyParallel = "parallel"
 	ConcurrencySkip     = "skip"
 	ConcurrencyReplace  = "replace"
+	ConcurrencyCoalesce = "coalesce"
 )
 
 // Trigger starts runs. CollectionID limits item and workflow-event triggers
@@ -93,9 +107,23 @@ type Trigger struct {
 	// (dms.FileSources). The default is every source except workflow, so a
 	// workflow that replaces a file does not start itself again.
 	Sources []string `json:"sources,omitempty"`
+	// MediaTypes, on file.added triggers, limits them to files of these
+	// media types: exact (application/pdf) or a wildcard (image/*).
+	MediaTypes []string `json:"media_types,omitempty"`
 	// TaskKey, on task.created, task.completed and task.cancelled triggers,
 	// limits them to tasks with this key.
 	TaskKey string `json:"task_key,omitempty"`
+	// Actions, on permissions.changed triggers, limits them to these changes
+	// (PermissionActions); the default is all.
+	Actions []string `json:"actions,omitempty"`
+}
+
+// PermissionActions are the changes a permissions.changed event reports.
+var PermissionActions = []string{"replace", "move", "member.set", "member.remove"}
+
+// acceptsAction reports whether a permissions.changed trigger accepts action.
+func (t Trigger) acceptsAction(action string) bool {
+	return len(t.Actions) == 0 || slices.Contains(t.Actions, action)
 }
 
 // sources returns the file sources a file.added trigger accepts.
@@ -105,6 +133,23 @@ func (t Trigger) sources() []string {
 	}
 	return []string{dms.FileUpload, dms.FileWebDAV, dms.FileRestore}
 }
+
+// acceptsMediaType reports whether a file.added trigger accepts a file's
+// media type.
+func (t Trigger) acceptsMediaType(media string) bool {
+	if len(t.MediaTypes) == 0 {
+		return true
+	}
+	for _, m := range t.MediaTypes {
+		if m == media || strings.HasSuffix(m, "/*") && strings.HasPrefix(media, strings.TrimSuffix(m, "*")) {
+			return true
+		}
+	}
+	return false
+}
+
+// mediaTypePattern is a media type or a type/* wildcard.
+var mediaTypePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/([a-z0-9][a-z0-9!#$&^_.+-]{0,62}|\*)$`)
 
 // Term changes a trigger's terms filter reacts to.
 const (
@@ -158,6 +203,13 @@ var (
 
 // WorkflowEvent is the event type a run of workflow key raises.
 func WorkflowEvent(key, event string) string { return "wf." + key + "." + event }
+
+// RoleEvent is the event type a run of a workflow filling role raises when
+// it ends: completed or failed.
+func RoleEvent(role, event string) string { return "role." + role + "." + event }
+
+// roleEventPattern matches role.{role}.completed and role.{role}.failed.
+var roleEventPattern = regexp.MustCompile(`^role\.([a-z0-9][a-z0-9._-]*)\.(completed|failed)$`)
 
 func isItemTrigger(t string) bool {
 	for _, v := range ItemTriggers {
@@ -249,6 +301,30 @@ func (d Definition) validate() error {
 				seen[s] = true
 			}
 		}
+		if len(t.MediaTypes) > 0 {
+			if t.Type != dms.EventFileAdded {
+				return dms.Invalid(at + "media_types belong to file.added triggers")
+			}
+			seen := map[string]bool{}
+			for _, m := range t.MediaTypes {
+				if len(t.MediaTypes) > 20 || !mediaTypePattern.MatchString(m) || seen[m] {
+					return dms.Invalid(at + "media_types are up to 20 distinct lower-case media types, such as application/pdf, or wildcards such as image/*")
+				}
+				seen[m] = true
+			}
+		}
+		if len(t.Actions) > 0 {
+			if t.Type != dms.EventPermissionsChanged {
+				return dms.Invalid(at + "actions belong to permissions.changed triggers")
+			}
+			seen := map[string]bool{}
+			for _, a := range t.Actions {
+				if !slices.Contains(PermissionActions, a) || seen[a] {
+					return dms.Invalid(at + "actions are distinct values of " + strings.Join(PermissionActions, ", "))
+				}
+				seen[a] = true
+			}
+		}
 		if t.TaskKey != "" && (!slices.Contains(tasks.Events, t.Type) || !tasks.ValidKey(t.TaskKey)) {
 			return dms.Invalid(at + "task_key is a task key, on task.created, task.completed and task.cancelled triggers")
 		}
@@ -259,6 +335,13 @@ func (d Definition) validate() error {
 			}
 			if (t.Type == dms.EventItemDeleted || t.Type == dms.EventItemPurged) && d.Condition != nil {
 				return dms.Invalid(at + "a condition cannot test deleted items")
+			}
+		case slices.Contains(FolderTriggers, t.Type):
+			if t.Cron != "" || t.TimeZone != "" {
+				return dms.Invalid(at + "cron and time_zone belong to schedule triggers")
+			}
+			if d.Condition != nil {
+				return dms.Invalid(at + "a condition tests items; folder triggers take collection_id and content_type_id")
 			}
 		case t.Type == TriggerSchedule:
 			if t.ContentTypeID != "" {
@@ -280,17 +363,21 @@ func (d Definition) validate() error {
 				return dms.Invalid(at + "a condition tests items; filter task triggers with task_key")
 			}
 		case t.Type == dms.EventPermissionsChanged:
-			if t.ContentTypeID != "" || t.Cron != "" || t.TimeZone != "" {
-				return dms.Invalid(at + "permissions.changed triggers take only collection_id")
-			}
-			if d.Condition != nil {
-				return dms.Invalid(at + "a condition tests items; permissions.changed also covers collections, folders and workspaces")
+			if t.Cron != "" || t.TimeZone != "" {
+				return dms.Invalid(at + "cron and time_zone belong to schedule triggers")
 			}
 		case t.Type == dms.EventTermMerged || t.Type == dms.EventTermChanged:
 			if t.CollectionID != "" || t.ContentTypeID != "" || t.Cron != "" || t.TimeZone != "" {
 				return dms.Invalid(at + t.Type + " triggers take no options")
 			}
 		case eventPattern.MatchString(t.Type):
+			if t.Cron != "" || t.TimeZone != "" {
+				return dms.Invalid(at + "cron and time_zone belong to schedule triggers")
+			}
+		case roleEventPattern.MatchString(t.Type):
+			if roles[roleEventPattern.FindStringSubmatch(t.Type)[1]] == nil {
+				return dms.Invalid(at + "unknown role in " + t.Type)
+			}
 			if t.Cron != "" || t.TimeZone != "" {
 				return dms.Invalid(at + "cron and time_zone belong to schedule triggers")
 			}
@@ -320,15 +407,44 @@ func (d Definition) validate() error {
 	}
 	switch d.Concurrency {
 	case "", ConcurrencyParallel, ConcurrencySkip, ConcurrencyReplace:
+	case ConcurrencyCoalesce:
+		if d.selection() {
+			return dms.Invalid("coalesce runs one item at a time; selection runs share several")
+		}
 	default:
-		return dms.Invalid("concurrency is parallel, skip or replace")
+		return dms.Invalid("concurrency is parallel, skip, replace or coalesce")
 	}
 	for name := range d.Variables {
 		if !forms.NamePattern.MatchString(name) {
 			return dms.Invalid("invalid variable name " + name)
 		}
 	}
+	if err := d.validateOutputs(); err != nil {
+		return err
+	}
 	return d.Flow.validate()
+}
+
+// validateOutputs checks the output form and that every output names one of
+// its properties. Values are usually tokens, so their types are checked when a
+// run completes.
+func (d Definition) validateOutputs() error {
+	if d.OutputSchema == nil {
+		if d.Outputs != nil {
+			return dms.Invalid("outputs need an output_schema")
+		}
+		return nil
+	}
+	if err := forms.Validate(d.OutputSchema, "output_schema"); err != nil {
+		return dms.Invalid(err.Error())
+	}
+	props, _ := d.OutputSchema["properties"].(map[string]any)
+	for name := range d.Outputs {
+		if _, ok := props[name]; !ok {
+			return dms.Invalid("outputs." + name + " is not a property of output_schema")
+		}
+	}
+	return nil
 }
 
 func (f Flow) validate() error {

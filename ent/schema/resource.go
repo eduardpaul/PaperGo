@@ -90,6 +90,9 @@ func (Resource) Indexes() []ent.Index {
 		// Lists one kind of child (the folders of a large library) without scanning the rest.
 		index.Fields("parent_id", "kind", "id", "scope_id"),
 		index.Fields("container_id", "id"),
+		// Lists the entries of one permission scope, for search trimming and
+		// for delivering permission changes to the entries they affect.
+		index.Fields("scope_id", "id"),
 		index.Fields("container_id", "content_type_id", "id"),
 		// Lets auto-surface queries list a collection's few ACL scopes by loose index scan.
 		index.Fields("container_id", "scope_id"),

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source .tools/native/env.sh
 
 printf 'Checking non-root execution, cache permissions and development tools...\n'
 [[ $(id -u) != 0 ]]
