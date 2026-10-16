@@ -240,6 +240,22 @@ def wait_for_proxy(settings, credentials, certificate=None, timeout=60):
     raise RuntimeError(f"NPM did not become ready on verified HTTPS: {reason}. Setup is incomplete; inspect the proxy host and certificate in NPM.")
 
 
+def verify_search_store(settings, credentials):
+    context = ssl.create_default_context(cafile=str(GENERATED / "ca.crt") if settings["tls"] == "local" else None)
+    connection = http.client.HTTPSConnection(settings["host"], settings["https_port"], timeout=15, context=context)
+    try:
+        if settings["tls"] == "local":
+            connection.sock = context.wrap_socket(socket.create_connection(("127.0.0.1", settings["https_port"]), 15), server_hostname=settings["host"])
+        login = credentials["papergo_user"] + ":" + credentials["papergo_password"]
+        connection.request("GET", "/v1/search/status", headers={"Authorization": "Basic " + base64.b64encode(login.encode()).decode()})
+        response = connection.getresponse()
+        status = json.loads(response.read()) if response.status == 200 else {}
+        if status.get("store") != "zvec":
+            raise RuntimeError("PaperGo must report the zvec search store. Check SEARCH_STORE and /data/search/zvec permissions, then rerun setup.")
+    finally:
+        connection.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", help="Public PaperGo hostname (required for first setup)")
@@ -343,6 +359,7 @@ def main():
     if result.get("meta", {}).get("nginx_online") is False:
         raise RuntimeError("NPM rejected the generated proxy configuration; inspect the NPM management UI")
     wait_for_proxy(settings, credentials, cert)
+    verify_search_store(settings, credentials)
     private_write(GENERATED / "ready", public_url + "\n")
     print(f"PaperGo configured at {public_url}/v1/identity/me")
     print(f"NPM management UI: http://127.0.0.1:{args.admin_port}")

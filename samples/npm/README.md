@@ -4,6 +4,8 @@ This stack uses **NPM Access List usernames and passwords** to authenticate both
 
 Requirements: Docker with Compose v2, Python 3, and OpenSSL for the local certificate option. PaperGo needs outbound DNS and HTTPS (TCP 443) for public iCalendar subscriptions and configured AI providers. The backend bridge permits egress; PaperGo publishes no host ports and trusts only NPM’s fixed address for proxy authentication. Setup and verification check verified HTTPS connectivity to `calendar.google.com` from the PaperGo container. Run each deployment from its own repository checkout. The setup script stores deployment-specific state under `generated/` and refuses conflicting settings for an existing stack.
 
+Search uses the native `zvec` store at `/data/search/zvec`, owned by UID 65532 with private directory permissions on the persistent data volume. Setup requires `/v1/search/status` to report `zvec`; verification also creates an item and waits for a successful indexed keyword search. Semantic and hybrid queries require a configured embedding provider and its model, as described in [search configuration](../../docs/search.md#semantic-and-hybrid-search).
+
 ## Run locally
 
 From this directory:

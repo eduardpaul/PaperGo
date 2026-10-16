@@ -16,6 +16,9 @@ services:
       - -eu
       - -c
       - >-
+        mkdir -p /data/search/zvec;
+        chown 65532:65532 /data/search /data/search/zvec;
+        chmod 0700 /data/search /data/search/zvec;
         cp /run/secrets/proxy-secret /data/.proxy-secret;
         chmod 0400 /data/.proxy-secret;
         chown 65532:65532 /data /data/.proxy-secret;
@@ -53,6 +56,9 @@ services:
       HTTP_ADDR: 0.0.0.0:8080
       DATABASE_PATH: /data/papergo.db
       BLOB_PATH: /data/blobs
+      SEARCH_STORE: zvec
+      SEARCH_ZVEC_PATH: /data/search/zvec
+      SEARCH_ZVEC_KEYWORD_CANDIDATES: "10000"
       MAX_UPLOAD_BYTES: "67108864"
       MAX_IN_FLIGHT: "32"
       REQUEST_TIMEOUT: 30s

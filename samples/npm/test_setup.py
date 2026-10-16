@@ -65,6 +65,22 @@ class EgressTests(unittest.TestCase):
                 setup.verify_egress()
 
 
+class SearchStoreTests(unittest.TestCase):
+    def test_requires_active_zvec_store_on_verified_connection(self):
+        for store in ['zvec', 'sqlite']:
+            connection = Mock()
+            connection.getresponse.return_value.status = 200
+            connection.getresponse.return_value.read.return_value = json.dumps({'store': store}).encode()
+            with patch.object(setup.ssl, 'create_default_context'), patch.object(setup.http.client, 'HTTPSConnection', return_value=connection):
+                if store == 'zvec':
+                    setup.verify_search_store({'host': 'docs.example', 'https_port': 443, 'tls': 'letsencrypt'}, {'papergo_user': 'admin', 'papergo_password': 'private'})
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'zvec search store'):
+                        setup.verify_search_store({'host': 'docs.example', 'https_port': 443, 'tls': 'letsencrypt'}, {'papergo_user': 'admin', 'papergo_password': 'private'})
+            connection.close.assert_called_once()
+            self.assertEqual(connection.request.call_args.args, ('GET', '/v1/search/status'))
+
+
 class AuthenticationTests(unittest.TestCase):
     def test_new_instance_creates_first_admin_before_login(self):
         api = Mock()

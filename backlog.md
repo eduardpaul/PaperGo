@@ -80,7 +80,7 @@ Phase 3 is complete. Final validation: full Go suite (988 test cases passed, 15 
 Scope: ISSUE-21, ISSUE-22, ISSUE-20 and ISSUE-19. ISSUE-23 and FEAT-01 are deferred and excluded from this phase.
 
 - [x] **ISSUE-21** — Backend Docker bridge allows outbound DNS/HTTPS while PaperGo ports remain unpublished. Setup and verification check calendar.google.com from the actual container with TLS verification and actionable errors. Validation: 20 NPM Python tests, admin CLI tests, Compose configuration checks and live distroless-container DNS/HTTPS smoke test.
-- [ ] **ISSUE-22** — Enable native zvec search in the NPM sample with storage and runtime verification.
+- [x] **ISSUE-22** — NPM selects native zvec with a private persistent search directory owned by UID 65532. Setup requires live zvec status; verification also waits for a newly created item to appear in keyword search. Validation: 21 NPM Python tests, full Docker image build, fresh-volume permissions/schema startup, live zvec status and native keyword-index smoke test.
 - [ ] **ISSUE-20** — Admin-managed integration identities and scoped REST access tokens.
 - [ ] **ISSUE-19** — Asynchronous bounded WebP previews with authorized lightweight viewing.
 
