@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run packaged native executables against a fresh disposable database."""
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -70,7 +71,7 @@ def exercise(binary, admin, directory, expected_version):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=10)
-    with sqlite3.connect(directory / "papergo.db") as db:
+    with closing(sqlite3.connect(directory / "papergo.db")) as db:
         assert db.execute("SELECT hash FROM atlas_schema_revisions").fetchone()[0] == expected_version
         assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert not db.execute("PRAGMA foreign_key_check").fetchall()
