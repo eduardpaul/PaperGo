@@ -120,6 +120,9 @@ func (_u *IdentityRESTTokenUpdate) sqlSave(ctx context.Context) (_node int, err 
 			}
 		}
 	}
+	if _u.mutation.ExpiresAtCleared() {
+		_spec.ClearField(identityresttoken.FieldExpiresAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.LastUsedAt(); ok {
 		_spec.SetField(identityresttoken.FieldLastUsedAt, field.TypeTime, value)
 	}
@@ -273,6 +276,9 @@ func (_u *IdentityRESTTokenUpdateOne) sqlSave(ctx context.Context) (_node *Ident
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.ExpiresAtCleared() {
+		_spec.ClearField(identityresttoken.FieldExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.LastUsedAt(); ok {
 		_spec.SetField(identityresttoken.FieldLastUsedAt, field.TypeTime, value)

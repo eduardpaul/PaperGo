@@ -745,10 +745,10 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		var ident auth.Identity
 		var err error
 		parts := strings.Fields(r.Header.Get("Authorization"))
-		if a.Auth.Kind() != auth.TrustedProxy && len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.RESTTokenPrefix) {
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && strings.HasPrefix(parts[1], identity.RESTTokenPrefix) {
 			token, e := a.DMS.Directory().AuthenticateRESTToken(r.Context(), parts[1])
-			if e != nil {
-				err = e
+			if e != nil || (a.Auth.Kind() == auth.TrustedProxy && !token.Integration) {
+				err = auth.ErrUnauthenticated
 			} else {
 				ident = auth.Identity{Subject: token.Subject}
 				r = r.WithContext(identity.WithRESTToken(r.Context(), token))
@@ -764,7 +764,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			a.problem(w, r, 401, "unauthorized", "valid authentication is required")
 			return
 		}
-		if a.Auth.Kind() == auth.TrustedProxy {
+		if _, token := identity.RESTTokenContext(r.Context()); !token && a.Auth.Kind() == auth.TrustedProxy {
 			if err = a.DMS.Directory().EnsureUser(r.Context(), ident.Subject); err != nil {
 				a.failure(w, r, err)
 				return

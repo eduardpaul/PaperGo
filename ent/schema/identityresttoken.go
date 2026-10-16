@@ -17,7 +17,9 @@ func (IdentityRESTToken) Fields() []ent.Field {
 		field.String("prefix").NotEmpty().Immutable(),
 		field.String("secret_hash").NotEmpty().Sensitive().Immutable(),
 		field.JSON("scopes", []string{}).Immutable(),
-		field.Time("expires_at").Immutable(),
+		field.Bool("integration").Default(false).Immutable(),
+		field.String("created_by").Default("").Immutable(),
+		field.Time("expires_at").Optional().Nillable().Immutable(),
 		field.Time("last_used_at").Optional().Nillable(),
 		field.Time("revoked_at").Optional().Nillable(),
 	}

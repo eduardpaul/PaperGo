@@ -89,6 +89,11 @@ func Active(v bool) predicate.IdentityUser {
 	return predicate.IdentityUser(sql.FieldEQ(FieldActive, v))
 }
 
+// Service applies equality check predicate on the "service" field. It's identical to ServiceEQ.
+func Service(v bool) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldEQ(FieldService, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.IdentityUser {
 	return predicate.IdentityUser(sql.FieldEQ(FieldCreatedAt, v))
@@ -347,6 +352,16 @@ func ActiveEQ(v bool) predicate.IdentityUser {
 // ActiveNEQ applies the NEQ predicate on the "active" field.
 func ActiveNEQ(v bool) predicate.IdentityUser {
 	return predicate.IdentityUser(sql.FieldNEQ(FieldActive, v))
+}
+
+// ServiceEQ applies the EQ predicate on the "service" field.
+func ServiceEQ(v bool) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldEQ(FieldService, v))
+}
+
+// ServiceNEQ applies the NEQ predicate on the "service" field.
+func ServiceNEQ(v bool) predicate.IdentityUser {
+	return predicate.IdentityUser(sql.FieldNEQ(FieldService, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

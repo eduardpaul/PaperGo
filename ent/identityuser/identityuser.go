@@ -23,6 +23,8 @@ const (
 	FieldDeletedAt = "deleted_at"
 	// FieldActive holds the string denoting the active field in the database.
 	FieldActive = "active"
+	// FieldService holds the string denoting the service field in the database.
+	FieldService = "service"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the identityuser in the database.
@@ -37,6 +39,7 @@ var Columns = []string{
 	FieldSyncHash,
 	FieldDeletedAt,
 	FieldActive,
+	FieldService,
 	FieldCreatedAt,
 }
 
@@ -59,6 +62,8 @@ var (
 	DefaultSyncHash string
 	// DefaultActive holds the default value on creation for the "active" field.
 	DefaultActive bool
+	// DefaultService holds the default value on creation for the "service" field.
+	DefaultService bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -96,6 +101,11 @@ func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByActive orders the results by the active field.
 func ByActive(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActive, opts...).ToFunc()
+}
+
+// ByService orders the results by the service field.
+func ByService(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldService, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

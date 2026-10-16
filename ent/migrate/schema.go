@@ -725,7 +725,9 @@ var (
 		{Name: "prefix", Type: field.TypeString},
 		{Name: "secret_hash", Type: field.TypeString},
 		{Name: "scopes", Type: field.TypeJSON},
-		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "integration", Type: field.TypeBool, Default: false},
+		{Name: "created_by", Type: field.TypeString, Default: ""},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
 		{Name: "last_used_at", Type: field.TypeTime, Nullable: true},
 		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
 		{Name: "subject", Type: field.TypeString, Size: 255},
@@ -738,7 +740,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "identity_rest_tokens_identity_users_user",
-				Columns:    []*schema.Column{IdentityRestTokensColumns[9]},
+				Columns:    []*schema.Column{IdentityRestTokensColumns[11]},
 				RefColumns: []*schema.Column{IdentityUsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -752,7 +754,7 @@ var (
 			{
 				Name:    "identityresttoken_subject_id",
 				Unique:  false,
-				Columns: []*schema.Column{IdentityRestTokensColumns[9], IdentityRestTokensColumns[0]},
+				Columns: []*schema.Column{IdentityRestTokensColumns[11], IdentityRestTokensColumns[0]},
 			},
 		},
 	}
@@ -787,6 +789,7 @@ var (
 		{Name: "sync_hash", Type: field.TypeString, Default: ""},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "active", Type: field.TypeBool, Default: true},
+		{Name: "service", Type: field.TypeBool, Default: false},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// IdentityUsersTable holds the schema information for the "identity_users" table.

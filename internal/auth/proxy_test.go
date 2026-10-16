@@ -42,7 +42,7 @@ func TestProxyRequiresPeerSecretAndUnambiguousIdentity(t *testing.T) {
 			return ""
 		}, false},
 		{"forwarded bearer", func(_ *testing.T, h map[string][]string) string {
-			h["Authorization"] = []string{"Bearer pg_rest_attempt"}
+			h["Authorization"] = []string{"Bearer pgo_attempt"}
 			return ""
 		}, false},
 		{"forwarded basic", func(_ *testing.T, h map[string][]string) string {

@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 )
@@ -70,6 +71,8 @@ func ScopeSQL(ctx context.Context, subject, scope string) (string, []any) {
 	return query, append(args, scope)
 }
 
+func scopeJSON(scopes []string) string { raw, _ := json.Marshal(scopes); return string(raw) }
+
 // ScopeExpressionSQL accepts only a trusted SQL expression built by the caller.
 func ScopeExpressionSQL(ctx context.Context, subject, expression string) (string, []any) {
 	principal, args := PrincipalSQL("a", subject)
@@ -85,7 +88,19 @@ func ScopeExpressionSQL(ctx context.Context, subject, expression string) (string
 		}
 		restriction = " AND sc.value IN (" + strings.Join(marks, ",") + ")"
 	}
-	return `(EXISTS (SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + restriction + ` AND sc.value=` + expression + `))`, append([]any{subject}, args...)
+	roles := `(EXISTS (SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + restriction + ` AND sc.value=` + expression + `))`
+	args = append([]any{subject}, args...)
+	// A queued operation retains the credential ID and cap, so it can use the
+	// same live integration grant without storing its secret or trusting flags.
+	if token, limited := RESTTokenContext(ctx); limited {
+		// The scope expression may contain placeholders; callers append those
+		// after our arguments. Keep it in one outer comparison.
+		roles = `(EXISTS (SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND EXISTS (SELECT 1 FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE ` + principal + restriction + ` AND sc.value=scope.value))`
+		integration := `EXISTS(SELECT 1 FROM identity_rest_tokens t JOIN identity_users u ON u.id=t.subject JOIN json_each(t.scopes) sc WHERE t.id=? AND t.subject=? AND t.integration=1 AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR datetime(t.expires_at)>CURRENT_TIMESTAMP) AND u.active=1 AND u.deleted_at IS NULL AND sc.value=scope.value)`
+		args = append(args, token.ID, subject)
+		return `(EXISTS(SELECT 1 FROM json_each(?) scope WHERE (` + roles + ` OR ` + integration + `) AND scope.value=` + expression + `))`, append([]any{scopeJSON(token.Scopes)}, args...)
+	}
+	return roles, args
 }
 
 func RequireScope(ctx context.Context, q Querier, subject, scope string) error {
@@ -105,7 +120,13 @@ func RequireScope(ctx context.Context, q Querier, subject, scope string) error {
 
 func EffectiveScopes(ctx context.Context, q Querier, subject string) ([]string, error) {
 	filter, args := PrincipalSQL("a", subject)
-	rows, err := q.QueryContext(ctx, `SELECT DISTINCT sc.value FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE EXISTS(SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND `+filter+` ORDER BY sc.value`, append([]any{subject}, args...)...)
+	query := `SELECT DISTINCT sc.value FROM identity_assignments a JOIN identity_roles r ON r.id=a.role_id JOIN json_each(r.scopes) sc WHERE EXISTS(SELECT 1 FROM identity_users u WHERE u.id=? AND u.active=1) AND ` + filter + ` ORDER BY sc.value`
+	args = append([]any{subject}, args...)
+	if token, limited := RESTTokenContext(ctx); limited {
+		query = strings.TrimSuffix(query, " ORDER BY sc.value") + ` UNION SELECT sc.value FROM identity_rest_tokens t JOIN identity_users u ON u.id=t.subject JOIN json_each(t.scopes) sc WHERE t.id=? AND t.subject=? AND t.integration=1 AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR datetime(t.expires_at)>CURRENT_TIMESTAMP) AND u.active=1 AND u.deleted_at IS NULL ORDER BY 1`
+		args = append(args, token.ID, subject)
+	}
+	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

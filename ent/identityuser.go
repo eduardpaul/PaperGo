@@ -27,6 +27,8 @@ type IdentityUser struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// Active holds the value of the "active" field.
 	Active bool `json:"active,omitempty"`
+	// Service holds the value of the "service" field.
+	Service bool `json:"service,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 	selectValues sql.SelectValues
@@ -37,7 +39,7 @@ func (*IdentityUser) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case identityuser.FieldActive:
+		case identityuser.FieldActive, identityuser.FieldService:
 			values[i] = new(sql.NullBool)
 		case identityuser.FieldID, identityuser.FieldDisplayName, identityuser.FieldEmail, identityuser.FieldSyncHash:
 			values[i] = new(sql.NullString)
@@ -94,6 +96,12 @@ func (_m *IdentityUser) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field active", values[i])
 			} else if value.Valid {
 				_m.Active = value.Bool
+			}
+		case identityuser.FieldService:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field service", values[i])
+			} else if value.Valid {
+				_m.Service = value.Bool
 			}
 		case identityuser.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -153,6 +161,9 @@ func (_m *IdentityUser) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("active=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Active))
+	builder.WriteString(", ")
+	builder.WriteString("service=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Service))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

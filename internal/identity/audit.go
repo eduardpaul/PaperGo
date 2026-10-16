@@ -34,7 +34,7 @@ func identityAuditState(ctx context.Context, tx *sql.Tx, typ, id string) (map[st
 		"group":        "SELECT name,description,(SELECT group_concat(principal_type||':'||principal_id) FROM (SELECT principal_type,principal_id FROM identity_memberships WHERE group_id=identity_groups.id ORDER BY principal_type,principal_id)) AS members FROM identity_groups WHERE id=?",
 		"role":         "SELECT name,description,scopes,(SELECT group_concat(principal_type||':'||principal_id) FROM (SELECT principal_type,principal_id FROM identity_assignments WHERE role_id=identity_roles.id ORDER BY principal_type,principal_id)) AS assignments FROM identity_roles WHERE id=?",
 		"organization": "SELECT identifier,display_name,description FROM identity_organizations WHERE id=?",
-		"rest_token":   "SELECT name,scopes,expires_at,revoked_at FROM identity_rest_tokens WHERE id=?",
+		"rest_token":   "SELECT name,scopes,expires_at,revoked_at,subject,integration,created_by FROM identity_rest_tokens WHERE id=?",
 	}
 	query := queries[typ]
 	if query == "" {

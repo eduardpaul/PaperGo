@@ -26,6 +26,7 @@ import { Route as AppAdminMaintenanceRouteImport } from './routes/_app/admin/mai
 import { Route as AppAdminRelationshipTypesRouteImport } from './routes/_app/admin/relationship-types'
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
 import { Route as AppAdminTermsRouteImport } from './routes/_app/admin/terms'
+import { Route as AppAdminTokensRouteImport } from './routes/_app/admin/tokens'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppFFolderIdRouteImport } from './routes/_app/f/$folderId'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
@@ -133,6 +134,11 @@ const AppAdminRolesRoute = AppAdminRolesRouteImport.update({
 const AppAdminTermsRoute = AppAdminTermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminTokensRoute = AppAdminTokensRouteImport.update({
+  id: '/tokens',
+  path: '/tokens',
   getParentRoute: () => AppAdminRoute,
 } as any)
 const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
@@ -280,6 +286,7 @@ export interface FileRoutesByFullPath {
   '/admin/relationship-types': typeof AppAdminRelationshipTypesRoute
   '/admin/roles': typeof AppAdminRolesRoute
   '/admin/terms': typeof AppAdminTermsRoute
+  '/admin/tokens': typeof AppAdminTokensRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/f/$folderId': typeof AppFFolderIdRoute
   '/settings/preferences': typeof AppSettingsPreferencesRoute
@@ -319,6 +326,7 @@ export interface FileRoutesByTo {
   '/admin/relationship-types': typeof AppAdminRelationshipTypesRoute
   '/admin/roles': typeof AppAdminRolesRoute
   '/admin/terms': typeof AppAdminTermsRoute
+  '/admin/tokens': typeof AppAdminTokensRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/f/$folderId': typeof AppFFolderIdRoute
   '/settings/preferences': typeof AppSettingsPreferencesRoute
@@ -360,6 +368,7 @@ export interface FileRoutesById {
   '/_app/admin/relationship-types': typeof AppAdminRelationshipTypesRoute
   '/_app/admin/roles': typeof AppAdminRolesRoute
   '/_app/admin/terms': typeof AppAdminTermsRoute
+  '/_app/admin/tokens': typeof AppAdminTokensRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/f/$folderId': typeof AppFFolderIdRoute
   '/_app/settings/preferences': typeof AppSettingsPreferencesRoute
@@ -403,6 +412,7 @@ export interface FileRouteTypes {
     | '/admin/relationship-types'
     | '/admin/roles'
     | '/admin/terms'
+    | '/admin/tokens'
     | '/admin/users'
     | '/f/$folderId'
     | '/settings/preferences'
@@ -442,6 +452,7 @@ export interface FileRouteTypes {
     | '/admin/relationship-types'
     | '/admin/roles'
     | '/admin/terms'
+    | '/admin/tokens'
     | '/admin/users'
     | '/f/$folderId'
     | '/settings/preferences'
@@ -482,6 +493,7 @@ export interface FileRouteTypes {
     | '/_app/admin/relationship-types'
     | '/_app/admin/roles'
     | '/_app/admin/terms'
+    | '/_app/admin/tokens'
     | '/_app/admin/users'
     | '/_app/f/$folderId'
     | '/_app/settings/preferences'
@@ -633,6 +645,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/admin/terms'
       preLoaderRoute: typeof AppAdminTermsRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/_app/admin/tokens': {
+      id: '/_app/admin/tokens'
+      path: '/tokens'
+      fullPath: '/admin/tokens'
+      preLoaderRoute: typeof AppAdminTokensRouteImport
       parentRoute: typeof AppAdminRoute
     }
     '/_app/admin/users': {
@@ -807,6 +826,7 @@ interface AppAdminRouteChildren {
   AppAdminRelationshipTypesRoute: typeof AppAdminRelationshipTypesRoute
   AppAdminRolesRoute: typeof AppAdminRolesRoute
   AppAdminTermsRoute: typeof AppAdminTermsRoute
+  AppAdminTokensRoute: typeof AppAdminTokensRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
 }
@@ -819,6 +839,7 @@ const AppAdminRouteChildren: AppAdminRouteChildren = {
   AppAdminRelationshipTypesRoute: AppAdminRelationshipTypesRoute,
   AppAdminRolesRoute: AppAdminRolesRoute,
   AppAdminTermsRoute: AppAdminTermsRoute,
+  AppAdminTokensRoute: AppAdminTokensRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
 }

@@ -90,6 +90,16 @@ func SecretHash(v string) predicate.IdentityRESTToken {
 	return predicate.IdentityRESTToken(sql.FieldEQ(FieldSecretHash, v))
 }
 
+// Integration applies equality check predicate on the "integration" field. It's identical to IntegrationEQ.
+func Integration(v bool) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldEQ(FieldIntegration, v))
+}
+
+// CreatedBy applies equality check predicate on the "created_by" field. It's identical to CreatedByEQ.
+func CreatedBy(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldEQ(FieldCreatedBy, v))
+}
+
 // ExpiresAt applies equality check predicate on the "expires_at" field. It's identical to ExpiresAtEQ.
 func ExpiresAt(v time.Time) predicate.IdentityRESTToken {
 	return predicate.IdentityRESTToken(sql.FieldEQ(FieldExpiresAt, v))
@@ -405,6 +415,81 @@ func SecretHashContainsFold(v string) predicate.IdentityRESTToken {
 	return predicate.IdentityRESTToken(sql.FieldContainsFold(FieldSecretHash, v))
 }
 
+// IntegrationEQ applies the EQ predicate on the "integration" field.
+func IntegrationEQ(v bool) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldEQ(FieldIntegration, v))
+}
+
+// IntegrationNEQ applies the NEQ predicate on the "integration" field.
+func IntegrationNEQ(v bool) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldNEQ(FieldIntegration, v))
+}
+
+// CreatedByEQ applies the EQ predicate on the "created_by" field.
+func CreatedByEQ(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldEQ(FieldCreatedBy, v))
+}
+
+// CreatedByNEQ applies the NEQ predicate on the "created_by" field.
+func CreatedByNEQ(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldNEQ(FieldCreatedBy, v))
+}
+
+// CreatedByIn applies the In predicate on the "created_by" field.
+func CreatedByIn(vs ...string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldIn(FieldCreatedBy, vs...))
+}
+
+// CreatedByNotIn applies the NotIn predicate on the "created_by" field.
+func CreatedByNotIn(vs ...string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldNotIn(FieldCreatedBy, vs...))
+}
+
+// CreatedByGT applies the GT predicate on the "created_by" field.
+func CreatedByGT(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldGT(FieldCreatedBy, v))
+}
+
+// CreatedByGTE applies the GTE predicate on the "created_by" field.
+func CreatedByGTE(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldGTE(FieldCreatedBy, v))
+}
+
+// CreatedByLT applies the LT predicate on the "created_by" field.
+func CreatedByLT(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldLT(FieldCreatedBy, v))
+}
+
+// CreatedByLTE applies the LTE predicate on the "created_by" field.
+func CreatedByLTE(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldLTE(FieldCreatedBy, v))
+}
+
+// CreatedByContains applies the Contains predicate on the "created_by" field.
+func CreatedByContains(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldContains(FieldCreatedBy, v))
+}
+
+// CreatedByHasPrefix applies the HasPrefix predicate on the "created_by" field.
+func CreatedByHasPrefix(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldHasPrefix(FieldCreatedBy, v))
+}
+
+// CreatedByHasSuffix applies the HasSuffix predicate on the "created_by" field.
+func CreatedByHasSuffix(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldHasSuffix(FieldCreatedBy, v))
+}
+
+// CreatedByEqualFold applies the EqualFold predicate on the "created_by" field.
+func CreatedByEqualFold(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldEqualFold(FieldCreatedBy, v))
+}
+
+// CreatedByContainsFold applies the ContainsFold predicate on the "created_by" field.
+func CreatedByContainsFold(v string) predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldContainsFold(FieldCreatedBy, v))
+}
+
 // ExpiresAtEQ applies the EQ predicate on the "expires_at" field.
 func ExpiresAtEQ(v time.Time) predicate.IdentityRESTToken {
 	return predicate.IdentityRESTToken(sql.FieldEQ(FieldExpiresAt, v))
@@ -443,6 +528,16 @@ func ExpiresAtLT(v time.Time) predicate.IdentityRESTToken {
 // ExpiresAtLTE applies the LTE predicate on the "expires_at" field.
 func ExpiresAtLTE(v time.Time) predicate.IdentityRESTToken {
 	return predicate.IdentityRESTToken(sql.FieldLTE(FieldExpiresAt, v))
+}
+
+// ExpiresAtIsNil applies the IsNil predicate on the "expires_at" field.
+func ExpiresAtIsNil() predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldIsNull(FieldExpiresAt))
+}
+
+// ExpiresAtNotNil applies the NotNil predicate on the "expires_at" field.
+func ExpiresAtNotNil() predicate.IdentityRESTToken {
+	return predicate.IdentityRESTToken(sql.FieldNotNull(FieldExpiresAt))
 }
 
 // LastUsedAtEQ applies the EQ predicate on the "last_used_at" field.

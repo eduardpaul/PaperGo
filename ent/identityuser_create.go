@@ -90,6 +90,20 @@ func (_c *IdentityUserCreate) SetNillableActive(v *bool) *IdentityUserCreate {
 	return _c
 }
 
+// SetService sets the "service" field.
+func (_c *IdentityUserCreate) SetService(v bool) *IdentityUserCreate {
+	_c.mutation.SetService(v)
+	return _c
+}
+
+// SetNillableService sets the "service" field if the given value is not nil.
+func (_c *IdentityUserCreate) SetNillableService(v *bool) *IdentityUserCreate {
+	if v != nil {
+		_c.SetService(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *IdentityUserCreate) SetCreatedAt(v time.Time) *IdentityUserCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -161,6 +175,10 @@ func (_c *IdentityUserCreate) defaults() {
 		v := identityuser.DefaultActive
 		_c.mutation.SetActive(v)
 	}
+	if _, ok := _c.mutation.Service(); !ok {
+		v := identityuser.DefaultService
+		_c.mutation.SetService(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := identityuser.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -180,6 +198,9 @@ func (_c *IdentityUserCreate) check() error {
 	}
 	if _, ok := _c.mutation.Active(); !ok {
 		return &ValidationError{Name: "active", err: errors.New(`ent: missing required field "IdentityUser.active"`)}
+	}
+	if _, ok := _c.mutation.Service(); !ok {
+		return &ValidationError{Name: "service", err: errors.New(`ent: missing required field "IdentityUser.service"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "IdentityUser.created_at"`)}
@@ -243,6 +264,10 @@ func (_c *IdentityUserCreate) createSpec() (*IdentityUser, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Active(); ok {
 		_spec.SetField(identityuser.FieldActive, field.TypeBool, value)
 		_node.Active = value
+	}
+	if value, ok := _c.mutation.Service(); ok {
+		_spec.SetField(identityuser.FieldService, field.TypeBool, value)
+		_node.Service = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(identityuser.FieldCreatedAt, field.TypeTime, value)

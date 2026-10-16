@@ -114,7 +114,7 @@ function TokensPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium">{token.name}</p>
                 <p className="text-xs text-muted">
-                  {token.prefix}… · expires {format.date(token.expires_at)}
+                  {token.prefix}… · expires {token.expires_at ? format.date(token.expires_at) : 'Never'}
                 </p>
               </div>
               <Button size="sm" variant="danger" disabled={revoke.isPending} onClick={() => revoke.mutate(token.id)}>

@@ -15554,6 +15554,8 @@ type IdentityRESTTokenMutation struct {
 	secret_hash   *string
 	scopes        *[]string
 	appendscopes  []string
+	integration   *bool
+	created_by    *string
 	expires_at    *time.Time
 	last_used_at  *time.Time
 	revoked_at    *time.Time
@@ -15900,6 +15902,78 @@ func (m *IdentityRESTTokenMutation) ResetScopes() {
 	m.appendscopes = nil
 }
 
+// SetIntegration sets the "integration" field.
+func (m *IdentityRESTTokenMutation) SetIntegration(b bool) {
+	m.integration = &b
+}
+
+// Integration returns the value of the "integration" field in the mutation.
+func (m *IdentityRESTTokenMutation) Integration() (r bool, exists bool) {
+	v := m.integration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIntegration returns the old "integration" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldIntegration(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIntegration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIntegration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIntegration: %w", err)
+	}
+	return oldValue.Integration, nil
+}
+
+// ResetIntegration resets all changes to the "integration" field.
+func (m *IdentityRESTTokenMutation) ResetIntegration() {
+	m.integration = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *IdentityRESTTokenMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *IdentityRESTTokenMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the IdentityRESTToken entity.
+// If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityRESTTokenMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *IdentityRESTTokenMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (m *IdentityRESTTokenMutation) SetExpiresAt(t time.Time) {
 	m.expires_at = &t
@@ -15917,7 +15991,7 @@ func (m *IdentityRESTTokenMutation) ExpiresAt() (r time.Time, exists bool) {
 // OldExpiresAt returns the old "expires_at" field's value of the IdentityRESTToken entity.
 // If the IdentityRESTToken object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IdentityRESTTokenMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+func (m *IdentityRESTTokenMutation) OldExpiresAt(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
 	}
@@ -15931,9 +16005,22 @@ func (m *IdentityRESTTokenMutation) OldExpiresAt(ctx context.Context) (v time.Ti
 	return oldValue.ExpiresAt, nil
 }
 
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (m *IdentityRESTTokenMutation) ClearExpiresAt() {
+	m.expires_at = nil
+	m.clearedFields[identityresttoken.FieldExpiresAt] = struct{}{}
+}
+
+// ExpiresAtCleared returns if the "expires_at" field was cleared in this mutation.
+func (m *IdentityRESTTokenMutation) ExpiresAtCleared() bool {
+	_, ok := m.clearedFields[identityresttoken.FieldExpiresAt]
+	return ok
+}
+
 // ResetExpiresAt resets all changes to the "expires_at" field.
 func (m *IdentityRESTTokenMutation) ResetExpiresAt() {
 	m.expires_at = nil
+	delete(m.clearedFields, identityresttoken.FieldExpiresAt)
 }
 
 // SetLastUsedAt sets the "last_used_at" field.
@@ -16108,7 +16195,7 @@ func (m *IdentityRESTTokenMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IdentityRESTTokenMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 11)
 	if m.created_at != nil {
 		fields = append(fields, identityresttoken.FieldCreatedAt)
 	}
@@ -16126,6 +16213,12 @@ func (m *IdentityRESTTokenMutation) Fields() []string {
 	}
 	if m.scopes != nil {
 		fields = append(fields, identityresttoken.FieldScopes)
+	}
+	if m.integration != nil {
+		fields = append(fields, identityresttoken.FieldIntegration)
+	}
+	if m.created_by != nil {
+		fields = append(fields, identityresttoken.FieldCreatedBy)
 	}
 	if m.expires_at != nil {
 		fields = append(fields, identityresttoken.FieldExpiresAt)
@@ -16156,6 +16249,10 @@ func (m *IdentityRESTTokenMutation) Field(name string) (ent.Value, bool) {
 		return m.SecretHash()
 	case identityresttoken.FieldScopes:
 		return m.Scopes()
+	case identityresttoken.FieldIntegration:
+		return m.Integration()
+	case identityresttoken.FieldCreatedBy:
+		return m.CreatedBy()
 	case identityresttoken.FieldExpiresAt:
 		return m.ExpiresAt()
 	case identityresttoken.FieldLastUsedAt:
@@ -16183,6 +16280,10 @@ func (m *IdentityRESTTokenMutation) OldField(ctx context.Context, name string) (
 		return m.OldSecretHash(ctx)
 	case identityresttoken.FieldScopes:
 		return m.OldScopes(ctx)
+	case identityresttoken.FieldIntegration:
+		return m.OldIntegration(ctx)
+	case identityresttoken.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
 	case identityresttoken.FieldExpiresAt:
 		return m.OldExpiresAt(ctx)
 	case identityresttoken.FieldLastUsedAt:
@@ -16240,6 +16341,20 @@ func (m *IdentityRESTTokenMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetScopes(v)
 		return nil
+	case identityresttoken.FieldIntegration:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIntegration(v)
+		return nil
+	case identityresttoken.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
 	case identityresttoken.FieldExpiresAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -16291,6 +16406,9 @@ func (m *IdentityRESTTokenMutation) AddField(name string, value ent.Value) error
 // mutation.
 func (m *IdentityRESTTokenMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(identityresttoken.FieldExpiresAt) {
+		fields = append(fields, identityresttoken.FieldExpiresAt)
+	}
 	if m.FieldCleared(identityresttoken.FieldLastUsedAt) {
 		fields = append(fields, identityresttoken.FieldLastUsedAt)
 	}
@@ -16311,6 +16429,9 @@ func (m *IdentityRESTTokenMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *IdentityRESTTokenMutation) ClearField(name string) error {
 	switch name {
+	case identityresttoken.FieldExpiresAt:
+		m.ClearExpiresAt()
+		return nil
 	case identityresttoken.FieldLastUsedAt:
 		m.ClearLastUsedAt()
 		return nil
@@ -16342,6 +16463,12 @@ func (m *IdentityRESTTokenMutation) ResetField(name string) error {
 		return nil
 	case identityresttoken.FieldScopes:
 		m.ResetScopes()
+		return nil
+	case identityresttoken.FieldIntegration:
+		m.ResetIntegration()
+		return nil
+	case identityresttoken.FieldCreatedBy:
+		m.ResetCreatedBy()
 		return nil
 	case identityresttoken.FieldExpiresAt:
 		m.ResetExpiresAt()
@@ -17095,6 +17222,7 @@ type IdentityUserMutation struct {
 	sync_hash     *string
 	deleted_at    *time.Time
 	active        *bool
+	service       *bool
 	created_at    *time.Time
 	clearedFields map[string]struct{}
 	done          bool
@@ -17399,6 +17527,42 @@ func (m *IdentityUserMutation) ResetActive() {
 	m.active = nil
 }
 
+// SetService sets the "service" field.
+func (m *IdentityUserMutation) SetService(b bool) {
+	m.service = &b
+}
+
+// Service returns the value of the "service" field in the mutation.
+func (m *IdentityUserMutation) Service() (r bool, exists bool) {
+	v := m.service
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldService returns the old "service" field's value of the IdentityUser entity.
+// If the IdentityUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityUserMutation) OldService(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldService is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldService requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldService: %w", err)
+	}
+	return oldValue.Service, nil
+}
+
+// ResetService resets all changes to the "service" field.
+func (m *IdentityUserMutation) ResetService() {
+	m.service = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *IdentityUserMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -17469,7 +17633,7 @@ func (m *IdentityUserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IdentityUserMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.display_name != nil {
 		fields = append(fields, identityuser.FieldDisplayName)
 	}
@@ -17484,6 +17648,9 @@ func (m *IdentityUserMutation) Fields() []string {
 	}
 	if m.active != nil {
 		fields = append(fields, identityuser.FieldActive)
+	}
+	if m.service != nil {
+		fields = append(fields, identityuser.FieldService)
 	}
 	if m.created_at != nil {
 		fields = append(fields, identityuser.FieldCreatedAt)
@@ -17506,6 +17673,8 @@ func (m *IdentityUserMutation) Field(name string) (ent.Value, bool) {
 		return m.DeletedAt()
 	case identityuser.FieldActive:
 		return m.Active()
+	case identityuser.FieldService:
+		return m.Service()
 	case identityuser.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -17527,6 +17696,8 @@ func (m *IdentityUserMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldDeletedAt(ctx)
 	case identityuser.FieldActive:
 		return m.OldActive(ctx)
+	case identityuser.FieldService:
+		return m.OldService(ctx)
 	case identityuser.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -17572,6 +17743,13 @@ func (m *IdentityUserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetActive(v)
+		return nil
+	case identityuser.FieldService:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetService(v)
 		return nil
 	case identityuser.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -17652,6 +17830,9 @@ func (m *IdentityUserMutation) ResetField(name string) error {
 		return nil
 	case identityuser.FieldActive:
 		m.ResetActive()
+		return nil
+	case identityuser.FieldService:
+		m.ResetService()
 		return nil
 	case identityuser.FieldCreatedAt:
 		m.ResetCreatedAt()

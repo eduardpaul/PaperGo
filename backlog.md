@@ -81,7 +81,7 @@ Scope: ISSUE-21, ISSUE-22, ISSUE-20 and ISSUE-19. ISSUE-23 and FEAT-01 are defer
 
 - [x] **ISSUE-21** — Backend Docker bridge allows outbound DNS/HTTPS while PaperGo ports remain unpublished. Setup and verification check calendar.google.com from the actual container with TLS verification and actionable errors. Validation: 20 NPM Python tests, admin CLI tests, Compose configuration checks and live distroless-container DNS/HTTPS smoke test.
 - [x] **ISSUE-22** — NPM selects native zvec with a private persistent search directory owned by UID 65532. Setup requires live zvec status; verification also waits for a newly created item to appear in keyword search. Validation: 21 NPM Python tests, full Docker image build, fresh-volume permissions/schema startup, live zvec status and native keyword-index smoke test.
-- [ ] **ISSUE-20** — Admin-managed integration identities and scoped REST access tokens.
+- [x] **ISSUE-20** — Organization managers list/revoke organization credentials and issue scoped `pgo_` integration tokens with separate non-interactive service identities, 30/90/365-day or no expiration, one-time secrets and last-use metadata. Token scopes and resource ACLs apply in bearer/proxy modes and queued operations revalidate the credential. Validation: issuance/ACL/scope/expiry/disabled-identity/revocation and proxy API tests, personal-token/operation regressions, two admin UI tests, typecheck/lint, production frontend build, Ent/Atlas checks and sample-package regeneration.
 - [ ] **ISSUE-19** — Asynchronous bounded WebP previews with authorized lightweight viewing.
 
 ## 1. Backlog Summary Matrix

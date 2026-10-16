@@ -364,12 +364,16 @@ export interface WorkflowRun {
 }
 
 export interface RestToken {
+  subject: string;
+  integration: boolean;
+  created_by: string;
+  revoked_at?: string;
   id: string;
   name: string;
   prefix: string;
   scopes?: string[] | null;
   created_at: string;
-  expires_at: string;
+  expires_at: string | null;
   last_used_at?: string;
 }
 

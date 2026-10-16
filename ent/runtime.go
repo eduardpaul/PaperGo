@@ -1099,6 +1099,14 @@ func init() {
 	identityresttokenDescSecretHash := identityresttokenFields[3].Descriptor()
 	// identityresttoken.SecretHashValidator is a validator for the "secret_hash" field. It is called by the builders before save.
 	identityresttoken.SecretHashValidator = identityresttokenDescSecretHash.Validators[0].(func(string) error)
+	// identityresttokenDescIntegration is the schema descriptor for integration field.
+	identityresttokenDescIntegration := identityresttokenFields[5].Descriptor()
+	// identityresttoken.DefaultIntegration holds the default value on creation for the integration field.
+	identityresttoken.DefaultIntegration = identityresttokenDescIntegration.Default.(bool)
+	// identityresttokenDescCreatedBy is the schema descriptor for created_by field.
+	identityresttokenDescCreatedBy := identityresttokenFields[6].Descriptor()
+	// identityresttoken.DefaultCreatedBy holds the default value on creation for the created_by field.
+	identityresttoken.DefaultCreatedBy = identityresttokenDescCreatedBy.Default.(string)
 	// identityresttokenDescID is the schema descriptor for id field.
 	identityresttokenDescID := identityresttokenMixinFields0[0].Descriptor()
 	// identityresttoken.DefaultID holds the default value on creation for the id field.
@@ -1176,12 +1184,16 @@ func init() {
 	identityuserDescActive := identityuserFields[4].Descriptor()
 	// identityuser.DefaultActive holds the default value on creation for the active field.
 	identityuser.DefaultActive = identityuserDescActive.Default.(bool)
+	// identityuserDescService is the schema descriptor for service field.
+	identityuserDescService := identityuserFields[5].Descriptor()
+	// identityuser.DefaultService holds the default value on creation for the service field.
+	identityuser.DefaultService = identityuserDescService.Default.(bool)
 	// identityuserDescCreatedAt is the schema descriptor for created_at field.
-	identityuserDescCreatedAt := identityuserFields[6].Descriptor()
+	identityuserDescCreatedAt := identityuserFields[7].Descriptor()
 	// identityuser.DefaultCreatedAt holds the default value on creation for the created_at field.
 	identityuser.DefaultCreatedAt = identityuserDescCreatedAt.Default.(func() time.Time)
 	// identityuserDescID is the schema descriptor for id field.
-	identityuserDescID := identityuserFields[5].Descriptor()
+	identityuserDescID := identityuserFields[6].Descriptor()
 	// identityuser.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	identityuser.IDValidator = func() func(string) error {
 		validators := identityuserDescID.Validators

@@ -26,6 +26,10 @@ const (
 	FieldSecretHash = "secret_hash"
 	// FieldScopes holds the string denoting the scopes field in the database.
 	FieldScopes = "scopes"
+	// FieldIntegration holds the string denoting the integration field in the database.
+	FieldIntegration = "integration"
+	// FieldCreatedBy holds the string denoting the created_by field in the database.
+	FieldCreatedBy = "created_by"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
@@ -54,6 +58,8 @@ var Columns = []string{
 	FieldPrefix,
 	FieldSecretHash,
 	FieldScopes,
+	FieldIntegration,
+	FieldCreatedBy,
 	FieldExpiresAt,
 	FieldLastUsedAt,
 	FieldRevokedAt,
@@ -80,6 +86,10 @@ var (
 	PrefixValidator func(string) error
 	// SecretHashValidator is a validator for the "secret_hash" field. It is called by the builders before save.
 	SecretHashValidator func(string) error
+	// DefaultIntegration holds the default value on creation for the "integration" field.
+	DefaultIntegration bool
+	// DefaultCreatedBy holds the default value on creation for the "created_by" field.
+	DefaultCreatedBy string
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() string
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -117,6 +127,16 @@ func ByPrefix(opts ...sql.OrderTermOption) OrderOption {
 // BySecretHash orders the results by the secret_hash field.
 func BySecretHash(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSecretHash, opts...).ToFunc()
+}
+
+// ByIntegration orders the results by the integration field.
+func ByIntegration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIntegration, opts...).ToFunc()
+}
+
+// ByCreatedBy orders the results by the created_by field.
+func ByCreatedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatedBy, opts...).ToFunc()
 }
 
 // ByExpiresAt orders the results by the expires_at field.

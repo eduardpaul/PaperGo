@@ -31,8 +31,12 @@ type IdentityRESTToken struct {
 	SecretHash string `json:"-"`
 	// Scopes holds the value of the "scopes" field.
 	Scopes []string `json:"scopes,omitempty"`
+	// Integration holds the value of the "integration" field.
+	Integration bool `json:"integration,omitempty"`
+	// CreatedBy holds the value of the "created_by" field.
+	CreatedBy string `json:"created_by,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
-	ExpiresAt time.Time `json:"expires_at,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// LastUsedAt holds the value of the "last_used_at" field.
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 	// RevokedAt holds the value of the "revoked_at" field.
@@ -70,7 +74,9 @@ func (*IdentityRESTToken) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case identityresttoken.FieldScopes:
 			values[i] = new([]byte)
-		case identityresttoken.FieldID, identityresttoken.FieldSubject, identityresttoken.FieldName, identityresttoken.FieldPrefix, identityresttoken.FieldSecretHash:
+		case identityresttoken.FieldIntegration:
+			values[i] = new(sql.NullBool)
+		case identityresttoken.FieldID, identityresttoken.FieldSubject, identityresttoken.FieldName, identityresttoken.FieldPrefix, identityresttoken.FieldSecretHash, identityresttoken.FieldCreatedBy:
 			values[i] = new(sql.NullString)
 		case identityresttoken.FieldCreatedAt, identityresttoken.FieldExpiresAt, identityresttoken.FieldLastUsedAt, identityresttoken.FieldRevokedAt:
 			values[i] = new(sql.NullTime)
@@ -133,11 +139,24 @@ func (_m *IdentityRESTToken) assignValues(columns []string, values []any) error 
 					return fmt.Errorf("unmarshal field scopes: %w", err)
 				}
 			}
+		case identityresttoken.FieldIntegration:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field integration", values[i])
+			} else if value.Valid {
+				_m.Integration = value.Bool
+			}
+		case identityresttoken.FieldCreatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field created_by", values[i])
+			} else if value.Valid {
+				_m.CreatedBy = value.String
+			}
 		case identityresttoken.FieldExpiresAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field expires_at", values[i])
 			} else if value.Valid {
-				_m.ExpiresAt = value.Time
+				_m.ExpiresAt = new(time.Time)
+				*_m.ExpiresAt = value.Time
 			}
 		case identityresttoken.FieldLastUsedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -211,8 +230,16 @@ func (_m *IdentityRESTToken) String() string {
 	builder.WriteString("scopes=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Scopes))
 	builder.WriteString(", ")
-	builder.WriteString("expires_at=")
-	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))
+	builder.WriteString("integration=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Integration))
+	builder.WriteString(", ")
+	builder.WriteString("created_by=")
+	builder.WriteString(_m.CreatedBy)
+	builder.WriteString(", ")
+	if v := _m.ExpiresAt; v != nil {
+		builder.WriteString("expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := _m.LastUsedAt; v != nil {
 		builder.WriteString("last_used_at=")

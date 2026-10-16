@@ -15,6 +15,7 @@ func (IdentityUser) Fields() []ent.Field {
 		field.String("sync_hash").Default(""),
 		field.Time("deleted_at").Optional().Nillable(),
 		field.Bool("active").Default(true),
+		field.Bool("service").Default(false).Immutable(),
 		field.String("id").NotEmpty().MaxLen(255).Immutable(),
 		field.Time("created_at").Default(func() time.Time { return time.Now().UTC() }).Immutable(),
 	}

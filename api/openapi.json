@@ -17273,6 +17273,95 @@
           }
         }
       }
+    },
+    "/v1/identity/tokens": {
+      "get": {
+        "operationId": "listOrganizationRESTTokens",
+        "summary": "List organization token metadata",
+        "description": "Requires organization.manage. Includes personal and integration credentials, with issuer, subject, expiration, revocation and last use. Never returns secrets or hashes.",
+        "x-module-scopes": [
+          "organization.manage"
+        ],
+        "responses": {
+          "200": {
+            "description": "Token metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RESTToken"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createIntegrationRESTToken",
+        "summary": "Create a scoped integration credential and service identity",
+        "description": "Requires organization.manage. Scopes must be distinct scopes held by the caller. Returns the pgo_ secret once; only its hash is stored. Service identities use token scopes and resource ACLs.",
+        "x-module-scopes": [
+          "organization.manage"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntegrationTokenInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Service credential; secret shown once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedRESTToken"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/identity/tokens/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "revokeOrganizationRESTToken",
+        "summary": "Revoke any organization REST credential immediately",
+        "x-module-scopes": [
+          "organization.manage"
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -17341,10 +17430,26 @@
             "format": "date-time"
           },
           "expires_at": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "last_used_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "integration": {
+            "type": "boolean"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "revoked_at": {
             "type": "string",
             "format": "date-time"
           }
@@ -17355,7 +17460,10 @@
           "prefix",
           "scopes",
           "created_at",
-          "expires_at"
+          "expires_at",
+          "subject",
+          "integration",
+          "created_by"
         ]
       },
       "Organization": {
@@ -24785,6 +24893,36 @@
           },
           "definition": {
             "$ref": "#/components/schemas/SmartFolderDefinition"
+          }
+        }
+      },
+      "IntegrationTokenInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "scopes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "expires_in_days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650,
+            "default": 90,
+            "description": "0 means no expiration."
           }
         }
       }

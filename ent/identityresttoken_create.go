@@ -65,9 +65,45 @@ func (_c *IdentityRESTTokenCreate) SetScopes(v []string) *IdentityRESTTokenCreat
 	return _c
 }
 
+// SetIntegration sets the "integration" field.
+func (_c *IdentityRESTTokenCreate) SetIntegration(v bool) *IdentityRESTTokenCreate {
+	_c.mutation.SetIntegration(v)
+	return _c
+}
+
+// SetNillableIntegration sets the "integration" field if the given value is not nil.
+func (_c *IdentityRESTTokenCreate) SetNillableIntegration(v *bool) *IdentityRESTTokenCreate {
+	if v != nil {
+		_c.SetIntegration(*v)
+	}
+	return _c
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (_c *IdentityRESTTokenCreate) SetCreatedBy(v string) *IdentityRESTTokenCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
+}
+
+// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
+func (_c *IdentityRESTTokenCreate) SetNillableCreatedBy(v *string) *IdentityRESTTokenCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
+	}
+	return _c
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (_c *IdentityRESTTokenCreate) SetExpiresAt(v time.Time) *IdentityRESTTokenCreate {
 	_c.mutation.SetExpiresAt(v)
+	return _c
+}
+
+// SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
+func (_c *IdentityRESTTokenCreate) SetNillableExpiresAt(v *time.Time) *IdentityRESTTokenCreate {
+	if v != nil {
+		_c.SetExpiresAt(*v)
+	}
 	return _c
 }
 
@@ -163,6 +199,14 @@ func (_c *IdentityRESTTokenCreate) defaults() {
 		v := identityresttoken.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.Integration(); !ok {
+		v := identityresttoken.DefaultIntegration
+		_c.mutation.SetIntegration(v)
+	}
+	if _, ok := _c.mutation.CreatedBy(); !ok {
+		v := identityresttoken.DefaultCreatedBy
+		_c.mutation.SetCreatedBy(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := identityresttoken.DefaultID()
 		_c.mutation.SetID(v)
@@ -209,8 +253,11 @@ func (_c *IdentityRESTTokenCreate) check() error {
 	if _, ok := _c.mutation.Scopes(); !ok {
 		return &ValidationError{Name: "scopes", err: errors.New(`ent: missing required field "IdentityRESTToken.scopes"`)}
 	}
-	if _, ok := _c.mutation.ExpiresAt(); !ok {
-		return &ValidationError{Name: "expires_at", err: errors.New(`ent: missing required field "IdentityRESTToken.expires_at"`)}
+	if _, ok := _c.mutation.Integration(); !ok {
+		return &ValidationError{Name: "integration", err: errors.New(`ent: missing required field "IdentityRESTToken.integration"`)}
+	}
+	if _, ok := _c.mutation.CreatedBy(); !ok {
+		return &ValidationError{Name: "created_by", err: errors.New(`ent: missing required field "IdentityRESTToken.created_by"`)}
 	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := identityresttoken.IDValidator(v); err != nil {
@@ -275,9 +322,17 @@ func (_c *IdentityRESTTokenCreate) createSpec() (*IdentityRESTToken, *sqlgraph.C
 		_spec.SetField(identityresttoken.FieldScopes, field.TypeJSON, value)
 		_node.Scopes = value
 	}
+	if value, ok := _c.mutation.Integration(); ok {
+		_spec.SetField(identityresttoken.FieldIntegration, field.TypeBool, value)
+		_node.Integration = value
+	}
+	if value, ok := _c.mutation.CreatedBy(); ok {
+		_spec.SetField(identityresttoken.FieldCreatedBy, field.TypeString, value)
+		_node.CreatedBy = value
+	}
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(identityresttoken.FieldExpiresAt, field.TypeTime, value)
-		_node.ExpiresAt = value
+		_node.ExpiresAt = &value
 	}
 	if value, ok := _c.mutation.LastUsedAt(); ok {
 		_spec.SetField(identityresttoken.FieldLastUsedAt, field.TypeTime, value)

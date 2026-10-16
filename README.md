@@ -61,7 +61,7 @@ npm run dev
 
 Vite listens on `http://127.0.0.1:5173` and proxies `/v1`, `/auth` and `/health` to `http://127.0.0.1:8080`. Set `PAPERGO_API` to point the proxy somewhere else. In development, sign in with the bearer token printed by the dev script. Trusted-proxy deployments use the browser’s HTTP authentication prompt and load the verified profile automatically. Screens the API does not support, and API areas that do not have a screen yet, are listed in [the web frontend backlog](docs/plans/web-frontend-backlog.md).
 
-[Organization groups and roles](docs/identity.md) are managed under `/v1/identity`. OIDC deployments require `ADMIN_SUBJECT` or `ADMIN_GROUP` for the first administrator; proxy deployments require `ADMIN_SUBJECT`; development defaults to `DEV_SUBJECT`. Verified subjects enroll with the Member role on first authentication. User profiles, guarded anonymization, organization metadata and scoped personal REST tokens are exposed by these APIs. Module scopes and resource ACLs apply independently, including to owners and workflow item actions.
+[Organization groups and roles](docs/identity.md) are managed under `/v1/identity`. OIDC deployments require `ADMIN_SUBJECT` or `ADMIN_GROUP` for the first administrator; proxy deployments require `ADMIN_SUBJECT`; development defaults to `DEV_SUBJECT`. Verified subjects enroll with the Member role on first authentication. User profiles, guarded anonymization, organization metadata, scoped personal REST tokens and admin-managed integration tokens are exposed by these APIs. Module scopes and resource ACLs apply independently, including to owners and workflow item actions.
 
 ## Data model and requirements
 

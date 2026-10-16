@@ -8,6 +8,7 @@ PaperGo runs at the root of one public host behind a TLS-terminating reverse pro
 | --- | --- |
 | Provider bearer tokens | OIDC verifies signature, issuer, expiry and audience. `OIDC_TOKEN_TYPE` optionally checks the JWT header type. |
 | Web sign-in | With `OIDC_CLIENT_ID`, the web app signs in at the provider with the authorization code flow and PKCE, renews access with refresh tokens and signs out at the provider. Without it, people paste a token. |
+| Integration REST tokens | Admin-issued service credentials authenticate with scoped Bearer tokens in either mode. Forward Authorization on an API ingress for these clients; PaperGo enforces token scopes and resource ACLs. |
 | Personal REST tokens | Bearer-authenticated deployments accept scoped personal credentials. These requests preserve the stored profile and group memberships. |
 | Users | Verified subjects enroll with the Member role on first use. OIDC profile claims supply a display name and email; proxy profiles are locally managed. |
 | Groups | Local groups are administered in PaperGo. OIDC groups synchronize from provider claims; their direct memberships are managed by the provider. |

@@ -10,6 +10,17 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 	a.registerPreferences(m)
 	a.registerInboxes(m)
 	d := a.DMS.Directory()
+	m.HandleFunc("GET /v1/identity/tokens", foundationRead(a, func(r *http.Request) (any, error) { return d.OrganizationRESTTokens(r.Context(), subject(r)) }))
+	m.HandleFunc("POST /v1/identity/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.RESTTokenInput, _ int) (any, error) {
+		return d.CreateIntegrationToken(r.Context(), subject(r), in)
+	}))
+	m.HandleFunc("DELETE /v1/identity/tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if err := d.RevokeOrganizationRESTToken(r.Context(), subject(r), r.PathValue("id")); err != nil {
+			a.failure(w, r, err)
+			return
+		}
+		w.WriteHeader(204)
+	})
 	if a.Auth == nil || a.Auth.Kind() != auth.TrustedProxy {
 		m.HandleFunc("GET /v1/identity/me/tokens", foundationRead(a, func(r *http.Request) (any, error) { return d.RESTTokens(r.Context(), subject(r)) }))
 		m.HandleFunc("POST /v1/identity/me/tokens", foundationMutation(a, 201, false, func(r *http.Request, in identity.RESTTokenInput, _ int) (any, error) {

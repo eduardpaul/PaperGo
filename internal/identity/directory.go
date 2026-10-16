@@ -190,9 +190,12 @@ func (d Directory) EnsureUser(ctx context.Context, subject string) error {
 	if err := ValidateSubject(subject); err != nil {
 		return err
 	}
-	var exists bool
-	if err := d.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=?)", subject).Scan(&exists); err != nil {
+	var exists, service bool
+	if err := d.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=?), EXISTS(SELECT 1 FROM identity_users WHERE id=? AND service=1)", subject, subject).Scan(&exists, &service); err != nil {
 		return err
+	}
+	if service {
+		return ErrForbidden
 	}
 	if exists {
 		return nil
@@ -205,6 +208,13 @@ func (d Directory) EnsureUser(ctx context.Context, subject string) error {
 // SyncUser enrolls or updates an OIDC user, synchronizing profile claims and
 // memberships in oidc groups when groups were claimed in the token.
 func (d Directory) SyncUser(ctx context.Context, u UserIdentity) error {
+	var service bool
+	if err := d.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM identity_users WHERE id=? AND service=1)", u.Subject).Scan(&service); err != nil {
+		return err
+	}
+	if service {
+		return ErrForbidden
+	}
 	if err := ValidateSubject(u.Subject); err != nil {
 		return err
 	}
