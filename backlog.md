@@ -43,7 +43,7 @@ This backlog synthesizes user feedback and feature requests into actionable engi
 ## Phase 1 Progress
 
 - [x] **ISSUE-03** — Search input remains mounted across query updates, follows URL navigation, and clears immediately while retaining focus. Validation: collection-page regression tests and frontend typecheck.
-- [ ] **ISSUE-04** — Windows drag-and-drop upload handling.
+- [x] **ISSUE-04** — Normalize file drag types, inspect file items, cancel browser drop navigation, and enqueue all files with copy feedback. Validation: 12 collection-page regressions (including read-only and non-file drags) and frontend typecheck.
 - [ ] **ISSUE-13** — Workspace publication export references.
 - [ ] **ISSUE-09** — Default versioning off for lists and libraries.
 

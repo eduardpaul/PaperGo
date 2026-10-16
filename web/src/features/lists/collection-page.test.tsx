@@ -11,21 +11,23 @@ import { CollectionPage, type CollectionSearch } from './collection-page';
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="#collection">{children}</a>,
 }));
-vi.mock('@/features/documents/uploads', () => ({ useUploads: () => ({ upload: vi.fn() }) }));
+const uploads = vi.hoisted(() => ({ upload: vi.fn(async () => []) }));
+vi.mock('@/features/documents/uploads', () => ({ useUploads: () => uploads }));
 
 const clients: QueryClient[] = [];
 afterEach(() => {
   cleanup();
   clients.splice(0).forEach((client) => client.clear());
+  uploads.upload.mockClear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
-function show(initial: CollectionSearch = {}) {
+function show(initial: CollectionSearch = {}, overrides: Partial<Resource> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(client);
   const collection: Resource = {
-    id: 'library', workspace_id: 'workspace', kind: 'library', name: 'Documents', version: 1, access: ['read', 'write'],
+    id: 'library', workspace_id: 'workspace', kind: 'library', name: 'Documents', version: 1, access: ['read', 'write'], ...overrides,
   };
   client.setQueryData(keys.resource('library'), collection);
   client.setQueryData(keys.fields('library'), []);
@@ -88,4 +90,37 @@ it('follows URL navigation and cancels a pending local search without losing foc
   expect(onSearch).toHaveBeenLastCalledWith({ q: undefined }, true);
   expect(input.value).toBe('');
   expect(document.activeElement).toBe(input);
+});
+
+
+it.each(['Files', 'files', 'FILES', 'application/x-moz-file', 'APPLICATION/X-MOZ-FILE', 'file-items', 'file-list'])('accepts %s file drags and enqueues all dropped files', async (type) => {
+  show();
+  const contents = screen.getByRole('region', { name: 'Library contents' });
+  const files = [new File(['a'], 'a.txt'), new File(['b'], 'b.txt')];
+  const transfer = {
+    types: type.startsWith('file-') ? [] : [type],
+    items: type === 'file-items' ? [{ kind: 'file' }] : [],
+    files: type === 'file-list' ? files : [],
+    dropEffect: 'none',
+  };
+  expect(fireEvent.dragOver(contents, { dataTransfer: transfer })).toBe(false);
+  expect(transfer.dropEffect).toBe('copy');
+  expect(screen.getByText('Drop to upload to Documents')).toBeTruthy();
+  await act(async () => {
+    expect(fireEvent.drop(contents, { dataTransfer: { ...transfer, files } })).toBe(false);
+  });
+  expect(uploads.upload).toHaveBeenCalledWith(files, expect.objectContaining({ url: '/v1/resources/library/documents', label: 'Documents' }));
+  expect(screen.queryByText('Drop to upload to Documents')).toBeNull();
+});
+
+it.each([{ kind: 'list' as const }, { access: ['read'] as Resource['access'] }, {}])('does not upload non-file or unauthorized drags (%j)', async (overrides) => {
+  show({}, overrides);
+  const contents = screen.getByRole('region', { name: overrides.kind === 'list' ? 'List contents' : 'Library contents' });
+  const transfer = Object.keys(overrides).length
+    ? { types: ['Files'], files: [new File(['a'], 'a.txt')] }
+    : { types: ['text/plain', 'application/x-papergo-item'], files: [] };
+  expect(fireEvent.dragOver(contents, { dataTransfer: transfer })).toBe(true);
+  await act(async () => { fireEvent.drop(contents, { dataTransfer: transfer }); });
+  expect(uploads.upload).not.toHaveBeenCalled();
+  expect(screen.queryByText('Drop to upload to Documents')).toBeNull();
 });

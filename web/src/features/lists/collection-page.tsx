@@ -272,7 +272,13 @@ export function CollectionPage({
       if (list.length === 1 && results.length === 1 && mounted.current) onSearch({ item: results[0].item.id, tab: undefined });
     });
   };
-  const hasFiles = (event: React.DragEvent) => library && canAdd && event.dataTransfer.types.includes('Files');
+  const hasFiles = (event: React.DragEvent) => {
+    const transfer = event.dataTransfer;
+    if (!library || !canAdd || !transfer) return false;
+    return Array.from(transfer.types).some((type) => ['files', 'application/x-moz-file'].includes(type.toLowerCase()))
+      || Array.from(transfer.items ?? []).some((item) => item.kind === 'file')
+      || transfer.files?.length > 0;
+  };
 
   return (
     <Screen wide className="max-w-[1600px]">
@@ -464,10 +470,13 @@ export function CollectionPage({
 
       <QueryFeedback query={views} />
       <div
+        role="region"
+        aria-label={library ? 'Library contents' : 'List contents'}
         className={cn('relative rounded-lg', dragging && 'ring-2 ring-accent ring-offset-2')}
         onDragOver={(event) => {
           if (!hasFiles(event)) return;
           event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
           setDragging(true);
         }}
         onDragLeave={(event) => {
