@@ -88,6 +88,9 @@ def environment(output, system):
         flags += ['-Wl,-rpath,$ORIGIN/lib', '-Wl,-rpath,/usr/lib/papergo']
     elif system == 'darwin':
         flags += ['-Wl,-rpath,@loader_path/lib']
+    elif system == 'windows':
+        # The tokenizer's Rust standard library calls the Windows NT API.
+        flags += ['-lntdll']
     env = {'CGO_ENABLED': '1', 'CGO_CFLAGS': shlex.join([f'-I{(output / "include").as_posix()}']),
            'CGO_LDFLAGS': shlex.join(flags), 'PKG_CONFIG_PATH': str(output / 'lib/pkgconfig'),
            'ONNXRUNTIME_LIB': str(output / 'lib' / {'linux': 'libonnxruntime.so', 'darwin': 'libonnxruntime.dylib', 'windows': 'onnxruntime.dll'}[system])}
