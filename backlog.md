@@ -42,6 +42,12 @@ This backlog synthesizes user feedback and feature requests into actionable engi
 
 ## Phase 1 Progress
 
+**Completed 2026-10-16.** All four fixes are implemented. Final validation passed:
+DMS, workflow runner, HTTP API, database, WebDAV and backup suites; 137 frontend
+tests; production build, typecheck, lint, scoped Go vet, Ent generation and Atlas
+migration validation. Windows file-drop behavior has automated drag-event coverage;
+manual Chrome/Edge validation on Windows remains unperformed.
+
 - [x] **ISSUE-03** — Search input remains mounted across query updates, follows URL navigation, and clears immediately while retaining focus. Validation: collection-page regression tests and frontend typecheck.
 - [x] **ISSUE-04** — Normalize file drag types, inspect file items, cancel browser drop navigation, and enqueue all files with copy feedback. Validation: 12 collection-page regressions (including read-only and non-file drags) and frontend typecheck.
 - [x] **ISSUE-13** — Export publications independently of collected revisions, preserve snapshots and typed references, and accept optional revision links on import. Validation: workspace package suite, including publishing-off and unpublish round trips, dry runs, source immutability, and strict live-reference rejection; Ent regenerated and Atlas checksum updated.
