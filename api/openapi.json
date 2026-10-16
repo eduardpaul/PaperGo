@@ -11372,10 +11372,7 @@
             "description": "Invalid principal, cycle, excessive nesting, or unknown scope"
           }
         },
-        "x-module-scopes": [
-          "role.read"
-        ],
-        "description": " Required module scopes: role.read. Resource ACLs and any additional use-case checks also apply."
+        "description": "Requires role.read or organization.manage. Returns the module scope catalog; credential issuance remains limited to scopes held by the issuer."
       }
     },
     "/v1/identity/me/scopes": {
@@ -17480,12 +17477,12 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT or personal REST token"
+        "bearerFormat": "JWT or pgo_ personal/integration REST token"
       },
       "proxyBasicAuth": {
         "type": "http",
         "scheme": "basic",
-        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. Personal-token and WebDAV credential endpoints are unavailable in this mode."
+        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. Personal-token and WebDAV credential endpoints are unavailable in this mode. Integration REST tokens authenticate directly when the API ingress forwards Authorization: Bearer pgo_…."
       }
     },
     "responses": {

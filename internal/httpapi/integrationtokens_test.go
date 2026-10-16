@@ -155,3 +155,23 @@ func TestIntegrationTokenExpiryAndDisabledIdentityAreRevalidated(t *testing.T) {
 		}
 	}
 }
+
+func TestOrganizationManagersCanReadTokenScopeCatalogWithoutRoleAdministration(t *testing.T) {
+	h, s, _ := setup(t)
+	ctx := t.Context()
+	if err := s.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+		t.Fatal(err)
+	}
+	limited, err := s.Directory().CreateRESTToken(ctx, "alice", identity.RESTTokenInput{Name: "Organization manager", Scopes: []string{"organization.manage", "list.read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := request(h, "GET", "/v1/identity/scopes", "", limited.Secret, "", "")
+	if got.Code != 200 {
+		t.Fatal(got.Code, got.Body.String())
+	}
+	got = request(h, "POST", "/v1/identity/tokens", `{"name":"Escalate","scopes":["list.write"]}`, limited.Secret, "", "application/json")
+	if got.Code != 422 {
+		t.Fatal("manager exceeded credential scope", got.Code, got.Body.String())
+	}
+}

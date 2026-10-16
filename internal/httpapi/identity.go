@@ -54,7 +54,9 @@ func (a *API) registerIdentity(m *http.ServeMux) {
 	}))
 	m.HandleFunc("GET /v1/identity/scopes", foundationRead(a, func(r *http.Request) (any, error) {
 		if err := a.DMS.RequireScope(r.Context(), subject(r), "role.read"); err != nil {
-			return nil, err
+			if err := a.DMS.RequireScope(r.Context(), subject(r), "organization.manage"); err != nil {
+				return nil, err
+			}
 		}
 		return identity.Catalog, nil
 	}))
