@@ -112,7 +112,7 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	create(t, s, list.ID, "item", strings.Repeat("漢", 1024), nil)
-	export, err := s.StartExport(ctx, admin)
+	export, err := s.StartExport(ctx, admin, ExportOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bad, err := target.StartImport(ctx, admin, badObject.Key, false)
+	bad, err := target.StartImport(ctx, admin, badObject.Key, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dry, err := target.StartImport(ctx, admin, upload.Key, true)
+	dry, err := target.StartImport(ctx, admin, upload.Key, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	}
 	defer index.Close()
 	target.SetSearch(index)
-	real, err := target.StartImport(ctx, admin, upload.Key, false)
+	real, err := target.StartImport(ctx, admin, upload.Key, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	}
 	// Applying to a populated app must fail without changing its graph.
 	before, _ := target.Client.Resource.Query().Count(ctx)
-	again, err := target.StartImport(ctx, admin, upload.Key, false)
+	again, err := target.StartImport(ctx, admin, upload.Key, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}

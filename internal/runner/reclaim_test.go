@@ -334,7 +334,7 @@ func TestReclaimedContentIsOmittedFromPortabilityPackages(t *testing.T) {
 	}
 	stop := f.operations(t)
 	defer stop()
-	export, err := f.dms.StartExport(ctx, "alice")
+	export, err := f.dms.StartExport(ctx, "alice", dms.ExportOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestReclaimedContentIsOmittedFromPortabilityPackages(t *testing.T) {
 	}
 	stopTarget := runServiceOperations(t, target)
 	defer stopTarget()
-	imp, err := target.StartImport(ctx, "organization-admin", uploaded.Key, false)
+	imp, err := target.StartImport(ctx, "organization-admin", uploaded.Key, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}

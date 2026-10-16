@@ -272,6 +272,19 @@ The response is 202 with a `Location` pointing to `/v1/operations/{id}`. Poll th
 
 Lookup fields may target any live collection in the organization, across workspace boundaries. Explicit assignments and defaults validate that every target is a live item of that collection, without requiring target read access or publication. Repeating a stored ID explicitly revalidates it; omitted lookup values survive unrelated edits. A lookup reference does not grant access to the target content.
 
+## Workspace export and import
+
+[Workspace packages](docs/workspace-portability.md) copy a shared workspace to
+another PaperGo instance, with its content types, lists, libraries, templates,
+views, smart folders, taxonomy, workflows and permissions. Include items and all
+file versions, or export configuration only. Workspace settings link to the export
+controls; administration provides export, validation and import. Imports create a
+new workspace alongside existing workspaces, optionally under a new name, and
+remap its internal references atomically. The
+[workflow examples](samples/workflows/README.md) and
+[batch receipt processing sample](samples/receipts-package/README.md) include ZIPs
+that can be installed directly from **Export and import**.
+
 ## Administrative backup and restore
 
 Build the administrative CLI with `go build -o papergo-admin ./cmd/admin`:

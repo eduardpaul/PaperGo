@@ -268,15 +268,45 @@ Each frame carries a durable numeric `id`. Reconnect with `Last-Event-ID` to rep
 
 Streams use a separate admission pool (four per user, 64 per process), send keepalives and close after 30 minutes for reconnect. Inactive accounts and revoked or expired personal REST tokens receive `reauthenticate` and disconnect. Live run status is reconciled by the workflow dispatcher.
 
-## Core configuration and content packages
+## Configuration and content packages
 
-`POST /v1/portability/exports` starts an organization-wide export. Poll the operation in `Location`; a successful result contains `package_url`, size, SHA256 and expiry. Only its starter with `organization.manage` can download the ZIP, for seven days. Exported objects stay referenced during that period and are then collected.
+[Workspace portability](workspace-portability.md) describes copying a workspace,
+including optional content, into another PaperGo instance. The administration
+screen supports workspace selection, a content switch, import validation and an
+optional name for the new workspace.
 
-The package contains the organization profile, users, groups, nested memberships, roles, assignments and preferences; taxonomy and relationship policies; field/content-type catalogs, schemas and templates; workspaces, collections, folders, items and permissions; views, smart folders and workflow definitions/triggers; retained revisions, history, publication snapshots and all file versions. Physical file bytes appear once. Credential secrets, audit records, delta/live cursors and job/run execution state belong to the installation. Deployment backup/restore preserves that installation state.
+`POST /v1/portability/exports` accepts `{ "workspace_id": "…", "include_data": true }`.
+Omit `workspace_id` to export the whole organization. The operation result contains
+`package_url`, size, SHA256 and expiry. Only its starter with
+`organization.manage` can download the ZIP, for seven days. Exported objects stay
+referenced during that period and are then collected.
 
-Send the ZIP as `application/zip` to `POST /v1/portability/imports?dry_run=true` to validate it without applying changes, then import with `dry_run=false`. Both require `organization.manage` and run as durable operations. Imports require an instance with no resources, preserve entity IDs, reconcile built-ins and the initial administrator, and reject other conflicts. They retain the importing administrator and use the same database constraints for the plan and application. All metadata applies atomically; file objects, and the text read from them, are checksummed and copied to local storage, typed indexes are rebuilt, and a search reindex is queued. Failed or dry-run imports leave no applied configuration/content. Unreferenced staged objects are collected.
+A workspace package includes its shared schema, taxonomy and group dependencies,
+collections, templates, views, shared smart folders, workflows and permissions.
+With content enabled it also includes items, folders, retained revisions,
+publication snapshots, history and all file versions. It excludes unrelated
+workspaces, personal Home and personal smart folders, organization settings,
+preferences and role assignments. Credential secrets, audit records, delta/live
+cursors and job/run execution state belong to the installation. Organization
+packages include the organization profile and complete portable identity graph.
+Deployment backup/restore preserves installation state.
 
-Limits are 100000 core records, a 64 MiB manifest and 4 GiB compressed package/uncompressed content. ZIP entries must exactly match the manifest; duplicate entries, unexpected paths, links, unsupported contracts and checksum/size mismatches are rejected. Packages use the current PaperGo core contract.
+Send the ZIP as `application/zip` to
+`POST /v1/portability/imports?dry_run=true` to validate without applying changes,
+then import with `dry_run=false`. Both require `organization.manage`. Workspace
+packages create a new workspace with remapped IDs in a populated instance;
+`workspace_name` optionally names the copy. Existing workspace names and conflicting
+shared dependencies fail atomically. Organization packages require an instance
+without resources and preserve entity IDs. Imports preserve the importing
+administrator. All metadata applies atomically; file objects and their extracted
+text are checksummed and copied to local storage, typed indexes are rebuilt and a
+search reindex is queued. Dry runs copy no objects and apply no metadata.
+Unreferenced staged objects are collected.
+
+Limits are 100000 core records, a 64 MiB manifest and 4 GiB compressed
+package/uncompressed content. ZIP entries must exactly match the manifest;
+duplicate entries, unexpected paths, links, unsupported contracts and checksum or
+size mismatches are rejected. Packages use the current PaperGo core contract.
 
 ## Supported document files
 

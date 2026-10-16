@@ -40,7 +40,7 @@
           "inputs": {
             "title": "Review topics for {item:name}",
             "assignees": [
-              "bob"
+              "role:owners"
             ],
             "input_schema": {
               "type": "object",
@@ -93,7 +93,7 @@
             "title": "Classification needs recomputation for {item:name}",
             "description": "The file, item metadata, or taxonomy changed during review. Re-run Taxonomy review to obtain new suggestions.",
             "assignees": [
-              "bob"
+              "role:owners"
             ],
             "wait": false
           },

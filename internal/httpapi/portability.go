@@ -16,7 +16,13 @@ func (a *API) registerPortability(m *http.ServeMux) {
 			a.problem(w, r, 503, "storage_unavailable", "package storage is unavailable")
 			return
 		}
-		op, err := a.DMS.StartExport(r.Context(), subject(r))
+		var options dms.ExportOptions
+		if r.ContentLength != 0 {
+			if !a.decode(w, r, &options) {
+				return
+			}
+		}
+		op, err := a.DMS.StartExport(r.Context(), subject(r), options)
 		if err != nil {
 			a.failure(w, r, err)
 			return
@@ -34,7 +40,7 @@ func (a *API) registerPortability(m *http.ServeMux) {
 			return
 		}
 		if strings.Split(r.Header.Get("Content-Type"), ";")[0] != "application/zip" {
-			a.problem(w, r, 415, "unsupported_media_type", "send a core package as application/zip")
+			a.problem(w, r, 415, "unsupported_media_type", "send a PaperGo package as application/zip")
 			return
 		}
 		dryRun := false
@@ -51,7 +57,7 @@ func (a *API) registerPortability(m *http.ServeMux) {
 			a.failure(w, r, err)
 			return
 		}
-		op, err := a.DMS.StartImport(r.Context(), subject(r), object.Key, dryRun)
+		op, err := a.DMS.StartImport(r.Context(), subject(r), object.Key, dryRun, r.URL.Query().Get("workspace_name"))
 		if err != nil {
 			a.failure(w, r, err)
 			return

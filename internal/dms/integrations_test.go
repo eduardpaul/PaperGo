@@ -450,7 +450,11 @@ func TestIntegrationPortablePackageRetainsGenericDataAndOmitsSecrets(t *testing.
 		t.Fatal(err)
 	}
 	var object storage.Object
-	if err = s.Write(ctx, func(t *Service) error { var e error; object, e = t.exportCorePackage(ctx, store); return e }); err != nil {
+	if err = s.Write(ctx, func(t *Service) error {
+		var e error
+		object, e = t.exportCorePackage(ctx, store, ExportOptions{})
+		return e
+	}); err != nil {
 		t.Fatal(err)
 	}
 	file, err := store.Open(ctx, object.Key)
@@ -506,4 +510,18 @@ func TestIntegrationPortablePackageRetainsGenericDataAndOmitsSecrets(t *testing.
 	if err != nil || data == nil || data.ProviderKind != IntegrationKindICalendar {
 		t.Fatal(data, err)
 	}
+	workspaceObject, _ := exportWorkspaceForTest(t, s, store, ExportOptions{WorkspaceID: list.WorkspaceID})
+	populated, _, _ := fixture(t)
+	workspaceResult, err := importWorkspaceForTest(t, populated, store, workspaceObject, false, "Imported integration")
+	if err != nil || !workspaceResult.Valid || len(workspaceResult.Warnings) == 0 {
+		t.Fatal(workspaceResult, err)
+	}
+	generic, err := populated.Client.IntegrationItem.Query().Only(ctx)
+	if err != nil || generic.IntegrationID != nil || generic.ExternalID == "" || generic.ItemID == itemID {
+		t.Fatal("workspace integration data not localized", generic, err)
+	}
+	if n, err := populated.Client.ListIntegration.Query().Count(ctx); err != nil || n != 0 {
+		t.Fatal("workspace integration connection was imported", n, err)
+	}
+
 }

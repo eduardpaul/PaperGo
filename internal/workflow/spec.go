@@ -17,6 +17,7 @@ import (
 
 	"papergo/internal/dms"
 	"papergo/internal/forms"
+	"papergo/internal/model"
 	"papergo/internal/tasks"
 )
 
@@ -198,7 +199,6 @@ var (
 	keyPattern      = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 	eventPattern    = regexp.MustCompile(`^wf\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)$`)
 	nodeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 _-]{0,99}$`)
-	cronParser      = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 )
 
 // WorkflowEvent is the event type a run of workflow key raises.
@@ -238,18 +238,11 @@ func ParseDefinition(raw json.RawMessage) (Definition, error) {
 
 // schedule returns the parsed cron schedule of t.
 func (t Trigger) schedule() (cron.Schedule, error) {
-	spec := t.Cron
-	if t.TimeZone != "" {
-		if _, err := time.LoadLocation(t.TimeZone); err != nil {
-			return nil, dms.Invalid("unknown time_zone " + t.TimeZone)
-		}
-		spec = "CRON_TZ=" + t.TimeZone + " " + spec
-	}
-	s, err := cronParser.Parse(spec)
+	schedule, err := model.WorkflowSchedule(t.Cron, t.TimeZone)
 	if err != nil {
-		return nil, dms.Invalid(fmt.Sprintf("invalid cron %q: %v", t.Cron, err))
+		return nil, dms.Invalid(err.Error())
 	}
-	return s, nil
+	return schedule, nil
 }
 
 // validate checks everything that needs no database: shapes, limits, the

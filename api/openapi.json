@@ -402,7 +402,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           },
           {
             "name": "type",
@@ -559,7 +559,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -694,7 +694,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           },
           {
             "name": "workspace_id",
@@ -1107,7 +1107,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           },
           {
             "schema": {
@@ -1483,7 +1483,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           },
           {
             "name": "direction",
@@ -1903,7 +1903,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "description": "Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
@@ -2079,7 +2079,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -2172,7 +2172,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -2462,7 +2462,7 @@
               "default": 50
             },
             "name": "$top",
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50.",
             "in": "query"
           }
         ]
@@ -2532,7 +2532,7 @@
               "default": 50
             },
             "name": "$top",
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50.",
             "in": "query"
           }
         ],
@@ -2680,7 +2680,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -3715,7 +3715,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -3971,7 +3971,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -5293,7 +5293,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -7337,7 +7337,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -7824,7 +7824,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -8636,7 +8636,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -9343,7 +9343,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -10326,7 +10326,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -12509,7 +12509,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -12903,7 +12903,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -13493,7 +13493,7 @@
         }
       ],
       "get": {
-        "summary": "Synchronize the caller\u2019s visible collection",
+        "summary": "Synchronize the caller’s visible collection",
         "description": "Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.",
         "parameters": [
           {
@@ -13521,7 +13521,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -13569,7 +13569,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
           },
           {
             "name": "actor",
@@ -13682,9 +13682,9 @@
         "tags": [
           "Portability"
         ],
-        "operationId": "startCoreExport",
-        "summary": "Export complete core configuration and content",
-        "description": "Organization-wide logical ZIP package. Includes identities and permissions, taxonomy, schemas, workspaces, workflows, saved queries, retained revisions/publications and deduplicated physical file objects. Credentials, audit records, cursors and execution state are installation-local. At most 100000 core records, 64 MiB manifest and 4 GiB ZIP/content. Export bytes expire after seven days.",
+        "operationId": "startPackageExport",
+        "summary": "Export an organization or workspace with optional content",
+        "description": "Requires organization.manage. Set workspace_id for a self-contained workspace package; omit it for a whole-organization package. include_data defaults to true; false exports configuration only. Workspace packages include shared schema/taxonomy/group dependencies, permissions, views, smart folders and workflows, and exclude personal Home, personal smart folders, unrelated workspaces and organization roles/preferences. References outside the workspace fail with an actionable error. Credentials and execution state are excluded. Limits: 100000 records, 64 MiB manifest, 4 GiB ZIP/content. Exports expire after seven days.",
         "x-required-scopes": [
           "organization.manage"
         ],
@@ -13721,6 +13721,16 @@
           "415": {
             "$ref": "#/components/responses/Problem"
           }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageExportOptions"
+              }
+            }
+          }
         }
       }
     },
@@ -13729,9 +13739,9 @@
         "tags": [
           "Portability"
         ],
-        "operationId": "startCoreImport",
-        "summary": "Validate and import a complete core package",
-        "description": "Imports into an instance with no resources. Stable entity IDs are preserved; existing built-ins and the initial administrator are reconciled. Other ID/name conflicts fail atomically. Requires organization.manage. dry_run validates through the same transaction and constraints, rolling back all changes. Preserves the importing administrator; no credential secrets or execution state are imported. Package objects are checksummed, bounded, deduplicated and copied to local storage. Poll operation result for valid/dry_run/rows/objects/errors.",
+        "operationId": "startPackageImport",
+        "summary": "Validate or import an organization or workspace package",
+        "description": "Requires organization.manage. A workspace package creates a new workspace alongside existing ones, with fresh entity IDs and remapped references. A configuration-only workspace template can declare template_subject to bind its single source account to the importing administrator in author metadata and user permissions, without creating a template account. Template packages cannot contain groups, group inboxes or organization identity settings. Literal text is not substituted. Set workspace_name to rename the copy; an existing live workspace name conflicts. Existing accounts retain their status/profile and organization roles; new subjects receive Member access, never source organization administration. Shared taxonomy and template content types are reused only when their configuration agrees; conflicting dependencies or group memberships fail atomically. Workspace imports do not change the organization profile or unrelated resources. Organization packages require an instance without resources and preserve stable IDs. dry_run exercises the same constraints and rolls back metadata changes; no file objects are copied. Poll the operation for valid/dry_run/rows/objects/warnings/errors and workspace_id/workspace_name for a workspace copy. Credentials and execution state are excluded. Workspace schedule cursors are rebuilt from current definitions after import time.",
         "x-required-scopes": [
           "organization.manage"
         ],
@@ -13743,6 +13753,15 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "workspace_name",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Name of the new workspace. Omit to use the source name. Valid only for workspace packages."
           }
         ],
         "requestBody": {
@@ -13797,8 +13816,8 @@
         "tags": [
           "Portability"
         ],
-        "operationId": "downloadCorePackage",
-        "summary": "Download an unexpired completed core export",
+        "operationId": "downloadPackage",
+        "summary": "Download an unexpired completed package",
         "description": "Only the starter with organization.manage can download it. Seven-day expiry; ETag is the package SHA256. Range and conditional downloads are supported.",
         "parameters": [
           {
@@ -21515,7 +21534,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Ids from the root to the term: /root/\u2026/term/."
+            "description": "Ids from the root to the term: /root/…/term/."
           },
           "labels": {
             "type": "object",
@@ -21720,7 +21739,7 @@
       },
       "TermCSV": {
         "type": "string",
-        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term \u2026 Level 7 Term."
+        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term … Level 7 Term."
       },
       "PortableTerm": {
         "type": "object",
@@ -22436,7 +22455,7 @@
           "languages": {
             "type": "string",
             "maxLength": 191,
-            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2\u201331 letters/underscores."
+            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
           }
         }
       },
@@ -22873,7 +22892,7 @@
           "languages": {
             "type": "string",
             "maxLength": 191,
-            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2\u201331 letters/underscores."
+            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
           }
         }
       },
@@ -24177,6 +24196,22 @@
           "read_at"
         ],
         "additionalProperties": false
+      },
+      "PackageExportOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Export this shared workspace and its dependencies. Omit for the whole organization."
+          },
+          "include_data": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include items, folders, retained revisions/publications and file bytes. False exports configuration only."
+          }
+        }
       },
       "WorkflowCompletion": {
         "type": "object",

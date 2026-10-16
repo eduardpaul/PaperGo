@@ -28,7 +28,7 @@ Tokens resolve exactly once. An entire object/array supplied by a token keeps it
 
 A score is ordinal; it does not extract an amount or predict an arbitrary number. Every answer contains `type`, `selected`, `probability` and the full keyed `probabilities`. Only noul answers add `noul`; only score answers add `score`. Probabilities retain their full precision. Raw logits are available from the diagnostic `cmd/decide`, outside normal workflow outputs.
 
-Use `{step:decide.answers.route.selected}` or `{step:decide.answers.route.probability}` with ordinary `if` nodes. Low probability succeeds on `done`. Errors use the workflow's `error` port. See [decision-routing.json](../samples/workflows/decision-routing.json) for an item-free custom-data workflow.
+Use `{step:decide.answers.route.selected}` or `{step:decide.answers.route.probability}` with ordinary `if` nodes. Low probability succeeds on `done`. Errors use the workflow's `error` port. Import the [workflow samples package](../samples/workflows/README.md) for an item-free custom-data routing workflow.
 
 ## Managed taxonomy
 
@@ -53,7 +53,7 @@ Document results include `source: {item_id,blob_id,text_id,item_version}`. `item
 
 `item.update` accepts optional `expected_version`, `expected_blob_id` and `expected_taxonomy`. Every supplied precondition is checked in the mutation transaction, in addition to ordinary write authorization. The taxonomy guard requires `taxonomy.read`. A failed condition follows `error` and writes nothing.
 
-The [taxonomy-review sample](../samples/workflows/taxonomy-review.json) reads a document, evaluates one configured term set, presents an editable term picker in an ordinary approval, then replaces a multi-value taxonomy field with approved IDs under all three guards. Rejection and no matches finish without a write. Changed state creates a follow-up task asking for recomputation. Configure the same set ID in both decision and task schema. A single-value field needs an explicitly selected ID, such as `{step:review.input.terms.0}`, and an explicit empty-value policy. A supplied multi-value array replaces the field; it is not appended. `tags.apply` remains an additive, model-independent free-tag action guarded by the current file version.
+The [taxonomy-review sample in the importable workflow package](../samples/workflows/README.md) reads a document, evaluates one configured term set, presents an editable term picker in an ordinary approval, then replaces a multi-value taxonomy field with approved IDs under all three guards. Rejection and no matches finish without a write. Changed state creates a follow-up task asking for recomputation. The package supplies the library, multi-value Topics field, managed terms and owner review tasks. When customizing it, configure the same set ID in both decision and task schema. A single-value field needs an explicitly selected ID, such as `{step:review.input.terms.0}`, and an explicit empty-value policy. A supplied multi-value array replaces the field; it is not appended. `tags.apply` remains an additive, model-independent free-tag action guarded by the current file version.
 
 ## Cache and execution
 

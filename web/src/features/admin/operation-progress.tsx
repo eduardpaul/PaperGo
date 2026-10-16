@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { api } from '@/api/http';
@@ -18,6 +19,8 @@ export interface Operation {
   error?: string;
   failures?: { item_id: string; reason: string }[];
   result?: {
+    workspace_id?: string;
+    workspace_name?: string;
     rows?: number;
     objects?: number;
     valid?: boolean;
@@ -83,6 +86,11 @@ export function OperationProgress({ id, label }: { id: string; label: string }) 
             <p>
               {data.result.rows} records · {data.result.objects ?? 0} files
             </p>
+          )}
+          {data.status === 'succeeded' && data.result.valid && data.result.workspace_id && !data.result.dry_run && (
+            <Link to="/w/$workspaceId" params={{ workspaceId: data.result.workspace_id }}>
+              Open {data.result.workspace_name ?? 'imported workspace'}
+            </Link>
           )}
           <ul>
             {data.result.warnings?.map((warning, index) => <li key={`warning-${index}`}>{warning}</li>)}

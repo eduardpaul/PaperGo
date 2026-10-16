@@ -17,20 +17,19 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"net/url"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"papergo/ent/resource"
 	"papergo/internal/ai"
 	"papergo/internal/ai/aitest"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
+	"papergo/internal/identity"
 	"papergo/internal/ocr"
 	"papergo/internal/resultcache"
 	"papergo/internal/runner"
@@ -144,7 +143,6 @@ type receiptEnv struct {
 	t         *testing.T
 	handler   http.Handler
 	api       *API
-	srv       *httptest.Server
 	pool      *sql.DB
 	dms       *dms.Service
 	wf        *workflow.Service
@@ -551,34 +549,47 @@ func TestReceiptsPackage(t *testing.T) {
 		Storage: store, Logger: logger, Ready: db.SQL.PingContext, MaxUpload: 32 << 20,
 	}
 	handler := api.Handler()
-	srv := httptest.NewServer(handler)
 	h := &receiptEnv{
-		t: t, handler: handler, api: api, srv: srv, dms: dmsService, wf: wf,
+		t: t, handler: handler, api: api, dms: dmsService, wf: wf,
 		batch: batch, clock: clock, logs: logs, runner: run, cfg: cfg,
 	}
 	h.pool = db.SQL
-	t.Cleanup(func() { srv.Close() })
 	t.Cleanup(func() { _ = h.runner.Shutdown(15 * time.Second) })
 
-	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Join(filepath.Dir(file), "..", "..")
-	cmd := exec.Command("python3", filepath.Join(root, "samples", "receipts-package", "setup.py"), "--url", srv.URL)
-	cmd.Env = append(os.Environ(), "PAPERGO_TOKEN="+testToken)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err = cmd.Run(); err != nil {
-		t.Fatalf("install: %v\n%s\n%s", err, stderr.String(), stdout.String())
+	// The same ZIP a user selects in Export and import provisions the sample.
+	// Drop the temporary organization role before running it, so ACL tests still
+	// exercise the importing author's ordinary workspace permissions.
+	if err = dmsService.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "alice"}, false); err != nil {
+		t.Fatal(err)
 	}
-	var installed struct {
-		WorkspaceID string `json:"workspace_id"`
-		LibraryID   string `json:"library_id"`
-		LinesID     string `json:"lines_id"`
-		WorkflowID  string `json:"workflow_id"`
+	sampleOperations(t, dmsService, store)
+	result := importSampleHTTP(t, handler, dmsService, "alice", "../../samples/receipts-package/receipts.zip", "", false)
+	if err = dmsService.Directory().SetAssignment(ctx, "organization-admin", identity.AdministratorRole, identity.Principal{Type: "user", ID: "alice"}, true); err != nil {
+		t.Fatal(err)
 	}
-	if err = json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &installed); err != nil || installed.WorkflowID == "" {
-		t.Fatalf("install output %s stderr %s: %v", stdout.String(), stderr.String(), err)
+	h.workspace = result.WorkspaceID
+	collections, err := dmsService.Client.Resource.Query().Where(resource.WorkspaceIDEQ(h.workspace), resource.KindIn(resource.KindLibrary, resource.KindList)).All(ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
-	h.workspace, h.library, h.lines, h.workflow = installed.WorkspaceID, installed.LibraryID, installed.LinesID, installed.WorkflowID
+	for _, collection := range collections {
+		switch collection.Name {
+		case "Receipts":
+			h.library = collection.ID
+		case "Receipt lines":
+			h.lines = collection.ID
+		}
+	}
+	flows, err := wf.List(ctx, "alice", h.workspace)
+	if err != nil || len(flows) != 2 {
+		t.Fatal(flows, err)
+	}
+	for _, flow := range flows {
+		if flow.Name == "Read receipts" {
+			h.workflow = flow.ID
+		}
+	}
+
 	t.Logf("installed workspace %s library %s lines %s workflow %s", h.workspace, h.library, h.lines, h.workflow)
 	h.editWorkflow(t)
 	h.disableSearch(t)
@@ -952,7 +963,18 @@ func (h *receiptEnv) grantBob(t *testing.T) {
 
 func (h *receiptEnv) enableCoordinator(t *testing.T) {
 	t.Helper()
-	rec := h.send(t, http.MethodPut, "/v1/workspaces/"+h.workspace+"/workflow-builtins/ai.batch", map[string]any{"enabled": true}, bobToken, "", 200)
+	var version int
+	for _, row := range h.builtins(t) {
+		if row.Key == "ai.batch" && len(row.Workflows) == 1 {
+			version = row.Workflows[0].Version
+		}
+	}
+	if version == 0 {
+		t.Fatal("sample did not import its batch coordinator")
+	}
+	// The imported coordinator is enabled already. Revise it as Bob because this
+	// test removes Alice's organization role to exercise source-author revocation.
+	rec := h.send(t, http.MethodPut, "/v1/workspaces/"+h.workspace+"/workflow-builtins/ai.batch", map[string]any{"enabled": true}, bobToken, strconv.Quote(strconv.Itoa(version)), 200)
 	var saved workflow.Workflow
 	decodeJSON(t, rec, &saved)
 	if !saved.Enabled || saved.ID == "" {

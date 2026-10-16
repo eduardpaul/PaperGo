@@ -117,7 +117,7 @@ func TestTaxonomyReviewSampleGuards(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			text := strings.NewReplacer("$LIBRARY", lib.ID, "$TERM_SET", set.ID, "$FIELD", "topics").Replace(string(raw))
+			text := strings.NewReplacer("$LIBRARY", lib.ID, "$TERM_SET", set.ID, "$FIELD", "topics", "role:owners", "bob").Replace(string(raw))
 			var save workflow.Save
 			if err = json.Unmarshal([]byte(text), &save); err != nil {
 				t.Fatal(err)
@@ -227,7 +227,7 @@ func TestTaxonomyReviewNativePDFAndOCR(t *testing.T) {
 		t.Fatal(err)
 	}
 	var save workflow.Save
-	if err = json.Unmarshal([]byte(strings.NewReplacer("$LIBRARY", lib.ID, "$TERM_SET", set.ID, "$FIELD", "topics").Replace(string(raw))), &save); err != nil {
+	if err = json.Unmarshal([]byte(strings.NewReplacer("$LIBRARY", lib.ID, "$TERM_SET", set.ID, "$FIELD", "topics", "role:owners", "bob").Replace(string(raw))), &save); err != nil {
 		t.Fatal(err)
 	}
 	w, err := f.wf.Create(ctx, "alice", f.ws.ID, save)

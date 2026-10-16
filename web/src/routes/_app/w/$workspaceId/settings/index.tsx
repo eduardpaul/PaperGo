@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
@@ -7,6 +7,7 @@ import { keys, resourceQuery } from '@/api/queries';
 import type { Resource } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
+import { useHasScope } from '@/features/admin/common';
 import { SmartFolderPackages } from '@/features/smart-folders/packages';
 import { can } from '@/features/lists/access';
 import { ConfirmDialog, SettingRow, SettingsSection } from '@/features/settings/section';
@@ -18,6 +19,7 @@ function GeneralPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const workspace = useQuery(resourceQuery(workspaceId));
+  const canTransfer = useHasScope('organization.manage');
   const [name, setName] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -79,6 +81,11 @@ function GeneralPage() {
         </SettingRow>
         </fieldset>
       </SettingsSection>
+      {canManage && canTransfer && !workspace.data.personal_owner_id && (
+        <SettingsSection title="Copy workspace" description="Export this workspace's configuration, with optional items and files, and import it into another PaperGo instance.">
+          <Link to="/admin/maintenance" search={{ workspace: workspaceId }}>Export this workspace</Link>
+        </SettingsSection>
+      )}
       <SmartFolderPackages workspaceId={workspaceId} />
       {canManage && !workspace.data.personal_owner_id && (
         <SettingsSection

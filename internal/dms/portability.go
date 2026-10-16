@@ -14,6 +14,7 @@ import (
 	"os"
 	"papergo/ent"
 	"papergo/ent/fielddefinition"
+	"papergo/ent/itemsurface"
 	"papergo/ent/operation"
 	"papergo/internal/identity"
 	"papergo/internal/storage"
@@ -60,35 +61,48 @@ type portableIntegration struct {
 }
 
 type corePackage struct {
-	Integrations []portableIntegration   `json:"integrations"`
-	Format       string                  `json:"format"`
-	Organization map[string]any          `json:"organization"`
-	Tables       map[string]packageTable `json:"tables"`
-	Objects      []packageObject         `json:"objects"`
+	Scope           string                  `json:"scope"`
+	WorkspaceID     string                  `json:"workspace_id,omitempty"`
+	TemplateSubject string                  `json:"template_subject,omitempty"`
+	IncludeData     bool                    `json:"include_data"`
+	Integrations    []portableIntegration   `json:"integrations"`
+	Format          string                  `json:"format"`
+	Organization    map[string]any          `json:"organization"`
+	Tables          map[string]packageTable `json:"tables"`
+	Objects         []packageObject         `json:"objects"`
 }
+type ExportOptions struct {
+	WorkspaceID string `json:"workspace_id,omitempty"`
+	IncludeData *bool  `json:"include_data,omitempty"`
+}
+
 type packagePayload struct {
-	ObjectKey string `json:"object_key,omitempty"`
-	DryRun    bool   `json:"dry_run,omitempty"`
+	ExportOptions
+	WorkspaceName string `json:"workspace_name,omitempty"`
+	ObjectKey     string `json:"object_key,omitempty"`
+	DryRun        bool   `json:"dry_run,omitempty"`
 }
 type PackageResult struct {
-	Warnings   []string   `json:"warnings,omitempty"`
-	Valid      bool       `json:"valid"`
-	DryRun     bool       `json:"dry_run,omitempty"`
-	Rows       int        `json:"rows,omitempty"`
-	Objects    int        `json:"objects,omitempty"`
-	Errors     []string   `json:"errors,omitempty"`
-	ObjectKey  string     `json:"object_key,omitempty"`
-	Size       int64      `json:"size,omitempty"`
-	SHA256     string     `json:"sha256,omitempty"`
-	PackageURL string     `json:"package_url,omitempty"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	WorkspaceID   string     `json:"workspace_id,omitempty"`
+	WorkspaceName string     `json:"workspace_name,omitempty"`
+	Warnings      []string   `json:"warnings,omitempty"`
+	Valid         bool       `json:"valid"`
+	DryRun        bool       `json:"dry_run,omitempty"`
+	Rows          int        `json:"rows,omitempty"`
+	Objects       int        `json:"objects,omitempty"`
+	Errors        []string   `json:"errors,omitempty"`
+	ObjectKey     string     `json:"object_key,omitempty"`
+	Size          int64      `json:"size,omitempty"`
+	SHA256        string     `json:"sha256,omitempty"`
+	PackageURL    string     `json:"package_url,omitempty"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
 }
 
 // RegisterPortability wires storage into the durable handlers before workers start.
 func (s *Service) RegisterPortability(store storage.Store) error {
 	validate := func(ctx context.Context, t *Service, subject, container string, raw json.RawMessage) error {
 		if container != "" {
-			return invalid("core packages are organization-wide")
+			return invalid("package operations have no container")
 		}
 		var in packagePayload
 		if err := json.Unmarshal(raw, &in); err != nil {
@@ -99,10 +113,30 @@ func (s *Service) RegisterPortability(store storage.Store) error {
 				return invalid("invalid package object")
 			}
 		}
+		if in.WorkspaceID != "" {
+			w, err := t.workspace(ctx, subject, in.WorkspaceID, "manage")
+			if err != nil {
+				return err
+			}
+			if w.PersonalOwnerID != nil {
+				return invalid("personal Home cannot be exported as a workspace package")
+			}
+		}
+		if in.WorkspaceName != "" {
+			return validateContainerMetadata(in.WorkspaceName, "")
+		}
 		return nil
 	}
 	if err := s.RegisterOperationHandler(OperationKindExport, OperationHandler{Scope: "organization.manage", Validate: validate, Step: func(ctx context.Context, t *Service, op *ent.Operation) error {
-		obj, err := t.exportCorePackage(ctx, store)
+		var in packagePayload
+		if err := json.Unmarshal(op.Payload, &in); err != nil {
+			return err
+		}
+		// Recheck access at execution time as well as when the operation is queued.
+		if err := validate(ctx, t, op.CreatedBy, "", op.Payload); err != nil {
+			return err
+		}
+		obj, err := t.exportCorePackage(ctx, store, in.ExportOptions)
 		if err != nil {
 			return err
 		}
@@ -130,11 +164,15 @@ func (s *Service) finishPackage(ctx context.Context, op *ent.Operation, result P
 	}
 	return s.Client.Operation.UpdateOne(op).SetResult(raw).SetStatus(operation.StatusSucceeded).SetProgress(100).SetCompletedAt(time.Now().UTC()).Exec(ctx)
 }
-func (s *Service) StartExport(ctx context.Context, subject string) (*ent.Operation, error) {
-	return s.EnqueueOperation(ctx, subject, "", OperationKindExport, json.RawMessage(`{}`))
+func (s *Service) StartExport(ctx context.Context, subject string, options ExportOptions) (*ent.Operation, error) {
+	raw, err := json.Marshal(packagePayload{ExportOptions: options})
+	if err != nil {
+		return nil, err
+	}
+	return s.EnqueueOperation(ctx, subject, "", OperationKindExport, raw)
 }
-func (s *Service) StartImport(ctx context.Context, subject, objectKey string, dryRun bool) (*ent.Operation, error) {
-	raw, _ := json.Marshal(packagePayload{objectKey, dryRun})
+func (s *Service) StartImport(ctx context.Context, subject, objectKey string, dryRun bool, workspaceName string) (*ent.Operation, error) {
+	raw, _ := json.Marshal(packagePayload{ObjectKey: objectKey, DryRun: dryRun, WorkspaceName: workspaceName})
 	return s.EnqueueOperation(ctx, subject, "", OperationKindImport, raw)
 }
 
@@ -162,8 +200,8 @@ func (s *Service) packageColumns(ctx context.Context, table string) ([]string, [
 	}
 	return columns, expressions, rows.Err()
 }
-func (s *Service) exportCorePackage(ctx context.Context, store storage.Store) (storage.Object, error) {
-	p := corePackage{Format: "papergo-core", Tables: map[string]packageTable{}, Objects: []packageObject{}, Organization: map[string]any{}}
+func (s *Service) exportCorePackage(ctx context.Context, store storage.Store, options ExportOptions) (storage.Object, error) {
+	p := corePackage{Scope: "organization", IncludeData: options.IncludeData == nil || *options.IncludeData, Format: "papergo-core", Tables: map[string]packageTable{}, Objects: []packageObject{}, Organization: map[string]any{}}
 	var identifier, name, description string
 	if err := s.tx.QueryRowContext(ctx, "SELECT identifier,display_name,description FROM identity_organizations WHERE singleton=1").Scan(&identifier, &name, &description); err != nil {
 		return storage.Object{}, err
@@ -176,7 +214,7 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store) (s
 	for _, source := range sources {
 		p.Integrations = append(p.Integrations, portableIntegration{source.ContainerID, source.Kind, source.Name})
 	}
-	count := 0
+	scanned := 0
 	for _, table := range packageTables {
 		columns, expressions, err := s.packageColumns(ctx, table)
 		if err != nil {
@@ -189,7 +227,8 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store) (s
 				}
 			}
 		}
-		rows, err := s.tx.QueryContext(ctx, "SELECT "+strings.Join(expressions, ",")+" FROM "+quotePackageColumn(table)+" ORDER BY id")
+		where, args := packageExportFilter(table, options)
+		rows, err := s.tx.QueryContext(ctx, "SELECT "+strings.Join(expressions, ",")+" FROM "+quotePackageColumn(table)+where+" ORDER BY id", args...)
 		if err != nil {
 			return storage.Object{}, err
 		}
@@ -210,8 +249,8 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store) (s
 				}
 			}
 			data.Rows = append(data.Rows, values)
-			count++
-			if count > 100000 {
+			scanned++
+			if options.WorkspaceID == "" && scanned > 100000 {
 				rows.Close()
 				return storage.Object{}, invalid("package exceeds 100000 core records")
 			}
@@ -222,6 +261,32 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store) (s
 			return storage.Object{}, err
 		}
 		p.Tables[table] = data
+	}
+	if options.WorkspaceID != "" {
+		p.Scope, p.WorkspaceID = "workspace", options.WorkspaceID
+		if err := selectWorkspacePackage(&p); err != nil {
+			return storage.Object{}, err
+		}
+		if err := s.validateWorkspaceSourceReferences(ctx, p); err != nil {
+			return storage.Object{}, err
+		}
+		if err := validateWorkspaceReferences(p); err != nil {
+			return storage.Object{}, err
+		}
+		if err := validateWorkspaceValues(p); err != nil {
+			return storage.Object{}, err
+		}
+	} else if !p.IncludeData {
+		if err := s.validateWorkspaceSourceReferences(ctx, p); err != nil {
+			return storage.Object{}, err
+		}
+	}
+	count := 0
+	for _, table := range p.Tables {
+		count += len(table.Rows)
+	}
+	if count > 100000 {
+		return storage.Object{}, invalid("package exceeds 100000 core records")
 	}
 	p.Objects = packageObjects(packageMaps(p.Tables["blobs"]), packageMaps(p.Tables["blob_texts"]))
 	raw, err := json.Marshal(p)
@@ -421,11 +486,29 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		err = invalid("unexpected data after package manifest")
 	}
 	reader.Close()
-	if err != nil || p.Format != "papergo-core" || len(p.Tables) != len(packageTables) {
+	if err != nil || p.Format != "papergo-core" || (p.Scope != "organization" && p.Scope != "workspace") || len(p.Tables) != len(packageTables) {
 		return result, invalid("invalid core package manifest")
 	}
-	for _, integration := range p.Integrations {
-		result.Warnings = append(result.Warnings, "Reconfigure "+integration.Name+" on list "+integration.ContainerID+": integration secrets are omitted from portable packages.")
+	if p.Scope == "organization" && p.WorkspaceID != "" {
+		return result, invalid("organization packages cannot specify workspace_id")
+	}
+	if p.TemplateSubject != "" && (p.Scope != "workspace" || p.IncludeData) {
+		return result, invalid("template_subject requires a configuration-only workspace package")
+	}
+	if !p.IncludeData {
+		if len(p.Objects) != 0 {
+			return result, invalid("configuration package contains file objects")
+		}
+		for _, table := range packageDataTables {
+			if len(p.Tables[table].Rows) != 0 {
+				return result, invalid("configuration package contains content")
+			}
+		}
+		for _, row := range packageMaps(p.Tables["resources"]) {
+			if row["kind"] == "item" || row["kind"] == "folder" {
+				return result, invalid("configuration package contains items or folders")
+			}
+		}
 	}
 	if len(entries) != 1+len(p.Objects) {
 		return result, invalid("package contains unexpected entries")
@@ -542,8 +625,34 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 	if err = s.tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM resources)").Scan(&populated); err != nil {
 		return result, err
 	}
-	if populated {
-		return result, ErrConflict
+	if populated && p.Scope == "organization" {
+		return result, invalid("organization packages require an instance without resources")
+	}
+	if p.Scope == "organization" && in.WorkspaceName != "" {
+		return result, invalid("workspace_name requires a workspace package")
+	}
+	if p.Scope == "workspace" {
+		if err = validateWorkspacePackage(p); err != nil {
+			return result, err
+		}
+		if err = s.bindWorkspaceTemplate(ctx, &p, subject); err != nil {
+			return result, err
+		}
+		var warnings []string
+		p, warnings, err = s.prepareWorkspacePackage(ctx, p, in.WorkspaceName)
+		if err != nil {
+			return result, err
+		}
+		result.Warnings = append(result.Warnings, warnings...)
+		result.WorkspaceID = p.WorkspaceID
+		for _, row := range packageMaps(p.Tables["resources"]) {
+			if row["id"] == p.WorkspaceID {
+				result.WorkspaceName, _ = row["name"].(string)
+			}
+		}
+	}
+	for _, integration := range p.Integrations {
+		result.Warnings = append(result.Warnings, "Reconfigure "+integration.Name+" on list "+integration.ContainerID+": integration secrets are omitted from portable packages.")
 	}
 	if !in.DryRun {
 		for _, obj := range p.Objects {
@@ -761,15 +870,23 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 			return err
 		}
 	}
-	if len(p.Organization) != 3 {
-		return invalid("invalid package organization profile")
-	}
-	if _, err = s.tx.ExecContext(ctx, "UPDATE identity_organizations SET identifier=?,display_name=?,description=?,version=version+1 WHERE singleton=1", p.Organization["identifier"], p.Organization["display_name"], p.Organization["description"]); err != nil {
-		return err
+	if p.Scope == "organization" {
+		if len(p.Organization) != 3 {
+			return invalid("invalid package organization profile")
+		}
+		if _, err = s.tx.ExecContext(ctx, "UPDATE identity_organizations SET identifier=?,display_name=?,description=?,version=version+1 WHERE singleton=1", p.Organization["identifier"], p.Organization["display_name"], p.Organization["description"]); err != nil {
+			return err
+		}
 	}
 	// Rebuild typed indexes from retained surfaces, including fields whose
 	// source index operation was unfinished. Execution records do not transfer.
-	projections, err := s.Client.ItemSurface.Query().All(ctx)
+	var collections []string
+	for _, row := range resources {
+		if row["kind"] == "list" || row["kind"] == "library" {
+			collections = append(collections, fmt.Sprint(row["id"]))
+		}
+	}
+	projections, err := s.Client.ItemSurface.Query().Where(itemsurface.ContainerIDIn(collections...)).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -794,7 +911,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 			return err
 		}
 	}
-	if _, err = s.Client.FieldDefinition.Update().SetIndexStatus(fielddefinition.IndexStatusReady).Save(ctx); err != nil {
+	if _, err = s.Client.FieldDefinition.Update().Where(fielddefinition.IDIn(packageIDs(p.Tables["field_definitions"])...)).SetIndexStatus(fielddefinition.IndexStatusReady).Save(ctx); err != nil {
 		return err
 	}
 	var invalidHome bool
