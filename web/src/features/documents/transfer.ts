@@ -20,6 +20,12 @@ export interface UploadOptions {
   signal?: AbortSignal;
 }
 
+export class UploadNameConflict extends ApiError {
+  constructor(readonly existingItem?: { id: string; version: number }) {
+    super(409, 'name_conflict', 'A file with this name is already here.');
+  }
+}
+
 /** Thrown when an upload is cancelled. */
 export class UploadCancelled extends Error {
   constructor() {
@@ -67,7 +73,11 @@ export function uploadDocument(
         resolve(payload as DocumentUpload);
         return;
       }
-      const problem = payload as { code?: string; detail?: string; title?: string } | undefined;
+      const problem = payload as { code?: string; detail?: string; title?: string; existing_item?: { id: string; version: number } } | undefined;
+      if (xhr.status === 409 && problem?.code === 'name_conflict') {
+        reject(new UploadNameConflict(problem.existing_item));
+        return;
+      }
       reject(new ApiError(xhr.status, problem?.code ?? 'error', problem?.detail ?? problem?.title ?? xhr.statusText));
     };
     xhr.onerror = () => reject(new ApiError(0, 'network', 'The upload was interrupted. Check the connection and try again.'));
@@ -77,11 +87,12 @@ export function uploadDocument(
   });
 }
 
-export async function replaceContent(itemId: string, version: number, file: File) {
+export async function replaceContent(itemId: string, version: number, file: File, signal?: AbortSignal) {
   const request = replaceContentRequest(itemId, version, file);
-  return api<{ duplicates?: { item_id: string; name: string }[] | null }>(request.path, {
+  return api<DocumentUpload['file'] & Pick<DocumentUpload, 'duplicates'>>(request.path, {
     method: request.method,
     raw: file,
+    signal,
     ifMatch: request.ifMatch,
     headers: request.headers,
   });

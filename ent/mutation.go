@@ -19567,6 +19567,7 @@ type ItemRevisionMutation struct {
 	created_at             *time.Time
 	container_id           *string
 	content_type_id        *string
+	filename               *string
 	revision_number        *int
 	addrevision_number     *int
 	name                   *string
@@ -19920,6 +19921,42 @@ func (m *ItemRevisionMutation) BlobIDCleared() bool {
 func (m *ItemRevisionMutation) ResetBlobID() {
 	m.blob = nil
 	delete(m.clearedFields, itemrevision.FieldBlobID)
+}
+
+// SetFilename sets the "filename" field.
+func (m *ItemRevisionMutation) SetFilename(s string) {
+	m.filename = &s
+}
+
+// Filename returns the value of the "filename" field in the mutation.
+func (m *ItemRevisionMutation) Filename() (r string, exists bool) {
+	v := m.filename
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFilename returns the old "filename" field's value of the ItemRevision entity.
+// If the ItemRevision object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemRevisionMutation) OldFilename(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFilename is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFilename requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFilename: %w", err)
+	}
+	return oldValue.Filename, nil
+}
+
+// ResetFilename resets all changes to the "filename" field.
+func (m *ItemRevisionMutation) ResetFilename() {
+	m.filename = nil
 }
 
 // SetRevisionNumber sets the "revision_number" field.
@@ -20306,7 +20343,7 @@ func (m *ItemRevisionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ItemRevisionMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, itemrevision.FieldCreatedAt)
 	}
@@ -20324,6 +20361,9 @@ func (m *ItemRevisionMutation) Fields() []string {
 	}
 	if m.blob != nil {
 		fields = append(fields, itemrevision.FieldBlobID)
+	}
+	if m.filename != nil {
+		fields = append(fields, itemrevision.FieldFilename)
 	}
 	if m.revision_number != nil {
 		fields = append(fields, itemrevision.FieldRevisionNumber)
@@ -20360,6 +20400,8 @@ func (m *ItemRevisionMutation) Field(name string) (ent.Value, bool) {
 		return m.SchemaRevisionID()
 	case itemrevision.FieldBlobID:
 		return m.BlobID()
+	case itemrevision.FieldFilename:
+		return m.Filename()
 	case itemrevision.FieldRevisionNumber:
 		return m.RevisionNumber()
 	case itemrevision.FieldName:
@@ -20391,6 +20433,8 @@ func (m *ItemRevisionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldSchemaRevisionID(ctx)
 	case itemrevision.FieldBlobID:
 		return m.OldBlobID(ctx)
+	case itemrevision.FieldFilename:
+		return m.OldFilename(ctx)
 	case itemrevision.FieldRevisionNumber:
 		return m.OldRevisionNumber(ctx)
 	case itemrevision.FieldName:
@@ -20451,6 +20495,13 @@ func (m *ItemRevisionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBlobID(v)
+		return nil
+	case itemrevision.FieldFilename:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFilename(v)
 		return nil
 	case itemrevision.FieldRevisionNumber:
 		v, ok := value.(int)
@@ -20577,6 +20628,9 @@ func (m *ItemRevisionMutation) ResetField(name string) error {
 		return nil
 	case itemrevision.FieldBlobID:
 		m.ResetBlobID()
+		return nil
+	case itemrevision.FieldFilename:
+		m.ResetFilename()
 		return nil
 	case itemrevision.FieldRevisionNumber:
 		m.ResetRevisionNumber()

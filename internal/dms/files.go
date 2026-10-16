@@ -419,7 +419,11 @@ func (s *Service) visibleFiles(ctx context.Context, subject string, q *ent.Resou
 	for _, r := range rows {
 		f := &File{Resource: r}
 		if rev := revisions[r.ID]; rev != nil && rev.BlobID != nil {
-			f.Blob = blobs[*rev.BlobID]
+			if file := blobs[*rev.BlobID]; file != nil {
+				copy := *file
+				copy.Filename = rev.Filename
+				f.Blob = &copy
+			}
 		}
 		out = append(out, f)
 	}

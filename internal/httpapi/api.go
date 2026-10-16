@@ -320,11 +320,17 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	problem := func(status int, code, message string) {
 		a.problem(w, r, status, code, message, operationIndex...)
 	}
+	var nameConflict *dms.DocumentNameConflict
 	var duplicate *dms.DuplicateError
 	var validation *dms.ValidationError
 	var identityValidation *identity.ValidationError
 	var max *http.MaxBytesError
 	switch {
+	case errors.As(err, &nameConflict):
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusConflict)
+		requestID, _ := r.Context().Value(requestKey{}).(string)
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": "Conflict", "status": 409, "code": "name_conflict", "detail": nameConflict.Error(), "request_id": requestID, "existing_item": nameConflict})
 	case errors.As(err, &duplicate):
 		problem(409, "duplicate_file", duplicate.Error()+"; matching item "+duplicate.Documents[0].ItemID)
 	case errors.As(err, &identityValidation):

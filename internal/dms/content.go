@@ -387,6 +387,9 @@ func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent
 	if b.Availability == blob.AvailabilityReclaimed {
 		return nil, ErrContentUnavailable
 	}
+	if rev.BlobID != nil && *rev.BlobID == b.ID {
+		b.Filename = rev.Filename
+	}
 	return b, nil
 }
 
@@ -464,6 +467,9 @@ func (s *Service) FileVersions(ctx context.Context, subject, id string, after, l
 	}
 	out := make([]FileVersion, len(rows))
 	for i, b := range rows {
+		if b.ID == current.ID {
+			b.Filename = current.Filename
+		}
 		out[i] = FileVersion{ID: b.ID, Version: b.Version, Filename: b.Filename, ContentType: b.ContentType, Size: b.Size, SHA256: b.Sha256, CreatedAt: b.CreatedAt, CreatedBy: authors[b.ID], IsCurrent: b.ID == current.ID, Availability: string(b.Availability)}
 	}
 	return numberedPage(out, limit, func(v FileVersion) int { return v.Version }), nil

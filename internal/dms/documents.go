@@ -89,6 +89,18 @@ func (s *Service) CreateDocument(ctx context.Context, subject, libraryID string,
 		if name == "" {
 			name = content.Filename
 		}
+		existing, err := t.Client.Resource.Query().Where(resource.ParentIDEQ(parent.ID), resource.NameKeyEQ(nameKey(strings.TrimSpace(name))), resource.DeletedAtIsNil()).Only(ctx)
+		if err == nil {
+			if existing.Kind == resource.KindItem {
+				if _, access := t.authorize(ctx, subject, existing.ID, "write"); access == nil {
+					return &DocumentNameConflict{ItemID: existing.ID, Version: existing.Version}
+				}
+			}
+			return ErrConflict
+		}
+		if !ent.IsNotFound(err) {
+			return err
+		}
 		item, err := t.create(ctx, subject, parent.ID, CreateResource{Kind: "item", Name: name, ContentTypeID: metadata.ContentTypeID, Tags: metadata.Tags, Values: metadata.Values}, &content)
 		if err != nil {
 			return err

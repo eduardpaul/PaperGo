@@ -24,6 +24,23 @@ Libraries accept `duplicate_policy: "allow" | "warn" | "block"` on creation and 
 
 `POST /v1/items/{id}/content/versions/{number}/restore` restores an earlier file that still has its bytes as a new file version. A reclaimed version answers `410 content_unavailable`. It requires item write permission, `list.write` and `document.write` and the current resource `If-Match`. It retains current metadata, restores the selected bytes and filename, and follows the library's publication settings. In a library with explicit publishing, restoring creates a draft and leaves the publication unchanged. Earlier files and metadata revisions remain immutable. Identical SHA-256 and size reuse one stored byte object across items and workspaces. File names, media types, language hints and access remain specific to each file version. Purging an item queues its objects once; cleanup rechecks all file-version references while holding the database write lock. Bytes shared by another item remain available. A periodic collector runs each minute and removes unreferenced completed objects older than one hour, including objects left by interrupted uploads. Failed storage deletion stays queued for retry.
 
+## Renaming and upload name conflicts
+
+Use an item's **Rename** action or edit its name in Details. The new content
+revision freezes the attachment display name used by the File tab, downloads,
+WebDAV and workflow file reads. Omitting an extension keeps the current one.
+Published readers keep the published filename until the rename is published;
+older revisions and uploaded file-version metadata retain their names. Renaming
+does not replace bytes or raise a file-change event. Sibling names remain unique
+ignoring case, and conflicts leave the item unchanged.
+
+An upload name collision returns `409 name_conflict` with `existing_item` (ID and
+resource version) only when the uploader can write that item. In the upload tray,
+choose **Rename** to retry with a new file and resource name, or **Replace
+existing** to upload to that item with the returned `If-Match` version. A concurrent
+edit rejects the replacement. Inaccessible items and folders disclose no replace
+target. Rejected uploads remove their temporary stored objects.
+
 ## Personal and group Inbox intake
 
 GET `/v1/identity/me/home` provisions one Home workspace with Documents and Inbox libraries. Both use the Documents template, shared Document content type, versioning off and the default document view. Their IDs remain stable even when names change.

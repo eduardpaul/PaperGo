@@ -247,3 +247,40 @@ func TestDocumentMultipartDatabaseFailureRollsBackAndCleansStorage(t *testing.T)
 		t.Fatal("database failure left bytes", len(files), err)
 	}
 }
+
+func TestUploadNameConflictAndRenameDownload(t *testing.T) {
+	h, s, _ := setup(t)
+	ctx := t.Context()
+	ws, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Files"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib, err := s.Create(ctx, "alice", ws.ID, dms.CreateResource{Kind: "library", Name: "Documents"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := "/v1/resources/" + lib.ID + "/documents"
+	first := documentRequest(t, h, endpoint, documentPart{"file", "original.pdf", "%PDF-first"})
+	var doc struct {
+		Item ent.Resource `json:"item"`
+	}
+	if first.Code != 201 || json.Unmarshal(first.Body.Bytes(), &doc) != nil {
+		t.Fatal(first.Code, first.Body.String())
+	}
+	conflict := documentRequest(t, h, endpoint, documentPart{"file", "ORIGINAL.pdf", "%PDF-second"})
+	var problem struct {
+		Code     string                   `json:"code"`
+		Existing dms.DocumentNameConflict `json:"existing_item"`
+	}
+	if conflict.Code != 409 || json.Unmarshal(conflict.Body.Bytes(), &problem) != nil || problem.Code != "name_conflict" || problem.Existing.ItemID != doc.Item.ID || problem.Existing.Version != 1 {
+		t.Fatal(conflict.Code, conflict.Body.String())
+	}
+	renamed := request(h, "PATCH", "/v1/resources/"+doc.Item.ID, `{"name":"Quarterly"}`, testToken, `"1"`, "application/json")
+	if renamed.Code != 200 {
+		t.Fatal(renamed.Code, renamed.Body.String())
+	}
+	download := request(h, "GET", "/v1/items/"+doc.Item.ID+"/content", "", testToken, "", "")
+	if download.Code != 200 || !strings.Contains(download.Header().Get("Content-Disposition"), "Quarterly.pdf") || download.Body.String() != "%PDF-first" {
+		t.Fatal(download.Code, download.Header(), download.Body.String())
+	}
+}

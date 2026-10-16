@@ -3,13 +3,15 @@ import { useNavigate } from '@tanstack/react-router';
 import { AlertTriangle, Check, ChevronDown, ChevronUp, FileUp, RotateCw, X } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { keys } from '@/api/queries';
-import type { DocumentUpload } from '@/api/types';
+import type { DocumentUpload, Resource } from '@/api/types';
+import { FormDialog } from '@/components/form-dialog';
+import { Input, Label } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { isApiError } from '@/api/http';
+import { api, isApiError } from '@/api/http';
 import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 import { cn } from '@/lib/utils';
-import { uploadDocument, UploadCancelled, type DocumentMetadata } from './transfer';
+import { uploadDocument, replaceContent, UploadNameConflict, UploadCancelled, type DocumentMetadata } from './transfer';
 
 /** Where files go and how to open what they became. */
 export interface UploadTarget {
@@ -31,6 +33,10 @@ export interface UploadEntry {
   error?: string;
   /** Network and server failures can be retried; refused files cannot. */
   retryable?: boolean;
+  nameConflict?: boolean;
+  conflict?: { id: string; version: number };
+  replaceTarget?: { id: string; version: number };
+  name?: string;
   result?: DocumentUpload;
 }
 
@@ -42,8 +48,8 @@ interface Uploads {
 
 /** Upload failures in people's words: the server's generic conflict here means the file name is taken. */
 function uploadError(error: unknown): string {
-  if (isApiError(error, 409) && error.code === 'conflict')
-    return 'A file with this name is already here. Rename the file, or replace the existing one from its File tab.';
+  if (isApiError(error, 409) && ['conflict', 'name_conflict'].includes(error.code))
+    return 'A file with this name is already here. Choose Rename, or Replace existing when available.';
   const message = problemMessage(error);
   return message.charAt(0).toUpperCase() + message.slice(1);
 }
@@ -86,10 +92,17 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
       const controller = new AbortController();
       controllers.current.set(entry.id, controller);
       patch(entry.id, { status: 'uploading', loaded: 0, error: undefined });
-      uploadDocument(entry.target.url, entry.file, entry.target.metadata?.(entry.file), {
-        signal: controller.signal,
-        onProgress: (loaded) => patch(entry.id, { loaded }),
-      }).then(
+      const request = entry.replaceTarget
+        ? replaceContent(entry.replaceTarget.id, entry.replaceTarget.version, entry.file, controller.signal).then(async (response): Promise<DocumentUpload> => ({
+            item: (await api<Resource>(`/v1/resources/${entry.replaceTarget!.id}`, { signal: controller.signal })).data,
+            file: response.data,
+            duplicates: response.data.duplicates,
+          }))
+        : uploadDocument(entry.target.url, entry.file, { ...entry.target.metadata?.(entry.file), ...(entry.name ? { name: entry.name } : {}) }, {
+            signal: controller.signal,
+            onProgress: (loaded) => patch(entry.id, { loaded }),
+          });
+      request.then(
         async (result) => {
           finish(entry, { status: 'done', loaded: entry.file.size, result });
           await queryClient.invalidateQueries({ queryKey: keys.resources });
@@ -98,9 +111,11 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
         (error: unknown) =>
           finish(
             entry,
-            error instanceof UploadCancelled
+            error instanceof UploadCancelled || controller.signal.aborted
               ? { status: 'cancelled', retryable: true }
-              : { status: 'failed', error: uploadError(error), retryable: !isApiError(error) || error.status === 0 || error.status >= 500 },
+              : { status: 'failed', error: uploadError(error), retryable: !isApiError(error) || error.status === 0 || error.status >= 500,
+                  nameConflict: isApiError(error, 409) && ['conflict', 'name_conflict'].includes(error.code),
+                  conflict: error instanceof UploadNameConflict ? error.existingItem : undefined },
           ),
       );
     },
@@ -148,6 +163,15 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
           started.current.delete(id);
           patch(id, { status: 'queued', loaded: 0, error: undefined });
         }}
+        onRename={(entry, name) => {
+          started.current.delete(entry.id);
+          patch(entry.id, { file: new File([entry.file], name, { type: entry.file.type, lastModified: entry.file.lastModified }), name,
+            status: 'queued', loaded: 0, error: undefined, nameConflict: false, conflict: undefined, replaceTarget: undefined });
+        }}
+        onReplace={(entry) => {
+          started.current.delete(entry.id);
+          patch(entry.id, { replaceTarget: entry.conflict, status: 'queued', loaded: 0, error: undefined, nameConflict: false });
+        }}
         onClear={() =>
           setEntries((current) => current.filter((entry) => entry.status === 'queued' || entry.status === 'uploading'))
         }
@@ -161,15 +185,21 @@ function UploadTray({
   onCancel,
   onRetry,
   onClear,
+  onRename,
+  onReplace,
 }: {
   entries: UploadEntry[];
   onCancel: (id: string) => void;
   onRetry: (id: string) => void;
   onClear: () => void;
+  onRename: (entry: UploadEntry, name: string) => void;
+  onReplace: (entry: UploadEntry) => void;
 }) {
   const format = useFormat();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [renaming, setRenaming] = useState<UploadEntry>();
+  const [name, setName] = useState('');
   if (entries.length === 0) return null;
   const active = entries.filter((entry) => entry.status === 'queued' || entry.status === 'uploading').length;
   const failed = entries.filter((entry) => entry.status === 'failed').length;
@@ -233,6 +263,10 @@ function UploadTray({
                       <RotateCw /> Retry
                     </Button>
                   )}
+                  {entry.status === 'failed' && entry.nameConflict && <>
+                    <Button size="sm" onClick={() => { setRenaming(entry); setName(entry.file.name); }}>Rename</Button>
+                    {entry.conflict && <Button size="sm" onClick={() => onReplace(entry)}>Replace existing</Button>}
+                  </>}
                   {link && (
                     <Button size="sm" variant="ghost" className="h-6 px-1.5" onClick={() => void navigate(link as never)}>
                       Open
@@ -269,6 +303,9 @@ function UploadTray({
           })}
         </ul>
       )}
+      {renaming && <FormDialog open title="Rename upload" submitLabel="Rename and upload" submitDisabled={!name.trim() || /[/\\]/.test(name)} onClose={() => setRenaming(undefined)} onSubmit={() => { onRename(renaming, name.trim()); setRenaming(undefined); }}>
+        <Label htmlFor="upload-name">File name</Label><Input id="upload-name" value={name} maxLength={1024} onChange={(event) => setName(event.target.value)} autoFocus />
+      </FormDialog>}
     </section>
   );
 }

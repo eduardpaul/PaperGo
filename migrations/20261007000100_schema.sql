@@ -108,7 +108,7 @@ CREATE TABLE item_revisions (
  item_id TEXT NOT NULL REFERENCES resources(id), container_id TEXT NOT NULL REFERENCES resources(id),
  schema_revision_id TEXT NOT NULL, content_type_id TEXT NOT NULL, revision_number INTEGER NOT NULL CHECK(revision_number>0),
  name TEXT NOT NULL, tags JSON NOT NULL CHECK(json_valid(tags) AND json_type(tags)='array'), payload JSON NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
- created_by TEXT NOT NULL, blob_id TEXT REFERENCES blobs(id),
+ created_by TEXT NOT NULL, blob_id TEXT REFERENCES blobs(id), filename TEXT NOT NULL DEFAULT '' CHECK((blob_id IS NULL)=(filename='')),
  FOREIGN KEY(container_id,schema_revision_id) REFERENCES schema_revisions(container_id,id),
   FOREIGN KEY(content_type_id) REFERENCES content_types(id)
 );

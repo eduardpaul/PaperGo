@@ -1322,12 +1322,18 @@ func init() {
 	itemrevisionDescCreatedAt := itemrevisionMixinFields0[1].Descriptor()
 	// itemrevision.DefaultCreatedAt holds the default value on creation for the created_at field.
 	itemrevision.DefaultCreatedAt = itemrevisionDescCreatedAt.Default.(func() time.Time)
+	// itemrevisionDescFilename is the schema descriptor for filename field.
+	itemrevisionDescFilename := itemrevisionFields[5].Descriptor()
+	// itemrevision.DefaultFilename holds the default value on creation for the filename field.
+	itemrevision.DefaultFilename = itemrevisionDescFilename.Default.(string)
+	// itemrevision.FilenameValidator is a validator for the "filename" field. It is called by the builders before save.
+	itemrevision.FilenameValidator = itemrevisionDescFilename.Validators[0].(func(string) error)
 	// itemrevisionDescRevisionNumber is the schema descriptor for revision_number field.
-	itemrevisionDescRevisionNumber := itemrevisionFields[5].Descriptor()
+	itemrevisionDescRevisionNumber := itemrevisionFields[6].Descriptor()
 	// itemrevision.RevisionNumberValidator is a validator for the "revision_number" field. It is called by the builders before save.
 	itemrevision.RevisionNumberValidator = itemrevisionDescRevisionNumber.Validators[0].(func(int) error)
 	// itemrevisionDescName is the schema descriptor for name field.
-	itemrevisionDescName := itemrevisionFields[6].Descriptor()
+	itemrevisionDescName := itemrevisionFields[7].Descriptor()
 	// itemrevision.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	itemrevision.NameValidator = func() func(string) error {
 		validators := itemrevisionDescName.Validators
@@ -1346,7 +1352,7 @@ func init() {
 		}
 	}()
 	// itemrevisionDescCreatedBy is the schema descriptor for created_by field.
-	itemrevisionDescCreatedBy := itemrevisionFields[9].Descriptor()
+	itemrevisionDescCreatedBy := itemrevisionFields[10].Descriptor()
 	// itemrevision.CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
 	itemrevision.CreatedByValidator = itemrevisionDescCreatedBy.Validators[0].(func(string) error)
 	// itemrevisionDescID is the schema descriptor for id field.

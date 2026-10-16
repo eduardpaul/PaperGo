@@ -22,3 +22,12 @@ type ValidationError struct{ Message string }
 
 func (e *ValidationError) Error() string { return e.Message }
 func invalid(message string) error       { return &ValidationError{Message: message} }
+
+// DocumentNameConflict exposes a replace target only when the uploader may write it.
+type DocumentNameConflict struct {
+	ItemID  string `json:"id"`
+	Version int    `json:"version"`
+}
+
+func (e *DocumentNameConflict) Error() string { return "a file with this name is already here" }
+func (e *DocumentNameConflict) Unwrap() error { return ErrConflict }

@@ -26,6 +26,8 @@ const (
 	FieldSchemaRevisionID = "schema_revision_id"
 	// FieldBlobID holds the string denoting the blob_id field in the database.
 	FieldBlobID = "blob_id"
+	// FieldFilename holds the string denoting the filename field in the database.
+	FieldFilename = "filename"
 	// FieldRevisionNumber holds the string denoting the revision_number field in the database.
 	FieldRevisionNumber = "revision_number"
 	// FieldName holds the string denoting the name field in the database.
@@ -85,6 +87,7 @@ var Columns = []string{
 	FieldContentTypeID,
 	FieldSchemaRevisionID,
 	FieldBlobID,
+	FieldFilename,
 	FieldRevisionNumber,
 	FieldName,
 	FieldTags,
@@ -105,6 +108,10 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultFilename holds the default value on creation for the "filename" field.
+	DefaultFilename string
+	// FilenameValidator is a validator for the "filename" field. It is called by the builders before save.
+	FilenameValidator func(string) error
 	// RevisionNumberValidator is a validator for the "revision_number" field. It is called by the builders before save.
 	RevisionNumberValidator func(int) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
@@ -153,6 +160,11 @@ func BySchemaRevisionID(opts ...sql.OrderTermOption) OrderOption {
 // ByBlobID orders the results by the blob_id field.
 func ByBlobID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBlobID, opts...).ToFunc()
+}
+
+// ByFilename orders the results by the filename field.
+func ByFilename(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFilename, opts...).ToFunc()
 }
 
 // ByRevisionNumber orders the results by the revision_number field.

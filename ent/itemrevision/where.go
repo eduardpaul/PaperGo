@@ -95,6 +95,11 @@ func BlobID(v string) predicate.ItemRevision {
 	return predicate.ItemRevision(sql.FieldEQ(FieldBlobID, v))
 }
 
+// Filename applies equality check predicate on the "filename" field. It's identical to FilenameEQ.
+func Filename(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldEQ(FieldFilename, v))
+}
+
 // RevisionNumber applies equality check predicate on the "revision_number" field. It's identical to RevisionNumberEQ.
 func RevisionNumber(v int) predicate.ItemRevision {
 	return predicate.ItemRevision(sql.FieldEQ(FieldRevisionNumber, v))
@@ -483,6 +488,71 @@ func BlobIDEqualFold(v string) predicate.ItemRevision {
 // BlobIDContainsFold applies the ContainsFold predicate on the "blob_id" field.
 func BlobIDContainsFold(v string) predicate.ItemRevision {
 	return predicate.ItemRevision(sql.FieldContainsFold(FieldBlobID, v))
+}
+
+// FilenameEQ applies the EQ predicate on the "filename" field.
+func FilenameEQ(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldEQ(FieldFilename, v))
+}
+
+// FilenameNEQ applies the NEQ predicate on the "filename" field.
+func FilenameNEQ(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldNEQ(FieldFilename, v))
+}
+
+// FilenameIn applies the In predicate on the "filename" field.
+func FilenameIn(vs ...string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldIn(FieldFilename, vs...))
+}
+
+// FilenameNotIn applies the NotIn predicate on the "filename" field.
+func FilenameNotIn(vs ...string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldNotIn(FieldFilename, vs...))
+}
+
+// FilenameGT applies the GT predicate on the "filename" field.
+func FilenameGT(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldGT(FieldFilename, v))
+}
+
+// FilenameGTE applies the GTE predicate on the "filename" field.
+func FilenameGTE(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldGTE(FieldFilename, v))
+}
+
+// FilenameLT applies the LT predicate on the "filename" field.
+func FilenameLT(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldLT(FieldFilename, v))
+}
+
+// FilenameLTE applies the LTE predicate on the "filename" field.
+func FilenameLTE(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldLTE(FieldFilename, v))
+}
+
+// FilenameContains applies the Contains predicate on the "filename" field.
+func FilenameContains(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldContains(FieldFilename, v))
+}
+
+// FilenameHasPrefix applies the HasPrefix predicate on the "filename" field.
+func FilenameHasPrefix(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldHasPrefix(FieldFilename, v))
+}
+
+// FilenameHasSuffix applies the HasSuffix predicate on the "filename" field.
+func FilenameHasSuffix(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldHasSuffix(FieldFilename, v))
+}
+
+// FilenameEqualFold applies the EqualFold predicate on the "filename" field.
+func FilenameEqualFold(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldEqualFold(FieldFilename, v))
+}
+
+// FilenameContainsFold applies the ContainsFold predicate on the "filename" field.
+func FilenameContainsFold(v string) predicate.ItemRevision {
+	return predicate.ItemRevision(sql.FieldContainsFold(FieldFilename, v))
 }
 
 // RevisionNumberEQ applies the EQ predicate on the "revision_number" field.

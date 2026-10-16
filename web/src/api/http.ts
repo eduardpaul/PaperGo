@@ -19,6 +19,7 @@ export function isApiError(error: unknown, status?: number): error is ApiError {
 }
 
 interface RequestOptions {
+  signal?: AbortSignal;
   method?: string;
   body?: unknown;
   raw?: BodyInit;
@@ -60,7 +61,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
   }
 
-  const response = await fetch(url, { method: options.method ?? 'GET', headers, body, credentials: 'same-origin' });
+  const response = await fetch(url, { method: options.method ?? 'GET', headers, body, signal: options.signal, credentials: 'same-origin' });
   if (response.status === 204) return { data: undefined as T, etag: etagOf(response), status: 204 };
 
   const text = await response.text();

@@ -879,6 +879,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "container_id", Type: field.TypeString},
 		{Name: "content_type_id", Type: field.TypeString},
+		{Name: "filename", Type: field.TypeString, Size: 4096, Default: ""},
 		{Name: "revision_number", Type: field.TypeInt},
 		{Name: "name", Type: field.TypeString, Size: 4096},
 		{Name: "tags", Type: field.TypeJSON},
@@ -896,19 +897,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "item_revisions_blobs_blob",
-				Columns:    []*schema.Column{ItemRevisionsColumns[9]},
+				Columns:    []*schema.Column{ItemRevisionsColumns[10]},
 				RefColumns: []*schema.Column{BlobsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "item_revisions_resources_revisions",
-				Columns:    []*schema.Column{ItemRevisionsColumns[10]},
+				Columns:    []*schema.Column{ItemRevisionsColumns[11]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "item_revisions_schema_revisions_items",
-				Columns:    []*schema.Column{ItemRevisionsColumns[11]},
+				Columns:    []*schema.Column{ItemRevisionsColumns[12]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -917,12 +918,12 @@ var (
 			{
 				Name:    "itemrevision_item_id_revision_number",
 				Unique:  true,
-				Columns: []*schema.Column{ItemRevisionsColumns[10], ItemRevisionsColumns[4]},
+				Columns: []*schema.Column{ItemRevisionsColumns[11], ItemRevisionsColumns[5]},
 			},
 			{
 				Name:    "itemrevision_item_id_id",
 				Unique:  true,
-				Columns: []*schema.Column{ItemRevisionsColumns[10], ItemRevisionsColumns[0]},
+				Columns: []*schema.Column{ItemRevisionsColumns[11], ItemRevisionsColumns[0]},
 			},
 		},
 	}

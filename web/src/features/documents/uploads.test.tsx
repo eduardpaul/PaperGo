@@ -23,6 +23,7 @@ class FakeRequest {
   statusText = '';
   responseText = '';
   url = '';
+  body?: FormData;
   headers: Record<string, string> = {};
   open(_method: string, url: URL) {
     this.url = url.pathname;
@@ -30,7 +31,8 @@ class FakeRequest {
   setRequestHeader(key: string, value: string) {
     this.headers[key] = value;
   }
-  send() {
+  send(body: FormData) {
+    this.body = body;
     FakeRequest.sent.push(this);
   }
   abort() {
@@ -133,4 +135,36 @@ it('cancels a running upload', async () => {
   await waitFor(() => expect(FakeRequest.sent).toHaveLength(1));
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   await waitFor(() => expect(screen.getByText('Cancelled')).toBeTruthy());
+});
+
+it('renames a conflicting upload and retries it with the new file and resource name', async () => {
+  vi.stubGlobal('XMLHttpRequest', FakeRequest);
+  render(<QueryClientProvider client={new QueryClient()}><UploadsProvider><Uploader files={[new File(['%PDF'], 'taken.pdf')]} onDone={vi.fn()} /></UploadsProvider></QueryClientProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  await waitFor(() => expect(FakeRequest.sent).toHaveLength(1));
+  act(() => FakeRequest.sent[0].respond(409, { code: 'name_conflict', existing_item: { id: 'existing', version: 4 } }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Rename' }));
+  fireEvent.change(screen.getByLabelText('File name'), { target: { value: 'new.pdf' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Rename and upload' }));
+  await waitFor(() => expect(FakeRequest.sent).toHaveLength(2));
+  expect(FakeRequest.sent[1].body?.get('file')).toBeInstanceOf(File);
+  expect((FakeRequest.sent[1].body?.get('file') as File).name).toBe('new.pdf');
+  expect(String(FakeRequest.sent[1].body?.get('metadata'))).toContain('"name":"new.pdf"');
+  act(() => FakeRequest.sent[1].respond(201, { item: { id: 'new' }, file: {} }));
+  expect(await screen.findByText('Uploaded to Contracts')).toBeTruthy();
+});
+
+it('replaces the identified writable file with its version precondition', async () => {
+  vi.stubGlobal('XMLHttpRequest', FakeRequest);
+  const fetch = vi.fn(async (_url: URL | string, init?: RequestInit) => new Response(stringifyJSON(init?.method === 'PUT' ? { id: 'blob', filename: 'taken.pdf', size: 4, content_type: 'application/pdf' } : { id: 'existing', version: 5, name: 'taken.pdf' })));
+  vi.stubGlobal('fetch', fetch);
+  render(<QueryClientProvider client={new QueryClient()}><UploadsProvider><Uploader files={[new File(['%PDF'], 'taken.pdf')]} onDone={vi.fn()} /></UploadsProvider></QueryClientProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  await waitFor(() => expect(FakeRequest.sent).toHaveLength(1));
+  act(() => FakeRequest.sent[0].respond(409, { code: 'name_conflict', existing_item: { id: 'existing', version: 4 } }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Replace existing' }));
+  expect(await screen.findByText('Uploaded to Contracts')).toBeTruthy();
+  const replace = fetch.mock.calls.find(([, init]) => init?.method === 'PUT');
+  expect(String(replace?.[0])).toContain('/v1/items/existing/content');
+  expect((replace?.[1]?.headers as Record<string, string>)['If-Match']).toBe('"4"');
 });

@@ -35,6 +35,8 @@ type ItemRevision struct {
 	SchemaRevisionID string `json:"schema_revision_id,omitempty"`
 	// BlobID holds the value of the "blob_id" field.
 	BlobID *string `json:"blob_id,omitempty"`
+	// Filename holds the value of the "filename" field.
+	Filename string `json:"filename,omitempty"`
 	// RevisionNumber holds the value of the "revision_number" field.
 	RevisionNumber int `json:"revision_number,omitempty"`
 	// Name holds the value of the "name" field.
@@ -119,7 +121,7 @@ func (*ItemRevision) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case itemrevision.FieldRevisionNumber:
 			values[i] = new(sql.NullInt64)
-		case itemrevision.FieldID, itemrevision.FieldItemID, itemrevision.FieldContainerID, itemrevision.FieldContentTypeID, itemrevision.FieldSchemaRevisionID, itemrevision.FieldBlobID, itemrevision.FieldName, itemrevision.FieldCreatedBy:
+		case itemrevision.FieldID, itemrevision.FieldItemID, itemrevision.FieldContainerID, itemrevision.FieldContentTypeID, itemrevision.FieldSchemaRevisionID, itemrevision.FieldBlobID, itemrevision.FieldFilename, itemrevision.FieldName, itemrevision.FieldCreatedBy:
 			values[i] = new(sql.NullString)
 		case itemrevision.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -180,6 +182,12 @@ func (_m *ItemRevision) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.BlobID = new(string)
 				*_m.BlobID = value.String
+			}
+		case itemrevision.FieldFilename:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field filename", values[i])
+			} else if value.Valid {
+				_m.Filename = value.String
 			}
 		case itemrevision.FieldRevisionNumber:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -290,6 +298,9 @@ func (_m *ItemRevision) String() string {
 		builder.WriteString("blob_id=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("filename=")
+	builder.WriteString(_m.Filename)
 	builder.WriteString(", ")
 	builder.WriteString("revision_number=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RevisionNumber))

@@ -46,17 +46,25 @@ func (s *Service) CurrentFile(ctx context.Context, subject, itemID string) (*ent
 	if err := s.RequireScope(ctx, subject, "document.read"); err != nil {
 		return nil, err
 	}
-	if _, err := s.authorize(ctx, subject, itemID, "read_draft"); err != nil {
-		return nil, err
-	}
-	id, err := s.currentBlobID(ctx, itemID)
+	item, err := s.authorize(ctx, subject, itemID, "read_draft")
 	if err != nil {
 		return nil, err
 	}
-	if id == "" {
+	if item.HeadRevisionID == nil {
 		return nil, invalid("the item has no file")
 	}
-	return s.Client.Blob.Get(ctx, id)
+	revision, err := s.Client.ItemRevision.Get(ctx, *item.HeadRevisionID)
+	if err != nil {
+		return nil, err
+	}
+	if revision.BlobID == nil {
+		return nil, invalid("the item has no file")
+	}
+	file, err := s.Client.Blob.Get(ctx, *revision.BlobID)
+	if err == nil {
+		file.Filename = revision.Filename
+	}
+	return file, err
 }
 
 func (s *Service) currentBlobID(ctx context.Context, itemID string) (string, error) {

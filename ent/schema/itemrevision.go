@@ -19,6 +19,7 @@ func (ItemRevision) Fields() []ent.Field {
 		field.String("content_type_id").Immutable(),
 		field.String("schema_revision_id").Immutable(),
 		field.String("blob_id").Optional().Nillable().Immutable(),
+		field.String("filename").Default("").MaxLen(4096).Immutable(),
 		field.Int("revision_number").Positive().Immutable(),
 		field.String("name").NotEmpty().MaxLen(4096).Validate(model.ValidateTitle).Immutable(),
 		field.JSON("tags", []string{}).Immutable(),

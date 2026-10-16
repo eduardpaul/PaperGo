@@ -16,6 +16,7 @@ import (
 	"papergo/ent/resource"
 	"papergo/ent/schemarevision"
 	"papergo/internal/model"
+	"path"
 	"time"
 )
 
@@ -193,7 +194,28 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	if err != nil {
 		return nil, err
 	}
-	builder := s.Client.ItemRevision.Create().SetItemID(r.ID).SetContainerID(c.ID).SetContentTypeID(*r.ContentTypeID).SetSchemaRevisionID(schema.ID).SetRevisionNumber(r.NextRevisionNumber).SetName(r.Name).SetTags(r.Tags).SetPayload(raw).SetCreatedBy(actor).SetNillableBlobID(blobID)
+	filename := ""
+	if blobID != nil {
+		if newBlobID != nil {
+			file, err := s.Client.Blob.Get(ctx, *blobID)
+			if err != nil {
+				return nil, err
+			}
+			filename = file.Filename
+		} else if previousRevision != nil {
+			filename = previousRevision.Filename
+			if r.Name != previousRevision.Name {
+				filename = r.Name
+				if path.Ext(filename) == "" {
+					filename += path.Ext(previousRevision.Filename)
+				}
+			}
+		}
+		if !filenameValid(filename) {
+			return nil, invalid("invalid attachment filename")
+		}
+	}
+	builder := s.Client.ItemRevision.Create().SetFilename(filename).SetItemID(r.ID).SetContainerID(c.ID).SetContentTypeID(*r.ContentTypeID).SetSchemaRevisionID(schema.ID).SetRevisionNumber(r.NextRevisionNumber).SetName(r.Name).SetTags(r.Tags).SetPayload(raw).SetCreatedBy(actor).SetNillableBlobID(blobID)
 	rev, err := builder.Save(ctx)
 	if err != nil {
 		return nil, err
@@ -397,7 +419,7 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 	if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfacePublished, defs); err != nil {
 		return nil, err
 	}
-	snapshot := map[string]any{"id": r.ID, "name": rev.Name, "tags": rev.Tags, "values": rev.Payload, "revision_id": rev.ID, "revision_number": rev.RevisionNumber, "schema_revision_id": rev.SchemaRevisionID}
+	snapshot := map[string]any{"id": r.ID, "name": rev.Name, "tags": rev.Tags, "values": rev.Payload, "revision_id": rev.ID, "revision_number": rev.RevisionNumber, "schema_revision_id": rev.SchemaRevisionID, "filename": rev.Filename}
 	if rev.BlobID != nil {
 		snapshot["blob_id"] = *rev.BlobID
 	}

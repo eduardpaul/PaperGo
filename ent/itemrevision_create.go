@@ -77,6 +77,20 @@ func (_c *ItemRevisionCreate) SetNillableBlobID(v *string) *ItemRevisionCreate {
 	return _c
 }
 
+// SetFilename sets the "filename" field.
+func (_c *ItemRevisionCreate) SetFilename(v string) *ItemRevisionCreate {
+	_c.mutation.SetFilename(v)
+	return _c
+}
+
+// SetNillableFilename sets the "filename" field if the given value is not nil.
+func (_c *ItemRevisionCreate) SetNillableFilename(v *string) *ItemRevisionCreate {
+	if v != nil {
+		_c.SetFilename(*v)
+	}
+	return _c
+}
+
 // SetRevisionNumber sets the "revision_number" field.
 func (_c *ItemRevisionCreate) SetRevisionNumber(v int) *ItemRevisionCreate {
 	_c.mutation.SetRevisionNumber(v)
@@ -194,6 +208,10 @@ func (_c *ItemRevisionCreate) defaults() {
 		v := itemrevision.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.Filename(); !ok {
+		v := itemrevision.DefaultFilename
+		_c.mutation.SetFilename(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := itemrevision.DefaultID()
 		_c.mutation.SetID(v)
@@ -216,6 +234,14 @@ func (_c *ItemRevisionCreate) check() error {
 	}
 	if _, ok := _c.mutation.SchemaRevisionID(); !ok {
 		return &ValidationError{Name: "schema_revision_id", err: errors.New(`ent: missing required field "ItemRevision.schema_revision_id"`)}
+	}
+	if _, ok := _c.mutation.Filename(); !ok {
+		return &ValidationError{Name: "filename", err: errors.New(`ent: missing required field "ItemRevision.filename"`)}
+	}
+	if v, ok := _c.mutation.Filename(); ok {
+		if err := itemrevision.FilenameValidator(v); err != nil {
+			return &ValidationError{Name: "filename", err: fmt.Errorf(`ent: validator failed for field "ItemRevision.filename": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.RevisionNumber(); !ok {
 		return &ValidationError{Name: "revision_number", err: errors.New(`ent: missing required field "ItemRevision.revision_number"`)}
@@ -304,6 +330,10 @@ func (_c *ItemRevisionCreate) createSpec() (*ItemRevision, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.ContentTypeID(); ok {
 		_spec.SetField(itemrevision.FieldContentTypeID, field.TypeString, value)
 		_node.ContentTypeID = value
+	}
+	if value, ok := _c.mutation.Filename(); ok {
+		_spec.SetField(itemrevision.FieldFilename, field.TypeString, value)
+		_node.Filename = value
 	}
 	if value, ok := _c.mutation.RevisionNumber(); ok {
 		_spec.SetField(itemrevision.FieldRevisionNumber, field.TypeInt, value)

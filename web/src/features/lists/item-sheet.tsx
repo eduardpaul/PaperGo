@@ -35,6 +35,7 @@ import { can } from './access';
 import { AccessEditor } from './access-editor';
 import { ItemSchemaView, Publications } from './item-history';
 import { MoveDialog } from './move-dialog';
+import { RenameDialog } from './rename-dialog';
 import { RelatedItems } from './related-items';
 import { fieldsForType, publishState } from './schema';
 
@@ -66,7 +67,7 @@ export function ItemSheet({
   const library = collection.kind === 'library';
   const [dirty, setDirty] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
-  const [dialog, setDialog] = useState<'move' | 'classify' | 'delete' | 'schema'>();
+  const [dialog, setDialog] = useState<'move' | 'classify' | 'delete' | 'schema' | 'rename'>();
   const remove = useMutation({
     meta: { silent: true },
     mutationFn: () =>
@@ -125,6 +126,7 @@ export function ItemSheet({
                 )}
                 {item.kind === 'item' && canWrite && (
                   <>
+                    <DropdownMenuItem onSelect={() => setDialog('rename')}>Rename…</DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setDialog('move')}>
                       <FolderInput /> Move…
                     </DropdownMenuItem>
@@ -207,6 +209,7 @@ export function ItemSheet({
         ) : (
           <p className="p-4 text-sm text-muted">This item is not available. It was deleted or moved, or you no longer have access.</p>
         )}
+        {item && dialog === 'rename' && <RenameDialog item={item} onClose={() => setDialog(undefined)} />}
         {item && dialog === 'move' && (
           <MoveDialog item={item} collection={collection} onClose={() => setDialog(undefined)} onMoved={onMoved} />
         )}
