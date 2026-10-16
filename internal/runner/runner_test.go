@@ -718,7 +718,7 @@ func TestSelectionRuns(t *testing.T) {
 	if note := f.head(t, a.ID).Values["note"]; note != "first of "+a.ID+", "+b.ID+", "+c.ID {
 		t.Fatalf("note %v", note)
 	}
-	page, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{ItemID: c.ID})
+	page, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{WorkflowID: w.ID, ItemID: c.ID})
 	if err != nil || len(page.Data) != 1 || page.Data[0].ID != run.ID {
 		t.Fatalf("runs of a member: %+v %v", page.Data, err)
 	}
@@ -1018,5 +1018,44 @@ func TestManualItemAssociationContracts(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestItemRunSummariesRespectDraftAccess(t *testing.T) {
+	f := setup(t)
+	f.searchOff(t)
+	a := f.item(t, "bob", "Visible", nil)
+	b := f.item(t, "alice", "Other member", nil)
+	w := f.workflow(t, "Private failure", `{"triggers":[{"type":"manual","selection":"selection"}],"flow":{"start":"fail","nodes":{"fail":{"activity":"fail","inputs":{"message":"private execution payload"}}}}}`)
+	ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{b.ID, a.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.wait(t, ids[0], finished)
+	page, err := f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{WorkflowID: w.ID, ItemID: a.ID})
+	if err != nil || len(page.Data) != 1 {
+		t.Fatal(page, err)
+	}
+	run := page.Data[0]
+	if run.Status != "failed" || run.Error != "" || len(run.Items) != 0 || run.Result != nil || run.Inputs != nil || len(run.Steps) != 0 || run.ItemID == nil || *run.ItemID != a.ID {
+		t.Fatal("scoped summary exposed execution data or another member", run)
+	}
+	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{}); err == nil {
+		t.Fatal("item reader listed all runs")
+	}
+	if _, err = f.r.Run(ctx, "bob", ids[0]); err == nil {
+		t.Fatal("item reader inspected execution payloads")
+	}
+	if _, err = f.r.Retry(ctx, "bob", ids[0]); err == nil {
+		t.Fatal("item reader retried a run")
+	}
+	if _, err = f.r.Runs(ctx, "carol", f.ws.ID, RunFilter{ItemID: a.ID}); err == nil {
+		t.Fatal("outsider read item history")
+	}
+	if _, err = f.dms.SetPermissions(ctx, "alice", a.ID, f.head(t, a.ID).Version, dms.Permissions{Grants: []dms.Permission{{"user", "alice", "manage", "allow"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{ItemID: a.ID}); err == nil {
+		t.Fatal("revoked item access still read history")
 	}
 }

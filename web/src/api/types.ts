@@ -344,6 +344,10 @@ export interface BuiltInState {
 }
 
 export interface WorkflowRun {
+  updated_at?: string;
+  inputs?: Record<string, unknown>;
+  result?: unknown;
+  steps?: { id: number; name: string; error?: string; output?: unknown; started_at?: string; completed_at?: string }[];
   id: string;
   workflow_id: string;
   status: string;

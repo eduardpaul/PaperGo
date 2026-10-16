@@ -18,12 +18,13 @@ export async function allPages<T>(path: string, query: Record<string, string | n
 export function useApiPages<T>(
   key: readonly unknown[],
   path: string,
-  options: { query?: Record<string, string | number | undefined>; enabled?: boolean; body?: unknown } = {},
+  options: { query?: Record<string, string | number | undefined>; enabled?: boolean; body?: unknown; refetchInterval?: number } = {},
 ) {
   const result = useInfiniteQuery({
     queryKey: [...key, path, options.query ?? {}, options.body ?? null],
     initialPageParam: path,
     enabled: options.enabled,
+    refetchInterval: options.refetchInterval,
     queryFn: async ({ pageParam }) =>
       (
         await api<Page<T>>(pageParam, {

@@ -7290,7 +7290,7 @@
       "get": {
         "summary": "Workflow Runs",
         "operationId": "workflowRuns",
-        "description": "Workspace managers see runs, newest first.",
+        "description": "Lists runs newest first. Workspace managers may list all runs. With item_id, users with draft-read access to that item may read scoped summaries, including selection membership, without execution errors, inputs, outputs, steps or other member identities. Execution details and retry/cancel remain manager-only.",
         "parameters": [
           {
             "name": "id",

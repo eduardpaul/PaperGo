@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { parseJSON, stringifyJSON } from '@/api/json';
 import type { Resource, Workflow } from '@/api/types';
-import { applicableWorkflows, RunWorkflowAction } from './item-workflows';
+import { RunDetails } from './run-details';
+import { applicableWorkflows, ItemWorkflows, RunWorkflowAction } from './item-workflows';
 
 const clients: QueryClient[] = [];
 afterEach(() => { cleanup(); clients.splice(0).forEach((client) => client.clear()); vi.unstubAllGlobals(); });
@@ -57,4 +58,38 @@ it('launches the selected items with typed inputs and displays a denied launch i
   expect(parseJSON(String(start?.[1]?.body))).toEqual({ item_ids: ['a', 'b'], primary_item_id: 'a', inputs: { reason: 'Review invoices' } });
   // The fixed selection does not fetch an unrelated item picker.
   expect(fetch.mock.calls.every(([url]) => /workflows/.test(String(url)))).toBe(true);
+});
+
+it('shows item-scoped history and refreshes its status without exposing manager actions', async () => {
+  let status = 'running';
+  const fetch = vi.fn(async (input: URL | string) => {
+    const url = new URL(String(input), window.location.origin);
+    const data = url.pathname.endsWith('/workflow-runs')
+      ? { value: [{ id: 'run', workflow_id: 'single', status, event_type: 'manual', actor: 'alice', created_at: '2026-10-16T12:00:00Z' }] }
+      : url.pathname.endsWith('/workflows') ? { value: entries } : { id: 'workspace', access: ['read'], kind: 'workspace' };
+    if (url.pathname.endsWith('/workflow-runs')) expect(url.searchParams.get('item_id')).toBe('item');
+    return new Response(stringifyJSON(data));
+  });
+  vi.stubGlobal('fetch', fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  render(<QueryClientProvider client={client}><ItemWorkflows item={{ id: 'item', name: 'Invoice', kind: 'item', version: 1, workspace_id: 'workspace' }} collectionId="collection" canWrite /></QueryClientProvider>);
+  expect(await screen.findByText('running')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Run workflow' })).toBeTruthy();
+  expect(screen.queryByText('View steps')).toBeNull();
+  status = 'completed';
+  await act(() => client.invalidateQueries({ queryKey: ['workflow-runs'] }));
+  expect(await screen.findByText('completed')).toBeTruthy();
+});
+
+it('shows execution steps and queues a failed run retry for managers', async () => {
+  const fetch = vi.fn(async (input: URL | string, _init?: RequestInit) => new Response(stringifyJSON(String(input).endsWith('/retry') ? { id: 'retry' } : { id: 'run', status: 'failed', event_type: 'manual', steps: [{ id: 1, name: 'Read invoice', error: 'Provider unavailable' }] })));
+  vi.stubGlobal('fetch', fetch);
+  const client = new QueryClient();
+  clients.push(client);
+  render(<QueryClientProvider client={client}><RunDetails id="run" onClose={vi.fn()} /></QueryClientProvider>);
+  expect(await screen.findByText('Read invoice')).toBeTruthy();
+  expect(screen.getByText('Provider unavailable')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry run' }));
+  await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/v1/workflow-runs/run/retry') && init?.method === 'POST')).toBe(true));
 });

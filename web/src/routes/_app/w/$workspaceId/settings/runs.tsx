@@ -5,12 +5,15 @@ import { workflowRuns, workflows } from '@/api/queries';
 import type { WorkflowRun } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { SettingsSection } from '@/features/settings/section';
+import { RunDetails } from '@/features/workflows/run-details';
 import { useFormat } from '@/lib/preferences';
 
-export const Route = createFileRoute('/_app/w/$workspaceId/settings/runs')({ component: RunsPage });
+export const Route = createFileRoute('/_app/w/$workspaceId/settings/runs')({ component: RunsPage, validateSearch: (search: Record<string, unknown>): { run?: string } => ({ run: typeof search.run === 'string' ? search.run : undefined }) });
 
 function RunsPage() {
   const { workspaceId } = Route.useParams();
+  const { run: selectedRun } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const format = useFormat();
   const queryClient = useQueryClient();
   const runs = useQuery({ queryKey: ['workflow-runs', workspaceId], queryFn: () => workflowRuns(workspaceId) });
@@ -33,11 +36,13 @@ function RunsPage() {
                 {run.error ? ` · ${run.error}` : ''}
               </p>
             </div>
+            <Button size="sm" onClick={() => void navigate({ search: { run: run.id } })}>View steps</Button>
             <RunActions run={run} pending={act.isPending} onAct={(action) => act.mutate({ id: run.id, action })} />
           </li>
         ))}
         {runs.isFetched && rows.length === 0 && <li className="text-sm text-muted">No runs yet.</li>}
       </ul>
+      {selectedRun && <RunDetails id={selectedRun} onClose={() => void navigate({ search: { run: undefined } })} />}
     </SettingsSection>
   );
 }

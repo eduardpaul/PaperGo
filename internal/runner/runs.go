@@ -151,7 +151,7 @@ func manage(ctx context.Context, t *dms.Service, subject, workspaceID string) er
 	return err
 }
 
-// Runs lists a workspace's runs, newest first, to its managers.
+// Runs lists workspace runs to managers, or item-scoped summaries to draft readers.
 func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFilter) (RunPage, error) {
 	if f.Limit <= 0 {
 		f.Limit = 50
@@ -159,14 +159,25 @@ func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFil
 	if f.Limit > 500 {
 		f.Limit = 500
 	}
+	restricted := false
 	page, err := dms.Read(ctx, r.dms, func(t *dms.Service) (RunPage, error) {
 		if err := manage(ctx, t, subject, workspaceID); err != nil {
-			return RunPage{}, err
+			if f.ItemID == "" {
+				return RunPage{}, err
+			}
+			item, err := t.Authorize(ctx, subject, f.ItemID, "read_draft")
+			if err != nil {
+				return RunPage{}, err
+			}
+			if item.WorkspaceID != workspaceID || item.Kind != "item" {
+				return RunPage{}, dms.ErrNotFound
+			}
+			restricted = true
 		}
 		q := t.Client.WorkflowRun.Query().Where(workflowrun.WorkspaceIDEQ(workspaceID))
 		if f.WorkflowID != "" {
 			q.Where(workflowrun.WorkflowIDEQ(f.WorkflowID))
-		} else if keys := workflow.SystemBuiltIns(); len(keys) > 0 {
+		} else if keys := workflow.SystemBuiltIns(); len(keys) > 0 && f.ItemID == "" {
 			// System built-ins run on every change; their runs are listed
 			// only when asked for by workflow.
 			system, err := t.Client.Workflow.Query().Where(entworkflow.WorkspaceIDEQ(workspaceID), entworkflow.BuiltinKeyIn(keys...)).IDs(ctx)
@@ -205,12 +216,25 @@ func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFil
 		for _, row := range rows {
 			out.Data = append(out.Data, toRun(row))
 		}
+		if restricted {
+			return out, nil
+		}
 		return out, members(ctx, t, out.Data)
 	})
 	if err != nil {
 		return page, err
 	}
-	return page, r.attach(page.Data, false)
+	if err = r.attach(page.Data, false); err != nil {
+		return page, err
+	}
+	if restricted {
+		for i := range page.Data {
+			// Summaries expose no execution payloads or identities of other members.
+			page.Data[i].Error = ""
+			page.Data[i].ItemID = &f.ItemID
+		}
+	}
+	return page, nil
 }
 
 // members fills in the membership of selection runs.

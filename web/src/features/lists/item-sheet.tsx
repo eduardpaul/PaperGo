@@ -29,6 +29,7 @@ import { valuesPatch } from '@/features/fields/values';
 import { QueryFeedback } from '@/features/admin/common';
 import { ConfirmDialog } from '@/features/settings/section';
 import { AddToSmartFolder } from '@/features/smart-folders/classification';
+import { ItemWorkflows } from '@/features/workflows/item-workflows';
 import { useFormat } from '@/lib/preferences';
 import { can } from './access';
 import { AccessEditor } from './access-editor';
@@ -91,6 +92,7 @@ export function ItemSheet({
     ...(isFile ? ['content'] : []),
     'versions',
     'links',
+    ...(item?.kind === 'item' ? ['workflows'] : []),
     ...(canManage ? ['access'] : []),
     ...(collection.publishing_enabled ? ['publish'] : []),
   ];
@@ -156,6 +158,7 @@ export function ItemSheet({
               {isFile && <TabsTrigger value="content">File</TabsTrigger>}
               <TabsTrigger value="versions">Versions</TabsTrigger>
               <TabsTrigger value="links">Links</TabsTrigger>
+              {item.kind === 'item' && <TabsTrigger value="workflows">Workflows</TabsTrigger>}
               {canManage && <TabsTrigger value="access">Permissions</TabsTrigger>}
               {collection.publishing_enabled && <TabsTrigger value="publish">Publishing</TabsTrigger>}
             </TabsList>
@@ -175,6 +178,9 @@ export function ItemSheet({
                 <Content item={item} canWrite={canWrite} />
               </TabsContent>
             )}
+            {item.kind === 'item' && <TabsContent value="workflows" className="min-h-0 flex-1 overflow-auto p-4">
+              <ItemWorkflows item={item} collectionId={collection.id} canWrite={canWrite} />
+            </TabsContent>}
             <TabsContent value="versions" className="min-h-0 flex-1 overflow-auto p-4">
               <Versions item={item} collection={collection} canWrite={canWrite} />
             </TabsContent>

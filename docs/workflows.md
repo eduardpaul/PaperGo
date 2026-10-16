@@ -494,6 +494,16 @@ The membership is recorded with the run (`items` in the run API) and does not ch
 - **Run listing.** Listing runs with `item_id` includes selection runs the item is a member of.
 - **Deleting a member.** Deleting a member, alone or with its folder, cancels the queued, running or waiting selection runs it belongs to, as it cancels the runs on that item. The exception is the run that deleted it, for example a run that replaces several items with one.
 
+## Item workflow history
+
+An item's **Workflows** tab offers applicable manual workflows and recent runs,
+including runs where the item belongs to a selection. Status, trigger, actor and
+execution time refresh while the tab is open. Users with draft-read access to the
+item can read scoped summaries. These omit execution errors, inputs, outputs,
+steps and other selection members. Workspace managers can follow **View steps**
+to inspect node results and retry failed runs. General run listing, execution
+details, cancellation and retry require workspace manage access.
+
 ## Who a run acts as
 
 A run acts as the **author of its workflow version**: the subject who saved that version, or who configured the built-in. Every step checks that author's permissions, as an API request would. A workflow therefore never does more than its author may, and a run fails visibly if the author loses access. `{trigger:actor}` and `{run:actor}` still name who caused the run.
