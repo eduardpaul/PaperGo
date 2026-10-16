@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Briefcase, File, Folder, Search as SearchIcon, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { api } from '@/api/http';
+import { SearchRelationships } from '@/features/search/search-relationships';
 import { useApiPages } from '@/api/pages';
 import { workspacesQuery } from '@/api/queries';
 import { searchRequest } from '@/api/requests';
@@ -18,10 +20,13 @@ import { useFormat } from '@/lib/preferences';
 import { textParam } from '@/lib/search';
 import { useDebounced } from '@/lib/use-debounced';
 
+interface SearchRouteParams { q?: string; workspace?: string; collection?: string; tag?: string; content_type?: string; kind?: Kind }
+
 type Kind = 'item' | 'folder' | 'all';
 
 export const Route = createFileRoute('/_app/search')({
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (search: Record<string, unknown>): SearchRouteParams => ({
+    content_type: textParam(search.content_type),
     q: textParam(search.q),
     workspace: textParam(search.workspace),
     collection: textParam(search.collection),
@@ -33,7 +38,8 @@ export const Route = createFileRoute('/_app/search')({
 
 function SearchPage() {
   const params = Route.useSearch();
-  const { q, workspace, collection, tag } = params;
+  const { q, workspace, collection, tag, content_type } = params;
+  const types = useQuery({ queryKey: ['search-content-types', workspace, collection], queryFn: async () => (await api<{ id: string; name: string }[]>('/v1/search/content-types', { query: { workspace_id: workspace, collection_id: collection } })).data });
   const kind: Kind = params.kind ?? 'item';
   const navigate = useNavigate({ from: Route.fullPath });
   const workspaces = useQuery(workspacesQuery);
@@ -50,7 +56,7 @@ function SearchPage() {
     const entry = workspaces.data?.find((candidate) => candidate.id === id);
     return entry?.personal_owner_id ? 'Home' : (entry?.name ?? 'Workspace');
   };
-  const filtered = !!(workspace || collection || tag);
+  const filtered = !!(workspace || collection || tag || content_type);
   // Workspaces are not in the search index: their names match here.
   const places = q
     ? (workspaces.data ?? []).filter((entry) => workspaceName(entry.id).toLowerCase().includes(q.toLowerCase())).slice(0, 8)
@@ -100,6 +106,13 @@ function SearchPage() {
             <option value="all">Items and folders</option>
           </Select>
         </div>
+        <div className="w-52"><Label htmlFor="search-type">Content type</Label>
+          <Select id="search-type" className="mt-1" value={content_type ?? ''} onChange={event => void navigate({ search: current => ({ ...current, content_type: event.target.value || undefined }) })}>
+            <option value="">All content types</option>
+            {types.data?.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+            {content_type && !types.data?.some(type => type.id === content_type) && <option value={content_type}>Selected content type</option>}
+          </Select>
+        </div>
         <Button type="submit" variant="primary">
           Search
         </Button>
@@ -124,13 +137,15 @@ function SearchPage() {
           word and - to leave a word out.
         </EmptyState>
       ) : (
-        <Results q={q} workspace={workspace} collection={collection} tag={tag} kind={kind} workspaceName={workspaceName} />
+        <Results contentType={content_type} typeNames={new Map((types.data ?? []).map(type => [type.id, type.name]))} q={q} workspace={workspace} collection={collection} tag={tag} kind={kind} workspaceName={workspaceName} />
       )}
     </Page>
   );
 }
 
 function Results({
+  contentType,
+  typeNames,
   q,
   workspace,
   collection,
@@ -138,6 +153,8 @@ function Results({
   kind,
   workspaceName,
 }: {
+  contentType?: string;
+  typeNames: Map<string, string>;
   q?: string;
   workspace?: string;
   collection?: string;
@@ -150,10 +167,11 @@ function Results({
     q,
     workspaceId: workspace,
     collectionId: collection,
+    contentTypeId: contentType,
     tag,
     kind,
   });
-  const results = useApiPages<SearchHit>(['search', q, workspace, collection, tag, kind], request.path, { query: request.query });
+  const results = useApiPages<SearchHit>(['search', q, workspace, collection, tag, kind, contentType], request.path, { query: request.query });
   const first = results.data?.pages[0] as SearchPage | undefined;
   const facets = first?.facets;
   const collectionIds = [
@@ -165,12 +183,13 @@ function Results({
   ].sort();
   const collectionNames = useResourceNames(collectionIds);
   const collectionName = (id: string) => collectionNames.get(id) ?? 'List';
-  const filter = (patch: { workspace?: string; collection?: string; tag?: string }) =>
+  const filter = (patch: { workspace?: string; collection?: string; tag?: string; content_type?: string }) =>
     void navigate({ search: (current) => ({ ...current, ...patch }) });
 
   if (results.isPending) return <Skeleton className="h-16" />;
   if (results.isError) return <QueryFeedback query={results} />;
   const chips = [
+    contentType && { label: typeNames.get(contentType) ?? 'Content type', clear: { content_type: undefined } },
     workspace && {
       label: workspaceName(workspace),
       clear: { workspace: undefined, collection: undefined },
@@ -233,6 +252,7 @@ function Results({
               onPick={(value) => filter({ collection: value })}
             />
           )}
+          {!contentType && <Facet title="Content types" values={facets.content_type ?? []} label={id => typeNames.get(id) ?? 'Content type'} onPick={value => filter({ content_type: value })} />}
           {!tag && <Facet title="Tags" values={facets.tag} label={(value) => `#${value}`} onPick={(value) => filter({ tag: value })} />}
         </aside>
       )}
@@ -285,7 +305,7 @@ export function Hit({ hit, where }: { hit: SearchHit; where: string }) {
       search: hit.kind === 'folder' ? { folder: hit.id } : { item: hit.id },
     });
   return (
-    <button type="button" className="flex w-full items-start gap-3 px-4 py-2.5 text-left hover:bg-surface-muted" onClick={open}>
+    <div><button type="button" className="flex w-full items-start gap-3 px-4 py-2.5 text-left hover:bg-surface-muted" onClick={open}>
       <Icon className="mt-0.5 size-4 shrink-0 text-muted" />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
@@ -311,6 +331,7 @@ export function Hit({ hit, where }: { hit: SearchHit; where: string }) {
           </span>
         )}
       </span>
-    </button>
+    </button>{hit.kind === 'item' && <SearchRelationships itemId={hit.id} />}
+    </div>
   );
 }

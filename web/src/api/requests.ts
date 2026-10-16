@@ -160,6 +160,7 @@ export function bulkUpdateRequests(
 }
 
 export interface SearchParams {
+  contentTypeId?: string;
   q?: string;
   workspaceId?: string;
   collectionId?: string;
@@ -176,6 +177,7 @@ export function searchRequest(params: SearchParams): ApiCall {
       q: params.q,
       workspace_id: params.workspaceId,
       collection_id: params.collectionId,
+      content_type_id: params.contentTypeId,
       tag: params.tag,
       kind: params.kind === 'all' ? 'item,folder' : params.kind,
       $top: 25,

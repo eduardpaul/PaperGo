@@ -160,3 +160,5 @@ For the other direction, use `--from zvec --to sqlite`. `--database`, `--sqlite`
 | GET | /v1/search/fields | The fields the caller can filter on |
 | POST | /v1/search/reindex | Rebuild every document (operation) |
 | GET | /v1/search/status | Store state |
+
+The search page offers a content-type selector and matching type facets. `GET /v1/search/content-types` lists names attached to readable collections, optionally narrowed by `workspace_id` and `collection_id`; pass `content_type_id` to `/v1/search` to filter. Expand Relationships on a result to load its authorized incoming/outgoing links and open a related item.

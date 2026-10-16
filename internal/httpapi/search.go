@@ -16,6 +16,7 @@ func (a *API) registerSearch(api *http.ServeMux) {
 	api.HandleFunc("GET /v1/search", a.search)
 	api.HandleFunc("POST /v1/search", a.search)
 	api.HandleFunc("GET /v1/search/fields", a.searchFields)
+	api.HandleFunc("GET /v1/search/content-types", a.searchContentTypes)
 	api.HandleFunc("POST /v1/search/reindex", a.reindexSearch)
 	api.HandleFunc("GET /v1/search/status", a.searchStatus)
 }
@@ -187,6 +188,15 @@ func (a *API) reindexSearch(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) searchStatus(w http.ResponseWriter, r *http.Request) {
 	out, err := a.DMS.SearchStatus(r.Context(), subject(r))
+	if err != nil {
+		a.failure(w, r, err)
+		return
+	}
+	respond(w, r, 200, out)
+}
+
+func (a *API) searchContentTypes(w http.ResponseWriter, r *http.Request) {
+	out, err := a.DMS.SearchContentTypes(r.Context(), subject(r), r.URL.Query().Get("workspace_id"), r.URL.Query().Get("collection_id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return

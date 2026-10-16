@@ -50,6 +50,9 @@ function stub(search: (url: URL) => unknown) {
           { id: 'ws2', kind: 'workspace', name: 'Legal' },
         ],
       };
+    else if (url.pathname === '/v1/search/content-types') body = [{ id: 'invoice', name: 'Invoice type' }];
+    else if (url.pathname.endsWith('/relationships')) body = { value: [{ id: 'link', source_id: 'a', target_id: 'other', type_id: 'rel', directed: true, related_item: { id: 'other', name: 'Related contract', workspace_id: 'ws1', container_id: 'col1' } }] };
+    else if (url.pathname === '/v1/relationship-types') body = { value: [{ id: 'rel', term: { name: 'Contract' } }] };
     else if (url.pathname === '/v1/$batch') {
       const { requests } = JSON.parse(String(init.body)) as { requests: { id: string }[] };
       body = {
@@ -81,7 +84,7 @@ it('asks for words or a filter before searching', async () => {
   const fetch = stub(() => ({ value: [] }));
   show();
   expect(await screen.findByText('Type to search')).toBeTruthy();
-  expect(fetch.mock.calls.some(([input]) => String(input).includes('/v1/search'))).toBe(false);
+  expect(fetch.mock.calls.some(([input]) => new URL(String(input)).pathname === '/v1/search')).toBe(false);
 });
 
 it('shows hits with highlighted snippets, totals and facets that narrow the search', async () => {
@@ -157,4 +160,28 @@ it('offers workspaces whose names match, which the index does not hold', async (
   expect(within(places).getByText('Finance')).toBeTruthy();
   expect(within(places).queryByText('Legal')).toBeNull();
   expect(await screen.findByText('Nothing matches “fin”')).toBeTruthy();
+});
+
+it('filters by content type without requiring text and clears the URL filter', async () => {
+  navigation.search = { content_type: 'invoice' };
+  const fetch = stub(() => ({ value: [hit('a', 'Invoice March')], total: 1 }));
+  show();
+  expect(await screen.findByText('Invoice March')).toBeTruthy();
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Content type' }).textContent).toContain('Invoice type'));
+  const request = fetch.mock.calls.map(([input]) => new URL(String(input))).find(url => url.pathname === '/v1/search')!;
+  expect(request.searchParams.get('content_type_id')).toBe('invoice');
+  fireEvent.click(screen.getByRole('button', { name: 'Remove filter Invoice type' }));
+  expect(navigation.navigate.mock.lastCall![0].search({ content_type: 'invoice' })).toEqual({ content_type: undefined });
+});
+
+it('loads related badges only on expansion and displays the authorized target name', async () => {
+  navigation.search = { q: 'invoice' };
+  const fetch = stub(() => ({ value: [hit('a', 'Invoice March')], total: 1 }));
+  show();
+  expect(await screen.findByText('Invoice March')).toBeTruthy();
+  expect(fetch.mock.calls.some(([input]) => String(input).includes('/relationships'))).toBe(false);
+  const details = screen.getByText('Relationships').closest('details')!;
+  details.open = true;
+  fireEvent(details, new Event('toggle'));
+  expect(await screen.findByRole('link', { name: 'Contract → Related contract' })).toBeTruthy();
 });

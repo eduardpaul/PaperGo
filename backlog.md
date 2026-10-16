@@ -69,7 +69,7 @@ manual Chrome/Edge validation on Windows remains unperformed.
 - [ ] **ISSUE-05** — Drag items and selections into folders and breadcrumbs.
 - [ ] **ISSUE-06** — Currency presets and organization/workspace defaults.
 - [x] **ISSUE-11** — Item and collection inspectors separate system properties from custom fields, including file metadata, authors and assigned tags/keywords. Item metadata and schema use the same authorized visible revision. Validation: frozen schema/publication/file-surface regressions, inspector UI test and frontend typecheck.
-- [ ] **ISSUE-08** — Search content types and related items.
+- [x] **ISSUE-08** — Search content-type selector, URL filters/chips and facets use a catalog scoped to readable collections. Expandable relationship badges load authorized incoming/outgoing links with direct item navigation and paging. Validation: scoped catalog permission tests, search API suite, six search UI regressions and typecheck.
 - [ ] **ISSUE-07** — Visual smart-folder rules, previews and direct result browsing.
 
 ## 1. Backlog Summary Matrix

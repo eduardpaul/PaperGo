@@ -109,6 +109,41 @@ func (s *Service) SearchFields(ctx context.Context, subject, workspaceID, collec
 	})
 }
 
+// SearchContentType is a named type attached to a collection the caller can read.
+type SearchContentType struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (s *Service) SearchContentTypes(ctx context.Context, subject, workspaceID, collectionID string) ([]SearchContentType, error) {
+	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+		return nil, err
+	}
+	return read(ctx, s, func(t *Service) ([]SearchContentType, error) {
+		readable, args := permissionSQL(ctx, "r.id", subject, "read")
+		conditions := []string{"r.kind IN ('list','library')", "r.deleted_at IS NULL", readable}
+		if workspaceID != "" {
+			conditions, args = append(conditions, "r.workspace_id=?"), append(args, workspaceID)
+		}
+		if collectionID != "" {
+			conditions, args = append(conditions, "r.id=?"), append(args, collectionID)
+		}
+		rows, err := t.Client.QueryContext(ctx, `SELECT DISTINCT t.id,t.name FROM resources r JOIN collection_types a ON a.container_id=r.id JOIN content_types t ON t.id=a.content_type_id WHERE `+strings.Join(conditions, " AND ")+` ORDER BY t.name,t.id`, args...)
+		if err != nil {
+			return nil, err
+		}
+		out := []SearchContentType{}
+		for rows.Next() {
+			var typ SearchContentType
+			if err = rows.Scan(&typ.ID, &typ.Name); err != nil {
+				break
+			}
+			out = append(out, typ)
+		}
+		return out, errors.Join(err, rows.Err(), rows.Close())
+	})
+}
+
 // Search filters are bounded like collection query filters.
 const (
 	maxSearchFilterNodes = 32
