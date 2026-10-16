@@ -12,6 +12,7 @@ import { Checkbox, Select } from '@/components/ui/select';
 import { ConfirmDialog, SettingsSection } from '@/features/settings/section';
 import { JsonInput } from '@/features/workflows/schema-form';
 import { Field, QueryFeedback, useHasScope } from './common';
+import { SystemProperties } from '@/features/lists/system-properties';
 import { FieldDialog, fieldTypeLabel } from './field-dialog';
 
 export const catalogTypesQuery = {
@@ -248,9 +249,11 @@ export function CollectionColumns({ collection, canManage }: { collection: Resou
       }
     >
       <QueryFeedback query={fields} />
+      <SystemProperties />
+      <h3 className="mt-3 font-medium">Custom fields</h3>
       <FieldList collection={collection} fields={fields.data ?? []} canManage={canManage} onEdit={setEditing} />
       {fields.isSuccess && fields.data.length === 0 && (
-        <p className="text-sm text-muted">No columns yet. Every item has a name; add columns for anything else.</p>
+        <p className="text-sm text-muted">No custom fields defined. System properties are available on every item.</p>
       )}
       {editing && (
         <FieldDialog

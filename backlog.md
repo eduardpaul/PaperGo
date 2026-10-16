@@ -63,6 +63,15 @@ manual Chrome/Edge validation on Windows remains unperformed.
 - [x] **ISSUE-17** — Item Workflows tab provides manual launches, paged live summaries with status/trigger/actor/timing, and manager links to node details and retry. Draft readers receive item-scoped summaries without execution payloads or other member IDs. Validation: summary/selection/API authorization tests, item history and retry UI regressions, typecheck and lint.
 - [x] **ISSUE-10** — Rename action and Details edits freeze per-revision attachment display names, preserve extensions and published/history names, and update downloads/WebDAV/workflow reads without file processing. Upload name conflicts offer rename-and-retry or conditional replacement only for writable targets. Validation: rename/upload/file/history/portability/API/WebDAV suites, 20 upload/item UI regressions, typecheck and lint; Ent and the single schema/checksum updated.
 
+## Phase 3 Progress
+
+- [ ] **ISSUE-01** — Right-click context menus.
+- [ ] **ISSUE-05** — Drag items and selections into folders and breadcrumbs.
+- [ ] **ISSUE-06** — Currency presets and organization/workspace defaults.
+- [x] **ISSUE-11** — Item and collection inspectors separate system properties from custom fields, including file metadata, authors and assigned tags/keywords. Item metadata and schema use the same authorized visible revision. Validation: frozen schema/publication/file-surface regressions, inspector UI test and frontend typecheck.
+- [ ] **ISSUE-08** — Search content types and related items.
+- [ ] **ISSUE-07** — Visual smart-folder rules, previews and direct result browsing.
+
 ## 1. Backlog Summary Matrix
 
 | ID | Title | Domain | Priority | Effort | Impact |

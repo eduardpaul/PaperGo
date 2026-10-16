@@ -2619,7 +2619,43 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SchemaRevision"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SchemaRevision"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "item"
+                      ],
+                      "properties": {
+                        "item": {
+                          "$ref": "#/components/schemas/Resource",
+                          "description": "System properties from the same visible revision as the schema."
+                        },
+                        "file": {
+                          "type": "object",
+                          "required": [
+                            "filename",
+                            "content_type",
+                            "size"
+                          ],
+                          "properties": {
+                            "filename": {
+                              "type": "string"
+                            },
+                            "content_type": {
+                              "type": "string"
+                            },
+                            "size": {
+                              "type": "integer",
+                              "format": "int64"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -17359,8 +17395,19 @@
           "existing_item": {
             "type": "object",
             "description": "On upload name_conflict, the existing writable item available for conditional replacement. Omitted for inaccessible items and folders.",
-            "properties": {"id": {"type": "string", "format": "uuid"}, "version": {"type": "integer"}},
-            "required": ["id", "version"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "version"
+            ],
             "additionalProperties": false
           },
           "operation_index": {
@@ -18319,7 +18366,10 @@
       },
       "ItemRevision": {
         "properties": {
-          "filename": {"type": "string", "description": "Attachment display name frozen in this revision; empty without a file."},
+          "filename": {
+            "type": "string",
+            "description": "Attachment display name frozen in this revision; empty without a file."
+          },
           "payload": {
             "type": "object",
             "additionalProperties": true

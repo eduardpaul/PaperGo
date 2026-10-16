@@ -258,7 +258,7 @@ func TestBlobSelectionFollowsPublishedRevision(t *testing.T) {
 	attach := func(key string) *ent.Blob {
 		t.Helper()
 		item = current(t, s, item.ID)
-		b, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: key, Filename: "file.txt", ContentType: "application/pdf", Size: 1, SHA256: strings.Repeat("a", 64)})
+		b, err := s.AttachBlob(testContext, "alice", item.ID, item.Version, BlobInput{ObjectKey: key, Filename: key + ".pdf", ContentType: "application/pdf", Size: int64(len(key)), SHA256: strings.Repeat("a", 64)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -276,6 +276,19 @@ func TestBlobSelectionFollowsPublishedRevision(t *testing.T) {
 	}
 	if _, err = s.GetBlob(testContext, "reader", item.ID, draft.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("explicit draft blob leaked", err)
+	}
+	for _, subject := range []string{"reader", "editor"} {
+		schema, err := s.ItemSchema(testContext, subject, item.ID, "auto")
+		want := old
+		if subject == "editor" {
+			want = draft
+		}
+		if err != nil || schema.File == nil || schema.File.Filename != want.Filename || schema.File.Size != want.Size {
+			t.Fatal("schema system properties do not match visible file", subject, schema, err)
+		}
+	}
+	if _, err = s.ItemSchema(testContext, "reader", item.ID, "head"); !errors.Is(err, ErrForbidden) {
+		t.Fatal("schema inspector exposed draft metadata", err)
 	}
 	b, err = s.GetBlob(testContext, "editor", item.ID, "")
 	if err != nil || b.ID != draft.ID {

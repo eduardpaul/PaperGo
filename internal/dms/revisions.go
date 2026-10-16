@@ -544,9 +544,22 @@ func (s *Service) publishAllHeads(ctx context.Context, actor string, c *ent.Reso
 
 // ItemSchema exposes only the schema belonging to the caller's visible revision.
 
-func (s *Service) ItemSchema(ctx context.Context, subject, id, surface string) (*ent.SchemaRevision, error) {
+// ItemSchema pairs the visible schema with the same surface's system properties.
+type ItemSchema struct {
+	*ent.SchemaRevision
+	Item *ent.Resource `json:"item"`
+	File *SchemaFile   `json:"file,omitempty"`
+}
+
+type SchemaFile struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Size        int64  `json:"size"`
+}
+
+func (s *Service) ItemSchema(ctx context.Context, subject, id, surface string) (*ItemSchema, error) {
 	if !s.transaction {
-		return read(ctx, s, func(t *Service) (*ent.SchemaRevision, error) { return t.ItemSchema(ctx, subject, id, surface) })
+		return read(ctx, s, func(t *Service) (*ItemSchema, error) { return t.ItemSchema(ctx, subject, id, surface) })
 	}
 	r, err := s.GetSurface(ctx, subject, id, surface)
 	if err != nil {
@@ -566,7 +579,19 @@ func (s *Service) ItemSchema(ctx context.Context, subject, id, surface string) (
 	if err != nil {
 		return nil, err
 	}
-	return s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID)
+	schema, err := s.Client.SchemaRevision.Get(ctx, rev.SchemaRevisionID)
+	if err != nil {
+		return nil, err
+	}
+	out := &ItemSchema{SchemaRevision: schema, Item: r}
+	if rev.BlobID != nil {
+		b, err := s.Client.Blob.Get(ctx, *rev.BlobID)
+		if err != nil {
+			return nil, err
+		}
+		out.File = &SchemaFile{Filename: rev.Filename, ContentType: b.ContentType, Size: b.Size}
+	}
+	return out, nil
 }
 
 func (s *Service) Schemas(ctx context.Context, subject, id string, after, limit int) (Page[*ent.SchemaRevision], error) {

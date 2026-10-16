@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { api } from '@/api/http';
 import { stringifyJSON } from '@/api/json';
 import { useApiPages } from '@/api/pages';
-import type { FieldDefinition, ValidationRule } from '@/api/types';
+import type { FieldDefinition, Resource, ValidationRule } from '@/api/types';
 import { Button } from '@/components/ui/button';
+import { SystemProperties } from './system-properties';
 import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
 import { useFormat } from '@/lib/preferences';
@@ -54,6 +55,8 @@ export function Publications({ itemId }: { itemId: string }) {
 }
 
 interface ItemSchema {
+  item: Resource;
+  file?: { filename: string; content_type: string; size: number };
   revision_number: number;
   created_at: string;
   created_by: string;
@@ -79,6 +82,9 @@ export function ItemSchemaView({ itemId }: { itemId: string }) {
       {schema.data && (
         <>
           <p className="text-sm">Schema revision {schema.data.revision_number}</p>
+          <SystemProperties item={schema.data.item} file={schema.data.file} contentType={schema.data.definition.content_types?.find(type => type.id === schema.data!.item.content_type_id)?.name} keywords={schema.data.definition.fields.filter(field => field.type === 'keywords').flatMap(field => { const value = schema.data!.item.values?.[field.id]; return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []; })} />
+          <h3 className="font-medium">Custom fields</h3>
+          {!schema.data.definition.fields.length && <p className="text-sm text-muted">No custom fields defined.</p>}
           <ul className="divide-y">
             {schema.data.definition.fields.map((field) => (
               <li key={field.id} className="py-2">
