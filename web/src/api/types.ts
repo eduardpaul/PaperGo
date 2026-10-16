@@ -272,22 +272,25 @@ export interface SmartFolder {
   owner_id?: string;
   name: string;
   description?: string;
-  definition?: SmartFolderDefinition;
+  definition: SmartFolderDefinition;
   version: number;
 }
 
 export interface SmartFolderDefinition {
+  mode: 'query' | 'classification';
+  collection_kind?: 'list' | 'library';
   collections?: string[];
   templates?: string[];
   content_types?: string[];
   terms?: string[];
   term_match?: string;
-  filter?: { field?: string; op?: string; value?: unknown };
+  filter?: FilterExpr;
   group_by?: { field: string; by?: string }[];
   include_folders?: boolean;
 }
 
 export interface SmartFolderEntry {
+  collection_kind: 'list' | 'library';
   workspace_id: string;
   collection_id: string;
   collection_name: string;

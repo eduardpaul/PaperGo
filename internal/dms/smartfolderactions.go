@@ -111,6 +111,9 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		if e != nil {
 			return e
 		}
+		if d.Mode != "classification" {
+			return invalid("saved searches cannot classify items; use a classification folder")
+		}
 		if e = smartPath(d, in.Path); e != nil {
 			return e
 		}
@@ -400,6 +403,9 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 		d, e := smartDefinition(f)
 		if e != nil {
 			return e
+		}
+		if d.Mode != "classification" {
+			return invalid("saved searches cannot remove classifications")
 		}
 		item, e := t.authorize(ctx, subject, itemID, "write")
 		if e != nil {

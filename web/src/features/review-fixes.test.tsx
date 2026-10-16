@@ -13,7 +13,7 @@ import { FieldEditor } from './fields/editor';
 import { CollectionColumns } from './admin/content-types';
 import { CollectionGeneral } from './lists/collection-settings';
 import { ItemSheet } from './lists/item-sheet';
-import { CreateSmartFolderDialog } from './smart-folders/create-dialog';
+import { SmartFolderDialog } from './smart-folders/editor-dialog';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...await importOriginal<typeof Router>(),
@@ -167,18 +167,23 @@ describe('reviewed frontend flows', () => {
     ['boolean', 'false', 'false'],
   ])('creates a smart-folder comparison with a %s literal', async (type, input, literal) => {
     let body: Record<string, unknown> | undefined;
-    mockAPI((_url, init) => {
-      if (init.method === 'POST') {
+    mockAPI((url, init) => {
+      if (url.pathname === '/v1/identity/me') return { subject: 'alice', scopes: ['list.read', 'list.write'] };
+      if (url.pathname === '/v1/search/fields') return { value: [{ key: 'status', label: 'Status', type, queryable: true }] };
+      if (url.pathname === '/v1/search/content-types' || url.pathname === '/v1/collection-templates') return [];
+      if (init.method === 'POST' && url.pathname === '/v1/smart-folders') {
         body = parseJSON(String(init.body)) as Record<string, unknown>;
-        return { id: 'folder', name: 'Filtered', version: 1 };
+        return { id: 'folder', name: 'Filtered', version: 1, definition: { mode: 'query' } };
       }
-      return { value: [] };
+      return { value: [], total: 0 };
     });
-    renderPage(<CreateSmartFolderDialog open onClose={vi.fn()} onCreated={vi.fn()} />);
+    renderPage(<SmartFolderDialog open onClose={vi.fn()} onSaved={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Filtered' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add filter' }));
+    await screen.findByRole('option', { name: 'Status' });
     fireEvent.change(screen.getByLabelText('Filter field'), { target: { value: 'status' } });
-    fireEvent.change(screen.getByLabelText('Value type'), { target: { value: type } });
-    fireEvent.change(screen.getByLabelText('Filter value'), { target: { value: input } });
+    fireEvent.change(screen.getByLabelText(/^Filter value/), { target: { value: input } });
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
     await waitFor(() => expect(body).toBeDefined());
     const definition = body!.definition as { filter: { value: unknown } };

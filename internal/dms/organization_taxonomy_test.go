@@ -191,7 +191,7 @@ func TestSharedTaxonomyAcrossWorkspacesAndDeletion(t *testing.T) {
 			t.Fatal("merged IDs did not resolve in both workspaces", page, err)
 		}
 	}
-	folder := smartOK(t, s, SmartFolderInput{Name: "Corporate topic", WorkspaceID: &second.ID, Definition: SmartFolderDefinition{Terms: []string{current.ID}}})
+	folder := smartOK(t, s, SmartFolderInput{Name: "Corporate topic", WorkspaceID: &second.ID, Definition: SmartFolderDefinition{Mode: "query", Terms: []string{current.ID}}})
 	page, err := s.QuerySmartFolder(ctx, "alice", folder.ID, SmartFolderQueryRequest{})
 	if err != nil || len(page.Data) != 1 || page.Data[0].Item.ID != b.ID {
 		t.Fatal("workspace-scoped smart folder", page, err)

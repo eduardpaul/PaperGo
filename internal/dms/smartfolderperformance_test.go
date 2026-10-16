@@ -12,11 +12,11 @@ func TestSmartFolderCollectionBudgetDoesNotTruncate(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		create(t, s, w.ID, "list", fmt.Sprintf("Extra %03d", i), nil)
 	}
-	f := smartOK(t, s, SmartFolderInput{Name: "Too broad", WorkspaceID: &w.ID})
+	f := smartOK(t, s, SmartFolderInput{Name: "Too broad", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query"}})
 	if _, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{}); !isValidation(err) {
 		t.Fatal("broad folder silently truncated", err)
 	}
-	in := SmartFolderInput{Name: f.Name, WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Collections: []string{l.Name}}}
+	in := SmartFolderInput{Name: f.Name, WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Collections: []string{l.Name}}}
 	f, err := s.UpdateSmartFolder(testContext, "alice", f.ID, f.Version, in)
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func BenchmarkSmartFolderQuery100Collections(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
-	f, err := s.CreateSmartFolder(ctx, "alice", SmartFolderInput{Name: "Open", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Filter: &FilterExpr{Field: "status", Value: []byte(`"open"`)}}})
+	f, err := s.CreateSmartFolder(ctx, "alice", SmartFolderInput{Name: "Open", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Filter: &FilterExpr{Field: "status", Value: []byte(`"open"`)}}})
 	if err != nil {
 		b.Fatal(err)
 	}

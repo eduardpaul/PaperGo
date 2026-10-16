@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { numericInput } from '@/api/json';
 import type { FieldDefinition, FilterExpr } from '@/api/types';
+import { FieldEditor } from '@/features/fields/editor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -14,6 +15,11 @@ export const systemFields: FieldDefinition[] = [
   ['$created_by', 'Created by', 'person'],
   ['$modified_by', 'Modified by', 'person'],
 ].map(([key, label, type]) => ({ id: key, key, label, type, indexed: true }));
+
+export const comparisonLabels: Record<string, string> = { eq: 'is', ne: 'is not', in: 'is one of', missing: 'is empty', present: 'has a value', gt: 'is after / greater than', gte: 'is on or after / at least', lt: 'is before / less than', lte: 'is on or before / at most', contains: 'contains', under: 'is in this topic' };
+export const relativeLabels: Record<string, string> = { today: 'Today', yesterday: 'Yesterday', tomorrow: 'Tomorrow', last7Days: 'Past week', next7Days: 'Next week', last30Days: 'Past month', next30Days: 'Next month', weekStart: 'Start of week', weekEnd: 'End of week', monthStart: 'Start of month', monthEnd: 'End of month', me: 'Current user' };
+export const fileTypeLabels: Record<string, string> = { 'application/pdf': 'PDF document', 'image/tiff': 'TIFF image', 'image/jpeg': 'JPEG image', 'image/png': 'PNG image', 'image/webp': 'WebP image' };
+export const fileTypeField: FieldDefinition = { id: '$file_type', key: '$file_type', label: 'File type', type: 'choice', indexed: true, choices: Object.keys(fileTypeLabels) };
 
 export function normalizeFilter(filter: FilterExpr | undefined, fields: FieldDefinition[]): FilterExpr | undefined {
   if (!filter) return undefined;
@@ -127,7 +133,7 @@ export function FilterEditor({
           ...(['term', 'keywords'].includes(field?.type ?? '') ? ['under'] : []),
         ];
   const value = (v: unknown, onValue: (v: unknown) => void, label: string) =>
-    field?.type === 'boolean' ? (
+    field && ['date', 'datetime', 'person', 'lookup', 'term', 'keywords'].includes(field.type) ? <FieldEditor id={`filter-${id}-${label.replaceAll(' ', '-')}`} field={{ ...field, label, required: false, options: { ...field.options, multiple: false } }} value={v} onChange={onValue} /> : field?.type === 'boolean' ? (
       <Select
         aria-label={label}
         value={String(v ?? false)}
@@ -141,7 +147,7 @@ export function FilterEditor({
         <option value="">Choose…</option>
         {field.choices?.map((choice) => (
           <option key={choice} value={choice}>
-            {choice}
+            {field.key === '$file_type' ? fileTypeLabels[choice] ?? choice : choice}
           </option>
         ))}
       </Select>
@@ -169,6 +175,7 @@ export function FilterEditor({
             })
           }
         >
+          {filter.field && !field && <option value={filter.field}>Field unavailable in this scope</option>}
           {fields.map((field) => (
             <option key={field.key} value={field.key}>
               {field.label}
@@ -193,7 +200,7 @@ export function FilterEditor({
         >
           {operators.map((operator) => (
             <option key={operator} value={operator}>
-              {operator}
+              {comparisonLabels[operator] ?? operator}
             </option>
           ))}
         </Select>
@@ -231,7 +238,7 @@ export function FilterEditor({
                   'monthEnd',
                 ].map((ref) => (
                   <option key={ref} value={ref}>
-                    {ref} (UTC)
+                    {relativeLabels[ref]} (UTC)
                   </option>
                 ))}
             </Select>

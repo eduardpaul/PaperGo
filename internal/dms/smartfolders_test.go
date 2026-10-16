@@ -33,7 +33,7 @@ func TestSmartFolderPhysicalFoldersAndExactTimes(t *testing.T) {
 	if _, err = s.Client.ItemSurface.Update().Where(itemsurface.ItemIDEQ(folder.ID)).SetModifiedAt(queryTime(stamp)).Save(testContext); err != nil {
 		t.Fatal(err)
 	}
-	f := smartOK(t, s, SmartFolderInput{Name: "Folders", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{IncludeFolders: true, Filter: &FilterExpr{Field: "$modified_at", Value: json.RawMessage(`"2026-10-08T11:30:00.123456789Z"`)}, GroupBy: []SmartFolderGroupBy{{Field: "$modified_at", By: "month"}}}})
+	f := smartOK(t, s, SmartFolderInput{Name: "Folders", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", IncludeFolders: true, Filter: &FilterExpr{Field: "$modified_at", Value: json.RawMessage(`"2026-10-08T11:30:00.123456789Z"`)}, GroupBy: []SmartFolderGroupBy{{Field: "$modified_at", By: "month"}}}})
 	rows, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
 	if err != nil || counted(rows.Total) != 1 || rows.Data[0].Item.ID != folder.ID {
 		t.Fatal(rows, err)
@@ -62,9 +62,9 @@ func TestSmartFolderOwnershipConcurrencyAndDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shared := smartOK(t, s, SmartFolderInput{Name: "Shared", WorkspaceID: &w.ID})
-	private := smartOK(t, s, SmartFolderInput{Name: "Private", Personal: true, WorkspaceID: &w.ID})
-	global := smartOK(t, s, SmartFolderInput{Name: "Everywhere", Personal: true})
+	shared := smartOK(t, s, SmartFolderInput{Name: "Shared", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query"}})
+	private := smartOK(t, s, SmartFolderInput{Name: "Private", Personal: true, WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query"}})
+	global := smartOK(t, s, SmartFolderInput{Name: "Everywhere", Personal: true, Definition: SmartFolderDefinition{Mode: "query"}})
 	if _, err = s.SmartFolder(testContext, "reader", private.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("private leaked", err)
 	}
@@ -79,31 +79,31 @@ func TestSmartFolderOwnershipConcurrencyAndDefinitions(t *testing.T) {
 	if err != nil || len(page.Data) != 1 || page.NextCursor == "" {
 		t.Fatal(page, err)
 	}
-	if _, err = s.CreateSmartFolder(testContext, "reader", SmartFolderInput{Name: "Forbidden", WorkspaceID: &w.ID}); !errors.Is(err, ErrNotFound) {
+	if _, err = s.CreateSmartFolder(testContext, "reader", SmartFolderInput{Name: "Forbidden", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query"}}); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
-	if _, err = s.CreateSmartFolder(testContext, "reader", SmartFolderInput{Name: "Mine", WorkspaceID: &w.ID, Personal: true}); err != nil {
+	if _, err = s.CreateSmartFolder(testContext, "reader", SmartFolderInput{Name: "Mine", WorkspaceID: &w.ID, Personal: true, Definition: SmartFolderDefinition{Mode: "query"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.DeleteSmartFolder(testContext, "reader", shared.ID, shared.Version); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
-	if _, err = s.UpdateSmartFolder(testContext, "alice", shared.ID, 99, SmartFolderInput{Name: "Bad", WorkspaceID: &w.ID}); !errors.Is(err, ErrPreconditionFailed) {
+	if _, err = s.UpdateSmartFolder(testContext, "alice", shared.ID, 99, SmartFolderInput{Name: "Bad", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query"}}); !errors.Is(err, ErrPreconditionFailed) {
 		t.Fatal(err)
 	}
-	if _, err = s.UpdateSmartFolder(testContext, "alice", private.ID, private.Version, SmartFolderInput{Name: "Shared now", WorkspaceID: &w.ID}); !isValidation(err) {
+	if _, err = s.UpdateSmartFolder(testContext, "alice", private.ID, private.Version, SmartFolderInput{Name: "Shared now", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query"}}); !isValidation(err) {
 		t.Fatal(err)
 	}
-	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "No scope"}); !isValidation(err) {
+	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "No scope", Definition: SmartFolderDefinition{Mode: "query"}}); !isValidation(err) {
 		t.Fatal(err)
 	}
-	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "Wrong scope", WorkspaceID: &l.ID}); !errors.Is(err, ErrNotFound) {
+	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "Wrong scope", WorkspaceID: &l.ID, Definition: SmartFolderDefinition{Mode: "query"}}); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
-	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "Invalid", Personal: true, Definition: SmartFolderDefinition{Filter: &FilterExpr{Field: "status", Op: "execute", Value: json.RawMessage(`"a"`)}}}); !isValidation(err) {
+	if _, err = s.CreateSmartFolder(testContext, "alice", SmartFolderInput{Name: "Invalid", Personal: true, Definition: SmartFolderDefinition{Mode: "query", Filter: &FilterExpr{Field: "status", Op: "execute", Value: json.RawMessage(`"a"`)}}}); !isValidation(err) {
 		t.Fatal(err)
 	}
-	if _, err = s.UpdateSmartFolder(testContext, "alice", global.ID, global.Version, SmartFolderInput{Name: "Renamed", Personal: true}); err != nil {
+	if _, err = s.UpdateSmartFolder(testContext, "alice", global.ID, global.Version, SmartFolderInput{Name: "Renamed", Personal: true, Definition: SmartFolderDefinition{Mode: "query"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.DeleteSmartFolder(testContext, "alice", global.ID, global.Version); !errors.Is(err, ErrPreconditionFailed) {
@@ -185,7 +185,7 @@ func TestSmartFoldersTermsSurfacesNavigationAndGlobalPaging(t *testing.T) {
 		}
 	}
 	create(t, s, a.ID, "item", "Draft secret", map[string]any{"project_0": root.ID, "issued": "2026-03-01", "status": "open"})
-	f := smartOK(t, s, SmartFolderInput{Name: "Apollo", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Terms: []string{root.ID}, GroupBy: []SmartFolderGroupBy{{Field: "issued", By: "year"}, {Field: "status"}}}})
+	f := smartOK(t, s, SmartFolderInput{Name: "Apollo", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Terms: []string{root.ID}, GroupBy: []SmartFolderGroupBy{{Field: "issued", By: "year"}, {Field: "status"}}}})
 	got, err := s.QuerySmartFolder(testContext, "reader", f.ID, SmartFolderQueryRequest{IncludeTotal: true, Limit: 1})
 	if err != nil || counted(got.Total) != 3 || len(got.Data) != 1 || got.Data[0].Item.ID != three.ID || got.Data[0].CollectionName != "Papers" {
 		t.Fatal(got, err)
@@ -262,7 +262,7 @@ func TestSmartFolderSkipsIncompatibleCollectionsAndSelectsTypesTemplates(t *test
 		t.Fatal(err)
 	}
 	create(t, s, b.ID, "item", "No status", nil)
-	f := smartOK(t, s, SmartFolderInput{Name: "Open", Personal: true, Definition: SmartFolderDefinition{Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"open"`)}, ContentTypes: []string{"INVOICE"}}})
+	f := smartOK(t, s, SmartFolderInput{Name: "Open", Personal: true, Definition: SmartFolderDefinition{Mode: "query", Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"open"`)}, ContentTypes: []string{"INVOICE"}}})
 	got, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
 	if err != nil || counted(got.Total) != 1 || got.Data[0].Item.ID != item.ID {
 		t.Fatal(got, err)
@@ -274,12 +274,12 @@ func TestSmartFolderSkipsIncompatibleCollectionsAndSelectsTypesTemplates(t *test
 	if _, err = s.ApplyTemplate(testContext, "alice", a.ID, tpl.ID, latest(t, s, a.ID).Version, tpl.Version, typ.ID); err != nil {
 		t.Fatal(err)
 	}
-	f = smartOK(t, s, SmartFolderInput{Name: "Template", Personal: true, Definition: SmartFolderDefinition{Templates: []string{"INVOICE_TEMPLATE"}}})
+	f = smartOK(t, s, SmartFolderInput{Name: "Template", Personal: true, Definition: SmartFolderDefinition{Mode: "query", Templates: []string{"INVOICE_TEMPLATE"}}})
 	got, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{IncludeTotal: true})
 	if err != nil || counted(got.Total) != 1 {
 		t.Fatal(got, err)
 	}
-	f = smartOK(t, s, SmartFolderInput{Name: "Invalid field", Personal: true, Definition: SmartFolderDefinition{Collections: []string{b.Name}, Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"open"`)}}})
+	f = smartOK(t, s, SmartFolderInput{Name: "Invalid field", Personal: true, Definition: SmartFolderDefinition{Mode: "query", Collections: []string{b.Name}, Filter: &FilterExpr{Field: "status", Value: json.RawMessage(`"open"`)}}})
 	if _, err = s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{}); !isValidation(err) {
 		t.Fatal(err)
 	}

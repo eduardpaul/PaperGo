@@ -201,7 +201,7 @@ CREATE TABLE smart_folders (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
  workspace_id TEXT REFERENCES resources(id), owner_id TEXT,
  name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
- definition JSON NOT NULL CHECK(json_valid(definition) AND json_type(definition)='object'),
+ definition JSON NOT NULL CHECK(json_valid(definition) AND json_type(definition)='object' AND coalesce(json_extract(definition,'$.mode'),'') IN ('query','classification')),
  created_by TEXT NOT NULL, updated_by TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
  CHECK(workspace_id IS NOT NULL OR owner_id IS NOT NULL), CHECK(owner_id IS NULL OR length(owner_id)>0)
 );

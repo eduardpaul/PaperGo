@@ -60,15 +60,17 @@ func smartBranchSQL(branch smartQueryBranch) (string, []any) {
 }
 
 type SmartFolderEntry struct {
+	CollectionKind string        `json:"collection_kind"`
 	WorkspaceID    string        `json:"workspace_id"`
 	CollectionID   string        `json:"collection_id"`
 	CollectionName string        `json:"collection_name"`
 	Item           *ent.Resource `json:"item"`
 }
 type SmartFolderResult struct {
-	Data       []SmartFolderEntry `json:"value"`
-	NextCursor string             `json:"-"`
-	Total      *int               `json:"total,omitempty"`
+	TotalCapped bool               `json:"total_capped,omitempty"`
+	Data        []SmartFolderEntry `json:"value"`
+	NextCursor  string             `json:"-"`
+	Total       *int               `json:"total,omitempty"`
 }
 type SmartFolderGroup struct {
 	Value any    `json:"value"`
@@ -93,7 +95,10 @@ func namedSelector(values []string, column string) (string, []any) {
 }
 
 func (s *Service) smartCandidates(ctx context.Context, subject string, f *ent.SmartFolder, d SmartFolderDefinition) ([]smartCandidate, error) {
-	q := s.Client.Resource.Query().Where(resource.KindIn(resource.KindList, resource.KindLibrary), permissionPredicate(ctx, subject, "read"))
+	q := s.Client.Resource.Query().Where(resource.KindIn(resource.KindList, resource.KindLibrary), resource.DeletedAtIsNil(), permissionPredicate(ctx, subject, "read"))
+	if d.CollectionKind != "" {
+		q.Where(resource.KindEQ(resource.Kind(d.CollectionKind)))
+	}
 	if f.WorkspaceID != nil {
 		q.Where(resource.WorkspaceIDEQ(*f.WorkspaceID))
 	}
@@ -338,6 +343,13 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 	if in.Surface != "auto" && in.Surface != "head" && in.Surface != "published" {
 		return compiledQuery{}, nil, invalid("invalid query surface")
 	}
+	order := SortSpec{Field: "$modified_at", Direction: "desc"}
+	if in.Sort != nil && !grouped {
+		order = *in.Sort
+	}
+	if (order.Field != "$name" && order.Field != "$created_at" && order.Field != "$modified_at") || (order.Direction != "asc" && order.Direction != "desc") {
+		return compiledQuery{}, nil, invalid("sort by name, created or modified in ascending or descending order")
+	}
 	candidates, err := s.smartCandidates(ctx, subject, f, d)
 	if err != nil {
 		return compiledQuery{}, nil, err
@@ -356,7 +368,7 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 	rankIdentity := ""
 	usable := []smartCandidate{}
 	for _, c := range candidates {
-		spec := QuerySpec{Filter: d.Filter, Sort: []SortSpec{{Field: "$modified_at", Direction: "desc"}}}
+		spec := QuerySpec{Filter: d.Filter, Sort: []SortSpec{order}}
 		q, err := s.compileCollectionQuery(ctx, subject, c.collection, c.defs, QueryRequest{Query: spec, Surface: in.Surface, rowACL: true}, false)
 		if err != nil {
 			var validation *ValidationError
@@ -451,12 +463,13 @@ func (s *Service) compileSmartFolder(ctx context.Context, subject string, f *ent
 		Version                  int
 		Path                     []*string
 		Grouped                  bool
+		Sort                     SortSpec
 		Schemas                  []string
 		SQL                      string
 		Args                     []any
-	}{f.ID, subject, in.Surface, f.Version, in.Path, grouped, schemas, text, args})
+	}{f.ID, subject, in.Surface, f.Version, in.Path, grouped, order, schemas, text, args})
 	sum := sha256.Sum256(fingerprint)
-	return compiledQuery{sql: text, args: args, fingerprint: hex.EncodeToString(sum[:]), descending: !grouped, kind: kind, rankDef: rankDef, orders: []queryOrder{{kind: kind, descending: !grouped}}}, usable, nil
+	return compiledQuery{sql: text, args: args, fingerprint: hex.EncodeToString(sum[:]), descending: !grouped && order.Direction == "desc", kind: kind, rankDef: rankDef, orders: []queryOrder{{kind: kind, descending: !grouped && order.Direction == "desc"}}}, usable, nil
 }
 
 func (s *Service) QuerySmartFolder(ctx context.Context, subject, id string, in SmartFolderQueryRequest) (SmartFolderResult, error) {
@@ -469,27 +482,52 @@ func (s *Service) QuerySmartFolder(ctx context.Context, subject, id string, in S
 		if err != nil {
 			return SmartFolderResult{}, err
 		}
-		q, candidates, err := t.compileSmartFolder(ctx, subject, f, d, in, false)
-		if err != nil {
+		return t.querySmartFolder(ctx, subject, f, d, in)
+	})
+}
+
+func (s *Service) querySmartFolder(ctx context.Context, subject string, f *ent.SmartFolder, d SmartFolderDefinition, in SmartFolderQueryRequest) (SmartFolderResult, error) {
+	q, candidates, err := s.compileSmartFolder(ctx, subject, f, d, in, false)
+	if err != nil {
+		return SmartFolderResult{}, err
+	}
+	if in.Surface == "" {
+		in.Surface = "auto"
+	}
+	out, err := s.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal, TotalLimit: in.TotalLimit}, q, nil)
+	if err != nil {
+		return SmartFolderResult{}, err
+	}
+	byID := map[string]*ent.Resource{}
+	for _, c := range candidates {
+		byID[c.collection.ID] = c.collection
+	}
+	result := SmartFolderResult{Data: []SmartFolderEntry{}, NextCursor: out.NextCursor, Total: out.Total, TotalCapped: out.TotalCapped}
+	for _, item := range out.Data {
+		c := byID[*item.ContainerID]
+		result.Data = append(result.Data, SmartFolderEntry{string(c.Kind), item.WorkspaceID, c.ID, c.Name, item})
+	}
+	return result, nil
+}
+
+type SmartFolderPreview struct {
+	WorkspaceID *string               `json:"workspace_id,omitempty"`
+	Definition  SmartFolderDefinition `json:"definition"`
+}
+
+// Preview evaluates an unsaved definition against exactly the caller's visible item surfaces.
+func (s *Service) PreviewSmartFolder(ctx context.Context, subject string, in SmartFolderPreview) (SmartFolderResult, error) {
+	if err := s.RequireScope(ctx, subject, "list.read"); err != nil {
+		return SmartFolderResult{}, err
+	}
+	return read(ctx, s, func(t *Service) (SmartFolderResult, error) {
+		if err := t.validateSmartFolder(ctx, subject, SmartFolderInput{Name: "Preview", Personal: true, WorkspaceID: in.WorkspaceID, Definition: in.Definition}); err != nil {
 			return SmartFolderResult{}, err
 		}
-		if in.Surface == "" {
-			in.Surface = "auto"
-		}
-		out, err := t.queryCompiled(ctx, subject, QueryRequest{Surface: in.Surface, After: in.After, Limit: in.Limit, IncludeTotal: in.IncludeTotal}, q, nil)
-		if err != nil {
-			return SmartFolderResult{}, err
-		}
-		byID := map[string]*ent.Resource{}
-		for _, c := range candidates {
-			byID[c.collection.ID] = c.collection
-		}
-		result := SmartFolderResult{Data: []SmartFolderEntry{}, NextCursor: out.NextCursor, Total: out.Total}
-		for _, item := range out.Data {
-			c := byID[*item.ContainerID]
-			result.Data = append(result.Data, SmartFolderEntry{item.WorkspaceID, c.ID, c.Name, item})
-		}
-		return result, nil
+		f := &ent.SmartFolder{ID: "preview", WorkspaceID: in.WorkspaceID, OwnerID: &subject, Version: 1}
+		out, err := t.querySmartFolder(ctx, subject, f, in.Definition, SmartFolderQueryRequest{Limit: 5, IncludeTotal: true, TotalLimit: 10000})
+		out.NextCursor = ""
+		return out, err
 	})
 }
 

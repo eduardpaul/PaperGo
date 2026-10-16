@@ -15,6 +15,8 @@ type SmartFolderTermRef struct {
 	Path       []string `json:"path"`
 }
 type PortableSmartFolderDefinition struct {
+	Mode           string               `json:"mode"`
+	CollectionKind string               `json:"collection_kind,omitempty"`
 	Collections    []string             `json:"collections,omitempty"`
 	Templates      []string             `json:"templates,omitempty"`
 	ContentTypes   []string             `json:"content_types,omitempty"`
@@ -125,7 +127,7 @@ func (s *Service) ExportSmartFolders(ctx context.Context, subject, workspace str
 			for _, id := range d.Terms {
 				terms = append(terms, refs[id])
 			}
-			pkg.Folders = append(pkg.Folders, PortableSmartFolder{f.Name, f.Description, PortableSmartFolderDefinition{d.Collections, d.Templates, d.ContentTypes, terms, d.TermMatch, d.Filter, d.GroupBy, d.IncludeFolders}})
+			pkg.Folders = append(pkg.Folders, PortableSmartFolder{f.Name, f.Description, PortableSmartFolderDefinition{d.Mode, d.CollectionKind, d.Collections, d.Templates, d.ContentTypes, terms, d.TermMatch, d.Filter, d.GroupBy, d.IncludeFolders}})
 		}
 		return result{pkg, w.Version}, nil
 	})
@@ -253,7 +255,7 @@ func (s *Service) ImportSmartFolders(ctx context.Context, subject, workspace str
 			for _, ref := range p.Terms {
 				ids = append(ids, refs[smartTermRefKey(ref)])
 			}
-			d := SmartFolderDefinition{p.Collections, p.Templates, p.ContentTypes, ids, p.TermMatch, p.Filter, p.GroupBy, p.IncludeFolders}
+			d := SmartFolderDefinition{p.Mode, p.CollectionKind, p.Collections, p.Templates, p.ContentTypes, ids, p.TermMatch, p.Filter, p.GroupBy, p.IncludeFolders}
 			in := SmartFolderInput{Name: portable.Name, Description: portable.Description, WorkspaceID: &workspace, Definition: d}
 			if e = t.validateSmartFolder(ctx, subject, in); e != nil {
 				return e

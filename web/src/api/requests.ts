@@ -185,8 +185,8 @@ export function searchRequest(params: SearchParams): ApiCall {
   };
 }
 
-export function smartFolderQueryRequest(id: string, path: (string | null)[]): ApiCall {
-  return { path: `/v1/smart-folders/${id}/query`, method: 'POST', query: { $top: 50 }, body: { include_total: true, path } };
+export function smartFolderQueryRequest(id: string, path: (string | null)[], sort?: ListingSort): ApiCall {
+  return { path: `/v1/smart-folders/${id}/query`, method: 'POST', query: { $top: 50 }, body: { include_total: true, path, ...(sort ? { sort } : {}) } };
 }
 
 export interface UploadPart {

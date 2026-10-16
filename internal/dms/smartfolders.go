@@ -22,6 +22,8 @@ type SmartFolderGroupBy struct {
 }
 
 type SmartFolderDefinition struct {
+	Mode           string               `json:"mode"`
+	CollectionKind string               `json:"collection_kind,omitempty"`
 	Collections    []string             `json:"collections,omitempty"`
 	Templates      []string             `json:"templates,omitempty"`
 	ContentTypes   []string             `json:"content_types,omitempty"`
@@ -41,6 +43,8 @@ type SmartFolderInput struct {
 }
 
 type SmartFolderQueryRequest struct {
+	Sort         *SortSpec `json:"sort,omitempty"`
+	TotalLimit   int       `json:"-"`
 	Path         []*string `json:"path,omitempty"`
 	Surface      string    `json:"surface,omitempty"`
 	After        string    `json:"-"`
@@ -70,6 +74,12 @@ func (s *Service) validateSmartFolder(ctx context.Context, subject string, in Sm
 		}
 	}
 	d := in.Definition
+	if d.Mode != "query" && d.Mode != "classification" {
+		return invalid("mode must be query or classification")
+	}
+	if d.CollectionKind != "" && d.CollectionKind != "list" && d.CollectionKind != "library" {
+		return invalid("collection_kind must be list or library")
+	}
 	for _, values := range [][]string{d.Collections, d.Templates, d.ContentTypes} {
 		if len(values) > MaxSmartCollections {
 			return invalid("at most 100 collection, template or content type selectors")

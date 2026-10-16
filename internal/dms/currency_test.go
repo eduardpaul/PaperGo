@@ -101,7 +101,7 @@ func TestCurrencyExactQueriesBoundsDefaultsHistoryAndUniqueness(t *testing.T) {
 			t.Fatal("exact group values", key, values, prices)
 		}
 	}
-	folder := smartOK(t, s, SmartFolderInput{Name: "Amounts", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Collections: []string{l.Name}, GroupBy: []SmartFolderGroupBy{{Field: "price"}}}})
+	folder := smartOK(t, s, SmartFolderInput{Name: "Amounts", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Collections: []string{l.Name}, GroupBy: []SmartFolderGroupBy{{Field: "price"}}}})
 	groups, err := s.SmartFolderGroups(testContext, "reader", folder.ID, SmartFolderQueryRequest{Limit: 1})
 	if err != nil || len(groups.Data) != 1 || groups.Data[0].Value != json.Number(prices[0]) || groups.NextCursor == "" {
 		t.Fatal("currency navigation groups", groups, err)

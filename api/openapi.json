@@ -5697,7 +5697,7 @@
         "x-module-scopes": [
           "list.write"
         ],
-        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply."
+        "description": " Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it."
       },
       "parameters": [
         {
@@ -5713,7 +5713,7 @@
     },
     "/v1/smart-folders/{id}/items/{itemID}": {
       "delete": {
-        "description": "Requires item If-Match and current folder_version. Clears matching equality values/tags and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Requires item If-Match and current folder_version. Clears matching equality values/tags and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.",
         "responses": {
           "200": {
             "content": {
@@ -17125,7 +17125,8 @@
                     "type": "object",
                     "required": [
                       "id",
-                      "name"
+                      "name",
+                      "key"
                     ],
                     "properties": {
                       "id": {
@@ -17133,6 +17134,9 @@
                         "format": "uuid"
                       },
                       "name": {
+                        "type": "string"
+                      },
+                      "key": {
                         "type": "string"
                       }
                     }
@@ -17225,6 +17229,41 @@
                       }
                     }
                   }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/v1/smart-folders/preview": {
+      "post": {
+        "operationId": "previewSmartFolder",
+        "summary": "Preview unsaved smart-folder rules",
+        "description": "Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.",
+        "x-module-scopes": [
+          "list.read"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartFolderPreview"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authorized preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartFolderResult"
                 }
               }
             }
@@ -18944,7 +18983,7 @@
         },
         "required": [],
         "additionalProperties": false,
-        "description": "One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $tags supports equality. Multi-valued eq matches any member; ne requires present with no equal member."
+        "description": "One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $tags supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision."
       },
       "SortSpec": {
         "type": "object",
@@ -20116,11 +20155,30 @@
               "type": "string"
             },
             "uniqueItems": true
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "query",
+              "classification"
+            ],
+            "description": "query saves a read-only live search; classification also permits explicit classify/unclassify actions."
+          },
+          "collection_kind": {
+            "type": "string",
+            "enum": [
+              "list",
+              "library"
+            ],
+            "description": "Omit to search both lists and libraries."
           }
         },
-        "description": "Live query across at most 100 readable collections. Name/key selectors ignore case. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have content types and optional custom fields, and participate in taxonomy/content-type selectors when include_folders is true. Equivalent collection predicates share one SQL branch; distinct shapes use UNION ALL. Queries are bounded to 30,000 SQL parameters.",
+        "description": "Live query across at most 100 readable collections. Name/key selectors ignore case. Terms include descendants and can occupy different term fields. Incompatible collection filters are skipped; none compatible returns validation. Metadata navigation is scalar and indexed, with compatible field types/scopes across collections. Physical folders have content types and optional custom fields, and participate in taxonomy/content-type selectors when include_folders is true. Equivalent collection predicates share one SQL branch; distinct shapes use UNION ALL. Queries are bounded to 30,000 SQL parameters. Mode is explicit. Results can be read directly without supplying a group path. $file_type filters the MIME type on the authorized visible revision.",
         "additionalProperties": false,
-        "type": "object"
+        "type": "object",
+        "required": [
+          "mode"
+        ]
       },
       "SmartFolderInput": {
         "properties": {
@@ -20256,12 +20314,38 @@
             "type": "boolean",
             "default": false,
             "description": "Count every authorized match before pagination. An exact total evaluates the whole result set, so it is returned only when requested."
+          },
+          "sort": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "field",
+              "direction"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "$name",
+                  "$created_at",
+                  "$modified_at"
+                ]
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "description": "Results default to modified descending. ID ties follow the chosen direction. Group queries use grouping order."
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [],
-        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink."
+        "description": "Pagination is specified by URL $top/$skiptoken. Repeat the same POST body at @odata.nextLink. An empty path returns all matching items even when group_by is configured."
       },
       "SmartFolderEntry": {
         "properties": {
@@ -20278,6 +20362,13 @@
           "collection_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "collection_kind": {
+            "type": "string",
+            "enum": [
+              "list",
+              "library"
+            ]
           }
         },
         "type": "object",
@@ -20285,7 +20376,8 @@
           "workspace_id",
           "collection_id",
           "collection_name",
-          "item"
+          "item",
+          "collection_kind"
         ]
       },
       "SmartFolderResult": {
@@ -20305,9 +20397,13 @@
               "null"
             ],
             "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          },
+          "total_capped": {
+            "type": "boolean",
+            "description": "Preview counts stop at 10,000. True means total is a lower bound."
           }
         },
-        "description": "Recently modified first, ID descending ties, permission filtering before pagination and the optional total. Cursors bind folder version, caller, surface, path, schemas and resolved references.",
+        "description": "Authorized items sorted by name, created or modified time, with ID ties in the same direction. Default is modified descending. Cursors bind folder version, caller, surface, path, ordering, schemas and resolved references.",
         "type": "object",
         "required": [
           "value",
@@ -20546,11 +20642,30 @@
               "type": "string"
             },
             "uniqueItems": true
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "query",
+              "classification"
+            ],
+            "description": "query saves a read-only live search; classification also permits explicit classify/unclassify actions."
+          },
+          "collection_kind": {
+            "type": "string",
+            "enum": [
+              "list",
+              "library"
+            ],
+            "description": "Omit to search both lists and libraries."
           }
         },
         "description": "Portable shared definition: named selectors and term paths, with filter literals retained literally.",
         "additionalProperties": false,
-        "type": "object"
+        "type": "object",
+        "required": [
+          "mode"
+        ]
       },
       "PortableSmartFolder": {
         "required": [
@@ -24342,13 +24457,22 @@
                 "missing"
               ]
             }
+          },
+          "queryable": {
+            "type": "boolean",
+            "description": "True when the field has a ready index for collection and smart-folder rules."
+          },
+          "lookup_container_id": {
+            "type": "string",
+            "format": "uuid"
           }
         },
         "required": [
           "key",
           "label",
           "type",
-          "operators"
+          "operators",
+          "queryable"
         ],
         "additionalProperties": false
       },
@@ -24647,6 +24771,22 @@
           "key",
           "completion"
         ]
+      },
+      "SmartFolderPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "definition"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/SmartFolderDefinition"
+          }
+        }
       }
     }
   }

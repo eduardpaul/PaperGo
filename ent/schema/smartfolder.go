@@ -19,6 +19,7 @@ func (SmartFolder) Fields() []ent.Field {
 		field.String("workspace_id").Optional().Nillable().Immutable().MaxLen(36),
 		field.String("owner_id").Optional().Nillable().Immutable().MaxLen(255),
 		field.String("name").NotEmpty().MaxLen(255), field.String("description").Default(""),
+		// definition.mode is required (query or classification); SQLite enforces it.
 		field.JSON("definition", json.RawMessage{}),
 		field.String("created_by").Immutable(), field.String("updated_by"),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),

@@ -525,7 +525,7 @@ func TestSmartFoldersMatchKeywordsAndMergedTerms(t *testing.T) {
 	}
 	names := func(terms ...string) string {
 		t.Helper()
-		f := smartOK(t, s, SmartFolderInput{Name: strings.Join(terms, " "), WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Terms: terms}})
+		f := smartOK(t, s, SmartFolderInput{Name: strings.Join(terms, " "), WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Terms: terms}})
 		got, err := s.QuerySmartFolder(testContext, "alice", f.ID, SmartFolderQueryRequest{})
 		if err != nil {
 			t.Fatal(err)

@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
 import { FieldEditor } from '@/features/fields/editor';
 import { valuesPatch } from '@/features/fields/values';
+import { FolderBrowser } from '@/features/lists/folder-browser';
 import { fieldsForType } from '@/features/lists/schema';
 
 /** PaperDotNet's AddToFolderDialog with Go's folder and item concurrency checks. */
@@ -53,7 +54,7 @@ export function AddToSmartFolder({ item, onClose }: { item: Resource; onClose: (
       <Select id="classify-folder" required value={id} onChange={(event) => setId(event.target.value)}>
         <option value="">Choose…</option>
         {folders.data
-          ?.filter((folder) => !folder.workspace_id || folder.workspace_id === item.workspace_id)
+          ?.filter((folder) => folder.definition.mode === 'classification' && (!folder.workspace_id || folder.workspace_id === item.workspace_id))
           .map((folder) => (
             <option key={folder.id} value={folder.id}>
               {folder.name}
@@ -74,13 +75,13 @@ export function ClassifyDialog({
   onClose: () => void;
 }) {
   const client = useQueryClient();
-  const [collectionId, setCollectionId] = useState(folder.definition?.collections?.[0] ?? '');
+  const [chosenCollectionId, setCollectionId] = useState('');
   const [mode, setMode] = useState('existing');
   const [itemId, setItemId] = useState('');
   const [q, setQ] = useState('');
   const [name, setName] = useState('');
   const [typeId, setTypeId] = useState('');
-  const [parentId, setParentId] = useState('');
+  const [destinationPath, setDestinationPath] = useState<Resource[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const collections = useQuery({
     queryKey: ['resources', folder.id, 'classification-collections'],
@@ -95,13 +96,15 @@ export function ClassifyDialog({
         .filter(
           (resource) =>
             (resource.kind === 'list' || resource.kind === 'library') &&
-            (!folder.definition?.collections?.length || folder.definition.collections.includes(resource.id)),
+            (!folder.definition.collections?.length || folder.definition.collections.some(name => name.toLowerCase() === resource.name.toLowerCase())) && (!folder.definition.collection_kind || resource.kind === folder.definition.collection_kind) && (!folder.definition.templates?.length || resource.template_keys?.some(key => folder.definition.templates!.some(template => template.toLowerCase() === key.toLowerCase()))),
         );
     },
   });
+  const collectionId = chosenCollectionId || collections.data?.[0]?.id || '';
   const types = useQuery({ ...contentTypesQuery(collectionId), enabled: !!collectionId });
   const fields = useQuery({ ...fieldsQuery(collectionId), enabled: !!collectionId });
-  const visible = fieldsForType(fields.data ?? [], types.data ?? [], typeId);
+  const typeOptions = (types.data ?? []).filter(type => !folder.definition.content_types?.length || folder.definition.content_types.some(value => [type.key.toLowerCase(), type.name.toLowerCase()].includes(value.toLowerCase())));
+  const visible = fieldsForType(fields.data ?? [], typeOptions, typeId);
   const items = useApiPages<Resource>(
     ['resources', collectionId, 'classify', q],
     `/v1/resources/${collectionId}/query`,
@@ -118,7 +121,7 @@ export function ClassifyDialog({
           path,
           item_id: mode === 'existing' ? itemId : undefined,
           version: mode === 'existing' ? item.data!.version : undefined,
-          parent_id: mode === 'new' ? parentId || undefined : undefined,
+          parent_id: mode === 'new' ? destinationPath.at(-1)?.id : undefined,
           create:
             mode === 'new'
               ? {
@@ -159,6 +162,7 @@ export function ClassifyDialog({
         onChange={(event) => {
           setCollectionId(event.target.value);
           setItemId('');
+          setDestinationPath([]);
           setTypeId('');
           setValues({});
         }}
@@ -205,14 +209,13 @@ export function ClassifyDialog({
           <Label htmlFor="classify-type">Content type</Label>
           <Select id="classify-type" value={typeId} onChange={(event) => setTypeId(event.target.value)}>
             <option value="">Default</option>
-            {types.data?.map((type) => (
+            {typeOptions.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.name}
               </option>
             ))}
           </Select>
-          <Label htmlFor="classify-parent">Destination folder id (optional)</Label>
-          <Input id="classify-parent" value={parentId} onChange={(event) => setParentId(event.target.value)} />
+          {collections.data?.find(collection => collection.id === collectionId) && <><p className="text-sm font-medium">Destination folder</p><FolderBrowser root={collections.data.find(collection => collection.id === collectionId)!} path={destinationPath} onChange={setDestinationPath} /></>}
           <p className="text-xs text-muted">
             Leave fields assigned by the smart folder empty; classification fills them before validating required
             fields.

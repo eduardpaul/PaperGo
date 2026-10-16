@@ -24,7 +24,7 @@ func TestSmartFolderRESTDefinitionsQueriesAndActions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := fmt.Sprintf(`{"name":"Open","workspace_id":%q,"personal":false,"definition":{"filter":{"field":"status","value":"open"},"group_by":[{"field":"status"}]}}`, w.ID)
+	body := fmt.Sprintf(`{"name":"Open","workspace_id":%q,"personal":false,"definition":{"mode":"classification","filter":{"field":"status","value":"open"},"group_by":[{"field":"status"}]}}`, w.ID)
 	response := request(h, "POST", "/v1/smart-folders", body, testToken, "", "application/json")
 	if response.Code != 201 || response.Header().Get("ETag") != `"1"` {
 		t.Fatal(response.Code, response.Body.String())
@@ -54,6 +54,22 @@ func TestSmartFolderRESTDefinitionsQueriesAndActions(t *testing.T) {
 	var item ent.Resource
 	if err = json.Unmarshal(response.Body.Bytes(), &item); err != nil {
 		t.Fatal(err)
+	}
+	previewBody := fmt.Sprintf(`{"workspace_id":%q,"definition":{"mode":"query","filter":{"field":"status","op":"eq","value":"open"}}}`, w.ID)
+	response = request(h, "POST", "/v1/smart-folders/preview", previewBody, testToken, "", "application/json")
+	var preview struct {
+		Total int                    `json:"total"`
+		Value []dms.SmartFolderEntry `json:"value"`
+	}
+	if response.Code != 200 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	if err = json.Unmarshal(response.Body.Bytes(), &preview); err != nil || preview.Total != 1 || len(preview.Value) != 1 || preview.Value[0].Item.ID != item.ID {
+		t.Fatalf("preview: %s (%v)", response.Body.String(), err)
+	}
+	response = request(h, "POST", "/v1/smart-folders/preview", `{"definition":{"mode":"invalid"}}`, testToken, "", "application/json")
+	if response.Code != 422 {
+		t.Fatal(response.Code, response.Body.String())
 	}
 	for _, path := range []string{"/v1/smart-folders/" + f.ID + "/query", "/v1/smart-folders/" + f.ID + "/query/groups"} {
 		response = request(h, "POST", path, `{}`, testToken, "", "application/json")

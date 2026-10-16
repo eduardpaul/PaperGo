@@ -104,12 +104,15 @@ type queryCompiler struct {
 func queryTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000000000Z") }
 
 func systemField(key string) (string, *ent.FieldDefinition) {
-	columns := map[string]string{"$id": "r.id", "$name": "p.name", "$created_at": "p.item_created_at", "$created_by": "p.item_created_by", "$modified_at": "p.modified_at", "$modified_by": "p.modified_by"}
+	columns := map[string]string{"$file_type": "(SELECT b.content_type FROM item_revisions fr JOIN blobs b ON b.id=fr.blob_id WHERE fr.id=p.revision_id)", "$id": "r.id", "$name": "p.name", "$created_at": "p.item_created_at", "$created_by": "p.item_created_by", "$modified_at": "p.modified_at", "$modified_by": "p.modified_by"}
 	column, ok := columns[key]
 	if !ok {
 		return "", nil
 	}
 	typ := fielddefinition.TypeText
+	if key == "$file_type" {
+		typ = fielddefinition.TypeChoice
+	}
 	if key == "$created_at" || key == "$modified_at" {
 		typ = fielddefinition.TypeDatetime
 	}

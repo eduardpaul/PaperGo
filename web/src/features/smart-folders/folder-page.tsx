@@ -1,293 +1,108 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
-import { toast } from 'sonner';
-import { api, continuation } from '@/api/http';
-import { keys, querySmartFolder, smartFolder, smartFolderGroups } from '@/api/queries';
-import type { Page, SmartFolder, SmartFolderEntry, SmartFolderGroup } from '@/api/types';
+import { useState, type ReactElement } from 'react';
+import { api } from '@/api/http';
+import { useApiPages } from '@/api/pages';
+import { keys, meQuery, resourceQuery, smartFolder } from '@/api/queries';
+import type { Page, Resource, SmartFolderEntry, SmartFolderGroup } from '@/api/types';
+import { smartFolderQueryRequest } from '@/api/requests';
+import type { ListingSort } from '@/api/requests';
 import { Page as Screen, PageHeader } from '@/components/page';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
-import { Input, Label } from '@/components/ui/input';
-import { ClassifyDialog } from './classification';
-import { ConfirmDialog } from '@/features/settings/section';
+import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
-import { useFormat } from '@/lib/preferences';
+import { usePeopleNames } from '@/features/fields/people';
+import { can } from '@/features/lists/access';
+import { ItemContextMenu } from '@/features/lists/item-context-menu';
+import { ItemsGallery } from '@/features/lists/items-layouts';
+import { ItemsTable } from '@/features/lists/items-table';
+import { ConfirmDialog } from '@/features/settings/section';
+import { ClassifyDialog } from './classification';
+import { SmartFolderDialog } from './editor-dialog';
+import { RuleSummary } from './rule-summary';
 
-export function SmartFolderPage({ folderId }: { folderId: string }) {
+export function SmartFolderPage({ folderId, edit = false }: { folderId: string; edit?: boolean }) {
+  return <FolderContents key={folderId} folderId={folderId} edit={edit} />;
+}
+function FolderContents({ folderId, edit }: { folderId: string; edit: boolean }) {
   const navigate = useNavigate();
-  const format = useFormat();
-  const queryClient = useQueryClient();
+  const client = useQueryClient();
   const folder = useQuery({ queryKey: ['smart-folders', folderId], queryFn: () => smartFolder(folderId) });
+  const me = useQuery(meQuery);
+  const workspace = useQuery({ ...resourceQuery(folder.data?.workspace_id ?? ''), enabled: !!folder.data?.workspace_id && !folder.data.owner_id });
+  const writable = me.data?.scopes?.includes('list.write') ?? false;
+  const canManage = writable && (folder.data?.owner_id ? folder.data.owner_id === me.data?.subject : can(workspace.data, 'manage'));
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const [unclassifying, setUnclassifying] = useState<SmartFolderEntry>();
-  const unclassify = useMutation({
-    mutationFn: (entry: SmartFolderEntry) =>
-      api(`/v1/smart-folders/${folderId}/items/${entry.item.id}`, {
-        method: 'DELETE',
-        ifMatch: entry.item.version,
-        body: { folder_version: folder.data!.version },
-      }),
-    onSuccess: async () => {
-      setUnclassifying(undefined);
-      await queryClient.invalidateQueries({ queryKey: keys.smartFolders });
-      await queryClient.invalidateQueries({ queryKey: keys.resources });
-    },
-  });
-  const [seenFolder, setSeenFolder] = useState(folderId);
-  const [path, setPath] = useState<(string | null)[]>([]);
-  if (folderId !== seenFolder) {
-    setSeenFolder(folderId);
-    setPath([]);
-  }
-  const definition = folder.data?.definition;
-  const grouped = path.length < (definition?.group_by?.length ?? 0);
-
-  const groups = useQuery({
-    queryKey: ['smart-folders', folderId, 'groups', path],
-    enabled: !!folder.data && grouped,
-    queryFn: () => smartFolderGroups(folderId, path),
-  });
-  const entries = useQuery({
-    queryKey: ['smart-folders', folderId, 'entries', path],
-    enabled: !!folder.data && !grouped,
-    queryFn: () => querySmartFolder(folderId, path),
-  });
-  const [entrySnapshot, setEntrySnapshot] = useState(entries.data);
-  const [more, setMore] = useState<SmartFolderEntry[]>([]);
-  const [next, setNext] = useState<string | null>(continuation(entries.data?.['@odata.nextLink']));
-  if (entries.data !== entrySnapshot) {
-    setEntrySnapshot(entries.data);
-    setMore([]);
-    setNext(continuation(entries.data?.['@odata.nextLink']));
-  }
-
-  async function loadMore() {
-    if (!next) return;
-    const page = (await api<Page<SmartFolderEntry>>(next, { method: 'POST', body: { include_total: true, path } }))
-      .data;
-    setMore((current) => [...current, ...(page.value ?? [])]);
-    setNext(continuation(page['@odata.nextLink']));
-  }
-
-  if (folder.isPending) {
-    return (
-      <Screen>
-        <Skeleton className="h-10 w-64" />
-      </Screen>
-    );
-  }
-  if (!folder.data)
-    return (
-      <Screen>
-        <EmptyState title="Smart folder not found" />
-      </Screen>
-    );
-
-  const rows = [...(entries.data?.value ?? []), ...more];
-  return (
-    <Screen>
-      <PageHeader
-        title={folder.data.name}
-        description={
-          folder.data.description || (folder.data.owner_id ? 'Personal smart folder' : 'Shared smart folder')
-        }
-        actions={
-          <Button variant="primary" onClick={() => setClassifying(true)}>
-            Add item
-          </Button>
-        }
-      />
-      <FolderDetails
-        key={`${folder.data.id}:${folder.data.version}`}
-        folder={folder.data}
-        onSaved={async () => {
-          await queryClient.invalidateQueries({ queryKey: keys.smartFolders });
-          await queryClient.invalidateQueries({ queryKey: ['smart-folders', folderId] });
-        }}
-        onDeleted={async () => {
-          await queryClient.invalidateQueries({ queryKey: keys.smartFolders });
-          void navigate({ to: '/' });
-        }}
-      />
-      <nav className="mb-3 flex flex-wrap items-center gap-2 text-xs" aria-label="Group path">
-        <button type="button" className="text-muted hover:text-foreground" onClick={() => setPath([])}>
-          All
-        </button>
-        {path.map((segment, index) => (
-          <span key={`${segment ?? 'empty'}-${index}`} className="flex items-center gap-2">
-            <span className="text-muted">/</span>
-            <button type="button" className="hover:underline" onClick={() => setPath(path.slice(0, index + 1))}>
-              {segment ?? '(empty)'}
-            </button>
-          </span>
-        ))}
-      </nav>
-      <QueryFeedback query={grouped ? groups : entries} />
-      {grouped ? (
-        <GroupList
-          groups={groups.data?.value ?? []}
-          pending={groups.isPending}
-          onOpen={(group) => setPath([...path, group.value == null ? null : String(group.value)])}
-        />
-      ) : (
-        <ul className="overflow-hidden rounded-lg border bg-surface">
-          {entries.isPending && (
-            <li className="p-4">
-              <Skeleton className="h-8" />
-            </li>
-          )}
-          {rows.map((entry) => (
-            <li key={entry.item.id} className="flex items-center border-b last:border-0">
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-muted"
-                onClick={() =>
-                  void navigate({
-                    to: '/w/$workspaceId/l/$listId',
-                    params: { workspaceId: entry.workspace_id, listId: entry.collection_id },
-                    search: entry.item.kind === 'folder' ? { folder: entry.item.id } : { item: entry.item.id },
-                  })
-                }
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{entry.item.name}</span>
-                  <span className="text-xs text-muted">{entry.collection_name}</span>
-                </span>
-                <span className="text-xs text-muted">
-                  {entry.item.updated_at ? format.date(entry.item.updated_at) : ''}
-                </span>
-              </button>
-              {entry.item.kind === 'item' && (
-                <Button size="sm" className="mr-3" onClick={() => setUnclassifying(entry)}>
-                  Remove classification
-                </Button>
-              )}
-            </li>
-          ))}
-          {!entries.isPending && rows.length === 0 && <EmptyState title="No matching items" />}
-        </ul>
-      )}
-      {!grouped && entries.data?.total != null && (
-        <p className="mt-2 text-xs text-muted">{entries.data.total} matches</p>
-      )}
-      {next && (
-        <Button className="mt-3" onClick={() => void loadMore()}>
-          Load more
-        </Button>
-      )}
-      {classifying && <ClassifyDialog folder={folder.data} path={path} onClose={() => setClassifying(false)} />}
-      <ConfirmDialog
-        open={!!unclassifying}
-        onOpenChange={(open) => !open && setUnclassifying(undefined)}
-        title={`Remove ${unclassifying?.item.name ?? ''} from this smart folder?`}
-        description="Clear the folder’s term and equality classifications. The item remains in its collection. Definitions that still match after clearing cannot be removed this way."
-        confirm="Remove classification"
-        busy={unclassify.isPending}
-        error={unclassify.error}
-        onConfirm={() => unclassifying && unclassify.mutate(unclassifying)}
-      />
-    </Screen>
-  );
-}
-
-function FolderDetails({
-  folder,
-  onSaved,
-  onDeleted,
-}: {
-  folder: SmartFolder;
-  onSaved: () => Promise<void>;
-  onDeleted: () => Promise<void>;
-}) {
-  const [name, setName] = useState(folder.name);
-  const [description, setDescription] = useState(folder.description ?? '');
-  const save = useMutation({
-    mutationFn: () =>
-      api(`/v1/smart-folders/${folder.id}`, {
-        method: 'PUT',
-        ifMatch: folder.version,
-        body: {
-          name: name.trim(),
-          description: description.trim(),
-          personal: !!folder.owner_id,
-          workspace_id: folder.workspace_id,
-          definition: folder.definition ?? {},
-        },
-      }),
-    onSuccess: async () => {
-      await onSaved();
-      toast.success('Smart folder saved');
-    },
-  });
+  const [layout, setLayout] = useState('table');
+  const [grouping, setGrouping] = useState(false);
+  const [path, setPath] = useState<{ value: string | null; label: string }[]>([]);
+  const [sort, setSort] = useState<ListingSort>({ field: '$modified_at', direction: 'desc' });
+  const groupBy = folder.data?.definition.group_by ?? [];
+  const grouped = grouping && path.length < groupBy.length;
+  const activePath = grouping ? path.map(segment => segment.value) : [];
+  const call = smartFolderQueryRequest(folderId, activePath, sort);
+  const entries = useApiPages<SmartFolderEntry>(['smart-folders', folderId, 'entries'], call.path, { enabled: !!folder.data && !grouped, query: call.query, body: call.body });
+  const groups = useApiPages<SmartFolderGroup>(['smart-folders', folderId, 'groups'], `/v1/smart-folders/${folderId}/query/groups`, { enabled: !!folder.data && grouped, body: { path: activePath } });
+  const people = usePeopleNames();
+  const refresh = async () => { await client.invalidateQueries({ queryKey: keys.smartFolders }); await client.invalidateQueries({ queryKey: keys.resources }); };
   const remove = useMutation({
-    mutationFn: () => api(`/v1/smart-folders/${folder.id}`, { method: 'DELETE', ifMatch: folder.version }),
-    onSuccess: () => onDeleted(),
+    meta: { silent: true },
+    mutationFn: () => api(`/v1/smart-folders/${folderId}`, { method: 'DELETE', ifMatch: folder.data!.version }),
+    onSuccess: async () => { await refresh(); void navigate({ to: '/' }); },
   });
-  return (
-    <form
-      className="mb-4 grid gap-2 rounded-lg border bg-surface p-4 sm:grid-cols-[1fr_1fr_auto_auto]"
-      onSubmit={(event) => {
-        event.preventDefault();
-        save.mutate();
-      }}
-    >
-      <div>
-        <Label htmlFor="folder-name">Name</Label>
-        <Input id="folder-name" className="mt-1" value={name} onChange={(event) => setName(event.target.value)} />
-      </div>
-      <div>
-        <Label htmlFor="folder-description">Description</Label>
-        <Input
-          id="folder-description"
-          className="mt-1"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </div>
-      <Button type="submit" className="self-end" disabled={save.isPending}>
-        Save
-      </Button>
-      <Button
-        type="button"
-        variant="danger"
-        className="self-end"
-        disabled={remove.isPending}
-        onClick={() => remove.mutate()}
-      >
-        Delete
-      </Button>
-    </form>
-  );
-}
-
-function GroupList({
-  groups,
-  pending,
-  onOpen,
-}: {
-  groups: SmartFolderGroup[];
-  pending: boolean;
-  onOpen: (group: SmartFolderGroup) => void;
-}) {
-  if (pending) return <Skeleton className="h-16" />;
-  if (groups.length === 0) return <EmptyState title="No groups" />;
-  return (
-    <ul className="overflow-hidden rounded-lg border bg-surface">
-      {groups.map((group) => (
-        <li key={String(group.value)} className="border-b last:border-0">
-          <button
-            type="button"
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-muted"
-            onClick={() => onOpen(group)}
-          >
-            <span className="flex-1 truncate text-sm font-medium">
-              {group.label || (group.value == null ? '(empty)' : String(group.value))}
-            </span>
-            <span className="text-xs text-muted">{group.count}</span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
+  const unclassify = useMutation({
+    meta: { silent: true },
+    mutationFn: () => api(`/v1/smart-folders/${folderId}/items/${unclassifying!.item.id}`, { method: 'DELETE', ifMatch: unclassifying!.item.version, body: { folder_version: folder.data!.version } }),
+    onSuccess: async () => { setUnclassifying(undefined); await refresh(); },
+  });
+  const closeEditor = () => {
+    setEditing(false);
+    if (edit) void navigate({ to: '/f/$folderId', params: { folderId }, search: { edit: undefined }, replace: true });
+  };
+  if (folder.isPending) return <Screen><Skeleton className="h-16" /></Screen>;
+  if (!folder.data) return <Screen><QueryFeedback query={folder} /><EmptyState title="Smart folder unavailable" /></Screen>;
+  const current = folder.data;
+  const classification = current.definition.mode === 'classification';
+  const byItem = new Map(entries.items.map(entry => [entry.item.id, entry]));
+  const provenance = new Map(entries.items.map(entry => [entry.item.id, entry.collection_name]));
+  const open = (item: Resource, tab?: string) => {
+    const entry = byItem.get(item.id)!;
+    void navigate({ to: '/w/$workspaceId/l/$listId', params: { workspaceId: entry.workspace_id, listId: entry.collection_id }, search: item.kind === 'folder' && !tab ? { folder: item.id } : { item: item.id, tab } });
+  };
+  const renderItem = (item: Resource, element: ReactElement) => {
+    const entry = byItem.get(item.id)!;
+    const collection: Resource = { id: entry.collection_id, workspace_id: entry.workspace_id, kind: entry.collection_kind, name: entry.collection_name, version: 1 };
+    return <ItemContextMenu key={item.id} item={item} collection={collection} onOpen={open} onDetails={(item, tab) => open(item, tab ?? 'details')}>{element}</ItemContextMenu>;
+  };
+  const total = (entries.data?.pages[0] as Page<SmartFolderEntry> | undefined)?.total;
+  return <Screen>
+    <PageHeader title={<span className="flex flex-wrap items-center gap-2">{current.name}<Badge>{classification ? 'Classification folder' : 'Saved search'}</Badge></span>} description={current.description || (current.owner_id ? 'Personal smart folder' : 'Shared smart folder')} actions={<>
+      {classification && writable && <Button variant="primary" onClick={() => setClassifying(true)}>Classify item…</Button>}
+      {canManage && <><Button onClick={() => setEditing(true)}>Edit rules…</Button><Button variant="ghost" onClick={() => setDeleting(true)}>Delete…</Button></>}
+    </>} />
+    <RuleSummary folder={current} />
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <Select aria-label="Results layout" value={layout} onChange={event => setLayout(event.target.value)}><option value="table">Table</option><option value="gallery">Grid</option></Select>
+      {!grouped && <Select aria-label="Sort results" value={`${sort.field}:${sort.direction}`} onChange={event => { const [field, direction] = event.target.value.split(':'); setSort({ field, direction: direction as 'asc' | 'desc' }); }}><option value="$modified_at:desc">Modified — newest first</option><option value="$modified_at:asc">Modified — oldest first</option><option value="$name:asc">Name — A to Z</option><option value="$name:desc">Name — Z to A</option><option value="$created_at:desc">Created — newest first</option><option value="$created_at:asc">Created — oldest first</option></Select>}
+      {!!groupBy.length && <Button onClick={() => { setGrouping(!grouping); setPath([]); }}>{grouping ? 'Show all results' : 'Browse groups'}</Button>}
+      {total !== undefined && !grouped && <span className="text-xs text-muted">{total} matching items</span>}
+    </div>
+    {grouping && <nav aria-label="Group path" className="mb-3 flex flex-wrap gap-2 text-sm"><button type="button" className="text-accent" onClick={() => { setGrouping(false); setPath([]); }}>All results</button><button type="button" className="text-accent" onClick={() => setPath([])}>Groups</button>{path.map((segment, index) => <button type="button" key={index} onClick={() => setPath(path.slice(0, index + 1))}>/ {segment.label}</button>)}</nav>}
+    <QueryFeedback query={grouped ? groups : entries} />
+    {grouped ? <><ul className="divide-y rounded-lg border bg-surface">{groups.items.map(group => <li key={String(group.value)}><button type="button" className="flex w-full justify-between px-4 py-3 text-left text-sm hover:bg-surface-muted" onClick={() => setPath([...path, { value: group.value == null ? null : String(group.value), label: group.label || String(group.value ?? 'No value') }])}><span>{group.label || String(group.value ?? 'No value')}</span><Badge>{group.count}</Badge></button></li>)}</ul>{groups.isSuccess && !groups.items.length && <EmptyState title="No matching groups" />}{groups.hasNextPage && <Button className="mt-3" disabled={groups.isFetchingNextPage} onClick={() => void groups.fetchNextPage()}>More groups</Button>}</> : <>
+      {entries.items.length > 0 && (layout === 'gallery' ? <ItemsGallery items={entries.items.map(entry => entry.item)} fields={[]} provenance={provenance} onOpen={open} renderItem={renderItem} /> : <ItemsTable rows={entries.items.map(entry => entry.item)} columns={['$name', '$modified_at', '$tags']} fields={[]} publishing={false} names={people} selectable={false} selected={new Map()} sortable={new Set(['$name', '$modified_at'])} sort={sort} onSort={next => setSort(next ?? { field: '$modified_at', direction: 'desc' })} onToggle={() => {}} onToggleAll={() => {}} onOpen={open} provenance={provenance} renderRow={renderItem} />)}
+      {entries.isSuccess && !entries.items.length && <EmptyState title="No matching items">Matching items appear here automatically as their information changes.</EmptyState>}
+      {classification && writable && entries.items.length > 0 && <details className="mt-4 text-sm"><summary className="cursor-pointer">Remove a classification</summary><ul>{entries.items.filter(entry => entry.item.kind === 'item').map(entry => <li key={entry.item.id} className="flex items-center justify-between gap-2 py-1"><span>{entry.item.name}</span><Button size="sm" onClick={() => setUnclassifying(entry)}>Remove classification</Button></li>)}</ul></details>}
+      {entries.hasNextPage && <Button className="mt-3" disabled={entries.isFetchingNextPage} onClick={() => void entries.fetchNextPage()}>More results</Button>}
+    </>}
+    <SmartFolderDialog open={editing || (edit && canManage)} folder={current} onClose={closeEditor} onSaved={closeEditor} />
+    {classifying && <ClassifyDialog folder={current} path={activePath} onClose={() => setClassifying(false)} />}
+    <ConfirmDialog open={deleting} onOpenChange={setDeleting} title={`Delete “${current.name}”?`} description="Removes the saved rules. Items stay in their collections." confirm="Delete smart folder" busy={remove.isPending} error={remove.error} onConfirm={() => remove.mutate()} />
+    <ConfirmDialog open={!!unclassifying} onOpenChange={value => !value && setUnclassifying(undefined)} title={`Remove classification from “${unclassifying?.item.name ?? ''}”?`} description="Clears the folder's keywords and equality values. The item stays in its collection; other rules may still match it." confirm="Remove classification" busy={unclassify.isPending} error={unclassify.error} onConfirm={() => unclassify.mutate()} />
+  </Screen>;
 }

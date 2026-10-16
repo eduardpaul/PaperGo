@@ -28,7 +28,7 @@ func TestSmartFolderClassificationAndUnclassification(t *testing.T) {
 	for _, field := range []CreateField{{Key: "projects", Label: "Projects", Type: "term", Indexed: true, Options: model.FieldOptions{TermSetID: set.ID, Multiple: true}}, {Key: "status", Label: "Status", Type: "text", Indexed: true}, {Key: "issued", Label: "Issued", Type: "date", Indexed: true}, {Key: "owner", Label: "Owner", Type: "text", Indexed: true}, {Key: "memo", Label: "Memo", Type: "text"}} {
 		fieldOK(t, s, l.ID, field)
 	}
-	f := smartOK(t, s, SmartFolderInput{Name: "Open", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Terms: []string{root.ID}, Filter: &FilterExpr{And: []FilterExpr{{Field: "status", Value: json.RawMessage(`"open"`)}, {Field: "owner", ValueRef: "me"}}}, GroupBy: []SmartFolderGroupBy{{Field: "issued", By: "year"}, {Field: "status"}}}})
+	f := smartOK(t, s, SmartFolderInput{Name: "Open", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "classification", Terms: []string{root.ID}, Filter: &FilterExpr{And: []FilterExpr{{Field: "status", Value: json.RawMessage(`"open"`)}, {Field: "owner", ValueRef: "me"}}}, GroupBy: []SmartFolderGroupBy{{Field: "issued", By: "year"}, {Field: "status"}}}})
 	physical := create(t, s, l.ID, "folder", "Physical", nil)
 	year, status := "2026", "open"
 	item, created, err := s.ClassifySmartFolder(testContext, "alice", f.ID, SmartFolderDrop{FolderVersion: f.Version, CollectionID: l.ID, ParentID: physical.ID, Create: &BulkCreate{Name: "Invoice", Values: map[string]any{"issued": "2026-10-08", "memo": "keep"}}, Path: []*string{&year, &status}})
@@ -68,7 +68,7 @@ func TestSmartFolderActionsRollBackAndRequireItemPermissions(t *testing.T) {
 	fieldOK(t, s, l.ID, CreateField{Key: "due", Label: "Due", Type: "date", Indexed: true})
 	fieldOK(t, s, l.ID, CreateField{Key: "serial", Label: "Serial", Type: "text", Indexed: true, Options: model.FieldOptions{Unique: true}})
 	original := create(t, s, l.ID, "item", "Original", map[string]any{"status": "closed", "serial": "reserved"})
-	f := smartOK(t, s, SmartFolderInput{Name: "Open", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Filter: &FilterExpr{And: []FilterExpr{{Field: "status", Value: json.RawMessage(`"open"`)}, {Field: "due", Op: "gte", Value: json.RawMessage(`"2026-10-01"`)}}}}})
+	f := smartOK(t, s, SmartFolderInput{Name: "Open", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "classification", Filter: &FilterExpr{And: []FilterExpr{{Field: "status", Value: json.RawMessage(`"open"`)}, {Field: "due", Op: "gte", Value: json.RawMessage(`"2026-10-01"`)}}}}})
 	before, _ := s.Client.ItemRevision.Query().Count(testContext)
 	audits, _ := s.Client.AuditEvent.Query().Count(testContext)
 	_, _, err := s.ClassifySmartFolder(testContext, "alice", f.ID, SmartFolderDrop{FolderVersion: f.Version, CollectionID: l.ID, ItemID: original.ID, Version: original.Version})
@@ -93,7 +93,7 @@ func TestSmartFolderActionsRollBackAndRequireItemPermissions(t *testing.T) {
 	if !errors.Is(err, ErrForbidden) {
 		t.Fatal(err)
 	}
-	rangeFolder := smartOK(t, s, SmartFolderInput{Name: "By range", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Filter: &FilterExpr{Field: "serial", Op: "present"}}})
+	rangeFolder := smartOK(t, s, SmartFolderInput{Name: "By range", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "classification", Filter: &FilterExpr{Field: "serial", Op: "present"}}})
 	_, err = s.UnclassifySmartFolder(testContext, "alice", rangeFolder.ID, original.ID, rangeFolder.Version, original.Version)
 	if !isValidation(err) {
 		t.Fatal(err)
@@ -103,12 +103,12 @@ func TestSmartFolderActionsRollBackAndRequireItemPermissions(t *testing.T) {
 		t.Fatal("unclassification did not roll back")
 	}
 	// Contradictory equalities and navigation cannot silently overwrite each other.
-	conflict := smartOK(t, s, SmartFolderInput{Name: "Conflict", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Filter: &FilterExpr{And: []FilterExpr{{Field: "status", Value: json.RawMessage(`"open"`)}, {Field: "status", Value: json.RawMessage(`"closed"`)}}}}})
+	conflict := smartOK(t, s, SmartFolderInput{Name: "Conflict", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "classification", Filter: &FilterExpr{And: []FilterExpr{{Field: "status", Value: json.RawMessage(`"open"`)}, {Field: "status", Value: json.RawMessage(`"closed"`)}}}}})
 	_, _, err = s.ClassifySmartFolder(testContext, "alice", conflict.ID, SmartFolderDrop{FolderVersion: conflict.Version, CollectionID: l.ID, Create: &BulkCreate{Name: "Impossible"}})
 	if !isValidation(err) {
 		t.Fatal(err)
 	}
-	bad := smartOK(t, s, SmartFolderInput{Name: "Wrong name type", Personal: true, Definition: SmartFolderDefinition{Filter: &FilterExpr{Field: "$name", Value: json.RawMessage(`42`)}}})
+	bad := smartOK(t, s, SmartFolderInput{Name: "Wrong name type", Personal: true, Definition: SmartFolderDefinition{Mode: "classification", Filter: &FilterExpr{Field: "$name", Value: json.RawMessage(`42`)}}})
 	_, _, err = s.ClassifySmartFolder(testContext, "alice", bad.ID, SmartFolderDrop{FolderVersion: bad.Version, CollectionID: l.ID, Create: &BulkCreate{Name: "Safe"}})
 	if !isValidation(err) {
 		t.Fatal(err)

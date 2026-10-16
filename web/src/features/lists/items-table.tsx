@@ -35,7 +35,9 @@ export function ItemsTable({
   onOpen,
   locations,
   renderRow,
+  provenance,
 }: {
+  provenance?: Map<string, string>;
   renderRow?: (item: Resource, row: ReactElement) => ReactNode;
   rows: Resource[];
   columns: string[];
@@ -248,6 +250,7 @@ export function ItemsTable({
                         >
                           {resource.kind === 'folder' && <Folder className="size-4 shrink-0 text-muted" />}
                           <span className="truncate">{resource.name}</span>
+                          {provenance?.get(resource.id) && <Badge>{provenance.get(resource.id)}</Badge>}
                           {state && <Badge tone={state === 'Published' ? 'success' : 'warning'}>{state}</Badge>}
                         </button>
                         {resource.parent_id && locations?.get(resource.parent_id) && (

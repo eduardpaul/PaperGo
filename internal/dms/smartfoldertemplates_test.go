@@ -25,8 +25,8 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 		return root, child
 	}
 	_, child := makeTerms()
-	original := smartOK(t, s, SmartFolderInput{Name: "Project files", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Collections: []string{l.Name}, Terms: []string{child.ID}, GroupBy: []SmartFolderGroupBy{{Field: "$modified_at", By: "year"}}}})
-	smartOK(t, s, SmartFolderInput{Name: "Private", WorkspaceID: &w.ID, Personal: true})
+	original := smartOK(t, s, SmartFolderInput{Name: "Project files", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", Collections: []string{l.Name}, Terms: []string{child.ID}, GroupBy: []SmartFolderGroupBy{{Field: "$modified_at", By: "year"}}}})
+	smartOK(t, s, SmartFolderInput{Name: "Private", WorkspaceID: &w.ID, Personal: true, Definition: SmartFolderDefinition{Mode: "query"}})
 	pkg, sourceVersion, err := s.ExportSmartFolders(testContext, "alice", w.ID)
 	if err != nil || len(pkg.Folders) != 1 || pkg.Folders[0].Name != original.Name || len(pkg.Folders[0].Definition.Terms[0].Path) != 2 {
 		t.Fatal(pkg, err)
@@ -79,7 +79,7 @@ func TestSmartFolderPackagesResolveTermsAndReapplyIdempotently(t *testing.T) {
 
 func TestSmartFolderPackageAtomicValidation(t *testing.T) {
 	s, w, _ := fixture(t)
-	pkg := SmartFolderPackage{Folders: []PortableSmartFolder{{Name: "Valid", Definition: PortableSmartFolderDefinition{}}, {Name: "Bad term", Definition: PortableSmartFolderDefinition{Terms: []SmartFolderTermRef{{TermSetKey: "missing", Path: []string{"Unknown"}}}}}}}
+	pkg := SmartFolderPackage{Folders: []PortableSmartFolder{{Name: "Valid", Definition: PortableSmartFolderDefinition{Mode: "query"}}, {Name: "Bad term", Definition: PortableSmartFolderDefinition{Mode: "query", Terms: []SmartFolderTermRef{{TermSetKey: "missing", Path: []string{"Unknown"}}}}}}}
 	before, _ := s.Client.AuditEvent.Query().Count(testContext)
 	_, err := s.ImportSmartFolders(testContext, "alice", w.ID, w.Version, pkg)
 	if !isValidation(err) {

@@ -85,7 +85,7 @@ Vite listens on `http://127.0.0.1:5173` and proxies `/v1`, `/auth` and `/health`
 | Reusable application schemas | Organization content-type and field catalogs, live collection attachments, independent defaults, cross-field rules and templates; shared updates advance immutable effective schemas atomically. |
 | Business keys | Indexed scalar uniqueness across head and published values, enforced transactionally for single and bulk writes. |
 | Saved views and controlled taxonomy | Bounded typed queries, sorting, pagination, opt-in authorized totals, grouping; an organization-wide governed taxonomy of term groups, sets and hierarchical terms (labels, synonyms, colors, order, deprecation, move, merge, SharePoint CSV import, portable packages) and keywords people add, which managers promote into managed sets. Workflows can react to terms gained or lost. |
-| Smart folders | Private or shared live queries across collections, descendant-term matching, metadata navigation, UTC-relative filters and physical folder inclusion. See [smart folders](docs/smart-folders.md). |
+| Smart folders | Personal or shared saved searches and classification folders, visual typed rules with live previews, direct table/grid results with collection badges, and optional metadata groups. See [smart folders](docs/smart-folders.md). |
 | Customizable automation | Workflows react to item changes, schedules, manual starts and each other's events, with conditions in the query filter language and flows of activity nodes. Versions are immutable; runs are durable, exactly once per step, act with their author's permissions, and start from a durable event log written with the change that triggers them, so any server can run them. Built-in workflows ship core processes that people configure, turn off or copy. See [workflows](docs/workflows.md). |
 
 ## API
@@ -104,8 +104,9 @@ Every `/v1` request requires authentication: `Authorization: Bearer <token>` in 
 | GET | `/v1/workspaces/{id}/tags` | The tag vocabulary with counts of readable resources; `collection_id`, `prefix`, `$skiptoken`, `$top` |
 | POST / GET | `/v1/smart-folders` | Create / browse personal and shared query definitions |
 | GET / PUT / DELETE | `/v1/smart-folders/{id}` | Read / replace / delete a definition with its own ETag |
+| POST | `/v1/smart-folders/preview` | Preview unsaved rules, five authorized matches and bounded count |
 | POST | `/v1/smart-folders/{id}/query`, `/query/groups` | Query live membership / navigate metadata groups with authorized counts |
-| POST | `/v1/smart-folders/{id}/items` | Classify an existing item or create an item matching the definition/path |
+| POST | `/v1/smart-folders/{id}/items` | Classify an existing item or create a match in classification mode |
 | DELETE | `/v1/smart-folders/{id}/items/{itemID}` | Remove classification while preserving the item and location |
 | GET / POST | `/v1/workspaces/{id}/smart-folders/export`, `/import` | Export / atomically merge portable shared definitions |
 | GET | `/v1/items/{id}/text` | Text read from the item's file, page by page; see [documents](docs/documents.md) |

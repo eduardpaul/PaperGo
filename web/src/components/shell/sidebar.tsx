@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { collectionChildren, smartFoldersQuery, workspacesQuery } from '@/api/queries';
 import { Logo } from '@/components/brand/logo';
 import { Skeleton } from '@/components/ui/feedback';
-import { CreateSmartFolderDialog } from '@/features/smart-folders/create-dialog';
+import { SmartFolderContextMenu } from '@/features/smart-folders/context-menu';
+import { SmartFolderDialog } from '@/features/smart-folders/editor-dialog';
 import { useHasScope } from '@/features/admin/common';
 import { PlaceContextMenu } from '@/features/workspaces/place-context-menu';
 import { CollectionIcon } from '@/features/lists/collection-icon';
@@ -54,6 +55,7 @@ function SmartFolders({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = useQuery(smartFoldersQuery);
   const [open, setOpen] = useState(true);
   const [creating, setCreating] = useState(false);
+  const canCreate = useHasScope('list.write');
   return (
     <Collapsible.Root open={open} onOpenChange={setOpen} className="mt-5">
       <div className="flex items-center px-2 pb-1">
@@ -61,25 +63,25 @@ function SmartFolders({ onNavigate }: { onNavigate?: () => void }) {
           <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
           Smart folders
         </Collapsible.Trigger>
-        <button type="button" aria-label="New smart folder" className="rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground" onClick={() => setCreating(true)}>
+        {canCreate && <button type="button" aria-label="New smart folder" className="rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground" onClick={() => setCreating(true)}>
           <Plus className="size-3.5" />
-        </button>
+        </button>}
       </div>
       <Collapsible.Content>
         <ul className="flex flex-col gap-0.5">
           {data?.map((folder) => (
             <li key={folder.id}>
-              <Link to="/f/$folderId" params={{ folderId: folder.id }} onClick={onNavigate} className={itemClass} activeProps={{ className: activeClass }}>
+              <SmartFolderContextMenu folder={folder} onNavigate={onNavigate}><Link to="/f/$folderId" params={{ folderId: folder.id }} onClick={onNavigate} className={itemClass} activeProps={{ className: activeClass }}>
                 <span className="truncate">{folder.name}</span>
-              </Link>
+              </Link></SmartFolderContextMenu>
             </li>
           ))}
         </ul>
       </Collapsible.Content>
-      <CreateSmartFolderDialog
+      <SmartFolderDialog
         open={creating}
         onClose={() => setCreating(false)}
-        onCreated={(folder) => {
+        onSaved={(folder) => {
           setCreating(false);
           onNavigate?.();
           void navigate({ to: '/f/$folderId', params: { folderId: folder.id } });

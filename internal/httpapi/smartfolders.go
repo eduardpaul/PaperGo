@@ -6,6 +6,9 @@ import (
 )
 
 func (a *API) registerSmartFolders(m *http.ServeMux) {
+	m.HandleFunc("POST /v1/smart-folders/preview", foundationMutation(a, 200, false, func(r *http.Request, in dms.SmartFolderPreview, _ int) (any, error) {
+		return a.DMS.PreviewSmartFolder(r.Context(), subject(r), in)
+	}))
 	m.HandleFunc("GET /v1/workspaces/{id}/smart-folders/export", func(w http.ResponseWriter, r *http.Request) {
 		out, version, err := a.DMS.ExportSmartFolders(r.Context(), subject(r), r.PathValue("id"))
 		if err != nil {

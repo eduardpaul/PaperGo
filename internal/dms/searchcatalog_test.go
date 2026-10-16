@@ -1,6 +1,9 @@
 package dms
 
-import "testing"
+import (
+	"papergo/internal/model"
+	"testing"
+)
 
 func TestSearchContentTypesRespectReadableCollections(t *testing.T) {
 	s, workspace, list := fixture(t)
@@ -26,5 +29,33 @@ func TestSearchContentTypesRespectReadableCollections(t *testing.T) {
 		if found != (collection != private.ID) {
 			t.Fatal("wrong scoped catalog", collection, types)
 		}
+	}
+}
+
+func TestSearchFieldsPreserveRuleEditorReferenceScopesAndChoices(t *testing.T) {
+	s, workspace, list := fixture(t)
+	second := create(t, s, workspace.ID, "list", "Other", nil)
+	for _, container := range []string{list.ID, second.ID} {
+		fieldOK(t, s, container, CreateField{Key: "reference", Label: "Reference", Type: "lookup", Indexed: true, Options: model.FieldOptions{LookupContainerID: container}})
+		fieldOK(t, s, container, CreateField{Key: "status", Label: "Status", Type: "choice", Indexed: true, Choices: []string{container}})
+	}
+	fields, err := s.SearchFields(testContext, "alice", workspace.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scopes := map[string]bool{}
+	choices := map[string]bool{}
+	for _, field := range fields {
+		if field.Key == "reference" {
+			scopes[field.LookupContainerID] = true
+		}
+		if field.Key == "status" {
+			for _, choice := range field.Choices {
+				choices[choice] = true
+			}
+		}
+	}
+	if !scopes[list.ID] || !scopes[second.ID] || !choices[list.ID] || !choices[second.ID] {
+		t.Fatalf("incomplete field metadata: %+v", fields)
 	}
 }

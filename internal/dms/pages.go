@@ -36,6 +36,9 @@ func (p QueryResult) APIPage() (map[string]any, string) {
 }
 func (p SmartFolderResult) APIPage() (map[string]any, string) {
 	result := map[string]any{"value": p.Data}
+	if p.TotalCapped {
+		result["total_capped"] = true
+	}
 	if p.Total != nil {
 		result["total"] = p.Total
 	}

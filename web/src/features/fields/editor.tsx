@@ -16,13 +16,15 @@ export function FieldEditor({
   field,
   value,
   onChange,
+  id: suppliedId,
 }: {
+  id?: string;
   field: FieldDefinition;
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
   const multiple = field.options?.multiple === true;
-  const id = `field-${field.key}`;
+  const id = suppliedId ?? `field-${field.key}`;
   return (
     <div className="flex flex-col gap-1.5">
       <Label id={`${id}-label`} htmlFor={id}>

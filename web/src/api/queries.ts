@@ -1,6 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { api, continuation, isApiError, listOf } from './http';
-import { smartFolderQueryRequest } from './requests';
 import type {
   Task,
   BuiltInState,
@@ -20,8 +19,6 @@ import type {
   Revision,
   Scope,
   SmartFolder,
-  SmartFolderEntry,
-  SmartFolderGroup,
   StagedFile,
   Term,
   UserProfile,
@@ -234,20 +231,6 @@ export async function webdavCredentials() {
 
 export async function smartFolder(id: string) {
   return (await api<SmartFolder>(`/v1/smart-folders/${id}`)).data;
-}
-
-export async function querySmartFolder(id: string, path: (string | null)[]) {
-  const request = smartFolderQueryRequest(id, path);
-  return (await api<Page<SmartFolderEntry>>(request.path, { method: request.method, query: request.query, body: request.body })).data;
-}
-
-export async function smartFolderGroups(id: string, path: (string | null)[]) {
-  return (
-    await api<Page<SmartFolderGroup>>(`/v1/smart-folders/${id}/query/groups`, {
-      method: 'POST',
-      body: { path },
-    })
-  ).data;
 }
 
 export async function terms(setId: string, q: string) {

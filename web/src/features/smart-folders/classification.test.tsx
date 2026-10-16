@@ -17,8 +17,8 @@ it('classifies using both the item version and selected smart folder version', a
             ? {}
             : {
                 value: [
-                  { id: 'folder', name: 'Invoices', workspace_id: 'w', version: 8 },
-                  { id: 'foreign', name: 'Other workspace', workspace_id: 'other', version: 1 },
+                  { id: 'folder', name: 'Invoices', workspace_id: 'w', version: 8, definition: { mode: 'classification' } },
+                  { id: 'foreign', name: 'Other workspace', workspace_id: 'other', version: 1, definition: { mode: 'classification' } },
                 ],
               },
         ),

@@ -1,14 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
-import { useApiPages } from '@/api/pages';
 import { collectionChildren, keys } from '@/api/queries';
 import type { Resource } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
-import { Alert, Skeleton } from '@/components/ui/feedback';
+import { Alert } from '@/components/ui/feedback';
 import { Label } from '@/components/ui/input';
+import { FolderBrowser } from './folder-browser';
 import { Select } from '@/components/ui/select';
 import { problemMessage } from '@/lib/errors';
 
@@ -34,10 +33,6 @@ export function MoveDialog({
   const [targetId, setTargetId] = useState(collection.id);
   const [path, setPath] = useState<Resource[]>([]);
   const parentId = path.at(-1)?.id ?? targetId;
-  // Only folders, page by page, however many files a folder holds.
-  const folders = useApiPages<Resource>(['resources', parentId, 'folders'], `/v1/resources/${parentId}/children`, {
-    query: { kind: 'folder', $top: 100 },
-  });
   const moving = items ?? [item];
   const bulk = moving.length > 1;
   const changed = moving.filter(item => parentId !== (item.parent_id ?? collection.id));
@@ -95,56 +90,7 @@ export function MoveDialog({
           ))}
       </Select>
       <p className="text-[13px] font-medium">Folder</p>
-      <nav aria-label="Destination folder" className="flex flex-wrap items-center gap-1 text-[13px]">
-        <button type="button" className="text-accent hover:underline" onClick={() => setPath([])}>
-          {target?.name ?? collection.name}
-        </button>
-        {path.map((folder, index) => (
-          <span key={folder.id} className="flex items-center gap-1">
-            <ChevronRight className="size-3.5 text-muted" />
-            <button type="button" className="text-accent hover:underline" onClick={() => setPath(path.slice(0, index + 1))}>
-              {folder.name}
-            </button>
-          </span>
-        ))}
-      </nav>
-      <div className="max-h-60 overflow-auto rounded-md border">
-        {folders.isPending ? (
-          <Skeleton className="m-2 h-8" />
-        ) : folders.items.length ? (
-          <ul>
-            {folders.items.filter(folder => !moving.some(item => item.id === folder.id)).map((folder) => (
-              <li key={folder.id}>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-surface-muted"
-                  onClick={() => setPath([...path, folder])}
-                >
-                  <Folder className="size-4 text-muted" />
-                  <span className="flex-1 truncate">{folder.name}</span>
-                  <ChevronRight className="size-4 text-muted" />
-                </button>
-              </li>
-            ))}
-            {folders.hasNextPage && (
-              <li>
-                <button
-                  type="button"
-                  className="w-full px-3 py-2 text-left text-[13px] text-accent hover:bg-surface-muted"
-                  disabled={folders.isFetchingNextPage}
-                  onClick={() => void folders.fetchNextPage()}
-                >
-                  {folders.isFetchingNextPage ? 'Loading…' : 'More folders'}
-                </button>
-              </li>
-            )}
-          </ul>
-        ) : (
-          <p className="flex items-center gap-2 px-3 py-2 text-[13px] text-muted">
-            <FolderOpen className="size-4" /> No folders here
-          </p>
-        )}
-      </div>
+      <FolderBrowser root={target ?? { ...collection, id: targetId }} path={path} onChange={setPath} excluded={moving.map(item => item.id)} />
       {bulk && <p className="text-xs text-muted">Move up to 100 entries between folders of this collection. The selection moves atomically.</p>}
       <p className="text-xs text-muted">
         {unchanged

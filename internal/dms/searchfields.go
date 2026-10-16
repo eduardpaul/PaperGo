@@ -14,13 +14,15 @@ import (
 // SearchField is a field search can filter on: a key with a type and
 // scale, as the readable lists and libraries define it.
 type SearchField struct {
-	Key       string   `json:"key"`
-	Label     string   `json:"label"`
-	Type      string   `json:"type"`
-	Scale     int      `json:"scale,omitempty"`
-	Multiple  bool     `json:"multiple,omitempty"`
-	Choices   []string `json:"choices,omitempty"`
-	TermSetID string   `json:"term_set_id,omitempty"`
+	Queryable         bool     `json:"queryable"`
+	LookupContainerID string   `json:"lookup_container_id,omitempty"`
+	Key               string   `json:"key"`
+	Label             string   `json:"label"`
+	Type              string   `json:"type"`
+	Scale             int      `json:"scale,omitempty"`
+	Multiple          bool     `json:"multiple,omitempty"`
+	Choices           []string `json:"choices,omitempty"`
+	TermSetID         string   `json:"term_set_id,omitempty"`
 	// Operators are the filter operators the field takes.
 	Operators []string `json:"operators"`
 }
@@ -72,8 +74,10 @@ func (s *Service) searchFieldDefinitions(ctx context.Context, subject, workspace
 	}
 	out := map[string][]*ent.FieldDefinition{}
 	for _, d := range defs {
-		// One definition per key, type and scale: they share index rows.
-		if !slices.ContainsFunc(out[d.Key], func(x *ent.FieldDefinition) bool { return x.Type == d.Type && x.Scale == d.Scale }) {
+		// Preserve the scopes, available choices and index readiness needed by typed rule editors.
+		if !slices.ContainsFunc(out[d.Key], func(x *ent.FieldDefinition) bool {
+			return x.Type == d.Type && x.Scale == d.Scale && x.Options.Multiple == d.Options.Multiple && x.Options.TermSetID == d.Options.TermSetID && x.Options.LookupContainerID == d.Options.LookupContainerID && queryable(x) == queryable(d) && slices.Equal(x.Choices, d.Choices)
+		}) {
 			out[d.Key] = append(out[d.Key], d)
 		}
 	}
@@ -102,7 +106,7 @@ func (s *Service) SearchFields(ctx context.Context, subject, workspaceID, collec
 		}) {
 			for _, d := range defs[key] {
 				out = append(out, SearchField{Key: d.Key, Label: d.Label, Type: string(d.Type), Scale: d.Scale, Multiple: d.Options.Multiple,
-					Choices: d.Choices, TermSetID: d.Options.TermSetID, Operators: searchOperators(string(d.Type))})
+					Choices: d.Choices, TermSetID: d.Options.TermSetID, Operators: searchOperators(string(d.Type)), Queryable: queryable(d), LookupContainerID: d.Options.LookupContainerID})
 			}
 		}
 		return out, nil
@@ -111,6 +115,7 @@ func (s *Service) SearchFields(ctx context.Context, subject, workspaceID, collec
 
 // SearchContentType is a named type attached to a collection the caller can read.
 type SearchContentType struct {
+	Key  string `json:"key"`
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
@@ -128,14 +133,14 @@ func (s *Service) SearchContentTypes(ctx context.Context, subject, workspaceID, 
 		if collectionID != "" {
 			conditions, args = append(conditions, "r.id=?"), append(args, collectionID)
 		}
-		rows, err := t.Client.QueryContext(ctx, `SELECT DISTINCT t.id,t.name FROM resources r JOIN collection_types a ON a.container_id=r.id JOIN content_types t ON t.id=a.content_type_id WHERE `+strings.Join(conditions, " AND ")+` ORDER BY t.name,t.id`, args...)
+		rows, err := t.Client.QueryContext(ctx, `SELECT DISTINCT t.id,t.name,t.key FROM resources r JOIN collection_types a ON a.container_id=r.id JOIN content_types t ON t.id=a.content_type_id WHERE `+strings.Join(conditions, " AND ")+` ORDER BY t.name,t.id`, args...)
 		if err != nil {
 			return nil, err
 		}
 		out := []SearchContentType{}
 		for rows.Next() {
 			var typ SearchContentType
-			if err = rows.Scan(&typ.ID, &typ.Name); err != nil {
+			if err = rows.Scan(&typ.ID, &typ.Name, &typ.Key); err != nil {
 				break
 			}
 			out = append(out, typ)

@@ -128,10 +128,10 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 	if _, err = s.CreateTemplate(ctx, "alice", ws.ID, TemplateInput{Key: "amounts", Name: "Amounts", Fields: []CreateField{{Key: "total", Label: "Total", Type: "integer"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.CreateSmartFolder(ctx, "alice", SmartFolderInput{Name: "Europe", WorkspaceID: &ws.ID, Definition: SmartFolderDefinition{Terms: []string{term.ID}}}); err != nil {
+	if _, err = s.CreateSmartFolder(ctx, "alice", SmartFolderInput{Name: "Europe", WorkspaceID: &ws.ID, Definition: SmartFolderDefinition{Mode: "query", Terms: []string{term.ID}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.CreateSmartFolder(ctx, "alice", SmartFolderInput{Name: "Personal excluded", WorkspaceID: &ws.ID, Personal: true}); err != nil {
+	if _, err = s.CreateSmartFolder(ctx, "alice", SmartFolderInput{Name: "Personal excluded", WorkspaceID: &ws.ID, Personal: true, Definition: SmartFolderDefinition{Mode: "query"}}); err != nil {
 		t.Fatal(err)
 	}
 	staff, err := s.Directory().SaveGroup(ctx, "organization-admin", "", 0, identity.GroupInput{Name: "Staff"})

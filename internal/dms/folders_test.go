@@ -53,7 +53,7 @@ func TestFolderFieldsSearchAndLiveReaderVisibility(t *testing.T) {
 	if err != nil || len(q.Data) != 1 || len(q.Data[0].Values) != 1 {
 		t.Fatal("folder selection", q, err)
 	}
-	smart := smartOK(t, s, SmartFolderInput{Name: "Research folders", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{IncludeFolders: true, Terms: []string{f.Values["topic"].(string)}}})
+	smart := smartOK(t, s, SmartFolderInput{Name: "Research folders", WorkspaceID: &w.ID, Definition: SmartFolderDefinition{Mode: "query", IncludeFolders: true, Terms: []string{f.Values["topic"].(string)}}})
 	page, err := s.QuerySmartFolder(testContext, "reader", smart.ID, SmartFolderQueryRequest{IncludeTotal: true})
 	if err != nil || counted(page.Total) != 1 || page.Data[0].Item.ID != f.ID {
 		t.Fatal("taxonomy smart folders", page, err)

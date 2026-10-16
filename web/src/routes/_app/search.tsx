@@ -39,7 +39,7 @@ export const Route = createFileRoute('/_app/search')({
 function SearchPage() {
   const params = Route.useSearch();
   const { q, workspace, collection, tag, content_type } = params;
-  const types = useQuery({ queryKey: ['search-content-types', workspace, collection], queryFn: async () => (await api<{ id: string; name: string }[]>('/v1/search/content-types', { query: { workspace_id: workspace, collection_id: collection } })).data });
+  const types = useQuery({ queryKey: ['search', 'content-types', workspace, collection], queryFn: async () => (await api<{ id: string; name: string }[]>('/v1/search/content-types', { query: { workspace_id: workspace, collection_id: collection } })).data });
   const kind: Kind = params.kind ?? 'item';
   const navigate = useNavigate({ from: Route.fullPath });
   const workspaces = useQuery(workspacesQuery);

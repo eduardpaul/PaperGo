@@ -17,6 +17,7 @@ import { useApiPages } from '@/api/pages';
 import { keys } from '@/api/queries';
 import { viewGroupsRequest, viewRowsRequest } from '@/api/requests';
 import type { FieldDefinition, FilterExpr, ListView, Page, QueryGroup, Resource } from '@/api/types';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, Skeleton } from '@/components/ui/feedback';
 import { QueryFeedback } from '@/features/admin/common';
@@ -33,6 +34,7 @@ import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 
 type LayoutProps = {
+  provenance?: Map<string, string>;
   renderItem?: (item: Resource, element: ReactElement) => ReactNode;
   items: Resource[];
   fields: FieldDefinition[];
@@ -54,7 +56,7 @@ function CardFields({ item, fields, names }: { item: Resource; fields: FieldDefi
   );
 }
 
-export function ItemsGallery({ items, fields, names, onOpen, renderItem }: LayoutProps) {
+export function ItemsGallery({ items, fields, names, onOpen, renderItem, provenance }: LayoutProps) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((item) => {
@@ -66,6 +68,7 @@ export function ItemsGallery({ items, fields, names, onOpen, renderItem }: Layou
             <span className="flex items-center gap-2 font-medium">
               {item.kind === 'folder' ? <Folder className="size-4" /> : <File className="size-4" />}
               {item.name}
+              {provenance?.get(item.id) && <Badge>{provenance.get(item.id)}</Badge>}
             </span>
             <CardFields item={item} fields={fields} names={names} />
           </button>;
