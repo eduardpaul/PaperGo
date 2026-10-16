@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState, type ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { stringifyJSON } from '@/api/json';
 import { keys } from '@/api/queries';
 import type { Resource } from '@/api/types';
+import { resourceDragType } from './folder-moves';
 import { CollectionPage, type CollectionSearch } from './collection-page';
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children }: { children: ReactNode }) => <a href="#collection">{children}</a>,
+  Link: ({ children, onDrop, onDragOver, onDragLeave, className }: { children: ReactNode } & React.HTMLAttributes<HTMLAnchorElement>) => <a href="#collection" onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave} className={className}>{children}</a>,
 }));
 const uploads = vi.hoisted(() => ({ upload: vi.fn(async () => []) }));
 vi.mock('@/features/documents/uploads', () => ({ useUploads: () => uploads }));
@@ -23,7 +24,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function show(initial: CollectionSearch = {}, overrides: Partial<Resource> = {}) {
+function show(initial: CollectionSearch = {}, overrides: Partial<Resource> = {}, rows: Resource[] = []) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(client);
   const collection: Resource = {
@@ -33,7 +34,12 @@ function show(initial: CollectionSearch = {}, overrides: Partial<Resource> = {})
   client.setQueryData(keys.fields('library'), []);
   client.setQueryData(keys.contentTypes('library'), []);
   client.setQueryData(keys.views('library'), []);
-  const fetch = vi.fn(async () => new Response(stringifyJSON({ value: [] }), { headers: { 'Content-Type': 'application/json' } }));
+  const fetch = vi.fn(async (input: URL | string, _init?: RequestInit) => {
+    const path = new URL(String(input)).pathname;
+    const found = rows.find(row => path === `/v1/resources/${row.id}`);
+    const body = found ? { ...found, access: ['read', 'write'] } : path.endsWith('/children') ? { value: rows } : path.endsWith('/move-selection') ? [] : path === `/v1/resources/${initial.folder}` ? { id: initial.folder, parent_id: 'library', kind: 'folder', name: 'Current folder', access: ['read', 'write'] } : { value: [] };
+    return new Response(stringifyJSON(body), { headers: { 'Content-Type': 'application/json' } });
+  });
   vi.stubGlobal('fetch', fetch);
   const onSearch = vi.fn();
   let navigate: (search: CollectionSearch) => void;
@@ -123,4 +129,44 @@ it.each([{ kind: 'list' as const }, { access: ['read'] as Resource['access'] }, 
   await act(async () => { fireEvent.drop(contents, { dataTransfer: transfer }); });
   expect(uploads.upload).not.toHaveBeenCalled();
   expect(screen.queryByText('Drop to upload to Documents')).toBeNull();
+});
+
+const dragItem = (id: string, kind: Resource['kind'] = 'item', parent = 'library'): Resource => ({ id, name: id, kind, parent_id: parent, container_id: 'library', workspace_id: 'workspace', version: id === 'Second' ? 8 : 3 });
+function transfer() {
+  const values = new Map<string, string>();
+  return { types: [resourceDragType], files: [], items: [], effectAllowed: 'none', dropEffect: 'none', setData: (type: string, value: string) => values.set(type, value), getData: (type: string) => values.get(type) ?? '' };
+}
+it('drags a selected pair onto a folder without uploading and retains context-menu selection', async () => {
+  const { fetch } = show({}, {}, [dragItem('First'), dragItem('Second'), dragItem('Archive', 'folder')]);
+  const first = (await screen.findByRole('button', { name: 'First' })).closest('tr')!;
+  const target = screen.getByRole('button', { name: 'Archive' }).closest('tr')!;
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select First' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Second' }));
+  expect(screen.getByText('2 selected')).toBeTruthy();
+  fireEvent.contextMenu(first);
+  expect(await screen.findByRole('menuitem', { name: 'Delete selected…' })).toBeTruthy();
+  expect(screen.getByText('2 selected')).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+  const dataTransfer = transfer();
+  fireEvent.dragStart(first, { dataTransfer });
+  expect(dataTransfer.effectAllowed).toBe('move');
+  fireEvent.dragOver(target, { dataTransfer });
+  expect(dataTransfer.dropEffect).toBe('move');
+  fireEvent.drop(target, { dataTransfer });
+  await waitFor(() => expect(fetch.mock.calls.some(([input]) => new URL(String(input)).pathname.endsWith('/move-selection'))).toBe(true));
+  const [, init] = fetch.mock.calls.find(([input]) => new URL(String(input)).pathname.endsWith('/move-selection'))!;
+  expect(JSON.parse(String(init?.body))).toEqual({ parent_id: 'Archive', items: [{ id: 'First', version: 3 }, { id: 'Second', version: 8 }] });
+  expect(uploads.upload).not.toHaveBeenCalled();
+});
+it('accepts an internal drop on the collection breadcrumb', async () => {
+  const { fetch } = show({ folder: 'current' }, {}, [dragItem('First', 'item', 'current')]);
+  const first = (await screen.findByRole('button', { name: 'First' })).closest('tr')!;
+  const dataTransfer = transfer();
+  fireEvent.dragStart(first, { dataTransfer });
+  const root = within(screen.getByRole('navigation', { name: 'Folders' })).getByRole('link', { name: 'Documents' });
+  fireEvent.dragOver(root, { dataTransfer });
+  fireEvent.drop(root, { dataTransfer });
+  await waitFor(() => expect(fetch.mock.calls.some(([input]) => new URL(String(input)).pathname.endsWith('/move-selection'))).toBe(true));
+  const [, init] = fetch.mock.calls.find(([input]) => new URL(String(input)).pathname.endsWith('/move-selection'))!;
+  expect(JSON.parse(String(init?.body)).parent_id).toBe('library');
 });

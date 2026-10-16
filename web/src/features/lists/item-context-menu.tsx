@@ -1,0 +1,69 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { problemMessage } from '@/lib/errors';
+import { batch } from '@/api/batch';
+import { keys, resourceQuery, workflows } from '@/api/queries';
+import type { Resource, Workflow } from '@/api/types';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { downloadContent } from '@/features/documents/transfer';
+import { ConfirmDialog } from '@/features/settings/section';
+import { AddToSmartFolder } from '@/features/smart-folders/classification';
+import { applicableWorkflows } from '@/features/workflows/item-workflows';
+import { LaunchWorkflow } from '@/features/workflows/workflow-tools';
+import { can } from './access';
+import { MoveDialog } from './move-dialog';
+import { RenameDialog } from './rename-dialog';
+
+/** The same resource operations used by the item panel, available on rows and cards. */
+export function ItemContextMenu({ item, collection, selection = [item], onSelect, onOpen, onDetails, children }: { item: Resource; collection: Resource; selection?: Resource[]; onSelect?: () => void; onOpen: (item: Resource) => void; onDetails: (item: Resource, tab?: string) => void; children: ReactElement }) {
+  const [open, setOpen] = useState(false);
+  const [dialog, setDialog] = useState<'rename' | 'move' | 'classify' | 'delete'>();
+  const [launching, setLaunching] = useState<Workflow>();
+  const client = useQueryClient();
+  const current = useQuery({ ...resourceQuery(item.id), enabled: open });
+  const fresh = current.data ?? item;
+  const writable = can(current.data, 'write');
+  const bulk = selection.length > 1;
+  const items = bulk ? selection.map(item => item.id === fresh.id ? fresh : item) : [fresh];
+  const definitions = useQuery({ queryKey: ['workflows', item.workspace_id], queryFn: () => workflows(item.workspace_id), enabled: open && writable && items.every(item => item.kind === 'item') });
+  const choices = applicableWorkflows(definitions.data ?? [], collection.id, items.length);
+  const remove = useMutation({
+    meta: { silent: true },
+    mutationFn: () => batch(items.map(item => ({ id: item.id, method: 'DELETE', url: `/v1/resources/${item.id}${item.kind === 'folder' ? '?recursive=true' : ''}`, headers: { 'If-Match': `"${item.version}"` } }))),
+    onError: error => toast.error(problemMessage(error)),
+    onSuccess: () => { setDialog(undefined); toast.success('Moved to the recycle bin'); },
+    onSettled: () => client.invalidateQueries({ queryKey: keys.resources }),
+  });
+  return <>
+    <ContextMenu onOpenChange={value => { setOpen(value); if (value) onSelect?.(); }}>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent>
+        {!bulk && <ContextMenuItem onSelect={() => onOpen(fresh)}>Open</ContextMenuItem>}
+        {!bulk && <ContextMenuItem onSelect={() => onDetails(fresh)}>Details</ContextMenuItem>}
+        {!bulk && collection.kind === 'library' && item.kind === 'item' && <ContextMenuItem onSelect={() => void downloadContent(item.id, item.name)}>Download</ContextMenuItem>}
+        {writable && <>
+          {!bulk && <ContextMenuItem onSelect={() => setDialog('rename')}>Rename…</ContextMenuItem>}
+          <ContextMenuItem disabled={items.length > 100} onSelect={() => setDialog('move')}>{bulk ? 'Move selected…' : 'Move…'}</ContextMenuItem>
+          {items.every(item => item.kind === 'item') && <ContextMenuSub>
+            <ContextMenuSubTrigger>Run workflow{bulk ? ` (${items.length} items)` : ''} ›</ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {choices.map(workflow => <ContextMenuItem key={workflow.id} onSelect={() => setLaunching(workflow)}>{workflow.name}</ContextMenuItem>)}
+              {!choices.length && <ContextMenuItem disabled>{definitions.isPending ? 'Loading workflows…' : 'No applicable workflows'}</ContextMenuItem>}
+            </ContextMenuSubContent>
+          </ContextMenuSub>}
+          {!bulk && item.kind === 'item' && <ContextMenuItem onSelect={() => setDialog('classify')}>Classify to smart folder…</ContextMenuItem>}
+        </>}
+        {!bulk && can(current.data, 'manage') && <ContextMenuItem onSelect={() => onDetails(fresh, 'access')}>Permissions</ContextMenuItem>}
+        {writable && <><ContextMenuSeparator /><ContextMenuItem tone="danger" onSelect={() => setDialog('delete')}>{bulk ? 'Delete selected…' : 'Delete…'}</ContextMenuItem></>}
+        {current.isError && <ContextMenuItem disabled>Actions unavailable. Open Details to retry.</ContextMenuItem>}
+      </ContextMenuContent>
+    </ContextMenu>
+    {dialog === 'rename' && <RenameDialog item={fresh} onClose={() => setDialog(undefined)} />}
+    {dialog === 'move' && <MoveDialog item={fresh} items={bulk ? items : undefined} collection={collection} onClose={() => setDialog(undefined)} onMoved={() => setDialog(undefined)} />}
+    {dialog === 'classify' && <AddToSmartFolder item={fresh} onClose={() => setDialog(undefined)} />}
+    {launching && <LaunchWorkflow workflow={launching} itemIds={items.map(item => item.id)} fixedSelection={items} onClose={() => setLaunching(undefined)} />}
+    <ConfirmDialog open={dialog === 'delete'} onOpenChange={value => !value && setDialog(undefined)} title={bulk ? `Delete ${items.length} selected entries?` : `Delete “${fresh.name}”?`} description="Folders include their contents. You can restore entries from the recycle bin." confirm="Delete" busy={remove.isPending} error={remove.error} onConfirm={() => remove.mutate()} />
+  </>;
+}

@@ -96,6 +96,9 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("GET /v1/resources/{id}/permissions", a.permissions)
 	api.HandleFunc("PUT /v1/resources/{id}/permissions", a.setPermissions)
 	api.HandleFunc("GET /v1/items/{id}/relationships", a.relationships)
+	api.HandleFunc("POST /v1/resources/{id}/move-selection", foundationMutation(a, 200, false, func(r *http.Request, in dms.MoveSelection, _ int) (any, error) {
+		return a.DMS.MoveSelection(r.Context(), subject(r), r.PathValue("id"), in)
+	}))
 	api.HandleFunc("POST /v1/items/{id}/move", foundationMutation(a, 200, true, func(r *http.Request, in dms.MoveItem, version int) (any, error) {
 		return a.DMS.MoveItem(r.Context(), subject(r), r.PathValue("id"), version, in)
 	}))
@@ -320,12 +323,22 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 	problem := func(status int, code, message string) {
 		a.problem(w, r, status, code, message, operationIndex...)
 	}
+	var moveConflict *dms.MoveNameConflict
 	var nameConflict *dms.DocumentNameConflict
 	var duplicate *dms.DuplicateError
 	var validation *dms.ValidationError
 	var identityValidation *identity.ValidationError
 	var max *http.MaxBytesError
 	switch {
+	case errors.As(err, &moveConflict):
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusConflict)
+		requestID, _ := r.Context().Value(requestKey{}).(string)
+		body := map[string]any{"type": "about:blank", "title": "Conflict", "status": 409, "code": "name_conflict", "detail": moveConflict.Error(), "request_id": requestID, "source_item_id": moveConflict.SourceID}
+		if moveConflict.Existing != nil {
+			body["existing_item"] = moveConflict.Existing
+		}
+		_ = json.NewEncoder(w).Encode(body)
 	case errors.As(err, &nameConflict):
 		w.Header().Set("Content-Type", "application/problem+json")
 		w.WriteHeader(http.StatusConflict)

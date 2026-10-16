@@ -4,6 +4,7 @@ import { textParam } from '@/lib/search';
 
 export const Route = createFileRoute('/_app/w/$workspaceId/l/$listId/')({
   validateSearch: (search: Record<string, unknown>): CollectionSearch => ({
+    create: search.create === 'folder' || search.create === 'upload' ? search.create : undefined,
     folder: textParam(search.folder),
     view: textParam(search.view),
     item: textParam(search.item),

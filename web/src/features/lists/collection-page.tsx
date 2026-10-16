@@ -14,7 +14,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { cloneElement, useEffect, useRef, useState, type HTMLAttributes, type ReactElement } from 'react';
 import { toast } from 'sonner';
 import { api, continuation } from '@/api/http';
 import { batch } from '@/api/batch';
@@ -49,6 +49,9 @@ import { cn } from '@/lib/utils';
 import { can } from './access';
 import { CollectionIcon } from './collection-icon';
 import { systemFields } from './filter-editor';
+import { useFolderMoves } from './folder-moves';
+import { ItemContextMenu } from './item-context-menu';
+import { MoveDialog } from './move-dialog';
 import { ItemSheet } from './item-sheet';
 import { ItemsBoard, ItemsCalendar, ItemsGallery } from './items-layouts';
 import { ItemsTable } from './items-table';
@@ -57,6 +60,7 @@ import { ColumnPicker } from './column-picker';
 import { columnLabel, fieldsForType, parseSort, sortableColumns, sortParam } from './schema';
 
 export interface CollectionSearch {
+  create?: 'folder' | 'upload';
   folder?: string;
   view?: string;
   item?: string;
@@ -132,6 +136,7 @@ export function CollectionPage({
   const [selected, setSelected] = useState<Map<string, Resource>>(new Map());
   // Everything the listing matches, beyond the loaded rows (for bulk edits).
   const [allMatching, setAllMatching] = useState(false);
+  const folderMoves = useFolderMoves(collection.data, selected, items => { setSelected(new Map(items.map(item => [item.id, item]))); setAllMatching(false); });
   if (listing.data !== snapshot) {
     setSnapshot(listing.data);
     setMore([]);
@@ -139,12 +144,25 @@ export function CollectionPage({
     setSelected(new Map());
     setAllMatching(false);
   }
+  const [moving, setMoving] = useState(false);
   const [bulkEditing, setBulkEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [operations, setOperations] = useState<string[]>([]);
   const [creating, setCreating] = useState<'item' | 'folder' | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const handledCreate = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (search.create !== 'upload') { handledCreate.current = undefined; return; }
+    if (!collection.data || handledCreate.current === search.create || (search.folder && !crumbs.data)) return;
+    handledCreate.current = search.create;
+    const location = search.folder ? crumbs.data?.at(-1) : collection.data;
+    if (can(location, 'write')) {
+      if (search.create === 'upload' && collection.data.kind === 'library') fileInput.current?.click();
+    } else toast.error('You do not have permission to add content here.');
+    onSearch({ create: undefined }, true);
+  }, [search.create, search.folder, collection.data, crumbs.data, onSearch]);
+
 
   const rows = [...(listing.data?.items ?? []), ...more];
   // The count comes after the first page, and only when there is more than one page.
@@ -173,8 +191,8 @@ export function CollectionPage({
   // Opening a folder found by a search shows the folder, not the search inside it.
   const open = (resource: Resource) =>
     resource.kind === 'folder'
-      ? onSearch({ folder: resource.id, item: undefined, tab: undefined, q: undefined })
-      : onSearch({ item: resource.id, tab: undefined });
+      ? onSearch({ folder: resource.id, item: undefined, tab: undefined, q: undefined, create: undefined })
+      : onSearch({ item: resource.id, tab: undefined, create: undefined });
 
   const { upload } = useUploads();
   // A finished single upload opens its item, unless the person has left this list meanwhile.
@@ -252,9 +270,17 @@ export function CollectionPage({
   const canAdd = can(location, 'write');
   const canEdit = can(current, 'write');
   const canManage = can(current, 'manage');
+  const requestedCreate = creating ?? (search.create === 'folder' && folders && canAdd ? 'folder' : null);
   const items = [...selected.values()].filter((resource) => resource.kind === 'item');
   const matching = listingQuery(request, listId);
   const allLoadedSelected = rows.length > 0 && selected.size === rows.length;
+  const renderItem = (item: Resource, element: ReactElement) => {
+    const row = element as ReactElement<HTMLAttributes<HTMLElement>>;
+    const source = folderMoves.sourceProps(item);
+    const drop = item.kind === 'folder' ? folderMoves.targetProps(item) : {};
+    const rendered = cloneElement(row, { ...source, ...drop, className: cn(row.props.className, folderMoves.over === item.id && 'bg-accent-soft ring-2 ring-accent ring-inset'), onDragStart: event => { row.props.onDragStart?.(event); source.onDragStart?.(event); } });
+    return <ItemContextMenu key={item.id} item={item} collection={current} selection={selected.has(item.id) ? [...selected.values()] : [item]} onSelect={() => { if (!canEdit) return; setAllMatching(false); if (!selected.has(item.id)) setSelected(new Map([[item.id, item]])); }} onOpen={open} onDetails={(item, tab) => onSearch({ item: item.id, tab })}>{rendered}</ItemContextMenu>;
+  };
   const startUpload = () => fileInput.current?.click();
   const uploadFiles = (files: FileList | null | undefined) => {
     const list = [...(files ?? [])];
@@ -398,7 +424,8 @@ export function CollectionPage({
             to="/w/$workspaceId/l/$listId"
             params={{ workspaceId, listId }}
             search={{ view: search.view }}
-            className="text-muted hover:text-foreground"
+            {...folderMoves.targetProps(current)}
+            className={cn('rounded px-1 text-muted hover:text-foreground', folderMoves.over === current.id && 'bg-accent-soft ring-2 ring-accent')}
           >
             {current.name}
           </Link>
@@ -406,13 +433,14 @@ export function CollectionPage({
             <span key={crumb.id} className="flex items-center gap-1">
               <ChevronRight className="size-3.5 text-muted" />
               {index === crumbs.data.length - 1 ? (
-                <span aria-current="page" className="flex items-center gap-1 font-medium">
+                <span aria-current="page" {...folderMoves.targetProps(crumb)} className={cn('flex items-center gap-1 rounded px-1 font-medium', folderMoves.over === crumb.id && 'bg-accent-soft ring-2 ring-accent')}>
                   <FolderOpen className="size-4 text-muted" /> {crumb.name}
                 </span>
               ) : (
                 <button
                   type="button"
-                  className="text-muted hover:text-foreground"
+                  {...folderMoves.targetProps(crumb)}
+                  className={cn('rounded px-1 text-muted hover:text-foreground', folderMoves.over === crumb.id && 'bg-accent-soft ring-2 ring-accent')}
                   onClick={() => onSearch({ folder: crumb.id, item: undefined })}
                 >
                   {crumb.name}
@@ -453,6 +481,7 @@ export function CollectionPage({
           {!allMatching && canEdit && items.length === selected.size && (
             <RunWorkflowAction workspaceId={workspaceId} collectionId={listId} items={items} />
           )}
+          {!allMatching && <Button size="sm" disabled={selected.size > 100} onClick={() => setMoving(true)}>Move selected…</Button>}
           {!allMatching && (
             <Button size="sm" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)}>
               <Trash2 /> Delete
@@ -500,6 +529,7 @@ export function CollectionPage({
         )}
         {ownRows && layout === 'board' ? (
           <ItemsBoard
+            renderItem={renderItem}
             collectionId={listId}
             view={view}
             fields={fieldList.filter((field) => view.columns?.includes(field.key))}
@@ -548,6 +578,7 @@ export function CollectionPage({
           </Card>
         ) : layout === 'gallery' ? (
           <ItemsGallery
+            renderItem={renderItem}
             items={rows}
             fields={fieldList.filter((field) => view?.columns?.includes(field.key))}
             names={names}
@@ -555,6 +586,7 @@ export function CollectionPage({
           />
         ) : (
           <ItemsTable
+            renderRow={renderItem}
             rows={rows}
             columns={columns}
             fields={fieldList}
@@ -605,6 +637,8 @@ export function CollectionPage({
           label={`Field update${operations.length > 1 ? ` (part ${index + 1} of ${operations.length})` : ''}`}
         />
       ))}
+      {folderMoves.dialogs}
+      {moving && selected.size > 0 && <MoveDialog item={[...selected.values()][0]} items={[...selected.values()]} collection={current} onClose={() => setMoving(false)} onMoved={() => setMoving(false)} />}
       {bulkEditing && (
         <BulkEditDialog
           collectionId={listId}
@@ -634,14 +668,15 @@ export function CollectionPage({
         error={remove.error}
         onConfirm={() => remove.mutate()}
       />
-      {creating && (
+      {requestedCreate && (
         <CreateDialog
-          kind={creating}
+          kind={requestedCreate}
           collection={current}
           parentId={search.folder || listId}
-          onClose={() => setCreating(null)}
+          onClose={() => { setCreating(null); if (search.create) onSearch({ create: undefined }, true); }}
           onCreated={(created) => {
             setCreating(null);
+            if (search.create) onSearch({ create: undefined }, true);
             void refresh();
             open(created);
           }}

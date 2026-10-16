@@ -15,11 +15,13 @@ import { problemMessage } from '@/lib/errors';
 /** Moves an item to another folder, list or library of its workspace, browsing folders instead of typing ids. */
 export function MoveDialog({
   item,
+  items,
   collection,
   onClose,
   onMoved,
 }: {
   item: Resource;
+  items?: Resource[];
   collection: Resource;
   onClose: () => void;
   onMoved: (moved: Resource) => void;
@@ -36,17 +38,25 @@ export function MoveDialog({
   const folders = useApiPages<Resource>(['resources', parentId, 'folders'], `/v1/resources/${parentId}/children`, {
     query: { kind: 'folder', $top: 100 },
   });
-  const unchanged = parentId === (item.parent_id ?? collection.id);
+  const moving = items ?? [item];
+  const bulk = moving.length > 1;
+  const changed = moving.filter(item => parentId !== (item.parent_id ?? collection.id));
+  const unchanged = changed.length === 0;
   const move = useMutation({
     meta: { silent: true },
-    mutationFn: async () =>
-      (
+    mutationFn: async () => {
+      if (bulk) {
+        const result = await api<{ id: string; version: number }[]>(`/v1/resources/${collection.id}/move-selection`, { method: 'POST', body: { parent_id: parentId, items: changed.map(item => ({ id: item.id, version: item.version })) } });
+        return { ...item, parent_id: parentId, version: result.data.find(row => row.id === item.id)?.version ?? item.version };
+      }
+      return (
         await api<Resource>(`/v1/items/${item.id}/move`, {
           method: 'POST',
           ifMatch: item.version,
           body: { collection_id: targetId, parent_id: path.at(-1)?.id },
         })
-      ).data,
+      ).data;
+    },
     onSuccess: async (moved) => {
       await queryClient.invalidateQueries({ queryKey: keys.resources });
       toast.success(`Moved to ${path.at(-1)?.name ?? targets.data?.find((target) => target.id === targetId)?.name}`);
@@ -57,10 +67,10 @@ export function MoveDialog({
   return (
     <FormDialog
       open
-      title={`Move “${item.name}”`}
+      title={bulk ? `Move ${moving.length} selected entries` : `Move “${item.name}”`}
       submitLabel="Move here"
       pending={move.isPending}
-      submitDisabled={unchanged}
+      submitDisabled={unchanged || moving.length > 100}
       onClose={onClose}
       onSubmit={() => move.mutate()}
     >
@@ -68,6 +78,7 @@ export function MoveDialog({
       <Label htmlFor="move-target">{collection.kind === 'library' ? 'Library' : 'List'}</Label>
       <Select
         id="move-target"
+        disabled={bulk}
         value={targetId}
         onChange={(event) => {
           setTargetId(event.target.value);
@@ -75,7 +86,7 @@ export function MoveDialog({
         }}
       >
         {targets.data
-          ?.filter((entry) => entry.kind === collection.kind)
+          ?.filter((entry) => entry.kind === collection.kind && (!bulk || entry.id === collection.id))
           .map((entry) => (
             <option key={entry.id} value={entry.id}>
               {entry.name}
@@ -102,7 +113,7 @@ export function MoveDialog({
           <Skeleton className="m-2 h-8" />
         ) : folders.items.length ? (
           <ul>
-            {folders.items.map((folder) => (
+            {folders.items.filter(folder => !moving.some(item => item.id === folder.id)).map((folder) => (
               <li key={folder.id}>
                 <button
                   type="button"
@@ -134,6 +145,7 @@ export function MoveDialog({
           </p>
         )}
       </div>
+      {bulk && <p className="text-xs text-muted">Move up to 100 entries between folders of this collection. The selection moves atomically.</p>}
       <p className="text-xs text-muted">
         {unchanged
           ? 'The item is already here. Choose another folder or list.'

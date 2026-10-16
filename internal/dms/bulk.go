@@ -90,8 +90,8 @@ func validateBulk(in BulkRequest) error {
 }
 
 // Bulk acquires the writer once and commits all item mutations, projections,
-// relationships and audit events together. Folder mutations are excluded:
-// an operation count must also bound the number of affected resources.
+// relationships and audit events together. Folder operations follow the same
+// containment and non-empty deletion rules as individual resource mutations.
 func (s *Service) Bulk(ctx context.Context, subject, collectionID string, in BulkRequest) (BulkResponse, error) {
 	if err := validateBulk(in); err != nil {
 		return BulkResponse{}, err

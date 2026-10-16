@@ -308,3 +308,7 @@ Local workflow decisions use `AI_DECISION_MODELS_PATH` and the shared
 `ONNXRUNTIME_LIB`. Both `ai.decide` and `taxonomy.decide` use the verified Laya
 multilingual FP32 bundle. See [workflow decisions](docs/decisions.md) for setup,
 custom-data routing, managed taxonomy suggestions and guarded human review.
+
+Right-click navigation entries, collection cards, rows or item cards for their available actions. A selected row keeps the selection for workflow, move and delete actions. Move selected entries between folders with `POST /v1/resources/{id}/move-selection`: up to 100 item/folder ids and current versions move together, with no partial changes on failure; nested ancestor/descendant selections are rejected.
+
+Drag entries or an explicit selection onto a folder or breadcrumb to move them. File uploads keep their own drop flow. A move name conflict offers rename-and-retry; a single writable file can replace the destination after confirmation, atomically recycling that destination and moving the source with both versions checked.

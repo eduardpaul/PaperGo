@@ -8,6 +8,7 @@ import { Logo } from '@/components/brand/logo';
 import { Skeleton } from '@/components/ui/feedback';
 import { CreateSmartFolderDialog } from '@/features/smart-folders/create-dialog';
 import { useHasScope } from '@/features/admin/common';
+import { PlaceContextMenu } from '@/features/workspaces/place-context-menu';
 import { CollectionIcon } from '@/features/lists/collection-icon';
 import { cn } from '@/lib/utils';
 
@@ -118,7 +119,7 @@ function Workspaces({ onNavigate }: { onNavigate?: () => void }) {
             ))}
           {workspaces.map((workspace) => (
             <li key={workspace.id}>
-              <Link
+              <PlaceContextMenu resource={workspace} onNavigate={onNavigate}><Link
                 to="/w/$workspaceId"
                 params={{ workspaceId: workspace.id }}
                 onClick={onNavigate}
@@ -128,7 +129,7 @@ function Workspaces({ onNavigate }: { onNavigate?: () => void }) {
               >
                 <Briefcase />
                 <span className="truncate">{workspace.name}</span>
-              </Link>
+              </Link></PlaceContextMenu>
               {current === workspace.id && <WorkspaceLists workspaceId={workspace.id} onNavigate={onNavigate} />}
             </li>
           ))}
@@ -147,7 +148,7 @@ function WorkspaceLists({ workspaceId, onNavigate }: { workspaceId: string; onNa
     <ul className="mt-0.5 mb-1 ml-4 flex flex-col gap-0.5 border-l pl-2">
       {data?.map((list) => (
         <li key={list.id}>
-          <Link
+          <PlaceContextMenu resource={list} onNavigate={onNavigate}><Link
             to="/w/$workspaceId/l/$listId"
             params={{ workspaceId, listId: list.id }}
             onClick={onNavigate}
@@ -156,7 +157,7 @@ function WorkspaceLists({ workspaceId, onNavigate }: { workspaceId: string; onNa
           >
             <CollectionIcon collection={list} />
             <span className="truncate">{list.name}</span>
-          </Link>
+          </Link></PlaceContextMenu>
         </li>
       ))}
     </ul>

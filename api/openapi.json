@@ -17146,6 +17146,94 @@
           }
         }
       }
+    },
+    "/v1/resources/{id}/move-selection": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Move selected items and folders atomically within one collection",
+        "description": "Requires write on each selected resource and destination. Moves 1–100 top-level entries, with each current version in the body. Ancestor/descendant selections, cycles and cross-collection moves are rejected. Every move rolls back on failure. Folder contents remain in their folder. A name_conflict reports the supplied source_item_id; existing_item is included only for a writable replacement file.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "parent_id": {
+                    "type": "string",
+                    "description": "Destination folder; empty selects collection root."
+                  },
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "version"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moved ids and resulting versions, in request order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "version"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -17449,7 +17537,7 @@
           },
           "existing_item": {
             "type": "object",
-            "description": "On upload name_conflict, the existing writable item available for conditional replacement. Omitted for inaccessible items and folders.",
+            "description": "On an upload or move-selection name_conflict, the existing writable file available for conditional replacement. Omitted for inaccessible items and folders.",
             "properties": {
               "id": {
                 "type": "string",
@@ -17469,6 +17557,11 @@
             "type": "integer",
             "minimum": 0,
             "description": "Zero-based failing operation index for bulk item errors. Omitted for batch-wide errors."
+          },
+          "source_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The supplied source id of a move-selection name conflict."
           }
         },
         "required": [

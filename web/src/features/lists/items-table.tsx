@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, ChevronsUpDown, Folder, FolderOpen } from 'lucide-react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import type { FieldDefinition, Resource } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/select';
@@ -34,7 +34,9 @@ export function ItemsTable({
   onToggleAll,
   onOpen,
   locations,
+  renderRow,
 }: {
+  renderRow?: (item: Resource, row: ReactElement) => ReactNode;
   rows: Resource[];
   columns: string[];
   fields: FieldDefinition[];
@@ -201,7 +203,7 @@ export function ItemsTable({
           {visible.map((index) => {
             const resource = rows[index];
             const state = publishState(resource, publishing);
-            return (
+            const row = (
               <tr
                 key={resource.id}
                 data-index={index}
@@ -261,6 +263,7 @@ export function ItemsTable({
                 ))}
               </tr>
             );
+            return renderRow ? renderRow(resource, row) : row;
           })}
           {padBottom > 0 && (
             <tr aria-hidden style={{ height: padBottom }}>

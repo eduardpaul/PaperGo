@@ -2,11 +2,19 @@ import { parseJSON, stringifyJSON } from './json';
 import { authenticationMode, authorizationHeaders } from './auth';
 export { clearToken, setToken, token } from './auth';
 
+export interface ProblemDetails {
+  code?: string;
+  detail?: string;
+  title?: string;
+  existing_item?: { id: string; version: number };
+  source_item_id?: string;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
 
-  constructor(status: number, code: string, detail: string) {
+  constructor(status: number, code: string, detail: string, readonly problem?: ProblemDetails) {
     super(detail || code);
     this.name = 'ApiError';
     this.status = status;
@@ -67,11 +75,12 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   const text = await response.text();
   const payload = text ? parseJSON(text) : undefined;
   if (!response.ok) {
-    const problem = payload as { code?: string; detail?: string; title?: string } | undefined;
+    const problem = payload as ProblemDetails | undefined;
     throw new ApiError(
       response.status,
       problem?.code ?? 'error',
       problem?.detail ?? problem?.title ?? response.statusText,
+      problem,
     );
   }
   return { data: payload as T, etag: etagOf(response), status: response.status };

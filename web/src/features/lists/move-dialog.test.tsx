@@ -52,3 +52,24 @@ it('lists only folders, page by page, and moves into the chosen one', async () =
   const move = calls.find((call) => call.path === '/v1/items/item/move');
   expect(parseJSON(String(move?.init.body))).toEqual({ collection_id: 'lib', parent_id: 'f2' });
 });
+
+it('moves a selection between folders with one atomic operation and each item version', async () => {
+  const calls: { path: string; init: RequestInit }[] = [];
+  const collection = resource('list', 'Tasks', 'list');
+  const a = { ...resource('a', 'First', 'item'), parent_id: 'list', version: 3 };
+  const b = { ...resource('b', 'Second', 'item'), parent_id: 'list', version: 8 };
+  vi.stubGlobal('fetch', vi.fn(async (input: URL | string, init: RequestInit = {}) => {
+    const path = new URL(String(input)).pathname;
+    calls.push({ path, init });
+    const body = path === '/v1/resources/w/children' ? { value: [collection] } : path === '/v1/resources/list/children' ? { value: [resource('folder', 'Archive', 'folder')] } : path.endsWith('/move-selection') ? [{ id: 'a', version: 4 }, { id: 'b', version: 9 }] : { value: [] };
+    return new Response(stringifyJSON(body));
+  }));
+  const moved = vi.fn();
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MoveDialog item={a} items={[a, b]} collection={collection} onClose={vi.fn()} onMoved={moved} /></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Archive' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Move here' }));
+  await waitFor(() => expect(moved).toHaveBeenCalled());
+  const bulk = calls.filter(call => call.path.endsWith('/move-selection'));
+  expect(bulk).toHaveLength(1);
+  expect(parseJSON(String(bulk[0].init.body))).toEqual({ parent_id: 'folder', items: [{ id: 'a', version: 3 }, { id: 'b', version: 8 }] });
+});

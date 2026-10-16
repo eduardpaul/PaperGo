@@ -10,7 +10,7 @@ import {
   startOfWeek,
 } from 'date-fns';
 import { File, Folder, MoreHorizontal } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api/http';
 import { useApiPages } from '@/api/pages';
@@ -33,6 +33,7 @@ import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 
 type LayoutProps = {
+  renderItem?: (item: Resource, element: ReactElement) => ReactNode;
   items: Resource[];
   fields: FieldDefinition[];
   /** Names of people, terms and looked-up items in the values. */
@@ -53,12 +54,11 @@ function CardFields({ item, fields, names }: { item: Resource; fields: FieldDefi
   );
 }
 
-export function ItemsGallery({ items, fields, names, onOpen }: LayoutProps) {
+export function ItemsGallery({ items, fields, names, onOpen, renderItem }: LayoutProps) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {items.map((item) => (
-        <li key={item.id}>
-          <button
+      {items.map((item) => {
+        const card = <button
             type="button"
             className="grid w-full gap-2 rounded-lg border bg-surface p-3 text-left shadow-xs hover:border-accent"
             onClick={() => onOpen(item)}
@@ -68,9 +68,9 @@ export function ItemsGallery({ items, fields, names, onOpen }: LayoutProps) {
               {item.name}
             </span>
             <CardFields item={item} fields={fields} names={names} />
-          </button>
-        </li>
-      ))}
+          </button>;
+        return <li key={item.id}>{renderItem ? renderItem(item, card) : card}</li>;
+      })}
     </ul>
   );
 }
@@ -94,12 +94,14 @@ export function ItemsBoard({
   groupBy,
   readOnly,
   onOpen,
+  renderItem,
 }: {
   collectionId: string;
   view: ListView;
   fields: FieldDefinition[];
   groupBy?: FieldDefinition;
   readOnly?: boolean;
+  renderItem?: LayoutProps['renderItem'];
   onOpen: (item: Resource) => void;
 }) {
   const client = useQueryClient();
@@ -169,6 +171,7 @@ export function ItemsBoard({
             <span className="text-muted">{groups.isSuccess ? format.number(counts.get(column) ?? 0) : ''}</span>
           </h3>
           <BoardColumn
+            renderItem={renderItem}
             collectionId={collectionId}
             view={view}
             filter={boardColumnFilter(groupBy.key, column)}
@@ -195,6 +198,7 @@ function BoardColumn({
   targets,
   onMove,
   onOpen,
+  renderItem,
 }: {
   collectionId: string;
   view: ListView;
@@ -203,6 +207,7 @@ function BoardColumn({
   readOnly?: boolean;
   column: string;
   targets: string[];
+  renderItem?: LayoutProps['renderItem'];
   onMove: (item: Resource, value: string) => void;
   onOpen: (item: Resource) => void;
 }) {
@@ -214,8 +219,8 @@ function BoardColumn({
   return (
     <div className="overflow-y-auto">
       <ul className="grid min-h-16 gap-2 p-2">
-        {cards.items.map((item) => (
-          <li
+        {cards.items.map((item) => {
+          const card = <li
             key={item.id}
             draggable={!readOnly && item.kind === 'item'}
             onDragStart={(event) =>
@@ -244,8 +249,9 @@ function BoardColumn({
               )}
             </div>
             <CardFields item={item} fields={fields} names={names} />
-          </li>
-        ))}
+          </li>;
+          return renderItem ? renderItem(item, card) : card;
+        })}
       </ul>
       {cards.items.length === 0 && <p className="px-3 pb-3 text-xs text-muted">Nothing here</p>}
       {cards.hasNextPage && (

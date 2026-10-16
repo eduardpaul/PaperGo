@@ -10,6 +10,7 @@ import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { QueryFeedback } from '@/features/admin/common';
 import { useAccess } from '@/features/lists/access';
 import { CollectionIcon } from '@/features/lists/collection-icon';
+import { PlaceContextMenu } from '@/features/workspaces/place-context-menu';
 import { NewCollectionDialog } from '@/features/workspaces/new-collection-dialog';
 import { useFormat } from '@/lib/preferences';
 
@@ -75,7 +76,7 @@ function WorkspacePage() {
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {collections.data.map((collection) => (
             <li key={collection.id}>
-              <Link
+              <PlaceContextMenu resource={collection}><Link
                 to="/w/$workspaceId/l/$listId"
                 params={{ workspaceId, listId: collection.id }}
                 className="group block h-full"
@@ -92,7 +93,7 @@ function WorkspacePage() {
                     <span className="text-xs text-muted">Updated {format.relative(collection.updated_at)}</span>
                   )}
                 </Card>
-              </Link>
+              </Link></PlaceContextMenu>
             </li>
           ))}
         </ul>
