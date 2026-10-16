@@ -9,7 +9,7 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 | `github.com/blevesearch/snowballstem` | word stems for search in the `SEARCH_LANGUAGES` (`internal/search` only): the Snowball project's generated stemmers | BSD-3-Clause |
 | `github.com/coreos/go-oidc/v3` | OIDC bearer token verification | Apache-2.0 |
 | `github.com/dbos-inc/dbos-transact-golang` | the embedded workflow runner (`internal/runner` only) | MIT |
-| `github.com/yalue/onnxruntime_go` | cgo ONNX Runtime binding shared by OCR and embeddings | MIT |
+| `github.com/yalue/onnxruntime_go` | cgo ONNX Runtime binding shared by OCR, embeddings and decisions | MIT |
 | `github.com/zvec-ai/zvec-go` | cgo search SDK, pinned to the `eduardpaul/zvec-go` string-array fix | Apache-2.0 |
 | `github.com/klippa-app/go-pdfium` | cgo PDF text reading and rendering | MIT |
 | `github.com/daulet/tokenizers` | statically linked Hugging Face Rust tokenizer | MIT |
@@ -60,3 +60,10 @@ The optional [zvec store](search.md#the-store) uses the official v0.7.0 C API SD
 | Boost | BSL-1.0 |
 
 MIT, Apache-2.0, BSD, ISC, zlib, BSL-1.0 and PostgreSQL licenses are allowed. The GCC Runtime Library Exception permits distributing the SDK's compiler runtimes without applying GPL terms to PaperGo. ONNX Runtime's Eigen dependency includes MPL-2.0 files; its upstream notices and source reference ship with the library.
+
+The optional local decision engine uses Laya multilingual FP32, checkpoint
+`1720e3e3357cfe1e281542e223f8273b0890ca34` (Apache-2.0). Its verified bundle includes
+model/tokenizer hashes, graph provenance, LICENSE and NOTICE. The Go marker
+serialization retains upstream attribution in `internal/decision/NOTICE`.
+See [model build/install](../scripts/decision-model/README.md). Python and PyTorch
+are model-build dependencies; they are not application runtime dependencies.

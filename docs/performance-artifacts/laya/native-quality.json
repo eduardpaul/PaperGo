@@ -1,0 +1,256 @@
+{
+  "matched_binary": [
+    {
+      "threshold": 0.5,
+      "true_positive": 20,
+      "false_positive": 20,
+      "false_negative": 0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1": 0.6666666666666666,
+      "exact_documents": 11,
+      "documents": 19
+    },
+    {
+      "threshold": 0.6,
+      "true_positive": 19,
+      "false_positive": 12,
+      "false_negative": 1,
+      "precision": 0.6129032258064516,
+      "recall": 0.95,
+      "f1": 0.7450980392156863,
+      "exact_documents": 13,
+      "documents": 19
+    },
+    {
+      "threshold": 0.7,
+      "true_positive": 18,
+      "false_positive": 8,
+      "false_negative": 2,
+      "precision": 0.6923076923076923,
+      "recall": 0.9,
+      "f1": 0.7826086956521738,
+      "exact_documents": 12,
+      "documents": 19
+    },
+    {
+      "threshold": 0.8,
+      "true_positive": 18,
+      "false_positive": 3,
+      "false_negative": 2,
+      "precision": 0.8571428571428571,
+      "recall": 0.9,
+      "f1": 0.8780487804878048,
+      "exact_documents": 15,
+      "documents": 19
+    },
+    {
+      "threshold": 0.9,
+      "true_positive": 15,
+      "false_positive": 1,
+      "false_negative": 5,
+      "precision": 0.9375,
+      "recall": 0.75,
+      "f1": 0.8333333333333334,
+      "exact_documents": 13,
+      "documents": 19
+    }
+  ],
+  "native_noul": [
+    {
+      "threshold": 0.5,
+      "true_positive": 20,
+      "false_positive": 45,
+      "false_negative": 0,
+      "precision": 0.3076923076923077,
+      "recall": 1.0,
+      "f1": 0.47058823529411764,
+      "exact_documents": 4,
+      "documents": 19
+    },
+    {
+      "threshold": 0.6,
+      "true_positive": 20,
+      "false_positive": 38,
+      "false_negative": 0,
+      "precision": 0.3448275862068966,
+      "recall": 1.0,
+      "f1": 0.5128205128205129,
+      "exact_documents": 5,
+      "documents": 19
+    },
+    {
+      "threshold": 0.7,
+      "true_positive": 20,
+      "false_positive": 28,
+      "false_negative": 0,
+      "precision": 0.4166666666666667,
+      "recall": 1.0,
+      "f1": 0.5882352941176471,
+      "exact_documents": 5,
+      "documents": 19
+    },
+    {
+      "threshold": 0.8,
+      "true_positive": 20,
+      "false_positive": 22,
+      "false_negative": 0,
+      "precision": 0.47619047619047616,
+      "recall": 1.0,
+      "f1": 0.6451612903225806,
+      "exact_documents": 6,
+      "documents": 19
+    },
+    {
+      "threshold": 0.9,
+      "true_positive": 18,
+      "false_positive": 14,
+      "false_negative": 2,
+      "precision": 0.5625,
+      "recall": 0.9,
+      "f1": 0.6923076923076923,
+      "exact_documents": 11,
+      "documents": 19
+    }
+  ],
+  "neutral_choice": [
+    {
+      "threshold": 0.5,
+      "true_positive": 4,
+      "false_positive": 12,
+      "false_negative": 16,
+      "precision": 0.25,
+      "recall": 0.2,
+      "f1": 0.22222222222222224,
+      "exact_documents": 2,
+      "documents": 19
+    },
+    {
+      "threshold": 0.6,
+      "true_positive": 2,
+      "false_positive": 5,
+      "false_negative": 18,
+      "precision": 0.2857142857142857,
+      "recall": 0.1,
+      "f1": 0.14814814814814817,
+      "exact_documents": 3,
+      "documents": 19
+    },
+    {
+      "threshold": 0.7,
+      "true_positive": 0,
+      "false_positive": 2,
+      "false_negative": 20,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0,
+      "exact_documents": 3,
+      "documents": 19
+    },
+    {
+      "threshold": 0.8,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 20,
+      "precision": 0,
+      "recall": 0.0,
+      "f1": 0,
+      "exact_documents": 3,
+      "documents": 19
+    },
+    {
+      "threshold": 0.9,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 20,
+      "precision": 0,
+      "recall": 0.0,
+      "f1": 0,
+      "exact_documents": 3,
+      "documents": 19
+    }
+  ],
+  "single_choice": {
+    "correct": 17,
+    "total": 19,
+    "labels": [
+      {
+        "id": "en-energy",
+        "label": "electricity"
+      },
+      {
+        "id": "es-energy",
+        "label": "electricity"
+      },
+      {
+        "id": "ca-energy",
+        "label": "electricity"
+      },
+      {
+        "id": "en-lease",
+        "label": "contract"
+      },
+      {
+        "id": "es-lease",
+        "label": "contract"
+      },
+      {
+        "id": "ca-lease",
+        "label": "contract"
+      },
+      {
+        "id": "en-premium",
+        "label": "insurance"
+      },
+      {
+        "id": "es-claim",
+        "label": "insurance"
+      },
+      {
+        "id": "ca-payslip",
+        "label": "employment"
+      },
+      {
+        "id": "en-payslip",
+        "label": "employment"
+      },
+      {
+        "id": "es-bank",
+        "label": "banking"
+      },
+      {
+        "id": "en-bank",
+        "label": "banking"
+      },
+      {
+        "id": "ca-medical",
+        "label": "medical"
+      },
+      {
+        "id": "en-medical",
+        "label": "medical"
+      },
+      {
+        "id": "es-flight",
+        "label": "travel"
+      },
+      {
+        "id": "ca-hotel",
+        "label": "travel"
+      },
+      {
+        "id": "en-meeting",
+        "label": "contract"
+      },
+      {
+        "id": "es-recipe",
+        "label": null
+      },
+      {
+        "id": "en-negation",
+        "label": "contract"
+      }
+    ]
+  },
+  "all_tag_sets_match_python": true
+}

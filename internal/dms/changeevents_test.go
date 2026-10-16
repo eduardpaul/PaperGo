@@ -1,9 +1,11 @@
 package dms
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"slices"
+	"strconv"
 	"testing"
 
 	"papergo/ent"
@@ -176,7 +178,7 @@ func TestTermChangedEventsFanOutAndRollback(t *testing.T) {
 		}
 		delete(workspaces, e.WorkspaceID)
 		before, after := e.Data["previous"].(map[string]any), e.Data["current"].(map[string]any)
-		if e.Data["term_id"] != term.ID || e.Data["term_set_id"] != set.ID || e.Data["version"] != float64(updated.Version) || before["name"] != "Finance" || after["name"] != "Accounting" || after["labels"].(map[string]any)["es"] != "Contabilidad" || !reflect.DeepEqual(e.Data["changed_fields"], []any{"description", "labels", "name"}) {
+		if e.Data["term_id"] != term.ID || e.Data["term_set_id"] != set.ID || e.Data["version"] != json.Number(strconv.Itoa(updated.Version)) || before["name"] != "Finance" || after["name"] != "Accounting" || after["labels"].(map[string]any)["es"] != "Contabilidad" || !reflect.DeepEqual(e.Data["changed_fields"], []any{"description", "labels", "name"}) {
 			t.Fatal(e.Data)
 		}
 	}

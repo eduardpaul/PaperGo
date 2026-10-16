@@ -13,6 +13,7 @@ import (
 	"papergo/internal/buildinfo"
 	"papergo/internal/config"
 	"papergo/internal/database"
+	"papergo/internal/decision"
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
 	"papergo/internal/httpapi"
@@ -174,7 +175,19 @@ func run(log *slog.Logger) error {
 	if chat != nil {
 		log.Info("ai steps enabled", "model", chat.Key())
 	}
+	var decisions *decision.Engine
+	if c.Decisions.Models != "" {
+		decisions, err = decision.New(c.Decisions)
+		if err != nil {
+			return fmt.Errorf("configure decisions: %w", err)
+		}
+		defer decisions.Close()
+		log.Info("local decisions enabled", "model", decisions.ID())
+	}
 	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload, Search: index, Embeddings: embeddings, Chat: chat, Results: resultcache.New(db.SQL), ResultTTL: c.RunRetention, Languages: c.SearchLanguages}
+	if decisions != nil {
+		tools.Decisions = decisions
+	}
 	tools.PDF = pdfium.New()
 	log.Info("pdf reading enabled", "reader", tools.PDF.Name())
 	if c.OCRLibrary != "" {

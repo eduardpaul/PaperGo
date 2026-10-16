@@ -5,6 +5,7 @@ import (
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	"papergo/internal/model"
 	"time"
 )
 
@@ -22,7 +23,7 @@ func (DomainEvent) Fields() []ent.Field {
 		field.String("collection_id").Optional().Nillable().Immutable(),
 		field.String("resource_id").Optional().Nillable().Immutable(),
 		field.String("actor").Immutable(),
-		field.JSON("data", map[string]any{}).Default(map[string]any{}).Immutable(),
+		field.JSON("data", model.JSONMap{}).Default(model.JSONMap{}).Immutable(),
 		field.Int("depth").NonNegative().Immutable(),
 		// CauseRunID is the workflow run whose step made the change, if any.
 		field.String("cause_run_id").Optional().Nillable().Immutable(),

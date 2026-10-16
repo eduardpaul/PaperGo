@@ -19979,6 +19979,7 @@
       },
       "WorkflowNode": {
         "type": "object",
+        "description": "A catalog activity with literal or token inputs. ai.decide accepts exactly one source (input, JSON data, or text_id with blob_id) and ordered typed questions. taxonomy.decide accepts the same sources and a managed term_set_id, returning term_ids and provenance guards. item.update accepts expected_version, expected_blob_id and expected_taxonomy as transactional preconditions. See docs/decisions.md and the catalog input/output schemas.",
         "properties": {
           "activity": {
             "type": "string"
@@ -20659,7 +20660,7 @@
       "WorkflowForm": {
         "type": "object",
         "additionalProperties": true,
-        "description": "A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required. x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people)."
+        "description": "A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id."
       },
       "TagCount": {
         "type": "object",

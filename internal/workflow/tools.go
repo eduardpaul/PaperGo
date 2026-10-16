@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"papergo/internal/ai"
+	"papergo/internal/decision"
 	"papergo/internal/doctext"
 	"papergo/internal/ocr"
 	"papergo/internal/resultcache"
@@ -18,7 +19,9 @@ import (
 // Tools are what activities with heavy work use in their work steps,
 // outside any transaction.
 type Tools struct {
-	Storage storage.Store
+	// Decisions is the single local decision engine shared by both actions.
+	Decisions decision.Model
+	Storage   storage.Store
 	// OCR reads text in images; nil when the deployment has no OCR.
 	OCR ocr.Engine
 	// PDF reads PDFs' text layers and renders their pages for OCR; nil

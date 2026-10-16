@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"papergo/internal/ai"
+	"papergo/internal/decision"
 	"papergo/internal/identity"
 	"papergo/internal/search"
 	"path/filepath"
@@ -74,6 +75,8 @@ type Config struct {
 	// Embeddings is the embedding model of semantic search
 	// (AI_EMBEDDINGS_*); off by default.
 	Embeddings ai.EmbeddingsConfig
+	// Decisions is the optional local Laya engine.
+	Decisions decision.Config
 	// Chat is the chat model of AI workflow steps (AI_CHAT_*); off by
 	// default.
 	Chat              ai.ChatConfig
@@ -153,6 +156,9 @@ func Load() (Config, error) {
 	}
 	c.OCRLibrary, c.OCRModels, c.OCRThreads = os.Getenv("ONNXRUNTIME_LIB"), value("OCR_MODELS", "models/paddleocr"), 1
 	if err := c.loadEmbeddings(); err != nil {
+		return c, err
+	}
+	if err := c.loadDecisions(); err != nil {
 		return c, err
 	}
 	if err := c.loadChat(); err != nil {
@@ -463,4 +469,30 @@ func readAPIKey(path string) (string, error) {
 		return "", fmt.Errorf("the API key must be one line of at most 4096 bytes")
 	}
 	return key, nil
+}
+
+func (c *Config) loadDecisions() error {
+	d := decision.Config{Models: os.Getenv("AI_DECISION_MODELS_PATH"), Library: c.OCRLibrary}
+	if d.Models == "" {
+		return nil
+	}
+	for _, n := range []struct {
+		key  string
+		into *int
+	}{
+		{"AI_DECISION_THREADS", &d.Threads}, {"AI_DECISION_MAX_TOKENS", &d.MaxTokens}, {"AI_DECISION_HEAD_TOKENS", &d.HeadTokens},
+	} {
+		if v := os.Getenv(n.key); v != "" {
+			parsed, err := strconv.Atoi(v)
+			if err != nil || parsed <= 0 {
+				return fmt.Errorf("%s must be a positive integer", n.key)
+			}
+			*n.into = parsed
+		}
+	}
+	if _, err := decision.New(d); err != nil {
+		return fmt.Errorf("AI_DECISION: %w", err)
+	}
+	c.Decisions = d
+	return nil
 }

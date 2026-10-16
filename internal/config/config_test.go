@@ -327,3 +327,32 @@ func TestZvecPathDoesNotOverlapData(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDecisionConfiguration(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("AUTH_MODE", "development")
+	t.Setenv("DEV_TOKEN", "0123456789abcdef0123456789abcdef")
+	t.Setenv("AI_DECISION_MODELS_PATH", "")
+	t.Setenv("ONNXRUNTIME_LIB", "")
+	c, err := Load()
+	if err != nil || c.Decisions.Models != "" {
+		t.Fatal("decisions must be optional", c.Decisions, err)
+	}
+	t.Setenv("AI_DECISION_MODELS_PATH", "models/decision")
+	if _, err = Load(); err == nil {
+		t.Fatal("enabled decisions without native library")
+	}
+	t.Setenv("ONNXRUNTIME_LIB", "/lib/libonnxruntime.so")
+	c, err = Load()
+	if err != nil || c.Decisions.Models != "models/decision" || c.Decisions.Library != c.OCRLibrary {
+		t.Fatal(c.Decisions, err)
+	}
+	for key, value := range map[string]string{"AI_DECISION_THREADS": "33", "AI_DECISION_MAX_TOKENS": "1025", "AI_DECISION_HEAD_TOKENS": "257"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv(key, value)
+			if _, err := Load(); err == nil {
+				t.Fatal("accepted unsupported setting", key, value)
+			}
+		})
+	}
+}

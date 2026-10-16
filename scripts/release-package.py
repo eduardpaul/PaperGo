@@ -38,6 +38,8 @@ def main():
     for notice in sorted((native / 'notices').rglob('*')):
         if notice.is_file():
             inputs['notices/' + notice.relative_to(native / 'notices').as_posix()] = notice
+    for name in ("LICENSE", "NOTICE"):
+        inputs["notices/decision/" + name] = root / "internal/decision" / name
     bundle = json.loads(inputs["release-database.json"].read_text())
     if bundle["releases"][-1]["version"] != args.version:
         raise ValueError("Packaged bundle does not match release tag")

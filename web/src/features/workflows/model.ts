@@ -9,6 +9,10 @@ export interface FormSchema {
   default?: unknown;
   enum?: unknown[];
   properties?: Record<string, FormSchema>;
+  additionalProperties?: boolean | FormSchema;
+  "x-term-set-sibling"?: string;
+  "x-term-set-bound"?: boolean;
+  "x-decision-questions"?: boolean;
   required?: string[];
   items?: FormSchema;
   format?: string;
@@ -21,6 +25,7 @@ export interface FormSchema {
   maxItems?: number;
   "x-papergo"?: {
     kind: string;
+    select?: "terms" | "sets";
     collection_id?: string;
     term_set_id?: string;
     group_id?: string;
@@ -78,6 +83,7 @@ export interface Activity {
   ports_from?: "outcomes";
   terminal?: boolean;
   input_schema: FormSchema;
+  output_schema?: FormSchema;
 }
 
 /** The ports a node can connect besides done and error, as the server checks them. */
@@ -188,4 +194,47 @@ export function renameNode(
     ),
   };
   return updated;
+}
+
+/** Token paths use the authored question keys and the catalog's output schema. */
+export function activityOutputPaths(activity: Activity | undefined, inputs: Record<string, unknown> | undefined): string[] {
+ if (activity?.key === 'ai.decide' && Array.isArray(inputs?.questions)) {
+  return inputs.questions.flatMap((q: {key?: string; type?: string} | null) => q?.key ?
+   ['selected','probability','probabilities',...(q.type==='noul'?['noul']:q.type==='score'?['score']:[])].map(field=>`answers.${q.key}.${field}`) : []);
+ }
+ return Object.keys(activity?.output_schema?.properties ?? {});
+}
+
+export function decisionQuestionErrors(questions: unknown[]): string[] {
+ const errors:string[]=[];const keys=new Set<string>();
+ if (questions.length<1||questions.length>32) errors.push('Use 1–32 questions.');
+ let total=0;
+ for (const [index,raw] of questions.entries()) {
+  if (!raw||typeof raw!=='object') continue;
+  const q=raw as {key?:string;type?:string;instructions?:string;options?:{key?:string;text?:string}[]|string};
+  const label=`Question ${index+1}`;
+  if (!q.key?.trim()) errors.push(`${label}: a key is required.`);
+  if (q.key&&!q.key.includes('{')) {
+   if (!/^[a-z][a-z0-9_]{0,63}$/.test(q.key)||keys.has(q.key)) errors.push(`${label}: use a unique lowercase identifier.`);
+   keys.add(q.key);
+  }
+  if (!q.instructions?.trim()) errors.push(`${label}: instructions are required.`);
+  // Token mode holds a string, including an empty one while it is being edited.
+  // Its array shape and option semantics are checked after runtime resolution.
+  if (typeof q.options==='string') continue;
+  const options=Array.isArray(q.options)?q.options:[];total+=options.length;
+  if (options.length<2||options.length>20) errors.push(`${label}: use 2–20 ordered options.`);
+  if (q.type==='noul' && (options.length!==2||options[0]?.key!=='false'||options[1]?.key!=='true')) errors.push(`${label}: noul requires false then true, in that order.`);
+  const optionKeys=new Set<string>(),texts=new Set<string>();
+  for (const [i,option] of options.entries()) {
+   if (!option.key?.trim()) errors.push(`${label}: option keys are required.`);
+   if (option.key&&!option.key.includes('{') && (!/^[A-Za-z0-9_-]{1,64}$/.test(option.key)||optionKeys.has(option.key))) errors.push(`${label}: option keys must be unique, without dots.`);
+   if (option.key) optionKeys.add(option.key);
+   const text=q.type==='score'?`level ${i}: ${option.text}`:q.type==='noul'?`${option.key}: ${option.text}`:option.text;
+   if (!option.text?.trim() || (text && texts.has(text))) errors.push(`${label}: use nonempty, distinct rendered option texts.`);
+   if (text) texts.add(text);
+  }
+ }
+ if (total>256) errors.push('Use at most 256 option entries across all questions.');
+ return [...new Set(errors)];
 }

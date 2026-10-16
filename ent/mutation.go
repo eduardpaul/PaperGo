@@ -6244,7 +6244,7 @@ type DomainEventMutation struct {
 	collection_id *string
 	resource_id   *string
 	actor         *string
-	data          *map[string]interface{}
+	data          *model.JSONMap
 	depth         *int
 	adddepth      *int
 	cause_run_id  *string
@@ -6603,12 +6603,12 @@ func (m *DomainEventMutation) ResetActor() {
 }
 
 // SetData sets the "data" field.
-func (m *DomainEventMutation) SetData(value map[string]interface{}) {
-	m.data = &value
+func (m *DomainEventMutation) SetData(mm model.JSONMap) {
+	m.data = &mm
 }
 
 // Data returns the value of the "data" field in the mutation.
-func (m *DomainEventMutation) Data() (r map[string]interface{}, exists bool) {
+func (m *DomainEventMutation) Data() (r model.JSONMap, exists bool) {
 	v := m.data
 	if v == nil {
 		return
@@ -6619,7 +6619,7 @@ func (m *DomainEventMutation) Data() (r map[string]interface{}, exists bool) {
 // OldData returns the old "data" field's value of the DomainEvent entity.
 // If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DomainEventMutation) OldData(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *DomainEventMutation) OldData(ctx context.Context) (v model.JSONMap, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldData is only allowed on UpdateOne operations")
 	}
@@ -7022,7 +7022,7 @@ func (m *DomainEventMutation) SetField(name string, value ent.Value) error {
 		m.SetActor(v)
 		return nil
 	case domainevent.FieldData:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(model.JSONMap)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

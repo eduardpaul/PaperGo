@@ -3,6 +3,7 @@
 package domainevent
 
 import (
+	"papergo/internal/model"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -73,7 +74,7 @@ var (
 	// WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
 	WorkspaceIDValidator func(string) error
 	// DefaultData holds the default value on creation for the "data" field.
-	DefaultData map[string]interface{}
+	DefaultData model.JSONMap
 	// DepthValidator is a validator for the "depth" field. It is called by the builders before save.
 	DepthValidator func(int) error
 )

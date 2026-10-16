@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Checkbox, Select } from '@/components/ui/select';
-import { formDefaults } from './model';
+import { decisionQuestionErrors, formDefaults } from './model';
 import type { FormSchema } from './model';
 
 export function JsonInput({
@@ -67,7 +67,7 @@ export function SchemaFields({
       {Object.entries(schema.properties ?? {}).map(([key, property]) => (
         <SchemaValue
           key={key}
-          schema={property}
+          schema={resolvePickerSchema(property, data)}
           value={data[key]}
           label={property.title ?? key}
           required={schema.required?.includes(key)}
@@ -77,6 +77,11 @@ export function SchemaFields({
             const next = { ...data };
             if (value === undefined) delete next[key];
             else next[key] = value;
+            if (value !== data[key]) {
+              for (const [dependent, config] of Object.entries(schema.properties ?? {})) {
+                if (config['x-term-set-sibling'] === key) delete next[dependent];
+              }
+            }
             onChange(next);
           }}
         />
@@ -182,7 +187,7 @@ function SchemaValue({
             <Checkbox id={id} checked={value === true} onChange={(event) => onChange(event.target.checked)} />
             Yes
           </label>
-        ) : schema.type === 'object' && schema.properties ? (
+        ) : schema.type === 'object' && schema.properties && !schema.additionalProperties ? (
           <SchemaFields
             schema={schema}
             data={(value as Record<string, unknown>) ?? {}}
@@ -191,42 +196,7 @@ function SchemaValue({
             onChange={onChange}
           />
         ) : schema.type === 'array' ? (
-          <div className="grid gap-2">
-            {(Array.isArray(value) ? value : []).map((entry, index, entries) => (
-              <div key={index} className="rounded border p-2">
-                <SchemaValue
-                  schema={schema.items ?? { type: 'string' }}
-                  value={entry}
-                  onChange={(next) => onChange(entries.map((current, i) => (i === index ? next : current)))}
-                  label={`${label} ${index + 1}`}
-                  required
-                  workspaceId={workspaceId}
-                  tokens={tokens}
-                />
-                <Button size="sm" onClick={() => onChange(entries.filter((_, i) => i !== index))}>
-                  Remove
-                </Button>
-              </div>
-            ))}
-            <Button
-              size="sm"
-              onClick={() =>
-                onChange([
-                  ...(Array.isArray(value) ? value : []),
-                  schema.items?.default ??
-                    (schema.items?.type === 'object'
-                      ? formDefaults(schema.items)
-                      : schema.items?.type === 'boolean'
-                        ? false
-                        : schema.items?.type === 'array'
-                          ? []
-                          : ''),
-                ])
-              }
-            >
-              Add {label.toLowerCase()}
-            </Button>
-          </div>
+          <ArrayValues schema={schema} value={value} onChange={onChange} label={label} workspaceId={workspaceId} tokens={tokens}/>
         ) : schema.type === 'object' ? (
           <JsonInput value={value ?? {}} onChange={onChange} label={label} />
         ) : (
@@ -266,13 +236,17 @@ function DomainPicker({
   const people = useQuery({ ...peopleQuery, enabled: domain.kind === 'people' });
   const candidates = useQuery({
     queryKey: ['workflow-inputs', workspaceId, domain, text],
-    enabled: domain.kind !== 'people',
+    enabled: domain.kind !== 'people' && !((schema['x-term-set-sibling'] || schema['x-term-set-bound']) && !domain.term_set_id),
     queryFn: async () => {
       if (domain.kind === 'keywords')
         return (await api<{ value: Term[] }>('/v1/keywords', { query: { q: text, $top: 50 } })).data.value.map(
           (term) => ({ value: term.id, label: term.name }),
         );
       if (domain.kind === 'terms') {
+        if (domain.select === 'sets')
+          return (await allPages<{ id: string; name: string }>('/v1/term-sets', { group_id: domain.group_id }))
+            .filter((set) => set.name.toLowerCase().includes(text.toLowerCase()))
+            .map((set) => ({ value: set.id, label: set.name }));
         if (domain.term_ids?.length)
           return (
             await api<{ value: Term[] }>('/v1/terms', { query: { ids: domain.term_ids.join(',') } })
@@ -326,4 +300,57 @@ function DomainPicker({
       onChange={(values) => onChange(schema.type === 'array' ? values.map((option) => option.value) : values[0]?.value)}
     />
   );
+}
+
+export function resolvePickerSchema(schema: FormSchema, data: Record<string, unknown>): FormSchema {
+ const dependency=schema['x-term-set-sibling'];
+ if (!dependency) return schema;
+ const set=data[dependency];
+ const staticSet=typeof set==='string' && !set.includes('{') ? set : undefined;
+ const dynamic=typeof set==='string' && set.includes('{');
+ function bind(current:FormSchema):FormSchema {
+  const next={...current};
+  if (next['x-papergo']?.kind==='terms') {
+   next['x-papergo']={...next['x-papergo'],term_set_id:staticSet};
+   next['x-term-set-bound']=true;
+  }
+  if (next.properties) next.properties=Object.fromEntries(Object.entries(next.properties).map(([key,child])=>[key,bind(child)]));
+  if (next.items) next.items=bind(next.items);
+  return next;
+ }
+ return {...bind(schema),description:dynamic ?
+  'The term set is a token. Supply term IDs with tokens; membership is checked when the workflow runs.' : schema.description};
+}
+
+function ArrayValues({schema,value,onChange,label,workspaceId,tokens}: {
+ schema:FormSchema; value:unknown; onChange:(value:unknown)=>void; label:string; workspaceId:string; tokens:boolean;
+}) {
+ const prefix=useId();
+ const entries=Array.isArray(value)?value:[];
+ const [ids,setIds]=useState(()=>entries.map((_,i)=>`${prefix}:${i}`));
+ const [serial,setSerial]=useState(entries.length);
+ const errors=schema['x-decision-questions'] ? decisionQuestionErrors(entries) : [];
+ function move(index:number,offset:number) {
+  const next=[...entries],keys=[...ids];
+  [next[index],next[index+offset]]=[next[index+offset],next[index]];
+  [keys[index],keys[index+offset]]=[keys[index+offset],keys[index]];
+  setIds(keys);onChange(next);
+ }
+ return <div className="grid gap-2">
+  {entries.map((entry,index)=><div key={ids[index]??`${prefix}:external:${index}`} className="rounded border p-2">
+   <SchemaValue schema={schema.items??{type:'string'}} value={entry}
+    onChange={next=>onChange(entries.map((current,i)=>i===index?next:current))}
+    label={`${label} ${index+1}`} required workspaceId={workspaceId} tokens={tokens}/>
+   <div className="flex gap-2">
+    <Button size="sm" disabled={index===0} onClick={()=>move(index,-1)}>Move up</Button>
+    <Button size="sm" disabled={index===entries.length-1} onClick={()=>move(index,1)}>Move down</Button>
+    <Button size="sm" onClick={()=>{setIds(ids.filter((_,i)=>i!==index));onChange(entries.filter((_,i)=>i!==index))}}>Remove</Button>
+   </div>
+  </div>)}
+  <Button size="sm" disabled={schema.maxItems!==undefined && entries.length>=schema.maxItems} onClick={()=>{
+   setIds([...ids,`${prefix}:${serial}`]);setSerial(serial+1);
+   onChange([...entries,schema.items?.default??(schema.items?.type==='object'?formDefaults(schema.items):schema.items?.type==='boolean'?false:schema.items?.type==='array'?[]:'')]);
+  }}>Add {label.toLowerCase()}</Button>
+  {errors.map(error=><p key={error} role="alert" className="text-xs text-danger">{error}</p>)}
+ </div>;
 }

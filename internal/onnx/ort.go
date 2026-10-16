@@ -1,4 +1,4 @@
-// Package onnx shares a cgo ONNX Runtime environment between OCR and embeddings.
+// Package onnx shares a cgo ONNX Runtime environment between local models.
 package onnx
 
 import (
@@ -47,13 +47,15 @@ type Session struct {
 	session                   *ort.DynamicAdvancedSession
 	Inputs, Outputs           []string
 	InputShapes, OutputShapes [][]int64
+	InputTypes, OutputTypes   []string
 }
 
-// Tensor is a float32 or int64 tensor in model input/output order.
+// Tensor is a float32, int64 or bool tensor in model input/output order.
 type Tensor struct {
 	Shape   []int64
 	Float32 []float32
 	Int64   []int64
+	Bool    []bool
 }
 
 // NewSession loads a self-contained model from bytes.
@@ -114,10 +116,12 @@ func newSession(threads int,
 	s := &Session{}
 	for _, input := range inputs {
 		s.Inputs = append(s.Inputs, input.Name)
+		s.InputTypes = append(s.InputTypes, tensorType(input.DataType))
 		s.InputShapes = append(s.InputShapes, slices.Clone(input.Dimensions))
 	}
 	for _, output := range outputs {
 		s.Outputs = append(s.Outputs, output.Name)
+		s.OutputTypes = append(s.OutputTypes, tensorType(output.DataType))
 		s.OutputShapes = append(s.OutputShapes, slices.Clone(output.Dimensions))
 	}
 	s.session, err = create(s.Inputs, s.Outputs, opts)
@@ -181,12 +185,20 @@ func (s *Session) Run(ctx context.Context, inputs []Tensor) ([]Tensor, error) {
 		if err != nil {
 			return nil, err
 		}
-		size := len(input.Float32)
+		size, types := len(input.Float32), 0
+		if input.Float32 != nil {
+			types++
+		}
 		if input.Int64 != nil {
 			size = len(input.Int64)
-			if input.Float32 != nil {
-				return nil, errors.New("tensor has two data types")
-			}
+			types++
+		}
+		if input.Bool != nil {
+			size = len(input.Bool)
+			types++
+		}
+		if types > 1 {
+			return nil, errors.New("tensor has multiple data types")
 		}
 		if n != size {
 			return nil, fmt.Errorf("tensor shape %v does not hold %d values", input.Shape, size)
@@ -196,6 +208,11 @@ func (s *Session) Run(ctx context.Context, inputs []Tensor) ([]Tensor, error) {
 				pinned.Pin(&input.Int64[0])
 			}
 			values[i], err = ort.NewTensor(ort.NewShape(input.Shape...), input.Int64)
+		} else if input.Bool != nil {
+			if n > 0 {
+				pinned.Pin(&input.Bool[0])
+			}
+			values[i], err = ort.NewTensor(ort.NewShape(input.Shape...), input.Bool)
 		} else {
 			if n > 0 {
 				pinned.Pin(&input.Float32[0])
@@ -245,5 +262,18 @@ func (s *Session) Close() {
 	if s.session != nil {
 		_ = s.session.Destroy()
 		s.session = nil
+	}
+}
+
+func tensorType(t ort.TensorElementDataType) string {
+	switch t {
+	case ort.TensorElementDataTypeInt64:
+		return "int64"
+	case ort.TensorElementDataTypeBool:
+		return "bool"
+	case ort.TensorElementDataTypeFloat:
+		return "float32"
+	default:
+		return t.String()
 	}
 }

@@ -1,0 +1,33 @@
+{
+  "model": "convaiinnovations/laya-multilingual",
+  "revision": "1720e3e3357cfe1e281542e223f8273b0890ca34",
+  "export_source_revision": "4ac226d5ee88ed6df8db288a05c766d7a34ee682",
+  "torch": "2.8.0+cpu",
+  "encoding": "markers-v1",
+  "rendering": "typed-options-v1",
+  "temperatures": {
+    "choice": 1,
+    "noul": 1,
+    "score": 1
+  },
+  "max_tokens": 1024,
+  "head_tokens": 256,
+  "option_tokens": 48,
+  "inputs": {
+    "input_ids": "int64",
+    "attention_mask": "int64",
+    "marker_pos": "int64",
+    "marker_mask": "bool",
+    "qtype": "int64"
+  },
+  "outputs": {
+    "logits": "float32",
+    "act_logits": "float32"
+  },
+  "files": {
+    "model.onnx": "74dc1d3dccd214c105832b195f191f18c1172b799c78301fdd88f3925608d46e",
+    "tokenizer.json": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+    "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "NOTICE": "d5d39718c5c266fe5a7a0e7724e06aef6bfd2bb8592ada22e90a89bb8f625d58"
+  }
+}

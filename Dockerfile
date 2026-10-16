@@ -35,6 +35,8 @@ COPY --from=native /src/.tools/native/lib/libpdfium.so /usr/lib/papergo/libpdfiu
 COPY --from=native /src/.tools/native/lib/libzvec_c_api.so /usr/lib/papergo/libzvec_c_api.so
 COPY --from=native /src/.tools/native/notices /usr/share/doc/papergo
 COPY models/paddleocr /usr/share/papergo/models/paddleocr
+COPY internal/decision/LICENSE internal/decision/NOTICE /usr/share/doc/papergo/decision/
+# Optional Laya weights are mounted separately via AI_DECISION_MODELS_PATH.
 COPY --from=build /out/papergo /papergo
 COPY --from=build /out/papergo-admin /papergo-admin
 COPY migrations /schema

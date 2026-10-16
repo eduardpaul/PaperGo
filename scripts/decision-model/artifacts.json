@@ -1,0 +1,43 @@
+{
+  "revision": "1720e3e3357cfe1e281542e223f8273b0890ca34",
+  "package": "laya==0.4.8",
+  "export_source_revision": "4ac226d5ee88ed6df8db288a05c766d7a34ee682",
+  "files": {
+    "model/README.md": {
+      "url": "https://huggingface.co/convaiinnovations/laya-multilingual/resolve/1720e3e3357cfe1e281542e223f8273b0890ca34/README.md",
+      "sha256": "e85d16c3fe35fe7094ef51a7cfa81144a5cc07558e5faddcff753a8153e38a0b"
+    },
+    "model/config.json": {
+      "url": "https://huggingface.co/convaiinnovations/laya-multilingual/resolve/1720e3e3357cfe1e281542e223f8273b0890ca34/config.json",
+      "sha256": "7add7c041b53f7091e65908553af79ab3f077946e5f2312d510ae13b17c7c134"
+    },
+    "model/encoder/config.json": {
+      "url": "https://huggingface.co/convaiinnovations/laya-multilingual/resolve/1720e3e3357cfe1e281542e223f8273b0890ca34/encoder/config.json",
+      "sha256": "83f6916d13ef0f556ac461f28308dc2bffa7ebeadee8ec9e2db5812020ea5bb4"
+    },
+    "model/model.safetensors": {
+      "url": "https://huggingface.co/convaiinnovations/laya-multilingual/resolve/1720e3e3357cfe1e281542e223f8273b0890ca34/model.safetensors",
+      "sha256": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204"
+    },
+    "model/rl_agent_config.json": {
+      "url": "https://huggingface.co/convaiinnovations/laya-multilingual/resolve/1720e3e3357cfe1e281542e223f8273b0890ca34/rl_agent_config.json",
+      "sha256": "25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6"
+    },
+    "model/tokenizer/tokenizer.json": {
+      "url": "https://huggingface.co/convaiinnovations/laya-multilingual/resolve/1720e3e3357cfe1e281542e223f8273b0890ca34/tokenizer/tokenizer.json",
+      "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f"
+    },
+    "model/tokenizer/tokenizer_config.json": {
+      "url": "https://huggingface.co/convaiinnovations/laya-multilingual/resolve/1720e3e3357cfe1e281542e223f8273b0890ca34/tokenizer/tokenizer_config.json",
+      "sha256": "424b69444bf7b5809dc2cd2e36d0bd71b8055124dd24274d6db3c655d38205e7"
+    },
+    "laya-0.4.8-py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/b8/cc/6f7d1ec516a450c42b2ad4c164e9cdbacac509bc808a187ec62e99be81ca/laya-0.4.8-py3-none-any.whl",
+      "sha256": "05064d8b949803af8cb173561ed0b24d6be5b62cb86d8d319321577c630d0288"
+    },
+    "upstream/export_onnx.py": {
+      "url": "https://raw.githubusercontent.com/NandhaKishorM/laya/4ac226d5ee88ed6df8db288a05c766d7a34ee682/scripts/export_onnx.py",
+      "sha256": "3dc6eac8971358ad5531c7124f2e631ddd4da6890a8df8a6237051e56b4594e2"
+    }
+  }
+}

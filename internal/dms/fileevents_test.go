@@ -1,6 +1,8 @@
 package dms
 
 import (
+	"encoding/json"
+	"strconv"
 	"testing"
 
 	"papergo/ent"
@@ -54,7 +56,7 @@ func TestFileAddedEventsNameTheirSource(t *testing.T) {
 		t.Fatalf("%d file.added events, want %d", len(got), len(want))
 	}
 	for i, e := range got {
-		if e.Data["source"] != want[i].source || e.Data["file_version"] != float64(want[i].version) || e.Data["revision_id"] == "" || e.Data["blob_id"] == "" || e.Data["content_type"] != "application/pdf" {
+		if e.Data["source"] != want[i].source || e.Data["file_version"] != json.Number(strconv.Itoa(want[i].version)) || e.Data["revision_id"] == "" || e.Data["blob_id"] == "" || e.Data["content_type"] != "application/pdf" {
 			t.Errorf("event %d data %v, want source %s version %d", i, e.Data, want[i].source, want[i].version)
 		}
 		if e.CollectionID == nil || *e.CollectionID != lib.ID || e.Actor != "alice" {

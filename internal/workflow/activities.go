@@ -57,6 +57,11 @@ func (a *Activity) Validate(inputs map[string]any) error {
 			return fmt.Errorf("activity %s has no input %s", a.Key, name)
 		}
 	}
+	if a.Key == "ai.decide" || a.Key == "taxonomy.decide" {
+		if err := validateDecisionStatic(a, inputs); err != nil {
+			return err
+		}
+	}
 	if a.Key == "if" {
 		_, filter := inputs["filter"]
 		_, left := inputs["op"]
@@ -236,7 +241,7 @@ func init() {
 	register(&Activity{Key: "item.get", Kind: "action", Description: "Reads an item; its fields become the output.",
 		InputSchema: inputs(itemIDProp), OutputSchema: forms.MustParse(itemOutput), run: runItemGet})
 	register(&Activity{Key: "item.update", Kind: "action", Description: "Changes an item's content type, name, tags or field values. Values are merged; null removes a value.",
-		InputSchema:  inputs(itemIDProp + `, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`),
+		InputSchema:  inputs(itemIDProp + `, "expected_version":{"type":"integer","title":"Expected item version","minimum":1},"expected_blob_id":{"type":"string","title":"Expected current file"},"expected_taxonomy":` + taxonomyGuardSchema + `, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`),
 		OutputSchema: forms.MustParse(itemOutput), run: runItemUpdate})
 	register(&Activity{Key: "item.create", Kind: "action", Description: "Creates an item; the output has its item_id.",
 		InputSchema:  inputs(collectProp+`, "parent_id": {"type": "string", "title": "Folder", "description": "Defaults to the collection."}, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`, "collection_id", "name"),
@@ -617,6 +622,41 @@ func runItemUpdate(e *env, in map[string]any) (outcome, error) {
 	r, err := e.t.Authorize(e.ctx, e.author, id, "write")
 	if err != nil {
 		return outcome{}, err
+	}
+	var expected *int
+	if raw, ok := in["expected_version"]; ok {
+		v, err := e.scope.resolve(raw)
+		if err != nil {
+			return outcome{}, err
+		}
+		n, ok := forms.WholeNumber(v)
+		if !ok || n < 1 {
+			return outcome{}, errors.New("expected_version must be a positive integer")
+		}
+		expected = &n
+	}
+	blob, err := e.optionalText(in, "expected_blob_id")
+	if err != nil {
+		return outcome{}, err
+	}
+	if _, ok := in["expected_blob_id"]; ok && blob == "" {
+		return outcome{}, errors.New("expected_blob_id must not be empty")
+	}
+	var guard *dms.TaxonomyGuard
+	if raw, ok := in["expected_taxonomy"]; ok {
+		v, err := e.scope.resolve(raw)
+		if err != nil {
+			return outcome{}, err
+		}
+		guard = &dms.TaxonomyGuard{}
+		if err = decisionConvert(v, guard); err != nil {
+			return outcome{}, err
+		}
+	}
+	if expected != nil || blob != "" || guard != nil {
+		if err = e.t.CheckItemGuards(e.ctx, e.author, id, expected, blob, guard); err != nil {
+			return outcome{}, err
+		}
 	}
 	var u dms.UpdateResource
 	if v, ok := in["content_type_id"]; ok {

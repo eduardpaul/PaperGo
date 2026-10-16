@@ -1,0 +1,27 @@
+{
+  "test_names": 71,
+  "shards": [
+    {
+      "shard": 1,
+      "tests": 18,
+      "exit_code": 0
+    },
+    {
+      "shard": 2,
+      "tests": 18,
+      "exit_code": 0
+    },
+    {
+      "shard": 3,
+      "tests": 18,
+      "exit_code": 0
+    },
+    {
+      "shard": 4,
+      "tests": 17,
+      "exit_code": 0
+    }
+  ],
+  "elapsed_seconds": 329.45,
+  "required_native_decisions": true
+}

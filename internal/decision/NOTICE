@@ -1,0 +1,12 @@
+Laya multilingual is published by convaiinnovations under Apache-2.0:
+https://huggingface.co/convaiinnovations/laya-multilingual/tree/1720e3e3357cfe1e281542e223f8273b0890ca34
+
+The FP32 graph is exported with NandhaKishorM/laya's Apache-2.0 exporter:
+https://github.com/NandhaKishorM/laya/tree/4ac226d5ee88ed6df8db288a05c766d7a34ee682
+
+The lossless marker serialization is adapted from Supersonic Labs' Apache-2.0
+sequence and Collator functions (julia/data.py), independently checked against
+Laya's official Python encoder:
+https://huggingface.co/SupersonicLabs/Julia-1/blob/a85b127321d580d65176c89ced8273f305745d85/julia/data.py
+
+Model weights and tokenizer are optional deployment artifacts. See LICENSE.

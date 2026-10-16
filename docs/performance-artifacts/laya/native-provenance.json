@@ -1,0 +1,7 @@
+{
+  "native_binary_sha256": "18b881988562917c1c1d57dbaaefc19c8b3b2f81d9c5795194c2e1218ec8cf4e",
+  "go": "go version go1.26.0 linux/amd64",
+  "platform": "Linux-6.18.54.1-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+  "reference_sha256": "cbbff37b604e1febb1a3218645e3cbb64c57b9500cc28064e609d32681e3f5c0",
+  "native_script_sha256": "9462f5d55dfecb5673a6a99165d2e620e7ea76b43084b88d3f1a8aefa85aa8a1"
+}

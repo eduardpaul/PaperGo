@@ -160,3 +160,54 @@ func TestTagVocabularyRoute(t *testing.T) {
 		t.Fatalf("tags: %d %s", w.Code, w.Body)
 	}
 }
+
+func TestDecisionCatalogAndStaticValidation(t *testing.T) {
+	h, s := setupWorkflows(t)
+	response := request(h, "GET", "/v1/workflow-catalog", "", testToken, "", "")
+	var catalog struct {
+		Activities []workflow.Activity `json:"activities"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &catalog); err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]workflow.Activity{}
+	for _, activity := range catalog.Activities {
+		found[activity.Key] = activity
+	}
+	for _, key := range []string{"ai.decide", "taxonomy.decide", "tags.apply"} {
+		a, ok := found[key]
+		if !ok || a.OutputSchema == nil {
+			t.Fatal("missing decision catalog entry", key)
+		}
+	}
+	if _, ok := found["tags.suggest"]; ok {
+		t.Fatal("replaced action in catalog")
+	}
+	data := found["ai.decide"].InputSchema["properties"].(map[string]any)["data"].(map[string]any)
+	if data["additionalProperties"] != true {
+		t.Fatal("JSON data must be open")
+	}
+	ws, err := s.Create(t.Context(), "alice", "", dms.CreateResource{Kind: "workspace", Name: "Decisions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const definition = `{"triggers":[{"type":"manual"}],"flow":{"start":"decide","nodes":{"decide":{"activity":"ai.decide","inputs":{"data":{"zero":0,"enabled":false},"questions":[{"key":"route","instructions":"Which route?","options":[{"key":"a","text":"A"},{"key":"b","text":"B"}]}]}}}}}`
+	body := `{"name":"Decision","definition":` + definition + `}`
+	saved := request(h, "POST", "/v1/workspaces/"+ws.ID+"/workflows", body, testToken, "", "application/json")
+	if saved.Code != 201 {
+		t.Fatal(saved.Code, saved.Body.String())
+	}
+	invalid := strings.Replace(body, `"key":"b"`, `"key":"a"`, 1)
+	bad := request(h, "POST", "/v1/workspaces/"+ws.ID+"/workflows", invalid, testToken, "", "application/json")
+	if bad.Code != 422 {
+		t.Fatal("duplicate option saved", bad.Code, bad.Body.String())
+	}
+	var workflowRow workflow.Workflow
+	if err = json.Unmarshal(saved.Body.Bytes(), &workflowRow); err != nil {
+		t.Fatal(err)
+	}
+	reopened := request(h, "GET", "/v1/workflows/"+workflowRow.ID, "", testToken, "", "")
+	if reopened.Code != 200 || !strings.Contains(reopened.Body.String(), `"enabled":false`) {
+		t.Fatal(reopened.Body.String())
+	}
+}

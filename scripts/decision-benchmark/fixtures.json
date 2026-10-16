@@ -1,0 +1,34 @@
+{
+  "description": "Hand-labelled synthetic DMS smoke set. Quality results apply only to these texts and candidate descriptions.",
+  "tags": [
+    {"tag": "invoice", "description": "An invoice or bill requesting payment for goods or services"},
+    {"tag": "electricity", "description": "Electricity supply, energy consumption or an electricity bill"},
+    {"tag": "contract", "description": "A legal agreement between parties specifying obligations and terms"},
+    {"tag": "insurance", "description": "An insurance policy, coverage, premium or claim"},
+    {"tag": "employment", "description": "Employment, salary, payslips or an employer's communication to an employee"},
+    {"tag": "banking", "description": "A bank account statement listing its balance and transactions"},
+    {"tag": "medical", "description": "A patient's medical examination, test results, diagnosis or prescription"},
+    {"tag": "travel", "description": "A travel booking, flight ticket, hotel reservation or trip itinerary"}
+  ],
+  "documents": [
+    {"id": "en-energy", "language": "en", "state": "ELECTRICITY INVOICE. Supplier: City Energy. September electricity consumption: 145 kWh. Amount due: 42 euros. Please pay this bill by bank transfer.", "expected": ["invoice", "electricity"]},
+    {"id": "es-energy", "language": "es", "state": "FACTURA DE ELECTRICIDAD. Comercializadora: Energía Ciudad. Consumo de septiembre: 145 kWh. Importe total a pagar: 42 euros. Vencimiento: 20 de octubre.", "expected": ["invoice", "electricity"]},
+    {"id": "ca-energy", "language": "ca", "state": "FACTURA D'ELECTRICITAT. Comercialitzadora: Energia Ciutat. Consum de setembre: 145 kWh. Import total a pagar: 42 euros. Data de venciment: 20 d'octubre.", "expected": ["invoice", "electricity"]},
+    {"id": "en-lease", "language": "en", "state": "LEASE AGREEMENT. Landlord Acme and tenant Beta agree to lease an office for twelve months. Rent is 900 euros monthly. Both parties sign this agreement. Either party may terminate with sixty days' notice.", "expected": ["contract"]},
+    {"id": "es-lease", "language": "es", "state": "CONTRATO DE ARRENDAMIENTO. El arrendador Acme y la arrendataria Beta acuerdan el alquiler de una oficina durante doce meses. La renta es de 900 euros mensuales. Ambas partes firman el contrato y aceptan sus obligaciones.", "expected": ["contract"]},
+    {"id": "ca-lease", "language": "ca", "state": "CONTRACTE D'ARRENDAMENT. L'arrendador Acme i l'arrendatària Beta acorden el lloguer d'una oficina durant dotze mesos. La renda és de 900 euros mensuals. Les dues parts signen el contracte i accepten les seves obligacions.", "expected": ["contract"]},
+    {"id": "en-premium", "language": "en", "state": "INSURANCE PREMIUM INVOICE. Please pay 250 euros to renew your home insurance coverage for the next year. This invoice is due on October 20. Policy number HOME123.", "expected": ["invoice", "insurance"]},
+    {"id": "es-claim", "language": "es", "state": "AVISO DE SINIESTRO. Su aseguradora ha recibido la reclamación por daños causados por agua. La póliza del hogar cubre la reparación hasta 3000 euros. El perito contactará con usted.", "expected": ["insurance"]},
+    {"id": "ca-payslip", "language": "ca", "state": "NÒMINA DE SETEMBRE. Empresa: Taller Central. Treballadora: Maria Serra. Salari brut: 2400 euros. Retenció fiscal: 360 euros. Cotització a la Seguretat Social: 150 euros. Líquid a percebre: 1890 euros.", "expected": ["employment"]},
+    {"id": "en-payslip", "language": "en", "state": "SEPTEMBER PAYSLIP. Employer: Central Workshop. Employee: Maria Serra. Gross salary: 2400 euros. Tax withheld: 360 euros. Social security: 150 euros. Net salary: 1890 euros.", "expected": ["employment"]},
+    {"id": "es-bank", "language": "es", "state": "EXTRACTO BANCARIO. Cuenta ES001234. Saldo inicial: 1200 euros. Movimientos: ingreso de nómina 1890 euros; retirada de efectivo 100 euros; compra en supermercado 45 euros. Saldo final: 2945 euros.", "expected": ["banking"]},
+    {"id": "en-bank", "language": "en", "state": "BANK ACCOUNT STATEMENT. Opening balance: 1200 euros. Transactions: salary credit 1890 euros; cash withdrawal 100 euros; grocery card purchase 45 euros. Closing balance: 2945 euros.", "expected": ["banking"]},
+    {"id": "ca-medical", "language": "ca", "state": "INFORME MÈDIC. Pacient: Joan Puig. Resultats de l'analítica: glucosa 95 mg/dL, hemoglobina 14 g/dL. Diagnòstic: valors dins de la normalitat. Es recomana una revisió anual.", "expected": ["medical"]},
+    {"id": "en-medical", "language": "en", "state": "MEDICAL LAB REPORT. Patient: John Smith. Blood glucose 95 mg/dL. Haemoglobin 14 g/dL. Results within the normal range. Physician recommends an annual check-up.", "expected": ["medical"]},
+    {"id": "es-flight", "language": "es", "state": "CONFIRMACIÓN DE VUELO. Pasajera: Ana Pérez. Reserva ABC123. Salida: Barcelona, 08:30 del 15 de noviembre. Llegada: París, 10:20. Asiento 14A. Una maleta incluida.", "expected": ["travel"]},
+    {"id": "ca-hotel", "language": "ca", "state": "CONFIRMACIÓ DE RESERVA D'HOTEL. Hoste: Anna Serra. Estada a Girona del 12 al 14 de novembre. Habitació doble amb esmorzar. Número de reserva HOT123. Aquesta confirmació no és una factura.", "expected": ["travel"]},
+    {"id": "en-meeting", "language": "en", "state": "Garden club meeting notes. We discussed planting tomatoes and watering the shared vegetable beds. The next meeting is on Saturday. Volunteers will bring seeds and tools.", "expected": []},
+    {"id": "es-recipe", "language": "es", "state": "RECETA DE TORTILLA. Ingredientes: cuatro huevos, tres patatas, aceite de oliva y sal. Freír las patatas, mezclarlas con los huevos batidos y cuajar la tortilla en una sartén.", "expected": []},
+    {"id": "en-negation", "language": "en", "state": "Meeting agenda template. This is not an invoice, contract, insurance policy, payslip, bank statement, medical report, electricity bill or travel booking. Agenda: introductions, brainstorming, next steps.", "expected": []}
+  ]
+}

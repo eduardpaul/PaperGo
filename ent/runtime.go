@@ -487,7 +487,7 @@ func init() {
 	// domaineventDescData is the schema descriptor for data field.
 	domaineventDescData := domaineventFields[7].Descriptor()
 	// domainevent.DefaultData holds the default value on creation for the data field.
-	domainevent.DefaultData = domaineventDescData.Default.(map[string]interface{})
+	domainevent.DefaultData = domaineventDescData.Default.(model.JSONMap)
 	// domaineventDescDepth is the schema descriptor for depth field.
 	domaineventDescDepth := domaineventFields[8].Descriptor()
 	// domainevent.DepthValidator is a validator for the "depth" field. It is called by the builders before save.

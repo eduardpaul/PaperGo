@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"papergo/ent/domainevent"
+	"papergo/internal/model"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -81,7 +82,7 @@ func (_c *DomainEventCreate) SetActor(v string) *DomainEventCreate {
 }
 
 // SetData sets the "data" field.
-func (_c *DomainEventCreate) SetData(v map[string]interface{}) *DomainEventCreate {
+func (_c *DomainEventCreate) SetData(v model.JSONMap) *DomainEventCreate {
 	_c.mutation.SetData(v)
 	return _c
 }

@@ -355,7 +355,9 @@ func decodeOutput(v any) any {
 		return v
 	}
 	var out any
-	if json.Unmarshal(raw, &out) != nil {
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.UseNumber()
+	if decoder.Decode(&out) != nil {
 		return v
 	}
 	return out

@@ -21,7 +21,7 @@ import {
   systemFields,
 } from "@/features/lists/filter-editor";
 import { problemMessage } from "@/lib/errors";
-import { formDefaults, nodePorts, normalizeForm, renameNode } from "./model";
+import { activityOutputPaths, formDefaults, nodePorts, normalizeForm, renameNode } from "./model";
 import type {
   Activity,
   FlowNode,
@@ -856,6 +856,12 @@ function FlowEditor({
               workspaceId={workspaceId}
               tokens
             />
+          )}
+          {activityOutputPaths(activity, node.inputs).length > 0 && (
+            <details className="text-xs">
+              <summary>Output tokens</summary>
+              {activityOutputPaths(activity, node.inputs).map(path => <code key={path} className="block">{`{step:${selected}.${path}}`}</code>)}
+            </details>
           )}
           {!activity?.terminal &&
             [

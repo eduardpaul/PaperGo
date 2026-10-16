@@ -35,6 +35,12 @@ type RunInput struct {
 	System bool `json:"system,omitempty"`
 }
 
+// UnmarshalJSON preserves arbitrary JSON numbers when durable execution reloads a run.
+func (in *RunInput) UnmarshalJSON(raw []byte) error {
+	type plain RunInput
+	return decisionDecode(raw, (*plain)(in))
+}
+
 // Exec makes a run durable. Step runs fn once: the writes it makes through t
 // and the events it passes to raise commit together, exactly once, and a
 // replay after a crash returns the recorded result without running fn.
@@ -472,5 +478,5 @@ func (r *runState) outputs(sc *scope) (map[string]any, error) {
 }
 
 func decode(raw json.RawMessage, v any) error {
-	return json.Unmarshal(raw, v)
+	return decisionDecode(raw, v)
 }

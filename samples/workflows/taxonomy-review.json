@@ -1,0 +1,116 @@
+{
+  "name": "Taxonomy review",
+  "description": "Review suggested managed terms, then replace a taxonomy field with source, metadata and taxonomy guards.",
+  "definition": {
+    "triggers": [
+      {
+        "type": "manual",
+        "collection_id": "$LIBRARY"
+      }
+    ],
+    "flow": {
+      "start": "read",
+      "nodes": {
+        "read": {
+          "activity": "document.read_text",
+          "next": {
+            "done": "decide",
+            "no_text": "done",
+            "unsupported": "done",
+            "error": "error"
+          }
+        },
+        "decide": {
+          "activity": "taxonomy.decide",
+          "inputs": {
+            "text_id": "{step:read.text_id}",
+            "blob_id": "{step:read.blob_id}",
+            "term_set_id": "$TERM_SET",
+            "selection": "multiple",
+            "threshold": 0.8
+          },
+          "next": {
+            "done": "review",
+            "none": "done",
+            "error": "error"
+          }
+        },
+        "review": {
+          "activity": "approval",
+          "inputs": {
+            "title": "Review topics for {item:name}",
+            "assignees": [
+              "bob"
+            ],
+            "input_schema": {
+              "type": "object",
+              "properties": {
+                "terms": {
+                  "type": "array",
+                  "title": "Approved topics",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true,
+                  "x-papergo": {
+                    "kind": "terms",
+                    "term_set_id": "$TERM_SET"
+                  }
+                }
+              },
+              "required": [
+                "terms"
+              ]
+            },
+            "values": {
+              "terms": "{step:decide.term_ids}"
+            }
+          },
+          "next": {
+            "approved": "apply",
+            "rejected": "done",
+            "error": "error"
+          }
+        },
+        "apply": {
+          "activity": "item.update",
+          "inputs": {
+            "values": {
+              "$FIELD": "{step:review.input.terms}"
+            },
+            "expected_version": "{step:decide.source.item_version}",
+            "expected_blob_id": "{step:decide.source.blob_id}",
+            "expected_taxonomy": "{step:decide.taxonomy_guard}"
+          },
+          "next": {
+            "done": "done",
+            "error": "changed"
+          }
+        },
+        "changed": {
+          "activity": "task",
+          "inputs": {
+            "title": "Classification needs recomputation for {item:name}",
+            "description": "The file, item metadata, or taxonomy changed during review. Re-run Taxonomy review to obtain new suggestions.",
+            "assignees": [
+              "bob"
+            ],
+            "wait": false
+          },
+          "next": {
+            "done": "done"
+          }
+        },
+        "done": {
+          "activity": "end"
+        },
+        "error": {
+          "activity": "fail",
+          "inputs": {
+            "message": "Document classification could not be completed."
+          }
+        }
+      }
+    }
+  }
+}

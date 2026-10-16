@@ -1,8 +1,10 @@
 package runner
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -67,7 +69,7 @@ func TestForEachPassesHaveTheirOwnNodeBudget(t *testing.T) {
 	if run.Status != "completed" {
 		t.Fatalf("run %s: %s", run.Status, run.Error)
 	}
-	if got := run.Result.(map[string]any)["variables"].(map[string]any)["last"]; got != "599" && got != 599.0 {
+	if got := run.Result.(map[string]any)["variables"].(map[string]any)["last"]; got != "599" && got != json.Number("599") {
 		t.Fatalf("last %v", got)
 	}
 }
@@ -132,9 +134,14 @@ func TestConcurrencySkipAndReplace(t *testing.T) {
 // queues one run that starts when the active one ends: a burst of changes
 // costs at most two runs, one after the other.
 func TestConcurrencyCoalesce(t *testing.T) {
-	f := setup(t)
-	w := f.workflow(t, "Coalesce", `{"triggers": [{"type": "item.updated", "collection_id": "$LIST"}], "concurrency": "coalesce",
-		"flow": {"start": "wait", "nodes": {"wait": {"activity": "delay", "inputs": {"duration": "1s"}}}}}`)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var enteredOnce, releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	defer unblock()
+	model := &runnerDecisionModel{probability: .9, during: func() { enteredOnce.Do(func() { close(entered) }); <-release }}
+	f := setup(t, func(tools *workflow.Tools) { tools.Decisions = model })
+	w := f.workflow(t, "Coalesce", `{"triggers":[{"type":"item.updated","collection_id":"$LIST"}],"concurrency":"coalesce",
+      "flow":{"start":"decide","nodes":{"decide":{"activity":"ai.decide","inputs":{"input":"{item:values.note}","questions":[{"key":"route","instructions":"Which route?","options":[{"key":"a","text":"A"},{"key":"b","text":"B"}]}]}}}}}`)
 	item := f.item(t, "alice", "Contract", nil)
 	for i, note := range []string{"first", "second", "third"} {
 		r := f.head(t, item.ID)
@@ -142,10 +149,23 @@ func TestConcurrencyCoalesce(t *testing.T) {
 			t.Fatal(err)
 		}
 		if i == 0 {
-			// Let the first run start before the next changes.
-			time.Sleep(300 * time.Millisecond)
+			select {
+			case <-entered:
+			case <-time.After(20 * time.Second):
+				t.Fatal("first run did not enter heavy work")
+			}
 		}
 	}
+	// Drain the whole burst while inference is explicitly held. The first run
+	// cannot finish between metadata writes, even with SQLite race instrumentation.
+	if _, err := f.r.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	page, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{WorkflowID: w.ID, Limit: 100})
+	if err != nil || len(page.Data) != 2 {
+		t.Fatal("coalesced burst", page.Data, err)
+	}
+	unblock()
 	runs := f.runs(t, w.ID, 2)
 	details := make([]Run, len(runs))
 	for i, run := range runs {

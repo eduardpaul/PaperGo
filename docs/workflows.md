@@ -242,6 +242,9 @@ A workflow can declare what a completed run returns, so other workflows can foll
 | `file.compose_pdf` | action | combines the current files of the run's items (JPEG, PNG or WebP photos of one list or library) into one searchable PDF in the run's order, staged for the primary item; see [photos to PDF](#photos-to-pdf). Heavy work. | `staged_file_id`, `item_id`, `others` (the other items, in order), `pages`, `bytes`, `metrics` |
 | `file.optimize_image` | action | analyzes the text of the item's current JPEG, PNG or WebP image with [OCR](ocr.md) and stages a smaller WebP copy whose smallest text keeps `target_height`; ports `candidate`/`skipped`; see [image optimization](#image-optimization). Heavy work. | `staged_file_id` (candidate) or `reason` (skipped), `item_id`, `blob_id`, `file_version`, `metrics` |
 | `ai.complete` | action | asks the [chat model](#ai-steps) to do what `prompt` says with `input` (text) or `text_id` (from `document.read_text` for the item's file, `blob_id` optional), cut at `max_chars` (default 20,000): summarize, extract, clean up. With `output_schema` (a form schema of an object), the answer is a JSON object checked against it, else text. Equal requests reuse the cached answer. Heavy work | `text` or `json`, `cached`, `model` |
+| `ai.decide` | action | answers ordered choice, noul or ordinal score questions from `input`, JSON `data`, or guarded document `text_id` and `blob_id`; see [workflow decisions](decisions.md). Heavy work | `answers`, `model`, `input_hash`, `cached`, document `source` |
+| `taxonomy.decide` | action | evaluates managed candidates of `term_set_id`, independently (`multiple`) or jointly (`single`); ports `done` and `none`; see [workflow decisions](decisions.md). Heavy work | `term_ids`, `scores`, `taxonomy_guard`, `source`, `model`, `input_hash`, `cached` |
+| `tags.apply` | action | adds `tags` while keeping existing tags; requires the source `blob_id` to remain current | item snapshot |
 | `document.read_text` | action | reads the text of the item's current file page by page (see [reading text](#reading-text)): `ocr` (`auto`, `always`, `never`), `max_pages` (default 500, at most 2,000), `languages` (OCR codes such as `eng+deu`; default the file's). Ports `done`, `no_text` (the file holds none) and `unsupported` (another format, a protected or broken PDF). Heavy work | `text_id`, `item_id`, `blob_id`, `pages`, `chars`, `language`, `ocr_pages`, `skipped_pages`, `truncated`, `reused`, `reason` (unsupported) |
 | `search.chunk` | action | splits the text of the item's file (`text_id` of `document.read_text`, or `text` given directly, such as a summary) with a `chunker` (`window`, `pages`, `paragraphs`, `headings`, `whole`; `max_chars`, `overlap`, `max_chunks`) into chunks of a `kind` (`content`, `summary`, `extract`), and stages them in the search index under a new `generation`, or one of this run given to add to. See [file content steps](#file-content-steps). Heavy work | `generation`, `chunks`, `truncated`, `item_id`, `blob_id` |
 | `search.enrich` | action | asks the [chat model](#ai-steps) to write context for each chunk of `generation` following `instructions`, such as which contract and clause a passage is; `scope` `chunk` (default) shows the model the chunk, `document` also the beginning of the document (`context_chars`, default 6,000). The context is searched and embedded with the chunk. Answers are cached per chunk text, instructions and context. Heavy work | `generation`, `enriched`, `cached`, `model` |
@@ -350,7 +353,7 @@ Launch inputs, built-in parameters and activity settings are described by **form
 ```
 
 **Keywords.**
-- Structure: `type` (`string`, `number`, `integer`, `boolean`, `array`, `object`), `properties`, `required`, `items`.
+- Structure: `type` (`string`, `number`, `integer`, `boolean`, `array`, `object`), `properties`, `required`, `items`, `additionalProperties` (boolean or a schema). Ordinary forms are closed unless they opt into additional properties.
 - Constraints: `enum`, `minimum`, `maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, `uniqueItems`.
 - Annotations: `default`, `title`, `description`, `format`, `examples`, `readOnly`, `writeOnly`, `deprecated` and `$comment`.
 - Presentation hints: other `x-*` keys are kept for UIs and ignored by the server.
@@ -370,11 +373,11 @@ Property names are lowercase identifiers, and forms nest at most 6 levels.
 | `item` | items of the workspace the person may read | `collection_id`: only that list or library |
 | `collection` | lists and libraries of the workspace the person may read | |
 | `relationship` | items to use with a relationship type; no link is created, nodes decide | `relationship_type_id` (required) |
-| `terms` | organization taxonomy terms, not deprecated | `group_id`, `term_set_id`, `term_ids` (only those terms) |
+| `terms` | organization taxonomy terms, active and unmerged; `select: "sets"` picks term sets | `group_id` narrows either selection; `term_set_id` and `term_ids` narrow terms only |
 | `keywords` | organization keywords, not deprecated: terms of its keywords set and terms available as keywords | |
 | `people` | principal subjects that have access to the workspace | `access`: `read` (default), `read_draft`, `write`, `publish` or `manage` |
 
-Term pickers browse `GET /v1/term-sets/{id}/terms`; keyword pickers suggest from `GET /v1/keywords?q=` and add new keywords with `POST /v1/keywords` before the form is submitted (see [taxonomy](application-foundation.md#controlled-taxonomy)).
+Set selection uses `{"kind":"terms","select":"sets"}` and browses `GET /v1/term-sets`, returning term-set IDs. Term selection returns term IDs. Term pickers browse `GET /v1/term-sets/{id}/terms`; keyword pickers suggest from `GET /v1/keywords?q=` and add new keywords with `POST /v1/keywords` before the form is submitted (see [taxonomy](application-foundation.md#controlled-taxonomy)).
 
 Saving a workflow checks that collections and relationship types belong to the workspace, and that taxonomy pickers reference existing organization groups, sets and terms. Taxonomy pickers require `taxonomy.read`.
 
@@ -566,3 +569,5 @@ PaperGo code that should happen after a change or on a schedule:
 3. Never reacts to changes in hidden code paths.
 
 Relationship creation, attribute updates, deletion and taxonomy merges emit `item.updated` for each live endpoint. These writes advance both item ETags and modification timestamps without adding metadata history. Their data includes `relationship_id`, `relationship_action`, `peer_id`, `changed_fields: ["$relationships"]`, the head `revision_id` and `content_type_id`. Term filters can match present terms; added/removed term filters do not fire for relationship-only changes. Duplicate link requests leave both endpoints unchanged. Purging an item emits relationship changes for surviving peers.
+
+`item.update` also accepts optional `expected_version`, `expected_blob_id` and `expected_taxonomy` preconditions. They are checked with the write in one transaction; a failed guard follows `error` without mutation. See [guarded decision consumption](decisions.md#guarded-review-and-writes).

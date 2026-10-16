@@ -305,7 +305,7 @@ func TestOutputsChainWorkflows(t *testing.T) {
 	}
 	result, _ := detail.Result.(map[string]any)
 	outputs, _ := result["outputs"].(map[string]any)
-	if detail.Status != "completed" || outputs["name"] != "Lease" || outputs["total"] != float64(7) || outputs["kind"] != "contract" {
+	if detail.Status != "completed" || outputs["name"] != "Lease" || outputs["total"] != json.Number("7") || outputs["kind"] != "contract" {
 		t.Fatalf("run: %+v", detail)
 	}
 	if _, ok := outputs["note"]; ok {

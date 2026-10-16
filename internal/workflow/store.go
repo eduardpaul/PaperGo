@@ -355,6 +355,11 @@ func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID s
 		}
 	}
 	for name, node := range def.Flow.Nodes {
+		if node.Activity == "taxonomy.decide" {
+			if err = checkStaticTaxonomyDecision(ctx, t, subject, node.Inputs); err != nil {
+				return def, nil, fmt.Errorf("flow.nodes.%s: %w", name, err)
+			}
+		}
 		if schema, ok := node.Inputs["input_schema"].(map[string]any); ok && (node.Activity == "task" || node.Activity == "approval") {
 			if err = forms.CheckConfig(ctx, t, subject, workspaceID, schema, "flow.nodes."+name+".inputs.input_schema"); err != nil {
 				return def, nil, err

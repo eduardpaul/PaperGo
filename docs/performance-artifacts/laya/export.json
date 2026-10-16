@@ -1,0 +1,10 @@
+{
+  "source_revision": "4ac226d5ee88ed6df8db288a05c766d7a34ee682",
+  "model_revision": "1720e3e3357cfe1e281542e223f8273b0890ca34",
+  "torch": "2.8.0+cpu",
+  "export_ms": 34347.18762099874,
+  "peak_rss_mib": 5482.73828125,
+  "graph_sha256": "74dc1d3dccd214c105832b195f191f18c1172b799c78301fdd88f3925608d46e",
+  "graph_bytes": 1288287578,
+  "export_script_sha256": "37104a09f0a7c0033a7d33fad255ce7cac5a2ac892192635ff4552b06d585406"
+}

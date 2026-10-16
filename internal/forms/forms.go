@@ -51,7 +51,7 @@ var schemaKeywords = map[string]bool{
 	"type": true, "title": true, "description": true, "default": true, "enum": true,
 	"minimum": true, "maximum": true, "minLength": true, "maxLength": true,
 	"minItems": true, "maxItems": true, "uniqueItems": true, "items": true,
-	"properties": true, "required": true, "format": true, "examples": true,
+	"additionalProperties": true, "properties": true, "required": true, "format": true, "examples": true,
 	"readOnly": true, "writeOnly": true, "deprecated": true, "$comment": true,
 }
 
@@ -61,14 +61,14 @@ var schemaKeywords = map[string]bool{
 //	item          items the person may read; collection_id limits them to one list or library
 //	collection    lists and libraries of the workspace the person may read
 //	relationship  items to link with relationship_type_id (an organization taxonomy predicate); no edge is created
-//	terms         organization taxonomy terms, not deprecated; group_id, term_set_id and term_ids narrow them
+//	terms         organization taxonomy terms, not deprecated; select: sets picks sets instead; group_id narrows either selection
 //	keywords      organization keywords: terms of its keywords set and terms available as keywords, not deprecated
 //	people        principal subjects with access (default read) to the workspace
 var domainKinds = map[string]map[string]bool{
 	"item":         {"collection_id": true},
 	"collection":   {},
 	"relationship": {"relationship_type_id": true},
-	"terms":        {"group_id": true, "term_set_id": true, "term_ids": true},
+	"terms":        {"select": true, "group_id": true, "term_set_id": true, "term_ids": true},
 	"keywords":     {},
 	"people":       {"access": true},
 }
@@ -86,7 +86,9 @@ func Plain(v any) any {
 		return nil
 	}
 	var out any
-	_ = json.Unmarshal(raw, &out)
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.UseNumber()
+	_ = dec.Decode(&out)
 	return out
 }
 
@@ -170,15 +172,26 @@ func validateSchema(s map[string]any, path string, depth int, root, launch bool)
 			return fmt.Errorf("%s.uniqueItems must be true or false", path)
 		}
 	}
-	for key, types := range map[string]string{"minimum": "number integer", "maximum": "number integer", "minLength": "string", "maxLength": "string", "minItems": "array", "maxItems": "array", "uniqueItems": "array", "items": "array", "properties": "object", "required": "object"} {
+	for key, types := range map[string]string{"minimum": "number integer", "maximum": "number integer", "minLength": "string", "maxLength": "string", "minItems": "array", "maxItems": "array", "uniqueItems": "array", "items": "array", "additionalProperties": "object", "properties": "object", "required": "object"} {
 		if _, ok := s[key]; ok && !strings.Contains(types, typ) {
 			return fmt.Errorf("%s.%s does not apply to type %s", path, key, typ)
 		}
 	}
 	if typ == "object" {
 		props, _ := s["properties"].(map[string]any)
-		if root && props == nil {
+		if root && props == nil && s["additionalProperties"] == nil {
 			return fmt.Errorf("%s needs properties", path)
+		}
+		if extra, ok := s["additionalProperties"]; ok {
+			switch v := extra.(type) {
+			case bool:
+			case map[string]any:
+				if err := validateSchema(v, path+".*", depth+1, false, false); err != nil {
+					return err
+				}
+			default:
+				return fmt.Errorf("%s.additionalProperties must be a boolean or schema", path)
+			}
 		}
 		if len(props) > maxSchemaFields {
 			return fmt.Errorf("%s has more than %d properties", path, maxSchemaFields)
@@ -259,6 +272,10 @@ func validateDomain(value any, typ string, items any, path string) error {
 			return fmt.Errorf("%s.x-papergo: %s is not an option of %s pickers", path, key, kind)
 		}
 		switch key {
+		case "select":
+			if v != "terms" && v != "sets" {
+				return fmt.Errorf("%s.x-papergo.select must be terms or sets", path)
+			}
 		case "term_ids":
 			list, ok := v.([]any)
 			if !ok || len(list) == 0 {
@@ -280,6 +297,9 @@ func validateDomain(value any, typ string, items any, path string) error {
 				return fmt.Errorf("%s.x-papergo.%s must be an ID", path, key)
 			}
 		}
+	}
+	if kind == "terms" && d["select"] == "sets" && (d["term_set_id"] != nil || d["term_ids"] != nil) {
+		return fmt.Errorf("%s.x-papergo: selecting sets allows group_id, not term_set_id or term_ids", path)
 	}
 	if kind == "relationship" && d["relationship_type_id"] == nil {
 		return fmt.Errorf("%s.x-papergo: relationship pickers need relationship_type_id", path)
@@ -335,11 +355,35 @@ func withDefaults(s map[string]any, values map[string]any) map[string]any {
 				out[name] = Plain(d)
 			}
 		}
-		if obj, ok := out[name].(map[string]any); ok && child["type"] == "object" {
-			out[name] = withDefaults(child, obj)
+		if v, present := out[name]; present {
+			out[name] = defaultValue(child, v)
+		}
+	}
+	if extra, ok := s["additionalProperties"].(map[string]any); ok {
+		for name, v := range out {
+			if props[name] != nil {
+				continue
+			}
+			out[name] = defaultValue(extra, v)
 		}
 	}
 	return out
+}
+
+func defaultValue(s map[string]any, v any) any {
+	if obj, ok := v.(map[string]any); ok && s["type"] == "object" {
+		return withDefaults(s, obj)
+	}
+	if list, ok := v.([]any); ok {
+		if child, ok := s["items"].(map[string]any); ok {
+			out := make([]any, len(list))
+			for i, e := range list {
+				out[i] = defaultValue(child, e)
+			}
+			return out
+		}
+	}
+	return v
 }
 
 // checkObject validates values against an object schema: required
@@ -363,7 +407,13 @@ func checkObject(s map[string]any, values map[string]any, path string) error {
 	for _, name := range names {
 		child, ok := props[name].(map[string]any)
 		if !ok {
-			return dms.Invalid(fmt.Sprintf("%s.%s is not an input of this form", path, name))
+			if s["additionalProperties"] == true {
+				continue
+			}
+			child, ok = s["additionalProperties"].(map[string]any)
+			if !ok {
+				return dms.Invalid(fmt.Sprintf("%s.%s is not an input of this form", path, name))
+			}
 		}
 		if values[name] == nil {
 			continue
@@ -533,6 +583,17 @@ func domainFields(s map[string]any, values any, path string, out *[]domainField)
 		child, _ := props[name].(map[string]any)
 		domainFields(child, obj[name], path+"."+name, out)
 	}
+	if extra, ok := s["additionalProperties"].(map[string]any); ok {
+		if obj != nil {
+			for name, v := range obj {
+				if props[name] == nil {
+					domainFields(extra, v, path+"."+name, out)
+				}
+			}
+		} else {
+			domainFields(extra, nil, path+".*", out)
+		}
+	}
 	if item, ok := s["items"].(map[string]any); ok {
 		if list, ok := values.([]any); ok {
 			for i, e := range list {
@@ -616,7 +677,7 @@ func checkTerm(ctx context.Context, t *dms.Service, group, set string, allowed [
 	if tm.Edges.TermSet == nil || set != "" && tm.TermSetID != set || group != "" && tm.Edges.TermSet.GroupID != group {
 		return fmt.Errorf("term %s is outside the allowed term set", id)
 	}
-	if tm.Deprecated {
+	if tm.Deprecated || tm.MergedIntoID != nil {
 		return fmt.Errorf("term %s is deprecated", id)
 	}
 	if allowed != nil {
@@ -673,6 +734,16 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 		}
 	case "terms":
 		group, _ := f.opts["group_id"].(string)
+		if f.opts["select"] == "sets" {
+			set, err := t.TermSet(ctx, subject, id)
+			if err != nil {
+				return err
+			}
+			if group != "" && set.GroupID != group {
+				return fmt.Errorf("term set %s is outside the allowed term group", id)
+			}
+			return nil
+		}
 		set, _ := f.opts["term_set_id"].(string)
 		allowed, _ := f.opts["term_ids"].([]any)
 		return checkTerm(ctx, t, group, set, allowed, id)
@@ -687,7 +758,7 @@ func checkPick(ctx context.Context, t *dms.Service, subject, workspaceID string,
 		if !tm.Edges.TermSet.IsKeywords && !tm.AvailableAsKeyword {
 			return fmt.Errorf("term %s is not an organization keyword", id)
 		}
-		if tm.Deprecated {
+		if tm.Deprecated || tm.MergedIntoID != nil {
 			return fmt.Errorf("keyword %s is deprecated", id)
 		}
 	case "people":

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"papergo/ent/domainevent"
+	"papergo/internal/model"
 	"strings"
 	"time"
 
@@ -31,7 +32,7 @@ type DomainEvent struct {
 	// Actor holds the value of the "actor" field.
 	Actor string `json:"actor,omitempty"`
 	// Data holds the value of the "data" field.
-	Data map[string]interface{} `json:"data,omitempty"`
+	Data model.JSONMap `json:"data,omitempty"`
 	// Depth holds the value of the "depth" field.
 	Depth int `json:"depth,omitempty"`
 	// CauseRunID holds the value of the "cause_run_id" field.

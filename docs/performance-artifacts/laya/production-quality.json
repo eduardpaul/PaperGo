@@ -1,0 +1,1 @@
+{"0.5":{"documents":19,"exact_sets":11,"fn":0,"fp":20,"tp":20},"0.6":{"documents":19,"exact_sets":13,"fn":1,"fp":12,"tp":19},"0.7":{"documents":19,"exact_sets":12,"fn":2,"fp":8,"tp":18},"0.8":{"documents":19,"exact_sets":15,"fn":2,"fp":3,"tp":18},"0.9":{"documents":19,"exact_sets":13,"fn":5,"fp":1,"tp":15}}
