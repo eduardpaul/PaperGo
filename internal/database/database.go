@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"fmt"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"modernc.org/sqlite"
 	"net/url"
 	"os"
@@ -47,8 +48,9 @@ func init() {
 }
 
 type Database struct {
-	SQL    *sql.DB
-	Client *ent.Client
+	SQL     *sql.DB
+	Client  *ent.Client
+	Dialect Dialect
 }
 
 // Options are the connection settings of a handle on the PaperGo SQLite file.
@@ -83,8 +85,26 @@ func DSN(abs string, o Options) string {
 	return u.String()
 }
 
-func Open(ctx context.Context, path string) (*Database, error) {
-	abs, err := filepath.Abs(path)
+func Open(ctx context.Context, pathOrURL string) (*Database, error) {
+	if strings.HasPrefix(pathOrURL, "postgres://") || strings.HasPrefix(pathOrURL, "postgresql://") {
+		db, err := sql.Open("pgx", pathOrURL)
+		if err != nil {
+			return nil, fmt.Errorf("open postgres: %w", err)
+		}
+		db.SetMaxOpenConns(25)
+		db.SetMaxIdleConns(25)
+		db.SetConnMaxLifetime(30 * time.Minute)
+		db.SetConnMaxIdleTime(5 * time.Minute)
+		if err = db.PingContext(ctx); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("ping postgres: %w", err)
+		}
+		dialect := NewPostgresDialect(db)
+		client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.EntDialect(), db)))
+		return &Database{SQL: db, Client: client, Dialect: dialect}, nil
+	}
+
+	abs, err := filepath.Abs(pathOrURL)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +121,7 @@ func Open(ctx context.Context, path string) (*Database, error) {
 		db.Close()
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
-	return &Database{SQL: db, Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db)))}, nil
+	return &Database{SQL: db, Client: ent.NewClient(ent.Driver(entsql.OpenDB(dialect.SQLite, db))), Dialect: SQLite}, nil
 }
 func (d *Database) Close() error { return d.Client.Close() }
 
