@@ -55,7 +55,7 @@ manual Chrome/Edge validation on Windows remains unperformed.
 
 ## Phase 2 Progress
 
-**Completed 2026-10-16.** All five in-scope fixes are implemented. General list-schema field editing is deferred to ISSUE-24. Final validation passed: the complete Go suite, 145 frontend tests, frontend lint and production build/typecheck, Go vet and application build, Ent regeneration, and Atlas migration validation.
+**Completed 2026-10-16.** All five in-scope fixes are implemented. General list-schema field editing is deferred to ISSUE-24. Final validation passed: the complete Go suite, 146 frontend tests, frontend lint and production build/typecheck, Go vet and application build, Ent regeneration, and Atlas migration validation.
 
 - [x] **ISSUE-14** — First attachments emit `file.added`; replacements, restores and content reindexing emit `file.updated` with filename and previous blob. Built-ins, trigger filters, editor, samples and API/docs agree. Validation: file/content/search/staging/definition and sample-package suites across DMS, workflow, runner and HTTP API; frontend typecheck.
 - [x] **ISSUE-15** — Selection toolbar offers enabled manual workflows matching the collection and item count. Launches keep the selected items, render typed input forms, show authorization failures inline and link to run details. Explicit starts keep inspectable run IDs: coalescing preserves each invocation and busy skip policies record a visible rejection. Validation: 16 workflow launch/collection regressions, typecheck and lint.
