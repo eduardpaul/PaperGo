@@ -231,7 +231,9 @@ func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFil
 		for i := range page.Data {
 			// Summaries expose no execution payloads or identities of other members.
 			page.Data[i].Error = ""
-			page.Data[i].ItemID = &f.ItemID
+			if primary := page.Data[i].ItemID; primary != nil && *primary != f.ItemID {
+				page.Data[i].ItemID = nil
+			}
 		}
 	}
 	return page, nil

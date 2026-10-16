@@ -1037,7 +1037,7 @@ func TestItemRunSummariesRespectDraftAccess(t *testing.T) {
 		t.Fatal(page, err)
 	}
 	run := page.Data[0]
-	if run.Status != "failed" || run.Error != "" || len(run.Items) != 0 || run.Result != nil || run.Inputs != nil || len(run.Steps) != 0 || run.ItemID == nil || *run.ItemID != a.ID {
+	if run.Status != "failed" || run.Error != "" || len(run.Items) != 0 || run.Result != nil || run.Inputs != nil || len(run.Steps) != 0 || run.ItemID != nil {
 		t.Fatal("scoped summary exposed execution data or another member", run)
 	}
 	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{}); err == nil {
