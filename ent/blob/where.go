@@ -110,6 +110,11 @@ func Sha256(v string) predicate.Blob {
 	return predicate.Blob(sql.FieldEQ(FieldSha256, v))
 }
 
+// ReclaimAfter applies equality check predicate on the "reclaim_after" field. It's identical to ReclaimAfterEQ.
+func ReclaimAfter(v time.Time) predicate.Blob {
+	return predicate.Blob(sql.FieldEQ(FieldReclaimAfter, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Blob {
 	return predicate.Blob(sql.FieldEQ(FieldCreatedAt, v))
@@ -618,6 +623,76 @@ func Sha256EqualFold(v string) predicate.Blob {
 // Sha256ContainsFold applies the ContainsFold predicate on the "sha256" field.
 func Sha256ContainsFold(v string) predicate.Blob {
 	return predicate.Blob(sql.FieldContainsFold(FieldSha256, v))
+}
+
+// AvailabilityEQ applies the EQ predicate on the "availability" field.
+func AvailabilityEQ(v Availability) predicate.Blob {
+	return predicate.Blob(sql.FieldEQ(FieldAvailability, v))
+}
+
+// AvailabilityNEQ applies the NEQ predicate on the "availability" field.
+func AvailabilityNEQ(v Availability) predicate.Blob {
+	return predicate.Blob(sql.FieldNEQ(FieldAvailability, v))
+}
+
+// AvailabilityIn applies the In predicate on the "availability" field.
+func AvailabilityIn(vs ...Availability) predicate.Blob {
+	return predicate.Blob(sql.FieldIn(FieldAvailability, vs...))
+}
+
+// AvailabilityNotIn applies the NotIn predicate on the "availability" field.
+func AvailabilityNotIn(vs ...Availability) predicate.Blob {
+	return predicate.Blob(sql.FieldNotIn(FieldAvailability, vs...))
+}
+
+// ReclaimAfterEQ applies the EQ predicate on the "reclaim_after" field.
+func ReclaimAfterEQ(v time.Time) predicate.Blob {
+	return predicate.Blob(sql.FieldEQ(FieldReclaimAfter, v))
+}
+
+// ReclaimAfterNEQ applies the NEQ predicate on the "reclaim_after" field.
+func ReclaimAfterNEQ(v time.Time) predicate.Blob {
+	return predicate.Blob(sql.FieldNEQ(FieldReclaimAfter, v))
+}
+
+// ReclaimAfterIn applies the In predicate on the "reclaim_after" field.
+func ReclaimAfterIn(vs ...time.Time) predicate.Blob {
+	return predicate.Blob(sql.FieldIn(FieldReclaimAfter, vs...))
+}
+
+// ReclaimAfterNotIn applies the NotIn predicate on the "reclaim_after" field.
+func ReclaimAfterNotIn(vs ...time.Time) predicate.Blob {
+	return predicate.Blob(sql.FieldNotIn(FieldReclaimAfter, vs...))
+}
+
+// ReclaimAfterGT applies the GT predicate on the "reclaim_after" field.
+func ReclaimAfterGT(v time.Time) predicate.Blob {
+	return predicate.Blob(sql.FieldGT(FieldReclaimAfter, v))
+}
+
+// ReclaimAfterGTE applies the GTE predicate on the "reclaim_after" field.
+func ReclaimAfterGTE(v time.Time) predicate.Blob {
+	return predicate.Blob(sql.FieldGTE(FieldReclaimAfter, v))
+}
+
+// ReclaimAfterLT applies the LT predicate on the "reclaim_after" field.
+func ReclaimAfterLT(v time.Time) predicate.Blob {
+	return predicate.Blob(sql.FieldLT(FieldReclaimAfter, v))
+}
+
+// ReclaimAfterLTE applies the LTE predicate on the "reclaim_after" field.
+func ReclaimAfterLTE(v time.Time) predicate.Blob {
+	return predicate.Blob(sql.FieldLTE(FieldReclaimAfter, v))
+}
+
+// ReclaimAfterIsNil applies the IsNil predicate on the "reclaim_after" field.
+func ReclaimAfterIsNil() predicate.Blob {
+	return predicate.Blob(sql.FieldIsNull(FieldReclaimAfter))
+}
+
+// ReclaimAfterNotNil applies the NotNil predicate on the "reclaim_after" field.
+func ReclaimAfterNotNil() predicate.Blob {
+	return predicate.Blob(sql.FieldNotNull(FieldReclaimAfter))
 }
 
 // HasItem applies the HasEdge predicate on the "item" edge.

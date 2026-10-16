@@ -20,6 +20,7 @@ import (
 	"papergo/internal/transfer"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
+	_ "papergo/internal/workflowai" // ai activities for catalog tests that do not import the runner
 	"papergo/web"
 	"strconv"
 	"strings"
@@ -348,6 +349,8 @@ func (a *API) failure(w http.ResponseWriter, r *http.Request, err error) {
 		problem(410, "live_cursor_expired", err.Error())
 	case errors.Is(err, dms.ErrDeltaExpired):
 		problem(410, "delta_expired", err.Error())
+	case errors.Is(err, dms.ErrContentUnavailable):
+		problem(410, "content_unavailable", "the file content is no longer available")
 	case errors.Is(err, dms.ErrNotFound) || errors.Is(err, identity.ErrNotFound):
 		problem(404, "not_found", "resource not found")
 	case errors.Is(err, dms.ErrForbidden) || errors.Is(err, identity.ErrForbidden):

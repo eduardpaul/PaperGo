@@ -36,6 +36,10 @@ type Blob struct {
 	Size int64 `json:"size,omitempty"`
 	// Sha256 holds the value of the "sha256" field.
 	Sha256 string `json:"sha256,omitempty"`
+	// Availability holds the value of the "availability" field.
+	Availability blob.Availability `json:"availability,omitempty"`
+	// ReclaimAfter holds the value of the "reclaim_after" field.
+	ReclaimAfter *time.Time `json:"reclaim_after,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the BlobQuery when eager-loading is set.
 	Edges        BlobEdges `json:"edges"`
@@ -69,9 +73,9 @@ func (*Blob) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case blob.FieldVersion, blob.FieldSize:
 			values[i] = new(sql.NullInt64)
-		case blob.FieldID, blob.FieldItemID, blob.FieldObjectKey, blob.FieldFilename, blob.FieldContentType, blob.FieldLanguages, blob.FieldSha256:
+		case blob.FieldID, blob.FieldItemID, blob.FieldObjectKey, blob.FieldFilename, blob.FieldContentType, blob.FieldLanguages, blob.FieldSha256, blob.FieldAvailability:
 			values[i] = new(sql.NullString)
-		case blob.FieldCreatedAt:
+		case blob.FieldCreatedAt, blob.FieldReclaimAfter:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -148,6 +152,19 @@ func (_m *Blob) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Sha256 = value.String
 			}
+		case blob.FieldAvailability:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field availability", values[i])
+			} else if value.Valid {
+				_m.Availability = blob.Availability(value.String)
+			}
+		case blob.FieldReclaimAfter:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field reclaim_after", values[i])
+			} else if value.Valid {
+				_m.ReclaimAfter = new(time.Time)
+				*_m.ReclaimAfter = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -215,6 +232,14 @@ func (_m *Blob) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("sha256=")
 	builder.WriteString(_m.Sha256)
+	builder.WriteString(", ")
+	builder.WriteString("availability=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Availability))
+	builder.WriteString(", ")
+	if v := _m.ReclaimAfter; v != nil {
+		builder.WriteString("reclaim_after=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

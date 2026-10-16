@@ -13,6 +13,9 @@ var (
 	ErrMissingParent      = errors.New("parent folder not found")
 	ErrExists             = errors.New("an entry with this name already exists")
 	ErrPreconditionFailed = errors.New("precondition failed")
+	// ErrContentUnavailable is a file version whose bytes were reclaimed.
+	// Its identity and metadata remain.
+	ErrContentUnavailable = errors.New("content unavailable")
 )
 
 type ValidationError struct{ Message string }

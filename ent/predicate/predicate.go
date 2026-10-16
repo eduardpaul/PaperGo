@@ -164,3 +164,6 @@ type WorkflowTrigger func(*sql.Selector)
 
 // WorkflowVersion is the predicate function for workflowversion builders.
 type WorkflowVersion func(*sql.Selector)
+
+// WorkflowWait is the predicate function for workflowwait builders.
+type WorkflowWait func(*sql.Selector)

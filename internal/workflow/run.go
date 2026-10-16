@@ -2,6 +2,9 @@ package workflow
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,10 +54,11 @@ func (in *RunInput) UnmarshalJSON(raw []byte) error {
 type Exec interface {
 	Step(name string, fn func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error)) (json.RawMessage, error)
 	Work(name string, fn func(ctx context.Context) (json.RawMessage, error)) (json.RawMessage, error)
-	// Await waits for task id, which node created, to be completed, and
-	// returns the node's output: tasks.Result's value. An error wrapping
-	// ErrStopped ends the execution: the run parked, or was cancelled.
-	Await(node, id string) (json.RawMessage, error)
+	// Await waits for park, which node created, and returns its completion.
+	// An error wrapping ErrStopped ends the execution: the run parked, or
+	// was cancelled. A deadline or a completion that is only an error fails
+	// the node.
+	Await(node string, park Park) (json.RawMessage, error)
 	Sleep(d time.Duration) error
 }
 
@@ -189,8 +193,8 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 			name = next
 			continue
 		}
-		if o.Wait != "" {
-			raw, err := r.x.Await(name, o.Wait)
+		if o.Park != nil {
+			raw, err := r.x.Await(name, *o.Park)
 			if errors.Is(err, ErrStopped) {
 				return Result{Status: "waiting", Node: name}, err
 			}
@@ -210,7 +214,19 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 			if err = decode(raw, &result); err != nil {
 				return r.finish(name, err)
 			}
-			o.Output, o.Port = result, fmt.Sprint(result["outcome"])
+			if msg, only := waitError(result); only {
+				next, ok := node.Next[PortError]
+				if !ok {
+					return r.finish(name, errors.New(msg))
+				}
+				r.steps[name] = map[string]any{"error": msg}
+				name = next
+				continue
+			}
+			o.Output = result
+			if o.Park.Kind == WaitKindTask {
+				o.Port = fmt.Sprint(result["outcome"])
+			}
 		}
 		r.steps[name] = o.Output
 		for k, v := range o.Vars {
@@ -335,11 +351,21 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 		}
 	}
 	sc := r.scope(ctx, t)
-	e := &env{ctx: dms.WithCause(ctx, r.in.Event.Depth, r.in.RunID), t: t, author: r.l.Author, itemID: r.in.ItemID, items: r.in.Items, runID: r.in.RunID, workspaceID: r.in.WorkspaceID, workflowID: r.in.WorkflowID, node: name, scope: sc, tools: r.tools,
+	e := &env{ctx: dms.WithCause(ctx, r.in.Event.Depth, r.in.RunID), t: t, author: r.l.Author, itemID: r.in.ItemID, items: r.in.Items, runID: r.in.RunID, workspaceID: r.in.WorkspaceID, workflowID: r.in.WorkflowID, node: name, executionID: r.executionID(name), scope: sc, tools: r.tools,
 		raise: func(event string, data map[string]any) { raise(r.event(WorkflowEvent(r.l.Key, event), data)) }}
 	o, err := run(e)
 	if err != nil {
 		return nil, err
+	}
+	if o.Park != nil {
+		deadline := o.Park.Deadline
+		var at *time.Time
+		if !deadline.IsZero() {
+			at = &deadline
+		}
+		if err = PutWait(ctx, t, Wait{Kind: o.Park.Kind, Key: o.Park.Key, WorkspaceID: e.workspaceID, RunID: e.runID, Node: e.node, ExecutionID: e.executionID, Data: o.Park.Data, Deadline: at}); err != nil {
+			return nil, err
+		}
 	}
 	o.Output = forms.Plain(o.Output)
 	out, err := json.Marshal(o)
@@ -479,4 +505,27 @@ func (r *runState) outputs(sc *scope) (map[string]any, error) {
 
 func decode(raw json.RawMessage, v any) error {
 	return decisionDecode(raw, v)
+}
+
+// executionID is stable for one visit of a node, including the loop iteration
+// it runs in, and stable again when that step is replayed.
+func (r *runState) executionID(node string) string {
+	h := sha256.New()
+	_, _ = h.Write([]byte(r.in.RunID))
+	for _, f := range r.loops {
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(f.node))
+		var n [4]byte
+		binary.BigEndian.PutUint32(n[:], uint32(f.index))
+		_, _ = h.Write(n[:])
+	}
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(node))
+	return hex.EncodeToString(h.Sum(nil)[:16])
+}
+
+// waitError reports a completion that is only an error message.
+func waitError(result map[string]any) (string, bool) {
+	msg, ok := result["error"].(string)
+	return msg, ok && msg != "" && len(result) == 1
 }

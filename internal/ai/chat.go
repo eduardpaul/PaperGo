@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -44,12 +45,21 @@ func (c ChatConfig) Validate() error {
 	return nil
 }
 
+// Image is one picture sent with a completion. Bytes are the file contents.
+type Image struct {
+	MediaType string
+	Bytes     []byte
+}
+
 // Completion asks the chat model for one answer.
 type Completion struct {
 	// Instructions say what to do (the system message).
 	Instructions string
 	// Input is what to do it with (the user message).
 	Input string
+	// Images are pictures the model sees with the input. None keeps the
+	// user message as text, which is what a deployment without vision sends.
+	Images []Image
 	// Schema, when set, asks for a JSON object answer matching this JSON
 	// schema.
 	Schema map[string]any
@@ -93,48 +103,75 @@ func (c *openAIChat) Key() string {
 // Complete asks for the answer at temperature 0, so equal requests get
 // equal answers as far as the model allows.
 func (c *openAIChat) Complete(ctx context.Context, in Completion) (Answer, error) {
-	body := map[string]any{"model": c.model, "temperature": 0, "messages": []map[string]string{
-		{"role": "system", "content": in.Instructions},
-		{"role": "user", "content": in.Input},
-	}}
-	if in.Schema != nil {
-		body["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "answer", "schema": in.Schema}}
-	}
-	payload, err := json.Marshal(body)
+	payload, err := json.Marshal(CompletionBody(c.model, in))
 	if err != nil {
 		return Answer{}, err
 	}
 	var out Answer
 	err = c.endpoint.call(ctx, payload, func(raw []byte) error {
-		var answer struct {
-			Choices []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-				FinishReason string `json:"finish_reason"`
-			} `json:"choices"`
-		}
-		if err := json.Unmarshal(raw, &answer); err != nil || len(answer.Choices) == 0 {
-			return errors.New("the answer is not a chat completion")
-		}
-		choice := answer.Choices[0]
-		if choice.FinishReason == "length" {
-			return errors.New("the answer was cut off at the model's length limit")
-		}
-		text := strings.TrimSpace(choice.Message.Content)
-		if in.Schema == nil {
-			if text == "" {
-				return errors.New("the answer is empty")
-			}
-			out.Text = text
-			return nil
-		}
-		if err := json.Unmarshal([]byte(unfence(text)), &out.JSON); err != nil || out.JSON == nil {
-			return errors.New("the answer is not a JSON object")
-		}
-		return nil
+		out, err = ParseCompletion(raw, in.Schema != nil)
+		return err
 	})
 	return out, err
+}
+
+// CompletionBody is the JSON body of one chat completion. Without images the
+// user message stays text. Images use data URLs so the request carries no
+// separate file handle.
+func CompletionBody(model string, in Completion) map[string]any {
+	var user any = in.Input
+	if len(in.Images) > 0 {
+		parts := make([]any, 0, 1+len(in.Images))
+		if in.Input != "" {
+			parts = append(parts, map[string]any{"type": "text", "text": in.Input})
+		}
+		for _, image := range in.Images {
+			parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]string{
+				"url": "data:" + image.MediaType + ";base64," + base64.StdEncoding.EncodeToString(image.Bytes),
+			}})
+		}
+		user = parts
+	}
+	body := map[string]any{"model": model, "temperature": 0, "messages": []any{
+		map[string]any{"role": "system", "content": in.Instructions},
+		map[string]any{"role": "user", "content": user},
+	}}
+	if in.Schema != nil {
+		body["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "answer", "schema": in.Schema}}
+	}
+	return body
+}
+
+// ParseCompletion reads one chat-completion response. structured asks for a
+// JSON object; otherwise the answer is text.
+func ParseCompletion(raw []byte, structured bool) (Answer, error) {
+	var answer struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(raw, &answer); err != nil || len(answer.Choices) == 0 {
+		return Answer{}, errors.New("the answer is not a chat completion")
+	}
+	choice := answer.Choices[0]
+	if choice.FinishReason == "length" {
+		return Answer{}, errors.New("the answer was cut off at the model's length limit")
+	}
+	text := strings.TrimSpace(choice.Message.Content)
+	if !structured {
+		if text == "" {
+			return Answer{}, errors.New("the answer is empty")
+		}
+		return Answer{Text: text}, nil
+	}
+	var out Answer
+	if err := json.Unmarshal([]byte(unfence(text)), &out.JSON); err != nil || out.JSON == nil {
+		return Answer{}, errors.New("the answer is not a JSON object")
+	}
+	return out, nil
 }
 
 // unfence strips a Markdown code fence some models put around JSON.

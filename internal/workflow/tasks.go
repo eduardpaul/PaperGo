@@ -220,7 +220,7 @@ func (e *env) createTask(in map[string]any, kind string, outcomes []model.TaskOu
 	if !wait {
 		return outcome{Output: out}, nil
 	}
-	return outcome{Wait: tk.ID, Output: out}, nil
+	return outcome{Park: &Park{Kind: WaitKindTask, Key: tk.ID}, Output: out}, nil
 }
 
 // dueAt reads a due time: a duration from now, a date or an RFC 3339 time.

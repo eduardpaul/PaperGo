@@ -8,6 +8,54 @@ import (
 	"time"
 )
 
+func TestBatchExecutionConfig(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("AUTH_MODE", "development")
+	t.Setenv("DEV_TOKEN", "0123456789abcdef0123456789abcdef")
+	dir := t.TempDir()
+	t.Setenv("DATABASE_PATH", filepath.Join(dir, "app.db"))
+	t.Setenv("SEARCH_DATABASE_PATH", filepath.Join(dir, "search.db"))
+	c, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.AIExecution != "immediate" || c.Batch.Enabled() || c.BatchDeadline != 72*time.Hour || c.BatchWorkspace != "" {
+		t.Fatalf("defaults: %+v execution %s deadline %s workspace %q", c.Batch, c.AIExecution, c.BatchDeadline, c.BatchWorkspace)
+	}
+	key := filepath.Join(dir, "batch.key")
+	if err = os.WriteFile(key, []byte("batch-secret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AI_BATCH_PROVIDER", "openai")
+	t.Setenv("AI_BATCH_ENDPOINT", "https://example.openai.azure.com/openai/v1/")
+	t.Setenv("AI_BATCH_MODEL", "gpt-batch")
+	t.Setenv("AI_BATCH_API_KEY_FILE", key)
+	t.Setenv("AI_BATCH_DEADLINE", "48h")
+	t.Setenv("AI_BATCH_WORKSPACE", " ws-1 ")
+	t.Setenv("AI_EXECUTION", "batch")
+	c, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.AIExecution != "batch" || c.Batch.Model != "gpt-batch" || c.Batch.APIKey != "batch-secret" || c.Batch.Endpoint != "https://example.openai.azure.com/openai/v1/" || c.BatchDeadline != 48*time.Hour || c.BatchWorkspace != "ws-1" {
+		t.Fatalf("batch config: %+v execution %s deadline %s workspace %q", c.Batch, c.AIExecution, c.BatchDeadline, c.BatchWorkspace)
+	}
+	for _, tc := range []struct{ key, value string }{
+		{"AI_EXECUTION", "sometimes"},
+		{"AI_BATCH_DEADLINE", "30s"},
+		{"AI_BATCH_DEADLINE", "721h"},
+		{"AI_BATCH_MODEL", ""},
+		{"AI_BATCH_PROVIDER", "local"},
+	} {
+		t.Run(tc.key+" "+tc.value, func(t *testing.T) {
+			t.Setenv(tc.key, tc.value)
+			if _, err := Load(); err == nil {
+				t.Fatal("invalid batch configuration accepted")
+			}
+		})
+	}
+}
+
 func TestSearchDatabasePathRejectsApplicationDatabase(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("AUTH_MODE", "development")

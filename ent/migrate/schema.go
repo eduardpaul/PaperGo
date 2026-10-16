@@ -67,6 +67,8 @@ var (
 		{Name: "languages", Type: field.TypeString, Size: 191, Default: ""},
 		{Name: "size", Type: field.TypeInt64},
 		{Name: "sha256", Type: field.TypeString, Size: 64},
+		{Name: "availability", Type: field.TypeEnum, Enums: []string{"available", "pending", "reclaimed"}, Default: "available"},
+		{Name: "reclaim_after", Type: field.TypeTime, Nullable: true},
 		{Name: "item_id", Type: field.TypeString, Size: 36},
 	}
 	// BlobsTable holds the schema information for the "blobs" table.
@@ -77,7 +79,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "blobs_resources_blobs",
-				Columns:    []*schema.Column{BlobsColumns[9]},
+				Columns:    []*schema.Column{BlobsColumns[11]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -86,7 +88,7 @@ var (
 			{
 				Name:    "blob_item_id_version",
 				Unique:  true,
-				Columns: []*schema.Column{BlobsColumns[9], BlobsColumns[2]},
+				Columns: []*schema.Column{BlobsColumns[11], BlobsColumns[2]},
 			},
 			{
 				Name:    "blob_object_key",
@@ -96,7 +98,7 @@ var (
 			{
 				Name:    "blob_sha256_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{BlobsColumns[8], BlobsColumns[9]},
+				Columns: []*schema.Column{BlobsColumns[8], BlobsColumns[11]},
 			},
 		},
 	}
@@ -2146,6 +2148,48 @@ var (
 			},
 		},
 	}
+	// WorkflowWaitsColumns holds the columns for the "workflow_waits" table.
+	WorkflowWaitsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "kind", Type: field.TypeString, Size: 64},
+		{Name: "key", Type: field.TypeString, Size: 128},
+		{Name: "workspace_id", Type: field.TypeString, Size: 36},
+		{Name: "run_id", Type: field.TypeString, Size: 36},
+		{Name: "node", Type: field.TypeString, Size: 100},
+		{Name: "execution_id", Type: field.TypeString, Size: 128},
+		{Name: "data", Type: field.TypeJSON, SchemaType: map[string]string{"sqlite3": "text"}},
+		{Name: "completion", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"sqlite3": "text"}},
+		{Name: "deadline", Type: field.TypeTime, Nullable: true},
+		{Name: "claim_run_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "claim_token", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "completed", "closed"}, Default: "open"},
+		{Name: "parking", Type: field.TypeBool, Default: false},
+	}
+	// WorkflowWaitsTable holds the schema information for the "workflow_waits" table.
+	WorkflowWaitsTable = &schema.Table{
+		Name:       "workflow_waits",
+		Columns:    WorkflowWaitsColumns,
+		PrimaryKey: []*schema.Column{WorkflowWaitsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "workflowwait_kind_key",
+				Unique:  true,
+				Columns: []*schema.Column{WorkflowWaitsColumns[3], WorkflowWaitsColumns[4]},
+			},
+			{
+				Name:    "workflowwait_run_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowWaitsColumns[6]},
+			},
+			{
+				Name:    "workflowwait_workspace_id_kind",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowWaitsColumns[5], WorkflowWaitsColumns[3]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuditEventsTable,
@@ -2201,6 +2245,7 @@ var (
 		WorkflowRunItemsTable,
 		WorkflowTriggersTable,
 		WorkflowVersionsTable,
+		WorkflowWaitsTable,
 	}
 )
 

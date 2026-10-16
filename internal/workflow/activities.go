@@ -119,9 +119,18 @@ type outcome struct {
 	Fail string `json:"fail,omitempty"`
 	// Job hands the node to its activity's work (activities with work only).
 	Job json.RawMessage `json:"job,omitempty"`
-	// Wait is a task the run waits for; its outcome picks the port and its
-	// result becomes the output.
-	Wait string `json:"wait,omitempty"`
+	// Park releases the worker until a durable wait completes. A task wait's
+	// outcome picks the port; any other completion is the node output.
+	Park *Park `json:"park,omitempty"`
+}
+
+// Park is a durable wait. Kind and Key identify it across replay. Data is a
+// small opaque object; large inputs stay outside the wait.
+type Park struct {
+	Kind     string          `json:"kind"`
+	Key      string          `json:"key"`
+	Data     json.RawMessage `json:"data,omitempty"`
+	Deadline time.Time       `json:"deadline,omitempty"`
 }
 
 // env is what an activity can use while its node runs: the DMS service bound
@@ -137,6 +146,7 @@ type env struct {
 	workspaceID string
 	workflowID  string
 	node        string
+	executionID string
 	scope       *scope
 	raise       func(typ string, data map[string]any)
 	// tools are the deployment's file, OCR and PDF tools.

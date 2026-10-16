@@ -26,6 +26,10 @@ func (a *API) registerWorkflows(api *http.ServeMux) {
 	api.HandleFunc("GET /v1/workflow-runs/{id}", a.workflowRun)
 	api.HandleFunc("POST /v1/workflow-runs/{id}/cancel", a.cancelWorkflowRun)
 	api.HandleFunc("POST /v1/workflow-runs/{id}/retry", a.retryWorkflowRun)
+	api.HandleFunc("GET /v1/workflow-waits", a.listWaits)
+	api.HandleFunc("POST /v1/workflow-waits/claim", a.claimWaits)
+	api.HandleFunc("PATCH /v1/workflow-waits", a.updateWait)
+	api.HandleFunc("POST /v1/workflow-waits/complete", a.completeWait)
 }
 
 // triggerTypes documents the trigger types for the catalog.

@@ -120,6 +120,8 @@ type Tx struct {
 	WorkflowTrigger *WorkflowTriggerClient
 	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
 	WorkflowVersion *WorkflowVersionClient
+	// WorkflowWait is the client for interacting with the WorkflowWait builders.
+	WorkflowWait *WorkflowWaitClient
 
 	// lazily loaded.
 	client     *Client
@@ -304,6 +306,7 @@ func (tx *Tx) init() {
 	tx.WorkflowRunItem = NewWorkflowRunItemClient(tx.config)
 	tx.WorkflowTrigger = NewWorkflowTriggerClient(tx.config)
 	tx.WorkflowVersion = NewWorkflowVersionClient(tx.config)
+	tx.WorkflowWait = NewWorkflowWaitClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

@@ -224,6 +224,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.As(err, &validation):
 		// Clients present 403 as "access denied" rather than a network failure.
 		h.status(w, http.StatusForbidden, validation.Message)
+	case errors.Is(err, dms.ErrContentUnavailable):
+		h.status(w, http.StatusGone, "content unavailable")
 	case errors.Is(err, dms.ErrNotFound):
 		h.status(w, http.StatusNotFound, "not found")
 	case errors.Is(err, dms.ErrForbidden):

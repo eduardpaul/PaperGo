@@ -3,6 +3,7 @@
 package blob
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -32,6 +33,10 @@ const (
 	FieldSize = "size"
 	// FieldSha256 holds the string denoting the sha256 field in the database.
 	FieldSha256 = "sha256"
+	// FieldAvailability holds the string denoting the availability field in the database.
+	FieldAvailability = "availability"
+	// FieldReclaimAfter holds the string denoting the reclaim_after field in the database.
+	FieldReclaimAfter = "reclaim_after"
 	// EdgeItem holds the string denoting the item edge name in mutations.
 	EdgeItem = "item"
 	// Table holds the table name of the blob in the database.
@@ -57,6 +62,8 @@ var Columns = []string{
 	FieldLanguages,
 	FieldSize,
 	FieldSha256,
+	FieldAvailability,
+	FieldReclaimAfter,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -95,6 +102,33 @@ var (
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
+
+// Availability defines the type for the "availability" enum field.
+type Availability string
+
+// AvailabilityAvailable is the default value of the Availability enum.
+const DefaultAvailability = AvailabilityAvailable
+
+// Availability values.
+const (
+	AvailabilityAvailable Availability = "available"
+	AvailabilityPending   Availability = "pending"
+	AvailabilityReclaimed Availability = "reclaimed"
+)
+
+func (a Availability) String() string {
+	return string(a)
+}
+
+// AvailabilityValidator is a validator for the "availability" field enum values. It is called by the builders before save.
+func AvailabilityValidator(a Availability) error {
+	switch a {
+	case AvailabilityAvailable, AvailabilityPending, AvailabilityReclaimed:
+		return nil
+	default:
+		return fmt.Errorf("blob: invalid enum value for availability field: %q", a)
+	}
+}
 
 // OrderOption defines the ordering options for the Blob queries.
 type OrderOption func(*sql.Selector)
@@ -147,6 +181,16 @@ func BySize(opts ...sql.OrderTermOption) OrderOption {
 // BySha256 orders the results by the sha256 field.
 func BySha256(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSha256, opts...).ToFunc()
+}
+
+// ByAvailability orders the results by the availability field.
+func ByAvailability(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAvailability, opts...).ToFunc()
+}
+
+// ByReclaimAfter orders the results by the reclaim_after field.
+func ByReclaimAfter(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReclaimAfter, opts...).ToFunc()
 }
 
 // ByItemField orders the results by item field.

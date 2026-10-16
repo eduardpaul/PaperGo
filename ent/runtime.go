@@ -58,6 +58,7 @@ import (
 	"papergo/ent/workflowrunitem"
 	"papergo/ent/workflowtrigger"
 	"papergo/ent/workflowversion"
+	"papergo/ent/workflowwait"
 	"papergo/internal/model"
 	"time"
 )
@@ -2854,4 +2855,147 @@ func init() {
 	workflowversion.DefaultID = workflowversionDescID.Default.(func() string)
 	// workflowversion.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	workflowversion.IDValidator = workflowversionDescID.Validators[0].(func(string) error)
+	workflowwaitMixin := schema.WorkflowWait{}.Mixin()
+	workflowwaitMixinFields0 := workflowwaitMixin[0].Fields()
+	_ = workflowwaitMixinFields0
+	workflowwaitFields := schema.WorkflowWait{}.Fields()
+	_ = workflowwaitFields
+	// workflowwaitDescCreatedAt is the schema descriptor for created_at field.
+	workflowwaitDescCreatedAt := workflowwaitMixinFields0[1].Descriptor()
+	// workflowwait.DefaultCreatedAt holds the default value on creation for the created_at field.
+	workflowwait.DefaultCreatedAt = workflowwaitDescCreatedAt.Default.(func() time.Time)
+	// workflowwaitDescUpdatedAt is the schema descriptor for updated_at field.
+	workflowwaitDescUpdatedAt := workflowwaitFields[0].Descriptor()
+	// workflowwait.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	workflowwait.DefaultUpdatedAt = workflowwaitDescUpdatedAt.Default.(func() time.Time)
+	// workflowwaitDescKind is the schema descriptor for kind field.
+	workflowwaitDescKind := workflowwaitFields[1].Descriptor()
+	// workflowwait.KindValidator is a validator for the "kind" field. It is called by the builders before save.
+	workflowwait.KindValidator = func() func(string) error {
+		validators := workflowwaitDescKind.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(kind string) error {
+			for _, fn := range fns {
+				if err := fn(kind); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// workflowwaitDescKey is the schema descriptor for key field.
+	workflowwaitDescKey := workflowwaitFields[2].Descriptor()
+	// workflowwait.KeyValidator is a validator for the "key" field. It is called by the builders before save.
+	workflowwait.KeyValidator = func() func(string) error {
+		validators := workflowwaitDescKey.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(key string) error {
+			for _, fn := range fns {
+				if err := fn(key); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// workflowwaitDescWorkspaceID is the schema descriptor for workspace_id field.
+	workflowwaitDescWorkspaceID := workflowwaitFields[3].Descriptor()
+	// workflowwait.WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
+	workflowwait.WorkspaceIDValidator = func() func(string) error {
+		validators := workflowwaitDescWorkspaceID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(workspace_id string) error {
+			for _, fn := range fns {
+				if err := fn(workspace_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// workflowwaitDescRunID is the schema descriptor for run_id field.
+	workflowwaitDescRunID := workflowwaitFields[4].Descriptor()
+	// workflowwait.RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
+	workflowwait.RunIDValidator = func() func(string) error {
+		validators := workflowwaitDescRunID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(run_id string) error {
+			for _, fn := range fns {
+				if err := fn(run_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// workflowwaitDescNode is the schema descriptor for node field.
+	workflowwaitDescNode := workflowwaitFields[5].Descriptor()
+	// workflowwait.NodeValidator is a validator for the "node" field. It is called by the builders before save.
+	workflowwait.NodeValidator = func() func(string) error {
+		validators := workflowwaitDescNode.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(node string) error {
+			for _, fn := range fns {
+				if err := fn(node); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// workflowwaitDescExecutionID is the schema descriptor for execution_id field.
+	workflowwaitDescExecutionID := workflowwaitFields[6].Descriptor()
+	// workflowwait.ExecutionIDValidator is a validator for the "execution_id" field. It is called by the builders before save.
+	workflowwait.ExecutionIDValidator = func() func(string) error {
+		validators := workflowwaitDescExecutionID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(execution_id string) error {
+			for _, fn := range fns {
+				if err := fn(execution_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// workflowwaitDescData is the schema descriptor for data field.
+	workflowwaitDescData := workflowwaitFields[7].Descriptor()
+	// workflowwait.DefaultData holds the default value on creation for the data field.
+	workflowwait.DefaultData = workflowwaitDescData.Default.(jsontext.Value)
+	// workflowwaitDescClaimRunID is the schema descriptor for claim_run_id field.
+	workflowwaitDescClaimRunID := workflowwaitFields[10].Descriptor()
+	// workflowwait.ClaimRunIDValidator is a validator for the "claim_run_id" field. It is called by the builders before save.
+	workflowwait.ClaimRunIDValidator = workflowwaitDescClaimRunID.Validators[0].(func(string) error)
+	// workflowwaitDescClaimToken is the schema descriptor for claim_token field.
+	workflowwaitDescClaimToken := workflowwaitFields[11].Descriptor()
+	// workflowwait.ClaimTokenValidator is a validator for the "claim_token" field. It is called by the builders before save.
+	workflowwait.ClaimTokenValidator = workflowwaitDescClaimToken.Validators[0].(func(string) error)
+	// workflowwaitDescParking is the schema descriptor for parking field.
+	workflowwaitDescParking := workflowwaitFields[13].Descriptor()
+	// workflowwait.DefaultParking holds the default value on creation for the parking field.
+	workflowwait.DefaultParking = workflowwaitDescParking.Default.(bool)
+	// workflowwaitDescID is the schema descriptor for id field.
+	workflowwaitDescID := workflowwaitMixinFields0[0].Descriptor()
+	// workflowwait.DefaultID holds the default value on creation for the id field.
+	workflowwait.DefaultID = workflowwaitDescID.Default.(func() string)
+	// workflowwait.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	workflowwait.IDValidator = workflowwaitDescID.Validators[0].(func(string) error)
 }

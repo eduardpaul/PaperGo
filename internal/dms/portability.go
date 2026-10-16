@@ -223,21 +223,7 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store) (s
 		}
 		p.Tables[table] = data
 	}
-	seen := map[string]bool{}
-	for _, row := range packageMaps(p.Tables["blobs"]) {
-		key := row["object_key"].(string)
-		if !seen[key] {
-			seen[key] = true
-			p.Objects = append(p.Objects, packageObject{key, row["size"].(int64), row["sha256"].(string)})
-		}
-	}
-	for _, row := range packageMaps(p.Tables["blob_texts"]) {
-		key := row["object_key"].(string)
-		if !seen[key] {
-			seen[key] = true
-			p.Objects = append(p.Objects, packageObject{key, row["object_size"].(int64), row["object_sha256"].(string)})
-		}
-	}
+	p.Objects = packageObjects(packageMaps(p.Tables["blobs"]), packageMaps(p.Tables["blob_texts"]))
 	raw, err := json.Marshal(p)
 	if err != nil {
 		return storage.Object{}, err
@@ -292,6 +278,72 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store) (s
 	}
 	return store.Put(ctx, f, PackageLimit)
 }
+
+// packageObjects lists each stored object once, in first-seen order. A key is
+// left out when every blob that names it has been reclaimed and no extracted
+// text still needs the bytes. History metadata stays in the blob rows.
+func packageObjects(blobs, texts []map[string]any) []packageObject {
+	type ref struct {
+		size int64
+		sha  string
+		keep bool
+		set  bool
+	}
+	order := []string{}
+	meta := map[string]*ref{}
+	add := func(key string) *ref {
+		if row, ok := meta[key]; ok {
+			return row
+		}
+		row := &ref{}
+		meta[key] = row
+		order = append(order, key)
+		return row
+	}
+	remember := func(row *ref, size any, sha any) {
+		n, ok := size.(int64)
+		text, textOK := sha.(string)
+		if !ok || !textOK {
+			return
+		}
+		row.size, row.sha, row.set = n, text, true
+	}
+	for _, blob := range blobs {
+		key, _ := blob["object_key"].(string)
+		if key == "" {
+			continue
+		}
+		row := add(key)
+		if blob["availability"] != "reclaimed" {
+			row.keep = true
+			remember(row, blob["size"], blob["sha256"])
+			continue
+		}
+		if !row.set {
+			remember(row, blob["size"], blob["sha256"])
+		}
+	}
+	for _, text := range texts {
+		key, _ := text["object_key"].(string)
+		if key == "" {
+			continue
+		}
+		row := add(key)
+		row.keep = true
+		if !row.set {
+			remember(row, text["object_size"], text["object_sha256"])
+		}
+	}
+	out := []packageObject{}
+	for _, key := range order {
+		row := meta[key]
+		if row.keep {
+			out = append(out, packageObject{Key: key, Size: row.size, SHA256: row.sha})
+		}
+	}
+	return out
+}
+
 func packageMaps(table packageTable) []map[string]any {
 	rows := make([]map[string]any, len(table.Rows))
 	for i, values := range table.Rows {
@@ -451,8 +503,11 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		if !ok {
 			return result, invalid("invalid blob object")
 		}
-		obj, ok := objects[key]
-		if !ok || blob["size"] != obj.Size || blob["sha256"] != obj.SHA256 {
+		obj, present := objects[key]
+		if blob["availability"] == "reclaimed" && !present {
+			continue
+		}
+		if !present || blob["size"] != obj.Size || blob["sha256"] != obj.SHA256 {
 			return result, invalid("blob metadata does not match packaged bytes")
 		}
 		if objectTypes[key] == "" || objectTypes[key] != blob["content_type"] {

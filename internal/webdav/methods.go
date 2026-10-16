@@ -26,6 +26,9 @@ func (h *Handler) get(w http.ResponseWriter, r *request) error {
 		return nil
 	}
 	var content io.ReadSeeker = bytes.NewReader(nil)
+	if f.Blob != nil && f.Blob.Availability == "reclaimed" {
+		return dms.ErrContentUnavailable
+	}
 	if f.Blob != nil {
 		file, err := h.Storage.Open(r.Context(), f.Blob.ObjectKey)
 		if err != nil {

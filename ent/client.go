@@ -64,6 +64,7 @@ import (
 	"papergo/ent/workflowrunitem"
 	"papergo/ent/workflowtrigger"
 	"papergo/ent/workflowversion"
+	"papergo/ent/workflowwait"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -184,6 +185,8 @@ type Client struct {
 	WorkflowTrigger *WorkflowTriggerClient
 	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
 	WorkflowVersion *WorkflowVersionClient
+	// WorkflowWait is the client for interacting with the WorkflowWait builders.
+	WorkflowWait *WorkflowWaitClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -248,6 +251,7 @@ func (c *Client) init() {
 	c.WorkflowRunItem = NewWorkflowRunItemClient(c.config)
 	c.WorkflowTrigger = NewWorkflowTriggerClient(c.config)
 	c.WorkflowVersion = NewWorkflowVersionClient(c.config)
+	c.WorkflowWait = NewWorkflowWaitClient(c.config)
 }
 
 type (
@@ -393,6 +397,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		WorkflowRunItem:         NewWorkflowRunItemClient(cfg),
 		WorkflowTrigger:         NewWorkflowTriggerClient(cfg),
 		WorkflowVersion:         NewWorkflowVersionClient(cfg),
+		WorkflowWait:            NewWorkflowWaitClient(cfg),
 	}, nil
 }
 
@@ -465,6 +470,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		WorkflowRunItem:         NewWorkflowRunItemClient(cfg),
 		WorkflowTrigger:         NewWorkflowTriggerClient(cfg),
 		WorkflowVersion:         NewWorkflowVersionClient(cfg),
+		WorkflowWait:            NewWorkflowWaitClient(cfg),
 	}, nil
 }
 
@@ -505,7 +511,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
 		c.SyncToken, c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup,
 		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.WorkflowTrigger, c.WorkflowVersion, c.WorkflowWait,
 	} {
 		n.Use(hooks...)
 	}
@@ -526,7 +532,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
 		c.SyncToken, c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup,
 		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion,
+		c.WorkflowTrigger, c.WorkflowVersion, c.WorkflowWait,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -641,6 +647,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.WorkflowTrigger.mutate(ctx, m)
 	case *WorkflowVersionMutation:
 		return c.WorkflowVersion.mutate(ctx, m)
+	case *WorkflowWaitMutation:
+		return c.WorkflowWait.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -8623,6 +8631,139 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 	}
 }
 
+// WorkflowWaitClient is a client for the WorkflowWait schema.
+type WorkflowWaitClient struct {
+	config
+}
+
+// NewWorkflowWaitClient returns a client for the WorkflowWait from the given config.
+func NewWorkflowWaitClient(c config) *WorkflowWaitClient {
+	return &WorkflowWaitClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `workflowwait.Hooks(f(g(h())))`.
+func (c *WorkflowWaitClient) Use(hooks ...Hook) {
+	c.hooks.WorkflowWait = append(c.hooks.WorkflowWait, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `workflowwait.Intercept(f(g(h())))`.
+func (c *WorkflowWaitClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WorkflowWait = append(c.inters.WorkflowWait, interceptors...)
+}
+
+// Create returns a builder for creating a WorkflowWait entity.
+func (c *WorkflowWaitClient) Create() *WorkflowWaitCreate {
+	mutation := newWorkflowWaitMutation(c.config, OpCreate)
+	return &WorkflowWaitCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WorkflowWait entities.
+func (c *WorkflowWaitClient) CreateBulk(builders ...*WorkflowWaitCreate) *WorkflowWaitCreateBulk {
+	return &WorkflowWaitCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WorkflowWaitClient) MapCreateBulk(slice any, setFunc func(*WorkflowWaitCreate, int)) *WorkflowWaitCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WorkflowWaitCreateBulk{err: fmt.Errorf("calling to WorkflowWaitClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WorkflowWaitCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WorkflowWaitCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WorkflowWait.
+func (c *WorkflowWaitClient) Update() *WorkflowWaitUpdate {
+	mutation := newWorkflowWaitMutation(c.config, OpUpdate)
+	return &WorkflowWaitUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WorkflowWaitClient) UpdateOne(_m *WorkflowWait) *WorkflowWaitUpdateOne {
+	mutation := newWorkflowWaitMutation(c.config, OpUpdateOne, withWorkflowWait(_m))
+	return &WorkflowWaitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WorkflowWaitClient) UpdateOneID(id string) *WorkflowWaitUpdateOne {
+	mutation := newWorkflowWaitMutation(c.config, OpUpdateOne, withWorkflowWaitID(id))
+	return &WorkflowWaitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WorkflowWait.
+func (c *WorkflowWaitClient) Delete() *WorkflowWaitDelete {
+	mutation := newWorkflowWaitMutation(c.config, OpDelete)
+	return &WorkflowWaitDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WorkflowWaitClient) DeleteOne(_m *WorkflowWait) *WorkflowWaitDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WorkflowWaitClient) DeleteOneID(id string) *WorkflowWaitDeleteOne {
+	builder := c.Delete().Where(workflowwait.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WorkflowWaitDeleteOne{builder}
+}
+
+// Query returns a query builder for WorkflowWait.
+func (c *WorkflowWaitClient) Query() *WorkflowWaitQuery {
+	return &WorkflowWaitQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWorkflowWait},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a WorkflowWait entity by its id.
+func (c *WorkflowWaitClient) Get(ctx context.Context, id string) (*WorkflowWait, error) {
+	return c.Query().Where(workflowwait.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WorkflowWaitClient) GetX(ctx context.Context, id string) *WorkflowWait {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *WorkflowWaitClient) Hooks() []Hook {
+	return c.hooks.WorkflowWait
+}
+
+// Interceptors returns the client interceptors.
+func (c *WorkflowWaitClient) Interceptors() []Interceptor {
+	return c.inters.WorkflowWait
+}
+
+func (c *WorkflowWaitClient) mutate(ctx context.Context, m *WorkflowWaitMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WorkflowWaitCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WorkflowWaitUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WorkflowWaitUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WorkflowWaitDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown WorkflowWait mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
@@ -8635,8 +8776,8 @@ type (
 		OperationItem, Publication, Relationship, RelationshipType, Resource,
 		SchemaRevision, SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken,
 		SyncView, Task, TaskResponse, Term, TermGroup, TermSet, WebDAVCredential,
-		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
-		WorkflowVersion []ent.Hook
+		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger, WorkflowVersion,
+		WorkflowWait []ent.Hook
 	}
 	inters struct {
 		AuditEvent, Blob, BlobDeletion, BlobText, BusinessKey, CachedResult,
@@ -8648,8 +8789,8 @@ type (
 		OperationItem, Publication, Relationship, RelationshipType, Resource,
 		SchemaRevision, SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken,
 		SyncView, Task, TaskResponse, Term, TermGroup, TermSet, WebDAVCredential,
-		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger,
-		WorkflowVersion []ent.Interceptor
+		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger, WorkflowVersion,
+		WorkflowWait []ent.Interceptor
 	}
 )
 

@@ -1,0 +1,90 @@
+{
+  "name": "Read receipts",
+  "description": "Reads a receipt photo, keeps a smaller copy when one is suitable, and files the purchase lines.",
+  "definition": {
+    "triggers": [
+      {"type": "file.added", "collection_id": "$LIBRARY", "media_types": ["image/*"], "sources": ["upload", "restore", "webdav"]},
+      {"type": "manual", "collection_id": "$LIBRARY"}
+    ],
+    "concurrency": "replace",
+    "flow": {"start": "optimize", "nodes": {
+      "optimize": {"activity": "file.optimize_image", "next": {"candidate": "promote", "skipped": "keep", "error": "review"}},
+      "promote": {"activity": "file.promote", "inputs": {"staged_file_id": "{step:optimize.staged_file_id}"}, "next": {"done": "remember-image", "error": "review"}},
+      "remember-image": {"activity": "set_variable", "inputs": {"name": "image_blob", "value": "{step:promote.blob_id}"}, "next": {"done": "remember-source"}},
+      "remember-source": {"activity": "set_variable", "inputs": {"name": "source_blob", "value": "{step:optimize.blob_id}"}, "next": {"done": "remember-reclaim"}},
+      "remember-reclaim": {"activity": "set_variable", "inputs": {"name": "reclaim", "value": "yes"}, "next": {"done": "extract"}},
+      "keep": {"activity": "set_variable", "inputs": {"name": "image_blob", "value": "{step:optimize.blob_id}"}, "next": {"done": "remember-skip"}},
+      "remember-skip": {"activity": "set_variable", "inputs": {"name": "reclaim", "value": "no"}, "next": {"done": "extract"}},
+      "extract": {"activity": "ai.complete", "inputs": {
+        "prompt": "Read this receipt photo. Return only the object described by the schema. store is the seller. purchase_date is YYYY-MM-DD. currency is a 3-letter code. total, quantity, unit_price and amount are exact decimal strings, never numbers. One lines entry per product.",
+        "image": "{var:image_blob}",
+        "execution": "batch",
+        "queue": "shared",
+        "output_schema": {
+          "type": "object",
+          "required": ["store", "purchase_date", "currency", "total", "lines"],
+          "properties": {
+            "store": {"type": "string", "minLength": 1, "maxLength": 200},
+            "purchase_date": {"type": "string", "minLength": 10, "maxLength": 10},
+            "currency": {"type": "string", "minLength": 3, "maxLength": 3},
+            "total": {"type": "string", "minLength": 1, "maxLength": 40},
+            "lines": {"type": "array", "minItems": 1, "maxItems": 100, "items": {
+              "type": "object",
+              "required": ["description", "quantity", "unit_price", "amount"],
+              "properties": {
+                "description": {"type": "string", "minLength": 1, "maxLength": 200},
+                "quantity": {"type": "string", "minLength": 1, "maxLength": 40},
+                "unit_price": {"type": "string", "minLength": 1, "maxLength": 40},
+                "amount": {"type": "string", "minLength": 1, "maxLength": 40}
+              }
+            }}
+          }
+        }
+      }, "next": {"done": "guard", "error": "review"}},
+      "guard": {"activity": "item.update", "inputs": {
+        "expected_blob_id": "{var:image_blob}",
+        "values": {
+          "store": "{step:extract.json.store}",
+          "purchase_date": "{step:extract.json.purchase_date}",
+          "currency": "{step:extract.json.currency}",
+          "total": "{step:extract.json.total}"
+        }
+      }, "next": {"done": "clear", "error": "review"}},
+      "clear": {"activity": "relationship.list", "inputs": {
+        "direction": "outgoing",
+        "type": "contains receipt line",
+        "limit": 50,
+        "cursor": "{step:clear.next_cursor}"
+      }, "next": {"done": "each-old", "error": "review"}},
+      "each-old": {"activity": "forEach", "inputs": {"items": "{step:clear.relationships}", "as": "link"}, "next": {"body": "unlink", "done": "more"}},
+      "unlink": {"activity": "relationship.remove", "inputs": {"relationship_id": "{var:link.id}"}, "next": {"done": "drop", "error": "review"}},
+      "drop": {"activity": "item.delete", "inputs": {"item_id": "{var:link.related_id}"}, "next": {"error": "review"}},
+      "more": {"activity": "if", "inputs": {"left": "{step:clear.next_cursor}", "op": "not_empty"}, "next": {"true": "clear", "false": "each-line"}},
+      "each-line": {"activity": "forEach", "inputs": {"items": "{step:extract.json.lines}", "as": "line"}, "next": {"body": "make", "done": "after-lines"}},
+      "make": {"activity": "item.create", "inputs": {
+        "collection_id": "$LINES",
+        "content_type_id": "$LINE_TYPE",
+        "name": "{var:line.description}",
+        "values": {
+          "description": "{var:line.description}",
+          "quantity": "{var:line.quantity}",
+          "unit_price": "{var:line.unit_price}",
+          "amount": "{var:line.amount}"
+        }
+      }, "next": {"done": "link", "error": "review"}},
+      "link": {"activity": "relationship.create", "inputs": {
+        "type": "contains receipt line",
+        "directed": true,
+        "target_id": "{step:make.item_id}"
+      }, "next": {"error": "review"}},
+      "after-lines": {"activity": "if", "inputs": {"left": "{var:reclaim}", "op": "eq", "right": "yes"}, "next": {"true": "reclaim", "false": "read"}},
+      "reclaim": {"activity": "file.reclaim", "inputs": {"blob_id": "{var:source_blob}"}, "next": {"done": "read", "error": "review"}},
+      "read": {"activity": "item.update", "inputs": {
+        "expected_blob_id": "{var:image_blob}",
+        "values": {"status": "Read"}
+      }, "next": {"done": "end", "error": "review"}},
+      "review": {"activity": "item.update", "inputs": {"values": {"status": "Needs review"}}, "next": {"done": "end"}},
+      "end": {"activity": "end"}
+    }}
+  }
+}

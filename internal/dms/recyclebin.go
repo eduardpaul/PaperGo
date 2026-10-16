@@ -367,7 +367,7 @@ func (s *Service) CleanupPurgedBlobs(ctx context.Context, store objectDeleter) e
 
 func (s *Service) deleteUnreferencedObject(ctx context.Context, store objectDeleter, key string) error {
 	var referenced bool
-	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=?) OR EXISTS(SELECT 1 FROM blob_texts WHERE object_key=?) OR EXISTS(SELECT 1 FROM staged_files WHERE object_key=? AND state='pending') OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now')))`, key, key, key, OperationKindImport, key, OperationKindExport, key); err != nil {
+	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=? AND availability<>'reclaimed') OR EXISTS(SELECT 1 FROM blob_texts WHERE object_key=?) OR EXISTS(SELECT 1 FROM staged_files WHERE object_key=? AND state='pending') OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now'))) OR EXISTS(SELECT 1 FROM workflow_waits WHERE status='open' AND json_type(data, '$.blobs')='array' AND EXISTS (SELECT 1 FROM json_each(json_extract(data, '$.blobs')) b JOIN blobs bl ON bl.id=json_extract(b.value, '$.blob_id') WHERE bl.object_key=?))`, key, key, key, OperationKindImport, key, OperationKindExport, key, key); err != nil {
 		return err
 	}
 	if referenced {
@@ -397,6 +397,9 @@ func (s *Service) RunBlobCleanup(ctx context.Context, store storage.Store, log *
 		}
 		if err := s.CollectObjects(ctx, store, time.Now().UTC()); err != nil && ctx.Err() == nil {
 			log.Error("unreferenced object cleanup", "error", err)
+		}
+		if err := s.SweepReclaims(ctx, store, time.Now().UTC()); err != nil && ctx.Err() == nil {
+			log.Error("reclaimed file cleanup", "error", err)
 		}
 		select {
 		case <-ctx.Done():

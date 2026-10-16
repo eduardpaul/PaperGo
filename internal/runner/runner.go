@@ -24,6 +24,7 @@ import (
 	"papergo/internal/database"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
+	_ "papergo/internal/workflowai" // registers ai.complete, search.enrich and the batch coordinator
 )
 
 const (
@@ -181,10 +182,13 @@ func (r *Runner) Launch(ctx context.Context) error {
 // Shutdown stops the dispatcher and the runner; pending runs and
 // undispatched events continue when it launches again.
 func (r *Runner) Shutdown(timeout time.Duration) error {
-	if r.stop != nil {
-		r.stop()
-		<-r.stopped
+	if r.stop == nil {
+		return nil
 	}
+	stop := r.stop
+	r.stop = nil
+	stop()
+	<-r.stopped
 	return dbos.Shutdown(r.ctx, timeout)
 }
 

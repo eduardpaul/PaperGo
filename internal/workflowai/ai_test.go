@@ -1,4 +1,4 @@
-package workflow
+package workflowai
 
 import (
 	"context"
@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"papergo/internal/ai"
+	"papergo/internal/forms"
 	"papergo/internal/resultcache"
 	"papergo/internal/search"
 	"papergo/internal/search/sqlitestore"
 	"papergo/internal/testutil"
+	"papergo/internal/workflow"
 )
 
 type resultTestChat struct {
@@ -48,16 +50,16 @@ func TestEnrichmentRetryReusesCompletedChunks(t *testing.T) {
 		}
 		return ai.Answer{Text: "context for " + in.Input}, nil
 	}}
-	w := &workEnv{ctx: ctx, tools: Tools{Search: index, Chat: chat, Results: cache, ResultTTL: time.Hour}}
+	tools := workflow.Tools{Search: index, Chat: chat, Results: cache, ResultTTL: time.Hour}
 	job := enrichJob{Generation: "run:chunk", Model: chat.Key(), Instructions: "describe", Scope: "chunk"}
 	raw, _ := json.Marshal(job)
-	if _, err = workSearchEnrich(w, raw); err == nil {
+	if _, err = workSearchEnrich(ctx, tools, raw); err == nil {
 		t.Fatal("expected the second chunk to fail")
 	}
 	// A work failure retains completed answers without publishing half the
 	// generation's enrichment. Retrying the exact job finds them in the cache.
 	key := enrichKey(job, "", search.StagedChunk{Kind: "text", Text: "first"})
-	if cached, err := cache.Get(ctx, "search.enrich", aiCacheScope, key); err != nil || cached == nil {
+	if cached, err := cache.Get(ctx, "search.enrich", answerScope, key); err != nil || cached == nil {
 		t.Fatalf("lost completed answer: %s %v", cached, err)
 	}
 	chunks, err := index.GenerationChunks(ctx, job.Generation)
@@ -70,7 +72,7 @@ func TestEnrichmentRetryReusesCompletedChunks(t *testing.T) {
 		}
 	}
 	fail = false
-	out, err := workSearchEnrich(w, raw)
+	out, err := workSearchEnrich(ctx, tools, raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,19 +105,19 @@ func TestCompleteCachesOnlyValidatedAnswers(t *testing.T) {
 		}
 		return ai.Answer{JSON: map[string]any{"total": 12.5}}, nil
 	}}
-	w := &workEnv{ctx: ctx, tools: Tools{Chat: chat, Results: cache, ResultTTL: time.Hour}}
+	tools := workflow.Tools{Chat: chat, Results: cache, ResultTTL: time.Hour}
 	job := completeJob{Key: "request", Model: chat.Key(), Input: "receipt", Prompt: "extract", Schema: map[string]any{
 		"type": "object", "properties": map[string]any{"total": map[string]any{"type": "number"}},
 	}}
 	raw, _ := json.Marshal(job)
-	if _, err := workAIComplete(w, raw); err == nil {
+	if _, err := workAIComplete(ctx, tools, raw); err == nil {
 		t.Fatal("accepted invalid structured answer")
 	}
-	if got, err := cache.Get(ctx, "ai.complete", aiCacheScope, job.Key); err != nil || got != nil {
+	if got, err := cache.Get(ctx, "ai.complete", answerScope, job.Key); err != nil || got != nil {
 		t.Fatalf("cached invalid answer: %s %v", got, err)
 	}
 	for _, cached := range []bool{false, true} {
-		out, err := workAIComplete(w, raw)
+		out, err := workAIComplete(ctx, tools, raw)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -126,5 +128,26 @@ func TestCompleteCachesOnlyValidatedAnswers(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("asked again after successful work: %d calls", calls)
+	}
+}
+
+func TestAIActivitySchemas(t *testing.T) {
+	want := map[string]bool{"ai.complete": false, "search.enrich": false, "ai.batch.coordinate": false}
+	for _, activity := range workflow.Activities() {
+		if _, ok := want[activity.Key]; !ok {
+			continue
+		}
+		want[activity.Key] = true
+		if err := forms.Validate(activity.InputSchema, activity.Key); err != nil {
+			t.Fatalf("%s input: %v", activity.Key, err)
+		}
+		if err := forms.Validate(activity.OutputSchema, activity.Key+" output"); err != nil {
+			t.Fatalf("%s output: %v", activity.Key, err)
+		}
+	}
+	for key, found := range want {
+		if !found {
+			t.Errorf("missing activity %s", key)
+		}
 	}
 }

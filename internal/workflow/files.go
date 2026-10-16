@@ -3,6 +3,7 @@ package workflow
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	"papergo/internal/dms"
 	"papergo/internal/forms"
@@ -23,6 +24,12 @@ func init() {
 	register(&Activity{Key: "file.discard", Kind: "action", Description: "Discards a staged file of this run; the item keeps its current file.",
 		InputSchema:  inputs(stagedProp, "staged_file_id"),
 		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"discarded": {"type": "boolean"}}}`), run: runFileDiscard})
+	register(&Activity{Key: "file.reclaim", Kind: "action", Description: "Asks to reclaim a file version's bytes after the grace period. The version keeps its id, number, filename, media type, size and checksum. Current files, published files, staged files and open waits that still name the version defer reclamation. A retry does not move the deadline.",
+		InputSchema: inputs(itemIDProp+`, "blob_id": {"type": "string", "title": "File version", "description": "The file version to reclaim, such as {trigger:blob_id}."}`, "blob_id"),
+		OutputSchema: forms.MustParse(`{"type": "object", "properties": {
+			"blob_id": {"type": "string"}, "availability": {"type": "string"}, "deferred": {"type": "boolean"},
+			"reason": {"type": "string"}, "reclaim_after": {"type": "string"}}}`),
+		run: runFileReclaim})
 }
 
 func (e *env) stagedID(in map[string]any) (string, error) {
@@ -57,6 +64,32 @@ func runFilePromote(e *env, in map[string]any) (outcome, error) {
 		return outcome{}, err
 	}
 	return outcome{Output: map[string]any{"item_id": b.ItemID, "blob_id": b.ID, "file_version": b.Version}}, nil
+}
+
+func runFileReclaim(e *env, in map[string]any) (outcome, error) {
+	itemID, err := e.target(in)
+	if err != nil {
+		return outcome{}, err
+	}
+	blobID, err := e.scope.text(in["blob_id"])
+	if err != nil {
+		return outcome{}, err
+	}
+	if blobID == "" {
+		return outcome{}, errors.New("blob_id is empty")
+	}
+	out, err := e.t.ReclaimBlob(e.ctx, e.author, itemID, blobID)
+	if err != nil {
+		return outcome{}, err
+	}
+	result := map[string]any{"blob_id": out.BlobID, "availability": out.Availability, "deferred": out.Deferred}
+	if out.Reason != "" {
+		result["reason"] = out.Reason
+	}
+	if out.ReclaimAfter != nil {
+		result["reclaim_after"] = out.ReclaimAfter.UTC().Format(time.RFC3339)
+	}
+	return outcome{Output: result}, nil
 }
 
 func runFileDiscard(e *env, in map[string]any) (outcome, error) {

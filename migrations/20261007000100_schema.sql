@@ -53,7 +53,7 @@ CREATE TABLE integration_revision_data (
 CREATE TRIGGER integration_revision_data_immutable BEFORE UPDATE ON integration_revision_data BEGIN SELECT RAISE(ABORT,'integration revision data is immutable'); END;
 
 CREATE TABLE `audit_events` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NULL, `resource_id` text NULL, `subject` text NOT NULL, `action` text NOT NULL, entity_type TEXT NOT NULL CHECK(length(entity_type)>0), entity_id TEXT NULL, properties JSON NOT NULL DEFAULT '[]' CHECK(json_valid(properties) AND json_type(properties)='array'), trace_id TEXT NOT NULL CHECK(length(trace_id)>0), `details` json NOT NULL, PRIMARY KEY (`id`));
-CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL CHECK(content_type IN ('application/pdf','image/tiff','image/jpeg','image/png','image/webp')), languages TEXT NOT NULL DEFAULT '' CHECK(length(languages)<=191), `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
+CREATE TABLE `blobs` (`id` text NOT NULL, `created_at` datetime NOT NULL, `version` integer NOT NULL, `object_key` text NOT NULL, `filename` text NOT NULL, `content_type` text NOT NULL CHECK(content_type IN ('application/pdf','image/tiff','image/jpeg','image/png','image/webp')), languages TEXT NOT NULL DEFAULT '' CHECK(length(languages)<=191), `size` integer NOT NULL, `sha256` text NOT NULL, `item_id` text NOT NULL, availability TEXT NOT NULL DEFAULT 'available' CHECK(availability IN ('available','pending','reclaimed')), reclaim_after DATETIME, PRIMARY KEY (`id`), CONSTRAINT `blobs_resources_blobs` FOREIGN KEY (`item_id`) REFERENCES `resources` (`id`) ON DELETE NO ACTION);
 CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT NULL, `key` text NOT NULL, `label` text NOT NULL, `type` text NOT NULL, `required` bool NOT NULL DEFAULT (false), `choices` json NOT NULL, indexed BOOLEAN NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1 CHECK(version>0), index_status TEXT NOT NULL DEFAULT 'ready' CHECK(index_status IN ('ready','building','failed')), scale INTEGER NOT NULL DEFAULT 0, options JSON NOT NULL DEFAULT '{}' CHECK(json_valid(options) AND json_type(options)='object'), PRIMARY KEY (`id`));
 CREATE TABLE blob_deletions (id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, object_key TEXT NOT NULL UNIQUE);
 -- Reusable results: namespaces own their keys and opaque JSON payloads.
@@ -290,12 +290,33 @@ CREATE TABLE runner_step_results (
  run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL,
  PRIMARY KEY (run_id, step_id)
 ) WITHOUT ROWID;
+-- Durable waits park a run or hold coordinator state. Payloads stay small.
+-- Action payloads, including remote LLM requests, use cached_results.
+-- Referenced file bytes stay in storage while a blob, staged file or open
+-- wait still names them.
+CREATE TABLE workflow_waits (
+ id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
+ kind TEXT NOT NULL CHECK(length(kind) BETWEEN 1 AND 64),
+ key TEXT NOT NULL CHECK(length(key) BETWEEN 1 AND 128),
+ workspace_id TEXT NOT NULL, run_id TEXT NOT NULL, node TEXT NOT NULL,
+ execution_id TEXT NOT NULL CHECK(length(execution_id) BETWEEN 1 AND 128),
+ data JSON NOT NULL DEFAULT '{}' CHECK(json_valid(data) AND json_type(data)='object' AND length(data)<=16384),
+ completion JSON CHECK(completion IS NULL OR (json_valid(completion) AND length(completion)<=65536)),
+ deadline DATETIME, claim_run_id TEXT, claim_token TEXT,
+ status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','completed','closed')),
+ parking BOOLEAN NOT NULL DEFAULT 0 CHECK(parking IN (0,1))
+);
+CREATE UNIQUE INDEX workflow_wait_kind_key ON workflow_waits(kind, key);
+CREATE INDEX workflow_wait_open_kind_workspace ON workflow_waits(kind, workspace_id, created_at) WHERE status='open';
+CREATE INDEX workflow_wait_run ON workflow_waits(run_id);
+CREATE INDEX workflow_wait_parking ON workflow_waits(status, deadline) WHERE parking=1;
 
 -- Indexes
 CREATE INDEX `auditevent_workspace_id_created_at` ON `audit_events` (`workspace_id`, `created_at`);
 CREATE INDEX `auditevent_resource_id_created_at` ON `audit_events` (`resource_id`, `created_at`);
 CREATE INDEX `blob_sha256_item_id` ON `blobs` (`sha256`, `item_id`);
 CREATE INDEX `blob_object_key` ON `blobs` (`object_key`);
+CREATE INDEX blob_reclaim_after ON blobs(reclaim_after) WHERE availability='pending';
 CREATE UNIQUE INDEX `blob_item_id_version` ON `blobs` (`item_id`, `version`);
 CREATE INDEX fielddefinition_key ON field_definitions(key);
 CREATE UNIQUE INDEX `grant_resource_id_principal_type_principal_id_action` ON `grants` (`resource_id`, `principal_type`, `principal_id`, `action`);
@@ -508,8 +529,19 @@ CREATE TRIGGER blob_item_validate BEFORE INSERT ON blobs BEGIN
     WHERE i.id=new.item_id AND i.kind='item' AND c.kind='library'
   ) THEN RAISE(ABORT,'blob requires library item') END;
 END;
+-- Identity and content metadata stay fixed. Availability moves from available
+-- to pending, then to reclaimed; reclaim_after is the grace deadline.
 CREATE TRIGGER blob_immutable BEFORE UPDATE ON blobs BEGIN
-  SELECT RAISE(ABORT,'blob revisions are immutable');
+  SELECT CASE WHEN new.id IS NOT old.id OR new.created_at IS NOT old.created_at OR new.version IS NOT old.version
+    OR new.object_key IS NOT old.object_key OR new.filename IS NOT old.filename OR new.content_type IS NOT old.content_type
+    OR new.languages IS NOT old.languages OR new.size IS NOT old.size OR new.sha256 IS NOT old.sha256 OR new.item_id IS NOT old.item_id
+    THEN RAISE(ABORT,'blob revisions are immutable') END;
+  SELECT CASE WHEN new.availability IS NOT old.availability AND NOT (
+      (old.availability='available' AND new.availability='pending') OR
+      (old.availability='pending' AND new.availability='reclaimed')
+    ) THEN RAISE(ABORT,'invalid file availability') END;
+  SELECT CASE WHEN old.availability='reclaimed' AND new.reclaim_after IS NOT old.reclaim_after
+    THEN RAISE(ABORT,'reclaimed file versions stay reclaimed') END;
 END;
 CREATE TRIGGER audit_immutable BEFORE UPDATE ON audit_events BEGIN
   SELECT RAISE(ABORT,'audit events are immutable');

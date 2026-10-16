@@ -40,6 +40,9 @@ func (r *Runner) dispatchLoop(ctx context.Context) {
 		if err := r.ResumeDecided(ctx); err != nil && ctx.Err() == nil {
 			r.log.Error("resume runs whose task completed", "error", err)
 		}
+		if err := r.ResumeWaits(ctx); err != nil && ctx.Err() == nil {
+			r.log.Error("resume runs whose wait completed", "error", err)
+		}
 		select {
 		case <-ctx.Done():
 			return

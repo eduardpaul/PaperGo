@@ -278,6 +278,9 @@ func (s *Service) RestoreBlob(ctx context.Context, subject, id string, number, v
 		if e != nil {
 			return e
 		}
+		if source.Availability == blob.AvailabilityReclaimed {
+			return ErrContentUnavailable
+		}
 		out, e = t.writeBlob(ctx, subject, id, version, BlobInput{ObjectKey: source.ObjectKey, Filename: source.Filename, ContentType: source.ContentType, Size: source.Size, SHA256: source.Sha256, Source: FileRestore}, "blob.restore", &number)
 		return e
 	})
@@ -364,7 +367,13 @@ func (s *Service) GetBlob(ctx context.Context, subject, id, blobID string) (*ent
 	if ent.IsNotFound(err) {
 		return nil, ErrNotFound
 	}
-	return b, err
+	if err != nil {
+		return nil, err
+	}
+	if b.Availability == blob.AvailabilityReclaimed {
+		return nil, ErrContentUnavailable
+	}
+	return b, nil
 }
 
 // FileVersion is one retained file of a library item.
@@ -380,6 +389,9 @@ type FileVersion struct {
 	CreatedBy string `json:"created_by"`
 	// IsCurrent marks the file of the caller's visible revision.
 	IsCurrent bool `json:"is_current"`
+	// Availability is available, pending (reclamation requested) or reclaimed.
+	// A reclaimed version keeps its identity and metadata; its bytes are gone.
+	Availability string `json:"availability"`
 }
 
 // FileVersions lists an item's retained files, newest first. Draft readers see
@@ -438,7 +450,7 @@ func (s *Service) FileVersions(ctx context.Context, subject, id string, after, l
 	}
 	out := make([]FileVersion, len(rows))
 	for i, b := range rows {
-		out[i] = FileVersion{ID: b.ID, Version: b.Version, Filename: b.Filename, ContentType: b.ContentType, Size: b.Size, SHA256: b.Sha256, CreatedAt: b.CreatedAt, CreatedBy: authors[b.ID], IsCurrent: b.ID == current.ID}
+		out[i] = FileVersion{ID: b.ID, Version: b.Version, Filename: b.Filename, ContentType: b.ContentType, Size: b.Size, SHA256: b.Sha256, CreatedAt: b.CreatedAt, CreatedBy: authors[b.ID], IsCurrent: b.ID == current.ID, Availability: string(b.Availability)}
 	}
 	return numberedPage(out, limit, func(v FileVersion) int { return v.Version }), nil
 }

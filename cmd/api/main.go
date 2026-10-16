@@ -27,6 +27,7 @@ import (
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
+	"papergo/internal/workflowai"
 	"papergo/migrations"
 	"path/filepath"
 	"syscall"
@@ -175,6 +176,13 @@ func run(log *slog.Logger) error {
 	if chat != nil {
 		log.Info("ai steps enabled", "model", chat.Key())
 	}
+	batch, err := ai.NewBatch(c.Batch, nil)
+	if err != nil {
+		return fmt.Errorf("configure the batch model: %w", err)
+	}
+	if batch != nil {
+		log.Info("ai batch enabled", "model", batch.Key())
+	}
 	var decisions *decision.Engine
 	if c.Decisions.Models != "" {
 		decisions, err = decision.New(c.Decisions)
@@ -184,7 +192,7 @@ func run(log *slog.Logger) error {
 		defer decisions.Close()
 		log.Info("local decisions enabled", "model", decisions.ID())
 	}
-	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload, Search: index, Embeddings: embeddings, Chat: chat, Results: resultcache.New(db.SQL), ResultTTL: c.RunRetention, Languages: c.SearchLanguages}
+	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload, Search: index, Embeddings: embeddings, Chat: chat, Batch: batch, DefaultExecution: c.AIExecution, BatchDeadline: c.BatchDeadline, Results: resultcache.New(db.SQL), ResultTTL: c.RunRetention, Languages: c.SearchLanguages}
 	if decisions != nil {
 		tools.Decisions = decisions
 	}
@@ -201,6 +209,16 @@ func run(log *slog.Logger) error {
 	}
 	workflows := &workflow.Service{DMS: service, Tools: tools}
 	service.OnIntegrationCreated(workflows.EnsureIntegrationWorkflow)
+	if c.BatchWorkspace != "" && batch != nil {
+		subject := c.AdminSubject
+		if subject == "" {
+			subject = c.DevSubject
+		}
+		if err = workflowai.EnsureCoordinator(startup, workflows, subject, c.BatchWorkspace); err != nil {
+			return fmt.Errorf("enable the AI batch coordinator: %w", err)
+		}
+		log.Info("ai batch coordinator enabled", "workspace", c.BatchWorkspace, "queue", "shared")
+	}
 	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, NodeID: c.NodeID, Retention: c.RunRetention, Logger: log}, db.SQL, service, workflows)
 	if err != nil {
 		return err

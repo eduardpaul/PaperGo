@@ -415,33 +415,40 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
         </h3>
         <QueryFeedback query={versions} />
         <ul className="flex flex-col divide-y rounded-md border">
-          {versions.items.map((version) => (
-            <li key={version.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium">
-                  Version {version.version}
-                  {version.is_current && <Badge className="ml-2">Current</Badge>}
-                </p>
-                <p className="truncate text-xs text-muted">
-                  {version.filename} · {format.fileSize(version.size)} · {format.dateTime(version.created_at)}
-                  {version.created_by && ` · ${names.get(version.created_by) ?? version.created_by}`}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                aria-label={`Download version ${version.version}`}
-                onClick={() => void downloadContent(item.id, version.filename, version.is_current ? undefined : version.id)}
-              >
-                <Download />
-              </Button>
-              {canWrite && !version.is_current && (
-                <Button size="sm" onClick={() => setRestoring(version)}>
-                  Restore
-                </Button>
-              )}
-            </li>
-          ))}
+          {versions.items.map((version) => {
+            const unavailable = version.availability === 'reclaimed';
+            return (
+              <li key={version.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium">
+                    Version {version.version}
+                    {version.is_current && <Badge className="ml-2">Current</Badge>}
+                    {unavailable && <Badge className="ml-2">Unavailable</Badge>}
+                  </p>
+                  <p className="truncate text-xs text-muted">
+                    {version.filename} · {format.fileSize(version.size)} · {format.dateTime(version.created_at)}
+                    {version.created_by && ` · ${names.get(version.created_by) ?? version.created_by}`}
+                    {unavailable && ' · content unavailable'}
+                  </p>
+                </div>
+                {!unavailable && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Download version ${version.version}`}
+                    onClick={() => void downloadContent(item.id, version.filename, version.is_current ? undefined : version.id)}
+                  >
+                    <Download />
+                  </Button>
+                )}
+                {canWrite && !version.is_current && !unavailable && (
+                  <Button size="sm" onClick={() => setRestoring(version)}>
+                    Restore
+                  </Button>
+                )}
+              </li>
+            );
+          })}
           {!versions.isPending && versions.items.length === 0 && (
             <li className="px-3 py-2 text-[13px] text-muted">No file yet.</li>
           )}

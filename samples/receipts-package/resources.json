@@ -1,0 +1,64 @@
+{
+  "workspace": {
+    "name": "Receipts desk",
+    "description": "Photos of purchase receipts and the lines read from them."
+  },
+  "fields": [
+    {"key": "store", "label": "Store", "type": "text", "indexed": true, "options": {"max_length": 200}},
+    {"key": "purchase_date", "label": "Purchase date", "type": "date", "indexed": true},
+    {"key": "currency", "label": "Currency", "type": "text", "options": {"max_length": 3}},
+    {"key": "total", "label": "Total", "type": "decimal", "scale": 2, "indexed": true},
+    {"key": "status", "label": "Status", "type": "choice", "indexed": true, "choices": ["New", "Read", "Needs review"], "options": {"default_value": "New"}},
+    {"key": "description", "label": "Description", "type": "text", "options": {"max_length": 200}},
+    {"key": "quantity", "label": "Quantity", "type": "decimal", "scale": 3},
+    {"key": "unit_price", "label": "Unit price", "type": "decimal", "scale": 2},
+    {"key": "amount", "label": "Amount", "type": "decimal", "scale": 2, "indexed": true}
+  ],
+  "content_types": [
+    {"key": "receipt", "name": "Receipt", "fields": ["store", "purchase_date", "currency", "total", "status"]},
+    {"key": "receipt_line", "name": "Receipt line", "fields": ["description", "quantity", "unit_price", "amount"]}
+  ],
+  "collections": [
+    {
+      "name": "Receipts",
+      "kind": "library",
+      "webdav_enabled": true,
+      "content_type": "receipt",
+      "views": [
+        {
+          "name": "Receipts",
+          "layout": "table",
+          "is_default": true,
+          "columns": ["$name", "store", "purchase_date", "currency", "total", "status"],
+          "query": {"content_type_id": "$receipt", "sort": [{"field": "purchase_date", "direction": "desc"}]}
+        },
+        {
+          "name": "Needs review",
+          "layout": "table",
+          "columns": ["$name", "store", "purchase_date", "currency", "total", "status"],
+          "query": {"content_type_id": "$receipt", "filter": {"field": "status", "op": "eq", "value": "Needs review"}}
+        }
+      ]
+    },
+    {
+      "name": "Receipt lines",
+      "kind": "list",
+      "content_type": "receipt_line",
+      "views": [
+        {
+          "name": "Lines",
+          "layout": "table",
+          "is_default": true,
+          "columns": ["$name", "description", "quantity", "unit_price", "amount"],
+          "query": {"content_type_id": "$receipt_line"}
+        }
+      ]
+    }
+  ],
+  "relationship": {
+    "name": "contains receipt line",
+    "inverse_label": "belongs to receipt",
+    "directed": true,
+    "max_incoming": 1
+  }
+}

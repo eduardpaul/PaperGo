@@ -2060,7 +2060,7 @@
       "get": {
         "summary": "List retained file versions",
         "operationId": "listFileVersions",
-        "description": "Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version. Restore one with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Retained files of a library item, newest first. Draft readers see every version; ordinary readers see only the published file. `is_current` marks the file of the caller's visible revision, `created_by` who uploaded or restored that version, and `availability` whether the bytes are still stored. A reclaimed version keeps its id, version, filename, content type, size and checksum; downloading or restoring it reports that the content is unavailable. Restore a version that still has its bytes with POST /v1/items/{id}/content/versions/{number}/restore. Required module scopes: list.read, document.read. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "$skiptoken",
@@ -22391,7 +22391,8 @@
           "sha256",
           "created_at",
           "created_by",
-          "is_current"
+          "is_current",
+          "availability"
         ],
         "properties": {
           "id": {
@@ -22429,6 +22430,11 @@
           },
           "is_current": {
             "type": "boolean"
+          },
+          "availability": {
+            "type": "string",
+            "enum": ["available", "pending", "reclaimed"],
+            "description": "available while the bytes are kept, pending after reclamation is requested, or reclaimed after the grace period. A reclaimed version keeps its identity and metadata; its download and restore report that the content is unavailable."
           }
         }
       },

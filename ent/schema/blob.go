@@ -9,7 +9,8 @@ import (
 	"papergo/internal/storage"
 )
 
-// Blob holds immutable object metadata; bytes live behind the storage port.
+// Blob holds a file version. Identity and content metadata are immutable.
+// Availability and reclaim_after track whether its bytes are still stored.
 type Blob struct{ ent.Schema }
 
 func (Blob) Mixin() []ent.Mixin { return []ent.Mixin{Identity{}} }
@@ -23,6 +24,8 @@ func (Blob) Fields() []ent.Field {
 		field.String("languages").Default("").MaxLen(191).Immutable(),
 		field.Int64("size").NonNegative().Immutable(),
 		field.String("sha256").MinLen(64).MaxLen(64).Immutable(),
+		field.Enum("availability").Values("available", "pending", "reclaimed").Default("available"),
+		field.Time("reclaim_after").Optional().Nillable(),
 	}
 }
 func (Blob) Edges() []ent.Edge {

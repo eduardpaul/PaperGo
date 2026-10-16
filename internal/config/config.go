@@ -79,7 +79,18 @@ type Config struct {
 	Decisions decision.Config
 	// Chat is the chat model of AI workflow steps (AI_CHAT_*); off by
 	// default.
-	Chat              ai.ChatConfig
+	Chat ai.ChatConfig
+	// Batch is the batch endpoint (AI_BATCH_*). It is independent of Chat
+	// and off by default.
+	Batch ai.BatchConfig
+	// AIExecution is the default for remote LLM actions: immediate or batch.
+	// An action's execution input overrides it. Empty is treated as immediate.
+	AIExecution string
+	// BatchDeadline is how long a parked batch request waits.
+	BatchDeadline time.Duration
+	// BatchWorkspace is the workspace whose AI batch coordinator admits
+	// installation queues. Empty leaves the coordinator off.
+	BatchWorkspace    string
 	ProxySecret       string
 	ProxyTrustedCIDRs []netip.Prefix
 }
@@ -162,6 +173,9 @@ func Load() (Config, error) {
 		return c, err
 	}
 	if err := c.loadChat(); err != nil {
+		return c, err
+	}
+	if err := c.loadBatch(); err != nil {
 		return c, err
 	}
 	if v := os.Getenv("OCR_THREADS"); v != "" {
@@ -455,6 +469,53 @@ func (c *Config) loadChat() error {
 		return fmt.Errorf("AI_CHAT: %w", err)
 	}
 	c.Chat = chat
+	return nil
+}
+
+// loadBatch reads AI_BATCH_*: an independent provider, endpoint, model and
+// credential file. AI_EXECUTION is the default for remote LLM actions.
+// AI_BATCH_DEADLINE bounds a parked request. AI_BATCH_WORKSPACE selects the
+// workspace that owns the installation coordinator.
+func (c *Config) loadBatch() error {
+	batch := ai.BatchConfig{
+		Provider: strings.ToLower(value("AI_BATCH_PROVIDER", ai.ProviderNone)),
+		Endpoint: os.Getenv("AI_BATCH_ENDPOINT"),
+		Model:    os.Getenv("AI_BATCH_MODEL"),
+	}
+	if strings.TrimSpace(batch.Endpoint) == "" {
+		if c.Chat.Enabled() && c.Chat.Endpoint != "" {
+			batch.Endpoint = c.Chat.Endpoint
+		} else {
+			batch.Endpoint = ai.DefaultEndpoint
+		}
+	}
+	if strings.TrimSpace(batch.Model) == "" {
+		batch.Model = c.Chat.Model
+	}
+	if path := os.Getenv("AI_BATCH_API_KEY_FILE"); path != "" && batch.Enabled() {
+		key, err := readAPIKey(path)
+		if err != nil {
+			return fmt.Errorf("AI_BATCH_API_KEY_FILE: %w", err)
+		}
+		batch.APIKey = key
+	}
+	if err := batch.Validate(); err != nil {
+		return fmt.Errorf("AI_BATCH: %w", err)
+	}
+	c.Batch = batch
+	c.AIExecution = strings.ToLower(value("AI_EXECUTION", "immediate"))
+	if c.AIExecution != "immediate" && c.AIExecution != "batch" {
+		return fmt.Errorf("AI_EXECUTION must be immediate or batch")
+	}
+	c.BatchDeadline = 72 * time.Hour
+	if v := os.Getenv("AI_BATCH_DEADLINE"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Minute || d > 30*24*time.Hour {
+			return fmt.Errorf("AI_BATCH_DEADLINE must be a duration between 1m and 720h")
+		}
+		c.BatchDeadline = d
+	}
+	c.BatchWorkspace = strings.TrimSpace(os.Getenv("AI_BATCH_WORKSPACE"))
 	return nil
 }
 

@@ -387,6 +387,7 @@ export interface FileVersion {
   created_at: string;
   created_by: string;
   is_current: boolean;
+  availability: 'available' | 'pending' | 'reclaimed';
 }
 
 export interface DocumentUpload {

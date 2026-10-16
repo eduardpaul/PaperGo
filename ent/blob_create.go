@@ -91,6 +91,34 @@ func (_c *BlobCreate) SetSha256(v string) *BlobCreate {
 	return _c
 }
 
+// SetAvailability sets the "availability" field.
+func (_c *BlobCreate) SetAvailability(v blob.Availability) *BlobCreate {
+	_c.mutation.SetAvailability(v)
+	return _c
+}
+
+// SetNillableAvailability sets the "availability" field if the given value is not nil.
+func (_c *BlobCreate) SetNillableAvailability(v *blob.Availability) *BlobCreate {
+	if v != nil {
+		_c.SetAvailability(*v)
+	}
+	return _c
+}
+
+// SetReclaimAfter sets the "reclaim_after" field.
+func (_c *BlobCreate) SetReclaimAfter(v time.Time) *BlobCreate {
+	_c.mutation.SetReclaimAfter(v)
+	return _c
+}
+
+// SetNillableReclaimAfter sets the "reclaim_after" field if the given value is not nil.
+func (_c *BlobCreate) SetNillableReclaimAfter(v *time.Time) *BlobCreate {
+	if v != nil {
+		_c.SetReclaimAfter(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *BlobCreate) SetID(v string) *BlobCreate {
 	_c.mutation.SetID(v)
@@ -152,6 +180,10 @@ func (_c *BlobCreate) defaults() {
 	if _, ok := _c.mutation.Languages(); !ok {
 		v := blob.DefaultLanguages
 		_c.mutation.SetLanguages(v)
+	}
+	if _, ok := _c.mutation.Availability(); !ok {
+		v := blob.DefaultAvailability
+		_c.mutation.SetAvailability(v)
 	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := blob.DefaultID()
@@ -228,6 +260,14 @@ func (_c *BlobCreate) check() error {
 			return &ValidationError{Name: "sha256", err: fmt.Errorf(`ent: validator failed for field "Blob.sha256": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.Availability(); !ok {
+		return &ValidationError{Name: "availability", err: errors.New(`ent: missing required field "Blob.availability"`)}
+	}
+	if v, ok := _c.mutation.Availability(); ok {
+		if err := blob.AvailabilityValidator(v); err != nil {
+			return &ValidationError{Name: "availability", err: fmt.Errorf(`ent: validator failed for field "Blob.availability": %w`, err)}
+		}
+	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := blob.IDValidator(v); err != nil {
 			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "Blob.id": %w`, err)}
@@ -302,6 +342,14 @@ func (_c *BlobCreate) createSpec() (*Blob, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Sha256(); ok {
 		_spec.SetField(blob.FieldSha256, field.TypeString, value)
 		_node.Sha256 = value
+	}
+	if value, ok := _c.mutation.Availability(); ok {
+		_spec.SetField(blob.FieldAvailability, field.TypeEnum, value)
+		_node.Availability = value
+	}
+	if value, ok := _c.mutation.ReclaimAfter(); ok {
+		_spec.SetField(blob.FieldReclaimAfter, field.TypeTime, value)
+		_node.ReclaimAfter = &value
 	}
 	if nodes := _c.mutation.ItemIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

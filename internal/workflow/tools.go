@@ -36,6 +36,18 @@ type Tools struct {
 	// Chat is the chat model ai.complete and search.enrich use; nil when AI
 	// steps are off.
 	Chat ai.Chat
+	// Batch submits groups of chat requests to the provider's batch
+	// endpoint. Nil leaves batch execution unavailable; immediate requests
+	// still use Chat.
+	Batch ai.Batcher
+	// DefaultExecution is immediate or batch. Empty means immediate.
+	// A remote LLM action's execution input overrides it.
+	DefaultExecution string
+	// BatchDeadline is how long a parked batch request waits. Empty means
+	// 72 hours.
+	BatchDeadline time.Duration
+	// Now is the clock batch admission uses. Empty means time.Now.
+	Now func() time.Time
 	// Results holds reusable action results outside domain transactions.
 	Results resultcache.Cache
 	// ResultTTL is the idle lifetime of cached AI results.
@@ -54,6 +66,14 @@ func (t Tools) maxPixels() int64 {
 		return t.MaxPixels
 	}
 	return ocr.MaxPixels
+}
+
+// Clock is the time activities use. Tests set Now; otherwise it is time.Now.
+func (t Tools) Clock() time.Time {
+	if t.Now != nil {
+		return t.Now()
+	}
+	return time.Now()
 }
 
 // ErrNoOCR fails OCR activities in a deployment without an OCR engine.

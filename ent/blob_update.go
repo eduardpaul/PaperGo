@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"papergo/ent/blob"
 	"papergo/ent/predicate"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -24,6 +25,40 @@ type BlobUpdate struct {
 // Where appends a list predicates to the BlobUpdate builder.
 func (_u *BlobUpdate) Where(ps ...predicate.Blob) *BlobUpdate {
 	_u.mutation.Where(ps...)
+	return _u
+}
+
+// SetAvailability sets the "availability" field.
+func (_u *BlobUpdate) SetAvailability(v blob.Availability) *BlobUpdate {
+	_u.mutation.SetAvailability(v)
+	return _u
+}
+
+// SetNillableAvailability sets the "availability" field if the given value is not nil.
+func (_u *BlobUpdate) SetNillableAvailability(v *blob.Availability) *BlobUpdate {
+	if v != nil {
+		_u.SetAvailability(*v)
+	}
+	return _u
+}
+
+// SetReclaimAfter sets the "reclaim_after" field.
+func (_u *BlobUpdate) SetReclaimAfter(v time.Time) *BlobUpdate {
+	_u.mutation.SetReclaimAfter(v)
+	return _u
+}
+
+// SetNillableReclaimAfter sets the "reclaim_after" field if the given value is not nil.
+func (_u *BlobUpdate) SetNillableReclaimAfter(v *time.Time) *BlobUpdate {
+	if v != nil {
+		_u.SetReclaimAfter(*v)
+	}
+	return _u
+}
+
+// ClearReclaimAfter clears the value of the "reclaim_after" field.
+func (_u *BlobUpdate) ClearReclaimAfter() *BlobUpdate {
+	_u.mutation.ClearReclaimAfter()
 	return _u
 }
 
@@ -61,6 +96,11 @@ func (_u *BlobUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *BlobUpdate) check() error {
+	if v, ok := _u.mutation.Availability(); ok {
+		if err := blob.AvailabilityValidator(v); err != nil {
+			return &ValidationError{Name: "availability", err: fmt.Errorf(`ent: validator failed for field "Blob.availability": %w`, err)}
+		}
+	}
 	if _u.mutation.ItemCleared() && len(_u.mutation.ItemIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Blob.item"`)
 	}
@@ -78,6 +118,15 @@ func (_u *BlobUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.Availability(); ok {
+		_spec.SetField(blob.FieldAvailability, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.ReclaimAfter(); ok {
+		_spec.SetField(blob.FieldReclaimAfter, field.TypeTime, value)
+	}
+	if _u.mutation.ReclaimAfterCleared() {
+		_spec.ClearField(blob.FieldReclaimAfter, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -97,6 +146,40 @@ type BlobUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *BlobMutation
+}
+
+// SetAvailability sets the "availability" field.
+func (_u *BlobUpdateOne) SetAvailability(v blob.Availability) *BlobUpdateOne {
+	_u.mutation.SetAvailability(v)
+	return _u
+}
+
+// SetNillableAvailability sets the "availability" field if the given value is not nil.
+func (_u *BlobUpdateOne) SetNillableAvailability(v *blob.Availability) *BlobUpdateOne {
+	if v != nil {
+		_u.SetAvailability(*v)
+	}
+	return _u
+}
+
+// SetReclaimAfter sets the "reclaim_after" field.
+func (_u *BlobUpdateOne) SetReclaimAfter(v time.Time) *BlobUpdateOne {
+	_u.mutation.SetReclaimAfter(v)
+	return _u
+}
+
+// SetNillableReclaimAfter sets the "reclaim_after" field if the given value is not nil.
+func (_u *BlobUpdateOne) SetNillableReclaimAfter(v *time.Time) *BlobUpdateOne {
+	if v != nil {
+		_u.SetReclaimAfter(*v)
+	}
+	return _u
+}
+
+// ClearReclaimAfter clears the value of the "reclaim_after" field.
+func (_u *BlobUpdateOne) ClearReclaimAfter() *BlobUpdateOne {
+	_u.mutation.ClearReclaimAfter()
+	return _u
 }
 
 // Mutation returns the BlobMutation object of the builder.
@@ -146,6 +229,11 @@ func (_u *BlobUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *BlobUpdateOne) check() error {
+	if v, ok := _u.mutation.Availability(); ok {
+		if err := blob.AvailabilityValidator(v); err != nil {
+			return &ValidationError{Name: "availability", err: fmt.Errorf(`ent: validator failed for field "Blob.availability": %w`, err)}
+		}
+	}
 	if _u.mutation.ItemCleared() && len(_u.mutation.ItemIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Blob.item"`)
 	}
@@ -180,6 +268,15 @@ func (_u *BlobUpdateOne) sqlSave(ctx context.Context) (_node *Blob, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.Availability(); ok {
+		_spec.SetField(blob.FieldAvailability, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.ReclaimAfter(); ok {
+		_spec.SetField(blob.FieldReclaimAfter, field.TypeTime, value)
+	}
+	if _u.mutation.ReclaimAfterCleared() {
+		_spec.ClearField(blob.FieldReclaimAfter, field.TypeTime)
 	}
 	_node = &Blob{config: _u.config}
 	_spec.Assign = _node.assignValues

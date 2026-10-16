@@ -59,6 +59,7 @@ import (
 	"papergo/ent/workflowrunitem"
 	"papergo/ent/workflowtrigger"
 	"papergo/ent/workflowversion"
+	"papergo/ent/workflowwait"
 	"reflect"
 	"sync"
 
@@ -178,6 +179,7 @@ func checkColumn(t, c string) error {
 			workflowrunitem.Table:         workflowrunitem.ValidColumn,
 			workflowtrigger.Table:         workflowtrigger.ValidColumn,
 			workflowversion.Table:         workflowversion.ValidColumn,
+			workflowwait.Table:            workflowwait.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

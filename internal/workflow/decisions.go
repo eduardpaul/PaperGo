@@ -3,6 +3,7 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,11 @@ import (
 )
 
 var ErrNoDecisions = errors.New("decision actions require AI_DECISION_MODELS_PATH and ONNXRUNTIME_LIB")
+
+func hashText(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
+}
 
 const decisionSourceProps = itemIDProp + `,
  "input":{"type":"string","title":"Input text"},

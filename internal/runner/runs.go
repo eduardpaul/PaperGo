@@ -557,6 +557,14 @@ func (r *Runner) deleteRuns(ctx context.Context, ids []string) error {
 		if _, err := t.Client.ExecContext(ctx, `DELETE FROM runner_step_results WHERE run_id IN (`+strings.Join(marks, ",")+`)`, args...); err != nil {
 			return err
 		}
+		if err := workflow.DeleteRunWaits(ctx, t, ids); err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := workflow.CloseRunWaits(ctx, t, id); err != nil {
+				return err
+			}
+		}
 		if err := t.DiscardRunStagedFiles(ctx, ids...); err != nil {
 			return err
 		}
