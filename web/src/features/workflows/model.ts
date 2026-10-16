@@ -57,6 +57,12 @@ export interface Trigger {
   task_key?: string;
   actions?: string[];
 }
+/** Standalone has neither selection nor collection; item modes may span the workspace. */
+export function manualItemMode(trigger: Trigger | undefined): 'none' | 'single' | 'multiple' {
+  if (!trigger || trigger.type !== 'manual') return 'none';
+  if (trigger.selection === 'selection') return 'multiple';
+  return trigger.collection_id || trigger.selection === 'per_item' ? 'single' : 'none';
+}
 export interface FlowNode {
   activity: string;
   inputs?: Record<string, unknown>;

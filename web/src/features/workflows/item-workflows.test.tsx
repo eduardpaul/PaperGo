@@ -14,6 +14,7 @@ const flow = (id: string, trigger: object, enabled = true): Workflow => ({
 });
 const entries = [
   flow('single', { type: 'manual', collection_id: 'collection' }),
+  flow('any-single', { type: 'manual', selection: 'per_item' }),
   flow('multiple', { type: 'manual', collection_id: 'collection', selection: 'selection' }),
   flow('other', { type: 'manual', collection_id: 'other' }),
   flow('standalone', { type: 'manual' }),
@@ -21,14 +22,15 @@ const entries = [
   flow('disabled', { type: 'manual', collection_id: 'collection' }, false),
 ];
 it('filters manual workflows by collection, selection size and enabled state', () => {
-  expect(applicableWorkflows(entries, 'collection', 1).map((entry) => entry.id)).toEqual(['single', 'multiple']);
+  expect(applicableWorkflows(entries, 'collection', 1).map((entry) => entry.id)).toEqual(['single', 'any-single', 'multiple']);
   expect(applicableWorkflows(entries, 'collection', 2).map((entry) => entry.id)).toEqual(['multiple']);
   expect(applicableWorkflows(entries, 'collection', 0)).toEqual([]);
   expect(applicableWorkflows(entries, 'collection', 101)).toEqual([]);
 });
 
 it('launches the selected items with typed inputs and displays a denied launch inline', async () => {
-  const multiple = { ...entries[1], definition: { ...entries[1].definition as object,
+  const base = entries.find((entry) => entry.id === 'multiple')!;
+  const multiple = { ...base, definition: { ...base.definition as object,
     input_schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string', title: 'Reason' } } },
   } };
   let denied = true;

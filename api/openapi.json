@@ -6740,7 +6740,7 @@
       "post": {
         "summary": "Start Workflow",
         "operationId": "startWorkflow",
-        "description": "Starts a workflow with a manual trigger, on items (write access to each) or with no item (workspace managers). Runs start when the request commits.",
+        "description": "Starts one manual workflow run. Standalone triggers require no item IDs and workspace manage access; single-item triggers require exactly one item; selection triggers require 1–100 ordered items. Item starts require write access to every item. Runs start when the request commits.",
         "parameters": [
           {
             "name": "id",
@@ -20440,7 +20440,7 @@
               "per_item",
               "selection"
             ],
-            "description": "On manual triggers with collection_id: one run per chosen item (per_item, default), or one run for all of them in order (selection)."
+            "description": "Manual item association: per_item requires exactly one item; selection requires 1–100 ordered items. collection_id optionally scopes either mode. A collection without selection defaults to per_item; a manual trigger with neither is standalone and rejects item_ids."
           },
           "terms": {
             "type": "array",

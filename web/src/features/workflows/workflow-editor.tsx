@@ -31,6 +31,8 @@ import type {
 } from "./model";
 import { JsonInput, SchemaFields } from "./schema-form";
 
+import { ManualTriggerFields } from "./manual-trigger";
+
 const fileSources = ["upload", "webdav", "restore", "workflow", "reindex"];
 // A file.added trigger without sources ignores files that workflows write.
 const defaultFileSources = ["upload", "webdav", "restore"];
@@ -268,7 +270,7 @@ export function WorkflowEditor({
                           placeholder="wf.workflow-key.completed"
                         />
                       )}
-                      {!trigger.type.startsWith("term.") && (
+                      {!trigger.type.startsWith("term.") && trigger.type !== "manual" && (
                         <Select
                           aria-label={`Trigger collection ${index + 1}`}
                           value={trigger.collection_id ?? ""}
@@ -349,22 +351,8 @@ export function WorkflowEditor({
                           )}
                         </>
                       )}
-                      {trigger.type === "manual" && trigger.collection_id && (
-                        <Select
-                          aria-label="Manual selection mode"
-                          value={trigger.selection ?? "per_item"}
-                          onChange={(event) =>
-                            changeTrigger(index, {
-                              ...trigger,
-                              selection: event.target.value,
-                            })
-                          }
-                        >
-                          <option value="per_item">One run per item</option>
-                          <option value="selection">
-                            One run for the ordered selection
-                          </option>
-                        </Select>
+                      {trigger.type === "manual" && (
+                        <ManualTriggerFields trigger={trigger} collections={collections.data ?? []} onChange={(next) => changeTrigger(index, next)} />
                       )}
                       {["file.added", "file.updated"].includes(trigger.type) && (
                         <fieldset className="flex flex-wrap gap-3 text-sm">

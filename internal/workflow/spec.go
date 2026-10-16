@@ -93,9 +93,9 @@ type Trigger struct {
 	Cron          string `json:"cron,omitempty"`
 	TimeZone      string `json:"time_zone,omitempty"`
 	Surface       string `json:"surface,omitempty"`
-	// Selection, on a manual trigger with collection_id, is per_item (one
-	// run per chosen item, the default) or selection (one run for all of
-	// them, in order).
+	// Selection is per_item (exactly one item) or selection (one ordered
+	// selection of items). A collection implies per_item by default; without
+	// either option a manual trigger is standalone and accepts no items.
 	Selection string `json:"selection,omitempty"`
 	// Terms, on item.created, item.updated and item.published triggers,
 	// limits them to revisions whose term and keywords fields hold one of
@@ -260,9 +260,6 @@ func (d Definition) validate() error {
 		}
 		if t.Selection != "" && (t.Type != TriggerManual || t.Selection != SelectionPerItem && t.Selection != SelectionAll) {
 			return dms.Invalid(at + "selection is per_item or selection, on manual triggers")
-		}
-		if t.Selection == SelectionAll && t.CollectionID == "" {
-			return dms.Invalid(at + "selection runs need collection_id: the items come from one list or library")
 		}
 		if len(t.Terms) > 0 || t.TermChange != "" {
 			if t.Type != dms.EventItemCreated && t.Type != dms.EventItemUpdated && t.Type != dms.EventItemPublished {

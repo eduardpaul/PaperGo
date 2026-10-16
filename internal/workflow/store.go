@@ -511,7 +511,7 @@ func index(ctx context.Context, t *dms.Service, w *ent.Workflow, def Definition)
 // RunID is the runner's ID of the run of workflowID for eventID.
 func RunID(workflowID, eventID string) string { return "wf:" + workflowID + ":" + eventID }
 
-// Start asks for a manual run. Without items it starts one run with no item.
+// Start asks for one manual run, with the trigger's standalone, single-item or selection association.
 // A trigger with selection mode starts one run for all items, in their
 // order; PrimaryItemID (default: the first) is that run's item.
 type Start struct {
@@ -579,13 +579,20 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			return dms.Invalid(fmt.Sprintf("start at most %d items at once", MaxStartItems))
 		}
 		selection := manual.Selection == SelectionAll
+		itemBound := manual.CollectionID != "" || manual.Selection != ""
+		if !itemBound && len(items) != 0 {
+			return dms.Invalid("standalone workflows do not accept item_ids")
+		}
+		if itemBound && !selection && len(items) != 1 {
+			return dms.Invalid("single-item workflows require exactly one item")
+		}
 		if in.PrimaryItemID != "" && (!selection || !seen[in.PrimaryItemID]) {
 			return dms.Invalid("primary_item_id must be one of item_ids, on a selection workflow")
 		}
 		data := map[string]any{"workflow_id": w.ID, "inputs": inputs}
 		if len(items) == 0 {
-			if manual.CollectionID != "" {
-				return dms.Invalid("this workflow starts on items of its collection; give item_ids")
+			if itemBound {
+				return dms.Invalid("this workflow requires item_ids")
 			}
 			if err = workspace(ctx, t, subject, w.WorkspaceID, "manage"); err != nil {
 				return err
@@ -596,6 +603,7 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			return nil
 		}
 		collection := ""
+		collections := map[string]string{}
 		for _, itemID := range items {
 			r, err := t.Authorize(ctx, subject, itemID, "write")
 			if err != nil {
@@ -608,6 +616,7 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 				return dms.Invalid("item " + itemID + " is not in the workflow's collection")
 			}
 			collection = *r.ContainerID
+			collections[itemID] = collection
 			if def.Condition != nil {
 				ok, err := matches(ctx, t, v.CreatedBy, collection, itemID, def.Condition)
 				if err != nil {
@@ -633,7 +642,7 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 				members[i] = itemID
 			}
 			data["items"] = members
-			e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, CollectionID: collection, ResourceID: primary, Actor: subject, Data: data}
+			e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, CollectionID: collections[primary], ResourceID: primary, Actor: subject, Data: data}
 			t.Emit(ctx, e)
 			runs = append(runs, RunID(w.ID, e.ID))
 		}

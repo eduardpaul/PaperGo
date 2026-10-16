@@ -344,9 +344,13 @@ func TestManualStartInputsAndBranches(t *testing.T) {
 	if _, err := f.wf.StartRuns(ctx, "carol", w.ID, workflow.Start{ItemIDs: []string{a.ID}, Inputs: map[string]any{"total": 1}}); err == nil {
 		t.Fatal("a stranger started a run")
 	}
-	ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{a.ID, b.ID}, Inputs: map[string]any{"total": json.Number("250")}})
-	if err != nil || len(ids) != 2 {
-		t.Fatalf("start: %v %v", ids, err)
+	var ids []string
+	var err error
+	for _, itemID := range []string{a.ID, b.ID} {
+		ids, err = f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{itemID}, Inputs: map[string]any{"total": json.Number("250")}})
+		if err != nil || len(ids) != 1 {
+			t.Fatalf("start: %v %v", ids, err)
+		}
 	}
 	for _, run := range f.runs(t, w.ID, 2) {
 		if run.Status != "completed" {
@@ -724,8 +728,8 @@ func TestSelectionRuns(t *testing.T) {
 	if _, err = f.wf.StartRuns(ctx, "alice", each.ID, workflow.Start{ItemIDs: []string{a.ID}, PrimaryItemID: a.ID}); err == nil {
 		t.Fatal("primary on a per-item workflow")
 	}
-	if ids, err = f.wf.StartRuns(ctx, "alice", each.ID, workflow.Start{ItemIDs: []string{a.ID, b.ID}}); err != nil || len(ids) != 2 {
-		t.Fatalf("per-item start: %v %v", ids, err)
+	if _, err = f.wf.StartRuns(ctx, "alice", each.ID, workflow.Start{ItemIDs: []string{a.ID, b.ID}}); err == nil {
+		t.Fatal("single-item workflow accepted multiple items")
 	}
 }
 
@@ -972,5 +976,47 @@ func TestTermTriggersAndHasTerms(t *testing.T) {
 	}
 	if runs := f.runs(t, merged.ID, 1); runs[0].Status != "completed" || runs[0].ItemID != nil {
 		t.Fatalf("term.merged: %+v", runs[0])
+	}
+}
+
+func TestManualItemAssociationContracts(t *testing.T) {
+	f := setup(t)
+	a := f.item(t, "alice", "First", nil)
+	other, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "list", Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := f.dms.Create(ctx, "alice", other.ID, dms.CreateResource{Kind: "item", Name: "Second"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, trigger string
+		accepts       [][]string
+		rejects       [][]string
+	}{
+		{"Standalone", `{"type":"manual"}`, [][]string{nil}, [][]string{{a.ID}}},
+		{"Single workspace", `{"type":"manual","selection":"per_item"}`, [][]string{{a.ID}, {b.ID}}, [][]string{nil, {a.ID, b.ID}}},
+		{"Multiple workspace", `{"type":"manual","selection":"selection"}`, [][]string{{a.ID}, {a.ID, b.ID}}, [][]string{nil}},
+		{"Single scoped", fmt.Sprintf(`{"type":"manual","collection_id":%q,"selection":"per_item"}`, f.list.ID), [][]string{{a.ID}}, [][]string{{b.ID}, {a.ID, b.ID}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := f.workflow(t, tc.name, `{"triggers":[`+tc.trigger+`],"flow":{"start":"end","nodes":{"end":{"activity":"end"}}}}`)
+			for _, items := range tc.rejects {
+				if _, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: items}); err == nil {
+					t.Fatal("invalid cardinality or scope accepted", items)
+				}
+			}
+			for _, items := range tc.accepts {
+				ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: items})
+				if err != nil || len(ids) != 1 {
+					t.Fatal("valid association rejected", items, ids, err)
+				}
+				run := f.wait(t, ids[0], finished)
+				if run.Status != "completed" {
+					t.Fatal(run)
+				}
+			}
+		})
 	}
 }

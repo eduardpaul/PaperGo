@@ -57,7 +57,7 @@ manual Chrome/Edge validation on Windows remains unperformed.
 
 - [x] **ISSUE-14** — First attachments emit `file.added`; replacements, restores and content reindexing emit `file.updated` with filename and previous blob. Built-ins, trigger filters, editor, samples and API/docs agree. Validation: file/content/search/staging/definition and sample-package suites across DMS, workflow, runner and HTTP API; frontend typecheck.
 - [x] **ISSUE-15** — Selection toolbar offers enabled manual workflows matching the collection and item count. Launches keep the selected items, render typed input forms, show authorization failures inline and link to run details. Validation: 16 workflow launch/collection regressions, typecheck and lint.
-- [ ] **ISSUE-16** — Author and enforce standalone, single-item and multiple-item triggers.
+- [x] **ISSUE-16** — Editor exposes standalone, single-item and multiple-item association, with any-workspace or collection scope and selection-token guidance. Launch forms and server enforce 0/1/N items; multi-collection selections use the primary item’s collection. Validation: manual/selection/definition/API suites and association/launch UI regressions, typecheck and lint.
 - [ ] **ISSUE-17** — Item workflow launches and live run history.
 - [ ] **ISSUE-10** — Upload conflict resolution and synchronized file renaming.
 - [ ] **ISSUE-12** — Atomic single-to-multiple choice field widening.

@@ -6,14 +6,14 @@ import type { Resource, Workflow } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/menu';
 import { QueryFeedback } from '@/features/admin/common';
-import type { WorkflowDefinition } from './model';
+import { manualItemMode, type WorkflowDefinition } from './model';
 import { LaunchWorkflow } from './workflow-tools';
 
 /** Manual item workflows are offered only for the selected collection and cardinality. */
 export function applicableWorkflows(entries: Workflow[], collectionId: string, count: number) {
   return entries.filter((workflow) => {
     const trigger = (workflow.definition as WorkflowDefinition).triggers.find((entry) => entry.type === 'manual');
-    return workflow.enabled && trigger && (trigger.collection_id || trigger.selection)
+    return workflow.enabled && trigger && manualItemMode(trigger) !== 'none'
       && (!trigger.collection_id || trigger.collection_id === collectionId)
       && count > 0 && count <= 100 && (trigger.selection === 'selection' || count === 1);
   });

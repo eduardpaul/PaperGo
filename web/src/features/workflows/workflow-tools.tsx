@@ -15,7 +15,7 @@ import { problemMessage } from '@/lib/errors';
 import { QueryFeedback } from '@/features/admin/common';
 import { useBlobUrl } from '@/features/tasks/review';
 import { useFormat } from '@/lib/preferences';
-import { formDefaults, normalizeForm } from './model';
+import { formDefaults, manualItemMode, normalizeForm } from './model';
 import type { WorkflowDefinition } from './model';
 import { SchemaFields } from './schema-form';
 
@@ -33,6 +33,7 @@ export function LaunchWorkflow({
   const client = useQueryClient();
   const definition = workflow.definition as WorkflowDefinition;
   const manual = definition.triggers.find((trigger) => trigger.type === 'manual');
+  const itemMode = manualItemMode(manual);
   const schema = definition.input_schema ?? { type: 'object', properties: {} };
   const hints = schema['x-papergo-selection'];
   const [inputs, setInputs] = useState<Record<string, unknown>>(formDefaults(schema));
@@ -43,7 +44,7 @@ export function LaunchWorkflow({
     ['resources', workflow.workspace_id, manual?.collection_id, 'launch-items', q],
     manual?.collection_id ? `/v1/resources/${manual.collection_id}/query` : '/v1/resources',
     {
-      enabled: !!manual && !fixedSelection,
+      enabled: !!manual && itemMode !== 'none' && !fixedSelection,
       query: manual?.collection_id ? undefined : { workspace_id: workflow.workspace_id, q, surface: 'head' },
       body: manual?.collection_id ? { surface: 'head', query: { search: q || undefined } } : undefined,
     },
@@ -84,24 +85,24 @@ export function LaunchWorkflow({
       title={`Run ${workflow.name}`}
       submitLabel="Run workflow"
       pending={launch.isPending}
-      submitDisabled={!workflow.enabled || (!!manual?.collection_id && !itemIds.length) || itemIds.length > 100}
+      submitDisabled={!workflow.enabled || !manual || (itemMode === 'single' ? itemIds.length !== 1 : itemMode === 'multiple' ? itemIds.length < 1 || itemIds.length > 100 : itemIds.length !== 0)}
       onClose={onClose}
       onSubmit={() => launch.mutate()}
     >
       {launch.error && <Alert>{problemMessage(launch.error)}</Alert>}
       {fixedSelection && <p className="text-sm">{fixedSelection.length} selected: {fixedSelection.map((item) => item.name).join(', ')}</p>}
-      {manual && (
+      {manual && itemMode !== 'none' && (
         <>
           {!fixedSelection && <>
-          <Label id="launch-items-label">{manual.collection_id ? 'Items' : 'Items (optional)'}</Label>
+          <Label id="launch-items-label">{itemMode === 'single' ? 'Item' : 'Items'}</Label>
           {!manual.collection_id && (
             <p className="text-xs text-muted">
-              Choose items to start one run per item. Starting without items requires manage access to this workspace.
+              Choose from any collection in this workspace.
             </p>
           )}
           <Combobox
             aria-labelledby="launch-items-label"
-            multiple
+            multiple={itemMode === 'multiple'}
             selected={itemIds.map((id) => options.find((option) => option.value === id) ?? { value: id, label: id })}
             options={options}
             onSearch={setQ}

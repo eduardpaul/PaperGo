@@ -81,10 +81,12 @@ Fields of a trigger:
   - **Without `collection_id`:** one run with no item.
   - Occurrences missed while PaperGo was down start once.
   - A change to a workflow never starts runs for times already past.
-- A `manual` trigger with `collection_id` starts only on items of that collection. Without it, it starts with no item. Manual workflows can declare a launch form, `input_schema` (see [Forms](#forms)).
-- `selection` on a `manual` trigger with `collection_id`:
-  - `per_item` (the default) starts one run per chosen item.
-  - `selection` starts **one run for all chosen items**, in order, for work that combines them, such as composing one document from several photos. See [selection runs](#selection-runs).
+- Manual triggers expose **Item association** in the editor:
+  - **None (Standalone)** has neither `collection_id` nor `selection`, requires workspace manage access, and rejects selected items.
+  - **Single Item** uses `selection: "per_item"` and requires exactly one item.
+  - **Multiple Items** uses `selection: "selection"` and starts one run for 1–100 ordered items. Use `{run:items}` and `forEach` to process them.
+  - Single and multiple modes can target any collection in the workspace or a specific `collection_id`. A collection without an explicit selection uses single-item mode.
+  - A manual workflow can declare `input_schema` for its launch form (see [Forms](#forms)).
 
 Trigger data, readable as `{trigger:...}`:
 
@@ -479,7 +481,7 @@ See [workflow extensions](workflow-extensions.md) for the registration and durab
 
 A manual trigger with `"selection": "selection"` starts one run over several items. `POST /v1/workflows/{id}/runs` then takes:
 
-- `item_ids`: 1 to 100 items of the trigger's collection. Duplicates are dropped and the first occurrence keeps its place.
+- `item_ids`: 1 to 100 items of the workflow's workspace, limited to the trigger's collection when configured. Duplicates are dropped and the first occurrence keeps its place.
 - `primary_item_id`: optional, one of `item_ids`. It defaults to the first.
 
 Every item needs the starter's `write` access and must meet the condition before the run starts.
