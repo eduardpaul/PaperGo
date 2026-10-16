@@ -11,7 +11,32 @@ on:
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: papergo-verify-${{ github.workflow }}-${{ github.event_name }}-${{ inputs.ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')) }}
 jobs:
+  frontend:
+    name: Build embedded frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build and typecheck
+        run: npm ci --prefix web && npm --prefix web run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: embedded-frontend
+          path: web/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
   devcontainer:
     name: Development container
     runs-on: ubuntu-latest
@@ -26,6 +51,7 @@ jobs:
           push: never
           runCmd: bash .devcontainer/smoke-test.sh
   staticcheck:
+    needs: frontend
     name: Staticcheck
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -38,13 +64,10 @@ jobs:
           go-version: '1.27.2'
           cache: true
       - uses: ./.github/actions/native
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Build embedded frontend
-        run: npm ci --prefix web && npm --prefix web run build
+          name: embedded-frontend
+          path: web/dist
       - name: Install Staticcheck
         # This upstream revision supports Go 1.27.2's export format.
         run: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45
@@ -66,6 +89,7 @@ jobs:
       - name: Build image and smoke test
         run: bash scripts/docker-smoke.sh
   verify:
+    needs: frontend
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -77,15 +101,17 @@ jobs:
           go-version: '1.27.2'
           cache: true
       - uses: ./.github/actions/native
+      - uses: actions/download-artifact@v4
+        with:
+          name: embedded-frontend
+          path: web/dist
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Build embedded frontend
-        run: npm ci --prefix web && npm --prefix web run build
       - name: Check frontend
-        run: npm --prefix web run lint && npm --prefix web test -- --maxWorkers=2
+        run: npm ci --prefix web && npm --prefix web run lint && npm --prefix web test -- --maxWorkers=2
       - name: Check verification and release scripts
         run: python3 -m unittest discover -s scripts/tests -v
       - name: Check NPM sample setup
@@ -130,6 +156,7 @@ jobs:
           PAPERGO_REQUIRE_EMBEDDING: '1'
         run: go test -race ./internal/embedding ./internal/onnx ./cmd/embed
   race:
+    needs: frontend
     name: Race tests (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -146,19 +173,26 @@ jobs:
           go-version: '1.27.2'
           cache: true
       - uses: ./.github/actions/native
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Build embedded frontend
-        run: npm ci --prefix web && npm --prefix web run build
+          name: embedded-frontend
+          path: web/dist
       - name: Test with race detection
         env:
           PAPERGO_REQUIRE_OCR: '1'
         run: python3 scripts/test-race.py --shard ${{ matrix.shard }} --shards 3
+      - name: Upload race test timings and events
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: race-timings-${{ matrix.shard }}
+          path: .cache/checks/race-${{ matrix.shard }}.*
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
 
   zvec:
+    needs: frontend
     name: Native zvec (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
@@ -175,13 +209,10 @@ jobs:
           go-version: '1.27.2'
           cache: true
       - uses: ./.github/actions/native
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Build embedded frontend
-        run: npm ci --prefix web && npm --prefix web run build
+          name: embedded-frontend
+          path: web/dist
       - name: Native conformance, lifecycle, backup and offline copy
         run: go test -race ./internal/search/zvecstore ./internal/backup ./cmd/admin
       - name: Service, HTTP and workflow parity
@@ -202,6 +233,7 @@ jobs:
           path: .tools/native/installed.json
 
   native-platforms:
+    needs: frontend
     name: Native SDK smoke (${{ matrix.runner }})
     strategy:
       fail-fast: false
@@ -218,16 +250,13 @@ jobs:
           go-version: '1.27.2'
           cache: true
       - uses: ./.github/actions/native
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Build the embedded frontend and executables
+          name: embedded-frontend
+          path: web/dist
+      - name: Build executables
         shell: bash
         run: |
-          npm ci --prefix web
-          npm --prefix web run build
           go build ./cmd/api ./cmd/admin ./cmd/embed ./cmd/ocr
       - name: Exercise native search, PDFs, images and OCR
         shell: bash

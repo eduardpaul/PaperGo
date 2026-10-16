@@ -106,6 +106,7 @@ def main():
     parser.add_argument('--directory', default=str(ROOT / '.tools/native'))
     parser.add_argument('--cmake', default='cmake')
     parser.add_argument('--github-env', action='store_true')
+    parser.add_argument('--check', action='store_true', help='require current installed SDKs without downloading or building')
     args = parser.parse_args()
     system = platform.system().lower()
     machine = {'x86_64': 'amd64', 'AMD64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}[platform.machine()]
@@ -121,6 +122,8 @@ def main():
                    'installer': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                    'notices': hashlib.sha256(b''.join(path.read_bytes() for path in sorted((ROOT / 'scripts/native-notices').rglob('*')) if path.is_file())).hexdigest()}
     if not stamp.exists() or json.loads(stamp.read_text()) != fingerprint:
+        if args.check:
+            parser.error('native SDKs are missing or stale; run python scripts/native.py')
         entries = dict(lock['platforms'][key], webp=lock['webp'], tokenizers_source=lock['tokenizers_source'])
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
             archives = dict(zip(entries, pool.map(lambda item: download(item, cache), entries.values())))

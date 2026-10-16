@@ -14,7 +14,10 @@ and run **Dev Containers: Reopen in Container**. The [development guide](docs/de
 covers the pinned toolchain, automatic setup, hot reload, debugging and checks.
 For rootless Docker on Linux, use **Dev Containers: Clone Repository in Container Volume**.
 With tools installed on Linux or macOS, run `bash scripts/setup-dev.sh`, then
-`bash scripts/dev.sh`; `bash scripts/check.sh` runs the development checks.
+`bash scripts/dev.sh`; `bash scripts/check.sh --packages ./internal/dms` runs
+cached checks for a selected Go package. Use `--web` for frontend checks or
+`--full` for the complete validation and production build. See
+[development checks](docs/development.md#check-changes) for all modes.
 
 PowerShell, from the repository root:
 

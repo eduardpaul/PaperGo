@@ -2,8 +2,12 @@
 """Run one shard of the complete Go race suite, including fuzz seeds and examples."""
 
 import argparse
+import json
 import re
 import subprocess
+import sys
+import time
+from pathlib import Path
 
 
 def shard_names(listing, shard, shards):
@@ -30,14 +34,29 @@ def main():
     if args.shards < 1 or not 1 <= args.shard <= args.shards:
         parser.error("shard must be between 1 and shards")
     flags = ["-race", "-count=1", "-timeout=15m"]
-    listing = subprocess.run(
-        ["go", "test", *flags, "-list", "^(Test|Fuzz|Example)", "./..."],
-        check=True, stdout=subprocess.PIPE, text=True,
-    )
+    started = time.monotonic()
+    report = Path(f".cache/checks/race-{args.shard}")
+    report.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        listing = subprocess.run(
+            ["go", "test", *flags, "-list", "^(Test|Fuzz|Example)", "./..."],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+    except subprocess.CalledProcessError as error:
+        report.with_suffix(".discovery.log").write_text(error.stdout or "", encoding="utf-8")
+        report.with_suffix(".discovery.json").write_text(json.dumps({
+            "wall_seconds": time.monotonic() - started, "exit_code": error.returncode,
+        }), encoding="utf-8")
+        print(error.stdout or "", file=sys.stderr)
+        raise
+    report.with_suffix(".discovery.log").write_text(listing.stdout, encoding="utf-8")
     names = shard_names(listing.stdout, args.shard, args.shards)
     print(f"Race shard {args.shard}/{args.shards}: {len(names)} test names", flush=True)
     subprocess.run(
-        ["go", "test", *flags, "-v", "-run", run_pattern(names), "./..."],
+        [sys.executable, str(Path(__file__).with_name("go-test.py")),
+         "--output", str(report),
+         "--preparation-seconds", str(time.monotonic() - started), "--",
+         *flags, "-run", run_pattern(names), "./..."],
         check=True,
     )
 
