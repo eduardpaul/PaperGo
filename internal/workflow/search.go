@@ -44,7 +44,7 @@ func init() {
 				{"type": "folder.purged", "collection_id": "{param:collection}"},
 				{"type": "permissions.changed", "collection_id": "{param:collection}", "actions": ["replace", "move"]},
 				{"type": "term.changed"}, {"type": "term.merged"},
-				{"type": "manual", "collection_id": "{param:collection}"}
+				{"type": "manual", "collection_id": "{param:collection}", "selection": "per_item"}
 			],
 			"concurrency": "coalesce",
 			"flow": {"start": "route", "nodes": {

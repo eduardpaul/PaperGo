@@ -169,6 +169,9 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 		if e != nil {
 			return nil, e
 		}
+		if _, e = s.projectWidenedChoices(ctx, old, defs, previous); e != nil {
+			return nil, e
+		}
 		if blobID == nil {
 			blobID = old.BlobID
 		}
@@ -312,7 +315,7 @@ func indexedDefinitions(current, defs []*ent.FieldDefinition) []*ent.FieldDefini
 	for _, d := range defs {
 		now := configured[d.Key]
 		copy := *d
-		copy.Indexed = now != nil && now.Indexed && now.Type == d.Type && now.Scale == d.Scale && optionsIdentityEqual(now.Options, d.Options)
+		copy.Indexed = now != nil && now.Indexed && now.Type == d.Type && now.Scale == d.Scale && (optionsIdentityEqual(now.Options, d.Options) || choiceWidening(d, now))
 		out = append(out, &copy)
 	}
 	return out

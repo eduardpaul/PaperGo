@@ -161,6 +161,9 @@ func (s *Service) RestoreRevision(ctx context.Context, subject, id string, numbe
 		if err != nil {
 			return err
 		}
+		if _, err = t.projectWidenedChoices(ctx, old, defs, values); err != nil {
+			return err
+		}
 		// Removed fields stay removed. Clear current fields absent from the snapshot.
 		known := definitionMap(defs)
 		for key := range values {

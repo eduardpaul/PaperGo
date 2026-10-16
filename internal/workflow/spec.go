@@ -104,11 +104,11 @@ type Trigger struct {
 	// or removed (held before, not now).
 	Terms      []string `json:"terms,omitempty"`
 	TermChange string   `json:"term_change,omitempty"`
-	// Sources, on file.added triggers, are the file sources that start runs
+	// Sources, on file.added and file.updated triggers, are the file sources that start runs
 	// (dms.FileSources). The default is every source except workflow, so a
 	// workflow that replaces a file does not start itself again.
 	Sources []string `json:"sources,omitempty"`
-	// MediaTypes, on file.added triggers, limits them to files of these
+	// MediaTypes, on file.added and file.updated triggers, limits them to files of these
 	// media types: exact (application/pdf) or a wildcard (image/*).
 	MediaTypes []string `json:"media_types,omitempty"`
 	// TaskKey, on task.created, task.completed and task.cancelled triggers,
@@ -127,7 +127,7 @@ func (t Trigger) acceptsAction(action string) bool {
 	return len(t.Actions) == 0 || slices.Contains(t.Actions, action)
 }
 
-// sources returns the file sources a file.added trigger accepts.
+// sources returns the file sources a file trigger accepts.
 func (t Trigger) sources() []string {
 	if len(t.Sources) > 0 {
 		return t.Sources
@@ -135,7 +135,7 @@ func (t Trigger) sources() []string {
 	return []string{dms.FileUpload, dms.FileWebDAV, dms.FileRestore}
 }
 
-// acceptsMediaType reports whether a file.added trigger accepts a file's
+// acceptsMediaType reports whether a file trigger accepts a file's
 // media type.
 func (t Trigger) acceptsMediaType(media string) bool {
 	if len(t.MediaTypes) == 0 {

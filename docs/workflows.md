@@ -562,7 +562,7 @@ Some processes are **roles**: product processes that one workflow fills, which p
 
 A manual start returns run IDs at once. Until its event is dispatched, the run shows as `queued`.
 
-Run lists leave out the runs of system built-ins, which run on every change, unless `workflow_id` selects their workflow.
+Run lists leave out the runs of system built-ins, which run on every change, unless `workflow_id` selects their workflow or `item_id` selects the item being inspected.
 
 Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default 30 days). Deleting a workflow stops it from matching triggers; its versions and runs are kept, and running runs finish with their version.
 

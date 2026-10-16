@@ -164,6 +164,8 @@ export function UploadsProvider({ children }: { children: ReactNode }) {
           patch(id, { status: 'queued', loaded: 0, error: undefined });
         }}
         onRename={(entry, name) => {
+          const dot = entry.file.name.lastIndexOf('.');
+          if (!name.includes('.') && dot > 0) name += entry.file.name.slice(dot);
           started.current.delete(entry.id);
           patch(entry.id, { file: new File([entry.file], name, { type: entry.file.type, lastModified: entry.file.lastModified }), name,
             status: 'queued', loaded: 0, error: undefined, nameConflict: false, conflict: undefined, replaceTarget: undefined });

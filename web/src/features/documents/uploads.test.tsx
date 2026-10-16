@@ -144,7 +144,7 @@ it('renames a conflicting upload and retries it with the new file and resource n
   await waitFor(() => expect(FakeRequest.sent).toHaveLength(1));
   act(() => FakeRequest.sent[0].respond(409, { code: 'name_conflict', existing_item: { id: 'existing', version: 4 } }));
   fireEvent.click(await screen.findByRole('button', { name: 'Rename' }));
-  fireEvent.change(screen.getByLabelText('File name'), { target: { value: 'new.pdf' } });
+  fireEvent.change(screen.getByLabelText('File name'), { target: { value: 'new' } });
   fireEvent.click(screen.getByRole('button', { name: 'Rename and upload' }));
   await waitFor(() => expect(FakeRequest.sent).toHaveLength(2));
   expect(FakeRequest.sent[1].body?.get('file')).toBeInstanceOf(File);

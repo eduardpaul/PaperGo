@@ -18313,7 +18313,7 @@
           },
           "options": {
             "$ref": "#/components/schemas/FieldOptions",
-            "description": "Complete replacement of options; multiple and reference scope are immutable."
+            "description": "Complete replacement of options. Single-choice fields may widen from multiple:false to multiple:true; other cardinality and reference scope changes are rejected. Current heads and indexes adopt arrays atomically across attached collections, while frozen history and publications retain their schemas."
           }
         }
       },
@@ -20818,7 +20818,7 @@
               "type": "string"
             },
             "maxItems": 100,
-            "description": "Items to start on; duplicates are dropped. A selection workflow takes 1 to 100 items of its collection and starts one run."
+            "description": "Items to start on; duplicates are dropped. Standalone requires none, per_item requires exactly one, and selection takes 1–100 workspace items. collection_id optionally restricts item modes to one collection. One request starts one run."
           },
           "inputs": {
             "type": "object",

@@ -105,7 +105,7 @@ func init() {
 			"approvers": {"type": "array", "title": "Approvers", "description": "Who reviews the smaller file; none means the workspace's owners.", "maxItems": 50, "items": {"type": "string"}, "x-papergo": {"kind": "people", "access": "read_draft"}}
 		}}`),
 		Definition: `{
-			"triggers": [{"type": "file.added", "collection_id": "{param:collection}"}, {"type": "file.updated", "collection_id": "{param:collection}"}, {"type": "manual", "collection_id": "{param:collection}"}],
+			"triggers": [{"type": "file.added", "collection_id": "{param:collection}"}, {"type": "file.updated", "collection_id": "{param:collection}"}, {"type": "manual", "collection_id": "{param:collection}", "selection": "per_item"}],
 			"concurrency": "replace",
 			"flow": {"start": "prepare", "nodes": {
 				"prepare": {"activity": "file.optimize_image", "inputs": {"target_height": "{param:target_height}", "min_confidence": "{param:min_confidence}",

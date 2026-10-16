@@ -1052,10 +1052,23 @@ func TestItemRunSummariesRespectDraftAccess(t *testing.T) {
 	if _, err = f.r.Runs(ctx, "carol", f.ws.ID, RunFilter{ItemID: a.ID}); err == nil {
 		t.Fatal("outsider read item history")
 	}
-	if _, err = f.dms.SetPermissions(ctx, "alice", a.ID, f.head(t, a.ID).Version, dms.Permissions{Grants: []dms.Permission{{"user", "alice", "manage", "allow"}}}); err != nil {
+	if _, err = f.dms.SetPermissions(ctx, "alice", a.ID, f.head(t, a.ID).Version, dms.Permissions{Grants: []dms.Permission{{PrincipalType: "user", PrincipalID: "alice", Action: "manage", Effect: "allow"}}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.r.Runs(ctx, "bob", f.ws.ID, RunFilter{ItemID: a.ID}); err == nil {
 		t.Fatal("revoked item access still read history")
+	}
+}
+
+func TestWorkspaceBuiltInsManualItemAssociation(t *testing.T) {
+	f := setup(t)
+	item := f.item(t, "bob", "Index manually", nil)
+	index := f.builtIn(t, "search.index", "")
+	ids, err := f.wf.StartRuns(ctx, "bob", index.ID, workflow.Start{ItemIDs: []string{item.ID}})
+	if err != nil || len(ids) != 1 {
+		t.Fatal("workspace built-in did not accept a selected item", ids, err)
+	}
+	if run := f.wait(t, ids[0], finished); run.Status != "completed" {
+		t.Fatal(run)
 	}
 }
