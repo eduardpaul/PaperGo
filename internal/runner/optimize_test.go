@@ -270,14 +270,17 @@ func TestPhotosToPDFBuiltIn(t *testing.T) {
 		t.Fatalf("rejected PDF replaced the file: %+v", b)
 	}
 
-	// While a conversion waits, another one with the same photos is skipped.
+	// While a conversion waits, another manual launch records a visible rejection.
 	run = start(second.ID, third.ID, second.ID, first.ID)
 	a = f.approvalOf(t, run)
-	if _, err = f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{first.ID, second.ID}, PrimaryItemID: first.ID}); err != nil {
+	rejected, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{first.ID, second.ID}, PrimaryItemID: first.ID})
+	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(300 * time.Millisecond)
-	f.runsOf(t, w.ID, 2)
+	if result := f.wait(t, rejected[0], finished); result.Status != "failed" || !strings.Contains(result.Error, "another run is active") {
+		t.Fatal("overlapping launch lost its inspectable rejection", result)
+	}
+	f.runsOf(t, w.ID, 3)
 
 	// Approving gives the primary the PDF and recycles the other photos;
 	// those deletions do not cancel the run that made them.
