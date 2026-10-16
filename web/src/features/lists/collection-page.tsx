@@ -44,6 +44,7 @@ import { useResourceNames, useValueNames } from '@/features/fields/names';
 import { valuesPatch } from '@/features/fields/values';
 import { ConfirmDialog } from '@/features/settings/section';
 import { useFormat } from '@/lib/preferences';
+import { RunWorkflowAction } from '@/features/workflows/item-workflows';
 import { cn } from '@/lib/utils';
 import { can } from './access';
 import { CollectionIcon } from './collection-icon';
@@ -449,6 +450,9 @@ export function CollectionPage({
           <Button size="sm" disabled={!allMatching && items.length === 0} onClick={() => setBulkEditing(true)}>
             <Pencil /> Edit a field
           </Button>
+          {!allMatching && canEdit && items.length === selected.size && (
+            <RunWorkflowAction workspaceId={workspaceId} collectionId={listId} items={items} />
+          )}
           {!allMatching && (
             <Button size="sm" disabled={remove.isPending} onClick={() => setConfirmingDelete(true)}>
               <Trash2 /> Delete

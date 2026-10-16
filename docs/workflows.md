@@ -35,6 +35,12 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 }
 ```
 
+Select items in a list or library and choose **Run workflow** to launch an enabled
+manual workflow for that collection and selection size. The confirmation dialog
+keeps the selected items, collects any launch inputs, and links to the started run.
+Select individual items (up to 100); the all-matching bulk selection cannot launch
+a workflow. The server rechecks write permission on every item before starting.
+
 ## Triggers
 
 | Type | Starts a run when | The run's item |

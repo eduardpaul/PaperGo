@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Input, Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { Alert } from '@/components/ui/feedback';
+import { problemMessage } from '@/lib/errors';
 import { QueryFeedback } from '@/features/admin/common';
 import { useBlobUrl } from '@/features/tasks/review';
 import { useFormat } from '@/lib/preferences';
@@ -21,10 +23,12 @@ export function LaunchWorkflow({
   workflow,
   onClose,
   itemIds: initialItems = [],
+  fixedSelection,
 }: {
   workflow: Workflow;
   onClose: () => void;
   itemIds?: string[];
+  fixedSelection?: Resource[];
 }) {
   const client = useQueryClient();
   const definition = workflow.definition as WorkflowDefinition;
@@ -39,15 +43,16 @@ export function LaunchWorkflow({
     ['resources', workflow.workspace_id, manual?.collection_id, 'launch-items', q],
     manual?.collection_id ? `/v1/resources/${manual.collection_id}/query` : '/v1/resources',
     {
-      enabled: !!manual,
+      enabled: !!manual && !fixedSelection,
       query: manual?.collection_id ? undefined : { workspace_id: workflow.workspace_id, q, surface: 'head' },
       body: manual?.collection_id ? { surface: 'head', query: { search: q || undefined } } : undefined,
     },
   );
-  const options = items.items
+  const options = (fixedSelection ?? items.items)
     .filter((item) => item.kind === 'item')
     .map((item) => ({ value: item.id, label: item.name }));
   const launch = useMutation({
+    meta: { silent: true },
     mutationFn: () =>
       api<{ run_ids: string[] }>(`/v1/workflows/${workflow.id}/runs`, {
         method: 'POST',
@@ -59,7 +64,9 @@ export function LaunchWorkflow({
         },
       }),
     onSuccess: async (result) => {
-      toast.success(`${result.data.run_ids.length} workflow runs started`);
+      toast.success(`${result.data.run_ids.length} workflow run${result.data.run_ids.length === 1 ? '' : 's'} started`, {
+        description: <a className="underline" href={`/w/${workflow.workspace_id}/settings/runs?run=${result.data.run_ids[0]}`}>View run details</a>,
+      });
       await client.invalidateQueries({ queryKey: ['workflow-runs'] });
       onClose();
     },
@@ -81,8 +88,11 @@ export function LaunchWorkflow({
       onClose={onClose}
       onSubmit={() => launch.mutate()}
     >
+      {launch.error && <Alert>{problemMessage(launch.error)}</Alert>}
+      {fixedSelection && <p className="text-sm">{fixedSelection.length} selected: {fixedSelection.map((item) => item.name).join(', ')}</p>}
       {manual && (
         <>
+          {!fixedSelection && <>
           <Label id="launch-items-label">{manual.collection_id ? 'Items' : 'Items (optional)'}</Label>
           {!manual.collection_id && (
             <p className="text-xs text-muted">
@@ -103,6 +113,7 @@ export function LaunchWorkflow({
               More items
             </Button>
           )}
+          </>}
           {manual.selection === 'selection' && (
             <>
               <Label htmlFor="launch-primary">Primary {hints?.item_label ?? 'item'}</Label>

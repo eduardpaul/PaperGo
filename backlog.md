@@ -56,7 +56,7 @@ manual Chrome/Edge validation on Windows remains unperformed.
 ## Phase 2 Progress
 
 - [x] **ISSUE-14** — First attachments emit `file.added`; replacements, restores and content reindexing emit `file.updated` with filename and previous blob. Built-ins, trigger filters, editor, samples and API/docs agree. Validation: file/content/search/staging/definition and sample-package suites across DMS, workflow, runner and HTTP API; frontend typecheck.
-- [ ] **ISSUE-15** — Launch workflows on selected items with input forms.
+- [x] **ISSUE-15** — Selection toolbar offers enabled manual workflows matching the collection and item count. Launches keep the selected items, render typed input forms, show authorization failures inline and link to run details. Validation: 16 workflow launch/collection regressions, typecheck and lint.
 - [ ] **ISSUE-16** — Author and enforce standalone, single-item and multiple-item triggers.
 - [ ] **ISSUE-17** — Item workflow launches and live run history.
 - [ ] **ISSUE-10** — Upload conflict resolution and synchronized file renaming.
