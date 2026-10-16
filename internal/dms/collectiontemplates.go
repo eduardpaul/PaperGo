@@ -29,7 +29,7 @@ type CollectionTemplate struct {
 
 func builtInCollectionTemplates() map[string]CollectionTemplate {
 	return map[string]CollectionTemplate{
-		"documents": {Key: "documents", Name: "Documents", Description: "Document library with descriptions and keywords", Kind: "library", AllowFolders: true, Versioning: "major", MaxVersions: 50,
+		"documents": {Key: "documents", Name: "Documents", Description: "Document library with descriptions and keywords", Kind: "library", AllowFolders: true, Versioning: "off", MaxVersions: 50,
 			ContentTypes: []TemplateInput{{Key: "document", Name: "Document", Fields: []CreateField{
 				{Key: "description", Label: "Description", Type: "note"},
 				{Key: "keywords", Label: "Keywords", Type: "keywords", Indexed: true, Options: model.FieldOptions{Multiple: true}},
@@ -63,9 +63,6 @@ func (s *Service) RegisterCollectionTemplate(in CollectionTemplate) error {
 	}
 	if in.Versioning == "" {
 		in.Versioning = "off"
-		if in.Kind == "library" {
-			in.Versioning = "major"
-		}
 	}
 	if in.MaxVersions == 0 {
 		in.MaxVersions = 50

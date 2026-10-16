@@ -8,6 +8,14 @@ The file streams under the configured upload limit; metadata is limited to 64 Ki
 
 A library item holds metadata and immutable file versions. `PUT /v1/items/{id}/content` streams a new file using `X-Filename`, `Content-Type` and the current numeric `If-Match`. The response includes the file version number and the new resource ETag. File version numbers, metadata revision numbers and resource lock versions are independent.
 
+Lists and libraries, including Documents templates and personal Home libraries,
+default to versioning off. With versioning off, replacing a file queues its
+previous bytes for reclamation after a one-hour grace period. Current published
+files, staged uses and workflow leases defer reclamation until released. File
+metadata remains in history with its availability, and bytes shared by other
+files remain stored. Enable versioning in collection settings to keep replacement
+files and record metadata history; retention accepts 1–500 metadata entries.
+
 Libraries accept `duplicate_policy: "allow" | "warn" | "block"` on creation and PATCH. It defaults to `warn`; changing it requires library manage access and the current `If-Match`. Collection templates can set the policy. Uploads compare SHA-256 hashes against current files visible to the caller across libraries and workspaces, excluding the item being replaced, historical files and deleted items. `warn` returns up to 20 matching documents in `duplicates`; `allow` returns an empty list; `block` rejects matching uploads with `409 duplicate_file`. File creation and replacement, including WebDAV, enforce blocking inside the same transaction as their revisions. Failed REST uploads remove their stored object. File restoration follows the version history and does not apply upload duplicate policy.
 
 `GET /v1/items/{id}/content/versions` lists the retained files of an item, newest first, with `$top` and `$skiptoken` paging. Each entry has its `version` number, `filename`, `content_type`, `size`, `sha256`, `created_at`, `created_by` (who uploaded or restored it), `is_current` (the file of the caller's visible revision) and `availability` (`available`, `pending` or `reclaimed`). Draft readers see every version; ordinary readers see only the published file. It requires `document.read`. A workflow asks for the bytes back with [`file.reclaim`](workflows.md#reclaiming-a-file-version). The version stays in history. `pending` still downloads. After the one-hour grace period an unprotected version becomes `reclaimed`: its download and restore answer `410 content_unavailable`, and file history shows it as unavailable. Bytes another file still needs stay stored.
@@ -18,7 +26,7 @@ Libraries accept `duplicate_policy: "allow" | "warn" | "block"` on creation and 
 
 ## Personal and group Inbox intake
 
-GET `/v1/identity/me/home` provisions one Home workspace with Documents and Inbox libraries. Both use the Documents template, shared Document content type, major versioning and the default document view. Their IDs remain stable even when names change.
+GET `/v1/identity/me/home` provisions one Home workspace with Documents and Inbox libraries. Both use the Documents template, shared Document content type, versioning off and the default document view. Their IDs remain stable even when names change.
 
 POST `/v1/identity/me/inbox/documents` uploads to personal Inbox. GET `/v1/identity/me/inboxes` returns personal Inbox first, then readable bindings for effective group memberships, ordered by group name. Discovery can include a read-only destination; group membership does not grant library access.
 

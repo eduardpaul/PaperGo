@@ -225,9 +225,6 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 		return nil, err
 	}
 	versioning := "off"
-	if in.Kind == "library" {
-		versioning = "major"
-	}
 	if in.Versioning != nil {
 		versioning = *in.Versioning
 	}

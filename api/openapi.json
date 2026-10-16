@@ -13857,7 +13857,7 @@
       "get": {
         "operationId": "getHome",
         "summary": "Discover and lazily provision personal Home and default libraries",
-        "description": "Atomically provisions one Home per active user with Documents and Inbox libraries using the Documents template, major versioning and a default view. Requires list.read; no workspace creation or catalog administration scopes. Ordinary deletion of Home and its default libraries is blocked. Home has one fixed owner; the administrator override and descendant ACLs still apply.",
+        "description": "Atomically provisions one Home per active user with Documents and Inbox libraries using the Documents template, versioning off and a default view. Requires list.read; no workspace creation or catalog administration scopes. Ordinary deletion of Home and its default libraries is blocked. Home has one fixed owner; the administrator override and descendant ACLs still apply.",
         "x-module-scopes": [
           "list.read"
         ],
@@ -17508,7 +17508,7 @@
               "off",
               "major"
             ],
-            "description": "Collections only. Lists default to off and libraries to major. Off stops recording new history; retained entries remain available."
+            "description": "Collections only. Lists and libraries default to off. Off stops recording new history; retained entries remain available. Replacing a file while off queues its previous bytes for reclamation after the one-hour grace period, subject to current/published file, staged-use and workflow-lease protection."
           },
           "max_versions": {
             "type": "integer",
@@ -17634,7 +17634,7 @@
               "off",
               "major"
             ],
-            "description": "Collections only. Lists default to off and libraries to major. Off stops recording new history; retained entries remain available."
+            "description": "Collections only. Lists and libraries default to off. Off stops recording new history; retained entries remain available. Replacing a file while off queues its previous bytes for reclamation after the one-hour grace period, subject to current/published file, staged-use and workflow-lease protection."
           },
           "max_versions": {
             "type": "integer",
@@ -17716,7 +17716,7 @@
               "off",
               "major"
             ],
-            "description": "Collections only. Lists default to off and libraries to major. Off stops recording new history; retained entries remain available."
+            "description": "Collections only. Lists and libraries default to off. Off stops recording new history; retained entries remain available. Replacing a file while off queues its previous bytes for reclamation after the one-hour grace period, subject to current/published file, staged-use and workflow-lease protection."
           },
           "max_versions": {
             "type": "integer",
@@ -22300,7 +22300,7 @@
               "off",
               "major"
             ],
-            "description": "Collections only. Lists default to off and libraries to major. Off stops recording new history; retained entries remain available."
+            "description": "Collections only. Lists and libraries default to off. Off stops recording new history; retained entries remain available. Replacing a file while off queues its previous bytes for reclamation after the one-hour grace period, subject to current/published file, staged-use and workflow-lease protection."
           },
           "max_versions": {
             "type": "integer",

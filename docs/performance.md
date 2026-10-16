@@ -219,8 +219,9 @@ temporary upload/import/export files, and logs. Current document language hints
 are metadata; PaperGo does not run an OCR engine in these measurements.
 
 Collections can retain 1–500 metadata versions per item (default 50 when
-versioning is enabled). File versions are retained independently; `max_versions`
-does not cap stored file bytes. Dispatched events and finished workflow runs use the
+versioning is enabled). With versioning off, replaced files enter byte reclamation
+after the grace period. With versioning enabled, file versions are retained
+independently; `max_versions` does not cap stored file bytes. Dispatched events and finished workflow runs use the
 30-day default runner retention; live changes use seven days. Ordinary audit
 history has no general automatic expiry. Retention deletions free SQLite pages
 for reuse; they do not inherently shrink the database file. The server logs

@@ -247,6 +247,15 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 	if err = s.retainHistory(ctx, c, rev, previousRevision); err != nil {
 		return nil, err
 	}
+	if c.Versioning == resource.VersioningOff && previousRevision != nil && previousRevision.BlobID != nil && newBlobID != nil && *previousRevision.BlobID != *newBlobID {
+		oldBlob, err := s.Client.Blob.Get(ctx, *previousRevision.BlobID)
+		if err != nil {
+			return nil, err
+		}
+		if _, err = s.reclaimBlob(ctx, oldBlob); err != nil {
+			return nil, err
+		}
+	}
 	return rev, nil
 }
 func (s *Service) replaceSurface(ctx context.Context, r *ent.Resource, rev *ent.ItemRevision, surface itemsurface.Surface, defs []*ent.FieldDefinition) error {

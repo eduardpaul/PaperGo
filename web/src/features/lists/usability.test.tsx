@@ -141,6 +141,14 @@ describe('item panel', () => {
     await waitFor(() => expect(calls).toContainEqual({ method: 'DELETE', path: '/v1/resources/item' }));
   });
 
+  it('explains disabled version history for a library', async () => {
+    mockItem();
+    renderWithClient(
+      <ItemSheet itemId="item" collection={{ ...collection, kind: 'library', versioning: 'off' }} fields={[]} contentTypes={[]} tab="versions" onTab={vi.fn()} onClose={vi.fn()} onMoved={vi.fn()} />,
+    );
+    expect(await screen.findByText(/Version history is off for this library/)).toBeTruthy();
+  });
+
   it('offers no edits to people who can only read', async () => {
     mockItem(['read']);
     renderWithClient(

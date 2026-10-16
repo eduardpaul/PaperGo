@@ -91,7 +91,7 @@ func TestHomeConcurrentProvisioningAndProtection(t *testing.T) {
 	}
 	for _, id := range []string{home.DocumentsLibraryID, home.InboxLibraryID} {
 		lib, err := s.Client.Resource.Get(ctx, id)
-		if err != nil || lib.Versioning != resource.VersioningMajor || lib.PublishingEnabled {
+		if err != nil || lib.Versioning != resource.VersioningOff || lib.PublishingEnabled {
 			t.Fatal(lib, err)
 		}
 		attached, err := s.Client.CollectionType.Query().Where(collectiontype.ContainerIDEQ(id), collectiontype.IsDefaultEQ(true)).Only(ctx)

@@ -2,27 +2,28 @@ package dms
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"papergo/ent"
+	"papergo/ent/blob"
 	"papergo/ent/resource"
+	"papergo/internal/storage"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
 	s, w, _ := fixture(t)
-	for _, tc := range []struct{ kind, mode string }{{"list", "off"}, {"library", "major"}} {
-		c, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: tc.kind, Name: tc.kind})
-		if err != nil || string(c.Versioning) != tc.mode || c.MaxVersions != 50 {
+	for _, kind := range []string{"list", "library"} {
+		c, err := s.Create(testContext, "alice", w.ID, CreateResource{Kind: kind, Name: kind})
+		if err != nil || c.Versioning != resource.VersioningOff || c.MaxVersions != 50 {
 			t.Fatal(c, err)
 		}
 		item := create(t, s, c.ID, "item", "Item", nil)
 		rows, err := s.RevisionHistory(testContext, "alice", item.ID, 0, 10)
-		expected := 0
-		if tc.mode == "major" {
-			expected = 1
-		}
-		if err != nil || len(rows.Data) != expected {
+		if err != nil || len(rows.Data) != 0 {
 			t.Fatal(rows, err)
 		}
 		if _, err = s.ItemSchema(testContext, "alice", item.ID, "head"); err != nil {
@@ -44,13 +45,16 @@ func TestHistoryDefaultsAndPolicyValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, recipe := range templates {
+		if recipe.Versioning != "off" {
+			t.Fatal("built-in template enables history", recipe.Key)
+		}
 		c, err := s.Create(testContext, "alice", w.ID, CreateResource{TemplateKey: recipe.Key, Name: recipe.Name})
 		if err != nil || string(c.Versioning) != recipe.Versioning || c.MaxVersions != recipe.MaxVersions {
 			t.Fatal(c, err)
 		}
 	}
-	c, err := s.Create(testContext, "alice", w.ID, CreateResource{TemplateKey: "documents", Name: "No history", Versioning: ptr("off"), MaxVersions: ptr(500)})
-	if err != nil || c.Versioning != resource.VersioningOff || c.MaxVersions != 500 {
+	c, err := s.Create(testContext, "alice", w.ID, CreateResource{TemplateKey: "documents", Name: "With history", Versioning: ptr("major"), MaxVersions: ptr(500)})
+	if err != nil || c.Versioning != resource.VersioningMajor || c.MaxVersions != 500 {
 		t.Fatal(c, err)
 	}
 }
@@ -255,5 +259,127 @@ func TestItemSnapshotCollectionTouchesOnlyTheGivenItems(t *testing.T) {
 	}
 	if err = s.CollectRevisions(testContext); err != nil || revisionCount(t, s, second.ID) != 1 {
 		t.Fatal("the full sweep left unreferenced snapshots", err)
+	}
+}
+
+func TestLibraryReplacementReclaimsBytesOnlyWhenVersioningOff(t *testing.T) {
+	for _, mode := range []string{"", "major"} {
+		for _, publishing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("mode=%q/publishing=%v", mode, publishing), func(t *testing.T) {
+				s, ws, _ := fixture(t)
+				ctx := t.Context()
+				in := CreateResource{Kind: "library", Name: "Files", PublishingEnabled: publishing}
+				if mode != "" {
+					in.Versioning = &mode
+				}
+				library, err := s.Create(ctx, "alice", ws.ID, in)
+				if err != nil {
+					t.Fatal(err)
+				}
+				store, err := storage.NewLocal(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				content := func(text string) BlobInput {
+					t.Helper()
+					object, e := store.Put(ctx, strings.NewReader(text), 1000)
+					if e != nil {
+						t.Fatal(e)
+					}
+					return BlobInput{ObjectKey: object.Key, Filename: "file.pdf", ContentType: "application/pdf", Size: object.Size, SHA256: object.SHA256}
+				}
+				document, err := s.CreateDocument(ctx, "alice", library.ID, DocumentMetadata{}, content("%PDF-1.7\nFirst\n%%EOF"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				item := document.Item
+				if publishing {
+					if _, err = s.Publish(ctx, "alice", item.ID, item.Version); err != nil {
+						t.Fatal(err)
+					}
+					item = latest(t, s, item.ID)
+				}
+				second, err := s.AttachBlob(ctx, "alice", item.ID, item.Version, content("%PDF-1.7\nSecond\n%%EOF"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				old, err := s.Client.Blob.Get(ctx, document.File.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				history, err := s.RevisionHistory(ctx, "alice", item.ID, 0, 10)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if mode == "major" {
+					if old.Availability != blob.AvailabilityAvailable || len(history.Data) != 2 {
+						t.Fatal("explicit history did not retain versions", old, history)
+					}
+				} else if old.Availability != blob.AvailabilityPending || len(history.Data) != 0 || publishing != (old.ReclaimAfter == nil) {
+					t.Fatal("history-off replacement was not queued with publication protection", old, history)
+				}
+				if err = s.SweepReclaims(ctx, store, time.Now().UTC()); err != nil {
+					t.Fatal(err)
+				}
+				f, err := store.Open(ctx, old.ObjectKey)
+				if err != nil {
+					t.Fatal("file bytes removed before grace period", err)
+				}
+				f.Close()
+				future := time.Now().UTC().Add(2 * ObjectGracePeriod)
+				if err = s.SweepReclaims(ctx, store, future); err != nil {
+					t.Fatal(err)
+				}
+				if publishing {
+					f, err := store.Open(ctx, old.ObjectKey)
+					if err != nil {
+						t.Fatal("published bytes were reclaimed", err)
+					}
+					f.Close()
+					item = latest(t, s, item.ID)
+					if _, err = s.Publish(ctx, "alice", item.ID, item.Version); err != nil {
+						t.Fatal(err)
+					}
+					if err = s.SweepReclaims(ctx, store, future); err != nil {
+						t.Fatal(err)
+					}
+					if err = s.SweepReclaims(ctx, store, future.Add(2*ObjectGracePeriod)); err != nil {
+						t.Fatal(err)
+					}
+				}
+				f, err = store.Open(ctx, old.ObjectKey)
+				if mode == "major" {
+					if err != nil {
+						t.Fatal("explicit history lost file bytes", err)
+					}
+					f.Close()
+				} else if !os.IsNotExist(err) {
+					if f != nil {
+						f.Close()
+					}
+					t.Fatal("replaced bytes were not reclaimed", err)
+				}
+				current, err := s.GetBlob(ctx, "alice", item.ID, "")
+				if err != nil || current.ID != second.ID || current.Availability != blob.AvailabilityAvailable {
+					t.Fatal("replacement is not current and available", current, err)
+				}
+				f, err = store.Open(ctx, second.ObjectKey)
+				if err != nil {
+					t.Fatal("current bytes removed", err)
+				}
+				f.Close()
+				// Re-uploading reclaimed content must use the newly stored object.
+				item = latest(t, s, item.ID)
+				reuploaded, err := s.AttachBlob(ctx, "alice", item.ID, item.Version, content("%PDF-1.7\nFirst\n%%EOF"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				f, err = store.Open(ctx, reuploaded.ObjectKey)
+				if err != nil {
+					t.Fatal("re-upload reused a reclaimed object", err)
+				}
+				f.Close()
+			})
+		}
 	}
 }

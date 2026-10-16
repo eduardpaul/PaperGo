@@ -495,7 +495,7 @@ function Versions({ item, collection, canWrite }: { item: Resource; collection: 
     <div className="flex flex-col gap-2">
       <p className="text-xs text-muted">
         {collection.versioning === 'off'
-          ? 'Version history is off for this list. Earlier versions kept before it was turned off are shown.'
+          ? `Version history is off for this ${collection.kind === 'library' ? 'library' : 'list'}. Retained earlier versions are shown.`
           : 'Restoring brings back the name, tags and columns of that version as a new version.'}
         {collection.kind === 'library' && ' The file stays as it is; restore files on the File tab.'}
       </p>

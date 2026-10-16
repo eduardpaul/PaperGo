@@ -35,33 +35,32 @@ func (s *Service) ReclaimBlob(ctx context.Context, subject, itemID, blobID strin
 		if e != nil {
 			return e
 		}
-		if row.Availability == blob.AvailabilityReclaimed {
-			out = ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityReclaimed)}
-			return nil
-		}
-		protected, reason, e := t.blobProtected(ctx, row)
-		if e != nil {
-			return e
-		}
-		if protected {
-			if e = t.Client.Blob.UpdateOneID(row.ID).SetAvailability(blob.AvailabilityPending).ClearReclaimAfter().Exec(ctx); e != nil {
-				return e
-			}
-			out = ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityPending), Deferred: true, Reason: reason}
-			return nil
-		}
-		if row.Availability == blob.AvailabilityPending && row.ReclaimAfter != nil {
-			out = ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityPending), ReclaimAfter: row.ReclaimAfter}
-			return nil
-		}
-		due := time.Now().UTC().Add(ObjectGracePeriod)
-		if e = t.Client.Blob.UpdateOneID(row.ID).SetAvailability(blob.AvailabilityPending).SetReclaimAfter(due).Exec(ctx); e != nil {
-			return e
-		}
-		out = ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityPending), ReclaimAfter: &due}
-		return nil
+		out, e = t.reclaimBlob(ctx, row)
+		return e
 	})
 	return out, err
+}
+
+// reclaimBlob shares the grace period and protection rules between explicit
+// reclamation and file replacement with collection versioning disabled.
+func (s *Service) reclaimBlob(ctx context.Context, row *ent.Blob) (ReclaimResult, error) {
+	if row.Availability == blob.AvailabilityReclaimed {
+		return ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityReclaimed)}, nil
+	}
+	protected, reason, err := s.blobProtected(ctx, row)
+	if err != nil {
+		return ReclaimResult{}, err
+	}
+	if protected {
+		err = s.Client.Blob.UpdateOneID(row.ID).SetAvailability(blob.AvailabilityPending).ClearReclaimAfter().Exec(ctx)
+		return ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityPending), Deferred: true, Reason: reason}, err
+	}
+	if row.Availability == blob.AvailabilityPending && row.ReclaimAfter != nil {
+		return ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityPending), ReclaimAfter: row.ReclaimAfter}, nil
+	}
+	due := time.Now().UTC().Add(ObjectGracePeriod)
+	err = s.Client.Blob.UpdateOneID(row.ID).SetAvailability(blob.AvailabilityPending).SetReclaimAfter(due).Exec(ctx)
+	return ReclaimResult{BlobID: row.ID, Availability: string(blob.AvailabilityPending), ReclaimAfter: &due}, err
 }
 
 // blobProtected reports why a file version's bytes must stay. The caller is

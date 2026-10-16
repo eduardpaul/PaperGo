@@ -138,6 +138,9 @@ func TestOrdinaryReaderHistorySnapshotsAndAuthorization(t *testing.T) {
 func TestRestoreRevisionValidatesCurrentSchemaAndKeepsBlob(t *testing.T) {
 	s, workspace, _ := fixture(t)
 	library := davLibrary(t, s, workspace, false)
+	if _, err := s.Update(testContext, "alice", library.ID, library.Version, UpdateResource{Versioning: ptr("major")}); err != nil {
+		t.Fatal(err)
+	}
 	f := fieldOK(t, s, library.ID, CreateField{Key: "note", Label: "Note", Type: "text"})
 	item := create(t, s, library.ID, "item", "File.txt", map[string]any{"note": "long original value"})
 	item, err := s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Values: &map[string]any{"note": "short"}})

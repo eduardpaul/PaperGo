@@ -123,7 +123,11 @@ export function CollectionGeneral({
           <SettingRow
             id="versioning"
             label="Version history"
-            hint={`Keep earlier versions of each ${library ? 'file and its details' : 'item'} so they can be restored.`}
+            hint={
+              library
+                ? 'Keep earlier files and their details for restoration. When off, replaced files are reclaimed after a one-hour grace period, once no longer in use.'
+                : 'Keep earlier versions of each item so they can be restored.'
+            }
           >
             <Select
               id="versioning"
