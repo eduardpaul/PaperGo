@@ -9,14 +9,16 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"papergo/internal/model"
 	_ "time/tzdata"
 
 	"github.com/google/uuid"
 	"golang.org/x/text/language"
 )
 
-var preferenceNames = []string{"language", "time_zone", "date_format", "time_format", "number_format", "theme", "document_languages"}
-var builtInPreferences = map[string]string{"language": "en", "time_zone": "UTC", "date_format": "yyyy-MM-dd", "time_format": "24h", "number_format": "en", "theme": "system", "document_languages": "eng"}
+var preferenceNames = []string{"language", "time_zone", "date_format", "time_format", "number_format", "theme", "document_languages", "default_currency"}
+var builtInPreferences = map[string]string{"language": "en", "time_zone": "UTC", "date_format": "yyyy-MM-dd", "time_format": "24h", "number_format": "en", "theme": "system", "document_languages": "eng", "default_currency": "USD"}
 var datePattern = regexp.MustCompile(`^[dMy]+([./ -][dMy]+)*$`)
 var preferenceLanguages = regexp.MustCompile(`^[a-z][a-z_]{1,31}(\+[a-z][a-z_]{1,31})*$`)
 
@@ -31,6 +33,7 @@ var preferenceLocales = func() map[string]bool {
 }()
 
 type Preferences struct {
+	DefaultCurrency   string   `json:"default_currency"`
 	Language          string   `json:"language"`
 	TimeZone          string   `json:"time_zone"`
 	DateFormat        string   `json:"date_format"`
@@ -91,7 +94,7 @@ func readPreferences(ctx context.Context, q Querier, subject string, organizatio
 			inherited = append(inherited, k)
 		}
 	}
-	return Preferences{values["language"], values["time_zone"], values["date_format"], values["time_format"], values["number_format"], values["theme"], values["document_languages"], inherited, version}, nil
+	return Preferences{values["default_currency"], values["language"], values["time_zone"], values["date_format"], values["time_format"], values["number_format"], values["theme"], values["document_languages"], inherited, version}, nil
 }
 
 func (d Directory) Preferences(ctx context.Context, subject string, organization bool) (out Preferences, err error) {
@@ -124,6 +127,8 @@ func validatePreference(name, value string) error {
 		valid = value == "24h" || value == "12h"
 	case "theme":
 		valid = value == "system" || value == "light" || value == "dark"
+	case "default_currency":
+		valid = model.ValidCurrencyCode(value)
 	case "document_languages":
 		valid = len(value) <= 100 && preferenceLanguages.MatchString(value)
 	default:
@@ -143,6 +148,9 @@ func (d Directory) PatchPreferences(ctx context.Context, subject string, organiz
 		return out, invalid("preferences must be a JSON object")
 	}
 	for k, v := range patch {
+		if k == "default_currency" && !organization {
+			return out, invalid("default_currency is an organization setting")
+		}
 		if v == nil {
 			known := false
 			for _, name := range preferenceNames {

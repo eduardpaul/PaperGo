@@ -1,3 +1,5 @@
+import { organizationPreferencesQuery, resourceQuery } from '@/api/queries';
+import { CurrencyPicker } from '@/features/fields/currency-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/api/http';
@@ -96,6 +98,10 @@ export function FieldDialog({
     queryFn: () => collectionChildren(collection!.workspace_id),
     enabled: type === 'lookup' && !!collection,
   });
+  const workspace = useQuery({ ...resourceQuery(collection?.workspace_id ?? ''), enabled: !field && !!collection?.workspace_id });
+  const organization = useQuery({ ...organizationPreferencesQuery, enabled: !field });
+  const currencyCode = options.currency_code ?? (workspace.data?.default_currency || organization.data?.default_currency || 'USD');
+  const effectiveOptions = type === 'currency' ? { ...options, currency_code: currencyCode } : options;
   const draft: FieldDefinition = {
     id: field?.id ?? 'new',
     key,
@@ -106,7 +112,7 @@ export function FieldDialog({
       .split('\n')
       .map((choice) => choice.trim())
       .filter(Boolean),
-    options: { ...options, default_value: undefined },
+    options: { ...effectiveOptions, default_value: undefined },
   };
   const patchOptions = (patch: Partial<FieldOptions>) => setOptions((current) => ({ ...current, ...patch }));
   const save = useMutation({
@@ -117,7 +123,7 @@ export function FieldDialog({
         required,
         indexed: indexed || type === 'keywords',
         choices: type === 'choice' ? draft.choices : undefined,
-        options: { ...options, default_value: normalizedDefault },
+        options: { ...effectiveOptions, default_value: normalizedDefault },
       };
       return field
         ? api(collection ? `/v1/resources/${collection.id}/fields/${field.id}` : `/v1/fields/${field.id}`, {
@@ -279,16 +285,10 @@ export function FieldDialog({
           </>
         )}
         {type === 'currency' && (
-          <Field id="field-currency" label="Currency code">
-            <Input
-              id="field-currency"
-              required
-              minLength={3}
-              maxLength={3}
-              value={options.currency_code ?? ''}
-              onChange={(event) => patchOptions({ currency_code: event.target.value.toUpperCase() })}
-            />
-          </Field>
+          <div className="grid gap-1.5"><Label id="field-currency-label">Currency</Label>
+            <CurrencyPicker id="field-currency" labelledBy="field-currency-label" value={currencyCode} onChange={code => patchOptions({ currency_code: code || undefined })} />
+            {!field && <p className="text-xs text-muted">Starts with the workspace default, or the organization default when no override is set.</p>}
+          </div>
         )}
         {type === 'lookup' && (
           <Field id="field-lookup" label="Look up items in">

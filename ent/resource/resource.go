@@ -35,6 +35,8 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
+	// FieldDefaultCurrency holds the string denoting the default_currency field in the database.
+	FieldDefaultCurrency = "default_currency"
 	// FieldAllowFolders holds the string denoting the allow_folders field in the database.
 	FieldAllowFolders = "allow_folders"
 	// FieldTags holds the string denoting the tags field in the database.
@@ -219,6 +221,7 @@ var Columns = []string{
 	FieldKind,
 	FieldName,
 	FieldDescription,
+	FieldDefaultCurrency,
 	FieldAllowFolders,
 	FieldTags,
 	FieldTemplateKeys,
@@ -274,6 +277,10 @@ var (
 	DefaultDescription string
 	// DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
 	DescriptionValidator func(string) error
+	// DefaultDefaultCurrency holds the default value on creation for the "default_currency" field.
+	DefaultDefaultCurrency string
+	// DefaultCurrencyValidator is a validator for the "default_currency" field. It is called by the builders before save.
+	DefaultCurrencyValidator func(string) error
 	// DefaultAllowFolders holds the default value on creation for the "allow_folders" field.
 	DefaultAllowFolders bool
 	// DefaultTags holds the default value on creation for the "tags" field.
@@ -453,6 +460,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByDescription orders the results by the description field.
 func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByDefaultCurrency orders the results by the default_currency field.
+func ByDefaultCurrency(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultCurrency, opts...).ToFunc()
 }
 
 // ByAllowFolders orders the results by the allow_folders field.

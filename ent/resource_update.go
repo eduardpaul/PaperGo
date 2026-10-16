@@ -178,6 +178,20 @@ func (_u *ResourceUpdate) SetNillableDescription(v *string) *ResourceUpdate {
 	return _u
 }
 
+// SetDefaultCurrency sets the "default_currency" field.
+func (_u *ResourceUpdate) SetDefaultCurrency(v string) *ResourceUpdate {
+	_u.mutation.SetDefaultCurrency(v)
+	return _u
+}
+
+// SetNillableDefaultCurrency sets the "default_currency" field if the given value is not nil.
+func (_u *ResourceUpdate) SetNillableDefaultCurrency(v *string) *ResourceUpdate {
+	if v != nil {
+		_u.SetDefaultCurrency(*v)
+	}
+	return _u
+}
+
 // SetAllowFolders sets the "allow_folders" field.
 func (_u *ResourceUpdate) SetAllowFolders(v bool) *ResourceUpdate {
 	_u.mutation.SetAllowFolders(v)
@@ -988,6 +1002,11 @@ func (_u *ResourceUpdate) check() error {
 			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Resource.description": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DefaultCurrency(); ok {
+		if err := resource.DefaultCurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "default_currency", err: fmt.Errorf(`ent: validator failed for field "Resource.default_currency": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := resource.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Resource.version": %w`, err)}
@@ -1058,6 +1077,9 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(resource.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DefaultCurrency(); ok {
+		_spec.SetField(resource.FieldDefaultCurrency, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.AllowFolders(); ok {
 		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
@@ -1885,6 +1907,20 @@ func (_u *ResourceUpdateOne) SetNillableDescription(v *string) *ResourceUpdateOn
 	return _u
 }
 
+// SetDefaultCurrency sets the "default_currency" field.
+func (_u *ResourceUpdateOne) SetDefaultCurrency(v string) *ResourceUpdateOne {
+	_u.mutation.SetDefaultCurrency(v)
+	return _u
+}
+
+// SetNillableDefaultCurrency sets the "default_currency" field if the given value is not nil.
+func (_u *ResourceUpdateOne) SetNillableDefaultCurrency(v *string) *ResourceUpdateOne {
+	if v != nil {
+		_u.SetDefaultCurrency(*v)
+	}
+	return _u
+}
+
 // SetAllowFolders sets the "allow_folders" field.
 func (_u *ResourceUpdateOne) SetAllowFolders(v bool) *ResourceUpdateOne {
 	_u.mutation.SetAllowFolders(v)
@@ -2708,6 +2744,11 @@ func (_u *ResourceUpdateOne) check() error {
 			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Resource.description": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DefaultCurrency(); ok {
+		if err := resource.DefaultCurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "default_currency", err: fmt.Errorf(`ent: validator failed for field "Resource.default_currency": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Version(); ok {
 		if err := resource.VersionValidator(v); err != nil {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Resource.version": %w`, err)}
@@ -2795,6 +2836,9 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(resource.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DefaultCurrency(); ok {
+		_spec.SetField(resource.FieldDefaultCurrency, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.AllowFolders(); ok {
 		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)

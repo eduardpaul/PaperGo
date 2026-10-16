@@ -487,6 +487,7 @@ func (s *Service) depth(ctx context.Context, r *ent.Resource) (int, error) {
 }
 
 type UpdateResource struct {
+	DefaultCurrency   *string         `json:"default_currency,omitempty"`
 	DuplicatePolicy   *string         `json:"duplicate_policy,omitempty"`
 	Name              *string         `json:"name,omitempty"`
 	Description       *string         `json:"description,omitempty"`
@@ -512,7 +513,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 }
 func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*ent.Resource, error) {
 	content := in.Name != nil || in.Description != nil || in.Tags != nil || in.Values != nil || in.ContentTypeID != nil
-	if !content && in.DuplicatePolicy == nil && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
+	if !content && in.DefaultCurrency == nil && in.DuplicatePolicy == nil && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
 		return nil, invalid("at least one change is required")
 	}
 	if in.Tags != nil {
@@ -557,6 +558,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		}
 	} else if in.Description != nil {
 		return nil, invalid("description belongs to workspaces, lists and libraries")
+	}
+	if in.DefaultCurrency != nil && (r.Kind != resource.KindWorkspace || (*in.DefaultCurrency != "" && !model.ValidCurrencyCode(*in.DefaultCurrency))) {
+		return nil, invalid("default_currency requires a workspace and an uppercase three-letter currency code, or empty to inherit")
 	}
 	if in.AllowFolders != nil && !collection {
 		return nil, invalid("allow_folders belongs to lists and libraries")
@@ -685,6 +689,9 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 	}
 	if in.Versioning != nil {
 		b.SetVersioning(resource.Versioning(*in.Versioning))
+	}
+	if in.DefaultCurrency != nil {
+		b.SetDefaultCurrency(*in.DefaultCurrency)
 	}
 	if in.DuplicatePolicy != nil {
 		b.SetDuplicatePolicy(resource.DuplicatePolicy(*in.DuplicatePolicy))

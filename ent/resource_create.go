@@ -143,6 +143,20 @@ func (_c *ResourceCreate) SetNillableDescription(v *string) *ResourceCreate {
 	return _c
 }
 
+// SetDefaultCurrency sets the "default_currency" field.
+func (_c *ResourceCreate) SetDefaultCurrency(v string) *ResourceCreate {
+	_c.mutation.SetDefaultCurrency(v)
+	return _c
+}
+
+// SetNillableDefaultCurrency sets the "default_currency" field if the given value is not nil.
+func (_c *ResourceCreate) SetNillableDefaultCurrency(v *string) *ResourceCreate {
+	if v != nil {
+		_c.SetDefaultCurrency(*v)
+	}
+	return _c
+}
+
 // SetAllowFolders sets the "allow_folders" field.
 func (_c *ResourceCreate) SetAllowFolders(v bool) *ResourceCreate {
 	_c.mutation.SetAllowFolders(v)
@@ -649,6 +663,10 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultDescription
 		_c.mutation.SetDescription(v)
 	}
+	if _, ok := _c.mutation.DefaultCurrency(); !ok {
+		v := resource.DefaultDefaultCurrency
+		_c.mutation.SetDefaultCurrency(v)
+	}
 	if _, ok := _c.mutation.AllowFolders(); !ok {
 		v := resource.DefaultAllowFolders
 		_c.mutation.SetAllowFolders(v)
@@ -775,6 +793,14 @@ func (_c *ResourceCreate) check() error {
 	if v, ok := _c.mutation.Description(); ok {
 		if err := resource.DescriptionValidator(v); err != nil {
 			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Resource.description": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.DefaultCurrency(); !ok {
+		return &ValidationError{Name: "default_currency", err: errors.New(`ent: missing required field "Resource.default_currency"`)}
+	}
+	if v, ok := _c.mutation.DefaultCurrency(); ok {
+		if err := resource.DefaultCurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "default_currency", err: fmt.Errorf(`ent: validator failed for field "Resource.default_currency": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.AllowFolders(); !ok {
@@ -924,6 +950,10 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(resource.FieldDescription, field.TypeString, value)
 		_node.Description = value
+	}
+	if value, ok := _c.mutation.DefaultCurrency(); ok {
+		_spec.SetField(resource.FieldDefaultCurrency, field.TypeString, value)
+		_node.DefaultCurrency = value
 	}
 	if value, ok := _c.mutation.AllowFolders(); ok {
 		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)

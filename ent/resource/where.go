@@ -110,6 +110,11 @@ func Description(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldDescription, v))
 }
 
+// DefaultCurrency applies equality check predicate on the "default_currency" field. It's identical to DefaultCurrencyEQ.
+func DefaultCurrency(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDefaultCurrency, v))
+}
+
 // AllowFolders applies equality check predicate on the "allow_folders" field. It's identical to AllowFoldersEQ.
 func AllowFolders(v bool) predicate.Resource {
 	return predicate.Resource(sql.FieldEQ(FieldAllowFolders, v))
@@ -823,6 +828,71 @@ func DescriptionEqualFold(v string) predicate.Resource {
 // DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
 func DescriptionContainsFold(v string) predicate.Resource {
 	return predicate.Resource(sql.FieldContainsFold(FieldDescription, v))
+}
+
+// DefaultCurrencyEQ applies the EQ predicate on the "default_currency" field.
+func DefaultCurrencyEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEQ(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyNEQ applies the NEQ predicate on the "default_currency" field.
+func DefaultCurrencyNEQ(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldNEQ(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyIn applies the In predicate on the "default_currency" field.
+func DefaultCurrencyIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldIn(FieldDefaultCurrency, vs...))
+}
+
+// DefaultCurrencyNotIn applies the NotIn predicate on the "default_currency" field.
+func DefaultCurrencyNotIn(vs ...string) predicate.Resource {
+	return predicate.Resource(sql.FieldNotIn(FieldDefaultCurrency, vs...))
+}
+
+// DefaultCurrencyGT applies the GT predicate on the "default_currency" field.
+func DefaultCurrencyGT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGT(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyGTE applies the GTE predicate on the "default_currency" field.
+func DefaultCurrencyGTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldGTE(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyLT applies the LT predicate on the "default_currency" field.
+func DefaultCurrencyLT(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLT(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyLTE applies the LTE predicate on the "default_currency" field.
+func DefaultCurrencyLTE(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldLTE(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyContains applies the Contains predicate on the "default_currency" field.
+func DefaultCurrencyContains(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContains(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyHasPrefix applies the HasPrefix predicate on the "default_currency" field.
+func DefaultCurrencyHasPrefix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasPrefix(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyHasSuffix applies the HasSuffix predicate on the "default_currency" field.
+func DefaultCurrencyHasSuffix(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldHasSuffix(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyEqualFold applies the EqualFold predicate on the "default_currency" field.
+func DefaultCurrencyEqualFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldEqualFold(FieldDefaultCurrency, v))
+}
+
+// DefaultCurrencyContainsFold applies the ContainsFold predicate on the "default_currency" field.
+func DefaultCurrencyContainsFold(v string) predicate.Resource {
+	return predicate.Resource(sql.FieldContainsFold(FieldDefaultCurrency, v))
 }
 
 // AllowFoldersEQ applies the EQ predicate on the "allow_folders" field.

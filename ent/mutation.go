@@ -29903,6 +29903,7 @@ type ResourceMutation struct {
 	kind                      *resource.Kind
 	name                      *string
 	description               *string
+	default_currency          *string
 	allow_folders             *bool
 	tags                      *[]string
 	appendtags                []string
@@ -30499,6 +30500,42 @@ func (m *ResourceMutation) OldDescription(ctx context.Context) (v string, err er
 // ResetDescription resets all changes to the "description" field.
 func (m *ResourceMutation) ResetDescription() {
 	m.description = nil
+}
+
+// SetDefaultCurrency sets the "default_currency" field.
+func (m *ResourceMutation) SetDefaultCurrency(s string) {
+	m.default_currency = &s
+}
+
+// DefaultCurrency returns the value of the "default_currency" field in the mutation.
+func (m *ResourceMutation) DefaultCurrency() (r string, exists bool) {
+	v := m.default_currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultCurrency returns the old "default_currency" field's value of the Resource entity.
+// If the Resource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResourceMutation) OldDefaultCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultCurrency: %w", err)
+	}
+	return oldValue.DefaultCurrency, nil
+}
+
+// ResetDefaultCurrency resets all changes to the "default_currency" field.
+func (m *ResourceMutation) ResetDefaultCurrency() {
+	m.default_currency = nil
 }
 
 // SetAllowFolders sets the "allow_folders" field.
@@ -32156,7 +32193,7 @@ func (m *ResourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResourceMutation) Fields() []string {
-	fields := make([]string, 0, 32)
+	fields := make([]string, 0, 33)
 	if m.created_at != nil {
 		fields = append(fields, resource.FieldCreatedAt)
 	}
@@ -32186,6 +32223,9 @@ func (m *ResourceMutation) Fields() []string {
 	}
 	if m.description != nil {
 		fields = append(fields, resource.FieldDescription)
+	}
+	if m.default_currency != nil {
+		fields = append(fields, resource.FieldDefaultCurrency)
 	}
 	if m.allow_folders != nil {
 		fields = append(fields, resource.FieldAllowFolders)
@@ -32281,6 +32321,8 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case resource.FieldDescription:
 		return m.Description()
+	case resource.FieldDefaultCurrency:
+		return m.DefaultCurrency()
 	case resource.FieldAllowFolders:
 		return m.AllowFolders()
 	case resource.FieldTags:
@@ -32354,6 +32396,8 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldName(ctx)
 	case resource.FieldDescription:
 		return m.OldDescription(ctx)
+	case resource.FieldDefaultCurrency:
+		return m.OldDefaultCurrency(ctx)
 	case resource.FieldAllowFolders:
 		return m.OldAllowFolders(ctx)
 	case resource.FieldTags:
@@ -32476,6 +32520,13 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDescription(v)
+		return nil
+	case resource.FieldDefaultCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultCurrency(v)
 		return nil
 	case resource.FieldAllowFolders:
 		v, ok := value.(bool)
@@ -32823,6 +32874,9 @@ func (m *ResourceMutation) ResetField(name string) error {
 		return nil
 	case resource.FieldDescription:
 		m.ResetDescription()
+		return nil
+	case resource.FieldDefaultCurrency:
+		m.ResetDefaultCurrency()
 		return nil
 	case resource.FieldAllowFolders:
 		m.ResetAllowFolders()

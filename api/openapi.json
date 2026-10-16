@@ -17654,6 +17654,11 @@
               null
             ],
             "description": "Protected default Home library identity."
+          },
+          "default_currency": {
+            "type": "string",
+            "pattern": "^([A-Z]{3})?$",
+            "description": "Workspace only. Empty inherits the organization default. Changing this affects newly created currency fields, not existing definitions."
           }
         },
         "required": [
@@ -17846,6 +17851,11 @@
               "block"
             ],
             "description": "Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file."
+          },
+          "default_currency": {
+            "type": "string",
+            "pattern": "^([A-Z]{3})?$",
+            "description": "Workspace only. Empty inherits the organization default. Changing this affects newly created currency fields, not existing definitions."
           }
         },
         "required": [],
@@ -22657,6 +22667,12 @@
           "version": {
             "type": "integer",
             "minimum": 0
+          },
+          "default_currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "description": "Default code for newly defined currency fields. Organization default is USD; workspace overrides take precedence.",
+            "default": "USD"
           }
         }
       },
@@ -22699,6 +22715,12 @@
           },
           "document_languages": {
             "type": "string",
+            "nullable": true
+          },
+          "default_currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "description": "Organization only. Null resets to USD; requires organization.manage.",
             "nullable": true
           }
         }

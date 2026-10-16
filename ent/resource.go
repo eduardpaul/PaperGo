@@ -41,6 +41,8 @@ type Resource struct {
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
+	// DefaultCurrency holds the value of the "default_currency" field.
+	DefaultCurrency string `json:"default_currency,omitempty"`
 	// AllowFolders holds the value of the "allow_folders" field.
 	AllowFolders bool `json:"allow_folders,omitempty"`
 	// Tags holds the value of the "tags" field.
@@ -286,7 +288,7 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case resource.FieldVersion, resource.FieldNextRevisionNumber, resource.FieldMaxVersions:
 			values[i] = new(sql.NullInt64)
-		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldPersonalOwnerID, resource.FieldSystemKey, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldDuplicatePolicy, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey, resource.FieldDeletedBy:
+		case resource.FieldID, resource.FieldWorkspaceID, resource.FieldPersonalOwnerID, resource.FieldSystemKey, resource.FieldParentID, resource.FieldContainerID, resource.FieldContentTypeID, resource.FieldKind, resource.FieldName, resource.FieldDescription, resource.FieldDefaultCurrency, resource.FieldHeadRevisionID, resource.FieldPublishedRevisionID, resource.FieldSchemaHeadID, resource.FieldVersioning, resource.FieldDuplicatePolicy, resource.FieldCreatedBy, resource.FieldUpdatedBy, resource.FieldScopeID, resource.FieldNameKey, resource.FieldDeletedBy:
 			values[i] = new(sql.NullString)
 		case resource.FieldCreatedAt, resource.FieldUpdatedAt, resource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -375,6 +377,12 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
 				_m.Description = value.String
+			}
+		case resource.FieldDefaultCurrency:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field default_currency", values[i])
+			} else if value.Valid {
+				_m.DefaultCurrency = value.String
 			}
 		case resource.FieldAllowFolders:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -671,6 +679,9 @@ func (_m *Resource) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)
+	builder.WriteString(", ")
+	builder.WriteString("default_currency=")
+	builder.WriteString(_m.DefaultCurrency)
 	builder.WriteString(", ")
 	builder.WriteString("allow_folders=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AllowFolders))

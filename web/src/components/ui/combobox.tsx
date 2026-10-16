@@ -68,7 +68,7 @@ export function Combobox({
       open={open}
       onOpenChange={(value) => {
         setOpen(value);
-        if (!value) setText('');
+        if (!value) { setText(''); onSearch?.(''); }
       }}
     >
       <PopoverTrigger asChild disabled={disabled}>
@@ -161,6 +161,7 @@ export function Combobox({
                 onSelect={() => {
                   onCreate(text.trim());
                   setText('');
+                  if (!multiple) setOpen(false);
                 }}
                 className="flex cursor-default items-center gap-2 rounded px-2 py-1.5 text-[13px] text-accent data-[selected=true]:bg-surface-muted"
               >

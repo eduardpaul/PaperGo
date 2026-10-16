@@ -27,6 +27,8 @@ func (Resource) Fields() []ent.Field {
 		field.String("name").NotEmpty().MaxLen(4096).Validate(model.ValidateTitle),
 		// Descriptive metadata of a workspace or collection.
 		field.String("description").Default("").MaxRuneLen(2000),
+		// Workspaces only: empty inherits the organization default.
+		field.String("default_currency").Default("").MaxLen(3),
 		// Collections only: controls creation of physical folders.
 		field.Bool("allow_folders").Default(true),
 		field.JSON("tags", []string{}).Default([]string{}),

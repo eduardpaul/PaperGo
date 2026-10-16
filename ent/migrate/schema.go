@@ -1338,6 +1338,7 @@ var (
 		{Name: "kind", Type: field.TypeEnum, Enums: []string{"workspace", "list", "library", "folder", "item"}},
 		{Name: "name", Type: field.TypeString, Size: 4096},
 		{Name: "description", Type: field.TypeString, Size: 2000, Default: ""},
+		{Name: "default_currency", Type: field.TypeString, Size: 3, Default: ""},
 		{Name: "allow_folders", Type: field.TypeBool, Default: true},
 		{Name: "tags", Type: field.TypeJSON},
 		{Name: "template_keys", Type: field.TypeJSON},
@@ -1372,37 +1373,37 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "resources_resources_children",
-				Columns:    []*schema.Column{ResourcesColumns[27]},
+				Columns:    []*schema.Column{ResourcesColumns[28]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_identity_users_personal_owner",
-				Columns:    []*schema.Column{ResourcesColumns[28]},
+				Columns:    []*schema.Column{ResourcesColumns[29]},
 				RefColumns: []*schema.Column{IdentityUsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "resources_resources_contained_items",
-				Columns:    []*schema.Column{ResourcesColumns[29]},
+				Columns:    []*schema.Column{ResourcesColumns[30]},
 				RefColumns: []*schema.Column{ResourcesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "resources_item_revisions_head_revision",
-				Columns:    []*schema.Column{ResourcesColumns[30]},
-				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "resources_item_revisions_published_revision",
 				Columns:    []*schema.Column{ResourcesColumns[31]},
 				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "resources_schema_revisions_schema_head",
+				Symbol:     "resources_item_revisions_published_revision",
 				Columns:    []*schema.Column{ResourcesColumns[32]},
+				RefColumns: []*schema.Column{ItemRevisionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "resources_schema_revisions_schema_head",
+				Columns:    []*schema.Column{ResourcesColumns[33]},
 				RefColumns: []*schema.Column{SchemaRevisionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1416,7 +1417,7 @@ var (
 			{
 				Name:    "resource_personal_owner_id",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[28]},
+				Columns: []*schema.Column{ResourcesColumns[29]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "personal_owner_id IS NOT NULL",
 				},
@@ -1432,47 +1433,47 @@ var (
 			{
 				Name:    "resource_kind_id_workspace_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[5], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[23]},
+				Columns: []*schema.Column{ResourcesColumns[5], ResourcesColumns[0], ResourcesColumns[2], ResourcesColumns[24]},
 			},
 			{
 				Name:    "resource_workspace_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[23]},
+				Columns: []*schema.Column{ResourcesColumns[2], ResourcesColumns[0], ResourcesColumns[24]},
 			},
 			{
 				Name:    "resource_parent_id_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[0], ResourcesColumns[23]},
+				Columns: []*schema.Column{ResourcesColumns[28], ResourcesColumns[0], ResourcesColumns[24]},
 			},
 			{
 				Name:    "resource_parent_id_kind_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[5], ResourcesColumns[0], ResourcesColumns[23]},
+				Columns: []*schema.Column{ResourcesColumns[28], ResourcesColumns[5], ResourcesColumns[0], ResourcesColumns[24]},
 			},
 			{
 				Name:    "resource_container_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[30], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_scope_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[23], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[24], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_content_type_id_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[4], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[30], ResourcesColumns[4], ResourcesColumns[0]},
 			},
 			{
 				Name:    "resource_container_id_scope_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[23]},
+				Columns: []*schema.Column{ResourcesColumns[30], ResourcesColumns[24]},
 			},
 			{
 				Name:    "resource_parent_id_name_key",
 				Unique:  true,
-				Columns: []*schema.Column{ResourcesColumns[27], ResourcesColumns[24]},
+				Columns: []*schema.Column{ResourcesColumns[28], ResourcesColumns[25]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "name_key IS NOT NULL",
 				},
@@ -1480,7 +1481,7 @@ var (
 			{
 				Name:    "resource_head_revision_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[30]},
+				Columns: []*schema.Column{ResourcesColumns[31]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "head_revision_id IS NOT NULL",
 				},
@@ -1488,7 +1489,7 @@ var (
 			{
 				Name:    "resource_published_revision_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[31]},
+				Columns: []*schema.Column{ResourcesColumns[32]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "published_revision_id IS NOT NULL",
 				},
@@ -1496,7 +1497,7 @@ var (
 			{
 				Name:    "resource_container_id_deleted_at_id",
 				Unique:  false,
-				Columns: []*schema.Column{ResourcesColumns[29], ResourcesColumns[25], ResourcesColumns[0]},
+				Columns: []*schema.Column{ResourcesColumns[30], ResourcesColumns[26], ResourcesColumns[0]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "deleted_at IS NOT NULL",
 				},

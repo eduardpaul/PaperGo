@@ -32,16 +32,22 @@ func TestPreferencesInheritanceAndIsolationAPI(t *testing.T) {
 		}
 		return out
 	}
+	for _, code := range []string{"eur", "EURO", "E1R"} {
+		response := request(h, "PATCH", org, `{"default_currency":"`+code+`"}`, testToken, `"0"`, "application/json")
+		if response.Code != 422 {
+			t.Fatal(response.Code, response.Body.String())
+		}
+	}
 	initial := read(mine)
-	if initial.Language != "en" || initial.TimeZone != "UTC" || initial.Theme != "system" || initial.DocumentLanguages != "eng" || len(initial.Inherited) != 7 || initial.Version != 0 {
+	if initial.DefaultCurrency != "USD" || initial.Language != "en" || initial.TimeZone != "UTC" || initial.Theme != "system" || initial.DocumentLanguages != "eng" || len(initial.Inherited) != 8 || initial.Version != 0 {
 		t.Fatal(initial)
 	}
-	res := request(h, "PATCH", org, `{"language":" de-DE ","time_zone":"Europe/Berlin","theme":"dark","document_languages":"deu+eng"}`, testToken, `"0"`, "application/merge-patch+json")
+	res := request(h, "PATCH", org, `{"default_currency":"EUR","language":" de-DE ","time_zone":"Europe/Berlin","theme":"dark","document_languages":"deu+eng"}`, testToken, `"0"`, "application/merge-patch+json")
 	if res.Code != 200 || res.Header().Get("ETag") != `"1"` {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	out := read(mine)
-	if out.Language != "de-DE" || out.TimeZone != "Europe/Berlin" || out.DocumentLanguages != "deu+eng" || out.Version != 0 || len(out.Inherited) != 7 {
+	if out.DefaultCurrency != "EUR" || out.Language != "de-DE" || out.TimeZone != "Europe/Berlin" || out.DocumentLanguages != "deu+eng" || out.Version != 0 || len(out.Inherited) != 8 {
 		t.Fatal(out)
 	}
 	res = request(h, "PATCH", mine, `{"language":"fr-FR","theme":"light"}`, testToken, `"0"`, "application/json")
@@ -53,7 +59,7 @@ func TestPreferencesInheritanceAndIsolationAPI(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	out = read(mine)
-	if out.Language != "fr-FR" || out.Theme != "light" || out.TimeFormat != "12h" || len(out.Inherited) != 5 || out.Version != 1 {
+	if out.Language != "fr-FR" || out.Theme != "light" || out.TimeFormat != "12h" || len(out.Inherited) != 6 || out.Version != 1 {
 		t.Fatal(out)
 	}
 	res = request(h, "PATCH", mine, `{"language":null}`, testToken, `"1"`, "application/json")
@@ -61,7 +67,7 @@ func TestPreferencesInheritanceAndIsolationAPI(t *testing.T) {
 		t.Fatal(res.Code, res.Body.String())
 	}
 	out = read(mine)
-	if out.Language != "es" || out.Theme != "light" || len(out.Inherited) != 6 {
+	if out.Language != "es" || out.Theme != "light" || len(out.Inherited) != 7 {
 		t.Fatal(out)
 	}
 	res = request(h, "PATCH", org, `{"language":null}`, testToken, `"2"`, "application/json")
@@ -105,7 +111,7 @@ func TestPreferencesValidationAndConcurrentUpdatesAPI(t *testing.T) {
 		status      int
 	}{
 		{`{}`, "", 428}, {`{}`, `"-1"`, 400}, {`{}`, `"1"`, 412},
-		{`{"unknown":null}`, `"0"`, 422}, {`{"theme":"blue"}`, `"0"`, 422},
+		{`{"default_currency":"EUR"}`, `"0"`, 422}, {`{"unknown":null}`, `"0"`, 422}, {`{"theme":"blue"}`, `"0"`, 422},
 		{`{"time_zone":"Invalid/Zone"}`, `"0"`, 422}, {`{"time_zone":"Local"}`, `"0"`, 422},
 		{`{"date_format":"dd/yy"}`, `"0"`, 422}, {`{"document_languages":"ENG"}`, `"0"`, 422},
 		{`{"language":"not-a-culture"}`, `"0"`, 422}, {`{"number_format":""}`, `"0"`, 422},

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { api } from '@/api/http';
 import { keys, resourceQuery } from '@/api/queries';
 import type { Resource } from '@/api/types';
+import { CurrencyPicker } from '@/features/fields/currency-picker';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { useHasScope } from '@/features/admin/common';
@@ -22,6 +23,8 @@ function GeneralPage() {
   const canTransfer = useHasScope('organization.manage');
   const [name, setName] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
+  const [currency, setCurrency] = useState<string | null>(null);
+  const currentCurrency = currency ?? workspace.data?.default_currency ?? '';
   const [deleting, setDeleting] = useState(false);
   const currentName = name ?? workspace.data?.name ?? '';
   const currentDescription = description ?? workspace.data?.description ?? '';
@@ -31,6 +34,7 @@ function GeneralPage() {
       if (workspace.data && currentName.trim() !== workspace.data.name) body.name = currentName.trim();
       if (workspace.data && currentDescription !== (workspace.data.description ?? ''))
         body.description = currentDescription;
+      if (currentCurrency !== workspace.data?.default_currency) body.default_currency = currentCurrency;
       return api<Resource>(`/v1/resources/${workspaceId}`, {
         method: 'PATCH',
         ifMatch: workspace.data?.version,
@@ -40,6 +44,7 @@ function GeneralPage() {
     onSuccess: async (updated) => {
       queryClient.setQueryData(keys.resource(workspaceId), updated);
       await queryClient.invalidateQueries({ queryKey: keys.workspaces });
+      setCurrency(null);
       setName(null);
       setDescription(null);
       toast.success('Workspace saved');
@@ -55,7 +60,7 @@ function GeneralPage() {
   });
   if (!workspace.data) return null;
   const canManage = can(workspace.data, 'manage');
-  const dirty = currentName.trim() !== workspace.data.name || currentDescription !== (workspace.data.description ?? '');
+  const dirty = currentName.trim() !== workspace.data.name || currentDescription !== (workspace.data.description ?? '') || currentCurrency !== workspace.data.default_currency;
   return (
     <div className="grid gap-5">
       <SettingsSection
@@ -78,6 +83,9 @@ function GeneralPage() {
             value={currentDescription}
             onChange={(event) => setDescription(event.target.value)}
           />
+        </SettingRow>
+        <SettingRow id="workspace-currency" label="Default currency" hint="Leave empty to use the organization default. Applies when creating currency fields.">
+          <CurrencyPicker id="workspace-currency" labelledBy="workspace-currency-label" value={currentCurrency} onChange={setCurrency} placeholder="Organization default" disabled={!canManage} />
         </SettingRow>
         </fieldset>
       </SettingsSection>

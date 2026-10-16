@@ -315,7 +315,7 @@ func validateFieldDefinition(d *ent.FieldDefinition) error {
 		return invalid("search_weight must be none, normal or high")
 	}
 	if typ == "currency" {
-		if len(o.CurrencyCode) != 3 || strings.IndexFunc(o.CurrencyCode, func(r rune) bool { return r < 'A' || r > 'Z' }) >= 0 {
+		if !model.ValidCurrencyCode(o.CurrencyCode) {
 			return invalid("currency_code requires three uppercase letters")
 		}
 	} else if o.CurrencyCode != "" {

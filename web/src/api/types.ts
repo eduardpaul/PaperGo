@@ -25,6 +25,7 @@ export interface Resource {
   kind: Kind;
   name: string;
   description?: string;
+  default_currency?: string;
   allow_folders?: boolean;
   template_keys?: string[] | null;
   tags?: string[] | null;
@@ -182,6 +183,7 @@ export interface Me {
 }
 
 export interface Preferences {
+  default_currency: string;
   language: string;
   time_zone: string;
   date_format: string;

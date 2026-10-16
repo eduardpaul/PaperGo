@@ -46,3 +46,22 @@ it.each([false, true])('keeps existing choice cardinality immutable (multiple=%s
   expect(checkbox.checked).toBe(multiple);
   client.clear();
 });
+
+it.each([['EUR', 'EUR'], ['', 'GBP']])('preselects currency using workspace=%s and organization defaults', async (workspaceCurrency, expected) => {
+  const fetch = vi.fn(async (input: URL | string, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const body = url.pathname === '/v1/resources/w' ? { default_currency: workspaceCurrency } : url.pathname === '/v1/organization/preferences' ? { default_currency: 'GBP' } : {};
+    return new Response(JSON.stringify(init?.method === 'POST' ? {} : body));
+  });
+  vi.stubGlobal('fetch', fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><FieldDialog collection={{ id: 'collection', workspace_id: 'w', kind: 'list', name: 'List', version: 9 }} onClose={vi.fn()} /></QueryClientProvider>);
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Price' } });
+  fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'currency' } });
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Currency' }).textContent).toContain(expected));
+  fireEvent.click(screen.getByRole('button', { name: 'Save field' }));
+  await waitFor(() => expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
+  const [, init] = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!;
+  expect(JSON.parse(String(init?.body)).options.currency_code).toBe(expected);
+  client.clear();
+});

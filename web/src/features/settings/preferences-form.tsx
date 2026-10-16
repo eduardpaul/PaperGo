@@ -5,6 +5,7 @@ import { api } from '@/api/http';
 import { keys } from '@/api/queries';
 import type { Preferences } from '@/api/types';
 import { Button } from '@/components/ui/button';
+import { CurrencyPicker } from '@/features/fields/currency-picker';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { cultures, cultureName, dateFormats, timeZones, withValue } from '@/features/settings/preference-options';
@@ -18,6 +19,7 @@ const fields = [
   'number_format',
   'theme',
   'document_languages',
+  'default_currency',
 ] as const;
 
 export function PreferencesForm({
@@ -82,6 +84,9 @@ export function PreferencesForm({
       }
     >
       <fieldset disabled={!canEdit}>
+        {organization && <SettingRow id="default-currency" label="Default currency" hint="Used by new currency fields unless their workspace overrides it.">
+          <CurrencyPicker id="default-currency" labelledBy="default-currency-label" value={current.default_currency} onChange={code => set('default_currency', code || 'USD')} disabled={!canEdit} />
+        </SettingRow>}
         <SettingRow
           id="language"
           label="Language"
