@@ -53,7 +53,7 @@ func (in *RunInput) UnmarshalJSON(raw []byte) error {
 // Sleep waits durably.
 type Exec interface {
 	Step(name string, fn func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error)) (json.RawMessage, error)
-	Work(name string, fn func(ctx context.Context) (json.RawMessage, error)) (json.RawMessage, error)
+	Work(name, activity string, fn func(ctx context.Context) (json.RawMessage, error)) (json.RawMessage, error)
 	// Await waits for park, which node created, and returns its completion.
 	// DBOS durably records the received completion or timeout.
 	Await(node string, park Park) (json.RawMessage, error)
@@ -297,7 +297,7 @@ func (r *runState) continueActivity(name string, a *Activity, o outcome) (outcom
 				return outcome{}, fmt.Errorf("activity %s returned work without a Work handler", a.Key)
 			}
 			job := o.Job
-			result, err := r.x.Work(label+" work", func(ctx context.Context) (json.RawMessage, error) {
+			result, err := r.x.Work(label+" work", a.Key, func(ctx context.Context) (json.RawMessage, error) {
 				out, err := a.work(&workEnv{ctx: ctx, tools: r.tools, runID: r.in.RunID}, job)
 				if err == nil && len(out) > MaxOutputBytes {
 					err = fmt.Errorf("node %s work result is larger than %d bytes", name, MaxOutputBytes)

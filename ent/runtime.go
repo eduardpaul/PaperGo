@@ -10,6 +10,7 @@ import (
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
 	"papergo/ent/bloblease"
+	"papergo/ent/blobpreview"
 	"papergo/ent/blobtext"
 	"papergo/ent/businesskey"
 	"papergo/ent/cachedresult"
@@ -374,6 +375,51 @@ func init() {
 	bloblease.DefaultID = blobleaseDescID.Default.(func() string)
 	// bloblease.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	bloblease.IDValidator = blobleaseDescID.Validators[0].(func(string) error)
+	blobpreviewMixin := schema.BlobPreview{}.Mixin()
+	blobpreviewMixinFields0 := blobpreviewMixin[0].Fields()
+	_ = blobpreviewMixinFields0
+	blobpreviewFields := schema.BlobPreview{}.Fields()
+	_ = blobpreviewFields
+	// blobpreviewDescCreatedAt is the schema descriptor for created_at field.
+	blobpreviewDescCreatedAt := blobpreviewMixinFields0[1].Descriptor()
+	// blobpreview.DefaultCreatedAt holds the default value on creation for the created_at field.
+	blobpreview.DefaultCreatedAt = blobpreviewDescCreatedAt.Default.(func() time.Time)
+	// blobpreviewDescSha256 is the schema descriptor for sha256 field.
+	blobpreviewDescSha256 := blobpreviewFields[0].Descriptor()
+	// blobpreview.Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
+	blobpreview.Sha256Validator = blobpreviewDescSha256.Validators[0].(func(string) error)
+	// blobpreviewDescObjectKey is the schema descriptor for object_key field.
+	blobpreviewDescObjectKey := blobpreviewFields[2].Descriptor()
+	// blobpreview.DefaultObjectKey holds the default value on creation for the object_key field.
+	blobpreview.DefaultObjectKey = blobpreviewDescObjectKey.Default.(string)
+	// blobpreviewDescObjectSha256 is the schema descriptor for object_sha256 field.
+	blobpreviewDescObjectSha256 := blobpreviewFields[3].Descriptor()
+	// blobpreview.DefaultObjectSha256 holds the default value on creation for the object_sha256 field.
+	blobpreview.DefaultObjectSha256 = blobpreviewDescObjectSha256.Default.(string)
+	// blobpreviewDescObjectSize is the schema descriptor for object_size field.
+	blobpreviewDescObjectSize := blobpreviewFields[4].Descriptor()
+	// blobpreview.DefaultObjectSize holds the default value on creation for the object_size field.
+	blobpreview.DefaultObjectSize = blobpreviewDescObjectSize.Default.(int64)
+	// blobpreview.ObjectSizeValidator is a validator for the "object_size" field. It is called by the builders before save.
+	blobpreview.ObjectSizeValidator = blobpreviewDescObjectSize.Validators[0].(func(int64) error)
+	// blobpreviewDescWidth is the schema descriptor for width field.
+	blobpreviewDescWidth := blobpreviewFields[5].Descriptor()
+	// blobpreview.DefaultWidth holds the default value on creation for the width field.
+	blobpreview.DefaultWidth = blobpreviewDescWidth.Default.(int)
+	// blobpreview.WidthValidator is a validator for the "width" field. It is called by the builders before save.
+	blobpreview.WidthValidator = blobpreviewDescWidth.Validators[0].(func(int) error)
+	// blobpreviewDescHeight is the schema descriptor for height field.
+	blobpreviewDescHeight := blobpreviewFields[6].Descriptor()
+	// blobpreview.DefaultHeight holds the default value on creation for the height field.
+	blobpreview.DefaultHeight = blobpreviewDescHeight.Default.(int)
+	// blobpreview.HeightValidator is a validator for the "height" field. It is called by the builders before save.
+	blobpreview.HeightValidator = blobpreviewDescHeight.Validators[0].(func(int) error)
+	// blobpreviewDescID is the schema descriptor for id field.
+	blobpreviewDescID := blobpreviewMixinFields0[0].Descriptor()
+	// blobpreview.DefaultID holds the default value on creation for the id field.
+	blobpreview.DefaultID = blobpreviewDescID.Default.(func() string)
+	// blobpreview.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	blobpreview.IDValidator = blobpreviewDescID.Validators[0].(func(string) error)
 	blobtextMixin := schema.BlobText{}.Mixin()
 	blobtextMixinFields0 := blobtextMixin[0].Fields()
 	_ = blobtextMixinFields0

@@ -22,6 +22,7 @@ import { Select } from '@/components/ui/select';
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { TagInput } from '@/components/tag-input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FilePreview } from '@/features/documents/preview';
 import { downloadContent, replaceContent } from '@/features/documents/transfer';
 import { FieldEditor } from '@/features/fields/editor';
 import { usePeopleNames } from '@/features/fields/people';
@@ -121,7 +122,7 @@ export function ItemSheet({
               <DropdownMenuContent align="end">
                 {isFile && (
                   <DropdownMenuItem onSelect={() => void downloadContent(item.id, item.name)}>
-                    <Download /> Download
+                    <Download /> Download original
                   </DropdownMenuItem>
                 )}
                 {item.kind === 'item' && canWrite && (
@@ -395,7 +396,7 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" onClick={() => void downloadContent(item.id, item.name)}>
-          <Download /> Download
+          <Download /> Download original
         </Button>
         {canWrite && (
           <Button disabled={replace.isPending} onClick={() => input.current?.click()}>
@@ -415,6 +416,7 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
           }}
         />
       </div>
+      <FilePreview itemId={item.id} version={item.version} alt={`Preview of ${item.name}`} />
       {canWrite && (
         <p className="text-xs text-muted">Replacing the file keeps the name, tags and columns, and adds a new file version.</p>
       )}

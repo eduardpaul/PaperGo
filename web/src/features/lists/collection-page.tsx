@@ -529,6 +529,7 @@ export function CollectionPage({
         )}
         {ownRows && layout === 'board' ? (
           <ItemsBoard
+            filePreviews={library}
             renderItem={renderItem}
             collectionId={listId}
             view={view}
@@ -578,6 +579,7 @@ export function CollectionPage({
           </Card>
         ) : layout === 'gallery' ? (
           <ItemsGallery
+            previewItems={library ? new Set(rows.map(row => row.id)) : undefined}
             renderItem={renderItem}
             items={rows}
             fields={fieldList.filter((field) => view?.columns?.includes(field.key))}

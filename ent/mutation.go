@@ -13,6 +13,7 @@ import (
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
 	"papergo/ent/bloblease"
+	"papergo/ent/blobpreview"
 	"papergo/ent/blobtext"
 	"papergo/ent/businesskey"
 	"papergo/ent/cachedresult"
@@ -88,6 +89,7 @@ const (
 	TypeBlob                    = "Blob"
 	TypeBlobDeletion            = "BlobDeletion"
 	TypeBlobLease               = "BlobLease"
+	TypeBlobPreview             = "BlobPreview"
 	TypeBlobText                = "BlobText"
 	TypeBusinessKey             = "BusinessKey"
 	TypeCachedResult            = "CachedResult"
@@ -4391,6 +4393,818 @@ func (m *BlobLeaseMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *BlobLeaseMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown BlobLease edge %s", name)
+}
+
+// BlobPreviewMutation represents an operation that mutates the BlobPreview nodes in the graph.
+type BlobPreviewMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *string
+	created_at     *time.Time
+	sha256         *string
+	status         *blobpreview.Status
+	object_key     *string
+	object_sha256  *string
+	object_size    *int64
+	addobject_size *int64
+	width          *int
+	addwidth       *int
+	height         *int
+	addheight      *int
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*BlobPreview, error)
+	predicates     []predicate.BlobPreview
+}
+
+var _ ent.Mutation = (*BlobPreviewMutation)(nil)
+
+// blobpreviewOption allows management of the mutation configuration using functional options.
+type blobpreviewOption func(*BlobPreviewMutation)
+
+// newBlobPreviewMutation creates new mutation for the BlobPreview entity.
+func newBlobPreviewMutation(c config, op Op, opts ...blobpreviewOption) *BlobPreviewMutation {
+	m := &BlobPreviewMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBlobPreview,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBlobPreviewID sets the ID field of the mutation.
+func withBlobPreviewID(id string) blobpreviewOption {
+	return func(m *BlobPreviewMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BlobPreview
+		)
+		m.oldValue = func(ctx context.Context) (*BlobPreview, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BlobPreview.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBlobPreview sets the old BlobPreview of the mutation.
+func withBlobPreview(node *BlobPreview) blobpreviewOption {
+	return func(m *BlobPreviewMutation) {
+		m.oldValue = func(context.Context) (*BlobPreview, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BlobPreviewMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BlobPreviewMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of BlobPreview entities.
+func (m *BlobPreviewMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BlobPreviewMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BlobPreviewMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BlobPreview.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BlobPreviewMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BlobPreviewMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BlobPreview entity.
+// If the BlobPreview object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobPreviewMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BlobPreviewMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetSha256 sets the "sha256" field.
+func (m *BlobPreviewMutation) SetSha256(s string) {
+	m.sha256 = &s
+}
+
+// Sha256 returns the value of the "sha256" field in the mutation.
+func (m *BlobPreviewMutation) Sha256() (r string, exists bool) {
+	v := m.sha256
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSha256 returns the old "sha256" field's value of the BlobPreview entity.
+// If the BlobPreview object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobPreviewMutation) OldSha256(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSha256 is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSha256 requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSha256: %w", err)
+	}
+	return oldValue.Sha256, nil
+}
+
+// ResetSha256 resets all changes to the "sha256" field.
+func (m *BlobPreviewMutation) ResetSha256() {
+	m.sha256 = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *BlobPreviewMutation) SetStatus(b blobpreview.Status) {
+	m.status = &b
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *BlobPreviewMutation) Status() (r blobpreview.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the BlobPreview entity.
+// If the BlobPreview object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobPreviewMutation) OldStatus(ctx context.Context) (v blobpreview.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *BlobPreviewMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetObjectKey sets the "object_key" field.
+func (m *BlobPreviewMutation) SetObjectKey(s string) {
+	m.object_key = &s
+}
+
+// ObjectKey returns the value of the "object_key" field in the mutation.
+func (m *BlobPreviewMutation) ObjectKey() (r string, exists bool) {
+	v := m.object_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectKey returns the old "object_key" field's value of the BlobPreview entity.
+// If the BlobPreview object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobPreviewMutation) OldObjectKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectKey: %w", err)
+	}
+	return oldValue.ObjectKey, nil
+}
+
+// ResetObjectKey resets all changes to the "object_key" field.
+func (m *BlobPreviewMutation) ResetObjectKey() {
+	m.object_key = nil
+}
+
+// SetObjectSha256 sets the "object_sha256" field.
+func (m *BlobPreviewMutation) SetObjectSha256(s string) {
+	m.object_sha256 = &s
+}
+
+// ObjectSha256 returns the value of the "object_sha256" field in the mutation.
+func (m *BlobPreviewMutation) ObjectSha256() (r string, exists bool) {
+	v := m.object_sha256
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectSha256 returns the old "object_sha256" field's value of the BlobPreview entity.
+// If the BlobPreview object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobPreviewMutation) OldObjectSha256(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectSha256 is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectSha256 requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectSha256: %w", err)
+	}
+	return oldValue.ObjectSha256, nil
+}
+
+// ResetObjectSha256 resets all changes to the "object_sha256" field.
+func (m *BlobPreviewMutation) ResetObjectSha256() {
+	m.object_sha256 = nil
+}
+
+// SetObjectSize sets the "object_size" field.
+func (m *BlobPreviewMutation) SetObjectSize(i int64) {
+	m.object_size = &i
+	m.addobject_size = nil
+}
+
+// ObjectSize returns the value of the "object_size" field in the mutation.
+func (m *BlobPreviewMutation) ObjectSize() (r int64, exists bool) {
+	v := m.object_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectSize returns the old "object_size" field's value of the BlobPreview entity.
+// If the BlobPreview object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobPreviewMutation) OldObjectSize(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectSize: %w", err)
+	}
+	return oldValue.ObjectSize, nil
+}
+
+// AddObjectSize adds i to the "object_size" field.
+func (m *BlobPreviewMutation) AddObjectSize(i int64) {
+	if m.addobject_size != nil {
+		*m.addobject_size += i
+	} else {
+		m.addobject_size = &i
+	}
+}
+
+// AddedObjectSize returns the value that was added to the "object_size" field in this mutation.
+func (m *BlobPreviewMutation) AddedObjectSize() (r int64, exists bool) {
+	v := m.addobject_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetObjectSize resets all changes to the "object_size" field.
+func (m *BlobPreviewMutation) ResetObjectSize() {
+	m.object_size = nil
+	m.addobject_size = nil
+}
+
+// SetWidth sets the "width" field.
+func (m *BlobPreviewMutation) SetWidth(i int) {
+	m.width = &i
+	m.addwidth = nil
+}
+
+// Width returns the value of the "width" field in the mutation.
+func (m *BlobPreviewMutation) Width() (r int, exists bool) {
+	v := m.width
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWidth returns the old "width" field's value of the BlobPreview entity.
+// If the BlobPreview object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobPreviewMutation) OldWidth(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWidth is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWidth requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWidth: %w", err)
+	}
+	return oldValue.Width, nil
+}
+
+// AddWidth adds i to the "width" field.
+func (m *BlobPreviewMutation) AddWidth(i int) {
+	if m.addwidth != nil {
+		*m.addwidth += i
+	} else {
+		m.addwidth = &i
+	}
+}
+
+// AddedWidth returns the value that was added to the "width" field in this mutation.
+func (m *BlobPreviewMutation) AddedWidth() (r int, exists bool) {
+	v := m.addwidth
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetWidth resets all changes to the "width" field.
+func (m *BlobPreviewMutation) ResetWidth() {
+	m.width = nil
+	m.addwidth = nil
+}
+
+// SetHeight sets the "height" field.
+func (m *BlobPreviewMutation) SetHeight(i int) {
+	m.height = &i
+	m.addheight = nil
+}
+
+// Height returns the value of the "height" field in the mutation.
+func (m *BlobPreviewMutation) Height() (r int, exists bool) {
+	v := m.height
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeight returns the old "height" field's value of the BlobPreview entity.
+// If the BlobPreview object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BlobPreviewMutation) OldHeight(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeight is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeight requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeight: %w", err)
+	}
+	return oldValue.Height, nil
+}
+
+// AddHeight adds i to the "height" field.
+func (m *BlobPreviewMutation) AddHeight(i int) {
+	if m.addheight != nil {
+		*m.addheight += i
+	} else {
+		m.addheight = &i
+	}
+}
+
+// AddedHeight returns the value that was added to the "height" field in this mutation.
+func (m *BlobPreviewMutation) AddedHeight() (r int, exists bool) {
+	v := m.addheight
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetHeight resets all changes to the "height" field.
+func (m *BlobPreviewMutation) ResetHeight() {
+	m.height = nil
+	m.addheight = nil
+}
+
+// Where appends a list predicates to the BlobPreviewMutation builder.
+func (m *BlobPreviewMutation) Where(ps ...predicate.BlobPreview) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BlobPreviewMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BlobPreviewMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BlobPreview, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BlobPreviewMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BlobPreviewMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BlobPreview).
+func (m *BlobPreviewMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BlobPreviewMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.created_at != nil {
+		fields = append(fields, blobpreview.FieldCreatedAt)
+	}
+	if m.sha256 != nil {
+		fields = append(fields, blobpreview.FieldSha256)
+	}
+	if m.status != nil {
+		fields = append(fields, blobpreview.FieldStatus)
+	}
+	if m.object_key != nil {
+		fields = append(fields, blobpreview.FieldObjectKey)
+	}
+	if m.object_sha256 != nil {
+		fields = append(fields, blobpreview.FieldObjectSha256)
+	}
+	if m.object_size != nil {
+		fields = append(fields, blobpreview.FieldObjectSize)
+	}
+	if m.width != nil {
+		fields = append(fields, blobpreview.FieldWidth)
+	}
+	if m.height != nil {
+		fields = append(fields, blobpreview.FieldHeight)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BlobPreviewMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case blobpreview.FieldCreatedAt:
+		return m.CreatedAt()
+	case blobpreview.FieldSha256:
+		return m.Sha256()
+	case blobpreview.FieldStatus:
+		return m.Status()
+	case blobpreview.FieldObjectKey:
+		return m.ObjectKey()
+	case blobpreview.FieldObjectSha256:
+		return m.ObjectSha256()
+	case blobpreview.FieldObjectSize:
+		return m.ObjectSize()
+	case blobpreview.FieldWidth:
+		return m.Width()
+	case blobpreview.FieldHeight:
+		return m.Height()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BlobPreviewMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case blobpreview.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case blobpreview.FieldSha256:
+		return m.OldSha256(ctx)
+	case blobpreview.FieldStatus:
+		return m.OldStatus(ctx)
+	case blobpreview.FieldObjectKey:
+		return m.OldObjectKey(ctx)
+	case blobpreview.FieldObjectSha256:
+		return m.OldObjectSha256(ctx)
+	case blobpreview.FieldObjectSize:
+		return m.OldObjectSize(ctx)
+	case blobpreview.FieldWidth:
+		return m.OldWidth(ctx)
+	case blobpreview.FieldHeight:
+		return m.OldHeight(ctx)
+	}
+	return nil, fmt.Errorf("unknown BlobPreview field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BlobPreviewMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case blobpreview.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case blobpreview.FieldSha256:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSha256(v)
+		return nil
+	case blobpreview.FieldStatus:
+		v, ok := value.(blobpreview.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case blobpreview.FieldObjectKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectKey(v)
+		return nil
+	case blobpreview.FieldObjectSha256:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectSha256(v)
+		return nil
+	case blobpreview.FieldObjectSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectSize(v)
+		return nil
+	case blobpreview.FieldWidth:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWidth(v)
+		return nil
+	case blobpreview.FieldHeight:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeight(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BlobPreview field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BlobPreviewMutation) AddedFields() []string {
+	var fields []string
+	if m.addobject_size != nil {
+		fields = append(fields, blobpreview.FieldObjectSize)
+	}
+	if m.addwidth != nil {
+		fields = append(fields, blobpreview.FieldWidth)
+	}
+	if m.addheight != nil {
+		fields = append(fields, blobpreview.FieldHeight)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BlobPreviewMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case blobpreview.FieldObjectSize:
+		return m.AddedObjectSize()
+	case blobpreview.FieldWidth:
+		return m.AddedWidth()
+	case blobpreview.FieldHeight:
+		return m.AddedHeight()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BlobPreviewMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case blobpreview.FieldObjectSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddObjectSize(v)
+		return nil
+	case blobpreview.FieldWidth:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWidth(v)
+		return nil
+	case blobpreview.FieldHeight:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddHeight(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BlobPreview numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BlobPreviewMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BlobPreviewMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BlobPreviewMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown BlobPreview nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BlobPreviewMutation) ResetField(name string) error {
+	switch name {
+	case blobpreview.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case blobpreview.FieldSha256:
+		m.ResetSha256()
+		return nil
+	case blobpreview.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case blobpreview.FieldObjectKey:
+		m.ResetObjectKey()
+		return nil
+	case blobpreview.FieldObjectSha256:
+		m.ResetObjectSha256()
+		return nil
+	case blobpreview.FieldObjectSize:
+		m.ResetObjectSize()
+		return nil
+	case blobpreview.FieldWidth:
+		m.ResetWidth()
+		return nil
+	case blobpreview.FieldHeight:
+		m.ResetHeight()
+		return nil
+	}
+	return fmt.Errorf("unknown BlobPreview field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BlobPreviewMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BlobPreviewMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BlobPreviewMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BlobPreviewMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BlobPreviewMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BlobPreviewMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BlobPreviewMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown BlobPreview unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BlobPreviewMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown BlobPreview edge %s", name)
 }
 
 // BlobTextMutation represents an operation that mutates the BlobText nodes in the graph.

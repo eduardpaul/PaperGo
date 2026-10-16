@@ -17,6 +17,7 @@ import (
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
 	"papergo/ent/bloblease"
+	"papergo/ent/blobpreview"
 	"papergo/ent/blobtext"
 	"papergo/ent/businesskey"
 	"papergo/ent/cachedresult"
@@ -94,6 +95,8 @@ type Client struct {
 	BlobDeletion *BlobDeletionClient
 	// BlobLease is the client for interacting with the BlobLease builders.
 	BlobLease *BlobLeaseClient
+	// BlobPreview is the client for interacting with the BlobPreview builders.
+	BlobPreview *BlobPreviewClient
 	// BlobText is the client for interacting with the BlobText builders.
 	BlobText *BlobTextClient
 	// BusinessKey is the client for interacting with the BusinessKey builders.
@@ -213,6 +216,7 @@ func (c *Client) init() {
 	c.Blob = NewBlobClient(c.config)
 	c.BlobDeletion = NewBlobDeletionClient(c.config)
 	c.BlobLease = NewBlobLeaseClient(c.config)
+	c.BlobPreview = NewBlobPreviewClient(c.config)
 	c.BlobText = NewBlobTextClient(c.config)
 	c.BusinessKey = NewBusinessKeyClient(c.config)
 	c.CachedResult = NewCachedResultClient(c.config)
@@ -362,6 +366,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Blob:                    NewBlobClient(cfg),
 		BlobDeletion:            NewBlobDeletionClient(cfg),
 		BlobLease:               NewBlobLeaseClient(cfg),
+		BlobPreview:             NewBlobPreviewClient(cfg),
 		BlobText:                NewBlobTextClient(cfg),
 		BusinessKey:             NewBusinessKeyClient(cfg),
 		CachedResult:            NewCachedResultClient(cfg),
@@ -438,6 +443,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Blob:                    NewBlobClient(cfg),
 		BlobDeletion:            NewBlobDeletionClient(cfg),
 		BlobLease:               NewBlobLeaseClient(cfg),
+		BlobPreview:             NewBlobPreviewClient(cfg),
 		BlobText:                NewBlobTextClient(cfg),
 		BusinessKey:             NewBusinessKeyClient(cfg),
 		CachedResult:            NewCachedResultClient(cfg),
@@ -519,18 +525,18 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.ActivityRecord, c.ActivityReference, c.AuditEvent, c.Blob, c.BlobDeletion,
-		c.BlobLease, c.BlobText, c.BusinessKey, c.CachedResult, c.CollectionType,
-		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
-		c.IdentityRole, c.IdentityUser, c.IntegrationItem, c.IntegrationRevisionData,
-		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListIntegration, c.ListView,
-		c.LiveChange, c.Operation, c.OperationItem, c.Publication, c.Relationship,
-		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
-		c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken, c.SyncView, c.Task,
-		c.TaskResponse, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
-		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
-		c.WorkflowWait,
+		c.BlobLease, c.BlobPreview, c.BlobText, c.BusinessKey, c.CachedResult,
+		c.CollectionType, c.ContentType, c.DomainEvent, c.FieldDefinition,
+		c.FieldValue, c.Grant, c.GroupInbox, c.IdentityAssignment, c.IdentityGroup,
+		c.IdentityMembership, c.IdentityOrganization, c.IdentityPreference,
+		c.IdentityRESTToken, c.IdentityRole, c.IdentityUser, c.IntegrationItem,
+		c.IntegrationRevisionData, c.ItemHistory, c.ItemRevision, c.ItemSurface,
+		c.ListIntegration, c.ListView, c.LiveChange, c.Operation, c.OperationItem,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
+		c.SyncToken, c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion, c.WorkflowWait,
 	} {
 		n.Use(hooks...)
 	}
@@ -541,18 +547,18 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.ActivityRecord, c.ActivityReference, c.AuditEvent, c.Blob, c.BlobDeletion,
-		c.BlobLease, c.BlobText, c.BusinessKey, c.CachedResult, c.CollectionType,
-		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
-		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
-		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
-		c.IdentityRole, c.IdentityUser, c.IntegrationItem, c.IntegrationRevisionData,
-		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListIntegration, c.ListView,
-		c.LiveChange, c.Operation, c.OperationItem, c.Publication, c.Relationship,
-		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
-		c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken, c.SyncView, c.Task,
-		c.TaskResponse, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
-		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
-		c.WorkflowWait,
+		c.BlobLease, c.BlobPreview, c.BlobText, c.BusinessKey, c.CachedResult,
+		c.CollectionType, c.ContentType, c.DomainEvent, c.FieldDefinition,
+		c.FieldValue, c.Grant, c.GroupInbox, c.IdentityAssignment, c.IdentityGroup,
+		c.IdentityMembership, c.IdentityOrganization, c.IdentityPreference,
+		c.IdentityRESTToken, c.IdentityRole, c.IdentityUser, c.IntegrationItem,
+		c.IntegrationRevisionData, c.ItemHistory, c.ItemRevision, c.ItemSurface,
+		c.ListIntegration, c.ListView, c.LiveChange, c.Operation, c.OperationItem,
+		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
+		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
+		c.SyncToken, c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup,
+		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
+		c.WorkflowTrigger, c.WorkflowVersion, c.WorkflowWait,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -573,6 +579,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.BlobDeletion.mutate(ctx, m)
 	case *BlobLeaseMutation:
 		return c.BlobLease.mutate(ctx, m)
+	case *BlobPreviewMutation:
+		return c.BlobPreview.mutate(ctx, m)
 	case *BlobTextMutation:
 		return c.BlobText.mutate(ctx, m)
 	case *BusinessKeyMutation:
@@ -1491,6 +1499,139 @@ func (c *BlobLeaseClient) mutate(ctx context.Context, m *BlobLeaseMutation) (Val
 		return (&BlobLeaseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown BlobLease mutation op: %q", m.Op())
+	}
+}
+
+// BlobPreviewClient is a client for the BlobPreview schema.
+type BlobPreviewClient struct {
+	config
+}
+
+// NewBlobPreviewClient returns a client for the BlobPreview from the given config.
+func NewBlobPreviewClient(c config) *BlobPreviewClient {
+	return &BlobPreviewClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `blobpreview.Hooks(f(g(h())))`.
+func (c *BlobPreviewClient) Use(hooks ...Hook) {
+	c.hooks.BlobPreview = append(c.hooks.BlobPreview, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `blobpreview.Intercept(f(g(h())))`.
+func (c *BlobPreviewClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BlobPreview = append(c.inters.BlobPreview, interceptors...)
+}
+
+// Create returns a builder for creating a BlobPreview entity.
+func (c *BlobPreviewClient) Create() *BlobPreviewCreate {
+	mutation := newBlobPreviewMutation(c.config, OpCreate)
+	return &BlobPreviewCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BlobPreview entities.
+func (c *BlobPreviewClient) CreateBulk(builders ...*BlobPreviewCreate) *BlobPreviewCreateBulk {
+	return &BlobPreviewCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BlobPreviewClient) MapCreateBulk(slice any, setFunc func(*BlobPreviewCreate, int)) *BlobPreviewCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BlobPreviewCreateBulk{err: fmt.Errorf("calling to BlobPreviewClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BlobPreviewCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BlobPreviewCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BlobPreview.
+func (c *BlobPreviewClient) Update() *BlobPreviewUpdate {
+	mutation := newBlobPreviewMutation(c.config, OpUpdate)
+	return &BlobPreviewUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BlobPreviewClient) UpdateOne(_m *BlobPreview) *BlobPreviewUpdateOne {
+	mutation := newBlobPreviewMutation(c.config, OpUpdateOne, withBlobPreview(_m))
+	return &BlobPreviewUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BlobPreviewClient) UpdateOneID(id string) *BlobPreviewUpdateOne {
+	mutation := newBlobPreviewMutation(c.config, OpUpdateOne, withBlobPreviewID(id))
+	return &BlobPreviewUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BlobPreview.
+func (c *BlobPreviewClient) Delete() *BlobPreviewDelete {
+	mutation := newBlobPreviewMutation(c.config, OpDelete)
+	return &BlobPreviewDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BlobPreviewClient) DeleteOne(_m *BlobPreview) *BlobPreviewDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BlobPreviewClient) DeleteOneID(id string) *BlobPreviewDeleteOne {
+	builder := c.Delete().Where(blobpreview.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BlobPreviewDeleteOne{builder}
+}
+
+// Query returns a query builder for BlobPreview.
+func (c *BlobPreviewClient) Query() *BlobPreviewQuery {
+	return &BlobPreviewQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBlobPreview},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BlobPreview entity by its id.
+func (c *BlobPreviewClient) Get(ctx context.Context, id string) (*BlobPreview, error) {
+	return c.Query().Where(blobpreview.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BlobPreviewClient) GetX(ctx context.Context, id string) *BlobPreview {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BlobPreviewClient) Hooks() []Hook {
+	return c.hooks.BlobPreview
+}
+
+// Interceptors returns the client interceptors.
+func (c *BlobPreviewClient) Interceptors() []Interceptor {
+	return c.inters.BlobPreview
+}
+
+func (c *BlobPreviewClient) mutate(ctx context.Context, m *BlobPreviewMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BlobPreviewCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BlobPreviewUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BlobPreviewUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BlobPreviewDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BlobPreview mutation op: %q", m.Op())
 	}
 }
 
@@ -9193,29 +9334,30 @@ func (c *WorkflowWaitClient) mutate(ctx context.Context, m *WorkflowWaitMutation
 type (
 	hooks struct {
 		ActivityRecord, ActivityReference, AuditEvent, Blob, BlobDeletion, BlobLease,
-		BlobText, BusinessKey, CachedResult, CollectionType, ContentType, DomainEvent,
-		FieldDefinition, FieldValue, Grant, GroupInbox, IdentityAssignment,
-		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
-		IdentityRESTToken, IdentityRole, IdentityUser, IntegrationItem,
-		IntegrationRevisionData, ItemHistory, ItemRevision, ItemSurface,
-		ListIntegration, ListView, LiveChange, Operation, OperationItem, Publication,
-		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task, TaskResponse,
-		Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
-		WorkflowRunItem, WorkflowTrigger, WorkflowVersion, WorkflowWait []ent.Hook
+		BlobPreview, BlobText, BusinessKey, CachedResult, CollectionType, ContentType,
+		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
+		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
+		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser,
+		IntegrationItem, IntegrationRevisionData, ItemHistory, ItemRevision,
+		ItemSurface, ListIntegration, ListView, LiveChange, Operation, OperationItem,
+		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
+		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task,
+		TaskResponse, Term, TermGroup, TermSet, WebDAVCredential, Workflow,
+		WorkflowRun, WorkflowRunItem, WorkflowTrigger, WorkflowVersion,
+		WorkflowWait []ent.Hook
 	}
 	inters struct {
 		ActivityRecord, ActivityReference, AuditEvent, Blob, BlobDeletion, BlobLease,
-		BlobText, BusinessKey, CachedResult, CollectionType, ContentType, DomainEvent,
-		FieldDefinition, FieldValue, Grant, GroupInbox, IdentityAssignment,
-		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
-		IdentityRESTToken, IdentityRole, IdentityUser, IntegrationItem,
-		IntegrationRevisionData, ItemHistory, ItemRevision, ItemSurface,
-		ListIntegration, ListView, LiveChange, Operation, OperationItem, Publication,
-		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
-		SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task, TaskResponse,
-		Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
-		WorkflowRunItem, WorkflowTrigger, WorkflowVersion,
+		BlobPreview, BlobText, BusinessKey, CachedResult, CollectionType, ContentType,
+		DomainEvent, FieldDefinition, FieldValue, Grant, GroupInbox,
+		IdentityAssignment, IdentityGroup, IdentityMembership, IdentityOrganization,
+		IdentityPreference, IdentityRESTToken, IdentityRole, IdentityUser,
+		IntegrationItem, IntegrationRevisionData, ItemHistory, ItemRevision,
+		ItemSurface, ListIntegration, ListView, LiveChange, Operation, OperationItem,
+		Publication, Relationship, RelationshipType, Resource, SchemaRevision,
+		SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task,
+		TaskResponse, Term, TermGroup, TermSet, WebDAVCredential, Workflow,
+		WorkflowRun, WorkflowRunItem, WorkflowTrigger, WorkflowVersion,
 		WorkflowWait []ent.Interceptor
 	}
 )

@@ -12,6 +12,7 @@ import {
 import { File, Folder, MoreHorizontal } from 'lucide-react';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { toast } from 'sonner';
+import { FilePreview } from '@/features/documents/preview';
 import { api } from '@/api/http';
 import { useApiPages } from '@/api/pages';
 import { keys } from '@/api/queries';
@@ -34,6 +35,7 @@ import { problemMessage } from '@/lib/errors';
 import { useFormat } from '@/lib/preferences';
 
 type LayoutProps = {
+  previewItems?: ReadonlySet<string>;
   provenance?: Map<string, string>;
   renderItem?: (item: Resource, element: ReactElement) => ReactNode;
   items: Resource[];
@@ -56,7 +58,7 @@ function CardFields({ item, fields, names }: { item: Resource; fields: FieldDefi
   );
 }
 
-export function ItemsGallery({ items, fields, names, onOpen, renderItem, provenance }: LayoutProps) {
+export function ItemsGallery({ items, fields, names, onOpen, renderItem, provenance, previewItems }: LayoutProps) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((item) => {
@@ -70,6 +72,7 @@ export function ItemsGallery({ items, fields, names, onOpen, renderItem, provena
               {item.name}
               {provenance?.get(item.id) && <Badge>{provenance.get(item.id)}</Badge>}
             </span>
+            {previewItems?.has(item.id) && item.kind === 'item' && <FilePreview itemId={item.id} version={item.version} alt="" className="h-36" />}
             <CardFields item={item} fields={fields} names={names} />
           </button>;
         return <li key={item.id}>{renderItem ? renderItem(item, card) : card}</li>;
@@ -96,6 +99,7 @@ export function ItemsBoard({
   fields,
   groupBy,
   readOnly,
+  filePreviews,
   onOpen,
   renderItem,
 }: {
@@ -104,6 +108,7 @@ export function ItemsBoard({
   fields: FieldDefinition[];
   groupBy?: FieldDefinition;
   readOnly?: boolean;
+  filePreviews?: boolean;
   renderItem?: LayoutProps['renderItem'];
   onOpen: (item: Resource) => void;
 }) {
@@ -174,6 +179,7 @@ export function ItemsBoard({
             <span className="text-muted">{groups.isSuccess ? format.number(counts.get(column) ?? 0) : ''}</span>
           </h3>
           <BoardColumn
+            filePreviews={filePreviews}
             renderItem={renderItem}
             collectionId={collectionId}
             view={view}
@@ -197,6 +203,7 @@ function BoardColumn({
   filter,
   fields,
   readOnly,
+  filePreviews,
   column,
   targets,
   onMove,
@@ -208,6 +215,7 @@ function BoardColumn({
   filter: FilterExpr;
   fields: FieldDefinition[];
   readOnly?: boolean;
+  filePreviews?: boolean;
   column: string;
   targets: string[];
   renderItem?: LayoutProps['renderItem'];
@@ -251,6 +259,7 @@ function BoardColumn({
                 </DropdownMenu>
               )}
             </div>
+            {filePreviews && item.kind === 'item' && <FilePreview itemId={item.id} version={item.version} alt="" className="h-28" />}
             <CardFields item={item} fields={fields} names={names} />
           </li>;
           return renderItem ? renderItem(item, card) : card;

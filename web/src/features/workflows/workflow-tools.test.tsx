@@ -70,8 +70,8 @@ it('preserves an ordered selection, explicit primary item and exact typed launch
 
 it('shows selection hints and image previews of the ordered items', async () => {
   const fetch = vi.fn(async (url: URL | string) =>
-    String(url).includes('/content')
-      ? new Response('image bytes', { headers: { 'Content-Type': 'image/png' } })
+    String(url).includes('/preview')
+      ? new Response('image bytes', { headers: { 'Content-Type': 'image/webp' } })
       : new Response(stringifyJSON({ value: [{ id: 'first', name: 'First', kind: 'item' }, { id: 'second', name: 'Second', kind: 'item' }] })),
   );
   vi.stubGlobal('fetch', fetch);
@@ -107,6 +107,7 @@ it('shows selection hints and image previews of the ordered items', async () => 
   expect(order.textContent).toContain('page 1:');
   expect(order.textContent).toContain('page 2:');
   await waitFor(() => expect(order.querySelectorAll('img[src="blob:preview"]')).toHaveLength(2));
-  expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/v1/items/second/content'))).toBe(true);
+  expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/v1/items/second/preview'))).toBe(true);
+  expect(fetch.mock.calls.some(([url]) => String(url).includes('/content'))).toBe(false);
   client.clear();
 });

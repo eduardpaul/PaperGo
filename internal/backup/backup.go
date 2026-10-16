@@ -345,7 +345,7 @@ func inspectDatabase(ctx context.Context, path string) ([]fileEntry, error) {
 	if bad {
 		return nil, errors.New("database foreign key check failed")
 	}
-	rows, err := db.SQL.QueryContext(ctx, "SELECT DISTINCT object_key,size,sha256 FROM blobs ORDER BY object_key")
+	rows, err := db.SQL.QueryContext(ctx, "SELECT DISTINCT object_key,size,sha256 FROM blobs UNION SELECT object_key,object_size,object_sha256 FROM blob_texts UNION SELECT object_key,object_size,object_sha256 FROM blob_previews WHERE status='ready' ORDER BY object_key")
 	if err != nil {
 		return nil, err
 	}

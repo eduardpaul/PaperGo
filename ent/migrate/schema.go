@@ -209,6 +209,36 @@ var (
 			},
 		},
 	}
+	// BlobPreviewsColumns holds the columns for the "blob_previews" table.
+	BlobPreviewsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "sha256", Type: field.TypeString},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"ready", "failed"}},
+		{Name: "object_key", Type: field.TypeString, Default: ""},
+		{Name: "object_sha256", Type: field.TypeString, Default: ""},
+		{Name: "object_size", Type: field.TypeInt64, Default: 0},
+		{Name: "width", Type: field.TypeInt, Default: 0},
+		{Name: "height", Type: field.TypeInt, Default: 0},
+	}
+	// BlobPreviewsTable holds the schema information for the "blob_previews" table.
+	BlobPreviewsTable = &schema.Table{
+		Name:       "blob_previews",
+		Columns:    BlobPreviewsColumns,
+		PrimaryKey: []*schema.Column{BlobPreviewsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "blobpreview_sha256",
+				Unique:  true,
+				Columns: []*schema.Column{BlobPreviewsColumns[2]},
+			},
+			{
+				Name:    "blobpreview_object_key",
+				Unique:  false,
+				Columns: []*schema.Column{BlobPreviewsColumns[4]},
+			},
+		},
+	}
 	// BlobTextsColumns holds the columns for the "blob_texts" table.
 	BlobTextsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -2301,6 +2331,7 @@ var (
 		BlobsTable,
 		BlobDeletionsTable,
 		BlobLeasesTable,
+		BlobPreviewsTable,
 		BlobTextsTable,
 		BusinessKeysTable,
 		CachedResultsTable,

@@ -20,7 +20,7 @@ import (
 // UUID tokens can also occur inside query expressions and workflow bindings.
 var packageUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
 
-var packageDataTables = []string{"blobs", "blob_texts", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "relationships"}
+var packageDataTables = []string{"blobs", "blob_texts", "blob_previews", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "relationships"}
 
 func packageIDs(table packageTable) []string {
 	ids := make([]string, 0, len(table.Rows))
@@ -148,9 +148,11 @@ func selectWorkspacePackage(p *corePackage) error {
 			hashes[row["sha256"]] = true
 		}
 	}
-	for _, row := range packageMaps(p.Tables["blob_texts"]) {
-		if hashes[row["sha256"]] {
-			add("blob_texts", row)
+	for _, table := range []string{"blob_texts", "blob_previews"} {
+		for _, row := range packageMaps(p.Tables[table]) {
+			if hashes[row["sha256"]] {
+				add(table, row)
+			}
 		}
 	}
 	dependencies := map[string][]record{}
@@ -431,7 +433,7 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 		return p, warnings, invalid("a workspace named " + name + " already exists; choose workspace_name for a separate copy")
 	}
 	// These natural identities are unique in the destination.
-	for _, table := range []string{"identity_users", "identity_groups", "term_groups", "term_sets", "content_types", "blob_texts"} {
+	for _, table := range []string{"identity_users", "identity_groups", "term_groups", "term_sets", "content_types", "blob_texts", "blob_previews"} {
 		for _, row := range rows[table] {
 			var query string
 			var args []any
@@ -447,6 +449,8 @@ func (s *Service) prepareWorkspacePackage(ctx context.Context, p corePackage, na
 					continue
 				}
 				query, args = "template_key=?", []any{row["template_key"]}
+			case "blob_previews":
+				query, args = "sha256=?", []any{row["sha256"]}
 			case "blob_texts":
 				query, args = "sha256=? AND settings=?", []any{row["sha256"], row["settings"]}
 			}
@@ -642,7 +646,7 @@ func (s *Service) compareWorkspaceDependency(ctx context.Context, table string, 
 		return err
 	}
 	for i, column := range columns {
-		if table == "blob_texts" && column == "object_key" {
+		if (table == "blob_texts" || table == "blob_previews") && column == "object_key" {
 			continue
 		}
 		if slices.Contains([]string{"id", "created_at", "updated_at", "version", "index_status"}, column) {
@@ -1107,7 +1111,7 @@ func packageExportFilter(table string, options ExportOptions) (string, []any) {
 		return " WHERE workflow_id IN (SELECT id FROM workflows WHERE workspace_id=?)", []any{ws}
 	case "integration_revision_data":
 		return " WHERE revision_id IN (SELECT r.id FROM item_revisions r JOIN resources c ON c.id=r.container_id WHERE c.workspace_id=?)", []any{ws}
-	case "blob_texts":
+	case "blob_texts", "blob_previews":
 		return " WHERE sha256 IN (SELECT b.sha256 FROM blobs b JOIN resources r ON r.id=b.item_id WHERE r.workspace_id=?)", []any{ws}
 	case "relationships":
 		return " WHERE source_id IN (" + scope + ") OR target_id IN (" + scope + ")", []any{ws, ws}

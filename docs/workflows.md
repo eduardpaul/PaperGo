@@ -635,3 +635,7 @@ PaperGo code that should happen after a change or on a schedule:
 Relationship creation, attribute updates, deletion and taxonomy merges emit `item.updated` for each live endpoint. These writes advance both item ETags and modification timestamps without adding metadata history. Their data includes `relationship_id`, `relationship_action`, `peer_id`, `changed_fields: ["$relationships"]`, the head `revision_id` and `content_type_id`. Term filters can match present terms; added/removed term filters do not fire for relationship-only changes. Duplicate link requests leave both endpoints unchanged. Purging an item emits relationship changes for surviving peers.
 
 `item.update` also accepts optional `expected_version`, `expected_blob_id` and `expected_taxonomy` preconditions. They are checked with the write in one transaction; a failed guard follows `error` without mutation. See [guarded decision consumption](decisions.md#guarded-review-and-writes).
+
+### File previews
+
+The default `documents.preview` system built-in fills the `file.preview` role with the `file.preview` activity. It runs on file additions/replacements and on demand, renders a bounded WebP asynchronously and keeps source files unchanged. Its lightweight viewer endpoint enforces the caller’s visible revision and resource permissions. See [file previews](previews.md) for size, worker, storage and API behavior.

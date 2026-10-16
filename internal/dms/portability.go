@@ -41,7 +41,7 @@ var packageTables = []string{
 	"identity_users", "identity_groups", "identity_roles", "identity_memberships", "identity_assignments", "identity_preferences",
 	"term_groups", "term_sets", "terms", "relationship_types", "field_definitions", "content_types",
 	"resources", "collection_types", "schema_revisions", "schema_templates", "list_views", "smart_folders",
-	"blobs", "blob_texts", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
+	"blobs", "blob_texts", "blob_previews", "item_revisions", "integration_revision_data", "integration_items", "item_histories", "publications", "item_surfaces", "business_keys", "grants", "relationships",
 	"workflows", "workflow_versions", "workflow_triggers", "group_inboxes",
 }
 
@@ -289,7 +289,7 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store, op
 	if count > 100000 {
 		return storage.Object{}, invalid("package exceeds 100000 core records")
 	}
-	p.Objects = packageObjects(packageMaps(p.Tables["blobs"]), packageMaps(p.Tables["blob_texts"]))
+	p.Objects = packageObjects(packageMaps(p.Tables["blobs"]), packageMaps(p.Tables["blob_texts"]), packageMaps(p.Tables["blob_previews"]))
 	raw, err := json.Marshal(p)
 	if err != nil {
 		return storage.Object{}, err
@@ -348,7 +348,7 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store, op
 // packageObjects lists each stored object once, in first-seen order. A key is
 // left out when every blob that names it has been reclaimed and no extracted
 // text still needs the bytes. History metadata stays in the blob rows.
-func packageObjects(blobs, texts []map[string]any) []packageObject {
+func packageObjects(blobs []map[string]any, renditions ...[]map[string]any) []packageObject {
 	type ref struct {
 		size int64
 		sha  string
@@ -389,15 +389,17 @@ func packageObjects(blobs, texts []map[string]any) []packageObject {
 			remember(row, blob["size"], blob["sha256"])
 		}
 	}
-	for _, text := range texts {
-		key, _ := text["object_key"].(string)
-		if key == "" {
-			continue
-		}
-		row := add(key)
-		row.keep = true
-		if !row.set {
-			remember(row, text["object_size"], text["object_sha256"])
+	for _, texts := range renditions {
+		for _, text := range texts {
+			key, _ := text["object_key"].(string)
+			if key == "" {
+				continue
+			}
+			row := add(key)
+			row.keep = true
+			if !row.set {
+				remember(row, text["object_size"], text["object_sha256"])
+			}
 		}
 	}
 	out := []packageObject{}
@@ -607,6 +609,19 @@ func (s *Service) importCorePackage(ctx context.Context, store storage.Store, su
 		obj, ok := objects[key]
 		if !ok || text["object_size"] != obj.Size || text["object_sha256"] != obj.SHA256 || !fileHashes[text["sha256"]] {
 			return result, invalid("file text does not match its packaged object or file")
+		}
+	}
+	for _, preview := range packageMaps(p.Tables["blob_previews"]) {
+		if !fileHashes[preview["sha256"]] {
+			return result, invalid("preview has no packaged source file")
+		}
+		if preview["status"] == "failed" {
+			continue
+		}
+		key, _ := preview["object_key"].(string)
+		obj, ok := objects[key]
+		if !ok || preview["object_size"] != obj.Size || preview["object_sha256"] != obj.SHA256 || objectTypes[key] != "image/webp" {
+			return result, invalid("preview does not match its packaged WebP object")
 		}
 	}
 	if err = validatePackageGroups(p); err != nil {
@@ -849,7 +864,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 					continue
 				}
 			}
-			if table == "blobs" || table == "blob_texts" {
+			if table == "blobs" || table == "blob_texts" || table == "blob_previews" {
 				if key, ok := objects[fmt.Sprint(row["object_key"])]; ok {
 					row["object_key"] = key
 				}

@@ -345,6 +345,9 @@ type objectDeleter interface {
 
 // CleanupPurgedBlobs is restart-safe: failed storage deletes remain queued.
 func (s *Service) CleanupPurgedBlobs(ctx context.Context, store objectDeleter) error {
+	if err := s.collectPreviews(ctx); err != nil {
+		return err
+	}
 	if err := s.collectBlobTexts(ctx); err != nil {
 		return err
 	}
@@ -367,7 +370,7 @@ func (s *Service) CleanupPurgedBlobs(ctx context.Context, store objectDeleter) e
 
 func (s *Service) deleteUnreferencedObject(ctx context.Context, store objectDeleter, key string) error {
 	var referenced bool
-	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=? AND availability<>'reclaimed') OR EXISTS(SELECT 1 FROM blob_texts WHERE object_key=?) OR EXISTS(SELECT 1 FROM staged_files WHERE object_key=? AND state='pending') OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now'))) OR EXISTS(SELECT 1 FROM blob_leases l JOIN blobs bl ON bl.id=l.blob_id WHERE bl.object_key=?)`, key, key, key, OperationKindImport, key, OperationKindExport, key, key); err != nil {
+	if err := s.scan(ctx, []any{&referenced}, `SELECT EXISTS(SELECT 1 FROM blobs WHERE object_key=? AND availability<>'reclaimed') OR EXISTS(SELECT 1 FROM blob_texts WHERE object_key=?) OR EXISTS(SELECT 1 FROM blob_previews WHERE object_key=?) OR EXISTS(SELECT 1 FROM staged_files WHERE object_key=? AND state='pending') OR EXISTS(SELECT 1 FROM operations WHERE (kind=? AND status='pending' AND json_extract(payload,'$.object_key')=?) OR (kind=? AND status='succeeded' AND json_extract(result,'$.object_key')=? AND julianday(json_extract(result,'$.expires_at'))>julianday('now'))) OR EXISTS(SELECT 1 FROM blob_leases l JOIN blobs bl ON bl.id=l.blob_id WHERE bl.object_key=?)`, key, key, key, key, OperationKindImport, key, OperationKindExport, key, key); err != nil {
 		return err
 	}
 	if referenced {

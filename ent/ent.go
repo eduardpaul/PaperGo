@@ -12,6 +12,7 @@ import (
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
 	"papergo/ent/bloblease"
+	"papergo/ent/blobpreview"
 	"papergo/ent/blobtext"
 	"papergo/ent/businesskey"
 	"papergo/ent/cachedresult"
@@ -135,6 +136,7 @@ func checkColumn(t, c string) error {
 			blob.Table:                    blob.ValidColumn,
 			blobdeletion.Table:            blobdeletion.ValidColumn,
 			bloblease.Table:               bloblease.ValidColumn,
+			blobpreview.Table:             blobpreview.ValidColumn,
 			blobtext.Table:                blobtext.ValidColumn,
 			businesskey.Table:             businesskey.ValidColumn,
 			cachedresult.Table:            cachedresult.ValidColumn,

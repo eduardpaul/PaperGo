@@ -17362,6 +17362,117 @@
           }
         }
       }
+    },
+    "/v1/items/{id}/preview": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getItemPreview",
+        "summary": "Read a lightweight rendition of the authorized visible file",
+        "description": "Requires list.read and document.read, plus resource ACL access. Resolves the visible published/head revision before selecting a rendition. Identical source bytes share a preview; original bytes are never returned. The default file.preview workflow generates previews asynchronously.",
+        "x-module-scopes": [
+          "list.read",
+          "document.read"
+        ],
+        "parameters": [
+          {
+            "name": "blob_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "An explicit version; ordinary readers can request only their published file."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded WebP (longest side at most 800px, fewer than 100000 bytes), or unavailable state.",
+            "headers": {
+              "X-Preview-Blob-ID": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "blob_id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "unavailable"
+                    },
+                    "blob_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Generation pending. No original content is returned.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "const": 2
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "blob_id"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "pending"
+                    },
+                    "blob_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {

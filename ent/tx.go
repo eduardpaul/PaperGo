@@ -26,6 +26,8 @@ type Tx struct {
 	BlobDeletion *BlobDeletionClient
 	// BlobLease is the client for interacting with the BlobLease builders.
 	BlobLease *BlobLeaseClient
+	// BlobPreview is the client for interacting with the BlobPreview builders.
+	BlobPreview *BlobPreviewClient
 	// BlobText is the client for interacting with the BlobText builders.
 	BlobText *BlobTextClient
 	// BusinessKey is the client for interacting with the BusinessKey builders.
@@ -265,6 +267,7 @@ func (tx *Tx) init() {
 	tx.Blob = NewBlobClient(tx.config)
 	tx.BlobDeletion = NewBlobDeletionClient(tx.config)
 	tx.BlobLease = NewBlobLeaseClient(tx.config)
+	tx.BlobPreview = NewBlobPreviewClient(tx.config)
 	tx.BlobText = NewBlobTextClient(tx.config)
 	tx.BusinessKey = NewBusinessKeyClient(tx.config)
 	tx.CachedResult = NewCachedResultClient(tx.config)

@@ -13,7 +13,7 @@ import { Select } from '@/components/ui/select';
 import { Alert } from '@/components/ui/feedback';
 import { problemMessage } from '@/lib/errors';
 import { QueryFeedback } from '@/features/admin/common';
-import { useBlobUrl } from '@/features/tasks/review';
+import { FilePreview } from '@/features/documents/preview';
 import { useFormat } from '@/lib/preferences';
 import { formDefaults, manualItemMode, normalizeForm } from './model';
 import type { WorkflowDefinition } from './model';
@@ -163,12 +163,7 @@ export function LaunchWorkflow({
 
 /** A small preview of an item's current image file. */
 function ItemImage({ itemId }: { itemId: string }) {
-  const { url } = useBlobUrl(`/v1/items/${itemId}/content`);
-  return (
-    <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded border bg-surface-muted">
-      {url && <img src={url} alt="" className="max-h-12 max-w-12 object-contain" />}
-    </span>
-  );
+  return <FilePreview itemId={itemId} alt="Selected item preview" className="size-12 min-h-0 shrink-0" />;
 }
 
 export function WorkflowVersions({

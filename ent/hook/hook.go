@@ -80,6 +80,18 @@ func (f BlobLeaseFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BlobLeaseMutation", m)
 }
 
+// The BlobPreviewFunc type is an adapter to allow the use of ordinary
+// function as BlobPreview mutator.
+type BlobPreviewFunc func(context.Context, *ent.BlobPreviewMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BlobPreviewFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BlobPreviewMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BlobPreviewMutation", m)
+}
+
 // The BlobTextFunc type is an adapter to allow the use of ordinary
 // function as BlobText mutator.
 type BlobTextFunc func(context.Context, *ent.BlobTextMutation) (ent.Value, error)

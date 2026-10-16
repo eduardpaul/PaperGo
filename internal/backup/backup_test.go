@@ -320,3 +320,36 @@ func TestBackupRestoresIntegrationEncryptionKey(t *testing.T) {
 		t.Fatal("key was not restored", err)
 	}
 }
+
+func TestBackupPreservesGeneratedPreviewObjects(t *testing.T) {
+	in, db, item, _ := fixture(t)
+	ctx := t.Context()
+	s := dms.NewService(db.SQL)
+	store, err := storage.NewLocal(in.BlobPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := s.GetBlob(ctx, "alice", item, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	object, err := store.Put(ctx, strings.NewReader("preview rendition"), 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SavePreview(ctx, source.Sha256, object, 10, 10); err != nil {
+		t.Fatal(err)
+	}
+	if err = Create(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	dest := Options{DatabasePath: filepath.Join(root, "papergo.db"), BlobPath: filepath.Join(root, "blobs"), ArchivePath: in.ArchivePath}
+	if err = Restore(ctx, dest); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dest.BlobPath, object.Key))
+	if err != nil || string(data) != "preview rendition" {
+		t.Fatal(string(data), err)
+	}
+}

@@ -71,17 +71,18 @@ type Config struct {
 
 // Runner executes workflow runs durably.
 type Runner struct {
-	workSlots chan struct{}
-	ctx       dbos.Context
-	db        *sql.DB
-	system    *sql.DB
-	dms       *dms.Service
-	workflows *workflow.Service
-	log       *slog.Logger
-	cfg       Config
-	wake      chan struct{}
-	stop      context.CancelFunc
-	stopped   chan struct{}
+	workSlots    chan struct{}
+	previewSlots chan struct{}
+	ctx          dbos.Context
+	db           *sql.DB
+	system       *sql.DB
+	dms          *dms.Service
+	workflows    *workflow.Service
+	log          *slog.Logger
+	cfg          Config
+	wake         chan struct{}
+	stop         context.CancelFunc
+	stopped      chan struct{}
 }
 
 // New registers PaperGo's runner workflows with DBOS on its own handle to
@@ -134,7 +135,7 @@ func New(cfg Config, db *sql.DB, service *dms.Service, workflows *workflow.Servi
 	if workflows.Tools.Records == nil {
 		workflows.Tools.Records = activitystore.New(db)
 	}
-	r := &Runner{workSlots: make(chan struct{}, cfg.Concurrency), ctx: ctx, db: db, system: system, dms: service, workflows: workflows, log: cfg.Logger, cfg: cfg, wake: make(chan struct{}, 1)}
+	r := &Runner{workSlots: make(chan struct{}, cfg.Concurrency), previewSlots: make(chan struct{}, 1), ctx: ctx, db: db, system: system, dms: service, workflows: workflows, log: cfg.Logger, cfg: cfg, wake: make(chan struct{}, 1)}
 	if _, err = dbos.RegisterQueue(ctx, serialQueue, dbos.WithPartitionConcurrency(1), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
 		system.Close()
 		return nil, err
@@ -267,14 +268,18 @@ func (x *durable) Step(name string, fn func(context.Context, *dms.Service, func(
 
 // Work runs fn as a DBOS step without a PaperGo transaction; DBOS records
 // its result, so a replay returns it without running fn again.
-func (x *durable) Work(name string, fn func(context.Context) (json.RawMessage, error)) (json.RawMessage, error) {
+func (x *durable) Work(name, activity string, fn func(context.Context) (json.RawMessage, error)) (json.RawMessage, error) {
 	return dbos.RunAsStep(x.ctx, func(ctx context.Context) (json.RawMessage, error) {
+		slots := x.r.workSlots
+		if activity == "file.preview" {
+			slots = x.r.previewSlots
+		}
 		select {
-		case x.r.workSlots <- struct{}{}:
+		case slots <- struct{}{}:
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
-		defer func() { <-x.r.workSlots }()
+		defer func() { <-slots }()
 		out, err := fn(ctx)
 		if err == nil && len(out) == 0 {
 			out = json.RawMessage("null")

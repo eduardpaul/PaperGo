@@ -24,6 +24,9 @@ type BlobDeletion func(*sql.Selector)
 // BlobLease is the predicate function for bloblease builders.
 type BlobLease func(*sql.Selector)
 
+// BlobPreview is the predicate function for blobpreview builders.
+type BlobPreview func(*sql.Selector)
+
 // BlobText is the predicate function for blobtext builders.
 type BlobText func(*sql.Selector)
 
