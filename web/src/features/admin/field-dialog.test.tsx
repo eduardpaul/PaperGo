@@ -38,14 +38,11 @@ it('uses the collection ETag for a shared field edit and preserves an exact defa
   client.clear();
 });
 
-it('widens a choice field and preserves its default as an array', async () => {
-  const fetch = vi.fn(async (_url: URL | string, _init?: RequestInit) => new Response('{}'));
-  vi.stubGlobal('fetch', fetch);
+it.each([false, true])('keeps existing choice cardinality immutable (multiple=%s)', (multiple) => {
   const client = new QueryClient();
-  render(<QueryClientProvider client={client}><FieldDialog collection={{ id: 'collection', workspace_id: 'w', kind: 'list', name: 'List', version: 9 }} field={{ id: 'field', key: 'status', label: 'Status', type: 'choice', choices: ['open', 'closed'], version: 1, options: { default_value: 'open' } }} onClose={vi.fn()} /></QueryClientProvider>);
-  fireEvent.click(screen.getByLabelText('Allow multiple values'));
-  fireEvent.click(screen.getByRole('button', { name: 'Save field' }));
-  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).options).toMatchObject({ multiple: true, default_value: ['open'] });
+  render(<QueryClientProvider client={client}><FieldDialog collection={{ id: 'collection', workspace_id: 'w', kind: 'list', name: 'List', version: 9 }} field={{ id: 'field', key: 'status', label: 'Status', type: 'choice', choices: ['open'], version: 1, options: { multiple } }} onClose={vi.fn()} /></QueryClientProvider>);
+  const checkbox = screen.getByLabelText<HTMLInputElement>('Allow multiple values');
+  expect(checkbox.disabled).toBe(true);
+  expect(checkbox.checked).toBe(multiple);
   client.clear();
 });

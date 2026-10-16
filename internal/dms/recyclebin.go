@@ -217,11 +217,6 @@ func (s *Service) RestoreDeleted(ctx context.Context, subject, collection, id st
 				}
 				t.emitRestored(ctx, subject, row)
 			}
-			if contentKind(row.Kind) {
-				if _, e = t.adoptWidenedChoiceHead(ctx, subject, row, false); e != nil {
-					return e
-				}
-			}
 			if e = t.audit(ctx, subject, "resource.restore", row, map[string]any{"parent_id": parent}); e != nil {
 				return e
 			}

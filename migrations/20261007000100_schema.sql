@@ -680,8 +680,7 @@ CREATE TRIGGER field_type_validate BEFORE INSERT ON field_definitions BEGIN
  THEN RAISE(ABORT,'invalid field type or scale') END;
 END;
 CREATE TRIGGER field_options_identity BEFORE UPDATE OF options ON field_definitions BEGIN
- SELECT CASE WHEN (coalesce(json_extract(new.options,'$.multiple'),0)<>coalesce(json_extract(old.options,'$.multiple'),0)
- AND NOT (old.type='choice' AND coalesce(json_extract(old.options,'$.multiple'),0)=0 AND coalesce(json_extract(new.options,'$.multiple'),0)=1))
+ SELECT CASE WHEN coalesce(json_extract(new.options,'$.multiple'),0)<>coalesce(json_extract(old.options,'$.multiple'),0)
  OR coalesce(json_extract(new.options,'$.lookup_container_id'),'')<>coalesce(json_extract(old.options,'$.lookup_container_id'),'')
  OR coalesce(json_extract(new.options,'$.term_set_id'),'')<>coalesce(json_extract(old.options,'$.term_set_id'),'')
  THEN RAISE(ABORT,'field cardinality and reference scope are immutable') END;

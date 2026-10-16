@@ -101,12 +101,8 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 	if in.Options != nil {
 		candidate.Options = *in.Options
 	}
-	widening := choiceWidening(d, &candidate)
-	if widening {
-		promoteChoiceDefault(d, &candidate)
-	}
-	if !optionsIdentityEqual(d.Options, candidate.Options) && !widening {
-		return nil, invalid("only single-to-multiple choice widening is supported; other cardinality and reference scope changes are immutable")
+	if !optionsIdentityEqual(d.Options, candidate.Options) {
+		return nil, invalid("cardinality and reference scope are immutable")
 	}
 	if e = validateFieldDefinition(&candidate); e != nil {
 		return nil, e
@@ -157,13 +153,6 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 	}
 	if e = s.refreshCollections(ctx, subject, collections); e != nil {
 		return nil, e
-	}
-	if widening {
-		for _, collection := range collections {
-			if e = s.adoptChoicePromotion(ctx, subject, collection, d.Key); e != nil {
-				return nil, e
-			}
-		}
 	}
 	if reindex {
 		if e = s.enqueueFieldIndex(ctx, subject, out); e != nil {

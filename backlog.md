@@ -20,7 +20,7 @@ This backlog synthesizes user feedback and feature requests into actionable engi
    - [ISSUE-09: Default Versioning History Disabled on Lists and Libraries](#issue-09-default-versioning-history-disabled-on-lists-and-libraries)
    - [ISSUE-10: File Renaming Flow During and After Upload](#issue-10-file-renaming-during-and-after-upload)
    - [ISSUE-11: System Fields and Tag Visibility in Field Definitions](#issue-11-system-fields-and-tag-visibility-in-field-definitions)
-   - [ISSUE-12: Choice Field Cardinality Upgrades (Single to Multi-Valued)](#issue-12-choice-field-cardinality-upgrades-single-to-multi-valued)
+   - [ISSUE-24: Changing Any Field in a List Schema](#issue-24-changing-any-field-in-a-list-schema)
    - [ISSUE-13: Workspace Package Export Publications Reference Fix](#issue-13-workspace-package-export-publications-reference-fix)
    - [ISSUE-23: Simplified SQLite Migrations via sqlite3def (sqldef) and Embedded Sequential Upgrades](#issue-23-simplified-sqlite-migrations-via-sqlite3def-sqldef-and-embedded-sequential-upgrades)
 4. [Workflow Engine & Automation](#4-workflow-engine--automation)
@@ -55,14 +55,13 @@ manual Chrome/Edge validation on Windows remains unperformed.
 
 ## Phase 2 Progress
 
-**Completed 2026-10-16.** All six fixes are implemented. Final validation passed: the complete Go suite, 145 frontend tests, frontend lint and production build/typecheck, Go vet and application build, Ent regeneration, and Atlas migration validation.
+**Completed 2026-10-16.** All five in-scope fixes are implemented. General list-schema field editing is deferred to ISSUE-24. Final validation passed: the complete Go suite, 145 frontend tests, frontend lint and production build/typecheck, Go vet and application build, Ent regeneration, and Atlas migration validation.
 
 - [x] **ISSUE-14** — First attachments emit `file.added`; replacements, restores and content reindexing emit `file.updated` with filename and previous blob. Built-ins, trigger filters, editor, samples and API/docs agree. Validation: file/content/search/staging/definition and sample-package suites across DMS, workflow, runner and HTTP API; frontend typecheck.
 - [x] **ISSUE-15** — Selection toolbar offers enabled manual workflows matching the collection and item count. Launches keep the selected items, render typed input forms, show authorization failures inline and link to run details. Explicit starts keep inspectable run IDs: coalescing preserves each invocation and busy skip policies record a visible rejection. Validation: 16 workflow launch/collection regressions, typecheck and lint.
 - [x] **ISSUE-16** — Editor exposes standalone, single-item and multiple-item association, with any-workspace or collection scope and selection-token guidance. Launch forms and server enforce 0/1/N items; multi-collection selections use the primary item’s collection. Validation: manual/selection/definition/API suites and association/launch UI regressions, typecheck and lint.
 - [x] **ISSUE-17** — Item Workflows tab provides manual launches, paged live summaries with status/trigger/actor/timing, and manager links to node details and retry. Draft readers receive item-scoped summaries without execution payloads or other member IDs. Validation: summary/selection/API authorization tests, item history and retry UI regressions, typecheck and lint.
 - [x] **ISSUE-10** — Rename action and Details edits freeze per-revision attachment display names, preserve extensions and published/history names, and update downloads/WebDAV/workflow reads without file processing. Upload name conflicts offer rename-and-retry or conditional replacement only for writable targets. Validation: rename/upload/file/history/portability/API/WebDAV suites, 20 upload/item UI regressions, typecheck and lint; Ent and the single schema/checksum updated.
-- [x] **ISSUE-12** — Choice fields widen atomically across attached collections; current heads, defaults and ordinal indexes adopt arrays while published/history snapshots retain frozen schemas. Historical and recycle-bin restoration adopt the current shape; new scalar writes, narrowing and other identity changes are rejected. Validation: shared-field/default/restore/rollback and HTTP regressions, schema/field/history suites, choice editor tests, typecheck and lint; existing schema trigger and Atlas checksum updated.
 
 ## 1. Backlog Summary Matrix
 
@@ -79,7 +78,7 @@ manual Chrome/Edge validation on Windows remains unperformed.
 | **ISSUE-09** | Default Versioning Disabled for All Collections | DMS Core | High | Small | Storage savings & user expectation |
 | **ISSUE-10** | File Renaming Flow During/After Upload | DMS / Web Frontend | High | Medium | Essential file management |
 | **ISSUE-11** | System Fields & Tag Visibility in Definitions | DMS / Web Frontend | Medium | Small | Mental model consistency |
-| **ISSUE-12** | Choice Field Cardinality Promotion | DMS Engine | Medium | Medium | Schema evolution flexibility |
+| **ISSUE-24** | Changing Any Field in a List Schema (Deferred) | DMS / Web Frontend / API | Medium | Large | Consistent schema editing across field properties |
 | **ISSUE-13** | Unresolved Reference in `publications.revision_id` | DMS Portability | Critical | Small | Fix export blocker |
 | **ISSUE-23** | Simplified SQLite Migrations via sqlite3def | Database / DevOps | High | Medium | Eliminates custom AST diffing; seamless binary upgrades |
 | **ISSUE-14** | `file.updated` Event (Prevent Redundant Chunks) | Workflow / DMS | High | Medium | Eliminates redundant AI/OCR load |
@@ -395,38 +394,28 @@ When inspecting field definitions in a fresh library, the system reports "no fie
 
 ---
 
-### ISSUE-12: Choice Field Cardinality Upgrades (Single to Multi-Valued)
+### ISSUE-24: Changing Any Field in a List Schema
+
+**Status:** Deferred; outside the current implementation phases. **Effort:** Large.
 
 #### Problem Statement
-When an administrator attempts to change an existing Choice field from single-value (`multiple: false`) to multi-valued (`multiple: true`), the server returns an error: `422 Unprocessable Entity: cardinality and reference scope are immutable`.
-
-#### Technical Analysis
-- **Location (`internal/dms/schema.go:104-106`)**:
-  ```go
-  if !optionsIdentityEqual(d.Options, candidate.Options) {
-      return nil, invalid("cardinality and reference scope are immutable")
-  }
-  ```
-- **Helper (`internal/dms/fieldtypes.go:389-391`)**:
-  ```go
-  func optionsIdentityEqual(a, b model.FieldOptions) bool {
-      return a.Multiple == b.Multiple && a.LookupContainerID == b.LookupContainerID && a.TermSetID == b.TermSetID
-  }
-  ```
-- Widening cardinality from single to multiple is completely safe: existing single choice values `"OptionA"` can automatically be promoted to array format `["OptionA"]` in storage and projection.
+Administrators need a consistent way to edit existing fields in list and library schemas. Field keys, types, decimal scales, multiplicity and reference scopes are currently immutable; labels and supported validation/display settings can already be edited. Editing one additional property in isolation does not provide a complete schema-editing experience.
 
 #### Proposed Specification
-1. Relax immutability constraint: Allow `d.Options.Multiple == false && candidate.Options.Multiple == true` (widening cardinality).
-2. During cardinality upgrade:
-   - Update `field_definitions.options.multiple = true`.
-   - Execute an atomic database update on `field_values` for that field key: convert existing scalar string values to JSON string arrays (e.g. `["value"]`).
-   - Re-index affected items.
-3. Narrowing cardinality (`true` to `false`) remains restricted if items have multi-item arrays with length > 1, or requires explicit truncation policy.
+1. Design a unified field editor for existing list/library fields, covering names/keys, types, precision/scale, single/multiple values, choices, defaults, validation rules, required/indexed flags and lookup/taxonomy scopes.
+2. Define an explicit support matrix for field changes. Preview affected values and dependent views, filters, content types, templates and workflows; explain unsupported changes and require an explicit decision for any destructive change. Do not silently discard values or truncate selections.
+3. Define the scope of edits to shared field definitions, including all attached collections, permissions and concurrent schema/item edits. Make that scope visible before applying a change.
+4. Validate the complete change before committing. Apply accepted changes to current item values, defaults, schemas and indexes consistently and atomically; a rejected change leaves them untouched.
+5. Preserve the schemas paired with published and historical business snapshots. Define restoration and publication behavior when current fields differ, as part of the same design.
+6. Update the API contract, item forms, collection schema UI, queries, export/import and documentation together. Follow the single-schema/no-compatibility-code repository rules; do not introduce deployment migrations or upgrade paths.
 
 #### Acceptance Criteria
-- Changing a choice field from single-selection to multi-selection succeeds with 200 OK.
-- Existing items with single choice selections are readable and render as multi-choice tags with their original selection preserved.
-- New values can be saved with multiple selections.
+- Existing fields have one consistent editing flow, with clear rules for every property and field type.
+- Choice cardinality changes are evaluated alongside other schema edits rather than implemented as a special exception.
+- Invalid or lossy changes cannot silently alter data, including across shared collections.
+- Accepted edits keep values, defaults, indexes and dependent features consistent; rejected edits leave no partial changes.
+- Published/history snapshots remain interpretable, with specified behavior for restoration and subsequent edits.
+- API, UI, permission, concurrency, rollback, query and portability tests cover the agreed support matrix.
 
 ---
 
@@ -885,7 +874,6 @@ graph TD
         B2 --> B3[ISSUE-16: Trigger Cardinality]
         B3 --> B4[ISSUE-17: Item Workflows Tab]
         B4 --> B5[ISSUE-10: File Renaming Flow]
-        B5 --> B6[ISSUE-12: Choice Cardinality Upgrade]
     end
 
     subgraph Phase 3: UI/UX & Navigation Polish
@@ -911,6 +899,8 @@ graph TD
 
 ### Phase Summary:
 1. **Phase 1 (Immediate Stability)**: Fix search keystroke focus loss, Windows file drop failure, export blocker on publication references, and ensure libraries default to versioning off.
-2. **Phase 2 (Automation Core)**: Introduce `file.updated` to prevent redundant AI re-chunking, enable manual workflow execution on selected items, add trigger cardinality contracts, and allow choice field upgrades.
+2. **Phase 2 (Automation Core)**: Introduce `file.updated` to prevent redundant AI re-chunking, enable manual workflow execution on selected items, add trigger cardinality contracts and item workflow history, and support file renaming and upload conflict resolution.
 3. **Phase 3 (Productivity & UX)**: Deliver right-click context menus, drag-and-drop folder moves, currency combobox presets, smart folders complete rework, and relationship discovery in search.
 4. **Phase 4 (Integrations & Packaging)**: Finalize admin integration tokens, Docker network egress, async preview pipeline, declarative `sqlite3def` migrations, and package the complete standalone single-binary distribution.
+
+**Deferred (unscheduled): ISSUE-24 — Changing Any Field in a List Schema.** Design general schema editing across field types and properties before implementing individual identity changes.

@@ -7,9 +7,58 @@ import (
 	"papergo/ent"
 	"papergo/internal/auth"
 	"papergo/internal/dms"
+	"papergo/internal/model"
 	"strings"
 	"testing"
 )
+
+func TestChoiceCardinalityIsImmutableAPI(t *testing.T) {
+	for _, multiple := range []bool{false, true} {
+		t.Run(fmt.Sprintf("multiple=%t", multiple), func(t *testing.T) {
+			h, s, _ := setup(t)
+			ctx := t.Context()
+			workspace, err := s.Create(ctx, "alice", "", dms.CreateResource{Kind: "workspace", Name: "Choices"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			list, err := s.Create(ctx, "alice", workspace.ID, dms.CreateResource{Kind: "list", Name: "Items"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			field, err := s.CreateField(ctx, "alice", list.ID, dms.CreateField{Key: "status", Label: "Status", Type: "choice", Choices: []string{"open"}, Options: model.FieldOptions{Multiple: multiple}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var value any = "open"
+			if multiple {
+				value = []any{"open"}
+			}
+			item, err := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Invoice", Values: map[string]any{"status": value}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			list, err = s.Get(ctx, "alice", list.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := request(h, "PATCH", "/v1/resources/"+list.ID+"/fields/"+field.ID, fmt.Sprintf(`{"options":{"multiple":%t}}`, !multiple), testToken, fmt.Sprintf(`"%d"`, list.Version), "application/json")
+			if response.Code != 422 || !strings.Contains(response.Body.String(), "cardinality and reference scope are immutable") {
+				t.Fatal(response.Code, response.Body.String())
+			}
+			if _, err = s.Client.FieldDefinition.UpdateOne(field).SetOptions(model.FieldOptions{Multiple: !multiple}).Save(ctx); err == nil {
+				t.Fatal("database allowed a cardinality change")
+			}
+			current, err := s.Get(ctx, "alice", list.ID)
+			if err != nil || current.Version != list.Version || *current.SchemaHeadID != *list.SchemaHeadID {
+				t.Fatal("rejected edit changed collection schema", current, err)
+			}
+			current, err = s.Get(ctx, "alice", item.ID)
+			if err != nil || current.Version != item.Version || *current.HeadRevisionID != *item.HeadRevisionID {
+				t.Fatal("rejected edit changed item head", current, err)
+			}
+		})
+	}
+}
 
 func TestMultipleFieldsAndPersonActivationAPI(t *testing.T) {
 	h, s, _ := setup(t)

@@ -18313,7 +18313,7 @@
           },
           "options": {
             "$ref": "#/components/schemas/FieldOptions",
-            "description": "Complete replacement of options. Single-choice fields may widen from multiple:false to multiple:true; other cardinality and reference scope changes are rejected. Current heads and indexes adopt arrays atomically across attached collections, while frozen history and publications retain their schemas."
+            "description": "Complete replacement of options; multiple and reference scope are immutable."
           }
         }
       },

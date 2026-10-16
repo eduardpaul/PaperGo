@@ -490,18 +490,6 @@ func (s *Service) checkTypeHeads(ctx context.Context, subject string, c *ent.Res
 			if e != nil {
 				return e
 			}
-			for _, field := range selected {
-				if _, scalar := values[field.Key].(string); field.Type == "choice" && field.Options.Multiple && scalar {
-					source, err := s.Client.ItemRevision.Get(ctx, head.RevisionID)
-					if err != nil {
-						return err
-					}
-					if _, err = s.projectWidenedChoices(ctx, source, selected, values); err != nil {
-						return err
-					}
-					break
-				}
-			}
 			projected := map[string]any{}
 			for key, value := range values {
 				if slices.Contains(keys, key) {

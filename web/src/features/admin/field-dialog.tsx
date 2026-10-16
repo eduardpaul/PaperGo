@@ -354,10 +354,10 @@ export function FieldDialog({
           <label className="flex gap-2">
             <Checkbox
               checked={!!options.multiple}
-              disabled={!!field && !(type === 'choice' && !field.options?.multiple)}
+              disabled={!!field}
               onChange={(event) => {
                 patchOptions({ multiple: event.target.checked });
-                setDefaultValue(event.target.checked && type === 'choice' && defaultValue !== undefined ? [defaultValue] : undefined);
+                setDefaultValue(undefined);
               }}
             />
             Allow multiple values
