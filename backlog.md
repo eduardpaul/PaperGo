@@ -53,6 +53,15 @@ manual Chrome/Edge validation on Windows remains unperformed.
 - [x] **ISSUE-13** — Export publications independently of collected revisions, preserve snapshots and typed references, and accept optional revision links on import. Validation: workspace package suite, including publishing-off and unpublish round trips, dry runs, source immutability, and strict live-reference rejection; Ent regenerated and Atlas checksum updated.
 - [x] **ISSUE-09** — Lists, libraries, Documents templates and Home default to history off; explicit major versioning remains opt-in. Replacement files enter protected byte reclamation with a one-hour grace period; re-uploads exclude reclaimed objects from deduplication. Settings/history copy and API/docs match. Validation: full DMS, HTTP API and database suites, 137 frontend tests, build, typecheck, lint, and scoped Go vet.
 
+## Phase 2 Progress
+
+- [x] **ISSUE-14** — First attachments emit `file.added`; replacements, restores and content reindexing emit `file.updated` with filename and previous blob. Built-ins, trigger filters, editor, samples and API/docs agree. Validation: file/content/search/staging/definition and sample-package suites across DMS, workflow, runner and HTTP API; frontend typecheck.
+- [ ] **ISSUE-15** — Launch workflows on selected items with input forms.
+- [ ] **ISSUE-16** — Author and enforce standalone, single-item and multiple-item triggers.
+- [ ] **ISSUE-17** — Item workflow launches and live run history.
+- [ ] **ISSUE-10** — Upload conflict resolution and synchronized file renaming.
+- [ ] **ISSUE-12** — Atomic single-to-multiple choice field widening.
+
 ## 1. Backlog Summary Matrix
 
 | ID | Title | Domain | Priority | Effort | Impact |

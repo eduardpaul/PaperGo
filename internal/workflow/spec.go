@@ -30,7 +30,7 @@ const (
 )
 
 // ItemTriggers are the trigger types raised by item writes.
-var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged, dms.EventFileAdded}
+var ItemTriggers = []string{dms.EventItemCreated, dms.EventItemUpdated, dms.EventItemPublished, dms.EventItemUnpublished, dms.EventItemDeleted, dms.EventItemRestored, dms.EventItemPurged, dms.EventFileAdded, dms.EventFileUpdated}
 
 // FolderTriggers are the trigger types raised by folder writes.
 var FolderTriggers = []string{dms.EventFolderCreated, dms.EventFolderUpdated, dms.EventFolderDeleted, dms.EventFolderRestored, dms.EventFolderPurged}
@@ -283,8 +283,8 @@ func (d Definition) validate() error {
 			}
 		}
 		if len(t.Sources) > 0 {
-			if t.Type != dms.EventFileAdded {
-				return dms.Invalid(at + "sources belong to file.added triggers")
+			if t.Type != dms.EventFileAdded && t.Type != dms.EventFileUpdated {
+				return dms.Invalid(at + "sources belong to file.added and file.updated triggers")
 			}
 			seen := map[string]bool{}
 			for _, s := range t.Sources {
@@ -295,8 +295,8 @@ func (d Definition) validate() error {
 			}
 		}
 		if len(t.MediaTypes) > 0 {
-			if t.Type != dms.EventFileAdded {
-				return dms.Invalid(at + "media_types belong to file.added triggers")
+			if t.Type != dms.EventFileAdded && t.Type != dms.EventFileUpdated {
+				return dms.Invalid(at + "media_types belong to file.added and file.updated triggers")
 			}
 			seen := map[string]bool{}
 			for _, m := range t.MediaTypes {

@@ -268,7 +268,7 @@ func (s *Service) reindexContent(ctx context.Context, actor string, ids []string
 		if err != nil {
 			return err
 		}
-		s.emitFileAdded(ctx, actor, r, b, rev, FileReindex)
+		s.emitFileChange(ctx, actor, r, b, rev, FileReindex, &b.ID)
 	}
 	return nil
 }

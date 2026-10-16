@@ -104,7 +104,7 @@ func runOptimizeImage(e *env, in map[string]any) (outcome, error) {
 		return outcome{Port: portSkipped, Output: out}, nil
 	}
 	// A run a superseded upload started must not optimize its replacement.
-	if trigger := e.scope.trigger; trigger["type"] == dms.EventFileAdded && trigger["resource_id"] == itemID {
+	if trigger := e.scope.trigger; (trigger["type"] == dms.EventFileAdded || trigger["type"] == dms.EventFileUpdated) && trigger["resource_id"] == itemID {
 		data, _ := trigger["data"].(map[string]any)
 		if v, ok := forms.Number(data["file_version"]); ok && int(v) != b.Version {
 			return skip(reasonSuperseded)

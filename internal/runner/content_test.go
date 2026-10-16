@@ -98,6 +98,14 @@ func TestSearchContentMakesFileTextFindable(t *testing.T) {
 		t.Fatalf("content after a rename: %+v (was %+v) %v", again, content, err)
 	}
 
+	// Replacing the same file starts content processing for its new blob.
+	replacement := f.upload(t, lib.ID, name, "application/pdf", doctexttest.TextPDF("Replacement payment terms"))
+	f.waitContent(t, replacement.ID, replacement.Blob.ID)
+	if runs := f.runs(t, index.ID, 2); runs[0].EventType != dms.EventFileUpdated {
+		t.Fatal("replacement did not run content processing on file.updated", runs)
+	}
+	f.runs(t, follower.ID, 2)
+
 	// The library chunks page by page.
 	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{CollectionID: lib.ID, Enabled: true, Parameters: map[string]any{"chunker": "pages", "max_chars": 5000}}); err != nil {
 		t.Fatal(err)
@@ -109,7 +117,7 @@ func TestSearchContentMakesFileTextFindable(t *testing.T) {
 	}
 	own := f.builtIn(t, "search.content", lib.ID)
 	f.runs(t, own.ID, 1)
-	f.runs(t, follower.ID, 2)
+	f.runs(t, follower.ID, 3)
 }
 
 // search.publish refuses generations of other runs and files no surface

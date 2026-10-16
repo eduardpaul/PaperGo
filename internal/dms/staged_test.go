@@ -101,8 +101,8 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 			if f.State != wantState {
 				t.Fatalf("staged file is %s, want %s", f.State, wantState)
 			}
-			// A failed cleanup must roll back the file.added event too.
-			events, err := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventFileAdded), domainevent.ResourceIDEQ(items[0].ID)).Order(ent.Asc(domainevent.FieldID)).All(testContext)
+			// A failed cleanup must roll back the file change event too.
+			events, err := s.Client.DomainEvent.Query().Where(domainevent.TypeIn(EventFileAdded, EventFileUpdated), domainevent.ResourceIDEQ(items[0].ID)).Order(ent.Asc(domainevent.FieldID)).All(testContext)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -111,7 +111,7 @@ func TestPromoteAndRecycleSourcesIsAtomic(t *testing.T) {
 				wantEvents = 2
 			}
 			if len(events) != wantEvents {
-				t.Fatalf("file.added events: %d, want %d", len(events), wantEvents)
+				t.Fatalf("file change events: %d, want %d", len(events), wantEvents)
 			}
 		})
 	}
@@ -175,9 +175,9 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 	if _, err = s.PromoteStagedFile(testContext, "alice", smaller, "run-1", false); !errors.Is(err, ErrConflict) {
 		t.Fatalf("promoting twice: %v", err)
 	}
-	e, err := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventFileAdded), domainevent.ResourceIDEQ(f.ID)).Order(domainevent.ByID()).All(testContext)
+	e, err := s.Client.DomainEvent.Query().Where(domainevent.TypeIn(EventFileAdded, EventFileUpdated), domainevent.ResourceIDEQ(f.ID)).Order(domainevent.ByID()).All(testContext)
 	if err != nil || len(e) != 2 || e[1].Data["source"] != FileWorkflow {
-		t.Fatalf("file.added events %v, %v", e, err)
+		t.Fatalf("file change events %v, %v", e, err)
 	}
 	// The other candidate was made from the replaced file: stale.
 	if _, err = s.PromoteStagedFile(testContext, "alice", discarded, "run-1", false); !errors.Is(err, ErrConflict) {

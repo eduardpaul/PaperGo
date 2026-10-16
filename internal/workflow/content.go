@@ -81,7 +81,7 @@ func init() {
 		}}`),
 		Definition: `{
 			"triggers": [
-				{"type": "file.added", "collection_id": "{param:collection}", "media_types": ["application/pdf", "image/*"], "sources": ["upload", "webdav", "restore", "workflow", "reindex"]},
+				{"type": "file.added", "collection_id": "{param:collection}", "media_types": ["application/pdf", "image/*"], "sources": ["upload", "webdav", "restore", "workflow", "reindex"]}, {"type": "file.updated", "collection_id": "{param:collection}", "media_types": ["application/pdf", "image/*"], "sources": ["upload", "webdav", "restore", "workflow", "reindex"]},
 				{"type": "manual", "collection_id": "{param:collection}"}
 			],
 			"concurrency": "coalesce",

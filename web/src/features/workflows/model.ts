@@ -52,7 +52,7 @@ export interface Trigger {
   terms?: string[];
   term_change?: string;
   sources?: string[];
-  /** On file.added: media types (application/pdf) or wildcards (image/*). */
+  /** On file.added and file.updated: media types (application/pdf) or wildcards (image/*). */
   media_types?: string[];
   task_key?: string;
   actions?: string[];

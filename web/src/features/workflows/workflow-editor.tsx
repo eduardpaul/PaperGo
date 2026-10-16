@@ -293,7 +293,7 @@ export function WorkflowEditor({
                       {trigger.collection_id &&
                         (trigger.type.startsWith("item.") ||
                           trigger.type.startsWith("wf.") ||
-                          trigger.type === "file.added") && (
+                          ["file.added", "file.updated"].includes(trigger.type)) && (
                           <Input
                             aria-label="Trigger content type"
                             value={trigger.content_type_id ?? ""}
@@ -366,7 +366,7 @@ export function WorkflowEditor({
                           </option>
                         </Select>
                       )}
-                      {trigger.type === "file.added" && (
+                      {["file.added", "file.updated"].includes(trigger.type) && (
                         <fieldset className="flex flex-wrap gap-3 text-sm">
                           <legend className="sr-only">File sources</legend>
                           {fileSources.map((source) => {
@@ -396,7 +396,7 @@ export function WorkflowEditor({
                           })}
                         </fieldset>
                       )}
-                      {trigger.type === "file.added" && (
+                      {["file.added", "file.updated"].includes(trigger.type) && (
                         <Input
                           aria-label="Media types"
                           placeholder="Optional media types, such as application/pdf, image/*"

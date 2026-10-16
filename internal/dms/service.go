@@ -452,7 +452,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 			return nil, e
 		}
 		if file != nil {
-			s.emitFileAdded(ctx, subject, out, file, rev, content.Source)
+			s.emitFileChange(ctx, subject, out, file, rev, content.Source, nil)
 		}
 	}
 	out, e = s.Client.Resource.Get(ctx, out.ID)

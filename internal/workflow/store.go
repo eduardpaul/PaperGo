@@ -669,7 +669,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 		}
 		// Purge removes revision payloads. Older queued content events must not
 		// block dispatch or start actions against an item that no longer exists.
-		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded || e.Type == dms.EventPermissionsChanged ||
+		if e.ResourceID != "" && (e.Type == dms.EventItemCreated || e.Type == dms.EventItemUpdated || e.Type == dms.EventItemPublished || e.Type == dms.EventItemUnpublished || e.Type == dms.EventItemRestored || e.Type == dms.EventFileAdded || e.Type == dms.EventFileUpdated || e.Type == dms.EventPermissionsChanged ||
 			e.Type == dms.EventFolderCreated || e.Type == dms.EventFolderUpdated || e.Type == dms.EventFolderRestored) {
 			exists, err := t.Client.Resource.Query().Where(resource.IDEQ(e.ResourceID)).Exist(ctx)
 			if err != nil {
@@ -950,7 +950,7 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 				continue
 			}
 		}
-		if e.Type == dms.EventFileAdded {
+		if e.Type == dms.EventFileAdded || e.Type == dms.EventFileUpdated {
 			source, _ := e.Data["source"].(string)
 			media, _ := e.Data["content_type"].(string)
 			if !slices.Contains(tr.sources(), source) || !tr.acceptsMediaType(media) {

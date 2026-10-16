@@ -163,20 +163,26 @@ type BlobInput struct {
 	Size        int64
 	SHA256      string
 	Languages   string
-	// Source says where the file came from, for file.added events:
+	// Source says where the file came from, for file change events:
 	// FileWebDAV, FileRestore or FileWorkflow; empty is an upload.
 	Source string
 }
 
-// emitFileAdded raises file.added for a file version that rev pins.
-func (s *Service) emitFileAdded(ctx context.Context, actor string, r *ent.Resource, b *ent.Blob, rev *ent.ItemRevision, source string) {
+// emitFileChange distinguishes first attachments from replacement and reindex events.
+func (s *Service) emitFileChange(ctx context.Context, actor string, r *ent.Resource, b *ent.Blob, rev *ent.ItemRevision, source string, previousBlobID *string) {
 	if source == "" {
 		source = FileUpload
 	}
-	s.emit(ctx, EventFileAdded, actor, r.WorkspaceID, r.ContainerID, r.ID, map[string]any{
+	typ := EventFileAdded
+	data := map[string]any{
 		"source": source, "file_version": b.Version, "blob_id": b.ID, "content_type": b.ContentType, "size": b.Size,
-		"revision_id": rev.ID, "content_type_id": rev.ContentTypeID,
-	})
+		"revision_id": rev.ID, "content_type_id": rev.ContentTypeID, "filename": b.Filename,
+	}
+	if previousBlobID != nil {
+		typ = EventFileUpdated
+		data["previous_blob_id"] = *previousBlobID
+	}
+	s.emit(ctx, typ, actor, r.WorkspaceID, r.ContainerID, r.ID, data)
 }
 
 func (s *Service) CanUpload(ctx context.Context, subject, id string, version int) error {
@@ -252,11 +258,19 @@ func (s *Service) writeBlob(ctx context.Context, subject, id string, version int
 	if e != nil {
 		return nil, e
 	}
+	var previousBlobID *string
+	if r.HeadRevisionID != nil {
+		previous, err := s.Client.ItemRevision.Get(ctx, *r.HeadRevisionID)
+		if err != nil {
+			return nil, err
+		}
+		previousBlobID = previous.BlobID
+	}
 	rev, e := s.recordRevision(ctx, subject, r, &out.ID, true)
 	if e != nil {
 		return nil, e
 	}
-	s.emitFileAdded(ctx, subject, r, out, rev, in.Source)
+	s.emitFileChange(ctx, subject, r, out, rev, in.Source, previousBlobID)
 	details := map[string]any{"blob_id": out.ID, "size": in.Size, "sha256": in.SHA256}
 	if sourceVersion != nil {
 		details["source_version"] = *sourceVersion

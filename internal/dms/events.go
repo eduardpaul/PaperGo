@@ -19,9 +19,9 @@ const (
 	EventItemDeleted     = "item.deleted"
 	EventItemRestored    = "item.restored"
 	EventItemPurged      = "item.purged"
-	// EventFileAdded is raised when a new file version becomes an item's
-	// current file, with the revision that pins it.
+	// EventFileAdded is raised for an item's first file attachment.
 	EventFileAdded          = "file.added"
+	EventFileUpdated        = "file.updated"
 	EventPermissionsChanged = "permissions.changed"
 	EventTermChanged        = "term.changed"
 	// Folder events mirror item events for folders: their name, tags and
@@ -33,13 +33,13 @@ const (
 	EventFolderPurged   = "folder.purged"
 )
 
-// File sources, the source of a file.added event.
+// File sources describe file.added and file.updated events.
 const (
 	FileUpload   = "upload"
 	FileWebDAV   = "webdav"
 	FileRestore  = "restore"
 	FileWorkflow = "workflow"
-	// FileReindex raises file.added again for a current file, when a search
+	// FileReindex raises file.updated again for a current file, when a search
 	// reindex asks the workflows that read files to read it.
 	FileReindex = "reindex"
 )

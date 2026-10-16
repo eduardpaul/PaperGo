@@ -60,6 +60,7 @@ func TestDefinitionValidation(t *testing.T) {
 		"loop without body":        {`{"triggers": [{"type": "manual"}], "flow": {"start": "a", "nodes": {"a": {"activity": "forEach", "inputs": {"items": [1], "as": "x"}}}}}`, "body port"},
 		"loop variable":            {`{"triggers": [{"type": "manual"}], "flow": {"start": "a", "nodes": {"a": {"activity": "forEach", "inputs": {"items": [1], "as": "Bad Name"}, "next": {"body": "a"}}}}}`, "variable name"},
 		"loop items text":          {`{"triggers": [{"type": "manual"}], "flow": {"start": "a", "nodes": {"a": {"activity": "forEach", "inputs": {"items": "abc", "as": "x"}, "next": {"body": "a"}}}}}`, "array or a token"},
+		"replacement sources":      {`{"triggers": [{"type": "file.updated", "collection_id": "c", "sources": ["upload", "workflow"], "media_types": ["image/*"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, ""},
 		"file sources":             {`{"triggers": [{"type": "file.added", "collection_id": "c", "sources": ["upload", "workflow"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, ""},
 		"sources on items":         {`{"triggers": [{"type": "item.created", "sources": ["upload"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "belong to file.added"},
 		"unknown source":           {`{"triggers": [{"type": "file.added", "sources": ["email"]}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "distinct values"},

@@ -16359,7 +16359,7 @@
                   "content": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Also index file content again, through file.added events with the reindex source."
+                    "description": "Also index file content again, through file.updated events with the reindex source."
                   },
                   "force": {
                     "type": "boolean",
@@ -20409,7 +20409,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed and term.merged take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
+            "description": "item.created, item.updated, item.published, item.unpublished, item.deleted, item.restored, item.purged, file.added, file.updated, folder.created, folder.updated, folder.deleted, folder.restored, folder.purged, permissions.changed, task.created, task.completed, task.cancelled, schedule, manual, term.merged, term.changed, or wf.{key}.{event}. Folder triggers take collection_id and content_type_id and no condition. permissions.changed is delivered per affected item and folder, takes collection_id, content_type_id, actions and a condition; term.changed and term.merged take no options or item conditions. term.changed subscriptions require taxonomy.read; dispatch and every executing node recheck the workflow version author's current scope."
           },
           "collection_id": {
             "type": "string",
@@ -20473,7 +20473,7 @@
             },
             "minItems": 1,
             "uniqueItems": true,
-            "description": "On file.added: the file sources that start runs; default upload, webdav and restore."
+            "description": "On file.added and file.updated: the file sources that start runs; default upload, webdav and restore."
           },
           "task_key": {
             "type": "string",
@@ -20500,7 +20500,7 @@
               "type": "string",
               "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/([a-z0-9][a-z0-9!#$&^_.+-]{0,62}|\\*)$"
             },
-            "description": "On file.added: only files of these media types start runs, exact (application/pdf) or wildcards (image/*)."
+            "description": "On file.added and file.updated: only files of these media types start runs, exact (application/pdf) or wildcards (image/*)."
           }
         },
         "required": [

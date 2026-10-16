@@ -6,6 +6,7 @@
   "definition": {
     "triggers": [
       {"type": "file.added", "collection_id": "$LIBRARY", "media_types": ["application/pdf"], "sources": ["upload", "webdav", "restore", "workflow", "reindex"]},
+      {"type": "file.updated", "collection_id": "$LIBRARY", "media_types": ["application/pdf"], "sources": ["upload", "webdav", "restore", "workflow", "reindex"]},
       {"type": "manual", "collection_id": "$LIBRARY"}
     ],
     "concurrency": "coalesce",

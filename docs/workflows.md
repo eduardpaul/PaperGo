@@ -46,7 +46,8 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 | `item.deleted` | an item is deleted, alone or with its folder | none (`{trigger:resource_id}` names it) |
 | `item.restored` | a deleted item is restored from the recycle bin | the item |
 | `item.purged` | a deleted item is permanently purged | none (`{trigger:resource_id}` names it) |
-| `file.added` | a new file version becomes a library item's current file: a new document, a replacement, a restore, or a workflow's | the item |
+| `file.added` | a library item receives its first file attachment | the item |
+| `file.updated` | an existing file is replaced, restored, or reindexed | the item |
 | `folder.created`, `folder.updated` | a folder is created, or renamed, retagged or moved | the folder |
 | `folder.deleted`, `folder.purged` | a folder is deleted (alone or with a parent folder), or permanently purged | none (`{trigger:resource_id}` names it) |
 | `folder.restored` | a deleted folder is restored from the recycle bin | the folder |
@@ -65,8 +66,8 @@ Fields of a trigger:
 - `content_type_id` (with `collection_id`) limits item triggers to one content type.
 - `terms` (1 to 20 term IDs) limits `item.created`, `item.updated` and `item.published` to revisions whose term and keywords fields hold one of the terms, a descendant of one, or a term merged into one. `term_change` says what counts: `present` (the default, the revision holds it), `added` (held now, not by the item's revision before) or `removed` (held before, not now).
 - `task_key` (on `task.*` triggers) limits them to tasks with that key, such as `legal_review`. With `collection_id`, only tasks about items of that collection start runs.
-- `sources` (on `file.added`) lists the file sources that start runs: `upload`, `webdav`, `restore`, `workflow` and `reindex` (a [search reindex with content](search.md#the-store)). The default is `upload`, `webdav` and `restore`, so a workflow that replaces a file does not start itself again.
-- `media_types` (on `file.added`) limits the trigger to files of these media types: exact (`application/pdf`) or a wildcard (`image/*`), up to 20. Other files start no run; a flow can also branch on `{trigger:data.content_type}`.
+- `sources` (on `file.added` and `file.updated`) lists the file sources that start runs: `upload`, `webdav`, `restore`, `workflow` and `reindex` (a [search reindex with content](search.md#the-store)). The default is `upload`, `webdav` and `restore`, so a workflow that replaces a file does not start itself again.
+- `media_types` (on `file.added` and `file.updated`) limits the trigger to files of these media types: exact (`application/pdf`) or a wildcard (`image/*`), up to 20. Other files start no run; a flow can also branch on `{trigger:data.content_type}`.
 - Folder triggers take `collection_id` and `content_type_id`, and no condition: conditions test item fields.
 - `actions` (on `permissions.changed`) lists the changes that start runs: `replace` (an ACL was replaced), `move` (a move gave the entry another permission scope), `member.set` and `member.remove` (workspace membership). The default is all. `permissions.changed` also takes `collection_id`, `content_type_id` and a condition, which folders never meet. `term.changed` and `term.merged` take no trigger options or item conditions.
 - For a schedule:
@@ -92,7 +93,7 @@ Trigger data, readable as `{trigger:...}`:
 The `data` for each event type:
 
 - `item.created` / `item.updated`: `revision_id`, `revision_number`, `content_type_id`, `blob_id`
-- `file.added`: `source`, `file_version`, `blob_id`, `content_type` (the file's media type), `size`, `revision_id`, `content_type_id`
+- `file.added` and `file.updated`: `filename`, `source`, `file_version`, `blob_id`, `content_type` (the file's media type), `size`, `revision_id`, `content_type_id`. `file.updated` also includes `previous_blob_id`. Metadata edits emit `item.updated` without a file event; content processors subscribe to the two file events.
 - `permissions.changed`: `resource_kind` (`item` or `folder`), `action`, `root_id` and `root_kind` (the resource whose ACL changed, that moved, or the workspace), `root_event_id`, and `previous_scope_id` / `current_scope_id` for `replace` and `move` (the permission scope the entry read through before and after). Membership actions add `member_subject`, `previous_role` and `role`; an empty role means no membership.
 - `folder.created` / `folder.updated`: `revision_id`, `revision_number`, `content_type_id` for a new name or tags; `from_parent_id` and `parent_id` for a move
 - `item.published`: `revision_id`, `revision_number`, `publication_id`
@@ -314,7 +315,7 @@ Activities that produce files, such as a smaller image or a PDF composed from ph
 
 - A staged file belongs to the run and to the item it would replace.
 - It records the file versions it was made from, and keeps its bytes while it is pending.
-- `file.promote` makes it the item's current file. That is a new file version (`file.added` with source `workflow`), with the item's metadata, revision history, audit and events like an upload. It succeeds only if every file it was made from is still its item's current file, so a candidate made from an old upload never replaces a newer one.
+- `file.promote` makes it the item's current file. That is a new file version (`file.updated` with source `workflow` for replacements), with the item's metadata, revision history, audit and events like an upload. It succeeds only if every file it was made from is still its item's current file, so a candidate made from an old upload never replaces a newer one.
 - With `recycle_sources: true` (default `false`), `file.promote` also moves the other source items to the recycle bin in the same transaction. The author must be able to write every source item. If any source changed or cannot be recycled, neither promotion nor recycling commits.
 - `file.discard` drops it.
 
@@ -338,7 +339,7 @@ A work step that a crash interrupts runs again; it writes no data of its own.
 
 `file.optimize_image` shrinks page images without making their text unreadable. It is PaperDotNet's storage optimization, with the same parameters and results:
 
-1. It skips files that are not JPEG, PNG or WebP, and runs started by a `file.added` whose file a newer one already replaced.
+1. It skips files that are not JPEG, PNG or WebP, and runs started by a file event whose file a newer one already replaced.
 2. It decodes the image (at most 64 megapixels), applies its EXIF orientation, and keeps animated images unchanged.
 3. A copy at most `max_analysis_dimension` pixels long (default 2600) goes to the OCR detector. Text lines that score at least `min_confidence` (default 50), are at least 6 analysis pixels high and at least 1.5 times as long as high count. Each line's height is its shortest side, projected back to the image's pixels.
 4. The `percentile` (default 5) of those heights, interpolated and rounded, at least 4, is the smallest text. The scale is `target_height` (default 12) divided by it, between `minimum_scale` (default 0.05) and 1: images never grow.

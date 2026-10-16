@@ -4,6 +4,7 @@
   "definition": {
     "triggers": [
       {"type": "file.added", "collection_id": "$LIBRARY", "media_types": ["image/*"], "sources": ["upload", "restore", "webdav"]},
+      {"type": "file.updated", "collection_id": "$LIBRARY", "media_types": ["image/*"], "sources": ["upload", "restore", "webdav"]},
       {"type": "manual", "collection_id": "$LIBRARY"}
     ],
     "concurrency": "replace",

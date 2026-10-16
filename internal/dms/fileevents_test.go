@@ -9,12 +9,12 @@ import (
 	"papergo/ent/domainevent"
 )
 
-func TestFileAddedEventsNameTheirSource(t *testing.T) {
+func TestFileChangeEventsNameTheirSource(t *testing.T) {
 	s, w, _ := fixture(t)
 	lib := davLibrary(t, s, w, false)
 	events := func(id string) []*ent.DomainEvent {
 		t.Helper()
-		rows, err := s.Client.DomainEvent.Query().Where(domainevent.TypeEQ(EventFileAdded), domainevent.ResourceIDEQ(id)).Order(ent.Asc(domainevent.FieldID)).All(testContext)
+		rows, err := s.Client.DomainEvent.Query().Where(domainevent.TypeIn(EventFileAdded, EventFileUpdated), domainevent.ResourceIDEQ(id)).Order(ent.Asc(domainevent.FieldID)).All(testContext)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,6 +56,15 @@ func TestFileAddedEventsNameTheirSource(t *testing.T) {
 		t.Fatalf("%d file.added events, want %d", len(got), len(want))
 	}
 	for i, e := range got {
+		wantType := EventFileUpdated
+		if i == 0 {
+			wantType = EventFileAdded
+		} else if e.Data["previous_blob_id"] != got[i-1].Data["blob_id"] {
+			t.Fatal("replacement did not identify the previous file", e.Data)
+		}
+		if e.Type != wantType || e.Data["filename"] != "a.pdf" {
+			t.Fatal("wrong file change event", e)
+		}
 		if e.Data["source"] != want[i].source || e.Data["file_version"] != json.Number(strconv.Itoa(want[i].version)) || e.Data["revision_id"] == "" || e.Data["blob_id"] == "" || e.Data["content_type"] != "application/pdf" {
 			t.Errorf("event %d data %v, want source %s version %d", i, e.Data, want[i].source, want[i].version)
 		}
