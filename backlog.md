@@ -75,6 +75,15 @@ manual Chrome/Edge validation on Windows remains unperformed.
 
 Phase 3 is complete. Final validation: full Go suite (988 test cases passed, 15 optional integration cases skipped), frontend typecheck/lint and all 167 tests, all 53 Python script/sample tests, CI-pinned staticcheck, `go vet ./...`, module checksum verification, reproducible Ent generation, Atlas migration validation and production frontend/application builds. Sample workspace packages were regenerated and verified.
 
+## Phase 4 Progress
+
+Scope: ISSUE-21, ISSUE-22, ISSUE-20 and ISSUE-19. ISSUE-23 and FEAT-01 are deferred and excluded from this phase.
+
+- [x] **ISSUE-21** — Backend Docker bridge allows outbound DNS/HTTPS while PaperGo ports remain unpublished. Setup and verification check calendar.google.com from the actual container with TLS verification and actionable errors. Validation: 20 NPM Python tests, admin CLI tests, Compose configuration checks and live distroless-container DNS/HTTPS smoke test.
+- [ ] **ISSUE-22** — Enable native zvec search in the NPM sample with storage and runtime verification.
+- [ ] **ISSUE-20** — Admin-managed integration identities and scoped REST access tokens.
+- [ ] **ISSUE-19** — Asynchronous bounded WebP previews with authorized lightweight viewing.
+
 ## 1. Backlog Summary Matrix
 
 | ID | Title | Domain | Priority | Effort | Impact |
@@ -465,6 +474,8 @@ This occurs if publishing was enabled and subsequently disabled in a library, or
 
 ### ISSUE-23: Simplified SQLite Migrations via sqlite3def (sqldef) and Embedded Sequential Upgrades
 
+**Status: Deferred; excluded from the current Phase 4 scope.**
+
 #### Problem Statement
 Currently, PaperGo development maintains a single `migrations/20261007000100_schema.sql` file. During releases, an ephemeral `release.json` bundle is generated using a custom release planner (`internal/releaseplan`) that relies on Atlas Go libraries and custom SQL catalog inspection to compute upgrade statements.
 This setup has significant drawbacks:
@@ -780,6 +791,8 @@ The NPM sample deployment defaults to SQLite full-text search. It should demonst
 
 ### FEAT-01: Zero-Dependency Single Binary Executable (Linux & Windows)
 
+**Status: Deferred; excluded from the current Phase 4 scope.**
+
 #### Executive Overview
 Transform PaperGo into a single self-contained executable for Linux (`papergo`) and Windows (`papergo.exe`). The binary must run immediately without requiring Docker, external databases, separate Node.js runtimes, or external identity providers.
 
@@ -900,8 +913,11 @@ graph TD
         D1[ISSUE-21: Docker DNS Resolution Fix] --> D2[ISSUE-22: NPM Zvec Integration]
         D2 --> D3[ISSUE-20: Admin REST Tokens]
         D3 --> D4[ISSUE-19: Async Low-Res Previews]
-        D4 --> D5[ISSUE-23: sqlite3def Migrations]
-        D5 --> D6[FEAT-01: Standalone Single Binary Executable]
+    end
+
+    subgraph Deferred
+        D5[ISSUE-23: sqlite3def Migrations]
+        D6[FEAT-01: Standalone Single Binary Executable]
     end
 
     Phase 1 --> Phase 2

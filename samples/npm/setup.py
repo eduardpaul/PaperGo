@@ -52,6 +52,20 @@ def start_stack(no_build):
         ) from None
 
 
+
+def verify_egress():
+    """Resolve and reach public HTTPS from the actual PaperGo container."""
+    try:
+        compose("exec", "-T", "papergo", "/papergo-admin", "health", "--url",
+                "https://calendar.google.com/", "--timeout", "15s")
+    except subprocess.CalledProcessError:
+        raise RuntimeError(
+            "PaperGo cannot reach calendar.google.com over verified HTTPS. "
+            "Allow outbound DNS and TCP 443 from the backend Docker network; "
+            "check the host firewall and samples/npm/README.md before rerunning setup."
+        ) from None
+
+
 def reset_management_password(credentials):
     # Use the pinned NPM image's password model, including its bcrypt update hook.
     # Credentials go over stdin, never command arguments, environment or logs.
@@ -290,6 +304,7 @@ def main():
                    f"PAPERGO_PRIVATE_IP={network.network_address + 3}"]) + "\n")
     private_write(GENERATED / "curl.netrc", f"machine {args.host}\nlogin {args.admin_user}\npassword {credentials['papergo_password']}\n")
     start_stack(args.no_build)
+    verify_egress()
     if args.reset_npm_admin_password:
         reset_management_password(credentials)
     api = API(f"http://127.0.0.1:{args.admin_port}/api")

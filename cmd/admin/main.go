@@ -39,14 +39,18 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		flags := flag.NewFlagSet("health", flag.ContinueOnError)
 		flags.SetOutput(out)
 		address := flags.String("url", "http://127.0.0.1:8080/health/ready", "Readiness URL")
+		timeout := flags.Duration("timeout", 3*time.Second, "Request timeout")
 		if err := flags.Parse(args[1:]); err != nil {
 			return err
+		}
+		if flags.NArg() != 0 || *timeout <= 0 || *timeout > time.Minute {
+			return errors.New("health requires a timeout greater than zero and at most one minute, and no positional arguments")
 		}
 		req, err := http.NewRequestWithContext(ctx, "GET", *address, nil)
 		if err != nil {
 			return err
 		}
-		response, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
+		response, err := (&http.Client{Timeout: *timeout}).Do(req)
 		if err != nil {
 			return err
 		}

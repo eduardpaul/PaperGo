@@ -11,6 +11,7 @@ import socket
 import ssl
 import subprocess
 from urllib.parse import quote
+from setup import verify_egress
 
 ROOT = Path(__file__).resolve().parent
 
@@ -59,6 +60,7 @@ def main():
     parser.add_argument("--large-upload", action="store_true", help="Also verify a 64 MiB upload and download at the sample's configured limit")
     args = parser.parse_args()
     settings, credentials, origin, context = load_deployment()
+    verify_egress()
     hostname, port = settings["host"], settings["https_port"]
     plain = http.client.HTTPConnection("127.0.0.1" if settings["tls"] == "local" else hostname, settings["http_port"], timeout=30)
     plain.request("GET", "/v1/identity/me", headers={"Host": hostname})

@@ -52,6 +52,19 @@ class StartupTests(unittest.TestCase):
         self.assertNotIn('--build', run.call_args.args[0])
 
 
+class EgressTests(unittest.TestCase):
+    def test_checks_dns_and_verified_https_inside_papergo(self):
+        with patch.object(setup, 'compose') as compose:
+            setup.verify_egress()
+        compose.assert_called_once_with('exec', '-T', 'papergo', '/papergo-admin', 'health',
+                                        '--url', 'https://calendar.google.com/', '--timeout', '15s')
+
+    def test_failed_egress_has_actionable_network_error(self):
+        with patch.object(setup, 'compose', side_effect=subprocess.CalledProcessError(1, ['docker'])):
+            with self.assertRaisesRegex(RuntimeError, 'outbound DNS and TCP 443'):
+                setup.verify_egress()
+
+
 class AuthenticationTests(unittest.TestCase):
     def test_new_instance_creates_first_admin_before_login(self):
         api = Mock()

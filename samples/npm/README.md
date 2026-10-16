@@ -2,7 +2,7 @@
 
 This stack uses **NPM Access List usernames and passwords** to authenticate both REST and WebDAV. PaperGo runs with `APP_ENV=production` and `AUTH_MODE=proxy`. There is no OIDC provider in the stack. NPM administrators control the trusted identity boundary. NPM management accounts control the proxy; they are separate from application logins.
 
-Requirements: Docker with Compose v2, Python 3, and OpenSSL for the local certificate option. Run each deployment from its own repository checkout. The setup script stores deployment-specific state under `generated/` and refuses conflicting settings for an existing stack.
+Requirements: Docker with Compose v2, Python 3, and OpenSSL for the local certificate option. PaperGo needs outbound DNS and HTTPS (TCP 443) for public iCalendar subscriptions and configured AI providers. The backend bridge permits egress; PaperGo publishes no host ports and trusts only NPM’s fixed address for proxy authentication. Setup and verification check verified HTTPS connectivity to `calendar.google.com` from the PaperGo container. Run each deployment from its own repository checkout. The setup script stores deployment-specific state under `generated/` and refuses conflicting settings for an existing stack.
 
 ## Run locally
 
