@@ -6,6 +6,12 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// ActivityRecord is the predicate function for activityrecord builders.
+type ActivityRecord func(*sql.Selector)
+
+// ActivityReference is the predicate function for activityreference builders.
+type ActivityReference func(*sql.Selector)
+
 // AuditEvent is the predicate function for auditevent builders.
 type AuditEvent func(*sql.Selector)
 
@@ -14,6 +20,9 @@ type Blob func(*sql.Selector)
 
 // BlobDeletion is the predicate function for blobdeletion builders.
 type BlobDeletion func(*sql.Selector)
+
+// BlobLease is the predicate function for bloblease builders.
+type BlobLease func(*sql.Selector)
 
 // BlobText is the predicate function for blobtext builders.
 type BlobText func(*sql.Selector)

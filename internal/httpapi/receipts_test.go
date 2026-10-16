@@ -38,6 +38,7 @@ import (
 	"papergo/internal/testutil"
 	"papergo/internal/testutil/searchstore"
 	"papergo/internal/workflow"
+	"papergo/internal/workflowai"
 )
 
 const bobToken = "fedcba9876543210fedcba9876543210"
@@ -529,8 +530,9 @@ func TestReceiptsPackage(t *testing.T) {
 	wf := &workflow.Service{DMS: dmsService, Tools: workflow.Tools{
 		Storage: store, OCR: receiptTextEngine{}, Search: index,
 		Results: resultcache.New(db.SQL), ResultTTL: 30 * 24 * time.Hour,
-		Batch: client, Now: clock.now, BatchDeadline: 72 * time.Hour,
+		Now: clock.now,
 	}}
+	workflowai.Configure(&wf.Tools, workflowai.Runtime{Batch: client, BatchDeadline: 72 * time.Hour})
 	cfg := runner.Config{
 		DatabasePath: path, NodeID: "receipts", PollInterval: 20 * time.Millisecond,
 		DispatchInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *", Logger: logger,

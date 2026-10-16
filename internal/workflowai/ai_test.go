@@ -50,7 +50,8 @@ func TestEnrichmentRetryReusesCompletedChunks(t *testing.T) {
 		}
 		return ai.Answer{Text: "context for " + in.Input}, nil
 	}}
-	tools := workflow.Tools{Search: index, Chat: chat, Results: cache, ResultTTL: time.Hour}
+	tools := workflow.Tools{Search: index, Results: cache, ResultTTL: time.Hour}
+	Configure(&tools, Runtime{Chat: chat})
 	job := enrichJob{Generation: "run:chunk", Model: chat.Key(), Instructions: "describe", Scope: "chunk"}
 	raw, _ := json.Marshal(job)
 	if _, err = workSearchEnrich(ctx, tools, raw); err == nil {
@@ -105,7 +106,8 @@ func TestCompleteCachesOnlyValidatedAnswers(t *testing.T) {
 		}
 		return ai.Answer{JSON: map[string]any{"total": 12.5}}, nil
 	}}
-	tools := workflow.Tools{Chat: chat, Results: cache, ResultTTL: time.Hour}
+	tools := workflow.Tools{Results: cache, ResultTTL: time.Hour}
+	Configure(&tools, Runtime{Chat: chat})
 	job := completeJob{Key: "request", Model: chat.Key(), Input: "receipt", Prompt: "extract", Schema: map[string]any{
 		"type": "object", "properties": map[string]any{"total": map[string]any{"type": "number"}},
 	}}

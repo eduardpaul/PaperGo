@@ -11,6 +11,7 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/doctext/doctexttest"
 	"papergo/internal/workflow"
+	"papergo/internal/workflowai"
 )
 
 // sample creates a workflow of samples/workflows for a library.
@@ -41,7 +42,10 @@ func aiTools(t *testing.T) (*aitest.Server, func(*workflow.Tools)) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return server, func(tools *workflow.Tools) { tools.Embeddings, tools.Chat = embeddings, chat }
+	return server, func(tools *workflow.Tools) {
+		tools.Embeddings = embeddings
+		workflowai.Configure(tools, workflowai.Runtime{Chat: chat})
+	}
 }
 
 // The receipts sample adds a model-written summary chunk to each receipt;

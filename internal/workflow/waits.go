@@ -5,18 +5,64 @@ import (
 	"encoding/json"
 	"encoding/json/jsontext"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"papergo/ent"
 	"papergo/ent/workflowwait"
+	"papergo/internal/activitystore"
 	"papergo/internal/dms"
 )
 
-// WaitKindTask is the durable wait a human task parks on. Its key is the task
-// id. Completion is the task result; the outcome field selects the port.
-const WaitKindTask = "task"
+// Completion separates execution failure and routing from an activity's data.
+type Completion struct {
+	Output map[string]any `json:"output,omitempty"`
+	Port   string         `json:"port,omitempty"`
+	Error  string         `json:"error,omitempty"`
+}
+
+// WaitResolver adapts external business state to the common completion contract.
+type WaitResolver func(context.Context, *dms.Service, Wait) (Completion, bool, error)
+
+var waitResolvers = map[string]WaitResolver{}
+
+func RegisterWaitResolver(kind string, resolve WaitResolver) {
+	if kind == "" || resolve == nil || waitResolvers[kind] != nil {
+		panic("invalid or duplicate wait resolver: " + kind)
+	}
+	waitResolvers[kind] = resolve
+}
+
+// ResolveWaits completes waits whose registered external source is ready.
+func ResolveWaits(ctx context.Context, t *dms.Service) error {
+	for kind, resolve := range waitResolvers {
+		after := ""
+		for {
+			page, err := ListOpenWaits(ctx, t, WaitQuery{Kind: kind, After: after, Limit: maxWaitList})
+			if err != nil {
+				return err
+			}
+			for _, wait := range page.Data {
+				completion, ready, err := resolve(ctx, t, wait)
+				if err != nil {
+					return err
+				}
+				if ready {
+					if err = completeWait(ctx, t, wait.Kind, wait.Key, completion); err != nil && !errors.Is(err, dms.ErrConflict) {
+						return err
+					}
+				}
+			}
+			if page.NextCursor == "" {
+				break
+			}
+			after = page.NextCursor
+		}
+	}
+	return nil
+}
 
 const (
 	maxWaitList       = 100
@@ -24,11 +70,13 @@ const (
 	maxWaitCompletion = 65536
 )
 
-// Wait is one durable wait. Data is a small JSON object. Large action
-// payloads belong in the result cache, and file bytes stay in storage.
-// Data.blobs, when present, is the list of file versions the wait still
-// needs; reclamation leaves those bytes in place while the wait is open.
+// Wait is a durable completion rendezvous. Data is small; PayloadID refers
+// to an activity record retained until consumption or cancellation. BlobIDs
+// acquire explicit file leases in the same transaction as wait creation.
 type Wait struct {
+	Queue       string          `json:"queue,omitempty"`
+	PayloadID   string          `json:"payload_id,omitempty"`
+	BlobIDs     []string        `json:"-"`
 	ID          string          `json:"id"`
 	Kind        string          `json:"kind"`
 	Key         string          `json:"key"`
@@ -41,6 +89,8 @@ type Wait struct {
 	Deadline    *time.Time      `json:"deadline,omitempty"`
 	ClaimRunID  *string         `json:"claim_run_id,omitempty"`
 	ClaimToken  *string         `json:"claim_token,omitempty"`
+	ClaimUntil  *time.Time      `json:"claim_until,omitempty"`
+	NotifiedAt  *time.Time      `json:"notified_at,omitempty"`
 	Status      string          `json:"status"`
 	Parking     bool            `json:"parking"`
 	CreatedAt   time.Time       `json:"created_at"`
@@ -50,6 +100,7 @@ type Wait struct {
 // WaitQuery lists open waits. An empty WorkspaceID is installation-wide and
 // requires organization.manage. Limit is at most 100.
 type WaitQuery struct {
+	Queue       string
 	Kind        string
 	WorkspaceID string
 	After       string
@@ -96,10 +147,10 @@ func objectJSON(raw json.RawMessage, limit int, name string) (json.RawMessage, e
 
 func toWait(row *ent.WorkflowWait) Wait {
 	w := Wait{
-		ID: row.ID, Kind: row.Kind, Key: row.Key, WorkspaceID: row.WorkspaceID, RunID: row.RunID,
+		Queue: row.Queue, PayloadID: row.PayloadID, ID: row.ID, Kind: row.Kind, Key: row.Key, WorkspaceID: row.WorkspaceID, RunID: row.RunID,
 		Node: row.Node, ExecutionID: row.ExecutionID, Data: json.RawMessage(row.Data),
 		Completion: json.RawMessage(row.Completion), Deadline: row.Deadline, ClaimRunID: row.ClaimRunID,
-		ClaimToken: row.ClaimToken, Status: string(row.Status), Parking: row.Parking,
+		ClaimToken: row.ClaimToken, ClaimUntil: row.ClaimUntil, NotifiedAt: row.NotifiedAt, Status: string(row.Status), Parking: row.Parking,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 	if len(w.Data) == 0 {
@@ -124,21 +175,30 @@ func PutWait(ctx context.Context, t *dms.Service, in Wait) error {
 	create := t.Client.WorkflowWait.Create().
 		SetKind(in.Kind).SetKey(in.Key).SetWorkspaceID(in.WorkspaceID).SetRunID(in.RunID).
 		SetNode(in.Node).SetExecutionID(in.ExecutionID).SetData(jsontext.Value(data)).
-		SetParking(in.Parking).SetUpdatedAt(time.Now().UTC())
+		SetQueue(in.Queue).SetPayloadID(in.PayloadID).SetParking(in.Parking).SetUpdatedAt(time.Now().UTC())
 	if in.Deadline != nil && !in.Deadline.IsZero() {
 		create.SetDeadline(in.Deadline.UTC())
 	}
-	if _, err = create.Save(ctx); err == nil || !ent.IsConstraintError(err) {
+	row, err := create.Save(ctx)
+	if err == nil {
+		return retainWait(ctx, t, in, row.ID)
+	}
+	if !ent.IsConstraintError(err) {
 		return err
 	}
-	row, err := t.Client.WorkflowWait.Query().Where(workflowwait.KindEQ(in.Kind), workflowwait.KeyEQ(in.Key)).Only(ctx)
+	row, err = t.Client.WorkflowWait.Query().Where(workflowwait.KindEQ(in.Kind), workflowwait.KeyEQ(in.Key)).Only(ctx)
 	if err != nil {
 		return err
 	}
 	if row.RunID != in.RunID || row.ExecutionID != in.ExecutionID {
 		return dms.ErrConflict
 	}
-	return nil
+	if in.Parking {
+		if err = t.Client.WorkflowWait.UpdateOneID(row.ID).SetParking(true).Exec(ctx); err != nil {
+			return err
+		}
+	}
+	return retainWait(ctx, t, in, row.ID)
 }
 
 func loadWait(ctx context.Context, t *dms.Service, kind, key string) (*ent.WorkflowWait, error) {
@@ -161,31 +221,48 @@ func GetWait(ctx context.Context, t *dms.Service, kind, key string) (Wait, error
 	return toWait(row), nil
 }
 
-// ParkWait marks an open wait as holding its run, once Await releases the worker.
-func ParkWait(ctx context.Context, t *dms.Service, kind, key, runID string) error {
-	n, err := t.Client.WorkflowWait.Update().Where(
-		workflowwait.KindEQ(kind), workflowwait.KeyEQ(key), workflowwait.RunIDEQ(runID), workflowwait.StatusEQ(workflowwait.StatusOpen),
-	).SetParking(true).SetUpdatedAt(time.Now().UTC()).Save(ctx)
+// ConsumeWait releases payload references and byte leases after recording
+// the completion, including a nonparking child of a joined activity.
+func ConsumeWait(ctx context.Context, t *dms.Service, kind, key, runID string) error {
+	row, err := loadWait(ctx, t, kind, key)
 	if err != nil {
 		return err
 	}
-	if n == 0 {
-		return dms.ErrNotFound
+	if row.RunID != runID {
+		return dms.ErrForbidden
 	}
-	return nil
-}
+	if row.Status == workflowwait.StatusOpen {
+		return dms.ErrConflict
+	}
 
-// ReleaseParking clears the park after the run has recorded the completion.
-func ReleaseParking(ctx context.Context, t *dms.Service, kind, key, runID string) error {
-	_, err := t.Client.WorkflowWait.Update().Where(
+	_, err = t.Client.WorkflowWait.Update().Where(
 		workflowwait.KindEQ(kind), workflowwait.KeyEQ(key), workflowwait.RunIDEQ(runID),
 	).SetParking(false).SetUpdatedAt(time.Now().UTC()).Save(ctx)
-	return err
+	if err != nil {
+		return err
+	}
+	return releaseWait(ctx, t, kind, key)
 }
 
 // CompleteWait records a completion on an open wait and releases its claim.
 // Completing an already completed wait with the same payload is a no-op.
-func CompleteWait(ctx context.Context, t *dms.Service, kind, key string, completion json.RawMessage) error {
+func CompleteWait(ctx context.Context, t *dms.Service, kind, key string, output json.RawMessage) error {
+	var values map[string]any
+	dec := json.NewDecoder(strings.NewReader(string(output)))
+	dec.UseNumber()
+	if err := dec.Decode(&values); err != nil {
+		return err
+	}
+	return completeWait(ctx, t, kind, key, Completion{Output: values})
+}
+func FailWait(ctx context.Context, t *dms.Service, kind, key, message string) error {
+	return completeWait(ctx, t, kind, key, Completion{Error: message})
+}
+func completeWait(ctx context.Context, t *dms.Service, kind, key string, value Completion) error {
+	completion, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
 	if err := validateWaitIdentity(kind, key); err != nil {
 		return err
 	}
@@ -196,7 +273,7 @@ func CompleteWait(ctx context.Context, t *dms.Service, kind, key string, complet
 	n, err := t.Client.WorkflowWait.Update().Where(
 		workflowwait.KindEQ(kind), workflowwait.KeyEQ(key), workflowwait.StatusEQ(workflowwait.StatusOpen),
 	).SetStatus(workflowwait.StatusCompleted).SetCompletion(jsontext.Value(payload)).
-		ClearClaimRunID().ClearClaimToken().SetUpdatedAt(time.Now().UTC()).Save(ctx)
+		ClearClaimRunID().ClearClaimToken().ClearClaimUntil().SetUpdatedAt(time.Now().UTC()).Save(ctx)
 	if err != nil {
 		return err
 	}
@@ -218,14 +295,14 @@ func CompleteWait(ctx context.Context, t *dms.Service, kind, key string, complet
 func CloseWait(ctx context.Context, t *dms.Service, kind, key, runID string) error {
 	n, err := t.Client.WorkflowWait.Update().Where(
 		workflowwait.KindEQ(kind), workflowwait.KeyEQ(key), workflowwait.RunIDEQ(runID), workflowwait.StatusEQ(workflowwait.StatusOpen),
-	).SetStatus(workflowwait.StatusClosed).SetParking(false).ClearClaimRunID().ClearClaimToken().SetUpdatedAt(time.Now().UTC()).Save(ctx)
+	).SetStatus(workflowwait.StatusClosed).SetParking(false).ClearClaimRunID().ClearClaimToken().ClearClaimUntil().SetUpdatedAt(time.Now().UTC()).Save(ctx)
 	if err != nil {
 		return err
 	}
 	if n == 0 {
 		return dms.ErrNotFound
 	}
-	return nil
+	return releaseWait(ctx, t, kind, key)
 }
 
 // CloseRunWaits closes the open waits a cancelled or deleted run owns,
@@ -233,9 +310,28 @@ func CloseWait(ctx context.Context, t *dms.Service, kind, key, runID string) err
 // that run holds on other waits.
 func CloseRunWaits(ctx context.Context, t *dms.Service, runID string) error {
 	now := time.Now().UTC()
+	store := activitystore.NewTx(t.SQLTx())
+	if err := store.ReleaseLeases(ctx, runID); err != nil {
+		return err
+	}
+	if err := store.Release(ctx, runID); err != nil {
+		return err
+	}
+	rows, err := t.Client.WorkflowWait.Query().Where(workflowwait.RunIDEQ(runID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if err = releaseWait(ctx, t, row.Kind, row.Key); err != nil {
+			return err
+		}
+	}
+	if err = t.ReleaseRunBlobLeases(ctx, runID); err != nil {
+		return err
+	}
 	if _, err := t.Client.WorkflowWait.Update().Where(
 		workflowwait.RunIDEQ(runID), workflowwait.StatusEQ(workflowwait.StatusOpen),
-	).SetStatus(workflowwait.StatusClosed).SetParking(false).ClearClaimRunID().ClearClaimToken().SetUpdatedAt(now).Save(ctx); err != nil {
+	).SetStatus(workflowwait.StatusClosed).SetParking(false).ClearClaimRunID().ClearClaimToken().ClearClaimUntil().SetUpdatedAt(now).Save(ctx); err != nil {
 		return err
 	}
 	if _, err := t.Client.WorkflowWait.Update().Where(
@@ -243,9 +339,9 @@ func CloseRunWaits(ctx context.Context, t *dms.Service, runID string) error {
 	).SetParking(false).SetUpdatedAt(now).Save(ctx); err != nil {
 		return err
 	}
-	_, err := t.Client.WorkflowWait.Update().Where(
+	_, err = t.Client.WorkflowWait.Update().Where(
 		workflowwait.ClaimRunIDEQ(runID), workflowwait.StatusEQ(workflowwait.StatusOpen),
-	).ClearClaimRunID().ClearClaimToken().SetUpdatedAt(now).Save(ctx)
+	).ClearClaimRunID().ClearClaimToken().ClearClaimUntil().SetUpdatedAt(now).Save(ctx)
 	return err
 }
 
@@ -277,23 +373,19 @@ func ParkingRuns(ctx context.Context, t *dms.Service, runIDs []string) (map[stri
 	return out, nil
 }
 
-// ExpireWaits completes open parking waits whose deadline has passed, except
-// human tasks, which expire on their own clock. The completion is an error
-// the resumed run follows as the node's error.
+// ExpireWaits completes open waits whose deadline has passed. The completion
+// follows the activity's normal resume and error handling path.
 func ExpireWaits(ctx context.Context, t *dms.Service, now time.Time) error {
 	rows, err := t.Client.WorkflowWait.Query().Where(
 		workflowwait.StatusEQ(workflowwait.StatusOpen),
-		workflowwait.ParkingEQ(true),
-		workflowwait.KindNEQ(WaitKindTask),
 		workflowwait.DeadlineNotNil(),
 		workflowwait.DeadlineLT(now),
 	).Limit(maxWaitList).All(ctx)
 	if err != nil {
 		return err
 	}
-	payload := json.RawMessage(`{"error":"the wait reached its deadline"}`)
 	for _, row := range rows {
-		if err = CompleteWait(ctx, t, row.Kind, row.Key, payload); err != nil && !errors.Is(err, dms.ErrConflict) {
+		if err = FailWait(ctx, t, row.Kind, row.Key, "the wait reached its deadline"); err != nil && !errors.Is(err, dms.ErrConflict) {
 			return err
 		}
 	}
@@ -305,8 +397,7 @@ func ExpireWaits(ctx context.Context, t *dms.Service, now time.Time) error {
 func CompletedParking(ctx context.Context, t *dms.Service) ([]Wait, error) {
 	rows, err := t.Client.WorkflowWait.Query().Where(
 		workflowwait.StatusEQ(workflowwait.StatusCompleted),
-		workflowwait.ParkingEQ(true),
-		workflowwait.KindNEQ(WaitKindTask),
+		workflowwait.ParkingEQ(true), workflowwait.NotifiedAtIsNil(),
 	).Limit(maxWaitList).All(ctx)
 	if err != nil {
 		return nil, err
@@ -335,6 +426,9 @@ func ListOpenWaits(ctx context.Context, t *dms.Service, q WaitQuery) (dms.Page[W
 		return dms.Page[Wait]{}, dms.Invalid("kind is required")
 	}
 	query := t.Client.WorkflowWait.Query().Where(workflowwait.KindEQ(q.Kind), workflowwait.StatusEQ(workflowwait.StatusOpen))
+	if q.Queue != "" {
+		query.Where(workflowwait.QueueEQ(q.Queue))
+	}
 	if q.WorkspaceID != "" {
 		query.Where(workflowwait.WorkspaceIDEQ(q.WorkspaceID))
 	}
@@ -383,7 +477,7 @@ func ClaimWaits(ctx context.Context, t *dms.Service, in WaitClaim) ([]Wait, stri
 		query := t.Client.WorkflowWait.Query().Where(
 			workflowwait.KindEQ(in.Kind),
 			workflowwait.StatusEQ(workflowwait.StatusOpen),
-			workflowwait.Or(workflowwait.ClaimRunIDIsNil(), workflowwait.ClaimRunIDEQ(in.Holder)),
+			workflowwait.Or(workflowwait.ClaimRunIDIsNil(), workflowwait.ClaimRunIDEQ(in.Holder), workflowwait.ClaimUntilLT(now)),
 		)
 		if len(seen) > 0 {
 			query.Where(workflowwait.IDNotIn(seen...))
@@ -405,8 +499,8 @@ func ClaimWaits(ctx context.Context, t *dms.Service, in WaitClaim) ([]Wait, stri
 		n, err := t.Client.WorkflowWait.Update().Where(
 			workflowwait.IDEQ(row.ID),
 			workflowwait.StatusEQ(workflowwait.StatusOpen),
-			workflowwait.Or(workflowwait.ClaimRunIDIsNil(), workflowwait.ClaimRunIDEQ(in.Holder)),
-		).SetClaimRunID(in.Holder).SetClaimToken(token).SetUpdatedAt(now).Save(ctx)
+			workflowwait.Or(workflowwait.ClaimRunIDIsNil(), workflowwait.ClaimRunIDEQ(in.Holder), workflowwait.ClaimUntilLT(now)),
+		).SetClaimRunID(in.Holder).SetClaimToken(token).SetClaimUntil(now.Add(10 * time.Minute)).SetUpdatedAt(now).Save(ctx)
 		if err != nil {
 			return nil, "", err
 		}
@@ -415,6 +509,8 @@ func ClaimWaits(ctx context.Context, t *dms.Service, in WaitClaim) ([]Wait, stri
 		}
 		row.ClaimRunID = &in.Holder
 		row.ClaimToken = &token
+		until := now.Add(10 * time.Minute)
+		row.ClaimUntil = &until
 		out = append(out, toWait(row))
 		if in.Key != "" {
 			break
@@ -440,7 +536,7 @@ func UpdateWaitData(ctx context.Context, t *dms.Service, in WaitUpdate) error {
 		workflowwait.KindEQ(in.Kind), workflowwait.KeyEQ(in.Key), workflowwait.StatusEQ(workflowwait.StatusOpen),
 		workflowwait.Or(
 			workflowwait.RunIDEQ(in.Holder),
-			workflowwait.And(workflowwait.ClaimRunIDEQ(in.Holder), workflowwait.ClaimTokenEQ(in.ClaimToken)),
+			workflowwait.And(workflowwait.ClaimRunIDEQ(in.Holder), workflowwait.ClaimTokenEQ(in.ClaimToken), workflowwait.ClaimUntilGT(time.Now().UTC())),
 		),
 	).SetData(jsontext.Value(data)).SetUpdatedAt(time.Now().UTC()).Save(ctx)
 	if err != nil {
@@ -464,7 +560,7 @@ func ReleaseClaim(ctx context.Context, t *dms.Service, kind, key, holder, token 
 	n, err := t.Client.WorkflowWait.Update().Where(
 		workflowwait.KindEQ(kind), workflowwait.KeyEQ(key), workflowwait.StatusEQ(workflowwait.StatusOpen),
 		workflowwait.ClaimRunIDEQ(holder), workflowwait.ClaimTokenEQ(token),
-	).ClearClaimRunID().ClearClaimToken().SetUpdatedAt(time.Now().UTC()).Save(ctx)
+	).ClearClaimRunID().ClearClaimToken().ClearClaimUntil().SetUpdatedAt(time.Now().UTC()).Save(ctx)
 	if err != nil {
 		return err
 	}
@@ -526,7 +622,7 @@ func (s *Service) UpdateWait(ctx context.Context, subject, workspaceID string, i
 }
 
 // FinishWait completes an open wait after the scope check.
-func (s *Service) FinishWait(ctx context.Context, subject, workspaceID, kind, key string, completion json.RawMessage) error {
+func (s *Service) FinishWait(ctx context.Context, subject, workspaceID, kind, key string, completion Completion) error {
 	return s.DMS.Write(ctx, func(t *dms.Service) error {
 		if err := s.authorizeWaits(ctx, t, subject, workspaceID); err != nil {
 			return err
@@ -540,6 +636,26 @@ func (s *Service) FinishWait(ctx context.Context, subject, workspaceID, kind, ke
 				return dms.ErrNotFound
 			}
 		}
-		return CompleteWait(ctx, t, kind, key, completion)
+		return completeWait(ctx, t, kind, key, completion)
 	})
+}
+
+func retainWait(ctx context.Context, t *dms.Service, w Wait, id string) error {
+	if err := t.LeaseBlobs(ctx, id, w.RunID, w.BlobIDs); err != nil {
+		return err
+	}
+	if w.PayloadID != "" {
+		return activitystore.NewTx(t.SQLTx()).Reference(ctx, id, w.PayloadID)
+	}
+	return nil
+}
+func releaseWait(ctx context.Context, t *dms.Service, kind, key string) error {
+	row, err := loadWait(ctx, t, kind, key)
+	if err != nil {
+		return err
+	}
+	if err = t.ReleaseBlobLeases(ctx, row.ID); err != nil {
+		return err
+	}
+	return activitystore.NewTx(t.SQLTx()).Release(ctx, row.ID)
 }

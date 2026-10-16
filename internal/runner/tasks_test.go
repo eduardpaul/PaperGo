@@ -128,7 +128,7 @@ func TestCancellingARunWhoseTaskCompletedStopsIt(t *testing.T) {
 	if _, err = f.r.Cancel(ctx, "alice", ids[0]); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.r.ResumeDecided(ctx); err != nil {
+	if err = f.r.SignalWaits(ctx); err != nil {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "cancelled")

@@ -244,7 +244,7 @@ func runSearchChunk(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	return outcome{Job: raw, Output: map[string]any{"item_id": itemID, "blob_id": b.ID, "generation": job.Generation}}, nil
+	return outcome{Job: raw, BlobIDs: []string{b.ID}, Output: map[string]any{"item_id": itemID, "blob_id": b.ID, "generation": job.Generation}}, nil
 }
 
 func workSearchChunk(w *workEnv, raw json.RawMessage) (json.RawMessage, error) {
@@ -273,6 +273,9 @@ func workSearchChunk(w *workEnv, raw json.RawMessage) (json.RawMessage, error) {
 	}
 	for i := range chunks {
 		chunks[i].Part, chunks[i].Language = job.Part, job.Language
+	}
+	if err = snapshotChunks(w.ctx, w.tools.Records, w.runID, job.ItemID, job.BlobID, job.Generation, job.Part, chunks); err != nil {
+		return nil, err
 	}
 	if err = w.tools.Search.StageContent(w.ctx, job.ItemID, job.BlobID, job.Generation, chunks); err != nil {
 		return nil, err
@@ -355,7 +358,7 @@ func runSearchPublish(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	return outcome{Job: raw, Output: out}, nil
+	return outcome{Job: raw, BlobIDs: []string{b.ID}, Output: out}, nil
 }
 
 func workSearchPublish(w *workEnv, raw json.RawMessage) (json.RawMessage, error) {

@@ -24,10 +24,16 @@ type Cache interface {
 	PutIfAbsent(ctx context.Context, namespace, scope, key string, payload json.RawMessage, ttl time.Duration) (json.RawMessage, error)
 }
 
+type sqlStore interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
 type Store struct {
-	db  *sql.DB
+	db  sqlStore
 	now func() time.Time
 }
+
+func NewTx(tx *sql.Tx) *Store { return &Store{db: tx, now: time.Now} }
 
 func New(db *sql.DB) *Store { return &Store{db: db, now: time.Now} }
 

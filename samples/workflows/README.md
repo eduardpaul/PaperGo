@@ -19,6 +19,8 @@ The workflow fills the `search.content` role for that library, so the workspace'
 
 `internal/runner/ai_test.go` runs both against a fake chat server.
 
+Extracting structured receipt lines from a ticket photo, through batch execution, is a separate package: [`samples/receipts-package`](../receipts-package/README.md). It uses the public API and ordinary workflow actions.
+
 ## Decision actions
 
 These samples use the optional [local decision engine](../../docs/decisions.md),

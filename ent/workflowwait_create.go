@@ -55,6 +55,34 @@ func (_c *WorkflowWaitCreate) SetKind(v string) *WorkflowWaitCreate {
 	return _c
 }
 
+// SetQueue sets the "queue" field.
+func (_c *WorkflowWaitCreate) SetQueue(v string) *WorkflowWaitCreate {
+	_c.mutation.SetQueue(v)
+	return _c
+}
+
+// SetNillableQueue sets the "queue" field if the given value is not nil.
+func (_c *WorkflowWaitCreate) SetNillableQueue(v *string) *WorkflowWaitCreate {
+	if v != nil {
+		_c.SetQueue(*v)
+	}
+	return _c
+}
+
+// SetPayloadID sets the "payload_id" field.
+func (_c *WorkflowWaitCreate) SetPayloadID(v string) *WorkflowWaitCreate {
+	_c.mutation.SetPayloadID(v)
+	return _c
+}
+
+// SetNillablePayloadID sets the "payload_id" field if the given value is not nil.
+func (_c *WorkflowWaitCreate) SetNillablePayloadID(v *string) *WorkflowWaitCreate {
+	if v != nil {
+		_c.SetPayloadID(*v)
+	}
+	return _c
+}
+
 // SetKey sets the "key" field.
 func (_c *WorkflowWaitCreate) SetKey(v string) *WorkflowWaitCreate {
 	_c.mutation.SetKey(v)
@@ -107,6 +135,34 @@ func (_c *WorkflowWaitCreate) SetDeadline(v time.Time) *WorkflowWaitCreate {
 func (_c *WorkflowWaitCreate) SetNillableDeadline(v *time.Time) *WorkflowWaitCreate {
 	if v != nil {
 		_c.SetDeadline(*v)
+	}
+	return _c
+}
+
+// SetNotifiedAt sets the "notified_at" field.
+func (_c *WorkflowWaitCreate) SetNotifiedAt(v time.Time) *WorkflowWaitCreate {
+	_c.mutation.SetNotifiedAt(v)
+	return _c
+}
+
+// SetNillableNotifiedAt sets the "notified_at" field if the given value is not nil.
+func (_c *WorkflowWaitCreate) SetNillableNotifiedAt(v *time.Time) *WorkflowWaitCreate {
+	if v != nil {
+		_c.SetNotifiedAt(*v)
+	}
+	return _c
+}
+
+// SetClaimUntil sets the "claim_until" field.
+func (_c *WorkflowWaitCreate) SetClaimUntil(v time.Time) *WorkflowWaitCreate {
+	_c.mutation.SetClaimUntil(v)
+	return _c
+}
+
+// SetNillableClaimUntil sets the "claim_until" field if the given value is not nil.
+func (_c *WorkflowWaitCreate) SetNillableClaimUntil(v *time.Time) *WorkflowWaitCreate {
+	if v != nil {
+		_c.SetClaimUntil(*v)
 	}
 	return _c
 }
@@ -224,6 +280,14 @@ func (_c *WorkflowWaitCreate) defaults() {
 		v := workflowwait.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.Queue(); !ok {
+		v := workflowwait.DefaultQueue
+		_c.mutation.SetQueue(v)
+	}
+	if _, ok := _c.mutation.PayloadID(); !ok {
+		v := workflowwait.DefaultPayloadID
+		_c.mutation.SetPayloadID(v)
+	}
 	if _, ok := _c.mutation.Data(); !ok {
 		v := workflowwait.DefaultData
 		_c.mutation.SetData(v)
@@ -257,6 +321,17 @@ func (_c *WorkflowWaitCreate) check() error {
 		if err := workflowwait.KindValidator(v); err != nil {
 			return &ValidationError{Name: "kind", err: fmt.Errorf(`ent: validator failed for field "WorkflowWait.kind": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.Queue(); !ok {
+		return &ValidationError{Name: "queue", err: errors.New(`ent: missing required field "WorkflowWait.queue"`)}
+	}
+	if v, ok := _c.mutation.Queue(); ok {
+		if err := workflowwait.QueueValidator(v); err != nil {
+			return &ValidationError{Name: "queue", err: fmt.Errorf(`ent: validator failed for field "WorkflowWait.queue": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PayloadID(); !ok {
+		return &ValidationError{Name: "payload_id", err: errors.New(`ent: missing required field "WorkflowWait.payload_id"`)}
 	}
 	if _, ok := _c.mutation.Key(); !ok {
 		return &ValidationError{Name: "key", err: errors.New(`ent: missing required field "WorkflowWait.key"`)}
@@ -374,6 +449,14 @@ func (_c *WorkflowWaitCreate) createSpec() (*WorkflowWait, *sqlgraph.CreateSpec)
 		_spec.SetField(workflowwait.FieldKind, field.TypeString, value)
 		_node.Kind = value
 	}
+	if value, ok := _c.mutation.Queue(); ok {
+		_spec.SetField(workflowwait.FieldQueue, field.TypeString, value)
+		_node.Queue = value
+	}
+	if value, ok := _c.mutation.PayloadID(); ok {
+		_spec.SetField(workflowwait.FieldPayloadID, field.TypeString, value)
+		_node.PayloadID = value
+	}
 	if value, ok := _c.mutation.Key(); ok {
 		_spec.SetField(workflowwait.FieldKey, field.TypeString, value)
 		_node.Key = value
@@ -405,6 +488,14 @@ func (_c *WorkflowWaitCreate) createSpec() (*WorkflowWait, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Deadline(); ok {
 		_spec.SetField(workflowwait.FieldDeadline, field.TypeTime, value)
 		_node.Deadline = &value
+	}
+	if value, ok := _c.mutation.NotifiedAt(); ok {
+		_spec.SetField(workflowwait.FieldNotifiedAt, field.TypeTime, value)
+		_node.NotifiedAt = &value
+	}
+	if value, ok := _c.mutation.ClaimUntil(); ok {
+		_spec.SetField(workflowwait.FieldClaimUntil, field.TypeTime, value)
+		_node.ClaimUntil = &value
 	}
 	if value, ok := _c.mutation.ClaimRunID(); ok {
 		_spec.SetField(workflowwait.FieldClaimRunID, field.TypeString, value)

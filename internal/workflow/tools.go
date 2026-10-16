@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"papergo/internal/activitystore"
 	"papergo/internal/ai"
 	"papergo/internal/decision"
 	"papergo/internal/doctext"
@@ -33,24 +34,15 @@ type Tools struct {
 	// Embeddings is the embedding model search.embed and the sweep use; nil
 	// when semantic search is off.
 	Embeddings ai.Embedder
-	// Chat is the chat model ai.complete and search.enrich use; nil when AI
-	// steps are off.
-	Chat ai.Chat
-	// Batch submits groups of chat requests to the provider's batch
-	// endpoint. Nil leaves batch execution unavailable; immediate requests
-	// still use Chat.
-	Batch ai.Batcher
-	// DefaultExecution is immediate or batch. Empty means immediate.
-	// A remote LLM action's execution input overrides it.
-	DefaultExecution string
-	// BatchDeadline is how long a parked batch request waits. Empty means
-	// 72 hours.
-	BatchDeadline time.Duration
-	// Now is the clock batch admission uses. Empty means time.Now.
+	// Records holds durable activity inputs and coordinator state.
+	Records *activitystore.Store
+	// Extensions are module dependencies supplied by the host before execution.
+	Extensions map[string]any
+	// Now is the clock activities use. Empty means time.Now.
 	Now func() time.Time
 	// Results holds reusable action results outside domain transactions.
 	Results resultcache.Cache
-	// ResultTTL is the idle lifetime of cached AI results.
+	// ResultTTL is the idle lifetime of reusable activity results.
 	ResultTTL time.Duration
 	// Languages are the languages search stems (SEARCH_LANGUAGES), among
 	// which document.read_text detects a text's language.

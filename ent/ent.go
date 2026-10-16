@@ -6,9 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"papergo/ent/activityrecord"
+	"papergo/ent/activityreference"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
+	"papergo/ent/bloblease"
 	"papergo/ent/blobtext"
 	"papergo/ent/businesskey"
 	"papergo/ent/cachedresult"
@@ -126,9 +129,12 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			activityrecord.Table:          activityrecord.ValidColumn,
+			activityreference.Table:       activityreference.ValidColumn,
 			auditevent.Table:              auditevent.ValidColumn,
 			blob.Table:                    blob.ValidColumn,
 			blobdeletion.Table:            blobdeletion.ValidColumn,
+			bloblease.Table:               bloblease.ValidColumn,
 			blobtext.Table:                blobtext.ValidColumn,
 			businesskey.Table:             businesskey.ValidColumn,
 			cachedresult.Table:            cachedresult.ValidColumn,

@@ -25,6 +25,10 @@ type WorkflowWait struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// Kind holds the value of the "kind" field.
 	Kind string `json:"kind,omitempty"`
+	// Queue holds the value of the "queue" field.
+	Queue string `json:"queue,omitempty"`
+	// PayloadID holds the value of the "payload_id" field.
+	PayloadID string `json:"payload_id,omitempty"`
 	// Key holds the value of the "key" field.
 	Key string `json:"key,omitempty"`
 	// WorkspaceID holds the value of the "workspace_id" field.
@@ -41,6 +45,10 @@ type WorkflowWait struct {
 	Completion jsontext.Value `json:"completion,omitempty"`
 	// Deadline holds the value of the "deadline" field.
 	Deadline *time.Time `json:"deadline,omitempty"`
+	// NotifiedAt holds the value of the "notified_at" field.
+	NotifiedAt *time.Time `json:"notified_at,omitempty"`
+	// ClaimUntil holds the value of the "claim_until" field.
+	ClaimUntil *time.Time `json:"claim_until,omitempty"`
 	// ClaimRunID holds the value of the "claim_run_id" field.
 	ClaimRunID *string `json:"claim_run_id,omitempty"`
 	// ClaimToken holds the value of the "claim_token" field.
@@ -61,9 +69,9 @@ func (*WorkflowWait) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case workflowwait.FieldParking:
 			values[i] = new(sql.NullBool)
-		case workflowwait.FieldID, workflowwait.FieldKind, workflowwait.FieldKey, workflowwait.FieldWorkspaceID, workflowwait.FieldRunID, workflowwait.FieldNode, workflowwait.FieldExecutionID, workflowwait.FieldClaimRunID, workflowwait.FieldClaimToken, workflowwait.FieldStatus:
+		case workflowwait.FieldID, workflowwait.FieldKind, workflowwait.FieldQueue, workflowwait.FieldPayloadID, workflowwait.FieldKey, workflowwait.FieldWorkspaceID, workflowwait.FieldRunID, workflowwait.FieldNode, workflowwait.FieldExecutionID, workflowwait.FieldClaimRunID, workflowwait.FieldClaimToken, workflowwait.FieldStatus:
 			values[i] = new(sql.NullString)
-		case workflowwait.FieldCreatedAt, workflowwait.FieldUpdatedAt, workflowwait.FieldDeadline:
+		case workflowwait.FieldCreatedAt, workflowwait.FieldUpdatedAt, workflowwait.FieldDeadline, workflowwait.FieldNotifiedAt, workflowwait.FieldClaimUntil:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -103,6 +111,18 @@ func (_m *WorkflowWait) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field kind", values[i])
 			} else if value.Valid {
 				_m.Kind = value.String
+			}
+		case workflowwait.FieldQueue:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field queue", values[i])
+			} else if value.Valid {
+				_m.Queue = value.String
+			}
+		case workflowwait.FieldPayloadID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field payload_id", values[i])
+			} else if value.Valid {
+				_m.PayloadID = value.String
 			}
 		case workflowwait.FieldKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -156,6 +176,20 @@ func (_m *WorkflowWait) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Deadline = new(time.Time)
 				*_m.Deadline = value.Time
+			}
+		case workflowwait.FieldNotifiedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field notified_at", values[i])
+			} else if value.Valid {
+				_m.NotifiedAt = new(time.Time)
+				*_m.NotifiedAt = value.Time
+			}
+		case workflowwait.FieldClaimUntil:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field claim_until", values[i])
+			} else if value.Valid {
+				_m.ClaimUntil = new(time.Time)
+				*_m.ClaimUntil = value.Time
 			}
 		case workflowwait.FieldClaimRunID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -228,6 +262,12 @@ func (_m *WorkflowWait) String() string {
 	builder.WriteString("kind=")
 	builder.WriteString(_m.Kind)
 	builder.WriteString(", ")
+	builder.WriteString("queue=")
+	builder.WriteString(_m.Queue)
+	builder.WriteString(", ")
+	builder.WriteString("payload_id=")
+	builder.WriteString(_m.PayloadID)
+	builder.WriteString(", ")
 	builder.WriteString("key=")
 	builder.WriteString(_m.Key)
 	builder.WriteString(", ")
@@ -251,6 +291,16 @@ func (_m *WorkflowWait) String() string {
 	builder.WriteString(", ")
 	if v := _m.Deadline; v != nil {
 		builder.WriteString("deadline=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.NotifiedAt; v != nil {
+		builder.WriteString("notified_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ClaimUntil; v != nil {
+		builder.WriteString("claim_until=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")

@@ -25,22 +25,24 @@ type ActivitySpec struct {
 	Prepare      func(Step, map[string]any) (Prepared, error)
 	Work         func(context.Context, Tools, json.RawMessage) (json.RawMessage, error)
 	Commit       func(Step, json.RawMessage, json.RawMessage) (Prepared, error)
+	Resume       func(Step, Completion) (Prepared, error)
 }
 
 // Prepared is the outcome of a prepare or commit handler.
 type Prepared struct {
-	Port   string
-	Output any
-	Vars   map[string]any
-	Sleep  time.Duration
-	End    bool
-	Fail   string
-	Job    json.RawMessage
-	Park   *Park
+	Port    string
+	Output  any
+	Vars    map[string]any
+	Sleep   time.Duration
+	End     bool
+	Fail    string
+	BlobIDs []string
+	Job     json.RawMessage
+	Park    *Park
 }
 
 func (p Prepared) outcome() outcome {
-	return outcome{Port: p.Port, Output: p.Output, Vars: p.Vars, Sleep: p.Sleep.Seconds(), End: p.End, Fail: p.Fail, Job: p.Job, Park: p.Park}
+	return outcome{Port: p.Port, Output: p.Output, Vars: p.Vars, Sleep: p.Sleep.Seconds(), End: p.End, Fail: p.Fail, Job: p.Job, Park: p.Park, BlobIDs: p.BlobIDs}
 }
 
 // Step is the transactional view of the node: the DMS service, the author,
@@ -139,6 +141,12 @@ func RegisterActivity(spec ActivitySpec) {
 				return outcome{}, err
 			}
 			return prepared.outcome(), nil
+		}
+	}
+	if spec.Resume != nil {
+		a.resume = func(e *env, c Completion) (outcome, error) {
+			p, err := spec.Resume(Step{e: e}, c)
+			return p.outcome(), err
 		}
 	}
 	register(a)

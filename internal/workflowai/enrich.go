@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"papergo/internal/activitystore"
 	"papergo/internal/ai"
 	"papergo/internal/forms"
 	"papergo/internal/search"
@@ -28,11 +29,12 @@ func init() {
 			"queue": {"type": "string", "title": "Queue", "description": "Named batch queue. Empty uses shared.", "minLength": 1, "maxLength": 64}`, "generation", "instructions"),
 		OutputSchema: forms.MustParse(`{"type": "object", "properties": {
 			"generation": {"type": "string"}, "enriched": {"type": "integer"}, "cached": {"type": "integer"}, "model": {"type": "string"}}}`),
-		Prepare: prepareEnrich, Work: workSearchEnrich, Commit: commitSearchEnrich,
+		Prepare: prepareEnrich, Work: workSearchEnrich, Commit: commitSearchEnrich, Resume: resumeEnrich,
 	})
 }
 
 type enrichJob struct {
+	ManifestKey  string `json:"manifest_key,omitempty"`
 	Generation   string `json:"generation"`
 	Model        string `json:"model"`
 	Instructions string `json:"instructions"`
@@ -72,7 +74,7 @@ type manifestChunk struct {
 	Part    string `json:"part"`
 	Ordinal int    `json:"ordinal"`
 	Kind    string `json:"kind"`
-	Text    string `json:"text"`
+	Answer  string `json:"answer,omitempty"`
 	Hash    string `json:"hash"`
 	WaitKey string `json:"wait_key,omitempty"`
 	Cached  bool   `json:"cached,omitempty"`
@@ -126,16 +128,16 @@ func prepareEnrich(step workflow.Step, in map[string]any) (workflow.Prepared, er
 		return workflow.Prepared{}, err
 	}
 	if mode == "batch" {
-		if tools.Batch == nil {
+		if runtime(tools).Batch == nil {
 			return workflow.Prepared{}, ErrNoBatch
 		}
-		job.Model = tools.Batch.Key()
+		job.Model = runtime(tools).Batch.Key()
 		return parkEnrich(step, job, queue)
 	}
-	if tools.Chat == nil {
+	if runtime(tools).Chat == nil {
 		return workflow.Prepared{}, ErrNoChat
 	}
-	job.Model = tools.Chat.Key()
+	job.Model = runtime(tools).Chat.Key()
 	raw, err := json.Marshal(job)
 	if err != nil {
 		return workflow.Prepared{}, err
@@ -160,11 +162,12 @@ func parkEnrich(step workflow.Step, job enrichJob, queue string) (workflow.Prepa
 	pending := 0
 	for i, chunk := range chunks {
 		key := enrichKey(job, contextText, chunk)
-		entry := manifestChunk{Part: chunk.Part, Ordinal: chunk.Ordinal, Kind: chunk.Kind, Text: chunk.Text, Hash: key}
-		if _, found, err := findAnswerStep(step.Context(), step.DMS().Client, tools, "search.enrich", key); err != nil {
+		entry := manifestChunk{Part: chunk.Part, Ordinal: chunk.Ordinal, Kind: chunk.Kind, Hash: key}
+		if answer, found, err := findAnswerStep(step.Context(), step.DMS().SQLTx(), tools, "search.enrich", key); err != nil {
 			return workflow.Prepared{}, err
 		} else if found {
 			entry.Cached = true
+			entry.Answer = answer.Text
 			manifest.Chunks = append(manifest.Chunks, entry)
 			continue
 		}
@@ -173,10 +176,10 @@ func parkEnrich(step workflow.Step, job enrichJob, queue string) (workflow.Prepa
 			input = "<document>\n" + contextText + "\n</document>\n\n<passage>\n" + chunk.Text + "\n</passage>"
 		}
 		body := requestBody{
-			Activity: "search.enrich", ModelKey: job.Model, Model: tools.Batch.Model(), Connection: tools.Batch.Connection(),
-			Queue: queue, Prompt: instructions, Input: input,
+			Activity: "search.enrich", ModelKey: job.Model, Model: runtime(tools).Batch.Model(), Connection: runtime(tools).Batch.Connection(),
+			Prompt: instructions, Input: input,
 		}
-		if err = putRequest(step.Context(), step.DMS().Client, tools, key, body); err != nil {
+		if err = putRequest(step.Context(), step.DMS().SQLTx(), tools, key, body); err != nil {
 			return workflow.Prepared{}, err
 		}
 		entry.WaitKey = fmt.Sprintf("%s:%d", step.ExecutionID(), i)
@@ -185,7 +188,7 @@ func parkEnrich(step workflow.Step, job enrichJob, queue string) (workflow.Prepa
 			return workflow.Prepared{}, err
 		}
 		if err = workflow.PutWait(step.Context(), step.DMS(), workflow.Wait{
-			Kind: kindRequest, Key: entry.WaitKey, WorkspaceID: step.WorkspaceID(), RunID: step.RunID(),
+			Kind: kindRequest, Key: entry.WaitKey, Queue: queue, PayloadID: activitystore.ID(requestCache, answerScope, key), WorkspaceID: step.WorkspaceID(), RunID: step.RunID(),
 			Node: step.Node(), ExecutionID: entry.WaitKey, Data: data, Deadline: deadlinePtr(deadlineAt(tools, tools.Clock())),
 		}); err != nil {
 			return workflow.Prepared{}, err
@@ -193,26 +196,27 @@ func parkEnrich(step workflow.Step, job enrichJob, queue string) (workflow.Prepa
 		manifest.Chunks = append(manifest.Chunks, entry)
 		pending++
 	}
-	if pending == 0 {
-		raw, err := json.Marshal(job)
-		if err != nil {
-			return workflow.Prepared{}, err
-		}
-		return workflow.Prepared{Job: raw, Output: map[string]any{"generation": job.Generation, "model": job.Model}}, nil
-	}
 	manifestKey := "manifest:" + step.ExecutionID()
 	raw, err := json.Marshal(manifest)
 	if err != nil {
 		return workflow.Prepared{}, err
 	}
-	if err = putCachedStep(step.Context(), step.DMS().Client, tools, "search.enrich", manifestKey, raw, requestTTL(tools)); err != nil {
+	if err = putManifest(step, manifestKey, raw); err != nil {
 		return workflow.Prepared{}, err
+	}
+	if pending == 0 {
+		job.ManifestKey = manifestKey
+		raw, err := json.Marshal(job)
+		if err != nil {
+			return workflow.Prepared{}, err
+		}
+		return workflow.Prepared{Job: raw}, nil
 	}
 	data, err := json.Marshal(joinData{Manifest: manifestKey, Queue: queue, Model: job.Model})
 	if err != nil {
 		return workflow.Prepared{}, err
 	}
-	return workflow.Prepared{Park: &workflow.Park{Kind: kindJoin, Key: step.ExecutionID(), Data: data, Deadline: deadlineAt(tools, tools.Clock())}}, nil
+	return workflow.Prepared{Park: &workflow.Park{Kind: kindJoin, Key: step.ExecutionID(), Queue: queue, PayloadID: activitystore.ID("ai.enrich.manifest", answerScope, manifestKey), Data: data, Deadline: deadlineAt(tools, tools.Clock())}}, nil
 }
 
 func deadlinePtr(at time.Time) *time.Time { return &at }
@@ -224,6 +228,31 @@ func workSearchEnrich(ctx context.Context, tools workflow.Tools, raw json.RawMes
 	}
 	if tools.Search == nil {
 		return nil, workflow.ErrNoSearch
+	}
+	if job.ManifestKey != "" {
+		record, err := tools.Records.Get(ctx, "ai.enrich.manifest", answerScope, job.ManifestKey)
+		if err != nil {
+			return nil, err
+		}
+		if record == nil {
+			return nil, errors.New("the enrichment manifest is unavailable")
+		}
+		var m enrichManifest
+		if err = json.Unmarshal(record.Payload, &m); err != nil {
+			return nil, err
+		}
+		var values []search.Enrichment
+		cached := 0
+		for _, c := range m.Chunks {
+			if c.Cached {
+				cached++
+			}
+			values = append(values, search.Enrichment{Part: c.Part, Ordinal: c.Ordinal, Text: c.Answer})
+		}
+		if err = tools.Search.SetEnrichments(ctx, job.Generation, values); err != nil {
+			return nil, err
+		}
+		return json.Marshal(enrichResult{Enriched: len(values), Cached: cached})
 	}
 	chunks, err := tools.Search.GenerationChunks(ctx, job.Generation)
 	if err != nil {
@@ -245,17 +274,17 @@ func workSearchEnrich(ctx context.Context, tools workflow.Tools, raw json.RawMes
 		if found {
 			res.Cached++
 		} else {
-			if tools.Chat == nil {
+			if runtime(tools).Chat == nil {
 				return nil, ErrNoChat
 			}
-			if tools.Chat.Key() != job.Model {
+			if runtime(tools).Chat.Key() != job.Model {
 				return nil, errors.New("the chat model changed before the request ran")
 			}
 			input := c.Text
 			if job.Scope == "document" {
 				input = "<document>\n" + contextText + "\n</document>\n\n<passage>\n" + c.Text + "\n</passage>"
 			}
-			answer, err := tools.Chat.Complete(ctx, ai.Completion{Instructions: instructions, Input: input})
+			answer, err := runtime(tools).Chat.Complete(ctx, ai.Completion{Instructions: instructions, Input: input})
 			if err != nil {
 				return nil, err
 			}
@@ -284,4 +313,39 @@ func commitSearchEnrich(_ workflow.Step, rawJob, rawResult json.RawMessage) (wor
 		return workflow.Prepared{}, err
 	}
 	return workflow.Prepared{Output: map[string]any{"generation": job.Generation, "enriched": res.Enriched, "cached": res.Cached, "model": job.Model}}, nil
+}
+
+// Resume schedules projection writes outside the DMS writer, as immediate
+// enrichment does, and retains the completed manifest through that work.
+func resumeEnrich(step workflow.Step, c workflow.Completion) (workflow.Prepared, error) {
+	if c.Error != "" {
+		return workflow.Prepared{}, errors.New(c.Error)
+	}
+	wait, err := workflow.GetWait(step.Context(), step.DMS(), kindJoin, step.ExecutionID())
+	if err != nil {
+		return workflow.Prepared{}, err
+	}
+	if err = authorizeRequest(step, wait); err != nil {
+		return workflow.Prepared{}, err
+	}
+	key, _ := c.Output["manifest"].(string)
+	if key == "" {
+		return workflow.Prepared{}, errors.New("the enrichment completion has no manifest")
+	}
+	raw, err := loadManifest(step, key)
+	if err != nil {
+		return workflow.Prepared{}, err
+	}
+	if raw == nil {
+		return workflow.Prepared{}, errors.New("the enrichment manifest is unavailable")
+	}
+	var m enrichManifest
+	if err = json.Unmarshal(raw, &m); err != nil {
+		return workflow.Prepared{}, err
+	}
+	if err = step.Tools().Records.WithTx(step.DMS().SQLTx()).Reference(step.Context(), step.RunID(), activitystore.ID("ai.enrich.manifest", answerScope, key)); err != nil {
+		return workflow.Prepared{}, err
+	}
+	job, err := json.Marshal(enrichJob{ManifestKey: key, Generation: m.Generation, Model: m.Model})
+	return workflow.Prepared{Job: job}, err
 }

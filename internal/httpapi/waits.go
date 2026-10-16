@@ -10,6 +10,7 @@ import (
 func (a *API) listWaits(w http.ResponseWriter, r *http.Request) {
 	out, err := a.Workflows.ListWaits(r.Context(), subject(r), workflow.WaitQuery{
 		Kind:        r.URL.Query().Get("kind"),
+		Queue:       r.URL.Query().Get("queue"),
 		WorkspaceID: r.URL.Query().Get("workspace_id"),
 		After:       r.URL.Query().Get("$skiptoken"),
 		Limit:       queryInt(r, "$top"),
@@ -69,10 +70,10 @@ func (a *API) updateWait(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) completeWait(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Kind        string          `json:"kind"`
-		Key         string          `json:"key"`
-		WorkspaceID string          `json:"workspace_id"`
-		Completion  json.RawMessage `json:"completion"`
+		Kind        string              `json:"kind"`
+		Key         string              `json:"key"`
+		WorkspaceID string              `json:"workspace_id"`
+		Completion  workflow.Completion `json:"completion"`
 	}
 	if !a.decode(w, r, &in) {
 		return

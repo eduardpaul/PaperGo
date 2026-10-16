@@ -13,11 +13,12 @@ func init() {
 	workflow.RegisterBuiltIn(&workflow.BuiltIn{
 		Key:         builtinKey,
 		Name:        "AI batch coordinator",
-		Description: "Each minute, admits one named queue of parked AI requests for the installation: full groups of 20, a daily partial flush, and provider polling. Originating workflows keep their own authors.",
+		Description: "Each minute, admits one named queue of parked AI requests for the installation: configurable groups, a daily partial flush, and provider polling. Originating workflows keep their own authors.",
 		System:      true,
 		ParametersSchema: forms.MustParse(`{"type": "object", "properties": {
+			"batch_size": {"type":"integer","title":"Batch size","minimum":1,"maximum":100,"default":20},
 			"queue": {"type": "string", "title": "Queue", "minLength": 1, "maxLength": 64, "default": "shared", "description": "Named queue this coordinator admits."},
-			"policy": {"type": "string", "title": "Admission", "enum": ["threshold", "schedule", "both"], "default": "both", "description": "threshold submits full groups. schedule submits on the flush, including a partial group. both does both."},
+			"policy": {"type": "string", "title": "Admission", "default": "both", "description": "threshold submits full groups. schedule submits on the flush, including a partial group. both does both."},
 			"flush_cron": {"type": "string", "title": "Flush schedule", "default": "0 1 * * *", "description": "When a partial group is sent."},
 			"time_zone": {"type": "string", "title": "Time zone", "default": "Europe/Madrid", "description": "Time zone of the flush."}
 		}}`),
@@ -27,7 +28,7 @@ func init() {
 				{"type": "manual"}
 			],
 			"flow": {"start": "coordinate", "nodes": {"coordinate": {"activity": "ai.batch.coordinate", "inputs": {
-				"queue": "{param:queue}", "policy": "{param:policy}", "flush_cron": "{param:flush_cron}", "time_zone": "{param:time_zone}"
+				"batch_size":"{param:batch_size}","queue": "{param:queue}", "policy": "{param:policy}", "flush_cron": "{param:flush_cron}", "time_zone": "{param:time_zone}"
 			}}}}
 		}`,
 	})

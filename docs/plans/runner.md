@@ -65,13 +65,13 @@ The phase 0 spike proved this design; the numbers are in [Spike results](#spike-
 | Exactly-once step (`stepTx`) | each workflow node | The node's writes through `dms` (as the version's author), the events they raise, the runs those start, and a `runner_step_results` row keyed by run ID and DBOS step ID commit in one transaction. A retried or recovered step finds the row and returns the stored output. Replay assigns step IDs in the same order, so a node can run many times in a run (loops, retries); the recorded name must match on replay. The output is always returned decoded from the row, so a first run and a replay see the same value. DBOS `RunAsTransaction` cannot be used: its callback gets a DBOS `Tx` without the `*sql.Tx`, so Ent cannot run on it. Lock waits that outlive the busy timeout are retried three times. |
 | Durable sleep | `delay` nodes, retry delays | DBOS `Sleep`, which survives restarts. |
 | Schedules | `Launch` | DBOS database schedules: `papergo.tick` every minute raises due workflow schedule triggers, and `papergo.retention` daily at 03:30 UTC deletes old runs. DBOS fires each tick once across nodes. |
-| Signals and waits (phase 3) | approvals | `Send` in the deciding request's transaction with an idempotency key, `Recv` with a timeout in the run. The workflow must already exist: DBOS rejects a message to an unknown workflow ID. A message sent before the run reaches `Recv` is kept. |
+| Signals and waits | human tasks and asynchronous actions | A common completion envelope, `Send` in the completion-publication transaction with an idempotency key, and `Recv` with a timeout in the run. The workflow must already exist: DBOS rejects a message to an unknown workflow ID. A message sent before the run reaches `Recv` is kept. |
 
 Rules:
 
 - **Event types are a contract.** [`docs/workflows.md`](../workflows.md) documents each type's data. Events are separate from `audit_events`: audit is the manager's record of what changed; events are what workflows react to.
 - **Runs act as the version's author.** Every step authorizes as the subject who saved the workflow version, as a request would, so a workflow never does more than its author may. Events a run raises are one level deeper than the event that started it, and depth 5 starts nothing.
-- **Queues:** one `workflows` queue today. Partitioned `bulk` and serial `maintenance` queues come with phases 3 and 4.
+- **Queues:** ordinary, partitioned coalesce and system queues carry orchestration. DBOS waits remain pending without cancelling/resuming the workflow. Heavy activity work has a per-node concurrency limit; suspended workflows do not consume it. Coalesce partitions remain serial through waits.
 
 ## Semantics
 
@@ -82,7 +82,7 @@ Rules:
   - no reads of mutable globals;
   - change running logic only behind `runner.Patch` (DBOS `Patch`/`DeprecatePatch`);
   - keep inputs and outputs JSON-serializable and small.
-- **Versions.** By default DBOS stamps each workflow with a hash of the binary and recovers only workflows from the same binary, so a deploy would strand pending work. PaperGo fixes the application version (`papergo-1`). The interpreter's step sequence (`load`, one step per node attempt, `finish`) is the compatibility contract; an incompatible change to it must be guarded with DBOS `Patch`.
+- **Versions.** By default DBOS stamps each workflow with a hash of the binary and recovers only workflows from the same binary, so a deploy would strand pending work. PaperGo fixes the application version (`papergo-1`). The interpreter records `load`, preparation, work/commit and wait/resume transitions, then `finish`. Node invocation IDs distinguish cycles, loop iterations and retries. Disposable development databases are recreated when this sequence changes.
 
 ## Product processes as system workflows
 

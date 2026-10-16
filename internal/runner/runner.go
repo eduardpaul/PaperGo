@@ -21,10 +21,10 @@ import (
 	_ "github.com/dbos-inc/dbos-transact-golang/dbos/driver/sqlite" // DBOS's SQLite system database
 	_ "time/tzdata"                                                 // schedule time zones in minimal images
 
+	"papergo/internal/activitystore"
 	"papergo/internal/database"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
-	_ "papergo/internal/workflowai" // registers ai.complete, search.enrich and the batch coordinator
 )
 
 const (
@@ -61,7 +61,8 @@ type Config struct {
 	TickSchedule string
 	// PollInterval is how often the run queue is polled; default 1s.
 	PollInterval time.Duration
-	// Concurrency bounds the runs one node executes at once; default 4.
+	// Concurrency bounds heavy activity work per node; default 4. Durable
+	// orchestration waits do not occupy a work slot.
 	Concurrency int
 	// DispatchInterval is how often the dispatcher looks for events that no
 	// commit on this node announced (other nodes, restarts); default 1s.
@@ -70,6 +71,7 @@ type Config struct {
 
 // Runner executes workflow runs durably.
 type Runner struct {
+	workSlots chan struct{}
 	ctx       dbos.Context
 	db        *sql.DB
 	system    *sql.DB
@@ -129,16 +131,19 @@ func New(cfg Config, db *sql.DB, service *dms.Service, workflows *workflow.Servi
 		system.Close()
 		return nil, fmt.Errorf("start the runner: %w", err)
 	}
-	r := &Runner{ctx: ctx, db: db, system: system, dms: service, workflows: workflows, log: cfg.Logger, cfg: cfg, wake: make(chan struct{}, 1)}
-	if _, err = dbos.RegisterQueue(ctx, serialQueue, dbos.WithWorkerConcurrency(cfg.Concurrency), dbos.WithPartitionConcurrency(1), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
+	if workflows.Tools.Records == nil {
+		workflows.Tools.Records = activitystore.New(db)
+	}
+	r := &Runner{workSlots: make(chan struct{}, cfg.Concurrency), ctx: ctx, db: db, system: system, dms: service, workflows: workflows, log: cfg.Logger, cfg: cfg, wake: make(chan struct{}, 1)}
+	if _, err = dbos.RegisterQueue(ctx, serialQueue, dbos.WithPartitionConcurrency(1), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
 		system.Close()
 		return nil, err
 	}
-	if _, err = dbos.RegisterQueue(ctx, systemQueue, dbos.WithWorkerConcurrency(cfg.Concurrency), dbos.WithPartitionConcurrency(1), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
+	if _, err = dbos.RegisterQueue(ctx, systemQueue, dbos.WithPartitionConcurrency(1), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
 		system.Close()
 		return nil, err
 	}
-	if _, err = dbos.RegisterQueue(ctx, runQueue, dbos.WithWorkerConcurrency(cfg.Concurrency), dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
+	if _, err = dbos.RegisterQueue(ctx, runQueue, dbos.WithQueueBasePollingInterval(cfg.PollInterval)); err != nil {
 		system.Close()
 		return nil, err
 	}
@@ -203,7 +208,17 @@ func (r *Runner) Ready(ctx context.Context) error {
 // run is the DBOS workflow of every PaperGo workflow run.
 func (r *Runner) run(ctx dbos.Context, in workflow.RunInput) (workflow.Result, error) {
 	res, err := r.workflows.Execute(ctx, &durable{r: r, ctx: ctx}, in)
-	if err != nil && !errors.Is(err, workflow.ErrStopped) {
+	if ctx.Err() == nil {
+		if cleanup := r.dms.Write(context.Background(), func(t *dms.Service) error {
+			if err := workflow.CloseRunWaits(context.Background(), t, in.RunID); err != nil {
+				return err
+			}
+			return nil
+		}); cleanup != nil {
+			r.log.Error("release activity resources", "error", cleanup)
+		}
+	}
+	if err != nil && ctx.Err() == nil {
 		r.log.Warn("workflow run failed", "run_id", in.RunID, "workflow_id", in.WorkflowID, "error", err)
 	}
 	return res, err
@@ -254,6 +269,12 @@ func (x *durable) Step(name string, fn func(context.Context, *dms.Service, func(
 // its result, so a replay returns it without running fn again.
 func (x *durable) Work(name string, fn func(context.Context) (json.RawMessage, error)) (json.RawMessage, error) {
 	return dbos.RunAsStep(x.ctx, func(ctx context.Context) (json.RawMessage, error) {
+		select {
+		case x.r.workSlots <- struct{}{}:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		defer func() { <-x.r.workSlots }()
 		out, err := fn(ctx)
 		if err == nil && len(out) == 0 {
 			out = json.RawMessage("null")

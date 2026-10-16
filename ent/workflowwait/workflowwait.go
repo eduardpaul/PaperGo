@@ -21,6 +21,10 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldKind holds the string denoting the kind field in the database.
 	FieldKind = "kind"
+	// FieldQueue holds the string denoting the queue field in the database.
+	FieldQueue = "queue"
+	// FieldPayloadID holds the string denoting the payload_id field in the database.
+	FieldPayloadID = "payload_id"
 	// FieldKey holds the string denoting the key field in the database.
 	FieldKey = "key"
 	// FieldWorkspaceID holds the string denoting the workspace_id field in the database.
@@ -37,6 +41,10 @@ const (
 	FieldCompletion = "completion"
 	// FieldDeadline holds the string denoting the deadline field in the database.
 	FieldDeadline = "deadline"
+	// FieldNotifiedAt holds the string denoting the notified_at field in the database.
+	FieldNotifiedAt = "notified_at"
+	// FieldClaimUntil holds the string denoting the claim_until field in the database.
+	FieldClaimUntil = "claim_until"
 	// FieldClaimRunID holds the string denoting the claim_run_id field in the database.
 	FieldClaimRunID = "claim_run_id"
 	// FieldClaimToken holds the string denoting the claim_token field in the database.
@@ -55,6 +63,8 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldKind,
+	FieldQueue,
+	FieldPayloadID,
 	FieldKey,
 	FieldWorkspaceID,
 	FieldRunID,
@@ -63,6 +73,8 @@ var Columns = []string{
 	FieldData,
 	FieldCompletion,
 	FieldDeadline,
+	FieldNotifiedAt,
+	FieldClaimUntil,
 	FieldClaimRunID,
 	FieldClaimToken,
 	FieldStatus,
@@ -86,6 +98,12 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// KindValidator is a validator for the "kind" field. It is called by the builders before save.
 	KindValidator func(string) error
+	// DefaultQueue holds the default value on creation for the "queue" field.
+	DefaultQueue string
+	// QueueValidator is a validator for the "queue" field. It is called by the builders before save.
+	QueueValidator func(string) error
+	// DefaultPayloadID holds the default value on creation for the "payload_id" field.
+	DefaultPayloadID string
 	// KeyValidator is a validator for the "key" field. It is called by the builders before save.
 	KeyValidator func(string) error
 	// WorkspaceIDValidator is a validator for the "workspace_id" field. It is called by the builders before save.
@@ -160,6 +178,16 @@ func ByKind(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldKind, opts...).ToFunc()
 }
 
+// ByQueue orders the results by the queue field.
+func ByQueue(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQueue, opts...).ToFunc()
+}
+
+// ByPayloadID orders the results by the payload_id field.
+func ByPayloadID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPayloadID, opts...).ToFunc()
+}
+
 // ByKey orders the results by the key field.
 func ByKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldKey, opts...).ToFunc()
@@ -188,6 +216,16 @@ func ByExecutionID(opts ...sql.OrderTermOption) OrderOption {
 // ByDeadline orders the results by the deadline field.
 func ByDeadline(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeadline, opts...).ToFunc()
+}
+
+// ByNotifiedAt orders the results by the notified_at field.
+func ByNotifiedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNotifiedAt, opts...).ToFunc()
+}
+
+// ByClaimUntil orders the results by the claim_until field.
+func ByClaimUntil(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClaimUntil, opts...).ToFunc()
 }
 
 // ByClaimRunID orders the results by the claim_run_id field.

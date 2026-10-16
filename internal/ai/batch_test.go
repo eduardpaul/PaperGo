@@ -2,13 +2,51 @@ package ai_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"papergo/internal/ai"
 	"papergo/internal/ai/aitest"
 )
+
+func TestBatchLookupReadsBeyondFiveHundredAndRejectsIncompleteListings(t *testing.T) {
+	for _, incomplete := range []bool{false, true} {
+		t.Run(fmt.Sprint(incomplete), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				page, _ := strconv.Atoi(r.URL.Query().Get("after"))
+				page++
+				if incomplete && page == 7 {
+					fmt.Fprint(w, `{"data":[],"has_more":true}`)
+					return
+				}
+				tag := "unrelated"
+				if page == 7 {
+					tag = "wanted"
+				}
+				json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"id": strconv.Itoa(page), "status": "completed", "metadata": map[string]string{ai.MetadataKey: tag}}}, "has_more": page < 7})
+			}))
+			defer server.Close()
+			client, err := ai.NewBatch(ai.BatchConfig{Provider: ai.ProviderOpenAI, Endpoint: server.URL, Model: "test"}, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, found, err := client.FindByTag(context.Background(), "wanted")
+			if incomplete {
+				if found || !errors.Is(err, ai.ErrUncertain) {
+					t.Fatalf("incomplete listing reported absence: %q %v %v", id, found, err)
+				}
+			} else if err != nil || !found || id != "7" {
+				t.Fatalf("later page lost: %q %v %v", id, found, err)
+			}
+		})
+	}
+}
 
 func TestBatchProtocolAndAzureBase(t *testing.T) {
 	server := aitest.NewBatchServer(t)

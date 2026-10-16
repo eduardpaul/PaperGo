@@ -865,7 +865,7 @@ func CancelByWorkflow(ctx context.Context, t *dms.Service, author, workspaceID, 
 }
 
 func cancel(ctx context.Context, t *dms.Service, tk *ent.Task, actor string) (*ent.Task, error) {
-	tk, err := t.Client.Task.UpdateOne(tk).SetStatus(task.StatusCancelled).SetParked(false).SetCompletedAt(time.Now().UTC()).AddVersion(1).Save(ctx)
+	tk, err := t.Client.Task.UpdateOne(tk).SetStatus(task.StatusCancelled).SetCompletedAt(time.Now().UTC()).AddVersion(1).Save(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -875,27 +875,18 @@ func cancel(ctx context.Context, t *dms.Service, tk *ent.Task, actor string) (*e
 	return tk, nil
 }
 
-// CancelRun cancels the open tasks a cancelled or deleted run waits for, and
-// releases a task that completed but has not resumed the run yet. Tasks
-// created without waiting stay open: they outlive their run. It reports
-// whether one of the tasks had parked the run.
-func CancelRun(ctx context.Context, t *dms.Service, runID string) (parked bool, err error) {
-	rows, err := t.Client.Task.Query().Where(task.RunIDEQ(runID), task.Or(task.And(task.StatusEQ(task.StatusOpen), task.Wait(true)), task.Parked(true))).All(ctx)
+// CancelRun cancels open tasks whose owning run was cancelled.
+func CancelRun(ctx context.Context, t *dms.Service, runID string) (bool, error) {
+	rows, err := t.Client.Task.Query().Where(task.RunIDEQ(runID), task.StatusEQ(task.StatusOpen), task.Wait(true)).All(ctx)
 	if err != nil {
 		return false, err
 	}
 	for _, tk := range rows {
-		parked = parked || tk.Parked
-		if tk.Status != task.StatusOpen {
-			err = t.Client.Task.UpdateOne(tk).SetParked(false).Exec(ctx)
-		} else {
-			_, err = cancel(ctx, t, tk, tk.CreatedBy)
-		}
-		if err != nil {
+		if _, err = cancel(ctx, t, tk, tk.CreatedBy); err != nil {
 			return false, err
 		}
 	}
-	return parked, nil
+	return len(rows) > 0, nil
 }
 
 func manages(ctx context.Context, t *dms.Service, subject, workspaceID string) bool {

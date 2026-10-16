@@ -360,7 +360,11 @@ func prepareDecision(e *env, in map[string]any, taxonomy bool) (outcome, error) 
 	if _, err = boundedDecision(decisionOutput(job, worst)); err != nil {
 		return outcome{}, err
 	}
-	return outcome{Job: raw}, nil
+	var ids []string
+	if job.Source != nil {
+		ids = []string{job.Source.BlobID}
+	}
+	return outcome{Job: raw, BlobIDs: ids}, nil
 }
 
 func boundedDecision(v any) (json.RawMessage, error) {

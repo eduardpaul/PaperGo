@@ -119,7 +119,7 @@ func runOptimizeImage(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	return outcome{Job: job, Output: out}, nil
+	return outcome{Job: job, BlobIDs: []string{b.ID}, Output: out}, nil
 }
 
 // number reads an optional numeric input, literal or token, into v.

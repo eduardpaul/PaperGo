@@ -9,6 +9,70 @@ import (
 )
 
 var (
+	// ActivityRecordsColumns holds the columns for the "activity_records" table.
+	ActivityRecordsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "namespace", Type: field.TypeString, Size: 64},
+		{Name: "scope", Type: field.TypeString, Size: 255},
+		{Name: "key", Type: field.TypeString, Size: 128},
+		{Name: "owner_id", Type: field.TypeString, Default: ""},
+		{Name: "payload", Type: field.TypeJSON},
+		{Name: "state", Type: field.TypeString, Default: "pending"},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "lease_owner", Type: field.TypeString, Nullable: true},
+		{Name: "lease_token", Type: field.TypeString, Nullable: true},
+		{Name: "lease_until", Type: field.TypeTime, Nullable: true},
+	}
+	// ActivityRecordsTable holds the schema information for the "activity_records" table.
+	ActivityRecordsTable = &schema.Table{
+		Name:       "activity_records",
+		Columns:    ActivityRecordsColumns,
+		PrimaryKey: []*schema.Column{ActivityRecordsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "activityrecord_namespace_scope_key",
+				Unique:  true,
+				Columns: []*schema.Column{ActivityRecordsColumns[2], ActivityRecordsColumns[3], ActivityRecordsColumns[4]},
+			},
+			{
+				Name:    "activityrecord_namespace_scope_state_key",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityRecordsColumns[2], ActivityRecordsColumns[3], ActivityRecordsColumns[7], ActivityRecordsColumns[4]},
+			},
+			{
+				Name:    "activityrecord_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityRecordsColumns[9]},
+			},
+		},
+	}
+	// ActivityReferencesColumns holds the columns for the "activity_references" table.
+	ActivityReferencesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "owner_id", Type: field.TypeString},
+		{Name: "record_id", Type: field.TypeString},
+	}
+	// ActivityReferencesTable holds the schema information for the "activity_references" table.
+	ActivityReferencesTable = &schema.Table{
+		Name:       "activity_references",
+		Columns:    ActivityReferencesColumns,
+		PrimaryKey: []*schema.Column{ActivityReferencesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "activityreference_owner_id_record_id",
+				Unique:  true,
+				Columns: []*schema.Column{ActivityReferencesColumns[2], ActivityReferencesColumns[3]},
+			},
+			{
+				Name:    "activityreference_record_id",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityReferencesColumns[3]},
+			},
+		},
+	}
 	// AuditEventsColumns holds the columns for the "audit_events" table.
 	AuditEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 36},
@@ -113,6 +177,37 @@ var (
 		Name:       "blob_deletions",
 		Columns:    BlobDeletionsColumns,
 		PrimaryKey: []*schema.Column{BlobDeletionsColumns[0]},
+	}
+	// BlobLeasesColumns holds the columns for the "blob_leases" table.
+	BlobLeasesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "owner_id", Type: field.TypeString},
+		{Name: "run_id", Type: field.TypeString},
+		{Name: "blob_id", Type: field.TypeString},
+	}
+	// BlobLeasesTable holds the schema information for the "blob_leases" table.
+	BlobLeasesTable = &schema.Table{
+		Name:       "blob_leases",
+		Columns:    BlobLeasesColumns,
+		PrimaryKey: []*schema.Column{BlobLeasesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "bloblease_owner_id_blob_id",
+				Unique:  true,
+				Columns: []*schema.Column{BlobLeasesColumns[2], BlobLeasesColumns[4]},
+			},
+			{
+				Name:    "bloblease_blob_id",
+				Unique:  false,
+				Columns: []*schema.Column{BlobLeasesColumns[4]},
+			},
+			{
+				Name:    "bloblease_run_id",
+				Unique:  false,
+				Columns: []*schema.Column{BlobLeasesColumns[3]},
+			},
+		},
 	}
 	// BlobTextsColumns holds the columns for the "blob_texts" table.
 	BlobTextsColumns = []*schema.Column{
@@ -1706,7 +1801,6 @@ var (
 		{Name: "run_id", Type: field.TypeString, Nullable: true},
 		{Name: "node", Type: field.TypeString, Nullable: true},
 		{Name: "wait", Type: field.TypeBool, Default: false},
-		{Name: "parked", Type: field.TypeBool, Default: false},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "completed", "cancelled", "expired"}, Default: "open"},
 		{Name: "outcome", Type: field.TypeString, Nullable: true},
 		{Name: "completed_by", Type: field.TypeString, Nullable: true},
@@ -1731,17 +1825,12 @@ var (
 			{
 				Name:    "task_workspace_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{TasksColumns[2], TasksColumns[22]},
+				Columns: []*schema.Column{TasksColumns[2], TasksColumns[21]},
 			},
 			{
 				Name:    "task_item_id",
 				Unique:  false,
 				Columns: []*schema.Column{TasksColumns[3]},
-			},
-			{
-				Name:    "task_parked_status",
-				Unique:  false,
-				Columns: []*schema.Column{TasksColumns[21], TasksColumns[22]},
 			},
 		},
 	}
@@ -2154,15 +2243,19 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "kind", Type: field.TypeString, Size: 64},
+		{Name: "queue", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "payload_id", Type: field.TypeString, Default: ""},
 		{Name: "key", Type: field.TypeString, Size: 128},
 		{Name: "workspace_id", Type: field.TypeString, Size: 36},
-		{Name: "run_id", Type: field.TypeString, Size: 36},
+		{Name: "run_id", Type: field.TypeString, Size: 80},
 		{Name: "node", Type: field.TypeString, Size: 100},
 		{Name: "execution_id", Type: field.TypeString, Size: 128},
 		{Name: "data", Type: field.TypeJSON, SchemaType: map[string]string{"sqlite3": "text"}},
 		{Name: "completion", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"sqlite3": "text"}},
 		{Name: "deadline", Type: field.TypeTime, Nullable: true},
-		{Name: "claim_run_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "notified_at", Type: field.TypeTime, Nullable: true},
+		{Name: "claim_until", Type: field.TypeTime, Nullable: true},
+		{Name: "claim_run_id", Type: field.TypeString, Nullable: true, Size: 80},
 		{Name: "claim_token", Type: field.TypeString, Nullable: true, Size: 64},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "completed", "closed"}, Default: "open"},
 		{Name: "parking", Type: field.TypeBool, Default: false},
@@ -2176,25 +2269,33 @@ var (
 			{
 				Name:    "workflowwait_kind_key",
 				Unique:  true,
-				Columns: []*schema.Column{WorkflowWaitsColumns[3], WorkflowWaitsColumns[4]},
+				Columns: []*schema.Column{WorkflowWaitsColumns[3], WorkflowWaitsColumns[6]},
 			},
 			{
 				Name:    "workflowwait_run_id",
 				Unique:  false,
-				Columns: []*schema.Column{WorkflowWaitsColumns[6]},
+				Columns: []*schema.Column{WorkflowWaitsColumns[8]},
+			},
+			{
+				Name:    "workflowwait_kind_queue_status_id",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowWaitsColumns[3], WorkflowWaitsColumns[4], WorkflowWaitsColumns[18], WorkflowWaitsColumns[0]},
 			},
 			{
 				Name:    "workflowwait_workspace_id_kind",
 				Unique:  false,
-				Columns: []*schema.Column{WorkflowWaitsColumns[5], WorkflowWaitsColumns[3]},
+				Columns: []*schema.Column{WorkflowWaitsColumns[7], WorkflowWaitsColumns[3]},
 			},
 		},
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		ActivityRecordsTable,
+		ActivityReferencesTable,
 		AuditEventsTable,
 		BlobsTable,
 		BlobDeletionsTable,
+		BlobLeasesTable,
 		BlobTextsTable,
 		BusinessKeysTable,
 		CachedResultsTable,

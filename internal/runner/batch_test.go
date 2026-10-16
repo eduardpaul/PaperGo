@@ -10,11 +10,101 @@ import (
 	"testing"
 	"time"
 
+	"papergo/internal/activitystore"
 	"papergo/internal/ai"
 	"papergo/internal/ai/aitest"
 	"papergo/internal/dms"
 	"papergo/internal/workflow"
+	"papergo/internal/workflowai"
 )
+
+func TestBatchIdenticalPendingImagesAndQueueIsolation(t *testing.T) {
+	server, _, tools := batchTools(t, false)
+	f := setup(t, tools)
+	f.searchOff(t)
+	f.disableSearch(t, f.ws.ID)
+	coord := f.enableBatch(t, map[string]any{"policy": "threshold", "batch_size": 1})
+	firstPass := f.coordinate(t, coord.ID)
+	// A failed or finished coordinator must never monopolize its queue.
+	if _, err := f.db.SQL.Exec(`UPDATE activity_records SET lease_owner=?,lease_token='stale',lease_until=? WHERE namespace='ai.batch.state'`, firstPass.ID, time.Now().UTC().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	lib, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "library", Name: "Tickets", WebDAVEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	png, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := f.workflow(t, "Read image", fmt.Sprintf(`{"triggers":[{"type":"manual","collection_id":%q}],"input_schema":{"type":"object","properties":{"image":{"type":"string"}}},"flow":{"start":"ask","nodes":{"ask":{"activity":"ai.complete","inputs":{"prompt":"Read","image":"{input:image}","execution":"batch"},"next":{"done":"save"}},"save":{"activity":"set_variable","inputs":{"name":"answer","value":"{step:ask.text}"}}}}}`, lib.ID))
+	var ids []string
+	for i := range 2 {
+		file := f.upload(t, lib.ID, fmt.Sprintf("ticket-%d.png", i), "image/png", png)
+		runs, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{file.ID}, Inputs: map[string]any{"image": file.Blob.ID}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, runs[0])
+		f.status(t, runs[0], "waiting")
+	}
+	waits := f.openRequests(t, "")
+	var data struct {
+		Hash string `json:"hash"`
+	}
+	if len(waits) != 2 {
+		t.Fatalf("pending consumers: %+v", waits)
+	}
+	if err = json.Unmarshal(waits[0].Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	client, err := ai.NewBatch(ai.BatchConfig{Provider: ai.ProviderOpenAI, Endpoint: server.Endpoint(), Model: "gpt-batch"}, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An unrelated queue with the same content hash must not block this queue.
+	body, _ := json.Marshal(map[string]any{"status": "uncertain", "hashes": []string{data.Hash}, "queue": "other"})
+	if err = f.wf.Tools.Records.Put(ctx, activitystore.Record{Namespace: "ai.batch.flight", Scope: ai.CacheKey("other", client.Connection(), client.Key()), Key: "unrelated", Payload: body}); err != nil {
+		t.Fatal(err)
+	}
+	// Old completed batches do not become open waits and cannot hide new work.
+	for i := range 1005 {
+		if err = f.wf.Tools.Records.Put(ctx, activitystore.Record{Namespace: "ai.batch.flight", Scope: ai.CacheKey("shared", client.Connection(), client.Key()), Key: fmt.Sprintf("old-%04d", i), State: "completed", Payload: json.RawMessage(`{"status":"done"}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.coordinate(t, coord.ID)
+	for _, id := range ids {
+		if got := f.answer(t, id); !strings.Contains(got, "data:image/png;base64,") {
+			t.Fatalf("image answer %q", got)
+		}
+	}
+	if server.Creates() != 1 || len(server.Uploads()) != 1 || len(jsonlIDs(t, server.Uploads()[0])) != 1 {
+		t.Fatalf("duplicate images were billed separately: %d", server.Creates())
+	}
+	// Evicting the reuse cache admits a fresh submission rather than
+	// resurrecting a historical provider batch with the same membership.
+	if _, err = f.db.SQL.Exec(`DELETE FROM cached_results`); err != nil {
+		t.Fatal(err)
+	}
+	file := f.upload(t, lib.ID, "fresh.png", "image/png", png)
+	fresh, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{file.ID}, Inputs: map[string]any{"image": file.Blob.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, fresh[0], "waiting")
+	f.coordinate(t, coord.ID)
+	if got := f.answer(t, fresh[0]); !strings.Contains(got, "data:image/png;base64,") {
+		t.Fatal(got)
+	}
+	if server.Creates() != 2 {
+		t.Fatalf("expired cache reused a historical provider batch: %d", server.Creates())
+	}
+	var openFlights int
+	if err = f.db.SQL.QueryRow(`SELECT COUNT(*) FROM workflow_waits WHERE kind IN ('ai.batch.flight','ai.batch.state')`).Scan(&openFlights); err != nil || openFlights != 0 {
+		t.Fatalf("synthetic wait owners: %d %v", openFlights, err)
+	}
+}
 
 // batchClock is the clock batch admission reads. Tests move it; activities
 // call it from the runner's goroutines.
@@ -50,9 +140,9 @@ func batchTools(t *testing.T, azure bool) (*aitest.BatchServer, *batchClock, fun
 	}
 	clock := &batchClock{at: time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)}
 	return server, clock, func(tools *workflow.Tools) {
-		tools.Batch = client
+		workflowai.Configure(tools, workflowai.Runtime{Batch: client, BatchDeadline: 72 * time.Hour})
 		tools.Now = clock.now
-		tools.BatchDeadline = 72 * time.Hour
+
 	}
 }
 
@@ -203,24 +293,17 @@ func attemptsOf(t *testing.T, waits []workflow.Wait, runID string) int {
 
 func (f *fixture) nextFlush(t *testing.T) time.Time {
 	t.Helper()
-	page, err := f.wf.ListWaits(ctx, "alice", workflow.WaitQuery{Kind: "ai.batch.state", Limit: 10})
-	if err != nil {
+	record, err := f.wf.Tools.Records.Get(ctx, "ai.batch.state", "installation", "shared")
+	if err != nil || record == nil {
+		t.Fatalf("coordinator state: %v", err)
+	}
+	var data struct {
+		NextFlush time.Time `json:"next_flush"`
+	}
+	if err = json.Unmarshal(record.Payload, &data); err != nil {
 		t.Fatal(err)
 	}
-	for _, w := range page.Data {
-		if w.Key != "shared" {
-			continue
-		}
-		var data struct {
-			NextFlush time.Time `json:"next_flush"`
-		}
-		if err = json.Unmarshal(w.Data, &data); err != nil {
-			t.Fatal(err)
-		}
-		return data.NextFlush
-	}
-	t.Fatal("no coordinator state")
-	return time.Time{}
+	return data.NextFlush
 }
 
 func containsAny(raw string, parts ...string) string {
@@ -535,7 +618,7 @@ func TestBatchReconcilesAmbiguousCreate(t *testing.T) {
 		reconcileAmbiguous(t, true, 1)
 	})
 	t.Run("missed", func(t *testing.T) {
-		reconcileAmbiguous(t, false, 2)
+		reconcileAmbiguous(t, false, 1)
 	})
 }
 
@@ -568,6 +651,10 @@ func reconcileAmbiguous(t *testing.T, land bool, wantCreates int) {
 	}
 	if server.Creates() != wantCreates {
 		t.Fatalf("creates %d, want %d", server.Creates(), wantCreates)
+	}
+	if !land {
+		f.status(t, id, "waiting")
+		return
 	}
 	if got := f.answer(t, id); got != "answer:ambiguous-ticket" {
 		t.Fatalf("answer %q", got)

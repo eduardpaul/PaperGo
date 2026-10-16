@@ -6,19 +6,19 @@ package workflowai
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/json/jsontext"
 	"errors"
 	"io"
 	"strconv"
 	"time"
 
-	"papergo/ent"
-	"papergo/ent/cachedresult"
+	"papergo/internal/activitystore"
 	"papergo/internal/ai"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
+	"papergo/internal/resultcache"
 	"papergo/internal/workflow"
 )
 
@@ -30,7 +30,6 @@ const (
 	kindState       = "ai.batch.state"
 	kindFlight      = "ai.batch.flight"
 	defaultQueue    = "shared"
-	batchSize       = 20
 	maxAttempts     = 3
 	defaultDeadline = 72 * time.Hour
 	pollEvery       = 5 * time.Minute
@@ -74,8 +73,6 @@ func hashText(text string) string {
 type imageRef struct {
 	ObjectKey   string `json:"object_key"`
 	ContentType string `json:"content_type"`
-	ItemID      string `json:"item_id"`
-	BlobID      string `json:"blob_id"`
 }
 
 type blobPin struct {
@@ -83,14 +80,13 @@ type blobPin struct {
 	BlobID string `json:"blob_id"`
 }
 
-// requestBody is the provider input, stored in the result cache. Wait rows
-// keep only the hash and the file pins.
+// requestBody is canonical provider input in durable activity storage.
+// Consumer identity and routing are kept separately from the shared payload.
 type requestBody struct {
 	Activity   string         `json:"activity"`
 	ModelKey   string         `json:"model_key"`
 	Model      string         `json:"model"`
 	Connection string         `json:"connection"`
-	Queue      string         `json:"queue"`
 	Prompt     string         `json:"prompt"`
 	Input      string         `json:"input,omitempty"`
 	ObjectKey  string         `json:"object_key,omitempty"`
@@ -100,13 +96,12 @@ type requestBody struct {
 }
 
 type requestData struct {
-	Hash       string    `json:"hash"`
-	Queue      string    `json:"queue"`
-	Activity   string    `json:"activity"`
-	Connection string    `json:"connection"`
-	Model      string    `json:"model"`
-	Blobs      []blobPin `json:"blobs,omitempty"`
-	Attempts   int       `json:"attempts,omitempty"`
+	Hash       string `json:"hash"`
+	Queue      string `json:"queue"`
+	Activity   string `json:"activity"`
+	Connection string `json:"connection"`
+	Model      string `json:"model"`
+	Attempts   int    `json:"attempts,omitempty"`
 }
 
 func cacheReady(tools workflow.Tools) error {
@@ -131,12 +126,12 @@ func findAnswer(ctx context.Context, tools workflow.Tools, namespace, key string
 
 // findAnswerStep reads a cached answer through the step's transaction.
 // The result cache's own connection would wait on the step's write lock.
-func findAnswerStep(ctx context.Context, client *ent.Client, tools workflow.Tools, namespace, key string) (cachedAnswer, bool, error) {
+func findAnswerStep(ctx context.Context, tx *sql.Tx, tools workflow.Tools, namespace, key string) (cachedAnswer, bool, error) {
 	var answer cachedAnswer
 	if err := cacheReady(tools); err != nil {
 		return answer, false, err
 	}
-	raw, err := stepCacheGet(ctx, client, namespace, key)
+	raw, err := resultcache.NewTx(tx).Get(ctx, namespace, answerScope, key)
 	if err != nil || raw == nil {
 		return answer, false, err
 	}
@@ -159,114 +154,52 @@ func saveAnswer(ctx context.Context, tools workflow.Tools, namespace, key string
 }
 
 func requestTTL(tools workflow.Tools) time.Duration {
-	ttl := tools.ResultTTL
-	deadline := tools.BatchDeadline
-	if deadline <= 0 {
-		deadline = defaultDeadline
+	d := runtime(tools).BatchDeadline
+	if d <= 0 {
+		d = defaultDeadline
 	}
-	if deadline > ttl {
-		ttl = deadline
-	}
-	return ttl
+	return d
 }
 
-func putRequest(ctx context.Context, client *ent.Client, tools workflow.Tools, hash string, body requestBody) error {
-	if err := cacheReady(tools); err != nil {
-		return err
+func putRequest(ctx context.Context, tx *sql.Tx, tools workflow.Tools, hash string, body requestBody) error {
+	if tools.Records == nil {
+		return errors.New("durable activity storage is not configured")
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
-	winner, err := stepCachePut(ctx, client, requestCache, hash, raw, requestTTL(tools))
-	if err != nil {
+	until := time.Now().UTC().Add(requestTTL(tools))
+	return tools.Records.WithTx(tx).PutImmutable(ctx, activitystore.Record{Namespace: requestCache, Scope: answerScope, Key: hash, Payload: raw, ExpiresAt: &until})
+}
+func putManifest(step workflow.Step, key string, payload json.RawMessage) error {
+	until := time.Now().UTC().Add(requestTTL(step.Tools()))
+	store := step.Tools().Records.WithTx(step.DMS().SQLTx())
+	if err := store.PutImmutable(step.Context(), activitystore.Record{Namespace: "ai.enrich.manifest", Scope: answerScope, Key: key, Payload: payload, ExpiresAt: &until}); err != nil {
 		return err
 	}
-	if string(winner) != string(raw) {
-		return errors.New("the stored batch request does not match this one")
-	}
-	return nil
+	return store.Reference(step.Context(), step.RunID(), activitystore.ID("ai.enrich.manifest", answerScope, key))
 }
-
-func putCachedStep(ctx context.Context, client *ent.Client, tools workflow.Tools, namespace, key string, payload json.RawMessage, ttl time.Duration) error {
-	if err := cacheReady(tools); err != nil {
-		return err
+func loadManifest(step workflow.Step, key string) (json.RawMessage, error) {
+	record, err := step.Tools().Records.WithTx(step.DMS().SQLTx()).Get(step.Context(), "ai.enrich.manifest", answerScope, key)
+	if err != nil || record == nil {
+		return nil, err
 	}
-	_, err := stepCachePut(ctx, client, namespace, key, payload, ttl)
-	return err
+	return record.Payload, nil
 }
-
-func stepCacheGet(ctx context.Context, client *ent.Client, namespace, key string) (json.RawMessage, error) {
-	now := time.Now().UTC()
-	row, err := client.CachedResult.Query().Where(
-		cachedresult.NamespaceEQ(namespace), cachedresult.ScopeEQ(answerScope), cachedresult.KeyEQ(key), cachedresult.ExpiresAtGT(now),
-	).Only(ctx)
-	if ent.IsNotFound(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	ttl := row.ExpiresAt.Sub(row.UsedAt)
-	if ttl > 0 && now.Sub(row.UsedAt) >= min(24*time.Hour, ttl/2) {
-		if err = client.CachedResult.UpdateOneID(row.ID).SetUsedAt(now).SetExpiresAt(now.Add(ttl)).Exec(ctx); err != nil {
-			return nil, err
-		}
-	}
-	if len(row.Payload) == 0 {
-		return nil, nil
-	}
-	return json.RawMessage(row.Payload), nil
-}
-
-func stepCachePut(ctx context.Context, client *ent.Client, namespace, key string, payload json.RawMessage, ttl time.Duration) (json.RawMessage, error) {
-	if ttl <= 0 || len(payload) > 1<<20 || !json.Valid(payload) {
-		return nil, errors.New("result cache requires JSON within 1 MiB and a positive TTL")
-	}
-	now := time.Now().UTC()
-	err := client.CachedResult.Create().
-		SetNamespace(namespace).SetScope(answerScope).SetKey(key).
-		SetPayload(jsontext.Value(payload)).SetUsedAt(now).SetExpiresAt(now.Add(ttl)).Exec(ctx)
-	if err == nil {
-		return payload, nil
-	}
-	if !ent.IsConstraintError(err) {
-		return nil, err
-	}
-	row, err := client.CachedResult.Query().Where(
-		cachedresult.NamespaceEQ(namespace), cachedresult.ScopeEQ(answerScope), cachedresult.KeyEQ(key),
-	).Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if row.ExpiresAt.After(now) {
-		return json.RawMessage(row.Payload), nil
-	}
-	if err = client.CachedResult.DeleteOneID(row.ID).Exec(ctx); err != nil {
-		return nil, err
-	}
-	if err = client.CachedResult.Create().
-		SetNamespace(namespace).SetScope(answerScope).SetKey(key).
-		SetPayload(jsontext.Value(payload)).SetUsedAt(now).SetExpiresAt(now.Add(ttl)).Exec(ctx); err != nil {
-		return nil, err
-	}
-	return payload, nil
-}
-
 func loadRequest(ctx context.Context, tools workflow.Tools, hash string) (requestBody, error) {
 	var body requestBody
-	if tools.Results == nil {
-		return body, errors.New("AI steps need a result cache with a positive TTL")
+	if tools.Records == nil {
+		return body, errors.New("durable activity storage is not configured")
 	}
-	raw, err := tools.Results.Get(ctx, requestCache, answerScope, hash)
+	record, err := tools.Records.Get(ctx, requestCache, answerScope, hash)
 	if err != nil {
 		return body, err
 	}
-	if raw == nil {
-		return body, errors.New("the batch request expired before it was sent")
+	if record == nil {
+		return body, errors.New("the durable batch request is unavailable")
 	}
-	err = json.Unmarshal(raw, &body)
-	return body, err
+	return body, json.Unmarshal(record.Payload, &body)
 }
 
 func readObject(ctx context.Context, tools workflow.Tools, key string) ([]byte, error) {
@@ -278,11 +211,16 @@ func readObject(ctx context.Context, tools workflow.Tools, key string) ([]byte, 
 		return nil, err
 	}
 	defer f.Close()
-	return io.ReadAll(f)
+	const limit = 20 << 20
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if len(data) > limit {
+		return nil, errors.New("the LLM source exceeds the 20 MiB input limit")
+	}
+	return data, err
 }
 
 func executionMode(step workflow.Step, in map[string]any) (string, error) {
-	mode := step.Tools().DefaultExecution
+	mode := runtime(step.Tools()).DefaultExecution
 	if mode != "batch" {
 		mode = "immediate"
 	}
@@ -313,26 +251,11 @@ func queueName(step workflow.Step, in map[string]any) (string, error) {
 }
 
 func deadlineAt(tools workflow.Tools, now time.Time) time.Time {
-	d := tools.BatchDeadline
+	d := runtime(tools).BatchDeadline
 	if d <= 0 {
 		d = defaultDeadline
 	}
 	return now.Add(d)
-}
-
-func batchOwner(queue string) string { return "ai.batch:" + queue }
-
-func pins(refs ...blobPin) []blobPin {
-	var out []blobPin
-	seen := map[string]bool{}
-	for _, pin := range refs {
-		if pin.BlobID == "" || seen[pin.BlobID] {
-			continue
-		}
-		seen[pin.BlobID] = true
-		out = append(out, pin)
-	}
-	return out
 }
 
 func inputSchema(properties string, required ...string) map[string]any {
@@ -344,17 +267,17 @@ func inputSchema(properties string, required ...string) map[string]any {
 }
 
 func chatConnection(tools workflow.Tools) string {
-	if tools.Chat == nil {
+	if runtime(tools).Chat == nil {
 		return ""
 	}
-	if tools.Batch != nil && tools.Batch.Key() == tools.Chat.Key() {
-		return tools.Batch.Connection()
+	if runtime(tools).Batch != nil && runtime(tools).Batch.Key() == runtime(tools).Chat.Key() {
+		return runtime(tools).Batch.Connection()
 	}
-	return "chat:" + tools.Chat.Key()
+	return "chat:" + runtime(tools).Chat.Key()
 }
 
 func contentHash(model, activity, connection, queue, prompt, source string, schema []byte, maxChars int, images []imageRef) string {
-	parts := []string{activity, connection, queue, prompt, source, string(schema), strconv.Itoa(maxChars)}
+	parts := []string{activity, connection, prompt, source, string(schema), strconv.Itoa(maxChars)}
 	for _, image := range images {
 		parts = append(parts, image.ObjectKey, image.ContentType)
 	}
@@ -368,11 +291,38 @@ func shortText(text string, limit int) string {
 	return text
 }
 
-func waitToken(w workflow.Wait) string {
-	if w.ClaimToken == nil {
-		return ""
-	}
-	return *w.ClaimToken
-}
-
 func notFound(err error) bool { return errors.Is(err, dms.ErrNotFound) }
+
+func saveResponse(ctx context.Context, tools workflow.Tools, key, responseKey string, answer cachedAnswer) error {
+	raw, err := json.Marshal(answer)
+	if err != nil {
+		return err
+	}
+	until := time.Now().UTC().Add(requestTTL(tools))
+	return tools.Records.Write(ctx, func(store *activitystore.Store) error {
+		if err := store.PutImmutable(ctx, activitystore.Record{Namespace: "ai.response", Scope: answerScope, Key: responseKey, Payload: raw, ExpiresAt: &until}); err != nil {
+			return err
+		}
+		request, err := store.Get(ctx, requestCache, answerScope, key)
+		if err != nil {
+			return err
+		}
+		// Late provider results must not create a permanent reference from
+		// a request already expired and collected after cancellation.
+		if request == nil {
+			return nil
+		}
+		return store.Reference(ctx, request.ID, activitystore.ID("ai.response", answerScope, responseKey))
+	})
+}
+func responseStep(step workflow.Step, key string) (cachedAnswer, error) {
+	var answer cachedAnswer
+	r, err := step.Tools().Records.WithTx(step.DMS().SQLTx()).Get(step.Context(), "ai.response", answerScope, key)
+	if err != nil {
+		return answer, err
+	}
+	if r == nil {
+		return answer, errors.New("durable provider response is unavailable")
+	}
+	return answer, json.Unmarshal(r.Payload, &answer)
+}

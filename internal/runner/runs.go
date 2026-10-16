@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -125,7 +124,7 @@ func (r *Runner) attach(runs []Run, output bool) error {
 			continue
 		}
 		runs[i].Status = status(s.Status)
-		if parked[runs[i].ID] && s.Status == dbos.WorkflowStatusCancelled {
+		if parked[runs[i].ID] && (s.Status == dbos.WorkflowStatusPending || s.Status == dbos.WorkflowStatusEnqueued) {
 			runs[i].Status = "waiting"
 			runs[i].Error = ""
 			s.Error = nil
@@ -450,6 +449,9 @@ var purgePage = 200
 
 // Purge applies the retention now.
 func (r *Runner) Purge(ctx context.Context) (int, error) {
+	if err := r.workflows.Tools.Records.Purge(ctx, time.Now()); err != nil {
+		return 0, err
+	}
 	if _, err := resultcache.New(r.db).PurgeExpired(ctx, time.Now()); err != nil {
 		return 0, err
 	}
@@ -463,27 +465,17 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 	}); err != nil {
 		return 0, err
 	}
-	// Parked runs wait for a task; they are not finished. They stay at the
-	// front of the listing, so later pages start after the ones skipped.
-	deleted, skipped := 0, 0
+	// DBOS pending waits are excluded by the terminal status filter.
+	deleted := 0
 	for {
 		done, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterName(runName), dbos.WithFilterStatus(dbos.WorkflowStatusSuccess, dbos.WorkflowStatusError, dbos.WorkflowStatusCancelled, dbos.WorkflowStatusMaxRecoveryAttemptsExceeded),
-			dbos.WithFilterCompletedBefore(cutoff), dbos.WithFilterOffset(skipped), dbos.WithFilterLimit(purgePage), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
+			dbos.WithFilterCompletedBefore(cutoff), dbos.WithFilterLimit(purgePage), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
 		if err != nil || len(done) == 0 {
 			return deleted, err
 		}
 		ids := make([]string, 0, len(done))
 		for _, s := range done {
 			ids = append(ids, s.ID)
-		}
-		parked, err := parkedRuns(ctx, r.dms, ids)
-		if err != nil {
-			return deleted, err
-		}
-		ids = slices.DeleteFunc(ids, func(id string) bool { return parked[id] })
-		skipped += len(done) - len(ids)
-		if len(ids) == 0 {
-			continue
 		}
 		if err = r.deleteRuns(ctx, ids); err != nil {
 			return deleted, err
@@ -557,13 +549,14 @@ func (r *Runner) deleteRuns(ctx context.Context, ids []string) error {
 		if _, err := t.Client.ExecContext(ctx, `DELETE FROM runner_step_results WHERE run_id IN (`+strings.Join(marks, ",")+`)`, args...); err != nil {
 			return err
 		}
-		if err := workflow.DeleteRunWaits(ctx, t, ids); err != nil {
-			return err
-		}
+
 		for _, id := range ids {
 			if err := workflow.CloseRunWaits(ctx, t, id); err != nil {
 				return err
 			}
+		}
+		if err := workflow.DeleteRunWaits(ctx, t, ids); err != nil {
+			return err
 		}
 		if err := t.DiscardRunStagedFiles(ctx, ids...); err != nil {
 			return err

@@ -130,7 +130,7 @@ func runReadText(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	return outcome{Job: job, Output: map[string]any{"item_id": itemID, "blob_id": b.ID}}, nil
+	return outcome{Job: job, BlobIDs: []string{b.ID}, Output: map[string]any{"item_id": itemID, "blob_id": b.ID}}, nil
 }
 
 // textSettings identify how text is read, so a result is reused only for

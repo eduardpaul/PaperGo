@@ -58,6 +58,34 @@ func (_u *WorkflowWaitUpdate) SetNillableKind(v *string) *WorkflowWaitUpdate {
 	return _u
 }
 
+// SetQueue sets the "queue" field.
+func (_u *WorkflowWaitUpdate) SetQueue(v string) *WorkflowWaitUpdate {
+	_u.mutation.SetQueue(v)
+	return _u
+}
+
+// SetNillableQueue sets the "queue" field if the given value is not nil.
+func (_u *WorkflowWaitUpdate) SetNillableQueue(v *string) *WorkflowWaitUpdate {
+	if v != nil {
+		_u.SetQueue(*v)
+	}
+	return _u
+}
+
+// SetPayloadID sets the "payload_id" field.
+func (_u *WorkflowWaitUpdate) SetPayloadID(v string) *WorkflowWaitUpdate {
+	_u.mutation.SetPayloadID(v)
+	return _u
+}
+
+// SetNillablePayloadID sets the "payload_id" field if the given value is not nil.
+func (_u *WorkflowWaitUpdate) SetNillablePayloadID(v *string) *WorkflowWaitUpdate {
+	if v != nil {
+		_u.SetPayloadID(*v)
+	}
+	return _u
+}
+
 // SetKey sets the "key" field.
 func (_u *WorkflowWaitUpdate) SetKey(v string) *WorkflowWaitUpdate {
 	_u.mutation.SetKey(v)
@@ -178,6 +206,46 @@ func (_u *WorkflowWaitUpdate) ClearDeadline() *WorkflowWaitUpdate {
 	return _u
 }
 
+// SetNotifiedAt sets the "notified_at" field.
+func (_u *WorkflowWaitUpdate) SetNotifiedAt(v time.Time) *WorkflowWaitUpdate {
+	_u.mutation.SetNotifiedAt(v)
+	return _u
+}
+
+// SetNillableNotifiedAt sets the "notified_at" field if the given value is not nil.
+func (_u *WorkflowWaitUpdate) SetNillableNotifiedAt(v *time.Time) *WorkflowWaitUpdate {
+	if v != nil {
+		_u.SetNotifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearNotifiedAt clears the value of the "notified_at" field.
+func (_u *WorkflowWaitUpdate) ClearNotifiedAt() *WorkflowWaitUpdate {
+	_u.mutation.ClearNotifiedAt()
+	return _u
+}
+
+// SetClaimUntil sets the "claim_until" field.
+func (_u *WorkflowWaitUpdate) SetClaimUntil(v time.Time) *WorkflowWaitUpdate {
+	_u.mutation.SetClaimUntil(v)
+	return _u
+}
+
+// SetNillableClaimUntil sets the "claim_until" field if the given value is not nil.
+func (_u *WorkflowWaitUpdate) SetNillableClaimUntil(v *time.Time) *WorkflowWaitUpdate {
+	if v != nil {
+		_u.SetClaimUntil(*v)
+	}
+	return _u
+}
+
+// ClearClaimUntil clears the value of the "claim_until" field.
+func (_u *WorkflowWaitUpdate) ClearClaimUntil() *WorkflowWaitUpdate {
+	_u.mutation.ClearClaimUntil()
+	return _u
+}
+
 // SetClaimRunID sets the "claim_run_id" field.
 func (_u *WorkflowWaitUpdate) SetClaimRunID(v string) *WorkflowWaitUpdate {
 	_u.mutation.SetClaimRunID(v)
@@ -285,6 +353,11 @@ func (_u *WorkflowWaitUpdate) check() error {
 			return &ValidationError{Name: "kind", err: fmt.Errorf(`ent: validator failed for field "WorkflowWait.kind": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Queue(); ok {
+		if err := workflowwait.QueueValidator(v); err != nil {
+			return &ValidationError{Name: "queue", err: fmt.Errorf(`ent: validator failed for field "WorkflowWait.queue": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Key(); ok {
 		if err := workflowwait.KeyValidator(v); err != nil {
 			return &ValidationError{Name: "key", err: fmt.Errorf(`ent: validator failed for field "WorkflowWait.key": %w`, err)}
@@ -346,6 +419,12 @@ func (_u *WorkflowWaitUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.Kind(); ok {
 		_spec.SetField(workflowwait.FieldKind, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Queue(); ok {
+		_spec.SetField(workflowwait.FieldQueue, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PayloadID(); ok {
+		_spec.SetField(workflowwait.FieldPayloadID, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Key(); ok {
 		_spec.SetField(workflowwait.FieldKey, field.TypeString, value)
 	}
@@ -385,6 +464,18 @@ func (_u *WorkflowWaitUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.DeadlineCleared() {
 		_spec.ClearField(workflowwait.FieldDeadline, field.TypeTime)
+	}
+	if value, ok := _u.mutation.NotifiedAt(); ok {
+		_spec.SetField(workflowwait.FieldNotifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.NotifiedAtCleared() {
+		_spec.ClearField(workflowwait.FieldNotifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ClaimUntil(); ok {
+		_spec.SetField(workflowwait.FieldClaimUntil, field.TypeTime, value)
+	}
+	if _u.mutation.ClaimUntilCleared() {
+		_spec.ClearField(workflowwait.FieldClaimUntil, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ClaimRunID(); ok {
 		_spec.SetField(workflowwait.FieldClaimRunID, field.TypeString, value)
@@ -448,6 +539,34 @@ func (_u *WorkflowWaitUpdateOne) SetKind(v string) *WorkflowWaitUpdateOne {
 func (_u *WorkflowWaitUpdateOne) SetNillableKind(v *string) *WorkflowWaitUpdateOne {
 	if v != nil {
 		_u.SetKind(*v)
+	}
+	return _u
+}
+
+// SetQueue sets the "queue" field.
+func (_u *WorkflowWaitUpdateOne) SetQueue(v string) *WorkflowWaitUpdateOne {
+	_u.mutation.SetQueue(v)
+	return _u
+}
+
+// SetNillableQueue sets the "queue" field if the given value is not nil.
+func (_u *WorkflowWaitUpdateOne) SetNillableQueue(v *string) *WorkflowWaitUpdateOne {
+	if v != nil {
+		_u.SetQueue(*v)
+	}
+	return _u
+}
+
+// SetPayloadID sets the "payload_id" field.
+func (_u *WorkflowWaitUpdateOne) SetPayloadID(v string) *WorkflowWaitUpdateOne {
+	_u.mutation.SetPayloadID(v)
+	return _u
+}
+
+// SetNillablePayloadID sets the "payload_id" field if the given value is not nil.
+func (_u *WorkflowWaitUpdateOne) SetNillablePayloadID(v *string) *WorkflowWaitUpdateOne {
+	if v != nil {
+		_u.SetPayloadID(*v)
 	}
 	return _u
 }
@@ -572,6 +691,46 @@ func (_u *WorkflowWaitUpdateOne) ClearDeadline() *WorkflowWaitUpdateOne {
 	return _u
 }
 
+// SetNotifiedAt sets the "notified_at" field.
+func (_u *WorkflowWaitUpdateOne) SetNotifiedAt(v time.Time) *WorkflowWaitUpdateOne {
+	_u.mutation.SetNotifiedAt(v)
+	return _u
+}
+
+// SetNillableNotifiedAt sets the "notified_at" field if the given value is not nil.
+func (_u *WorkflowWaitUpdateOne) SetNillableNotifiedAt(v *time.Time) *WorkflowWaitUpdateOne {
+	if v != nil {
+		_u.SetNotifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearNotifiedAt clears the value of the "notified_at" field.
+func (_u *WorkflowWaitUpdateOne) ClearNotifiedAt() *WorkflowWaitUpdateOne {
+	_u.mutation.ClearNotifiedAt()
+	return _u
+}
+
+// SetClaimUntil sets the "claim_until" field.
+func (_u *WorkflowWaitUpdateOne) SetClaimUntil(v time.Time) *WorkflowWaitUpdateOne {
+	_u.mutation.SetClaimUntil(v)
+	return _u
+}
+
+// SetNillableClaimUntil sets the "claim_until" field if the given value is not nil.
+func (_u *WorkflowWaitUpdateOne) SetNillableClaimUntil(v *time.Time) *WorkflowWaitUpdateOne {
+	if v != nil {
+		_u.SetClaimUntil(*v)
+	}
+	return _u
+}
+
+// ClearClaimUntil clears the value of the "claim_until" field.
+func (_u *WorkflowWaitUpdateOne) ClearClaimUntil() *WorkflowWaitUpdateOne {
+	_u.mutation.ClearClaimUntil()
+	return _u
+}
+
 // SetClaimRunID sets the "claim_run_id" field.
 func (_u *WorkflowWaitUpdateOne) SetClaimRunID(v string) *WorkflowWaitUpdateOne {
 	_u.mutation.SetClaimRunID(v)
@@ -692,6 +851,11 @@ func (_u *WorkflowWaitUpdateOne) check() error {
 			return &ValidationError{Name: "kind", err: fmt.Errorf(`ent: validator failed for field "WorkflowWait.kind": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Queue(); ok {
+		if err := workflowwait.QueueValidator(v); err != nil {
+			return &ValidationError{Name: "queue", err: fmt.Errorf(`ent: validator failed for field "WorkflowWait.queue": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Key(); ok {
 		if err := workflowwait.KeyValidator(v); err != nil {
 			return &ValidationError{Name: "key", err: fmt.Errorf(`ent: validator failed for field "WorkflowWait.key": %w`, err)}
@@ -770,6 +934,12 @@ func (_u *WorkflowWaitUpdateOne) sqlSave(ctx context.Context) (_node *WorkflowWa
 	if value, ok := _u.mutation.Kind(); ok {
 		_spec.SetField(workflowwait.FieldKind, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Queue(); ok {
+		_spec.SetField(workflowwait.FieldQueue, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PayloadID(); ok {
+		_spec.SetField(workflowwait.FieldPayloadID, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Key(); ok {
 		_spec.SetField(workflowwait.FieldKey, field.TypeString, value)
 	}
@@ -809,6 +979,18 @@ func (_u *WorkflowWaitUpdateOne) sqlSave(ctx context.Context) (_node *WorkflowWa
 	}
 	if _u.mutation.DeadlineCleared() {
 		_spec.ClearField(workflowwait.FieldDeadline, field.TypeTime)
+	}
+	if value, ok := _u.mutation.NotifiedAt(); ok {
+		_spec.SetField(workflowwait.FieldNotifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.NotifiedAtCleared() {
+		_spec.ClearField(workflowwait.FieldNotifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ClaimUntil(); ok {
+		_spec.SetField(workflowwait.FieldClaimUntil, field.TypeTime, value)
+	}
+	if _u.mutation.ClaimUntilCleared() {
+		_spec.ClearField(workflowwait.FieldClaimUntil, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ClaimRunID(); ok {
 		_spec.SetField(workflowwait.FieldClaimRunID, field.TypeString, value)

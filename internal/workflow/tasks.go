@@ -1,9 +1,11 @@
 package workflow
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"papergo/internal/dms"
 	"strings"
 	"time"
 
@@ -20,6 +22,8 @@ import (
 
 // portsFromOutcomes marks an activity whose ports are its node's outcomes.
 const portsFromOutcomes = "outcomes"
+
+const WaitKindTask = "task"
 
 const (
 	taskCommonProps = `"title": {"type": "string", "title": "Title"},
@@ -40,6 +44,17 @@ const (
 )
 
 func init() {
+	RegisterWaitResolver(WaitKindTask, func(ctx context.Context, t *dms.Service, w Wait) (Completion, bool, error) {
+		result, err := tasks.Result(ctx, t, w.Key)
+		if err != nil {
+			return Completion{Error: err.Error()}, true, nil
+		}
+		if result == nil {
+			return Completion{}, false, nil
+		}
+		return Completion{Output: result, Port: fmt.Sprint(result["outcome"])}, true, nil
+	})
+
 	register(&Activity{Key: "task", Kind: "flow", PortsFrom: portsFromOutcomes,
 		Description: "Asks the assignees to do something and answer with one of the outcomes, optionally filling in a form. With wait (the default), the run waits without holding a worker and follows the port named after the outcome; without, it creates the task and continues at done.",
 		InputSchema: inputs(taskCommonProps+`,

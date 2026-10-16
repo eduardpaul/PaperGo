@@ -238,20 +238,6 @@ func (_c *TaskCreate) SetNillableWait(v *bool) *TaskCreate {
 	return _c
 }
 
-// SetParked sets the "parked" field.
-func (_c *TaskCreate) SetParked(v bool) *TaskCreate {
-	_c.mutation.SetParked(v)
-	return _c
-}
-
-// SetNillableParked sets the "parked" field if the given value is not nil.
-func (_c *TaskCreate) SetNillableParked(v *bool) *TaskCreate {
-	if v != nil {
-		_c.SetParked(*v)
-	}
-	return _c
-}
-
 // SetStatus sets the "status" field.
 func (_c *TaskCreate) SetStatus(v task.Status) *TaskCreate {
 	_c.mutation.SetStatus(v)
@@ -439,10 +425,6 @@ func (_c *TaskCreate) defaults() {
 		v := task.DefaultWait
 		_c.mutation.SetWait(v)
 	}
-	if _, ok := _c.mutation.Parked(); !ok {
-		v := task.DefaultParked
-		_c.mutation.SetParked(v)
-	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := task.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -542,9 +524,6 @@ func (_c *TaskCreate) check() error {
 	}
 	if _, ok := _c.mutation.Wait(); !ok {
 		return &ValidationError{Name: "wait", err: errors.New(`ent: missing required field "Task.wait"`)}
-	}
-	if _, ok := _c.mutation.Parked(); !ok {
-		return &ValidationError{Name: "parked", err: errors.New(`ent: missing required field "Task.parked"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Task.status"`)}
@@ -695,10 +674,6 @@ func (_c *TaskCreate) createSpec() (*Task, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Wait(); ok {
 		_spec.SetField(task.FieldWait, field.TypeBool, value)
 		_node.Wait = value
-	}
-	if value, ok := _c.mutation.Parked(); ok {
-		_spec.SetField(task.FieldParked, field.TypeBool, value)
-		_node.Parked = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(task.FieldStatus, field.TypeEnum, value)

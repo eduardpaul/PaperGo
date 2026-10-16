@@ -60,8 +60,6 @@ type Task struct {
 	Node *string `json:"node,omitempty"`
 	// Wait holds the value of the "wait" field.
 	Wait bool `json:"wait,omitempty"`
-	// Parked holds the value of the "parked" field.
-	Parked bool `json:"parked,omitempty"`
 	// Status holds the value of the "status" field.
 	Status task.Status `json:"status,omitempty"`
 	// Outcome holds the value of the "outcome" field.
@@ -90,7 +88,7 @@ func (*Task) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case task.FieldAssignees, task.FieldOutcomes, task.FieldInputSchema, task.FieldValues, task.FieldReview, task.FieldInput:
 			values[i] = new([]byte)
-		case task.FieldWait, task.FieldParked:
+		case task.FieldWait:
 			values[i] = new(sql.NullBool)
 		case task.FieldVersion:
 			values[i] = new(sql.NullInt64)
@@ -253,12 +251,6 @@ func (_m *Task) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field wait", values[i])
 			} else if value.Valid {
 				_m.Wait = value.Bool
-			}
-		case task.FieldParked:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field parked", values[i])
-			} else if value.Valid {
-				_m.Parked = value.Bool
 			}
 		case task.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -424,9 +416,6 @@ func (_m *Task) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("wait=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Wait))
-	builder.WriteString(", ")
-	builder.WriteString("parked=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Parked))
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Status))

@@ -6,6 +6,8 @@ import (
 	_ "time/tzdata"
 
 	"github.com/robfig/cron/v3"
+
+	"papergo/internal/workflow"
 )
 
 // Admission policies. threshold submits every full group of batchSize.
@@ -40,6 +42,7 @@ type pollTarget struct {
 
 type flushState struct {
 	NextFlush time.Time
+	Drain     bool
 }
 
 type admitPlan struct {
@@ -51,15 +54,13 @@ type admitPlan struct {
 	FlushSet  bool
 }
 
-func admit(now time.Time, queue, policy, connection, model, cronExpr, zone string, requests []queuedRequest, flights []openFlight, state flushState) (admitPlan, error) {
+func admit(now time.Time, queue, policy, connection, model, cronExpr, zone string, requests []queuedRequest, flights []openFlight, state flushState, batchSize int) (admitPlan, error) {
 	if policy == "" {
 		policy = policyBoth
 	}
-	if policy != policyThreshold && policy != policySchedule && policy != policyBoth {
-		return admitPlan{}, fmt.Errorf("policy must be threshold, schedule or both")
-	}
+
 	var plan admitPlan
-	flush := false
+	flush := state.Drain
 	if policy != policyThreshold {
 		if cronExpr == "" {
 			cronExpr = "0 1 * * *"
@@ -85,8 +86,10 @@ func admit(now time.Time, queue, policy, connection, model, cronExpr, zone strin
 	blocked := map[string]bool{}
 	for _, flight := range flights {
 		switch flight.Status {
-		case "uncertain":
-			plan.Reconcile = append(plan.Reconcile, flight.Tag)
+		case "uncertain", "prepared":
+			if !flight.NextPoll.After(now) {
+				plan.Reconcile = append(plan.Reconcile, flight.Tag)
+			}
 			for _, hash := range flight.Hashes {
 				blocked[hash] = true
 			}
@@ -125,26 +128,14 @@ func admit(now time.Time, queue, policy, connection, model, cronExpr, zone strin
 		plan.Groups = append(plan.Groups, append([]string(nil), hashes[:n]...))
 		hashes = hashes[n:]
 	}
-	switch policy {
-	case policyThreshold:
-		for len(hashes) >= batchSize {
-			take(batchSize)
-		}
-	case policySchedule:
-		if flush {
-			for len(hashes) >= batchSize {
-				take(batchSize)
-			}
-			take(len(hashes))
-		}
-	default:
-		for len(hashes) >= batchSize {
-			take(batchSize)
-		}
-		if flush {
-			take(len(hashes))
-		}
+	sizes, err := workflow.Admit(policy, len(hashes), batchSize, flush)
+	if err != nil {
+		return plan, err
 	}
+	for _, n := range sizes {
+		take(n)
+	}
+
 	return plan, nil
 }
 

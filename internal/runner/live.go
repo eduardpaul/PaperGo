@@ -6,6 +6,7 @@ import (
 	"papergo/ent"
 	"papergo/ent/workflowrun"
 	"papergo/internal/dms"
+	"papergo/internal/workflow"
 )
 
 // The runner batches status observation once per dispatch interval, instead of
@@ -43,7 +44,7 @@ func (r *Runner) SyncLiveRuns(ctx context.Context) error {
 					continue
 				}
 				state := status(entry.Status)
-				if parked[row.ID] && state == "cancelled" {
+				if parked[row.ID] && (state == "running" || state == "queued") {
 					state = "waiting"
 				}
 				at := entry.UpdatedAt.UnixMilli()
@@ -56,6 +57,11 @@ func (r *Runner) SyncLiveRuns(ctx context.Context) error {
 				// A source may have been purged after the status read.
 				if _, err := t.Client.WorkflowRun.Update().Where(workflowrun.IDEQ(row.ID), workflowrun.LiveStatusIn("queued", "running", "waiting")).SetLiveStatus(state).SetLiveUpdatedAt(at).Save(ctx); err != nil {
 					return err
+				}
+				if state == "completed" || state == "cancelled" || state == "failed" {
+					if err := workflow.CloseRunWaits(ctx, t, row.ID); err != nil {
+						return err
+					}
 				}
 				// A finished or cancelled run promotes nothing more. A failed
 				// run keeps its staged files for a retry until it is purged.

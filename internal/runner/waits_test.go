@@ -114,15 +114,6 @@ func (f *fixture) startWait(t *testing.T, w workflow.Workflow, itemID, key strin
 	return ids[0]
 }
 
-const waitFlow = `{
-	"triggers": [{"type": "manual", "collection_id": "$LIST"}],
-	"flow": {"start": "park", "nodes": {
-		"park": {"activity": "test.wait", "inputs": {"key": "$KEY"}, "next": {"done": "mark", "error": "fail"}},
-		"mark": {"activity": "item.update", "inputs": {"values": {"note": "ready"}}},
-		"fail": {"activity": "item.update", "inputs": {"values": {"note": "timed out"}}}
-	}}
-}`
-
 func TestWaitCompletesBeforeTheRunParks(t *testing.T) {
 	f := setup(t)
 	item := f.item(t, "alice", "Letter", nil)
@@ -143,7 +134,7 @@ func TestWaitCompletesBeforeTheRunParks(t *testing.T) {
 		t.Fatalf("note %v", got)
 	}
 	row := f.waitRow(t, "test.wait", "early")
-	if row.Status != "completed" || row.Parking || string(row.Completion) != `{"ready":true}` {
+	if row.Status != "completed" || row.Parking || string(row.Completion) != `{"output":{"ready":true}}` {
 		t.Fatalf("wait %+v", row)
 	}
 }
@@ -167,7 +158,7 @@ func TestWaitDeadlineAlreadyPassedFollowsTheErrorPort(t *testing.T) {
 	if got := f.head(t, item.ID).Values["note"]; got != "timed out" {
 		t.Fatalf("note %v", got)
 	}
-	if row := f.waitRow(t, "test.wait", "past"); row.Status != "closed" || row.Parking {
+	if row := f.waitRow(t, "test.wait", "past"); row.Status != "completed" || row.Parking {
 		t.Fatalf("wait %+v", row)
 	}
 }
@@ -262,7 +253,7 @@ func TestWaitSurvivesRestartUntilItIsCompleted(t *testing.T) {
 	if run, err := g.r.Run(ctx, "alice", id); err != nil || run.Status != "waiting" {
 		t.Fatalf("after restart: %+v %v", run, err)
 	}
-	if err = g.wf.FinishWait(ctx, "alice", g.ws.ID, "test.wait", "restart", json.RawMessage(`{"ready":true}`)); err != nil {
+	if err = g.wf.FinishWait(ctx, "alice", g.ws.ID, "test.wait", "restart", workflow.Completion{Output: map[string]any{"ready": true}}); err != nil {
 		t.Fatal(err)
 	}
 	g.status(t, id, "completed")
@@ -373,7 +364,7 @@ func TestWaitInsideALoopHasAStableExecutionPerIteration(t *testing.T) {
 	if first.Status != "open" {
 		t.Fatalf("first %+v", first)
 	}
-	if err = f.wf.FinishWait(ctx, "alice", f.ws.ID, "test.wait", "loop-a", json.RawMessage(`{"ready":true}`)); err != nil {
+	if err = f.wf.FinishWait(ctx, "alice", f.ws.ID, "test.wait", "loop-a", workflow.Completion{Output: map[string]any{"ready": true}}); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(20 * time.Second)
@@ -393,7 +384,7 @@ func TestWaitInsideALoopHasAStableExecutionPerIteration(t *testing.T) {
 	if first.ExecutionID == "" || first.ExecutionID == second.ExecutionID {
 		t.Fatalf("execution ids %s %s", first.ExecutionID, second.ExecutionID)
 	}
-	if err = f.wf.FinishWait(ctx, "alice", f.ws.ID, "test.wait", "loop-b", json.RawMessage(`{"ready":true}`)); err != nil {
+	if err = f.wf.FinishWait(ctx, "alice", f.ws.ID, "test.wait", "loop-b", workflow.Completion{Output: map[string]any{"ready": true}}); err != nil {
 		t.Fatal(err)
 	}
 	f.status(t, ids[0], "completed")

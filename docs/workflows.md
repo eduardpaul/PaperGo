@@ -11,7 +11,7 @@ A workflow has:
 
 Every save that changes the definition creates a new immutable **version**. A run always executes the version it started with.
 
-Runs are durable. Each node runs as one step that commits exactly once. A run continues at the node it reached after a crash or restart, and waits such as `delay` survive restarts. The engine is described in the [runner plan](plans/runner.md).
+Runs are durable. Each node runs as one step that commits exactly once. A run continues at the node it reached after a crash or restart, and waits such as `delay` and parked activities survive restarts. The engine is described in the [runner plan](plans/runner.md).
 
 ## Example
 
@@ -119,7 +119,7 @@ Updating organization terms delivers `term.changed` to every live workspace so i
 
 ## Concurrency
 
-`concurrency` decides what a start does while a run of the same workflow on the same item is still queued, running or waiting for a task:
+`concurrency` decides what a start does while a run of the same workflow on the same item is still queued, running or waiting:
 
 | Value | A new start |
 | --- | --- |
@@ -130,7 +130,7 @@ Updating organization terms delivers `term.changed` to every live workspace so i
 
 Selection runs compare every member: a start overlaps an active run when they share an item. A start that `skip` or `coalesce` drops creates no run.
 
-`coalesce` suits workflows that rebuild something from the item as it is when they run, such as an index: a burst of changes costs at most two runs, and the last one sees the final state. Runs of one workflow on one item never overlap, except that a run waiting for a task does not hold its place, so the next run starts at once. Selection workflows cannot coalesce. Cancelling a run discards its staged files and cancels the tasks it waits for.
+`coalesce` suits workflows that rebuild something from the item as it is when they run, such as an index: a burst of changes costs at most two runs, and the last one sees the final state. Runs of one workflow on one item never overlap: a durable wait keeps its DBOS queue partition until that run finishes or is cancelled. Selection workflows cannot coalesce. Cancelling a run discards its staged files, cancels the tasks it waits for, closes its waits and releases claims it holds.
 
 ## Conditions
 
@@ -236,18 +236,24 @@ A workflow can declare what a completed run returns, so other workflows can foll
 | `item.publish` | action | publishes the head revision, if not already published | `published` |
 | `item.unpublish` | action | unpublishes, if published | `unpublished` |
 | `item.delete` | action | deletes the item | `deleted` |
+| `relationship.list` | action | lists one page of the item's relationships (`direction` `both`, `outgoing` or `incoming`; optional `type` name; `limit` at most 100). Pass `next_cursor` back as `cursor` | `relationships` (`id`, `source_id`, `target_id`, `type_id`, `directed`, `related_id`), `next_cursor`, `count` |
+| `relationship.create` | action | links the item to `target_id` with relationship type `type` (its name). An existing link of the same type and direction is kept, so a retry does not add a second one. `directed` follows the type when omitted | `relationship_id`, `source_id`, `target_id` |
+| `relationship.remove` | action | removes `relationship_id` of the item. A relationship that is already gone is reported as removed | `relationship_id`, `removed` |
 | `task.cancel` | action | cancels an open task of the workspace that no run waits for (`task_id`), such as a follow-up created without waiting; a task a run waits for ends with its run | `task_id`, `status` |
 | `file.promote` | action | makes a staged file of this run (`staged_file_id`) its item's current file, as a new file version; fails when a file it was made from is no longer current. With `recycle_sources: true`, recycles the other source items in the same transaction | `item_id`, `blob_id`, `file_version` |
 | `file.discard` | action | discards a staged file of this run; the item keeps its file | `discarded` |
+| `file.reclaim` | action | asks to reclaim `blob_id` after the grace period. The version keeps its id, number, filename, media type, size and checksum. A current file, a published file, a staged file or a byte lease held by work or a wait defers reclamation. A retry does not move the deadline. See [reclaiming a file version](#reclaiming-a-file-version) | `blob_id`, `availability`, `deferred`, `reason`, `reclaim_after` |
 | `file.compose_pdf` | action | combines the current files of the run's items (JPEG, PNG or WebP photos of one list or library) into one searchable PDF in the run's order, staged for the primary item; see [photos to PDF](#photos-to-pdf). Heavy work. | `staged_file_id`, `item_id`, `others` (the other items, in order), `pages`, `bytes`, `metrics` |
 | `file.optimize_image` | action | analyzes the text of the item's current JPEG, PNG or WebP image with [OCR](ocr.md) and stages a smaller WebP copy whose smallest text keeps `target_height`; ports `candidate`/`skipped`; see [image optimization](#image-optimization). Heavy work. | `staged_file_id` (candidate) or `reason` (skipped), `item_id`, `blob_id`, `file_version`, `metrics` |
-| `ai.complete` | action | asks the [chat model](#ai-steps) to do what `prompt` says with `input` (text) or `text_id` (from `document.read_text` for the item's file, `blob_id` optional), cut at `max_chars` (default 20,000): summarize, extract, clean up. With `output_schema` (a form schema of an object), the answer is a JSON object checked against it, else text. Equal requests reuse the cached answer. Heavy work | `text` or `json`, `cached`, `model` |
+| `ai.complete` | action | asks the [chat model](#ai-steps) to do what `prompt` says with `input` (text or field values), `chunk` (from `search.read_chunks`), `text_id` (from `document.read_text` for the item's file, `blob_id` optional) or `image` (a file version, alone or with text), cut at `max_chars` (default 20,000): summarize, extract, clean up. With `output_schema` (a form schema of an object), the answer is a JSON object checked against it, else text. `execution` is `immediate` or `batch` (empty uses the deployment default) and `queue` names a batch queue. Equal requests reuse the cached answer. Heavy work | `text` or `json`, `cached`, `model` |
 | `ai.decide` | action | answers ordered choice, noul or ordinal score questions from `input`, JSON `data`, or guarded document `text_id` and `blob_id`; see [workflow decisions](decisions.md). Heavy work | `answers`, `model`, `input_hash`, `cached`, document `source` |
 | `taxonomy.decide` | action | evaluates managed candidates of `term_set_id`, independently (`multiple`) or jointly (`single`); ports `done` and `none`; see [workflow decisions](decisions.md). Heavy work | `term_ids`, `scores`, `taxonomy_guard`, `source`, `model`, `input_hash`, `cached` |
 | `tags.apply` | action | adds `tags` while keeping existing tags; requires the source `blob_id` to remain current | item snapshot |
 | `document.read_text` | action | reads the text of the item's current file page by page (see [reading text](#reading-text)): `ocr` (`auto`, `always`, `never`), `max_pages` (default 500, at most 2,000), `languages` (OCR codes such as `eng+deu`; default the file's). Ports `done`, `no_text` (the file holds none) and `unsupported` (another format, a protected or broken PDF). Heavy work | `text_id`, `item_id`, `blob_id`, `pages`, `chars`, `language`, `ocr_pages`, `skipped_pages`, `truncated`, `reused`, `reason` (unsupported) |
 | `search.chunk` | action | splits the text of the item's file (`text_id` of `document.read_text`, or `text` given directly, such as a summary) with a `chunker` (`window`, `pages`, `paragraphs`, `headings`, `whole`; `max_chars`, `overlap`, `max_chunks`) into chunks of a `kind` (`content`, `summary`, `extract`), and stages them in the search index under a new `generation`, or one of this run given to add to. See [file content steps](#file-content-steps). Heavy work | `generation`, `chunks`, `truncated`, `item_id`, `blob_id` |
-| `search.enrich` | action | asks the [chat model](#ai-steps) to write context for each chunk of `generation` following `instructions`, such as which contract and clause a passage is; `scope` `chunk` (default) shows the model the chunk, `document` also the beginning of the document (`context_chars`, default 6,000). The context is searched and embedded with the chunk. Answers are cached per chunk text, instructions and context. Heavy work | `generation`, `enriched`, `cached`, `model` |
+| `search.read_chunks` | action | reads a bounded page from a generation owned by this run, with complete references usable by `ai.complete` | `chunks`, `next_offset`, `more` |
+| `search.enrich` | action | asks the [chat model](#ai-steps) to write context for each chunk of `generation` following `instructions`, such as which contract and clause a passage is; `scope` `chunk` (default) shows the model the chunk, `document` also the beginning of the document (`context_chars`, default 6,000). The context is searched and embedded with the chunk. `execution` and `queue` are as for `ai.complete`. Answers are cached per chunk text, instructions and context. Heavy work | `generation`, `enriched`, `cached`, `model` |
+| `ai.batch.coordinate` | action | admits one named queue of parked AI requests for the installation: configurable full groups, a daily partial flush, and provider polling. Originating workflows keep their own authors. The [coordinator](#ai-steps) built-in is the caller. Output is counts only | `queue`, `submitted`, `polled`, `completed`, `released`, `busy` |
 | `search.embed` | action | gives the chunks of `generation` their embedding vectors for semantic search, reusing vectors of identical chunk inputs; `mode` `immediate` (default) or `later`. Port `deferred` for `later` or a failing model, which the embedding sweep covers; without a model, `done` with nothing embedded. See [file content steps](#file-content-steps). Heavy work | `generation`, `embedded`, `reused`, `model`, `reason` |
 | `search.publish` | action | makes `generation` the searchable content of the item's file (`blob_id`, default the current one); port `stale` when it is not this run's generation or the item no longer has that file. Heavy work | `published`, `generation`, `item_id`, `blob_id`, `reason` |
 | `search.sync` | action | writes the [search](search.md) documents of an item or folder (`item_id`, default the run's item or the event's `resource_id`) as it is now, or removes them when it is gone; safe to run again | `written`, `removed` |
@@ -276,17 +282,31 @@ The text is kept once per file bytes and reading settings (reader, OCR engine an
 
 ### AI steps
 
-`ai.complete` and `search.enrich` ask a chat model behind any OpenAI-compatible `/v1/chat/completions` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp). They are off until it is configured: `AI_CHAT_PROVIDER=openai`, `AI_CHAT_MODEL`, `AI_CHAT_ENDPOINT` (default OpenAI's) and, if the server needs one, `AI_CHAT_API_KEY_FILE`; without it they fail saying so.
+`ai.complete` and `search.enrich` call a remote chat model. Immediate execution uses any OpenAI-compatible `/v1/chat/completions` endpoint (OpenAI, Ollama, LM Studio, vLLM, llama.cpp): `AI_CHAT_PROVIDER=openai`, `AI_CHAT_MODEL`, `AI_CHAT_ENDPOINT` (default OpenAI's) and, if the server needs one, `AI_CHAT_API_KEY_FILE`. An immediate step fails when no chat model is configured.
 
-- **Requests** run at temperature 0, time out after two minutes, and are retried on 429 and 5xx, honouring `Retry-After` up to 30 seconds. With an `output_schema` they ask for a JSON answer of that schema; an answer that does not match fails the step.
-- **Cached results.** Answers are cached by the model, endpoint and request (prompt, schema and input; for `search.enrich` the chunk text, instructions and context). A rerun, reindex or identical file reuses an unexpired answer. Each validated answer is saved immediately, so a failed enrichment keeps the answers of its completed chunks for retry. Concurrent misses or a crash between a provider response and saving it can repeat a request. Answers expire after the idle lifetime set by `RUN_RETENTION`. Backups keep them with the database; content packages leave them out.
-- **Samples.** [`samples/workflows`](../samples/workflows/README.md) has two `search.content` fillers for a library: receipts with a model-written summary chunk, and contracts split at headings with context per section.
+`execution` on the node is `immediate` or `batch`. An empty value uses `AI_EXECUTION`, which defaults to `immediate`. `queue` names a batch queue; empty uses `shared`.
+
+Batch execution needs its own provider and does not call the chat provider when that provider is missing. Set `AI_BATCH_PROVIDER=openai`, `AI_BATCH_MODEL` (empty uses the chat model), `AI_BATCH_ENDPOINT` (empty uses the chat endpoint, otherwise OpenAI's) and, when the server needs one, `AI_BATCH_API_KEY_FILE`. The client speaks the OpenAI Batch protocol, including Azure bases that end in `/openai/v1`. Requests that share a connection and an effective model go in one provider batch. A batch step follows its error port when the batch provider is not configured, when the answer does not match `output_schema`, when retries are exhausted, or when the wait reaches `AI_BATCH_DEADLINE` (default `72h`, from `1m` through `720h`).
+
+The **AI batch coordinator** (`ai.batch`) is a system built-in in the workspace named by `AI_BATCH_WORKSPACE`. Startup turns it on there when a batch provider is configured, and leaves an existing copy, including one that was turned off, as it is. The subject that turns it on must manage that workspace, and each coordinator run needs `organization.manage`. Named queues serve the installation. The workflow that asked for the answer keeps its own author and permissions, so one workspace cannot read another's prompt or answer.
+
+Each minute the coordinator admits its queue, including while earlier batches are still in flight. `policy` is `threshold` (full groups only), `schedule` (only on the flush, including a partial group) or `both` (default). `batch_size` sets the number of distinct uncached requests in a full group (1–100, default 20). The flush follows `flush_cron` (default `0 1 * * *`) in `time_zone` (default `Europe/Madrid`) and also sends a partial group, including a flush missed while the process was down. The coordinator polls the provider every five minutes. Identical requests share one provider line and keep separate authorization. A durable submission intent fixes batch membership before upload. After a create that might have reached the provider, reconciliation looks for that intent in provider metadata. An inconclusive or incomplete lookup never permits another create; an unresolved request reaches its deadline instead. A line that already succeeded is not sent again. Each pass handles at most one new group, one reconciliation and one poll, continuing scheduled backlogs on later passes.
+
+`ai.complete` takes `prompt` and one text source: `input` (including a field token such as `{item:values.note}`), `text_id` (from `document.read_text`, optional `blob_id`), or `chunk` (a reference returned by `search.read_chunks`). `image` adds a file version the model sees, alone or with any text source. Text is cut at `max_chars` (default 20,000). Without `output_schema`, use `{step:ask.text}`. With an object schema, the validated answer is `{step:ask.json}`, and fields such as `{step:ask.json.total}` can feed `item.update`. Both response formats work with every text source and either execution mode. Outputs also include `cached` and `model`. Source objects have a 20 MiB read limit; batch JSONL has a 100 MiB action limit.
+
+`search.read_chunks` reads a run-owned generation from `search.chunk`. Its bounded page contains `chunks`, each with `text` and a complete `chunk` reference, plus `next_offset` and `more`. Pass `{step:chunks.chunks.0.chunk}` to one AI step, or use `forEach` over `{step:chunks.chunks}` and pass the loop entry's `chunk`. The reference reads a complete, run-owned snapshot even when its preview was truncated or another workflow republishes search content. Snapshots are retained through the run and become collectible after it ends and their one-day lifetime passes. Chunk text is copied into the durable AI request before waiting.
+
+`search.enrich` writes context for each chunk of `generation` following `instructions`. `scope` `chunk` (default) shows the model the chunk; `document` also shows the beginning of the document (`context_chars`, default 6,000). The context is searched and embedded with the chunk. The output is `generation`, `enriched`, `cached` and `model`. Embeddings and local decision models are separate from this remote batching.
+
+- **Immediate requests** run at temperature 0, time out after two minutes, and are retried on 429 and 5xx, honouring `Retry-After` up to 30 seconds.
+- **Cached results.** Answers are cached by the model, endpoint and request. For `ai.complete` that is the prompt, schema, input and image. For `search.enrich` it is the chunk text, instructions and context. A rerun, reindex or identical file reuses an unexpired answer. Each validated answer is saved immediately, so a failed enrichment keeps the answers of its completed chunks for retry. Concurrent misses or a crash between a provider response and saving it can repeat a request. Answers expire after the idle lifetime set by `RUN_RETENTION`. Backups keep them with the database; content packages leave them out. Batch request bodies and authoritative provider responses use durable activity records, independently of answer-cache eviction. Waits and submitted batches retain their payloads; explicit blob leases keep source bytes until consumption or cancellation.
+- **Samples.** [`samples/workflows`](../samples/workflows/README.md) has two `search.content` fillers that call the model immediately: receipts with a model-written summary chunk, and contracts split at headings with context per section. [`samples/receipts-package`](../samples/receipts-package/README.md) extracts structured purchase lines from a ticket photo through batch execution and ordinary item and relationship actions.
 
 ### Reusable action results
 
 Actions use `Tools.Results` (`internal/resultcache`) for results shared across runs. The main database's `cached_results` table stores a namespace, sharing scope, caller-defined key, opaque JSON payload, creation/use timestamps and expiry. Each namespace owns its keys and payload validation; the store accepts JSON within 1 MiB and has no action-specific columns. `Get` treats expired entries as misses and extends live entries' expiry on access, at most once a day or half their lifetime. `PutIfAbsent` atomically returns the first live payload, replacing expired entries. The retention job collects expired entries independently of run age.
 
-`ai.complete` and `search.enrich` use separate namespaces and the `installation` scope, with `RUN_RETENTION` as their idle lifetime. Their keys include model endpoint identity and request hashes. Cache operations run in the work phase outside domain transactions. Scope controls reuse, grants no permissions and is selected by trusted action code after authorizing its inputs. Workflow configuration and run outputs stay in their existing stores; durable integration state, revision-bound content and search vectors keep their own lifecycles.
+`ai.complete` and `search.enrich` store answers in separate namespaces and the `installation` scope, with `RUN_RETENTION` as their idle lifetime. Their keys include model endpoint identity and request hashes. Reads and writes of a cached answer that happen inside a step use that step's transaction; provider calls stay outside it. Scope controls reuse, grants no permissions and is selected by trusted action code after authorizing its inputs. Workflow configuration and run outputs stay in their existing stores; durable integration state, revision-bound content and search vectors keep their own lifecycles.
 
 ### Staged files
 
@@ -299,6 +319,10 @@ Activities that produce files, such as a smaller image or a PDF composed from ph
 - `file.discard` drops it.
 
 A completed or cancelled run discards its pending staged files. A failed run keeps them for a retry until the run is deleted. Purging an item deletes its staged files. The storage collector frees discarded files' bytes after its grace period.
+
+### Reclaiming a file version
+
+`file.reclaim` asks for one file version's bytes back. The version keeps its id, number, filename, content type, size and checksum. The request marks it `pending`. A current file, a published file, a staged file, or a byte lease held by work or a wait defers the grace period (`deferred`, with `reason` `current`, `published`, `staged` or `in use`). A retry of a version that is already pending does not move `reclaim_after`. After the one-hour object grace period, the collector marks an unprotected version `reclaimed` and deletes bytes that no other file still needs. Downloading or restoring a reclaimed version answers `410 content_unavailable`. File history keeps the version and shows it as unavailable, without download or restore. Content packages record the version without requiring its bytes. See [documents](documents.md).
 
 ### Heavy work
 
@@ -425,10 +449,24 @@ The Tasks screen offers Waiting for me, Approvals, Completed and All views. **Lo
 - **Reassigning.** When an assignee can no longer answer, for example after leaving, a workspace owner (or the creator of a person's task) replaces the open task's assignees, as entries like those of a new task. Answers of entries that stay count; with `all`, the task completes once every entry left has answered, and a waiting run continues.
 - **Form.** `input_schema` is a [form](#forms), frozen on the task when it is created, so editing the workflow does not change an open task. Its pickers must point at the workspace, as a launch form's do; this is checked when the workflow is saved and when the task is created. `values` prefill it; tokens in them, such as `{item:values.total}`, are resolved then, and they must be valid answers, picks included. An answer sends the form's values unless its outcome skips the form; the server applies defaults and checks them, and pickers are checked against the person who answers. Later nodes read them as `{step:check.input.total}`.
 - **Review.** `review` shows a staged file of the run beside the form: `file.compare` shows the item's current file beside a staged image, both at 100%; `file.preview` shows a staged document, such as a PDF. An answer whose outcome does not `allow_stale` fails with 409 when the staged file was made from a file that is no longer current.
-- **Waiting.** With `wait` (the default), the run waits without holding a worker: it parks, shows as `waiting`, and resumes moments after the task completes. Waiting runs count as active for [concurrency](#concurrency) and are not deleted by run retention. Cancelling a waiting run, replacing it, or deleting its item cancels the task; a run cancelled after its task completed stays cancelled even if it was about to resume. With `wait: false`, the node creates the task, outputs `task_id` and continues at `done`; the task outlives the run, and other workflows react to it with `task.*` triggers.
+- **Waiting.** With `wait` (the default), the run parks on a [durable wait](#durable-waits): it shows as `waiting`, holds no worker, and resumes moments after the task completes. Waiting runs count as active for [concurrency](#concurrency) and are not deleted by run retention. Cancelling a waiting run, replacing it, or deleting its item cancels the task and closes the wait; a run cancelled after its task completed stays cancelled even if it was about to resume. With `wait: false`, the node creates the task, outputs `task_id` and continues at `done`; the task outlives the run, and other workflows react to it with `task.*` triggers.
 - **Other inputs:** `key` (a lowercase name triggers and lists filter on), `priority` (`low`, `normal`, `high`), `due` (a duration such as `48h`, a date or a time), `item_id` (default the run's item).
 
 Answers and their form values stay on the task after it completes, and completed tasks are kept when their runs are deleted. Creating and answering tasks are recorded in the workspace's audit trail (`task.create`, `task.respond`).
+
+## Durable waits
+
+A node that must wait for something outside the run creates a durable wait. Human tasks and external activities, including batch AI requests, use the same completion contract. The run shows as `waiting`; DBOS `Recv` persists its suspension and timeout, while DBOS `Send` durably delivers the completion. Publication and its application marker commit in one database transaction, with an idempotency key. Messages sent before the receiver starts remain in its inbox. Waiting does not consume a heavy-work slot, and restarting replays DBOS checkpoints. Cancellation closes the waits and releases payload references, byte leases and executor claims.
+
+A completion envelope has `output` (the action's data), optional `port` and optional `error`. An error enters the node's retry and error-port handling. A registered activity's `Resume` handler can validate current permissions, transform the result, or start another work or wait phase. Deadlines complete through the same contract. A task's `due_at` describes its due date; it does not implicitly cancel the task.
+
+Extensions list, claim, update and complete open waits through the [wait routes](#api). A `workspace_id` limits the call to a workspace the caller manages. Omitting it requires `organization.manage`. Lists support named `queue` filtering and cursor pagination. Claims expire after ten minutes; updates by claim holders require their current, unexpired token. Completion is an administrative operation under the same scope check.
+
+Wait data is bounded at 16 KiB and completion at 64 KiB. Large inputs belong in `Tools.Records` (`internal/activitystore`), whose namespace/scope/key records have explicit expiry and retention references. Expiry cannot delete a record while an active consumer references it. `Park.PayloadID` retains an activity record; `Park.BlobIDs` acquires source-file leases. Immediate heavy work uses `Prepared.BlobIDs` for the same byte protection. Consumption, terminal runs and cancellation release these references. A deferred reclamation request is revisited automatically and starts its grace period once its last protection disappears.
+
+The AI module stores requests until their batch deadline, completed provider responses while their requests need them, and scheduler/submission state separately from waits. Coordinator leases have expiry and fencing tokens; terminal holders can be replaced. Completed batches retire into expiring records, and batches with no remaining consumers release their payload references. Pending submission records also have a bounded lifetime beyond consumer deadlines, so disabling a coordinator or changing providers cannot retain them forever. Result-cache lifetime is solely a reuse policy.
+
+See [workflow extensions](workflow-extensions.md) for the registration and durability boundaries.
 
 ## Selection runs
 
@@ -464,6 +502,7 @@ Built-in workflows are processes PaperGo ships, in the same model.
 | `search.content` | Index file content: when a PDF or an image is added (also through WebDAV, a restore, a workflow or a content reindex), `document.read_text`, `search.chunk`, `search.embed` and `search.publish` make its text searchable with pages and, with an embedding model, by meaning ([search](search.md#file-content)). `concurrency: coalesce`. A system built-in filling the `search.content` role, on by default; outputs `blob_id`, `text_id`, `pages`, `language`, `generation`, `chunks` | role (workspace, or per list or library) | `ocr`, `max_pages`, `chunker`, `max_chars`, `overlap`, `max_chunks`, `embed` |
 | `search.index` | Index for search: on item and folder changes, `permissions.changed` (`replace`, `move`), `term.changed`, `term.merged` and manual starts, `search.sync` rewrites the entry's [search](search.md) documents; term events reindex every item holding the term. `concurrency: coalesce`. A system built-in filling the `search.index` role, on by default. | role (workspace, or per list or library) | none |
 | `items.expire` | Unpublish expired items: every day, unpublishes the published items whose date `field` is before today | per list or library | `field` (an indexed date field), `cron` (default `0 1 * * *`), `time_zone` (default `UTC`) |
+| `ai.batch` | AI batch coordinator: each minute, admits one named queue of parked AI requests for the installation. Full groups of `batch_size` go on every pass when the policy includes a threshold; the daily flush also sends a partial group; in-flight batches are polled. Originating workflows keep their own authors. A system built-in. Startup turns it on in `AI_BATCH_WORKSPACE` when a batch provider is configured, and leaves an existing copy as it is. See [AI steps](#ai-steps) | one workspace | `batch_size` (1–100, default 20), `queue` (default `shared`), `policy` (`threshold`, `schedule` or `both`, default `both`), `flush_cron` (default `0 1 * * *`), `time_zone` (default `Europe/Madrid`) |
 
 How people use them:
 
@@ -490,7 +529,7 @@ Some processes are **roles**: product processes that one workflow fills, which p
 | --- | --- |
 | `queued` | waiting for a worker |
 | `running` | executing, or waiting in `delay` |
-| `waiting` | waiting for a task, without holding a worker |
+| `waiting` | waiting for a task or another durable wait, without holding a worker |
 | `completed` | finished |
 | `failed` | a node failed with no `error` port, or `fail` ran |
 | `cancelled` | stopped by a manager |
@@ -498,7 +537,7 @@ Some processes are **roles**: product processes that one workflow fills, which p
 `GET /v1/workflow-runs/{id}` shows the run's result (its status, last node, variables and [outputs](#outputs)) and its recorded steps: `load`, each node attempt, and `finish`, each with output or error.
 
 - **Retry** (`POST .../retry`) runs a failed run again from the failed step as a new run with `retry_of`. Steps before it keep their recorded results, so nothing they wrote is written twice.
-- **Cancel** (`POST .../cancel`) stops a queued or running run.
+- **Cancel** (`POST .../cancel`) stops a queued, running or waiting run. A waiting run's tasks are cancelled, its waits are closed and claims it holds are released.
 
 **How runs start.** A change and its events commit together in the domain event log (`domain_events`), so a change that rolls back raises nothing, and the write does no workflow work. A dispatcher in the runner takes logged events in order, matches them to workflows, and queues the runs. The runs and the events' dispatched mark commit together, and each event starts at most one run per workflow, so a crash dispatches events again without duplicates. Queued runs execute on whichever server's workers take them. The dispatcher wakes when a change commits and also checks every second, so it picks up events that other servers or a restart left behind.
 
@@ -517,6 +556,8 @@ Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default
 | Start a manual workflow on items | `write` on each item |
 | Start a manual workflow with no item | workspace `manage` |
 | See, cancel and retry runs | workspace `manage` |
+| List, claim, update and complete waits of one workspace | workspace `manage` |
+| List, claim, update and complete waits with no workspace | `organization.manage` |
 | Answer a task | being an assignee (or in an assigned group) who can read the workspace and the item's draft |
 | Create a task | workspace `read`, and `write` on the item when it concerns one |
 | Cancel a task | its creator or a workspace owner; a workflow's task ends with its run |
@@ -537,6 +578,10 @@ Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default
 | GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `$skiptoken`, `$top`) |
 | GET | /v1/workflow-runs/{id} | A run with result and steps |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
+| GET | /v1/workflow-waits | Open waits of one `kind` (`queue`, `workspace_id`, `$top` at most 100, `$skiptoken`) |
+| POST | /v1/workflow-waits/claim | Claim open waits for `holder`; the body is `kind`, optional `key` and `workspace_id`, and `limit`. The response is `value` and `claim_token`; each wait includes `claim_until` |
+| PATCH | /v1/workflow-waits | Replace one open wait's `data`, as its owning run or as `holder` with `claim_token` |
+| POST | /v1/workflow-waits/complete | Complete one open wait with `completion`, an envelope with `output`, `port` or `error` |
 | GET | /v1/me/tasks | The caller's tasks (`waiting=true` for those still to answer, `status`, `kind`, `key`, `workspace_id`, `item_id`, `$top`); open ones by due time, in pages linked by `@odata.nextLink` like the other task lists |
 | GET / POST | /v1/workspaces/{id}/tasks | A workspace's tasks, for its owners; create a task: `{"title", "description", "assignees", "item_id", "kind", "key", "completion", "outcomes", "input_schema", "values", "priority", "due_at"}` |
 | GET | /v1/items/{id}/tasks | The tasks about an item the caller may see |

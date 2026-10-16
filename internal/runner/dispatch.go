@@ -37,11 +37,8 @@ func (r *Runner) dispatchLoop(ctx context.Context) {
 		if err := r.SyncLiveRuns(ctx); err != nil && ctx.Err() == nil {
 			r.log.Error("observe workflow statuses", "error", err)
 		}
-		if err := r.ResumeDecided(ctx); err != nil && ctx.Err() == nil {
-			r.log.Error("resume runs whose task completed", "error", err)
-		}
-		if err := r.ResumeWaits(ctx); err != nil && ctx.Err() == nil {
-			r.log.Error("resume runs whose wait completed", "error", err)
+		if err := r.SignalWaits(ctx); err != nil && ctx.Err() == nil {
+			r.log.Error("signal completed waits", "error", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -94,7 +91,7 @@ func (r *Runner) activeRuns(ids []string) (map[string]string, error) {
 	out := map[string]string{}
 	for _, s := range statuses {
 		switch state := status(s.Status); {
-		case parked[s.ID]:
+		case (state == "running" || state == "queued") && parked[s.ID]:
 			out[s.ID] = "waiting"
 		case state == "queued" || state == "running":
 			out[s.ID] = state

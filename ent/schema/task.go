@@ -42,10 +42,8 @@ func (Task) Fields() []ent.Field {
 		field.String("workflow_id").Optional().Nillable().Immutable(),
 		field.String("run_id").Optional().Nillable().Immutable(),
 		field.String("node").Optional().Nillable().Immutable(),
-		// Wait marks a task a run waits for; Parked a run that stopped
-		// waiting until the task completes.
+		// Wait marks a task whose result a workflow consumes.
 		field.Bool("wait").Default(false).Immutable(),
-		field.Bool("parked").Default(false),
 		field.Enum("status").Values("open", "completed", "cancelled", "expired").Default("open"),
 		field.String("outcome").Optional().Nillable(),
 		field.String("completed_by").Optional().Nillable(),
@@ -58,7 +56,7 @@ func (Task) Fields() []ent.Field {
 	}
 }
 func (Task) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("run_id"), index.Fields("workspace_id", "status"), index.Fields("item_id"), index.Fields("parked", "status")}
+	return []ent.Index{index.Fields("run_id"), index.Fields("workspace_id", "status"), index.Fields("item_id")}
 }
 
 // TaskResponse is one assignee's answer to a task. An any-mode task has one;

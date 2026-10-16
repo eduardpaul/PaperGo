@@ -79,6 +79,16 @@ func Kind(v string) predicate.WorkflowWait {
 	return predicate.WorkflowWait(sql.FieldEQ(FieldKind, v))
 }
 
+// Queue applies equality check predicate on the "queue" field. It's identical to QueueEQ.
+func Queue(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEQ(FieldQueue, v))
+}
+
+// PayloadID applies equality check predicate on the "payload_id" field. It's identical to PayloadIDEQ.
+func PayloadID(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEQ(FieldPayloadID, v))
+}
+
 // Key applies equality check predicate on the "key" field. It's identical to KeyEQ.
 func Key(v string) predicate.WorkflowWait {
 	return predicate.WorkflowWait(sql.FieldEQ(FieldKey, v))
@@ -107,6 +117,16 @@ func ExecutionID(v string) predicate.WorkflowWait {
 // Deadline applies equality check predicate on the "deadline" field. It's identical to DeadlineEQ.
 func Deadline(v time.Time) predicate.WorkflowWait {
 	return predicate.WorkflowWait(sql.FieldEQ(FieldDeadline, v))
+}
+
+// NotifiedAt applies equality check predicate on the "notified_at" field. It's identical to NotifiedAtEQ.
+func NotifiedAt(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEQ(FieldNotifiedAt, v))
+}
+
+// ClaimUntil applies equality check predicate on the "claim_until" field. It's identical to ClaimUntilEQ.
+func ClaimUntil(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEQ(FieldClaimUntil, v))
 }
 
 // ClaimRunID applies equality check predicate on the "claim_run_id" field. It's identical to ClaimRunIDEQ.
@@ -267,6 +287,136 @@ func KindEqualFold(v string) predicate.WorkflowWait {
 // KindContainsFold applies the ContainsFold predicate on the "kind" field.
 func KindContainsFold(v string) predicate.WorkflowWait {
 	return predicate.WorkflowWait(sql.FieldContainsFold(FieldKind, v))
+}
+
+// QueueEQ applies the EQ predicate on the "queue" field.
+func QueueEQ(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEQ(FieldQueue, v))
+}
+
+// QueueNEQ applies the NEQ predicate on the "queue" field.
+func QueueNEQ(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNEQ(FieldQueue, v))
+}
+
+// QueueIn applies the In predicate on the "queue" field.
+func QueueIn(vs ...string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldIn(FieldQueue, vs...))
+}
+
+// QueueNotIn applies the NotIn predicate on the "queue" field.
+func QueueNotIn(vs ...string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNotIn(FieldQueue, vs...))
+}
+
+// QueueGT applies the GT predicate on the "queue" field.
+func QueueGT(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldGT(FieldQueue, v))
+}
+
+// QueueGTE applies the GTE predicate on the "queue" field.
+func QueueGTE(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldGTE(FieldQueue, v))
+}
+
+// QueueLT applies the LT predicate on the "queue" field.
+func QueueLT(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldLT(FieldQueue, v))
+}
+
+// QueueLTE applies the LTE predicate on the "queue" field.
+func QueueLTE(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldLTE(FieldQueue, v))
+}
+
+// QueueContains applies the Contains predicate on the "queue" field.
+func QueueContains(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldContains(FieldQueue, v))
+}
+
+// QueueHasPrefix applies the HasPrefix predicate on the "queue" field.
+func QueueHasPrefix(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldHasPrefix(FieldQueue, v))
+}
+
+// QueueHasSuffix applies the HasSuffix predicate on the "queue" field.
+func QueueHasSuffix(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldHasSuffix(FieldQueue, v))
+}
+
+// QueueEqualFold applies the EqualFold predicate on the "queue" field.
+func QueueEqualFold(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEqualFold(FieldQueue, v))
+}
+
+// QueueContainsFold applies the ContainsFold predicate on the "queue" field.
+func QueueContainsFold(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldContainsFold(FieldQueue, v))
+}
+
+// PayloadIDEQ applies the EQ predicate on the "payload_id" field.
+func PayloadIDEQ(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEQ(FieldPayloadID, v))
+}
+
+// PayloadIDNEQ applies the NEQ predicate on the "payload_id" field.
+func PayloadIDNEQ(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNEQ(FieldPayloadID, v))
+}
+
+// PayloadIDIn applies the In predicate on the "payload_id" field.
+func PayloadIDIn(vs ...string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldIn(FieldPayloadID, vs...))
+}
+
+// PayloadIDNotIn applies the NotIn predicate on the "payload_id" field.
+func PayloadIDNotIn(vs ...string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNotIn(FieldPayloadID, vs...))
+}
+
+// PayloadIDGT applies the GT predicate on the "payload_id" field.
+func PayloadIDGT(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldGT(FieldPayloadID, v))
+}
+
+// PayloadIDGTE applies the GTE predicate on the "payload_id" field.
+func PayloadIDGTE(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldGTE(FieldPayloadID, v))
+}
+
+// PayloadIDLT applies the LT predicate on the "payload_id" field.
+func PayloadIDLT(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldLT(FieldPayloadID, v))
+}
+
+// PayloadIDLTE applies the LTE predicate on the "payload_id" field.
+func PayloadIDLTE(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldLTE(FieldPayloadID, v))
+}
+
+// PayloadIDContains applies the Contains predicate on the "payload_id" field.
+func PayloadIDContains(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldContains(FieldPayloadID, v))
+}
+
+// PayloadIDHasPrefix applies the HasPrefix predicate on the "payload_id" field.
+func PayloadIDHasPrefix(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldHasPrefix(FieldPayloadID, v))
+}
+
+// PayloadIDHasSuffix applies the HasSuffix predicate on the "payload_id" field.
+func PayloadIDHasSuffix(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldHasSuffix(FieldPayloadID, v))
+}
+
+// PayloadIDEqualFold applies the EqualFold predicate on the "payload_id" field.
+func PayloadIDEqualFold(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEqualFold(FieldPayloadID, v))
+}
+
+// PayloadIDContainsFold applies the ContainsFold predicate on the "payload_id" field.
+func PayloadIDContainsFold(v string) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldContainsFold(FieldPayloadID, v))
 }
 
 // KeyEQ applies the EQ predicate on the "key" field.
@@ -652,6 +802,106 @@ func DeadlineIsNil() predicate.WorkflowWait {
 // DeadlineNotNil applies the NotNil predicate on the "deadline" field.
 func DeadlineNotNil() predicate.WorkflowWait {
 	return predicate.WorkflowWait(sql.FieldNotNull(FieldDeadline))
+}
+
+// NotifiedAtEQ applies the EQ predicate on the "notified_at" field.
+func NotifiedAtEQ(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEQ(FieldNotifiedAt, v))
+}
+
+// NotifiedAtNEQ applies the NEQ predicate on the "notified_at" field.
+func NotifiedAtNEQ(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNEQ(FieldNotifiedAt, v))
+}
+
+// NotifiedAtIn applies the In predicate on the "notified_at" field.
+func NotifiedAtIn(vs ...time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldIn(FieldNotifiedAt, vs...))
+}
+
+// NotifiedAtNotIn applies the NotIn predicate on the "notified_at" field.
+func NotifiedAtNotIn(vs ...time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNotIn(FieldNotifiedAt, vs...))
+}
+
+// NotifiedAtGT applies the GT predicate on the "notified_at" field.
+func NotifiedAtGT(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldGT(FieldNotifiedAt, v))
+}
+
+// NotifiedAtGTE applies the GTE predicate on the "notified_at" field.
+func NotifiedAtGTE(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldGTE(FieldNotifiedAt, v))
+}
+
+// NotifiedAtLT applies the LT predicate on the "notified_at" field.
+func NotifiedAtLT(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldLT(FieldNotifiedAt, v))
+}
+
+// NotifiedAtLTE applies the LTE predicate on the "notified_at" field.
+func NotifiedAtLTE(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldLTE(FieldNotifiedAt, v))
+}
+
+// NotifiedAtIsNil applies the IsNil predicate on the "notified_at" field.
+func NotifiedAtIsNil() predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldIsNull(FieldNotifiedAt))
+}
+
+// NotifiedAtNotNil applies the NotNil predicate on the "notified_at" field.
+func NotifiedAtNotNil() predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNotNull(FieldNotifiedAt))
+}
+
+// ClaimUntilEQ applies the EQ predicate on the "claim_until" field.
+func ClaimUntilEQ(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldEQ(FieldClaimUntil, v))
+}
+
+// ClaimUntilNEQ applies the NEQ predicate on the "claim_until" field.
+func ClaimUntilNEQ(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNEQ(FieldClaimUntil, v))
+}
+
+// ClaimUntilIn applies the In predicate on the "claim_until" field.
+func ClaimUntilIn(vs ...time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldIn(FieldClaimUntil, vs...))
+}
+
+// ClaimUntilNotIn applies the NotIn predicate on the "claim_until" field.
+func ClaimUntilNotIn(vs ...time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNotIn(FieldClaimUntil, vs...))
+}
+
+// ClaimUntilGT applies the GT predicate on the "claim_until" field.
+func ClaimUntilGT(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldGT(FieldClaimUntil, v))
+}
+
+// ClaimUntilGTE applies the GTE predicate on the "claim_until" field.
+func ClaimUntilGTE(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldGTE(FieldClaimUntil, v))
+}
+
+// ClaimUntilLT applies the LT predicate on the "claim_until" field.
+func ClaimUntilLT(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldLT(FieldClaimUntil, v))
+}
+
+// ClaimUntilLTE applies the LTE predicate on the "claim_until" field.
+func ClaimUntilLTE(v time.Time) predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldLTE(FieldClaimUntil, v))
+}
+
+// ClaimUntilIsNil applies the IsNil predicate on the "claim_until" field.
+func ClaimUntilIsNil() predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldIsNull(FieldClaimUntil))
+}
+
+// ClaimUntilNotNil applies the NotNil predicate on the "claim_until" field.
+func ClaimUntilNotNil() predicate.WorkflowWait {
+	return predicate.WorkflowWait(sql.FieldNotNull(FieldClaimUntil))
 }
 
 // ClaimRunIDEQ applies the EQ predicate on the "claim_run_id" field.

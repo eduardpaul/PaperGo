@@ -113,7 +113,11 @@ func runComposePDF(e *env, in map[string]any) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	return outcome{Job: raw}, nil
+	ids := make([]string, len(job.Photos))
+	for i, photo := range job.Photos {
+		ids[i] = photo.BlobID
+	}
+	return outcome{Job: raw, BlobIDs: ids}, nil
 }
 
 func workComposePDF(w *workEnv, raw json.RawMessage) (json.RawMessage, error) {

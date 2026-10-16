@@ -8,6 +8,30 @@ import (
 	"papergo/ent"
 )
 
+// The ActivityRecordFunc type is an adapter to allow the use of ordinary
+// function as ActivityRecord mutator.
+type ActivityRecordFunc func(context.Context, *ent.ActivityRecordMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActivityRecordFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActivityRecordMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActivityRecordMutation", m)
+}
+
+// The ActivityReferenceFunc type is an adapter to allow the use of ordinary
+// function as ActivityReference mutator.
+type ActivityReferenceFunc func(context.Context, *ent.ActivityReferenceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActivityReferenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActivityReferenceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActivityReferenceMutation", m)
+}
+
 // The AuditEventFunc type is an adapter to allow the use of ordinary
 // function as AuditEvent mutator.
 type AuditEventFunc func(context.Context, *ent.AuditEventMutation) (ent.Value, error)
@@ -42,6 +66,18 @@ func (f BlobDeletionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BlobDeletionMutation", m)
+}
+
+// The BlobLeaseFunc type is an adapter to allow the use of ordinary
+// function as BlobLease mutator.
+type BlobLeaseFunc func(context.Context, *ent.BlobLeaseMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BlobLeaseFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BlobLeaseMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BlobLeaseMutation", m)
 }
 
 // The BlobTextFunc type is an adapter to allow the use of ordinary

@@ -11,10 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"papergo/ent/bloblease"
+	"papergo/ent/workflowversion"
+	"papergo/internal/activitystore"
 	"papergo/internal/ai"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
-	"papergo/internal/search"
 	"papergo/internal/workflow"
 )
 
@@ -22,10 +24,11 @@ func init() {
 	workflow.RegisterActivity(workflow.ActivitySpec{
 		Key:         "ai.batch.coordinate",
 		Kind:        "action",
-		Description: "Admits the installation's parked AI requests for one named queue: full groups of 20, a daily partial flush, and provider polling. Originating workflows keep their own authors. The output is counts only.",
+		Description: "Admits the installation's parked AI requests for one named queue: configurable groups, a daily partial flush, and provider polling. Originating workflows keep their own authors. The output is counts only.",
 		InputSchema: inputSchema(`
+			"batch_size": {"type":"integer","title":"Batch size","minimum":1,"maximum":100,"default":20},
 			"queue": {"type": "string", "title": "Queue", "minLength": 1, "maxLength": 64, "description": "Named queue. Empty uses shared."},
-			"policy": {"type": "string", "title": "Admission", "enum": ["threshold", "schedule", "both"], "description": "threshold submits full groups. schedule submits on the flush, including a partial group. both does both."},
+			"policy": {"type": "string", "title": "Admission", "description": "threshold submits full groups. schedule submits on the flush, including a partial group. both does both."},
 			"flush_cron": {"type": "string", "title": "Flush schedule", "description": "When a partial group is sent. Default 01:00 every day."},
 			"time_zone": {"type": "string", "title": "Time zone", "description": "Time zone of the flush. Default Europe/Madrid."}`),
 		OutputSchema: forms.MustParse(`{"type": "object", "properties": {
@@ -39,9 +42,11 @@ type stateData struct {
 	NextFlush time.Time `json:"next_flush,omitempty"`
 	Cron      string    `json:"cron,omitempty"`
 	TimeZone  string    `json:"time_zone,omitempty"`
+	Drain     bool      `json:"drain,omitempty"`
 }
 
 type flightData struct {
+	Tries      int       `json:"tries,omitempty"`
 	Status     string    `json:"status"`
 	BatchID    string    `json:"batch_id,omitempty"`
 	Hashes     []string  `json:"hashes,omitempty"`
@@ -55,12 +60,15 @@ type flightData struct {
 // on these requests, so a retry does not reuse the metadata of a batch that
 // already finished.
 type groupSubmit struct {
+	Tag    string   `json:"tag"`
+	Queue  string   `json:"queue"`
 	Hashes []string `json:"hashes"`
 	Tries  int      `json:"tries"`
 }
 
 type coordinateJob struct {
 	Queue      string        `json:"queue"`
+	ResultKey  string        `json:"result_key"`
 	StateToken string        `json:"state_token"`
 	Connection string        `json:"connection"`
 	Model      string        `json:"model"`
@@ -71,10 +79,11 @@ type coordinateJob struct {
 }
 
 type lineResult struct {
-	Hash     string `json:"hash"`
-	OK       bool   `json:"ok,omitempty"`
-	Terminal bool   `json:"terminal,omitempty"`
-	Error    string `json:"error,omitempty"`
+	ResponseKey string `json:"response_key,omitempty"`
+	Hash        string `json:"hash"`
+	OK          bool   `json:"ok,omitempty"`
+	Terminal    bool   `json:"terminal,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
 type groupResult struct {
@@ -92,7 +101,7 @@ func prepareCoordinate(step workflow.Step, in map[string]any) (workflow.Prepared
 		return workflow.Prepared{}, err
 	}
 	tools := step.Tools()
-	if tools.Batch == nil {
+	if runtime(tools).Batch == nil {
 		return workflow.Prepared{}, ErrNoBatch
 	}
 	queue, err := queueName(step, in)
@@ -100,7 +109,7 @@ func prepareCoordinate(step workflow.Step, in map[string]any) (workflow.Prepared
 		return workflow.Prepared{}, err
 	}
 	policy := policyBoth
-	if err = step.Choice(in, "policy", &policy, []string{policyThreshold, policySchedule, policyBoth}); err != nil {
+	if err = step.Choice(in, "policy", &policy, workflow.AdmissionPolicies()); err != nil {
 		return workflow.Prepared{}, err
 	}
 	cronExpr, err := step.OptionalText(in, "flush_cron")
@@ -118,34 +127,42 @@ func prepareCoordinate(step workflow.Step, in map[string]any) (workflow.Prepared
 		zone = "Europe/Madrid"
 	}
 	now := tools.Clock()
-	if err = workflow.PutWait(step.Context(), step.DMS(), workflow.Wait{
-		Kind: kindState, Key: queue, WorkspaceID: step.WorkspaceID(), RunID: batchOwner(queue),
-		Node: step.Node(), ExecutionID: "state", Data: json.RawMessage(`{}`),
-	}); err != nil {
+	store := tools.Records.WithTx(step.DMS().SQLTx())
+	if err = store.PutImmutable(step.Context(), activitystore.Record{Namespace: kindState, Scope: answerScope, Key: queue, OwnerID: step.WorkflowID(), Payload: json.RawMessage(`{}`)}); err != nil && !errors.Is(err, activitystore.ErrConflict) {
 		return workflow.Prepared{}, err
 	}
-	claimed, token, err := workflow.ClaimWaits(step.Context(), step.DMS(), workflow.WaitClaim{
-		Kind: kindState, Key: queue, Holder: step.RunID(), Limit: 1,
-	})
+	token, claimed, err := store.Claim(step.Context(), kindState, answerScope, queue, step.RunID(), time.Hour)
 	if err != nil {
 		return workflow.Prepared{}, err
 	}
-	if len(claimed) == 0 {
+	if !claimed {
 		return workflow.Prepared{Output: map[string]any{"queue": queue, "busy": true}}, nil
 	}
-	state, err := decodeState(claimed[0].Data)
+	record, err := store.Get(step.Context(), kindState, answerScope, queue)
 	if err != nil {
 		return workflow.Prepared{}, err
 	}
-	requests, err := listRequests(step)
+	state, err := decodeState(record.Payload)
 	if err != nil {
 		return workflow.Prepared{}, err
 	}
-	flights, err := listFlights(step)
+	if state.Cron != cronExpr || state.TimeZone != zone {
+		state.NextFlush = time.Time{}
+		state.Drain = false
+	}
+	batchSize := 20
+	if err = step.Whole(in, "batch_size", &batchSize, 1, 100); err != nil {
+		return workflow.Prepared{}, err
+	}
+	requests, err := listRequests(step, queue)
 	if err != nil {
 		return workflow.Prepared{}, err
 	}
-	plan, err := admit(now, queue, policy, tools.Batch.Connection(), tools.Batch.Key(), cronExpr, zone, requests, flights, flushState{NextFlush: state.NextFlush})
+	flights, err := listFlights(step, queue)
+	if err != nil {
+		return workflow.Prepared{}, err
+	}
+	plan, err := admit(now, queue, policy, runtime(tools).Batch.Connection(), runtime(tools).Batch.Key(), cronExpr, zone, requests, flights, flushState{NextFlush: state.NextFlush, Drain: state.Drain}, batchSize)
 	if err != nil {
 		return workflow.Prepared{}, err
 	}
@@ -159,7 +176,7 @@ func prepareCoordinate(step workflow.Step, in map[string]any) (workflow.Prepared
 		if err = json.Unmarshal(wait.Data, &data); err != nil {
 			return workflow.Prepared{}, err
 		}
-		answer, found, err := findAnswerStep(step.Context(), step.DMS().Client, tools, data.Activity, data.Hash)
+		answer, found, err := findAnswerStep(step.Context(), step.DMS().SQLTx(), tools, data.Activity, data.Hash)
 		if err != nil || !found {
 			if err == nil {
 				err = errors.New("the cached answer disappeared")
@@ -175,19 +192,31 @@ func prepareCoordinate(step workflow.Step, in map[string]any) (workflow.Prepared
 		}
 		completed++
 	}
-	if err = resolveJoins(step, tools); err != nil {
+	if err = resolveJoins(step, tools, queue); err != nil {
 		return workflow.Prepared{}, err
 	}
+	drain := state.Drain || plan.FlushSet && !state.NextFlush.IsZero() && !state.NextFlush.After(now)
+	if len(plan.Groups) > 1 {
+		plan.Groups = plan.Groups[:1]
+	} else {
+		drain = false
+	}
+	if len(plan.Poll) > 1 {
+		plan.Poll = plan.Poll[:1]
+	}
+	if len(plan.Reconcile) > 1 {
+		plan.Reconcile = plan.Reconcile[:1]
+	}
+	next := state.NextFlush
 	if plan.FlushSet {
-		raw, err := json.Marshal(stateData{NextFlush: plan.NextFlush, Cron: cronExpr, TimeZone: zone})
-		if err != nil {
-			return workflow.Prepared{}, err
-		}
-		if err = workflow.UpdateWaitData(step.Context(), step.DMS(), workflow.WaitUpdate{
-			Kind: kindState, Key: queue, Holder: batchOwner(queue), Data: raw,
-		}); err != nil {
-			return workflow.Prepared{}, err
-		}
+		next = plan.NextFlush
+	}
+	rawState, err := json.Marshal(stateData{NextFlush: next, Cron: cronExpr, TimeZone: zone, Drain: drain})
+	if err != nil {
+		return workflow.Prepared{}, err
+	}
+	if err = store.Put(step.Context(), activitystore.Record{Namespace: kindState, Scope: answerScope, Key: queue, OwnerID: step.WorkflowID(), Payload: rawState}); err != nil {
+		return workflow.Prepared{}, err
 	}
 	tries := map[string]int{}
 	for _, req := range requests {
@@ -197,16 +226,35 @@ func prepareCoordinate(step workflow.Step, in map[string]any) (workflow.Prepared
 	}
 	groups := make([]groupSubmit, 0, len(plan.Groups))
 	for _, hashes := range plan.Groups {
-		group := groupSubmit{Hashes: hashes}
+		group := groupSubmit{Hashes: hashes, Queue: queue}
 		for _, hash := range hashes {
 			if tries[hash] > group.Tries {
 				group.Tries = tries[hash]
 			}
 		}
 		groups = append(groups, group)
+		tag := submissionTag(runtime(tools).Batch.Connection(), runtime(tools).Batch.Model(), step.ExecutionID(), group.Tries, hashes)
+		groups[len(groups)-1].Tag = tag
+		if err = saveFlight(step, coordinateJob{Queue: queue, Connection: runtime(tools).Batch.Connection(), Model: runtime(tools).Batch.Key()}, tag, flightData{Tries: group.Tries, Status: "prepared", Hashes: hashes, Queue: queue, Connection: runtime(tools).Batch.Connection(), Model: runtime(tools).Batch.Key()}); err != nil {
+			return workflow.Prepared{}, err
+		}
+		for _, hash := range hashes {
+			if err = store.Reference(step.Context(), activitystore.ID(kindFlight, flightScope(queue, runtime(tools).Batch.Connection(), runtime(tools).Batch.Key()), tag), activitystore.ID(requestCache, answerScope, hash)); err != nil {
+				return workflow.Prepared{}, err
+			}
+		}
+
+	}
+	until := time.Now().UTC().Add(24 * time.Hour)
+	resultID := activitystore.ID("ai.coordinate.result", queue, step.ExecutionID())
+	if err = store.Put(step.Context(), activitystore.Record{Namespace: "ai.coordinate.result", Scope: queue, Key: step.ExecutionID(), Payload: json.RawMessage(`{}`), ExpiresAt: &until}); err != nil {
+		return workflow.Prepared{}, err
+	}
+	if err = store.Reference(step.Context(), step.RunID(), resultID); err != nil {
+		return workflow.Prepared{}, err
 	}
 	job, err := json.Marshal(coordinateJob{
-		Queue: queue, StateToken: token, Connection: tools.Batch.Connection(), Model: tools.Batch.Key(),
+		Queue: queue, ResultKey: step.ExecutionID(), StateToken: token, Connection: runtime(tools).Batch.Connection(), Model: runtime(tools).Batch.Key(),
 		Groups: groups, Reconcile: plan.Reconcile, Poll: plan.Poll, Completed: completed,
 	})
 	if err != nil {
@@ -215,8 +263,8 @@ func prepareCoordinate(step workflow.Step, in map[string]any) (workflow.Prepared
 	return workflow.Prepared{Job: job, Output: map[string]any{"queue": queue, "completed": completed}}, nil
 }
 
-func listRequests(step workflow.Step) ([]queuedRequest, error) {
-	waits, err := listKind(step, kindRequest)
+func listRequests(step workflow.Step, queue string) ([]queuedRequest, error) {
+	waits, err := listKind(step, kindRequest, queue)
 	if err != nil {
 		return nil, err
 	}
@@ -234,13 +282,22 @@ func listRequests(step workflow.Step) ([]queuedRequest, error) {
 			return nil, err
 		}
 		if wait.Deadline != nil && !wait.Deadline.After(now) {
-			if err = workflow.CompleteWait(step.Context(), step.DMS(), kindRequest, wait.Key, json.RawMessage(`{"error":"the wait reached its deadline"}`)); err != nil && !errors.Is(err, dms.ErrConflict) {
+			if err = workflow.FailWait(step.Context(), step.DMS(), kindRequest, wait.Key, "the wait reached its deadline"); err != nil && !errors.Is(err, dms.ErrConflict) {
+				return nil, err
+			}
+			continue
+		}
+		if err = authorizeRequest(step, wait); err != nil {
+			if !errors.Is(err, dms.ErrForbidden) && !errors.Is(err, dms.ErrNotFound) {
+				return nil, err
+			}
+			if err = workflow.FailWait(step.Context(), step.DMS(), kindRequest, wait.Key, "the request author can no longer read its source"); err != nil {
 				return nil, err
 			}
 			continue
 		}
 		cached := false
-		if _, cached, err = findAnswerStep(step.Context(), step.DMS().Client, step.Tools(), data.Activity, data.Hash); err != nil {
+		if _, cached, err = findAnswerStep(step.Context(), step.DMS().SQLTx(), step.Tools(), data.Activity, data.Hash); err != nil {
 			return nil, err
 		}
 		out = append(out, queuedRequest{Key: wait.Key, Hash: data.Hash, Queue: data.Queue, Connection: data.Connection, Model: data.Model, Cached: cached, Attempts: data.Attempts})
@@ -248,27 +305,97 @@ func listRequests(step workflow.Step) ([]queuedRequest, error) {
 	return out, nil
 }
 
-func listFlights(step workflow.Step) ([]openFlight, error) {
-	waits, err := listKind(step, kindFlight)
+// Dispatch preserves each originating version author's authority, even when
+// an installation coordinator has broader permissions.
+func authorizeRequest(step workflow.Step, wait workflow.Wait) error {
+	t, ctx := step.DMS(), step.Context()
+	run, err := t.Client.WorkflowRun.Get(ctx, wait.RunID)
+	if err != nil {
+		return err
+	}
+	version, err := t.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(run.WorkflowID), workflowversion.NumberEQ(run.WorkflowVersion)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err = t.Authorize(ctx, version.CreatedBy, wait.WorkspaceID, "read"); err != nil {
+		return err
+	}
+	leases, err := t.Client.BlobLease.Query().Where(bloblease.OwnerIDEQ(wait.ID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, lease := range leases {
+		source, err := t.Client.Blob.Get(ctx, lease.BlobID)
+		if err != nil {
+			return err
+		}
+		if _, err = t.GetBlob(ctx, version.CreatedBy, source.ItemID, source.ID); err != nil {
+			return err
+		}
+	}
+	if run.ItemID != nil {
+		_, err = t.GetSurface(ctx, version.CreatedBy, *run.ItemID, "auto")
+	}
+	return err
+}
+
+func flightScope(queue, connection, model string) string {
+	return ai.CacheKey(queue, connection, model)
+}
+func listFlights(step workflow.Step, queue string) ([]openFlight, error) {
+	tools := step.Tools()
+	scope := flightScope(queue, runtime(tools).Batch.Connection(), runtime(tools).Batch.Key())
+	store := tools.Records.WithTx(step.DMS().SQLTx())
+	waits, err := listKind(step, kindRequest, queue)
 	if err != nil {
 		return nil, err
 	}
-	var out []openFlight
+	active := map[string]bool{}
 	for _, wait := range waits {
-		var data flightData
-		if err = json.Unmarshal(wait.Data, &data); err != nil {
+		var data requestData
+		if err := json.Unmarshal(wait.Data, &data); err != nil {
 			return nil, err
 		}
-		out = append(out, openFlight{Tag: wait.Key, Status: data.Status, BatchID: data.BatchID, Hashes: data.Hashes, NextPoll: data.NextPoll})
+		active[data.Hash] = true
+	}
+	after := ""
+	var out []openFlight
+	for {
+		records, err := store.List(step.Context(), kindFlight, scope, "pending", after, 100)
+		if err != nil {
+			return nil, err
+		}
+		if len(records) == 0 {
+			break
+		}
+		for _, record := range records {
+			var data flightData
+			if err = json.Unmarshal(record.Payload, &data); err != nil {
+				return nil, err
+			}
+			live := false
+			for _, hash := range data.Hashes {
+				live = live || active[hash]
+			}
+			if !live {
+				if err = saveFlight(step, coordinateJob{Queue: queue, Connection: runtime(tools).Batch.Connection(), Model: runtime(tools).Batch.Key()}, record.Key, flightData{Status: "done", BatchID: data.BatchID, Queue: queue, Connection: data.Connection, Model: data.Model}); err != nil {
+					return nil, err
+				}
+				after = record.Key
+				continue
+			}
+			out = append(out, openFlight{Tag: record.Key, Status: data.Status, BatchID: data.BatchID, Hashes: data.Hashes, NextPoll: data.NextPoll})
+			after = record.Key
+		}
 	}
 	return out, nil
 }
 
-func listKind(step workflow.Step, kind string) ([]workflow.Wait, error) {
+func listKind(step workflow.Step, kind, queue string) ([]workflow.Wait, error) {
 	var out []workflow.Wait
 	after := ""
-	for page := 0; page < 10; page++ {
-		listed, err := workflow.ListOpenWaits(step.Context(), step.DMS(), workflow.WaitQuery{Kind: kind, After: after, Limit: 100})
+	for {
+		listed, err := workflow.ListOpenWaits(step.Context(), step.DMS(), workflow.WaitQuery{Kind: kind, Queue: queue, After: after, Limit: 100})
 		if err != nil {
 			return nil, err
 		}
@@ -291,13 +418,15 @@ func decodeState(raw json.RawMessage) (stateData, error) {
 }
 
 func workCoordinate(ctx context.Context, tools workflow.Tools, raw json.RawMessage) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
 	var job coordinateJob
 	if err := json.Unmarshal(raw, &job); err != nil {
 		return nil, err
 	}
 	var groups []groupResult
 	for _, tag := range job.Reconcile {
-		groups = append(groups, reconcileGroup(ctx, tools, tag))
+		groups = append(groups, reconcileGroup(ctx, tools, job, tag))
 	}
 	for _, poll := range job.Poll {
 		groups = append(groups, pollGroup(ctx, tools, poll))
@@ -305,21 +434,39 @@ func workCoordinate(ctx context.Context, tools workflow.Tools, raw json.RawMessa
 	for _, group := range job.Groups {
 		groups = append(groups, submitGroup(ctx, tools, job.Connection, group))
 	}
-	return json.Marshal(struct {
+	payload, err := json.Marshal(struct {
 		Groups []groupResult `json:"groups"`
 	}{Groups: groups})
+	if err != nil {
+		return nil, err
+	}
+	until := time.Now().UTC().Add(24 * time.Hour)
+	if err = tools.Records.Put(ctx, activitystore.Record{Namespace: "ai.coordinate.result", Scope: job.Queue, Key: job.ResultKey, Payload: payload, ExpiresAt: &until}); err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]string{"result_key": job.ResultKey})
 }
 
-func reconcileGroup(ctx context.Context, tools workflow.Tools, tag string) groupResult {
-	if tools.Batch == nil {
+func reconcileGroup(ctx context.Context, tools workflow.Tools, job coordinateJob, tag string) groupResult {
+	if runtime(tools).Batch == nil {
 		return groupResult{Tag: tag, Status: "error", Error: ErrNoBatch.Error()}
 	}
-	id, found, err := tools.Batch.FindByTag(ctx, tag)
+	record, e := tools.Records.Get(ctx, kindFlight, flightScope(job.Queue, job.Connection, job.Model), tag)
+	if e != nil {
+		return groupResult{Tag: tag, Status: "uncertain", Error: e.Error()}
+	}
+	if record != nil {
+		var data flightData
+		if json.Unmarshal(record.Payload, &data) == nil && data.Status == "prepared" {
+			return submitGroup(ctx, tools, job.Connection, groupSubmit{Tag: tag, Queue: job.Queue, Hashes: data.Hashes, Tries: data.Tries})
+		}
+	}
+	id, found, err := runtime(tools).Batch.FindByTag(ctx, tag)
 	if err != nil {
 		return groupResult{Tag: tag, Status: "uncertain", Error: err.Error()}
 	}
 	if !found {
-		return groupResult{Tag: tag, Status: "cleared", Phase: "reconcile"}
+		return groupResult{Tag: tag, Status: "uncertain", Phase: "reconcile", Error: "the provider has not confirmed the submission"}
 	}
 	result := finishBatch(ctx, tools, tag, nil, id)
 	result.Phase = "reconcile"
@@ -327,7 +474,7 @@ func reconcileGroup(ctx context.Context, tools workflow.Tools, tag string) group
 }
 
 func pollGroup(ctx context.Context, tools workflow.Tools, poll pollTarget) groupResult {
-	if tools.Batch == nil {
+	if runtime(tools).Batch == nil {
 		return groupResult{Tag: poll.Tag, Status: "error", Phase: "poll", Error: ErrNoBatch.Error()}
 	}
 	if poll.BatchID == "" {
@@ -340,28 +487,47 @@ func pollGroup(ctx context.Context, tools workflow.Tools, poll pollTarget) group
 
 func submitGroup(ctx context.Context, tools workflow.Tools, connection string, group groupSubmit) groupResult {
 	hashes := group.Hashes
-	if tools.Batch == nil {
+	if runtime(tools).Batch == nil {
 		return groupResult{Hashes: hashes, Status: "error", Error: ErrNoBatch.Error()}
 	}
-	tag := submissionTag(connection, tools.Batch.Model(), group.Tries, hashes)
-	id, found, err := tools.Batch.FindByTag(ctx, tag)
-	if err != nil {
-		return groupResult{Tag: tag, Hashes: hashes, Status: "uncertain", Phase: "submit", Error: err.Error()}
+	tag := group.Tag
+	if tag == "" {
+		return groupResult{Hashes: hashes, Status: "error", Error: "the submission has no durable intent"}
 	}
-	if found {
-		result := finishBatch(ctx, tools, tag, hashes, id)
-		result.Phase = "submit"
-		return result
+	scope := flightScope(group.Queue, connection, runtime(tools).Batch.Key())
+	record, err := tools.Records.Get(ctx, kindFlight, scope, tag)
+	if err != nil {
+		return groupResult{Tag: tag, Hashes: hashes, Status: "uncertain", Error: err.Error()}
+	}
+	if record == nil {
+		return groupResult{Tag: tag, Hashes: hashes, Status: "uncertain", Error: "the submission intent is unavailable"}
+	}
+	var data flightData
+	if err = json.Unmarshal(record.Payload, &data); err != nil {
+		return groupResult{Tag: tag, Hashes: hashes, Status: "uncertain", Error: err.Error()}
+	}
+	if data.Status != "prepared" {
+		// Only a prepared intent proves Create has never been authorized.
+		// All other states require reconciliation, never another create.
+		return reconcileGroup(ctx, tools, coordinateJob{Queue: group.Queue, Connection: connection, Model: runtime(tools).Batch.Key()}, tag)
 	}
 	payload, err := jsonl(ctx, tools, hashes)
 	if err != nil {
 		return groupResult{Tag: tag, Hashes: hashes, Status: "error", Phase: "submit", Error: err.Error()}
 	}
-	fileID, err := tools.Batch.Upload(ctx, payload)
+	fileID, err := runtime(tools).Batch.Upload(ctx, payload)
 	if err != nil {
 		return groupResult{Tag: tag, Hashes: hashes, Status: "error", Phase: "submit", Error: err.Error()}
 	}
-	id, err = tools.Batch.Create(ctx, fileID, tag)
+	intent, _ := json.Marshal(flightData{Status: "uncertain", Hashes: hashes, Queue: group.Queue, Connection: connection, Model: runtime(tools).Batch.Key()})
+	swapped, err := tools.Records.CompareAndSwap(ctx, record.ID, record.Payload, intent)
+	if err != nil || !swapped {
+		if err == nil {
+			err = errors.New("another executor advanced the submission intent")
+		}
+		return groupResult{Tag: tag, Hashes: hashes, Status: "uncertain", Error: err.Error()}
+	}
+	id, err := runtime(tools).Batch.Create(ctx, fileID, tag)
 	if err != nil {
 		if errors.Is(err, ai.ErrUncertain) {
 			return groupResult{Tag: tag, Hashes: hashes, Status: "uncertain", Phase: "submit", Error: err.Error()}
@@ -374,24 +540,24 @@ func submitGroup(ctx context.Context, tools workflow.Tools, connection string, g
 }
 
 func finishBatch(ctx context.Context, tools workflow.Tools, tag string, hashes []string, id string) groupResult {
-	batch, err := tools.Batch.Get(ctx, id)
+	batch, err := runtime(tools).Batch.Get(ctx, id)
 	if err != nil {
 		return groupResult{Tag: tag, Hashes: hashes, BatchID: id, Status: "in_progress", Error: err.Error()}
 	}
 	if !batch.Terminal() {
 		return groupResult{Tag: tag, Hashes: hashes, BatchID: id, Status: "in_progress"}
 	}
-	lines, err := batchLines(ctx, tools, batch)
+	lines, err := batchLines(ctx, tools, batch, tag)
 	if err != nil {
 		return groupResult{Tag: tag, Hashes: hashes, BatchID: id, Status: "in_progress", Error: err.Error()}
 	}
 	return groupResult{Tag: tag, Hashes: hashes, BatchID: id, Status: batch.Status, Lines: lines}
 }
 
-func submissionTag(connection, model string, tries int, hashes []string) string {
+func submissionTag(connection, model, invocation string, tries int, hashes []string) string {
 	sorted := append([]string(nil), hashes...)
 	sort.Strings(sorted)
-	parts := append([]string{model, strconv.Itoa(tries)}, sorted...)
+	parts := append([]string{model, invocation, strconv.Itoa(tries)}, sorted...)
 	return ai.CacheKey(connection, parts...)
 }
 
@@ -435,31 +601,34 @@ func jsonl(ctx context.Context, tools workflow.Tools, hashes []string) ([]byte, 
 		if err != nil {
 			return nil, err
 		}
+		if buf.Len()+len(line)+1 > 100<<20 {
+			return nil, errors.New("batch input exceeds the 100 MiB action limit; reduce batch_size or source size")
+		}
 		buf.Write(line)
 		buf.WriteByte('\n')
 	}
 	return buf.Bytes(), nil
 }
 
-func batchLines(ctx context.Context, tools workflow.Tools, batch ai.Batch) ([]lineResult, error) {
+func batchLines(ctx context.Context, tools workflow.Tools, batch ai.Batch, tag string) ([]lineResult, error) {
 	var lines []lineResult
 	if batch.OutputFileID != "" {
-		raw, err := tools.Batch.Download(ctx, batch.OutputFileID)
+		raw, err := runtime(tools).Batch.Download(ctx, batch.OutputFileID)
 		if err != nil {
 			return nil, err
 		}
-		parsed, err := parseBatchFile(ctx, tools, raw)
+		parsed, err := parseBatchFile(ctx, tools, raw, tag)
 		if err != nil {
 			return nil, err
 		}
 		lines = append(lines, parsed...)
 	}
 	if batch.ErrorFileID != "" {
-		raw, err := tools.Batch.Download(ctx, batch.ErrorFileID)
+		raw, err := runtime(tools).Batch.Download(ctx, batch.ErrorFileID)
 		if err != nil {
 			return nil, err
 		}
-		parsed, err := parseBatchFile(ctx, tools, raw)
+		parsed, err := parseBatchFile(ctx, tools, raw, tag)
 		if err != nil {
 			return nil, err
 		}
@@ -468,7 +637,7 @@ func batchLines(ctx context.Context, tools workflow.Tools, batch ai.Batch) ([]li
 	return lines, nil
 }
 
-func parseBatchFile(ctx context.Context, tools workflow.Tools, raw []byte) ([]lineResult, error) {
+func parseBatchFile(ctx context.Context, tools workflow.Tools, raw []byte, tag string) ([]lineResult, error) {
 	var lines []lineResult
 	for _, row := range bytes.Split(raw, []byte("\n")) {
 		row = bytes.TrimSpace(row)
@@ -515,12 +684,18 @@ func parseBatchFile(ctx context.Context, tools workflow.Tools, raw []byte) ([]li
 		if body.Activity == "search.enrich" {
 			answer.Text = shortText(answer.Text, maxEnrichmentChars)
 		}
-		if _, err = acceptAnswer(ctx, tools, body.Activity, line.CustomID, body.ModelKey, body.Schema, answer); err != nil {
+		accepted, e := acceptAnswer(ctx, tools, body.Activity, line.CustomID, body.ModelKey, body.Schema, answer)
+		err = e
+		if err != nil {
 			terminal := strings.Contains(err.Error(), "output_schema") || strings.Contains(err.Error(), "workflow output limit")
 			lines = append(lines, lineResult{Hash: line.CustomID, Terminal: terminal, Error: err.Error()})
 			continue
 		}
-		lines = append(lines, lineResult{Hash: line.CustomID, OK: true})
+		responseKey := ai.CacheKey(tag, line.CustomID)
+		if err = saveResponse(ctx, tools, line.CustomID, responseKey, accepted); err != nil {
+			return nil, err
+		}
+		lines = append(lines, lineResult{Hash: line.CustomID, ResponseKey: responseKey, OK: true})
 	}
 	return lines, nil
 }
@@ -533,7 +708,21 @@ func commitCoordinate(step workflow.Step, rawJob, rawResult json.RawMessage) (wo
 	if err := json.Unmarshal(rawJob, &job); err != nil {
 		return workflow.Prepared{}, err
 	}
-	if err := json.Unmarshal(rawResult, &result); err != nil {
+	store := step.Tools().Records.WithTx(step.DMS().SQLTx())
+	if err := store.CheckLease(step.Context(), kindState, answerScope, job.Queue, step.RunID(), job.StateToken); err != nil {
+		return workflow.Prepared{}, err
+	}
+	record, err := store.Get(step.Context(), "ai.coordinate.result", job.Queue, job.ResultKey)
+	if err != nil {
+		return workflow.Prepared{}, err
+	}
+	if record == nil {
+		return workflow.Prepared{}, errors.New("coordinator work result is unavailable")
+	}
+	if err = json.Unmarshal(record.Payload, &result); err != nil {
+		return workflow.Prepared{}, err
+	}
+	if err = store.Unreference(step.Context(), step.RunID(), record.ID); err != nil {
 		return workflow.Prepared{}, err
 	}
 	counts := map[string]int{"submitted": 0, "polled": 0, "completed": job.Completed, "released": 0}
@@ -542,10 +731,10 @@ func commitCoordinate(step workflow.Step, rawJob, rawResult json.RawMessage) (wo
 			return workflow.Prepared{}, err
 		}
 	}
-	if err := resolveJoins(step, step.Tools()); err != nil {
+	if err := resolveJoins(step, step.Tools(), job.Queue); err != nil {
 		return workflow.Prepared{}, err
 	}
-	if err := workflow.ReleaseClaim(step.Context(), step.DMS(), kindState, job.Queue, step.RunID(), job.StateToken); err != nil && !notFound(err) {
+	if err := store.ReleaseLease(step.Context(), kindState, answerScope, job.Queue, step.RunID(), job.StateToken); err != nil && !notFound(err) {
 		return workflow.Prepared{}, err
 	}
 	return workflow.Prepared{Output: map[string]any{
@@ -557,22 +746,28 @@ func commitCoordinate(step workflow.Step, rawJob, rawResult json.RawMessage) (wo
 func applyGroup(step workflow.Step, job coordinateJob, group groupResult, counts map[string]int) error {
 	hashes := group.Hashes
 	if len(hashes) == 0 && group.Tag != "" {
-		if flight, err := workflow.GetWait(step.Context(), step.DMS(), kindFlight, group.Tag); err == nil {
+		store := step.Tools().Records.WithTx(step.DMS().SQLTx())
+		if flight, err := store.Get(step.Context(), kindFlight, flightScope(job.Queue, job.Connection, job.Model), group.Tag); err == nil && flight != nil {
 			var data flightData
-			if json.Unmarshal(flight.Data, &data) == nil {
+			if json.Unmarshal(flight.Payload, &data) == nil {
 				hashes = data.Hashes
 			}
 		}
 	}
 	switch group.Status {
 	case "uncertain":
-		return saveFlight(step, job, group.Tag, flightData{Status: "uncertain", Hashes: hashes, Queue: job.Queue, Connection: job.Connection, Model: job.Model})
-	case "cleared":
-		return saveFlight(step, job, group.Tag, flightData{Status: "cleared", Queue: job.Queue, Connection: job.Connection, Model: job.Model})
+		next := time.Time{}
+		if group.Phase == "reconcile" {
+			next = step.Tools().Clock().Add(pollEvery)
+		}
+		return saveFlight(step, job, group.Tag, flightData{Status: "uncertain", NextPoll: next, Hashes: hashes, Queue: job.Queue, Connection: job.Connection, Model: job.Model})
 	case "error":
 		n, err := releaseHashes(step, hashes, lineResult{Error: group.Error})
 		counts["released"] += n
-		return err
+		if err != nil {
+			return err
+		}
+		return saveFlight(step, job, group.Tag, flightData{Status: "done", Queue: job.Queue, Connection: job.Connection, Model: job.Model})
 	case "in_progress":
 		if group.Phase == "submit" {
 			counts["submitted"]++
@@ -622,23 +817,19 @@ func applyLine(step workflow.Step, hash string, line lineResult) (completed, rel
 			return completed, released, err
 		}
 		if line.OK {
-			answer, found, err := findAnswerStep(step.Context(), step.DMS().Client, step.Tools(), data.Activity, hash)
+			answer, err := responseStep(step, line.ResponseKey)
 			if err != nil {
 				return completed, released, err
 			}
-			if !found {
-				line = lineResult{Terminal: true, Error: "the provider answer was not cached"}
-			} else {
-				payload, err := json.Marshal(answer.output(data.Model, false))
-				if err != nil {
-					return completed, released, err
-				}
-				if err = workflow.CompleteWait(step.Context(), step.DMS(), kindRequest, wait.Key, payload); err != nil && !errors.Is(err, dms.ErrConflict) {
-					return completed, released, err
-				}
-				completed++
-				continue
+			payload, err := json.Marshal(answer.output(data.Model, false))
+			if err != nil {
+				return completed, released, err
 			}
+			if err = workflow.CompleteWait(step.Context(), step.DMS(), kindRequest, wait.Key, payload); err != nil && !errors.Is(err, dms.ErrConflict) {
+				return completed, released, err
+			}
+			completed++
+			continue
 		}
 		message := line.Error
 		if message == "" {
@@ -646,11 +837,7 @@ func applyLine(step workflow.Step, hash string, line lineResult) (completed, rel
 		}
 		next := data.Attempts + 1
 		if line.Terminal || next >= maxAttempts {
-			payload, err := json.Marshal(map[string]string{"error": shortText(message, 300)})
-			if err != nil {
-				return completed, released, err
-			}
-			if err = workflow.CompleteWait(step.Context(), step.DMS(), kindRequest, wait.Key, payload); err != nil && !errors.Is(err, dms.ErrConflict) {
+			if err = workflow.FailWait(step.Context(), step.DMS(), kindRequest, wait.Key, shortText(message, 300)); err != nil && !errors.Is(err, dms.ErrConflict) {
 				return completed, released, err
 			}
 			completed++
@@ -661,24 +848,10 @@ func applyLine(step workflow.Step, hash string, line lineResult) (completed, rel
 		if err != nil {
 			return completed, released, err
 		}
-		holder := step.RunID()
-		token := waitToken(wait)
-		if wait.ClaimRunID != nil && token != "" {
-			holder = *wait.ClaimRunID
-		} else {
-			holder = wait.RunID
-			token = ""
-		}
-		if err = workflow.UpdateWaitData(step.Context(), step.DMS(), workflow.WaitUpdate{
-			Kind: kindRequest, Key: wait.Key, Holder: holder, ClaimToken: token, Data: raw,
-		}); err != nil && !notFound(err) {
+		if err = workflow.UpdateWaitData(step.Context(), step.DMS(), workflow.WaitUpdate{Kind: kindRequest, Key: wait.Key, Holder: wait.RunID, Data: raw}); err != nil {
 			return completed, released, err
 		}
-		if token != "" && wait.ClaimRunID != nil {
-			if err = workflow.ReleaseClaim(step.Context(), step.DMS(), kindRequest, wait.Key, *wait.ClaimRunID, token); err != nil && !notFound(err) {
-				return completed, released, err
-			}
-		}
+
 		released++
 	}
 	return completed, released, nil
@@ -697,7 +870,7 @@ func releaseHashes(step workflow.Step, hashes []string, line lineResult) (int, e
 }
 
 func waitsForHash(step workflow.Step, hash string) ([]workflow.Wait, error) {
-	waits, err := listKind(step, kindRequest)
+	waits, err := listKind(step, kindRequest, "")
 	if err != nil {
 		return nil, err
 	}
@@ -720,22 +893,31 @@ func saveFlight(step workflow.Step, job coordinateJob, tag string, data flightDa
 	if err != nil {
 		return err
 	}
-	if err = workflow.PutWait(step.Context(), step.DMS(), workflow.Wait{
-		Kind: kindFlight, Key: tag, WorkspaceID: step.WorkspaceID(), RunID: batchOwner(job.Queue),
-		Node: step.Node(), ExecutionID: tag, Data: raw,
-	}); err != nil {
+	scope := flightScope(job.Queue, job.Connection, job.Model)
+	// Pending intents outlive every consumer deadline, but are still
+	// collected if this coordinator is disabled or its provider changes.
+	until := step.Tools().Clock().UTC().Add(requestTTL(step.Tools()) + 24*time.Hour)
+	record := activitystore.Record{Namespace: kindFlight, Scope: scope, Key: tag, OwnerID: step.WorkflowID(), Payload: raw, ExpiresAt: &until}
+	if data.Status == "done" || data.Status == "cleared" {
+		record.State = "completed"
+		until := time.Now().UTC().Add(step.Tools().ResultTTL)
+		record.ExpiresAt = &until
+	}
+	store := step.Tools().Records.WithTx(step.DMS().SQLTx())
+	if err = store.Put(step.Context(), record); err != nil {
 		return err
 	}
-	return workflow.UpdateWaitData(step.Context(), step.DMS(), workflow.WaitUpdate{
-		Kind: kindFlight, Key: tag, Holder: batchOwner(job.Queue), Data: raw,
-	})
+	if record.State == "completed" {
+		return store.Release(step.Context(), activitystore.ID(kindFlight, scope, tag))
+	}
+	return nil
 }
 
-func resolveJoins(step workflow.Step, tools workflow.Tools) error {
+func resolveJoins(step workflow.Step, tools workflow.Tools, queue string) error {
 	if tools.Search == nil || tools.Results == nil {
 		return nil
 	}
-	joins, err := listKind(step, kindJoin)
+	joins, err := listKind(step, kindJoin, queue)
 	if err != nil {
 		return err
 	}
@@ -744,12 +926,12 @@ func resolveJoins(step workflow.Step, tools workflow.Tools) error {
 		if err = json.Unmarshal(join.Data, &data); err != nil {
 			return err
 		}
-		raw, err := stepCacheGet(step.Context(), step.DMS().Client, "search.enrich", data.Manifest)
+		raw, err := loadManifest(step, data.Manifest)
 		if err != nil {
 			return err
 		}
 		if raw == nil {
-			if err = workflow.CompleteWait(step.Context(), step.DMS(), kindJoin, join.Key, json.RawMessage(`{"error":"the enrichment request expired"}`)); err != nil && !errors.Is(err, dms.ErrConflict) {
+			if err = workflow.FailWait(step.Context(), step.DMS(), kindJoin, join.Key, "the enrichment request expired"); err != nil && !errors.Is(err, dms.ErrConflict) {
 				return err
 			}
 			continue
@@ -760,21 +942,9 @@ func resolveJoins(step workflow.Step, tools workflow.Tools) error {
 		}
 		pending, failed := 0, ""
 		cached := 0
-		var enrichments []search.Enrichment
-		for _, chunk := range manifest.Chunks {
+		for i, chunk := range manifest.Chunks {
 			if chunk.Cached {
 				cached++
-			}
-			answer, found, err := findAnswerStep(step.Context(), step.DMS().Client, tools, "search.enrich", chunk.Hash)
-			if err != nil {
-				return err
-			}
-			if found {
-				enrichments = append(enrichments, search.Enrichment{Part: chunk.Part, Ordinal: chunk.Ordinal, Text: answer.Text})
-				continue
-			}
-			if chunk.WaitKey == "" {
-				pending++
 				continue
 			}
 			wait, err := workflow.GetWait(step.Context(), step.DMS(), kindRequest, chunk.WaitKey)
@@ -785,37 +955,58 @@ func resolveJoins(step workflow.Step, tools workflow.Tools) error {
 			if err != nil {
 				return err
 			}
-			if wait.Status == "completed" {
-				var payload map[string]any
-				if json.Unmarshal(wait.Completion, &payload) == nil {
-					if message, _ := payload["error"].(string); message != "" && len(payload) == 1 {
-						failed = message
-						continue
-					}
-				}
-				failed = "the enrichment answer was not cached"
+			if wait.Status == "open" {
+				pending++
 				continue
 			}
-			pending++
+			var c workflow.Completion
+			if err = json.Unmarshal(wait.Completion, &c); err != nil {
+				return err
+			}
+			if c.Error != "" {
+				failed = c.Error
+				continue
+			}
+			text, ok := c.Output["text"].(string)
+			if !ok {
+				failed = "the enrichment completion has no text"
+				continue
+			}
+			manifest.Chunks[i].Answer = text
 		}
+
 		if pending > 0 {
 			continue
 		}
-		if failed != "" {
-			payload, err := json.Marshal(map[string]string{"error": shortText(failed, 300)})
-			if err != nil {
+		// Child completions have been copied into the manifest. Their
+		// request payloads no longer need to outlive this join.
+		for _, chunk := range manifest.Chunks {
+			if chunk.WaitKey == "" {
+				continue
+			}
+			if err = workflow.ConsumeWait(step.Context(), step.DMS(), kindRequest, chunk.WaitKey, join.RunID); err != nil && !notFound(err) {
 				return err
 			}
-			if err = workflow.CompleteWait(step.Context(), step.DMS(), kindJoin, join.Key, payload); err != nil && !errors.Is(err, dms.ErrConflict) {
+		}
+		if failed != "" {
+			if err = workflow.FailWait(step.Context(), step.DMS(), kindJoin, join.Key, failed); err != nil && !errors.Is(err, dms.ErrConflict) {
 				return err
 			}
 			continue
 		}
-		if err = tools.Search.SetEnrichments(step.Context(), manifest.Generation, enrichments); err != nil {
+		answersKey := data.Manifest + ":answers"
+		answers, err := json.Marshal(manifest)
+		if err != nil {
+			return err
+		}
+		if err = putManifest(step, answersKey, answers); err != nil {
+			return err
+		}
+		if err = tools.Records.WithTx(step.DMS().SQLTx()).Reference(step.Context(), join.ID, activitystore.ID("ai.enrich.manifest", answerScope, answersKey)); err != nil {
 			return err
 		}
 		payload, err := json.Marshal(map[string]any{
-			"generation": manifest.Generation, "enriched": len(enrichments), "cached": cached, "model": manifest.Model,
+			"manifest": answersKey, "generation": manifest.Generation, "enriched": len(manifest.Chunks), "cached": cached, "model": manifest.Model,
 		})
 		if err != nil {
 			return err

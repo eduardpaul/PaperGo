@@ -11,9 +11,12 @@ import (
 
 	"papergo/ent/migrate"
 
+	"papergo/ent/activityrecord"
+	"papergo/ent/activityreference"
 	"papergo/ent/auditevent"
 	"papergo/ent/blob"
 	"papergo/ent/blobdeletion"
+	"papergo/ent/bloblease"
 	"papergo/ent/blobtext"
 	"papergo/ent/businesskey"
 	"papergo/ent/cachedresult"
@@ -79,12 +82,18 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// ActivityRecord is the client for interacting with the ActivityRecord builders.
+	ActivityRecord *ActivityRecordClient
+	// ActivityReference is the client for interacting with the ActivityReference builders.
+	ActivityReference *ActivityReferenceClient
 	// AuditEvent is the client for interacting with the AuditEvent builders.
 	AuditEvent *AuditEventClient
 	// Blob is the client for interacting with the Blob builders.
 	Blob *BlobClient
 	// BlobDeletion is the client for interacting with the BlobDeletion builders.
 	BlobDeletion *BlobDeletionClient
+	// BlobLease is the client for interacting with the BlobLease builders.
+	BlobLease *BlobLeaseClient
 	// BlobText is the client for interacting with the BlobText builders.
 	BlobText *BlobTextClient
 	// BusinessKey is the client for interacting with the BusinessKey builders.
@@ -198,9 +207,12 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.ActivityRecord = NewActivityRecordClient(c.config)
+	c.ActivityReference = NewActivityReferenceClient(c.config)
 	c.AuditEvent = NewAuditEventClient(c.config)
 	c.Blob = NewBlobClient(c.config)
 	c.BlobDeletion = NewBlobDeletionClient(c.config)
+	c.BlobLease = NewBlobLeaseClient(c.config)
 	c.BlobText = NewBlobTextClient(c.config)
 	c.BusinessKey = NewBusinessKeyClient(c.config)
 	c.CachedResult = NewCachedResultClient(c.config)
@@ -344,9 +356,12 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:                     ctx,
 		config:                  cfg,
+		ActivityRecord:          NewActivityRecordClient(cfg),
+		ActivityReference:       NewActivityReferenceClient(cfg),
 		AuditEvent:              NewAuditEventClient(cfg),
 		Blob:                    NewBlobClient(cfg),
 		BlobDeletion:            NewBlobDeletionClient(cfg),
+		BlobLease:               NewBlobLeaseClient(cfg),
 		BlobText:                NewBlobTextClient(cfg),
 		BusinessKey:             NewBusinessKeyClient(cfg),
 		CachedResult:            NewCachedResultClient(cfg),
@@ -417,9 +432,12 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:                     ctx,
 		config:                  cfg,
+		ActivityRecord:          NewActivityRecordClient(cfg),
+		ActivityReference:       NewActivityReferenceClient(cfg),
 		AuditEvent:              NewAuditEventClient(cfg),
 		Blob:                    NewBlobClient(cfg),
 		BlobDeletion:            NewBlobDeletionClient(cfg),
+		BlobLease:               NewBlobLeaseClient(cfg),
 		BlobText:                NewBlobTextClient(cfg),
 		BusinessKey:             NewBusinessKeyClient(cfg),
 		CachedResult:            NewCachedResultClient(cfg),
@@ -477,7 +495,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		AuditEvent.
+//		ActivityRecord.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -500,18 +518,19 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuditEvent, c.Blob, c.BlobDeletion, c.BlobText, c.BusinessKey, c.CachedResult,
-		c.CollectionType, c.ContentType, c.DomainEvent, c.FieldDefinition,
-		c.FieldValue, c.Grant, c.GroupInbox, c.IdentityAssignment, c.IdentityGroup,
-		c.IdentityMembership, c.IdentityOrganization, c.IdentityPreference,
-		c.IdentityRESTToken, c.IdentityRole, c.IdentityUser, c.IntegrationItem,
-		c.IntegrationRevisionData, c.ItemHistory, c.ItemRevision, c.ItemSurface,
-		c.ListIntegration, c.ListView, c.LiveChange, c.Operation, c.OperationItem,
-		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
-		c.SyncToken, c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup,
-		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion, c.WorkflowWait,
+		c.ActivityRecord, c.ActivityReference, c.AuditEvent, c.Blob, c.BlobDeletion,
+		c.BlobLease, c.BlobText, c.BusinessKey, c.CachedResult, c.CollectionType,
+		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
+		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
+		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
+		c.IdentityRole, c.IdentityUser, c.IntegrationItem, c.IntegrationRevisionData,
+		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListIntegration, c.ListView,
+		c.LiveChange, c.Operation, c.OperationItem, c.Publication, c.Relationship,
+		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
+		c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken, c.SyncView, c.Task,
+		c.TaskResponse, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.WorkflowWait,
 	} {
 		n.Use(hooks...)
 	}
@@ -521,18 +540,19 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuditEvent, c.Blob, c.BlobDeletion, c.BlobText, c.BusinessKey, c.CachedResult,
-		c.CollectionType, c.ContentType, c.DomainEvent, c.FieldDefinition,
-		c.FieldValue, c.Grant, c.GroupInbox, c.IdentityAssignment, c.IdentityGroup,
-		c.IdentityMembership, c.IdentityOrganization, c.IdentityPreference,
-		c.IdentityRESTToken, c.IdentityRole, c.IdentityUser, c.IntegrationItem,
-		c.IntegrationRevisionData, c.ItemHistory, c.ItemRevision, c.ItemSurface,
-		c.ListIntegration, c.ListView, c.LiveChange, c.Operation, c.OperationItem,
-		c.Publication, c.Relationship, c.RelationshipType, c.Resource,
-		c.SchemaRevision, c.SchemaTemplate, c.SmartFolder, c.StagedFile, c.SyncState,
-		c.SyncToken, c.SyncView, c.Task, c.TaskResponse, c.Term, c.TermGroup,
-		c.TermSet, c.WebDAVCredential, c.Workflow, c.WorkflowRun, c.WorkflowRunItem,
-		c.WorkflowTrigger, c.WorkflowVersion, c.WorkflowWait,
+		c.ActivityRecord, c.ActivityReference, c.AuditEvent, c.Blob, c.BlobDeletion,
+		c.BlobLease, c.BlobText, c.BusinessKey, c.CachedResult, c.CollectionType,
+		c.ContentType, c.DomainEvent, c.FieldDefinition, c.FieldValue, c.Grant,
+		c.GroupInbox, c.IdentityAssignment, c.IdentityGroup, c.IdentityMembership,
+		c.IdentityOrganization, c.IdentityPreference, c.IdentityRESTToken,
+		c.IdentityRole, c.IdentityUser, c.IntegrationItem, c.IntegrationRevisionData,
+		c.ItemHistory, c.ItemRevision, c.ItemSurface, c.ListIntegration, c.ListView,
+		c.LiveChange, c.Operation, c.OperationItem, c.Publication, c.Relationship,
+		c.RelationshipType, c.Resource, c.SchemaRevision, c.SchemaTemplate,
+		c.SmartFolder, c.StagedFile, c.SyncState, c.SyncToken, c.SyncView, c.Task,
+		c.TaskResponse, c.Term, c.TermGroup, c.TermSet, c.WebDAVCredential, c.Workflow,
+		c.WorkflowRun, c.WorkflowRunItem, c.WorkflowTrigger, c.WorkflowVersion,
+		c.WorkflowWait,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -541,12 +561,18 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *ActivityRecordMutation:
+		return c.ActivityRecord.mutate(ctx, m)
+	case *ActivityReferenceMutation:
+		return c.ActivityReference.mutate(ctx, m)
 	case *AuditEventMutation:
 		return c.AuditEvent.mutate(ctx, m)
 	case *BlobMutation:
 		return c.Blob.mutate(ctx, m)
 	case *BlobDeletionMutation:
 		return c.BlobDeletion.mutate(ctx, m)
+	case *BlobLeaseMutation:
+		return c.BlobLease.mutate(ctx, m)
 	case *BlobTextMutation:
 		return c.BlobText.mutate(ctx, m)
 	case *BusinessKeyMutation:
@@ -651,6 +677,272 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.WorkflowWait.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// ActivityRecordClient is a client for the ActivityRecord schema.
+type ActivityRecordClient struct {
+	config
+}
+
+// NewActivityRecordClient returns a client for the ActivityRecord from the given config.
+func NewActivityRecordClient(c config) *ActivityRecordClient {
+	return &ActivityRecordClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `activityrecord.Hooks(f(g(h())))`.
+func (c *ActivityRecordClient) Use(hooks ...Hook) {
+	c.hooks.ActivityRecord = append(c.hooks.ActivityRecord, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `activityrecord.Intercept(f(g(h())))`.
+func (c *ActivityRecordClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ActivityRecord = append(c.inters.ActivityRecord, interceptors...)
+}
+
+// Create returns a builder for creating a ActivityRecord entity.
+func (c *ActivityRecordClient) Create() *ActivityRecordCreate {
+	mutation := newActivityRecordMutation(c.config, OpCreate)
+	return &ActivityRecordCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ActivityRecord entities.
+func (c *ActivityRecordClient) CreateBulk(builders ...*ActivityRecordCreate) *ActivityRecordCreateBulk {
+	return &ActivityRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ActivityRecordClient) MapCreateBulk(slice any, setFunc func(*ActivityRecordCreate, int)) *ActivityRecordCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ActivityRecordCreateBulk{err: fmt.Errorf("calling to ActivityRecordClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ActivityRecordCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ActivityRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ActivityRecord.
+func (c *ActivityRecordClient) Update() *ActivityRecordUpdate {
+	mutation := newActivityRecordMutation(c.config, OpUpdate)
+	return &ActivityRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ActivityRecordClient) UpdateOne(_m *ActivityRecord) *ActivityRecordUpdateOne {
+	mutation := newActivityRecordMutation(c.config, OpUpdateOne, withActivityRecord(_m))
+	return &ActivityRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ActivityRecordClient) UpdateOneID(id string) *ActivityRecordUpdateOne {
+	mutation := newActivityRecordMutation(c.config, OpUpdateOne, withActivityRecordID(id))
+	return &ActivityRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ActivityRecord.
+func (c *ActivityRecordClient) Delete() *ActivityRecordDelete {
+	mutation := newActivityRecordMutation(c.config, OpDelete)
+	return &ActivityRecordDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ActivityRecordClient) DeleteOne(_m *ActivityRecord) *ActivityRecordDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ActivityRecordClient) DeleteOneID(id string) *ActivityRecordDeleteOne {
+	builder := c.Delete().Where(activityrecord.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ActivityRecordDeleteOne{builder}
+}
+
+// Query returns a query builder for ActivityRecord.
+func (c *ActivityRecordClient) Query() *ActivityRecordQuery {
+	return &ActivityRecordQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeActivityRecord},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ActivityRecord entity by its id.
+func (c *ActivityRecordClient) Get(ctx context.Context, id string) (*ActivityRecord, error) {
+	return c.Query().Where(activityrecord.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ActivityRecordClient) GetX(ctx context.Context, id string) *ActivityRecord {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ActivityRecordClient) Hooks() []Hook {
+	return c.hooks.ActivityRecord
+}
+
+// Interceptors returns the client interceptors.
+func (c *ActivityRecordClient) Interceptors() []Interceptor {
+	return c.inters.ActivityRecord
+}
+
+func (c *ActivityRecordClient) mutate(ctx context.Context, m *ActivityRecordMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ActivityRecordCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ActivityRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ActivityRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ActivityRecordDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ActivityRecord mutation op: %q", m.Op())
+	}
+}
+
+// ActivityReferenceClient is a client for the ActivityReference schema.
+type ActivityReferenceClient struct {
+	config
+}
+
+// NewActivityReferenceClient returns a client for the ActivityReference from the given config.
+func NewActivityReferenceClient(c config) *ActivityReferenceClient {
+	return &ActivityReferenceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `activityreference.Hooks(f(g(h())))`.
+func (c *ActivityReferenceClient) Use(hooks ...Hook) {
+	c.hooks.ActivityReference = append(c.hooks.ActivityReference, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `activityreference.Intercept(f(g(h())))`.
+func (c *ActivityReferenceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ActivityReference = append(c.inters.ActivityReference, interceptors...)
+}
+
+// Create returns a builder for creating a ActivityReference entity.
+func (c *ActivityReferenceClient) Create() *ActivityReferenceCreate {
+	mutation := newActivityReferenceMutation(c.config, OpCreate)
+	return &ActivityReferenceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ActivityReference entities.
+func (c *ActivityReferenceClient) CreateBulk(builders ...*ActivityReferenceCreate) *ActivityReferenceCreateBulk {
+	return &ActivityReferenceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ActivityReferenceClient) MapCreateBulk(slice any, setFunc func(*ActivityReferenceCreate, int)) *ActivityReferenceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ActivityReferenceCreateBulk{err: fmt.Errorf("calling to ActivityReferenceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ActivityReferenceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ActivityReferenceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ActivityReference.
+func (c *ActivityReferenceClient) Update() *ActivityReferenceUpdate {
+	mutation := newActivityReferenceMutation(c.config, OpUpdate)
+	return &ActivityReferenceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ActivityReferenceClient) UpdateOne(_m *ActivityReference) *ActivityReferenceUpdateOne {
+	mutation := newActivityReferenceMutation(c.config, OpUpdateOne, withActivityReference(_m))
+	return &ActivityReferenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ActivityReferenceClient) UpdateOneID(id string) *ActivityReferenceUpdateOne {
+	mutation := newActivityReferenceMutation(c.config, OpUpdateOne, withActivityReferenceID(id))
+	return &ActivityReferenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ActivityReference.
+func (c *ActivityReferenceClient) Delete() *ActivityReferenceDelete {
+	mutation := newActivityReferenceMutation(c.config, OpDelete)
+	return &ActivityReferenceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ActivityReferenceClient) DeleteOne(_m *ActivityReference) *ActivityReferenceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ActivityReferenceClient) DeleteOneID(id string) *ActivityReferenceDeleteOne {
+	builder := c.Delete().Where(activityreference.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ActivityReferenceDeleteOne{builder}
+}
+
+// Query returns a query builder for ActivityReference.
+func (c *ActivityReferenceClient) Query() *ActivityReferenceQuery {
+	return &ActivityReferenceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeActivityReference},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ActivityReference entity by its id.
+func (c *ActivityReferenceClient) Get(ctx context.Context, id string) (*ActivityReference, error) {
+	return c.Query().Where(activityreference.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ActivityReferenceClient) GetX(ctx context.Context, id string) *ActivityReference {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ActivityReferenceClient) Hooks() []Hook {
+	return c.hooks.ActivityReference
+}
+
+// Interceptors returns the client interceptors.
+func (c *ActivityReferenceClient) Interceptors() []Interceptor {
+	return c.inters.ActivityReference
+}
+
+func (c *ActivityReferenceClient) mutate(ctx context.Context, m *ActivityReferenceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ActivityReferenceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ActivityReferenceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ActivityReferenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ActivityReferenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ActivityReference mutation op: %q", m.Op())
 	}
 }
 
@@ -1066,6 +1358,139 @@ func (c *BlobDeletionClient) mutate(ctx context.Context, m *BlobDeletionMutation
 		return (&BlobDeletionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown BlobDeletion mutation op: %q", m.Op())
+	}
+}
+
+// BlobLeaseClient is a client for the BlobLease schema.
+type BlobLeaseClient struct {
+	config
+}
+
+// NewBlobLeaseClient returns a client for the BlobLease from the given config.
+func NewBlobLeaseClient(c config) *BlobLeaseClient {
+	return &BlobLeaseClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `bloblease.Hooks(f(g(h())))`.
+func (c *BlobLeaseClient) Use(hooks ...Hook) {
+	c.hooks.BlobLease = append(c.hooks.BlobLease, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `bloblease.Intercept(f(g(h())))`.
+func (c *BlobLeaseClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BlobLease = append(c.inters.BlobLease, interceptors...)
+}
+
+// Create returns a builder for creating a BlobLease entity.
+func (c *BlobLeaseClient) Create() *BlobLeaseCreate {
+	mutation := newBlobLeaseMutation(c.config, OpCreate)
+	return &BlobLeaseCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BlobLease entities.
+func (c *BlobLeaseClient) CreateBulk(builders ...*BlobLeaseCreate) *BlobLeaseCreateBulk {
+	return &BlobLeaseCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BlobLeaseClient) MapCreateBulk(slice any, setFunc func(*BlobLeaseCreate, int)) *BlobLeaseCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BlobLeaseCreateBulk{err: fmt.Errorf("calling to BlobLeaseClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BlobLeaseCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BlobLeaseCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BlobLease.
+func (c *BlobLeaseClient) Update() *BlobLeaseUpdate {
+	mutation := newBlobLeaseMutation(c.config, OpUpdate)
+	return &BlobLeaseUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BlobLeaseClient) UpdateOne(_m *BlobLease) *BlobLeaseUpdateOne {
+	mutation := newBlobLeaseMutation(c.config, OpUpdateOne, withBlobLease(_m))
+	return &BlobLeaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BlobLeaseClient) UpdateOneID(id string) *BlobLeaseUpdateOne {
+	mutation := newBlobLeaseMutation(c.config, OpUpdateOne, withBlobLeaseID(id))
+	return &BlobLeaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BlobLease.
+func (c *BlobLeaseClient) Delete() *BlobLeaseDelete {
+	mutation := newBlobLeaseMutation(c.config, OpDelete)
+	return &BlobLeaseDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BlobLeaseClient) DeleteOne(_m *BlobLease) *BlobLeaseDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BlobLeaseClient) DeleteOneID(id string) *BlobLeaseDeleteOne {
+	builder := c.Delete().Where(bloblease.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BlobLeaseDeleteOne{builder}
+}
+
+// Query returns a query builder for BlobLease.
+func (c *BlobLeaseClient) Query() *BlobLeaseQuery {
+	return &BlobLeaseQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBlobLease},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BlobLease entity by its id.
+func (c *BlobLeaseClient) Get(ctx context.Context, id string) (*BlobLease, error) {
+	return c.Query().Where(bloblease.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BlobLeaseClient) GetX(ctx context.Context, id string) *BlobLease {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BlobLeaseClient) Hooks() []Hook {
+	return c.hooks.BlobLease
+}
+
+// Interceptors returns the client interceptors.
+func (c *BlobLeaseClient) Interceptors() []Interceptor {
+	return c.inters.BlobLease
+}
+
+func (c *BlobLeaseClient) mutate(ctx context.Context, m *BlobLeaseMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BlobLeaseCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BlobLeaseUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BlobLeaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BlobLeaseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BlobLease mutation op: %q", m.Op())
 	}
 }
 
@@ -8767,29 +9192,30 @@ func (c *WorkflowWaitClient) mutate(ctx context.Context, m *WorkflowWaitMutation
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuditEvent, Blob, BlobDeletion, BlobText, BusinessKey, CachedResult,
-		CollectionType, ContentType, DomainEvent, FieldDefinition, FieldValue, Grant,
-		GroupInbox, IdentityAssignment, IdentityGroup, IdentityMembership,
-		IdentityOrganization, IdentityPreference, IdentityRESTToken, IdentityRole,
-		IdentityUser, IntegrationItem, IntegrationRevisionData, ItemHistory,
-		ItemRevision, ItemSurface, ListIntegration, ListView, LiveChange, Operation,
-		OperationItem, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken,
-		SyncView, Task, TaskResponse, Term, TermGroup, TermSet, WebDAVCredential,
-		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger, WorkflowVersion,
-		WorkflowWait []ent.Hook
+		ActivityRecord, ActivityReference, AuditEvent, Blob, BlobDeletion, BlobLease,
+		BlobText, BusinessKey, CachedResult, CollectionType, ContentType, DomainEvent,
+		FieldDefinition, FieldValue, Grant, GroupInbox, IdentityAssignment,
+		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
+		IdentityRESTToken, IdentityRole, IdentityUser, IntegrationItem,
+		IntegrationRevisionData, ItemHistory, ItemRevision, ItemSurface,
+		ListIntegration, ListView, LiveChange, Operation, OperationItem, Publication,
+		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
+		SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task, TaskResponse,
+		Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
+		WorkflowRunItem, WorkflowTrigger, WorkflowVersion, WorkflowWait []ent.Hook
 	}
 	inters struct {
-		AuditEvent, Blob, BlobDeletion, BlobText, BusinessKey, CachedResult,
-		CollectionType, ContentType, DomainEvent, FieldDefinition, FieldValue, Grant,
-		GroupInbox, IdentityAssignment, IdentityGroup, IdentityMembership,
-		IdentityOrganization, IdentityPreference, IdentityRESTToken, IdentityRole,
-		IdentityUser, IntegrationItem, IntegrationRevisionData, ItemHistory,
-		ItemRevision, ItemSurface, ListIntegration, ListView, LiveChange, Operation,
-		OperationItem, Publication, Relationship, RelationshipType, Resource,
-		SchemaRevision, SchemaTemplate, SmartFolder, StagedFile, SyncState, SyncToken,
-		SyncView, Task, TaskResponse, Term, TermGroup, TermSet, WebDAVCredential,
-		Workflow, WorkflowRun, WorkflowRunItem, WorkflowTrigger, WorkflowVersion,
+		ActivityRecord, ActivityReference, AuditEvent, Blob, BlobDeletion, BlobLease,
+		BlobText, BusinessKey, CachedResult, CollectionType, ContentType, DomainEvent,
+		FieldDefinition, FieldValue, Grant, GroupInbox, IdentityAssignment,
+		IdentityGroup, IdentityMembership, IdentityOrganization, IdentityPreference,
+		IdentityRESTToken, IdentityRole, IdentityUser, IntegrationItem,
+		IntegrationRevisionData, ItemHistory, ItemRevision, ItemSurface,
+		ListIntegration, ListView, LiveChange, Operation, OperationItem, Publication,
+		Relationship, RelationshipType, Resource, SchemaRevision, SchemaTemplate,
+		SmartFolder, StagedFile, SyncState, SyncToken, SyncView, Task, TaskResponse,
+		Term, TermGroup, TermSet, WebDAVCredential, Workflow, WorkflowRun,
+		WorkflowRunItem, WorkflowTrigger, WorkflowVersion,
 		WorkflowWait []ent.Interceptor
 	}
 )

@@ -192,7 +192,8 @@ func run(log *slog.Logger) error {
 		defer decisions.Close()
 		log.Info("local decisions enabled", "model", decisions.ID())
 	}
-	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload, Search: index, Embeddings: embeddings, Chat: chat, Batch: batch, DefaultExecution: c.AIExecution, BatchDeadline: c.BatchDeadline, Results: resultcache.New(db.SQL), ResultTTL: c.RunRetention, Languages: c.SearchLanguages}
+	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload, Search: index, Embeddings: embeddings, Results: resultcache.New(db.SQL), ResultTTL: c.RunRetention, Languages: c.SearchLanguages}
+	workflowai.Configure(&tools, workflowai.Runtime{Chat: chat, Batch: batch, DefaultExecution: c.AIExecution, BatchDeadline: c.BatchDeadline})
 	if decisions != nil {
 		tools.Decisions = decisions
 	}

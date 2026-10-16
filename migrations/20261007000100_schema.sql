@@ -9,7 +9,8 @@
 CREATE TABLE list_integrations (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
  container_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
- kind TEXT NOT NULL CHECK(length(kind) BETWEEN 1 AND 64), name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 255),
+ kind TEXT NOT NULL CHECK(length(kind) BETWEEN 1 AND 64),
+ name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 255),
  paused BOOLEAN NOT NULL DEFAULT 0 CHECK(paused IN (0,1)), version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
  generation TEXT NOT NULL, config_ciphertext BLOB NOT NULL, config_hash TEXT NOT NULL,
  configured_by TEXT NOT NULL, credential_id TEXT NOT NULL DEFAULT '', credential_scopes JSON NOT NULL DEFAULT '[]',
@@ -274,7 +275,7 @@ CREATE TABLE tasks (
  review JSON CHECK(review IS NULL OR json_valid(review)),
  priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('low','normal','high')),due_at DATETIME,
  source TEXT NOT NULL CHECK(source IN ('workflow','user','system')),workflow_id TEXT,run_id TEXT,node TEXT,
- wait BOOLEAN NOT NULL DEFAULT 0,parked BOOLEAN NOT NULL DEFAULT 0,
+ wait BOOLEAN NOT NULL DEFAULT 0,
  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','completed','cancelled','expired')),
  outcome TEXT,completed_by TEXT,completed_at DATETIME,comment TEXT NOT NULL DEFAULT '' CHECK(length(comment)<=4000),
  input JSON CHECK(input IS NULL OR json_valid(input)),created_by TEXT NOT NULL,
@@ -290,11 +291,11 @@ CREATE TABLE runner_step_results (
  run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL,
  PRIMARY KEY (run_id, step_id)
 ) WITHOUT ROWID;
--- Durable waits park a run or hold coordinator state. Payloads stay small.
--- Action payloads, including remote LLM requests, use cached_results.
--- Referenced file bytes stay in storage while a blob, staged file or open
--- wait still names them.
+-- Waits are completion rendezvous owned by real workflow runs. DBOS owns
+-- durable suspension, inbox delivery and timeout checkpointing. Large action
+-- payloads use activity_records; explicit blob_leases protect source bytes.
 CREATE TABLE workflow_waits (
+ queue TEXT NOT NULL DEFAULT '',payload_id TEXT NOT NULL DEFAULT '',
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
  kind TEXT NOT NULL CHECK(length(kind) BETWEEN 1 AND 64),
  key TEXT NOT NULL CHECK(length(key) BETWEEN 1 AND 128),
@@ -302,14 +303,31 @@ CREATE TABLE workflow_waits (
  execution_id TEXT NOT NULL CHECK(length(execution_id) BETWEEN 1 AND 128),
  data JSON NOT NULL DEFAULT '{}' CHECK(json_valid(data) AND json_type(data)='object' AND length(data)<=16384),
  completion JSON CHECK(completion IS NULL OR (json_valid(completion) AND length(completion)<=65536)),
- deadline DATETIME, claim_run_id TEXT, claim_token TEXT,
+ deadline DATETIME, notified_at DATETIME, claim_until DATETIME, claim_run_id TEXT, claim_token TEXT,
  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','completed','closed')),
  parking BOOLEAN NOT NULL DEFAULT 0 CHECK(parking IN (0,1))
 );
 CREATE UNIQUE INDEX workflow_wait_kind_key ON workflow_waits(kind, key);
 CREATE INDEX workflow_wait_open_kind_workspace ON workflow_waits(kind, workspace_id, created_at) WHERE status='open';
+CREATE INDEX workflow_wait_queue ON workflow_waits(kind,queue,status,id);
 CREATE INDEX workflow_wait_run ON workflow_waits(run_id);
 CREATE INDEX workflow_wait_parking ON workflow_waits(status, deadline) WHERE parking=1;
+
+-- Durable activity state and references are separate from reusable answers.
+CREATE TABLE activity_records (id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,
+ namespace TEXT NOT NULL,scope TEXT NOT NULL,key TEXT NOT NULL,owner_id TEXT NOT NULL DEFAULT '',
+ payload JSON NOT NULL CHECK(json_valid(payload) AND length(payload)<=1048576),state TEXT NOT NULL DEFAULT 'pending',
+ expires_at DATETIME,lease_owner TEXT,lease_token TEXT,lease_until DATETIME);
+CREATE UNIQUE INDEX activityrecord_namespace_scope_key ON activity_records(namespace,scope,key);
+CREATE INDEX activityrecord_namespace_scope_state_key ON activity_records(namespace,scope,state,key);
+CREATE INDEX activityrecord_expires_at ON activity_records(expires_at);
+CREATE TABLE activity_references(id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,owner_id TEXT NOT NULL,record_id TEXT NOT NULL);
+CREATE UNIQUE INDEX activityreference_owner_id_record_id ON activity_references(owner_id,record_id);
+CREATE INDEX activityreference_record_id ON activity_references(record_id);
+CREATE TABLE blob_leases(id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,owner_id TEXT NOT NULL,run_id TEXT NOT NULL,blob_id TEXT NOT NULL REFERENCES blobs(id) ON DELETE CASCADE);
+CREATE UNIQUE INDEX bloblease_owner_id_blob_id ON blob_leases(owner_id,blob_id);
+CREATE INDEX bloblease_blob_id ON blob_leases(blob_id);
+CREATE INDEX bloblease_run_id ON blob_leases(run_id);
 
 -- Indexes
 CREATE INDEX `auditevent_workspace_id_created_at` ON `audit_events` (`workspace_id`, `created_at`);
@@ -414,7 +432,7 @@ CREATE INDEX stagedfile_object_key_state ON staged_files(object_key,state);
 CREATE INDEX task_run_id ON tasks(run_id);
 CREATE INDEX task_workspace_id_status ON tasks(workspace_id,status);
 CREATE INDEX task_item_id ON tasks(item_id);
-CREATE INDEX task_parked_status ON tasks(parked,status);
+
 CREATE UNIQUE INDEX taskresponse_task_id_assignee ON task_responses(task_id,assignee);
 
 -- Triggers: derived projections, integrity guards and permission scopes

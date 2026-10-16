@@ -14,12 +14,18 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// ActivityRecord is the client for interacting with the ActivityRecord builders.
+	ActivityRecord *ActivityRecordClient
+	// ActivityReference is the client for interacting with the ActivityReference builders.
+	ActivityReference *ActivityReferenceClient
 	// AuditEvent is the client for interacting with the AuditEvent builders.
 	AuditEvent *AuditEventClient
 	// Blob is the client for interacting with the Blob builders.
 	Blob *BlobClient
 	// BlobDeletion is the client for interacting with the BlobDeletion builders.
 	BlobDeletion *BlobDeletionClient
+	// BlobLease is the client for interacting with the BlobLease builders.
+	BlobLease *BlobLeaseClient
 	// BlobText is the client for interacting with the BlobText builders.
 	BlobText *BlobTextClient
 	// BusinessKey is the client for interacting with the BusinessKey builders.
@@ -253,9 +259,12 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.ActivityRecord = NewActivityRecordClient(tx.config)
+	tx.ActivityReference = NewActivityReferenceClient(tx.config)
 	tx.AuditEvent = NewAuditEventClient(tx.config)
 	tx.Blob = NewBlobClient(tx.config)
 	tx.BlobDeletion = NewBlobDeletionClient(tx.config)
+	tx.BlobLease = NewBlobLeaseClient(tx.config)
 	tx.BlobText = NewBlobTextClient(tx.config)
 	tx.BusinessKey = NewBusinessKeyClient(tx.config)
 	tx.CachedResult = NewCachedResultClient(tx.config)
@@ -316,7 +325,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: AuditEvent.QueryXXX(), the query will be executed
+// applies a query, for example: ActivityRecord.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

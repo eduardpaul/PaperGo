@@ -189,7 +189,10 @@ func (b *openAIBatch) Create(ctx context.Context, inputFileID, tag string) (stri
 
 func (b *openAIBatch) FindByTag(ctx context.Context, tag string) (string, bool, error) {
 	after := ""
-	for page := 0; page < 5; page++ {
+	for page := 0; ; page++ {
+		if page >= 100 {
+			return "", false, fmt.Errorf("%w: provider batch listing exceeds reconciliation budget", ErrUncertain)
+		}
 		u := b.base + "/batches?limit=100"
 		if after != "" {
 			u += "&after=" + url.QueryEscape(after)
@@ -220,12 +223,14 @@ func (b *openAIBatch) FindByTag(ctx context.Context, tag string) (string, bool, 
 				return found, ok, err
 			}
 		}
-		if !list.HasMore || last == "" || last == after {
-			break
+		if !list.HasMore {
+			return "", false, nil
+		}
+		if last == "" || last == after {
+			return "", false, fmt.Errorf("%w: provider listing cannot advance", ErrUncertain)
 		}
 		after = last
 	}
-	return "", false, nil
 }
 
 func (b *openAIBatch) tagMatches(ctx context.Context, item json.RawMessage, id, tag string) (string, bool, error) {
@@ -236,11 +241,7 @@ func (b *openAIBatch) tagMatches(ctx context.Context, item json.RawMessage, id, 
 		return "", false, err
 	}
 	if meta.Metadata == nil {
-		got, err := b.Get(ctx, id)
-		if err != nil {
-			return "", false, err
-		}
-		raw, status, err := b.do(ctx, http.MethodGet, b.base+"/batches/"+url.PathEscape(got.ID), nil, "")
+		raw, status, err := b.do(ctx, http.MethodGet, b.base+"/batches/"+url.PathEscape(id), nil, "")
 		if err != nil || status != http.StatusOK {
 			if err == nil {
 				err = &Error{Model: "batch model", Status: status, Message: errorMessage(raw)}
@@ -310,9 +311,12 @@ func (b *openAIBatch) do(ctx context.Context, method, endpoint string, body io.R
 		return nil, 0, err
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
 	if err != nil {
 		return nil, resp.StatusCode, err
+	}
+	if len(raw) > maxResponse {
+		return nil, resp.StatusCode, errors.New("batch provider response exceeds the size limit")
 	}
 	return raw, resp.StatusCode, nil
 }

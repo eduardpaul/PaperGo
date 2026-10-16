@@ -252,7 +252,7 @@ func TestFileReclaimDefersProtectedAndSharedBytes(t *testing.T) {
 	f.upload(t, lib.ID, "pinned.png", "image/png", bytes.Repeat([]byte("i"), 86))
 	if err = f.dms.Write(ctx, func(tx *dms.Service) error {
 		return workflow.PutWait(ctx, tx, workflow.Wait{
-			Kind: "file.pin", Key: "one", WorkspaceID: f.ws.ID, RunID: "run-pin", Node: "hold", ExecutionID: "1",
+			BlobIDs: []string{pinned.Blob.ID}, Kind: "file.pin", Key: "one", WorkspaceID: f.ws.ID, RunID: "run-pin", Node: "hold", ExecutionID: "1",
 			Data: json.RawMessage(fmt.Sprintf(`{"blobs":[{"item_id":%q,"blob_id":%q}]}`, pinned.ID, pinned.Blob.ID)),
 		})
 	}); err != nil {
@@ -272,12 +272,13 @@ func TestFileReclaimDefersProtectedAndSharedBytes(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if out := reclaim(pinned.ID, pinned.Blob.ID); out["deferred"] != false || out["availability"] != "pending" {
-		t.Fatalf("after the wait closed: %+v", out)
+	if err = f.dms.SweepReclaims(ctx, f.store, time.Now().UTC()); err != nil {
+		t.Fatal(err)
 	}
 	if err = f.dms.SweepReclaims(ctx, f.store, time.Now().UTC().Add(2*dms.ObjectGracePeriod)); err != nil {
 		t.Fatal(err)
 	}
+
 	if objectPresent(t, f.store, pinned.Blob.ObjectKey) {
 		t.Fatal("bytes remained after the wait closed and the grace period passed")
 	}

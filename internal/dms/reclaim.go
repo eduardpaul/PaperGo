@@ -100,7 +100,7 @@ func (s *Service) blobProtected(ctx context.Context, row *ent.Blob) (bool, strin
 		return true, "staged", nil
 	}
 	var waiting bool
-	if err = s.scan(ctx, []any{&waiting}, `SELECT EXISTS(SELECT 1 FROM workflow_waits WHERE status='open' AND json_type(data, '$.blobs')='array' AND EXISTS (SELECT 1 FROM json_each(json_extract(data, '$.blobs')) WHERE json_extract(value, '$.blob_id')=?))`, row.ID); err != nil {
+	if err = s.scan(ctx, []any{&waiting}, `SELECT EXISTS(SELECT 1 FROM blob_leases WHERE blob_id=?)`, row.ID); err != nil {
 		return false, "", err
 	}
 	if waiting {
@@ -112,39 +112,48 @@ func (s *Service) blobProtected(ctx context.Context, row *ent.Blob) (bool, strin
 // SweepReclaims frees file versions whose grace period has ended and that
 // nothing still protects. Shared bytes stay while another file needs them.
 func (s *Service) SweepReclaims(ctx context.Context, store storage.Store, now time.Time) error {
-	rows, err := s.Client.Blob.Query().Where(
-		blob.AvailabilityEQ(blob.AvailabilityPending),
-		blob.ReclaimAfterNotNil(),
-		blob.ReclaimAfterLTE(now),
-	).Limit(100).All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, row := range rows {
-		if err = s.write(ctx, func(t *Service) error {
-			current, err := t.Client.Blob.Get(ctx, row.ID)
-			if ent.IsNotFound(err) {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			if current.Availability != blob.AvailabilityPending || current.ReclaimAfter == nil || current.ReclaimAfter.After(now) {
-				return nil
-			}
-			protected, _, err := t.blobProtected(ctx, current)
-			if err != nil {
-				return err
-			}
-			if protected {
-				return t.Client.Blob.UpdateOneID(current.ID).ClearReclaimAfter().Exec(ctx)
-			}
-			if err = t.Client.Blob.UpdateOneID(current.ID).SetAvailability(blob.AvailabilityReclaimed).ClearReclaimAfter().Exec(ctx); err != nil {
-				return err
-			}
-			return t.deleteUnreferencedObject(ctx, store, current.ObjectKey)
-		}); err != nil {
+	after := ""
+	for {
+		rows, err := s.Client.Blob.Query().Where(
+			blob.IDGT(after), blob.AvailabilityEQ(blob.AvailabilityPending),
+			blob.Or(blob.ReclaimAfterIsNil(), blob.ReclaimAfterLTE(now)),
+		).Order(ent.Asc(blob.FieldID)).Limit(100).All(ctx)
+		if err != nil {
 			return err
+		}
+		if len(rows) == 0 {
+			break
+		}
+		for _, row := range rows {
+			after = row.ID
+			if err = s.write(ctx, func(t *Service) error {
+				current, err := t.Client.Blob.Get(ctx, row.ID)
+				if ent.IsNotFound(err) {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if current.Availability != blob.AvailabilityPending || current.ReclaimAfter != nil && current.ReclaimAfter.After(now) {
+					return nil
+				}
+				protected, _, err := t.blobProtected(ctx, current)
+				if err != nil {
+					return err
+				}
+				if protected {
+					return t.Client.Blob.UpdateOneID(current.ID).ClearReclaimAfter().Exec(ctx)
+				}
+				if current.ReclaimAfter == nil {
+					return t.Client.Blob.UpdateOneID(current.ID).SetReclaimAfter(now.Add(ObjectGracePeriod)).Exec(ctx)
+				}
+				if err = t.Client.Blob.UpdateOneID(current.ID).SetAvailability(blob.AvailabilityReclaimed).ClearReclaimAfter().Exec(ctx); err != nil {
+					return err
+				}
+				return t.deleteUnreferencedObject(ctx, store, current.ObjectKey)
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

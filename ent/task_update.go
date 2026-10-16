@@ -104,20 +104,6 @@ func (_u *TaskUpdate) ClearDueAt() *TaskUpdate {
 	return _u
 }
 
-// SetParked sets the "parked" field.
-func (_u *TaskUpdate) SetParked(v bool) *TaskUpdate {
-	_u.mutation.SetParked(v)
-	return _u
-}
-
-// SetNillableParked sets the "parked" field if the given value is not nil.
-func (_u *TaskUpdate) SetNillableParked(v *bool) *TaskUpdate {
-	if v != nil {
-		_u.SetParked(*v)
-	}
-	return _u
-}
-
 // SetStatus sets the "status" field.
 func (_u *TaskUpdate) SetStatus(v task.Status) *TaskUpdate {
 	_u.mutation.SetStatus(v)
@@ -383,9 +369,6 @@ func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.NodeCleared() {
 		_spec.ClearField(task.FieldNode, field.TypeString)
 	}
-	if value, ok := _u.mutation.Parked(); ok {
-		_spec.SetField(task.FieldParked, field.TypeBool, value)
-	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(task.FieldStatus, field.TypeEnum, value)
 	}
@@ -521,20 +504,6 @@ func (_u *TaskUpdateOne) SetNillableDueAt(v *time.Time) *TaskUpdateOne {
 // ClearDueAt clears the value of the "due_at" field.
 func (_u *TaskUpdateOne) ClearDueAt() *TaskUpdateOne {
 	_u.mutation.ClearDueAt()
-	return _u
-}
-
-// SetParked sets the "parked" field.
-func (_u *TaskUpdateOne) SetParked(v bool) *TaskUpdateOne {
-	_u.mutation.SetParked(v)
-	return _u
-}
-
-// SetNillableParked sets the "parked" field if the given value is not nil.
-func (_u *TaskUpdateOne) SetNillableParked(v *bool) *TaskUpdateOne {
-	if v != nil {
-		_u.SetParked(*v)
-	}
 	return _u
 }
 
@@ -832,9 +801,6 @@ func (_u *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) {
 	}
 	if _u.mutation.NodeCleared() {
 		_spec.ClearField(task.FieldNode, field.TypeString)
-	}
-	if value, ok := _u.mutation.Parked(); ok {
-		_spec.SetField(task.FieldParked, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(task.FieldStatus, field.TypeEnum, value)

@@ -52,7 +52,7 @@ func TestWorkflowWaitRoutes(t *testing.T) {
 	if w = request(h, "PATCH", "/v1/workflow-waits", body, testToken, "", "application/json"); w.Code != http.StatusOK {
 		t.Fatalf("update %d %s", w.Code, w.Body.String())
 	}
-	if w = request(h, "POST", "/v1/workflow-waits/complete", `{"kind":"review","key":"one","workspace_id":"`+ws.ID+`","completion":{"ok":true}}`, testToken, "", "application/json"); w.Code != http.StatusOK {
+	if w = request(h, "POST", "/v1/workflow-waits/complete", `{"kind":"review","key":"one","workspace_id":"`+ws.ID+`","completion":{"output":{"ok":true}}}`, testToken, "", "application/json"); w.Code != http.StatusOK {
 		t.Fatalf("complete %d %s", w.Code, w.Body.String())
 	}
 	w = request(h, "GET", "/v1/workflow-waits?kind=review&workspace_id="+ws.ID, "", testToken, "", "")

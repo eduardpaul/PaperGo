@@ -119,11 +119,6 @@ func Wait(v bool) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldWait, v))
 }
 
-// Parked applies equality check predicate on the "parked" field. It's identical to ParkedEQ.
-func Parked(v bool) predicate.Task {
-	return predicate.Task(sql.FieldEQ(FieldParked, v))
-}
-
 // Outcome applies equality check predicate on the "outcome" field. It's identical to OutcomeEQ.
 func Outcome(v string) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldOutcome, v))
@@ -927,16 +922,6 @@ func WaitEQ(v bool) predicate.Task {
 // WaitNEQ applies the NEQ predicate on the "wait" field.
 func WaitNEQ(v bool) predicate.Task {
 	return predicate.Task(sql.FieldNEQ(FieldWait, v))
-}
-
-// ParkedEQ applies the EQ predicate on the "parked" field.
-func ParkedEQ(v bool) predicate.Task {
-	return predicate.Task(sql.FieldEQ(FieldParked, v))
-}
-
-// ParkedNEQ applies the NEQ predicate on the "parked" field.
-func ParkedNEQ(v bool) predicate.Task {
-	return predicate.Task(sql.FieldNEQ(FieldParked, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

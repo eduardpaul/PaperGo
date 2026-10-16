@@ -54,8 +54,6 @@ const (
 	FieldNode = "node"
 	// FieldWait holds the string denoting the wait field in the database.
 	FieldWait = "wait"
-	// FieldParked holds the string denoting the parked field in the database.
-	FieldParked = "parked"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldOutcome holds the string denoting the outcome field in the database.
@@ -101,7 +99,6 @@ var Columns = []string{
 	FieldRunID,
 	FieldNode,
 	FieldWait,
-	FieldParked,
 	FieldStatus,
 	FieldOutcome,
 	FieldCompletedBy,
@@ -140,8 +137,6 @@ var (
 	DescriptionValidator func(string) error
 	// DefaultWait holds the default value on creation for the "wait" field.
 	DefaultWait bool
-	// DefaultParked holds the default value on creation for the "parked" field.
-	DefaultParked bool
 	// DefaultComment holds the default value on creation for the "comment" field.
 	DefaultComment string
 	// CommentValidator is a validator for the "comment" field. It is called by the builders before save.
@@ -372,11 +367,6 @@ func ByNode(opts ...sql.OrderTermOption) OrderOption {
 // ByWait orders the results by the wait field.
 func ByWait(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWait, opts...).ToFunc()
-}
-
-// ByParked orders the results by the parked field.
-func ByParked(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldParked, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

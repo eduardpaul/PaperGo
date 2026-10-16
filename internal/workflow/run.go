@@ -55,9 +55,7 @@ type Exec interface {
 	Step(name string, fn func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error)) (json.RawMessage, error)
 	Work(name string, fn func(ctx context.Context) (json.RawMessage, error)) (json.RawMessage, error)
 	// Await waits for park, which node created, and returns its completion.
-	// An error wrapping ErrStopped ends the execution: the run parked, or
-	// was cancelled. A deadline or a completion that is only an error fails
-	// the node.
+	// DBOS durably records the received completion or timeout.
 	Await(node string, park Park) (json.RawMessage, error)
 	Sleep(d time.Duration) error
 }
@@ -73,10 +71,6 @@ type Result struct {
 
 // ErrRunFailed wraps the reason a run failed.
 var ErrRunFailed = errors.New("workflow run failed")
-
-// ErrStopped wraps the reason a run's execution stopped without failing,
-// such as parking until a task completes.
-var ErrStopped = errors.New("workflow run stopped")
 
 type loaded struct {
 	Key    string `json:"key"`
@@ -138,7 +132,9 @@ type runState struct {
 	vars  map[string]any
 	steps map[string]any
 	// loops are the forEach nodes the run is inside, innermost last.
-	loops []loopFrame
+	loops             []loopFrame
+	invocation        uint64
+	currentInvocation uint64
 }
 
 // loopFrame is a forEach node's progress: its items, recorded by the node's
@@ -193,41 +189,7 @@ func (r *runState) execute(ctx context.Context) (Result, error) {
 			name = next
 			continue
 		}
-		if o.Park != nil {
-			raw, err := r.x.Await(name, *o.Park)
-			if errors.Is(err, ErrStopped) {
-				return Result{Status: "waiting", Node: name}, err
-			}
-			if err != nil {
-				if ctx.Err() != nil {
-					return Result{Status: "cancelled", Node: name}, ctx.Err()
-				}
-				next, ok := node.Next[PortError]
-				if !ok {
-					return r.finish(name, err)
-				}
-				r.steps[name] = map[string]any{"error": err.Error()}
-				name = next
-				continue
-			}
-			var result map[string]any
-			if err = decode(raw, &result); err != nil {
-				return r.finish(name, err)
-			}
-			if msg, only := waitError(result); only {
-				next, ok := node.Next[PortError]
-				if !ok {
-					return r.finish(name, errors.New(msg))
-				}
-				r.steps[name] = map[string]any{"error": msg}
-				name = next
-				continue
-			}
-			o.Output = result
-			if o.Park.Kind == WaitKindTask {
-				o.Port = fmt.Sprint(result["outcome"])
-			}
-		}
+
 		r.steps[name] = o.Output
 		for k, v := range o.Vars {
 			r.vars[k] = v
@@ -288,6 +250,8 @@ func (r *runState) attempt(ctx context.Context, name string, node Node) (outcome
 		delay, _ = time.ParseDuration(node.Retry.Delay)
 	}
 	for i := 1; ; i++ {
+		r.invocation++
+		r.currentInvocation = r.invocation
 		o, err := r.once(name, node)
 		if err == nil {
 			return o, nil
@@ -316,28 +280,94 @@ func (r *runState) once(name string, node Node) (outcome, error) {
 		return outcome{}, err
 	}
 	var o outcome
-	if err = decode(raw, &o); err != nil || o.Job == nil {
-		return o, err
+	if err = decode(raw, &o); err != nil {
+		return outcome{}, err
 	}
-	job := o.Job
-	result, err := r.x.Work(name+" work", func(ctx context.Context) (json.RawMessage, error) {
-		out, err := a.work(&workEnv{ctx: ctx, tools: r.tools, runID: r.in.RunID}, job)
-		if err == nil && len(out) > MaxOutputBytes {
-			err = fmt.Errorf("node %s work result is larger than %d bytes", name, MaxOutputBytes)
+	return r.continueActivity(name, a, o)
+}
+
+// continueActivity applies the same lifecycle to immediate work and work
+// requested by Resume. Each transition has a durable DBOS boundary.
+func (r *runState) continueActivity(name string, a *Activity, o outcome) (outcome, error) {
+	for transition := 0; transition < MaxNodeVisits; transition++ {
+		label := fmt.Sprintf("%s transition %d", name, transition)
+		switch {
+		case o.Job != nil:
+			if a.work == nil {
+				return outcome{}, fmt.Errorf("activity %s returned work without a Work handler", a.Key)
+			}
+			job := o.Job
+			result, err := r.x.Work(label+" work", func(ctx context.Context) (json.RawMessage, error) {
+				out, err := a.work(&workEnv{ctx: ctx, tools: r.tools, runID: r.in.RunID}, job)
+				if err == nil && len(out) > MaxOutputBytes {
+					err = fmt.Errorf("node %s work result is larger than %d bytes", name, MaxOutputBytes)
+				}
+				return out, err
+			})
+			if err != nil {
+				return outcome{}, err
+			}
+			raw, err := r.x.Step(label+" commit", func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error) {
+				if err := t.ReleaseBlobLeases(ctx, r.executionID(name)); err != nil {
+					return nil, err
+				}
+				return r.node(ctx, t, raise, name, func(e *env) (outcome, error) { return a.commit(e, job, result) })
+			})
+			if err != nil {
+				return outcome{}, err
+			}
+			o = outcome{}
+			if err = decode(raw, &o); err != nil {
+				return outcome{}, err
+			}
+		case o.Park != nil:
+			park := *o.Park
+			raw, err := r.x.Await(label, park)
+			if err != nil {
+				return outcome{}, err
+			}
+			var completion Completion
+			if err = decode(raw, &completion); err != nil {
+				return outcome{}, err
+			}
+			raw, err = r.x.Step(label+" resume", func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error) {
+				result, err := r.node(ctx, t, raise, name, func(e *env) (outcome, error) {
+					if a.resume != nil {
+						return a.resume(e, completion)
+					}
+					if completion.Error != "" {
+						return outcome{}, errors.New(completion.Error)
+					}
+					return outcome{Output: completion.Output, Port: completion.Port}, nil
+				})
+				if err != nil {
+					return nil, err
+				}
+				if err = ConsumeWait(ctx, t, park.Kind, park.Key, r.in.RunID); err != nil {
+					return nil, err
+				}
+				return result, nil
+			})
+			if err != nil {
+				// A failed Resume is a durably consumed completion too. Drop
+				// its parking marker before a retry, delay or error branch.
+				_, releaseErr := r.x.Step(label+" release failed wait", func(ctx context.Context, t *dms.Service, _ func(dms.Event)) (json.RawMessage, error) {
+					if err := ConsumeWait(ctx, t, park.Kind, park.Key, r.in.RunID); err != nil {
+						return nil, err
+					}
+					return json.RawMessage(`{}`), nil
+				})
+				return outcome{}, errors.Join(err, releaseErr)
+			}
+			o = outcome{}
+			if err = decode(raw, &o); err != nil {
+				return outcome{}, err
+			}
+		default:
+			return o, nil
 		}
-		return out, err
-	})
-	if err != nil {
-		return outcome{}, err
 	}
-	raw, err = r.x.Step(name+" commit", func(ctx context.Context, t *dms.Service, raise func(dms.Event)) (json.RawMessage, error) {
-		return r.node(ctx, t, raise, name, func(e *env) (outcome, error) { return a.commit(e, job, result) })
-	})
-	if err != nil {
-		return outcome{}, err
-	}
-	o = outcome{}
-	return o, decode(raw, &o)
+	return outcome{}, fmt.Errorf("activity %s exceeded its lifecycle transition limit", a.Key)
 }
 
 // node runs inside a step: tokens and the item are read in the node's
@@ -357,13 +387,18 @@ func (r *runState) node(ctx context.Context, t *dms.Service, raise func(dms.Even
 	if err != nil {
 		return nil, err
 	}
+	if o.Job != nil {
+		if err = t.LeaseBlobs(ctx, e.executionID, e.runID, o.BlobIDs); err != nil {
+			return nil, err
+		}
+	}
 	if o.Park != nil {
 		deadline := o.Park.Deadline
 		var at *time.Time
 		if !deadline.IsZero() {
 			at = &deadline
 		}
-		if err = PutWait(ctx, t, Wait{Kind: o.Park.Kind, Key: o.Park.Key, WorkspaceID: e.workspaceID, RunID: e.runID, Node: e.node, ExecutionID: e.executionID, Data: o.Park.Data, Deadline: at}); err != nil {
+		if err = PutWait(ctx, t, Wait{Kind: o.Park.Kind, Key: o.Park.Key, WorkspaceID: e.workspaceID, RunID: e.runID, Node: e.node, ExecutionID: e.executionID, Data: o.Park.Data, Deadline: at, Parking: true, Queue: o.Park.Queue, PayloadID: o.Park.PayloadID, BlobIDs: o.Park.BlobIDs}); err != nil {
 			return nil, err
 		}
 	}
@@ -512,6 +547,9 @@ func decode(raw json.RawMessage, v any) error {
 func (r *runState) executionID(node string) string {
 	h := sha256.New()
 	_, _ = h.Write([]byte(r.in.RunID))
+	var visit [8]byte
+	binary.BigEndian.PutUint64(visit[:], r.currentInvocation)
+	_, _ = h.Write(visit[:])
 	for _, f := range r.loops {
 		_, _ = h.Write([]byte{0})
 		_, _ = h.Write([]byte(f.node))
@@ -522,10 +560,4 @@ func (r *runState) executionID(node string) string {
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(node))
 	return hex.EncodeToString(h.Sum(nil)[:16])
-}
-
-// waitError reports a completion that is only an error message.
-func waitError(result map[string]any) (string, bool) {
-	msg, ok := result["error"].(string)
-	return msg, ok && msg != "" && len(result) == 1
 }
