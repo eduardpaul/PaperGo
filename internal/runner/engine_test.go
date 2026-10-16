@@ -279,3 +279,48 @@ func TestFolderEvents(t *testing.T) {
 	// Folder writes start no item workflows; the item inside still does.
 	f.runs(t, items.ID, 3)
 }
+
+func TestManualCoalescingPreservesEachLaunch(t *testing.T) {
+	f := setup(t)
+	f.searchOff(t)
+	item := f.item(t, "alice", "Manual item", nil)
+	w := f.workflow(t, "Manual coalesce", `{"triggers":[{"type":"manual","collection_id":"$LIST"}],"concurrency":"coalesce","input_schema":{"type":"object","required":["value"],"properties":{"value":{"type":"string"}}},"flow":{"start":"save","nodes":{"save":{"activity":"set_variable","inputs":{"name":"value","value":"{input:value}"}}}}}`)
+	var runs []string
+	for _, value := range []string{"first", "second"} {
+		ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{item.ID}, Inputs: map[string]any{"value": value}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		runs = append(runs, ids[0])
+	}
+	for _, id := range runs {
+		if run := f.wait(t, id, finished); run.Status != "completed" {
+			t.Fatal("manual run was dropped", run)
+		}
+	}
+	f.runs(t, w.ID, 2)
+}
+
+func TestManualSkipKeepsAnInspectableRejection(t *testing.T) {
+	f := setup(t)
+	f.searchOff(t)
+	item := f.item(t, "alice", "Manual item", nil)
+	w := f.workflow(t, "Manual skip", `{"triggers":[{"type":"manual","collection_id":"$LIST"}],"concurrency":"skip","flow":{"start":"hold","nodes":{"hold":{"activity":"delay","inputs":{"duration":"1h"}}}}}`)
+	first, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{item.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.r.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	second, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{item.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run := f.wait(t, second[0], finished); run.Status != "failed" || !strings.Contains(run.Error, "another run is active") {
+		t.Fatal("manual skip lost its rejection", run)
+	}
+	if _, err = f.r.Cancel(ctx, "alice", first[0]); err != nil {
+		t.Fatal(err)
+	}
+}

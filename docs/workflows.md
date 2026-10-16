@@ -137,7 +137,7 @@ Updating organization terms delivers `term.changed` to every live workspace so i
 | `replace` | cancels the active run and starts |
 | `coalesce` | starts nothing while a run is **queued**; while one is running, queues one run that starts when it ends |
 
-Selection runs compare every member: a start overlaps an active run when they share an item. A start that `skip` or `coalesce` drops creates no run.
+Selection runs compare every member: a start overlaps an active run when they share an item. An automatic start that `skip` or `coalesce` drops creates no run. Explicit manual starts always keep their returned run IDs: coalescing queues each manual invocation in order, and a busy `skip` policy records a failed run explaining the rejection before any activity executes.
 
 `coalesce` suits workflows that rebuild something from the item as it is when they run, such as an index: a burst of changes costs at most two runs, and the last one sees the final state. Runs of one workflow on one item never overlap: a durable wait keeps its DBOS queue partition until that run finishes or is cancelled. Selection workflows cannot coalesce. Cancelling a run discards its staged files, cancels the tasks it waits for, closes its waits and releases claims it holds.
 

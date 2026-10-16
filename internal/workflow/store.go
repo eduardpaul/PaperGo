@@ -773,14 +773,14 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 					return nil, nil, err
 				}
 			}
-			conditionErr := ""
+			startError := ""
 			if m.def.Condition != nil && e.Type != TriggerManual && e.Type != TriggerSchedule {
 				if e.ResourceID == "" || e.CollectionID == "" {
 					continue
 				}
 				holds, err := matches(ctx, t, m.v.CreatedBy, e.CollectionID, e.ResourceID, m.def.Condition)
 				if err != nil {
-					conditionErr = err.Error()
+					startError = "condition could not be evaluated: " + err.Error()
 				} else if !holds {
 					continue
 				}
@@ -801,7 +801,10 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 				switch c {
 				case ConcurrencySkip:
 					if len(busy) > 0 {
-						continue
+						if e.Type != TriggerManual {
+							continue
+						}
+						startError = "manual launch skipped because another run is active"
 					}
 				case ConcurrencyReplace:
 					ids := make([]string, 0, len(busy))
@@ -816,7 +819,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 					for _, state := range busy {
 						queued = queued || state == "queued"
 					}
-					if queued {
+					if queued && e.Type != TriggerManual {
 						continue
 					}
 				}
@@ -837,7 +840,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 			if _, err = c.Save(ctx); err != nil {
 				return nil, nil, err
 			}
-			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: e, ConditionError: conditionErr, System: systemWorkflow(w)}
+			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: e, StartError: startError, System: systemWorkflow(w)}
 			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 {
 				in.Partition = w.ID + ":" + members[0]
 			}

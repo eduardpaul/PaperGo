@@ -27,9 +27,9 @@ type RunInput struct {
 	Inputs      map[string]any `json:"inputs,omitempty"`
 	// Items is a selection run's ordered membership; ItemID is its primary.
 	Items []string `json:"items,omitempty"`
-	// ConditionError fails the run at once: the condition could not be
-	// evaluated when the event was dispatched.
-	ConditionError string `json:"condition_error,omitempty"`
+	// StartError fails the run before any activity: condition evaluation or
+	// a manual launch's concurrency policy rejected execution at dispatch.
+	StartError string `json:"start_error,omitempty"`
 	// Partition, for coalesce workflows, names the workflow and item: runs
 	// of one partition execute one at a time.
 	Partition string `json:"partition,omitempty"`
@@ -101,8 +101,8 @@ func (s *Service) Execute(ctx context.Context, x Exec, in RunInput) (Result, err
 		if err != nil {
 			return nil, err
 		}
-		if in.ConditionError != "" {
-			return nil, fmt.Errorf("condition could not be evaluated: %s", in.ConditionError)
+		if in.StartError != "" {
+			return nil, errors.New(in.StartError)
 		}
 		l := loaded{Key: w.Key, Author: v.CreatedBy, System: systemWorkflow(w), Definition: def}
 		if w.Role != nil {
