@@ -1,6 +1,9 @@
 import importlib.util
+import os
 from pathlib import Path
 import re
+import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -16,6 +19,12 @@ class RaceShardTests(unittest.TestCase):
         "FuzzOrientation", "Example", "ExampleService_Get",
         "ok  papergo/internal/dms  0.010s", "?  papergo/cmd/api  [no test files]",
     ])
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.addCleanup(os.chdir, Path.cwd())
+        os.chdir(temporary.name)
 
     def test_all_tests_fuzz_seeds_and_examples_run_on_exactly_one_shard(self):
         expected = {
@@ -58,10 +67,23 @@ class RaceShardTests(unittest.TestCase):
             run.return_value.stdout = self.listing
             race.main()
         listing, execution = [call.args[0] for call in run.call_args_list]
-        for command in [listing, execution]:
-            self.assertEqual(command[:5], ["go", "test", "-race", "-count=1", "-timeout=15m"])
-            self.assertEqual(command[-1], "./...")
+        self.assertEqual(listing[:5], ["go", "test", "-race", "-count=1", "-timeout=15m"])
+        flags = execution[execution.index("--") + 1:]
+        self.assertEqual(flags[:3], ["-race", "-count=1", "-timeout=15m"])
+        self.assertEqual(flags[-1], "./...")
+        self.assertTrue(execution[1].endswith("go-test.py"))
+        self.assertIn("--output", execution)
+        self.assertIn("--preparation-seconds", execution)
         self.assertIn("-list", listing)
-        self.assertIn("-v", execution)
         self.assertNotIn("/", execution[execution.index("-run") + 1])
         self.assertTrue(all(call.kwargs["check"] for call in run.call_args_list))
+
+    def test_discovery_failure_keeps_diagnostics_without_running_tests(self):
+        error = subprocess.CalledProcessError(1, ['go', 'test'], output='compile failure detail')
+        with patch.object(race.subprocess, 'run', side_effect=error) as run, \
+                patch('sys.argv', ['test-race.py', '--shard', '2', '--shards', '3']):
+            with self.assertRaises(subprocess.CalledProcessError):
+                race.main()
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(Path('.cache/checks/race-2.discovery.log').read_text(), 'compile failure detail')
+        self.assertIn('"exit_code": 1', Path('.cache/checks/race-2.discovery.json').read_text())

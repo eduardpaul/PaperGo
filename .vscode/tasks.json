@@ -27,6 +27,28 @@
       "type": "process", "command": "bash", "args": ["scripts/check.sh"],
       "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" },
       "group": { "kind": "test", "isDefault": true }
+    },
+    {
+      "label": "PaperGo: check Go package",
+      "type": "process", "command": "bash", "args": ["scripts/check.sh", "--packages", "${input:papergoTestPackage}"],
+      "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: check frontend",
+      "type": "process", "command": "bash", "args": ["scripts/check.sh", "--web"],
+      "problemMatcher": [], "options": { "cwd": "${workspaceFolder}" }
+    },
+    {
+      "label": "PaperGo: full check",
+      "type": "process", "command": "bash", "args": ["scripts/check.sh", "--full"],
+      "problemMatcher": ["$go"], "options": { "cwd": "${workspaceFolder}" }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "papergoTestPackage", "type": "promptString",
+      "description": "Go package or pattern to test (include affected callers for shared changes)",
+      "default": "./internal/dms"
     }
   ]
 }

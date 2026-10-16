@@ -83,13 +83,51 @@ Run **PaperGo: check** or:
 bash scripts/check.sh
 ```
 
-This runs the frontend build, lint and tests, Python tests, module verification,
-Ent generation and drift check, Go formatting, vet, Staticcheck, Go tests and
-the application build. `govulncheck ./...` runs a dependency scan separately.
-Local checks use ordinary Go tests, as the PowerShell check script does. CI runs
-the full suite with race detection across three jobs. Each job discovers the Go
-tests, fuzz seeds and examples, then runs a distinct shard with a 15-minute
-timeout per package. Run a shard locally with
+The default checks Go formatting and runs the ordinary Go suite with Go's
+test-result cache enabled. For the edit/check loop, select the packages you are
+working on, or check the frontend separately:
+
+```sh
+bash scripts/check.sh --packages ./internal/dms
+bash scripts/check.sh --packages ./internal/dms --run '^TestSeekPagesMatchSortedEligibleRows$'
+bash scripts/check.sh --web
+```
+
+Package selection is explicit: include affected callers when changing shared
+code. There is no automatic reverse-dependency selection. An unscoped check runs
+all Go packages. `--web` runs typechecking, lint and all frontend tests without
+requiring native SDKs; for repeated frontend edits use
+`npm --prefix web test -- --watch`.
+
+Checks require installed dependencies and never download SDKs or run `npm ci`.
+Run setup after dependency changes, or use `python3 scripts/native.py` and
+`npm ci --prefix web` to refresh just those dependencies. Go checks build the
+embedded frontend on the first check, then reuse it only while both the source
+and generated asset hashes match. Frontend edits or missing/changed assets
+trigger a rebuild. Reports live in `.cache/checks`: raw Go JSON events, structured
+package/test timings and a Markdown summary.
+
+Use `bash scripts/check.sh --full` for frontend build/lint/tests, Python tests,
+module verification, Ent generation/drift check, Go formatting, vet, Staticcheck,
+uncached ordinary Go tests and the application build. Staticcheck must be
+installed, as it is in the devcontainer. `--race` runs the entire Go suite with
+race detection and forced execution. `--native` requires `DECISION_MODELS_PATH`
+and `EMBEDDING_MODELS_ROOT`, then runs real decision, embedding, OCR and runner
+tests with race detection; missing required assets fail. The PowerShell entry
+point accepts the same arguments, for example
+`./scripts/check.ps1 --packages ./internal/dms`. `govulncheck ./...` runs a
+dependency scan separately.
+
+The verification workflow builds and typechecks the embedded frontend once,
+then distributes the real assets to its Go jobs. Docker and devcontainer smoke
+checks exercise their own builds. Frontend lint/tests and backend verification
+retain their own checks. CI runs the full Go suite with race detection across
+three jobs.
+Each job discovers the tests, fuzz seeds and examples, then runs a distinct shard
+with a 15-minute timeout per package. Raw events and timing reports are uploaded
+even if test execution fails; discovery duration is recorded separately from the
+execution command. Superseded branch/PR runs are canceled; release validation
+retains its serialized publication policy. Run a shard locally with
 `python3 scripts/test-race.py --shard 1 --shards 3`, repeating with shards 2 and 3
 for the complete suite. Race instrumentation makes the pure-Go SQLite driver
 substantially slower, so allow for a longer run on a development machine.

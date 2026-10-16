@@ -13,6 +13,9 @@ on:
     - cron: '23 6 * * 1'
 permissions:
   contents: read
+concurrency:
+  group: papergo-dependencies-${{ github.workflow }}-${{ github.event_name }}-${{ inputs.ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')) }}
 jobs:
   govulncheck:
     name: Go dependency vulnerabilities
