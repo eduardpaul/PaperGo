@@ -267,6 +267,7 @@ func (s *Service) exportCorePackage(ctx context.Context, store storage.Store, op
 		if err := selectWorkspacePackage(&p); err != nil {
 			return storage.Object{}, err
 		}
+		clearMissingPublicationRevisions(&p)
 		if err := s.validateWorkspaceSourceReferences(ctx, p); err != nil {
 			return storage.Object{}, err
 		}

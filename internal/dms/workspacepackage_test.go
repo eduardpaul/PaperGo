@@ -649,3 +649,117 @@ func TestConfigurationPackageScopeAndContentConsistency(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkspacePackageCollectedPublicationRevision(t *testing.T) {
+	for _, unpublish := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unpublish=%v", unpublish), func(t *testing.T) {
+			s, ws, vendors := fixture(t)
+			ctx := t.Context()
+			store, err := storage.NewLocal(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err := store.Put(ctx, strings.NewReader("%PDF-1.7\nPublished\n%%EOF"), 1000)
+			if err != nil {
+				t.Fatal(err)
+			}
+			vendor := create(t, s, vendors.ID, "item", "Supplier", nil)
+			library, err := s.Create(ctx, "alice", ws.ID, CreateResource{Kind: "library", Name: "Documents", Versioning: ptr("off"), PublishingEnabled: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			fieldOK(t, s, library.ID, CreateField{Key: "vendor", Label: "Vendor", Type: "lookup", Options: model.FieldOptions{LookupContainerID: vendors.ID}})
+			fieldOK(t, s, library.ID, CreateField{Key: "memo", Label: "Memo", Type: "text"})
+			document, err := s.CreateDocument(ctx, "alice", library.ID, DocumentMetadata{Name: "Published", Values: map[string]any{"vendor": vendor.ID, "memo": vendor.ID}}, BlobInput{ObjectKey: file.Key, Filename: "published.pdf", ContentType: "application/pdf", Size: file.Size, SHA256: file.SHA256})
+			if err != nil {
+				t.Fatal(err)
+			}
+			item := document.Item
+			published, err := s.Publish(ctx, "alice", item.ID, item.Version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			item, err = s.Update(ctx, "alice", item.ID, latest(t, s, item.ID).Version, UpdateResource{Name: ptr("Current"), Values: ptr(map[string]any{"vendor": nil, "memo": nil})})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if unpublish {
+				if _, err = s.Unpublish(ctx, "alice", item.ID, item.Version); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err = s.Update(ctx, "alice", library.ID, latest(t, s, library.ID).Version, UpdateResource{PublishingEnabled: ptr(false)}); err != nil {
+				t.Fatal(err)
+			}
+			if err = s.Client.DomainEvent.Update().SetDispatchedAt(time.Now().UTC()).Exec(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if err = s.CollectRevisions(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.Client.ItemRevision.Get(ctx, *published.RevisionID); !ent.IsNotFound(err) {
+				t.Fatal("published revision was not collected", err)
+			}
+			object, manifest := exportWorkspaceForTest(t, s, store, ExportOptions{WorkspaceID: ws.ID})
+			found := false
+			for _, row := range packageMaps(manifest.Tables["publications"]) {
+				if row["id"] == published.ID {
+					found = true
+					if row["revision_id"] != nil || row["snapshot"] != string(published.Snapshot) {
+						t.Fatal("export did not detach the collected revision while preserving the snapshot", row)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("publication missing from package")
+			}
+			source, err := s.Client.Publication.Get(ctx, published.ID)
+			if err != nil || source.RevisionID == nil || *source.RevisionID != *published.RevisionID || !bytes.Equal(source.Snapshot, published.Snapshot) {
+				t.Fatal("export changed the source publication", source, err)
+			}
+			target, _, _ := fixture(t)
+			for _, dry := range []bool{true, false} {
+				result, err := importWorkspaceForTest(t, target, store, object, dry, "Copy")
+				if err != nil || !result.Valid {
+					t.Fatal("import", result, err)
+				}
+			}
+			publications, err := target.Client.Publication.Query().All(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found = false
+			for _, event := range publications {
+				var snapshot map[string]any
+				if err = json.Unmarshal(event.Snapshot, &snapshot); err != nil {
+					t.Fatal(err)
+				}
+				if snapshot["name"] != "Published" {
+					continue
+				}
+				found = true
+				values := snapshot["values"].(map[string]any)
+				copiedVendor, e := target.Client.Resource.Get(ctx, fmt.Sprint(values["vendor"]))
+				if e != nil || copiedVendor.Name != vendor.Name || copiedVendor.ID == vendor.ID || values["memo"] != vendor.ID || event.RevisionID != nil {
+					t.Fatal("snapshot references or literal values were not preserved", event, snapshot, copiedVendor, e)
+				}
+			}
+			if !found {
+				t.Fatal("imported publication snapshot missing")
+			}
+			// Import validation still rejects broken live revision references.
+			for i, column := range manifest.Tables["resources"].Columns {
+				if column == "head_revision_id" {
+					for _, row := range manifest.Tables["resources"].Rows {
+						if row[i] != nil {
+							row[i] = "missing-revision"
+						}
+					}
+				}
+			}
+			if err = validateWorkspaceReferences(manifest); err == nil || !strings.Contains(err.Error(), "resources.head_revision_id") {
+				t.Fatal("unresolved live revision accepted", err)
+			}
+		})
+	}
+}

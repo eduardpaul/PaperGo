@@ -222,6 +222,25 @@ func selectWorkspacePackage(p *corePackage) error {
 	return nil
 }
 
+// Publications retain their frozen snapshots after revision collection. Only
+// links to revisions carried by the package are restored in the copied workspace.
+func clearMissingPublicationRevisions(p *corePackage) {
+	revisions := map[string]bool{}
+	for _, id := range packageIDs(p.Tables["item_revisions"]) {
+		revisions[id] = true
+	}
+	table := p.Tables["publications"]
+	column := slices.Index(table.Columns, "revision_id")
+	if column < 0 {
+		return
+	}
+	for _, row := range table.Rows {
+		if !revisions[fmt.Sprint(row[column])] {
+			row[column] = nil
+		}
+	}
+}
+
 func validateWorkspacePackage(p corePackage) error {
 	// Run the export selector on a separate graph to reject injected identities,
 	// organization roles/preferences, extra workspaces and unowned content.
@@ -703,7 +722,9 @@ func preserveWorkspaceValues(table string, source, mapped map[string]any, graph 
 		}
 	}
 	var schema SchemaDefinition
-	if revision != nil {
+	if table == "publications" {
+		schema = graph.schemas[fmt.Sprint(values["schema_revision_id"])]
+	} else if revision != nil {
 		schema = graph.schemas[fmt.Sprint(revision["schema_revision_id"])]
 	}
 	for _, field := range schema.Fields {
@@ -953,15 +974,25 @@ func validateWorkspaceValues(p corePackage) error {
 			}
 		}
 	}
-	for _, row := range rows["item_revisions"] {
-		schema := graph.schemas[fmt.Sprint(row["schema_revision_id"])]
-		values, err := decodeValues(json.RawMessage(fmt.Sprint(row["payload"])))
-		if err != nil {
-			return err
-		}
-		for _, field := range schema.Fields {
-			if err := checkField(field, values[field.ID]); err != nil {
+	for _, table := range []string{"item_revisions", "publications"} {
+		for _, row := range rows[table] {
+			column := "payload"
+			if table == "publications" {
+				column = "snapshot"
+			}
+			values, err := decodeValues(json.RawMessage(fmt.Sprint(row[column])))
+			if err != nil {
 				return err
+			}
+			schemaID := row["schema_revision_id"]
+			if table == "publications" {
+				schemaID = values["schema_revision_id"]
+				values, _ = values["values"].(map[string]any)
+			}
+			for _, field := range graph.schemas[fmt.Sprint(schemaID)].Fields {
+				if err := checkField(field, values[field.ID]); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -996,17 +1027,18 @@ func workspaceRowReferences(table string, row map[string]any, graph workspaceVal
 			} else if table != "item_revisions" {
 				revision = graph.revisions[fmt.Sprint(row["revision_id"])]
 			}
-			if revision == nil {
-				continue
-			}
 			payload, ok := node.(map[string]any)
 			if !ok {
 				continue
 			}
+			var schema SchemaDefinition
 			if table == "publications" {
+				schema = graph.schemas[fmt.Sprint(payload["schema_revision_id"])]
+				packageReferences(payload["schema_revision_id"], visit, fieldTypes)
 				payload, _ = payload["values"].(map[string]any)
+			} else if revision != nil {
+				schema = graph.schemas[fmt.Sprint(revision["schema_revision_id"])]
 			}
-			schema := graph.schemas[fmt.Sprint(revision["schema_revision_id"])]
 			for _, field := range schema.Fields {
 				if portableReferenceType(field.Type) || field.Type == "person" {
 					packageReferences(payload[field.ID], visit, fieldTypes)

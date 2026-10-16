@@ -13,6 +13,9 @@ Choose whether to include content. With content enabled, the package also carrie
 items and folders, typed values, unique permissions, retained revisions and
 history, publications, relationships, every file version and extracted file text.
 Without content, lists and libraries are empty but keep their configuration.
+Publication snapshots remain portable after their content revisions are collected.
+The package clears unavailable publication revision links and imports the frozen
+snapshot independently, using its schema to remap typed references.
 
 ## In the browser
 

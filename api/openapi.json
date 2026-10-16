@@ -18169,7 +18169,8 @@
           },
           "revision_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Optional revision link. Workspace copies omit links to collected revisions; the immutable snapshot remains available."
           }
         }
       },

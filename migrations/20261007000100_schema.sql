@@ -634,7 +634,7 @@ CREATE TRIGGER resource_revision_pointers BEFORE UPDATE OF head_revision_id,publ
  THEN RAISE(ABORT,'invalid revision pointer') END;
 END;
 CREATE TRIGGER publication_revision_validate BEFORE INSERT ON publications BEGIN
- SELECT CASE WHEN new.revision_id IS NULL OR new.action NOT IN ('publish','unpublish')
+ SELECT CASE WHEN new.action NOT IN ('publish','unpublish')
  THEN RAISE(ABORT,'invalid publication revision') END;
 END;
 CREATE TRIGGER publication_retained BEFORE DELETE ON publications WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=old.item_id AND deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'live publication events are retained'); END;
