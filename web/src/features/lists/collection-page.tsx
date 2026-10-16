@@ -382,7 +382,7 @@ export function CollectionPage({
             onSaved={(id) => onSearch({ view: id, cols: undefined, sort: undefined })}
           />
         )}
-        <SearchBox key={search.q ?? ''} initial={search.q ?? ''} noun={noun} onSearch={(q) => onSearch({ q }, true)} />
+        <SearchBox initial={search.q ?? ''} noun={noun} onSearch={(q) => onSearch({ q }, true)} />
       </div>
 
       {search.folder && (
@@ -670,6 +670,12 @@ function ViewTab({ active, onClick, children }: { active: boolean; onClick: () =
 /** Searches as the person types (after a short pause); Escape or the clear button empties it. */
 function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string; onSearch: (q: string | undefined) => void }) {
   const [value, setValue] = useState(initial);
+  const [previousInitial, setPreviousInitial] = useState(initial);
+  // URL navigation updates the value without replacing the focused input.
+  if (initial !== previousInitial) {
+    setPreviousInitial(initial);
+    setValue(initial);
+  }
   const input = useRef<HTMLInputElement>(null);
   const latest = useRef(onSearch);
   // "/" jumps to the search box from anywhere on the page, as in many web apps.
@@ -693,6 +699,11 @@ function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string;
     const timer = setTimeout(() => latest.current(trimmed || undefined), 350);
     return () => clearTimeout(timer);
   }, [value, initial]);
+  const clear = () => {
+    setValue('');
+    onSearch(undefined);
+    input.current?.focus();
+  };
   return (
     <form
       role="search"
@@ -710,7 +721,7 @@ function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string;
         onKeyDown={(event) => {
           if (event.key === 'Escape' && value) {
             event.preventDefault();
-            setValue('');
+            clear();
           }
         }}
         placeholder={`Search this ${noun}…`}
@@ -723,7 +734,7 @@ function SearchBox({ initial, noun, onSearch }: { initial: string; noun: string;
           type="button"
           aria-label="Clear search"
           className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-muted hover:bg-surface-muted hover:text-foreground"
-          onClick={() => setValue('')}
+          onClick={clear}
         >
           <X className="size-3.5" />
         </button>

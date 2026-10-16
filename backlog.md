@@ -40,6 +40,13 @@ This backlog synthesizes user feedback and feature requests into actionable engi
 
 ---
 
+## Phase 1 Progress
+
+- [x] **ISSUE-03** — Search input remains mounted across query updates, follows URL navigation, and clears immediately while retaining focus. Validation: collection-page regression tests and frontend typecheck.
+- [ ] **ISSUE-04** — Windows drag-and-drop upload handling.
+- [ ] **ISSUE-13** — Workspace publication export references.
+- [ ] **ISSUE-09** — Default versioning off for lists and libraries.
+
 ## 1. Backlog Summary Matrix
 
 | ID | Title | Domain | Priority | Effort | Impact |
