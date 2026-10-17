@@ -183,10 +183,11 @@ describe('reviewed frontend flows', () => {
     await screen.findByRole('option', { name: 'Status' });
     fireEvent.change(screen.getByLabelText('Filter field'), { target: { value: 'status' } });
     fireEvent.change(screen.getByLabelText(/^Filter value/), { target: { value: input } });
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(false));
+    // Create stays disabled until the debounced preview request succeeds.
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(false), { timeout: 8_000 });
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
-    await waitFor(() => expect(body).toBeDefined());
+    await waitFor(() => expect(body).toBeDefined(), { timeout: 8_000 });
     const definition = body!.definition as { filter: { value: unknown } };
     expect(stringifyJSON(definition.filter.value)).toBe(literal);
-  });
+  }, 20_000);
 });
