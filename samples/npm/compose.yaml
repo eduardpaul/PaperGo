@@ -25,48 +25,20 @@ services:
         chmod 0700 /data
     restart: "no"
 
-  initialize:
-    image: papergo:npm-sample
-    build: ../..
-    entrypoint: [/papergo-admin]
-    command: [initialize, --schema, /schema]
-    environment:
-      DATABASE_PATH: /data/papergo.db
-    volumes: [papergo-data:/data]
-    depends_on:
-      volume-permissions:
-        condition: service_completed_successfully
-    network_mode: none
-    read_only: true
-    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    restart: "no"
-
   papergo:
     image: papergo:npm-sample
     build: ../..
     environment:
-      APP_ENV: production
-      AUTH_MODE: proxy
-      ADMIN_SUBJECT: ${PAPERGO_ADMIN:?Run setup.py first}
-      PUBLIC_URL: ${PUBLIC_URL:?Run setup.py first}
-      PROXY_SECRET_FILE: /data/.proxy-secret
-      PROXY_TRUSTED_CIDRS: ${NPM_PRIVATE_IP:?Run setup.py first}/32
-      HTTP_ADDR: 0.0.0.0:8080
-      DATABASE_PATH: /data/papergo.db
-      BLOB_PATH: /data/blobs
-      SEARCH_STORE: zvec
-      SEARCH_ZVEC_PATH: /data/search/zvec
-      SEARCH_ZVEC_KEYWORD_CANDIDATES: "10000"
-      MAX_UPLOAD_BYTES: "67108864"
-      MAX_IN_FLIGHT: "32"
-      REQUEST_TIMEOUT: 30s
-      NODE_ID: papergo-1
-      RUN_RETENTION: 720h
-    volumes: [papergo-data:/data]
+      PAPERGO_CONFIG: /config/config.ini
+      # Image defaults must not override the mounted file.
+      HTTP_ADDR: ""
+      DATABASE_PATH: ""
+      BLOB_PATH: ""
+    volumes:
+      - papergo-data:/data
+      - ./generated/config.ini:/config/config.ini:ro
     depends_on:
-      initialize:
+      volume-permissions:
         condition: service_completed_successfully
     networks:
       backend:
@@ -76,7 +48,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     healthcheck:
-      test: [CMD, /papergo-admin, health]
+      test: [CMD, /papergo, --health]
       interval: 10s
       timeout: 4s
       start_period: 20s

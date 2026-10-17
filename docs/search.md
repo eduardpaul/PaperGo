@@ -116,7 +116,7 @@ With an embedding model, search also finds file content close in meaning to `q`,
 
 ## The store
 
-`SEARCH_STORE=sqlite|zvec` selects the store (`sqlite` by default). Both implement keyword, semantic and hybrid search, exact field filters, permissions and surfaces. Both hold derived data independently of the main database.
+`SEARCH_STORE=sqlite|zvec` selects the store (`zvec` by default). Both implement keyword, semantic and hybrid search, exact field filters, permissions and surfaces. Both hold derived data independently of the main database.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |

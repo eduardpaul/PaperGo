@@ -143,6 +143,10 @@ func (a *API) Handler() http.Handler {
 			OIDC *BrowserSignIn `json:"oidc,omitempty"`
 		}{mode, signIn})
 	})
+	if local, ok := a.Auth.(auth.Local); ok {
+		root.HandleFunc("POST /auth/login", a.localLogin(local))
+		root.HandleFunc("POST /auth/logout", a.localLogout(local))
+	}
 	root.Handle("/auth/", http.NotFoundHandler())
 	root.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) { respond(w, r, 200, map[string]string{"status": "ok"}) })
 	root.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
@@ -759,7 +763,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 		}
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", "Bearer")
-			if a.Auth.Kind() == auth.TrustedProxy {
+			if a.Auth.Kind() == auth.TrustedProxy || a.Auth.Kind() == auth.LocalMode {
 				w.Header().Set("WWW-Authenticate", `Basic realm="PaperGo", charset="UTF-8"`)
 			}
 			a.problem(w, r, 401, "unauthorized", "valid authentication is required")

@@ -29,6 +29,43 @@ def private_write(path, content):
     os.chmod(path, 0o600)
 
 
+def write_shared_config(path, content):
+    """The container user must be able to read the mounted file."""
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644), "w") as f:
+        f.write(content)
+    os.chmod(path, 0o644)
+
+
+def papergo_config(public_url, issuer_url):
+    return "\n".join([
+        "[server]",
+        "port = 8080",
+        "bind = 0.0.0.0",
+        "data_dir = /data",
+        f"public_url = {public_url}",
+        "",
+        "[auth]",
+        "mode = oidc",
+        "admin_group = admins",
+        "",
+        "[oidc]",
+        f"issuer = {issuer_url}",
+        "audience = papergo",
+        "client_id = papergo",
+        "groups_claim = groups",
+        "groups_prefix = papergo-",
+        "",
+        "[search]",
+        "store = zvec",
+        "zvec_path = /data/search/zvec",
+        "",
+        "[storage]",
+        "blob_path = /data/blobs",
+        "max_upload_mb = 64",
+        "",
+    ])
+
+
 def compose(*args, **kwargs):
     return subprocess.run(["docker", "compose", "--env-file", str(ROOT / ".env"),
                            "-f", str(ROOT / "compose.yaml"), *args], check=True, **kwargs)
@@ -253,11 +290,12 @@ def main():
     public_url = origin(args.host, args.https_port)
     private_write(ROOT / ".env", env_file({
         "PUBLIC_URL": public_url, "PAPERGO_HOST": args.host, "AUTH_HOST": args.auth_host,
-        "OIDC_ISSUER": issuer(settings), "PAPERGO_ADMIN": args.admin_user,
+        "PAPERGO_ADMIN": args.admin_user,
         "PAPERGO_TRUST_FILE": LOCAL_TRUST if args.tls == "local" else SYSTEM_TRUST,
         "HTTP_PORT": str(args.http_port), "HTTPS_PORT": str(args.https_port),
         "PAPERGO_ADMIN_EMAIL": args.email, "IDP_ADMIN_PASSWORD_HASH": credentials["authentik_password_hash"],
         "PAPERGO_ADMIN_PASSWORD_HASH": credentials["papergo_password_hash"]}))
+    write_shared_config(GENERATED / "config.ini", papergo_config(public_url, issuer(settings)))
 
     # The issuer must exist before PaperGo starts: PaperGo loads its discovery document at startup.
     compose("up", "-d", "--wait", "--wait-timeout", "600", "caddy", "authentik-server", "authentik-worker")

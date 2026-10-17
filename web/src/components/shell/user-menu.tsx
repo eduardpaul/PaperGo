@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { LogOut, Monitor, Moon, Settings, ShieldCheck, Sun } from 'lucide-react';
 import { api, clearToken } from '@/api/http';
-import { authenticationMode, oidcSignIn } from '@/api/auth';
+import { authenticationMode, oidcSignIn, signOutLocal } from '@/api/auth';
 import { keys, meQuery, preferencesQuery } from '@/api/queries';
 import type { Preferences } from '@/api/types';
 import { Avatar } from '@/components/ui/avatar';
@@ -85,6 +85,13 @@ export function UserMenu() {
                 void signIn.signOut().then((redirected) => {
                   if (!redirected) signedOut();
                 }, signedOut);
+                return;
+              }
+              if (authenticationMode() === 'local') {
+                void signOutLocal().finally(() => {
+                  clearToken();
+                  void navigate({ to: '/login', search: { returnTo: '/' } });
+                });
                 return;
               }
               clearToken();

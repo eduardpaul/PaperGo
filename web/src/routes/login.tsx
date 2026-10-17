@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, isApiError, setToken } from '@/api/http';
-import { authenticationMode, oidcSignIn } from '@/api/auth';
+import { authenticationMode, oidcSignIn, signInLocal } from '@/api/auth';
 import { safeReturnPath } from '@/api/oidc';
 import { meQuery } from '@/api/queries';
 import type { Me } from '@/api/types';
@@ -19,7 +19,64 @@ export const Route = createFileRoute('/login')({
 
 function Login() {
   if (authenticationMode() === 'proxy') return <ProxyLogin />;
+  if (authenticationMode() === 'local') return <LocalLogin />;
   return oidcSignIn() ? <ProviderLogin /> : <BearerLogin />;
+}
+
+function LocalLogin() {
+  const { returnTo } = Route.useSearch();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    setError('');
+    try {
+      await signInLocal(username, password);
+      await api<Me>('/v1/identity/me');
+      queryClient.clear();
+      void navigate({ href: returnTo });
+    } catch (cause) {
+      setError(isApiError(cause) ? problemMessage(cause) : 'Those credentials were not accepted.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <main className="flex min-h-dvh items-center justify-center px-4">
+      <form onSubmit={(event) => void onSubmit(event)} className="w-full max-w-sm rounded-xl border bg-surface p-6 shadow-xs">
+        <Logo />
+        <h1 className="mt-6 text-lg font-semibold">Sign in</h1>
+        <p className="mt-1 text-[13px] text-muted">Use the administrator account configured for this PaperGo server.</p>
+        <Label htmlFor="username" className="mt-5 block">
+          Username
+        </Label>
+        <Input id="username" className="mt-1.5" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required />
+        <Label htmlFor="password" className="mt-4 block">
+          Password
+        </Label>
+        <Input
+          id="password"
+          className="mt-1.5"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+        />
+        {error && <Alert className="mt-3">{error}</Alert>}
+        <Button type="submit" variant="primary" className="mt-4 w-full" disabled={pending}>
+          {pending ? 'Checking…' : 'Continue'}
+        </Button>
+      </form>
+    </main>
+  );
 }
 
 function ProviderLogin() {

@@ -17,6 +17,7 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
 	"papergo/internal/httpapi"
+	"papergo/internal/identity"
 	"papergo/internal/integration"
 	"papergo/internal/ocr/paddle"
 	"papergo/internal/resultcache"
@@ -39,8 +40,15 @@ func main() {
 		fmt.Println(buildinfo.String())
 		return
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "--health" {
+		if err := health(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 {
-		fmt.Fprintln(os.Stderr, "usage: papergo [--version]; configure the server through environment variables")
+		fmt.Fprintln(os.Stderr, "usage: papergo [--version|--health [url]]; configuration is read from config.ini and environment variables")
 		os.Exit(1)
 	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -64,9 +72,8 @@ func run(log *slog.Logger) error {
 	resolved, err := filepath.EvalSymlinks(c.DatabasePath)
 	if err == nil {
 		c.DatabasePath = resolved
-	}
-	if err != nil && !(migrations.Published() && os.IsNotExist(err)) {
-		return fmt.Errorf("resolve database path (apply the Atlas schema before startup): %w", err)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("resolve database path: %w", err)
 	}
 	dataLease, err := database.AcquireLease(c.DatabasePath, migrations.Published())
 	if err != nil {
@@ -108,17 +115,36 @@ func run(log *slog.Logger) error {
 			return e
 		}
 		db = reopened
+	} else if err = db.EnsureSchema(startup); err != nil {
+		return err
 	}
 	if err = db.CheckSchema(startup); err != nil {
 		return err
+	}
+	if c.AuthMode == "local" && c.AdminPassword == "" {
+		ready, e := identity.HasAdministrator(startup, db.SQL)
+		if e != nil {
+			return e
+		}
+		if !ready {
+			c.AdminPassword, err = config.PromptAdminPassword(os.Stdin, os.Stderr)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	store, err := storage.NewLocal(c.BlobPath)
 	if err != nil {
 		return err
 	}
-	verifier, err := auth.New(startup, c)
-	if err != nil {
-		return fmt.Errorf("initialize authentication: %w", err)
+	var verifier auth.Authenticator
+	if c.AuthMode == "local" {
+		verifier = auth.Local{DB: db.SQL}
+	} else {
+		verifier, err = auth.New(startup, c)
+		if err != nil {
+			return fmt.Errorf("initialize authentication: %w", err)
+		}
 	}
 	service := dms.NewService(db.SQL)
 	configuredIntegrations, err := service.Client.ListIntegration.Query().Exist(startup)
@@ -165,6 +191,18 @@ func run(log *slog.Logger) error {
 	}
 	if err = service.Directory().Initialize(startup, c.AdminSubject, c.AdminGroup); err != nil {
 		return fmt.Errorf("initialize organization directory: %w", err)
+	}
+	if c.AuthMode == "local" {
+		hash := ""
+		if c.AdminPassword != "" {
+			hash, err = auth.HashPassword(c.AdminPassword)
+			if err != nil {
+				return err
+			}
+		}
+		if err = service.Directory().SetInitialPasswordHash(startup, c.AdminSubject, hash); err != nil {
+			return fmt.Errorf("initialize local administrator: %w", err)
+		}
 	}
 	if err = service.RegisterPortability(store); err != nil {
 		return err

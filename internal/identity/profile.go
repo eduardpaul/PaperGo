@@ -211,6 +211,7 @@ func DeleteUserInTx(ctx context.Context, tx *sql.Tx, actor, subject string, purg
 			"DELETE FROM grants WHERE principal_type='user' AND principal_id=?",
 			"DELETE FROM webdav_credentials WHERE subject=?",
 			"DELETE FROM identity_rest_tokens WHERE subject=?",
+			"DELETE FROM identity_sessions WHERE subject=?",
 			"DELETE FROM sync_tokens WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
 			"DELETE FROM sync_states WHERE view_id IN (SELECT id FROM sync_views WHERE subject=?)",
 			"DELETE FROM sync_views WHERE subject=?",
@@ -219,7 +220,7 @@ func DeleteUserInTx(ctx context.Context, tx *sql.Tx, actor, subject string, purg
 				return err
 			}
 		}
-		_, err = tx.ExecContext(ctx, "UPDATE identity_users SET active=0,display_name='Deleted user',email='',deleted_at=? WHERE id=?", time.Now().UTC(), subject)
+		_, err = tx.ExecContext(ctx, "UPDATE identity_users SET active=0,display_name='Deleted user',email='',password_hash='',deleted_at=? WHERE id=?", time.Now().UTC(), subject)
 		return err
 	})
 	if err != nil {

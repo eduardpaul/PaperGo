@@ -191,6 +191,9 @@ func (s *Service) packageColumns(ctx context.Context, table string) ([]string, [
 		if err = rows.Scan(&cid, &name, &kind, &notnull, &defaults, &pk); err != nil {
 			return nil, nil, err
 		}
+		if name == "password_hash" {
+			continue
+		}
 		columns = append(columns, name)
 		expression := quotePackageColumn(name)
 		if strings.Contains(strings.ToUpper(kind), "DATE") {
@@ -849,7 +852,7 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 					return err
 				}
 				if exists {
-					if _, err = s.tx.ExecContext(ctx, "UPDATE identity_users SET active=?,display_name=?,email=?,deleted_at=? WHERE id=?", row["active"], row["display_name"], row["email"], row["deleted_at"], id); err != nil {
+					if _, err = s.tx.ExecContext(ctx, "UPDATE identity_users SET active=?,display_name=?,email=?,password_hash='',deleted_at=? WHERE id=?", row["active"], row["display_name"], row["email"], row["deleted_at"], id); err != nil {
 						return err
 					}
 					continue

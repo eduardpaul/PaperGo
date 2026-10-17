@@ -12,3 +12,6 @@ var checksum string
 func SchemaHash() string {
 	return strings.TrimPrefix(strings.Fields(strings.Split(strings.TrimSpace(checksum), "\n")[1])[1], "h1:")
 }
+
+// ChecksumFile is the Atlas directory checksum embedded next to the schema.
+func ChecksumFile() string { return checksum }

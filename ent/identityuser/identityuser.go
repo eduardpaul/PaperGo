@@ -19,6 +19,8 @@ const (
 	FieldEmail = "email"
 	// FieldSyncHash holds the string denoting the sync_hash field in the database.
 	FieldSyncHash = "sync_hash"
+	// FieldPasswordHash holds the string denoting the password_hash field in the database.
+	FieldPasswordHash = "password_hash"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
 	// FieldActive holds the string denoting the active field in the database.
@@ -37,6 +39,7 @@ var Columns = []string{
 	FieldDisplayName,
 	FieldEmail,
 	FieldSyncHash,
+	FieldPasswordHash,
 	FieldDeletedAt,
 	FieldActive,
 	FieldService,
@@ -60,6 +63,10 @@ var (
 	DefaultEmail string
 	// DefaultSyncHash holds the default value on creation for the "sync_hash" field.
 	DefaultSyncHash string
+	// DefaultPasswordHash holds the default value on creation for the "password_hash" field.
+	DefaultPasswordHash string
+	// PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
+	PasswordHashValidator func(string) error
 	// DefaultActive holds the default value on creation for the "active" field.
 	DefaultActive bool
 	// DefaultService holds the default value on creation for the "service" field.
@@ -91,6 +98,11 @@ func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 // BySyncHash orders the results by the sync_hash field.
 func BySyncHash(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSyncHash, opts...).ToFunc()
+}
+
+// ByPasswordHash orders the results by the password_hash field.
+func ByPasswordHash(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPasswordHash, opts...).ToFunc()
 }
 
 // ByDeletedAt orders the results by the deleted_at field.

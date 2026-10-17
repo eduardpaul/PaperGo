@@ -12,18 +12,25 @@ def main():
     parser.add_argument("--version", required=True)
     parser.add_argument("--os", required=True, choices=["linux", "darwin", "windows"])
     parser.add_argument("--arch", required=True, choices=["amd64", "arm64"])
+    parser.add_argument("--bin-dir", type=Path, help="Directory containing papergo and papergo-admin")
+    parser.add_argument("--native-dir", type=Path, help="Pinned native SDK directory (lib/ and notices/)")
+    parser.add_argument("--release-database", type=Path, help="release-database.json to embed")
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     dist = root / "dist"
     dist.mkdir(exist_ok=True)
     suffix = ".exe" if args.os == "windows" else ""
+    bin_dir = args.bin_dir or (root / "bin")
+    native = args.native_dir or (root / ".tools" / "native")
+    release_database = args.release_database or (root / "migrations" / "release.json")
     inputs = {
-        f"papergo{suffix}": root / "bin" / f"papergo{suffix}",
-        f"papergo-admin{suffix}": root / "bin" / f"papergo-admin{suffix}",
-        "release-database.json": root / "migrations" / "release.json",
+        f"papergo{suffix}": bin_dir / f"papergo{suffix}",
+        f"papergo-admin{suffix}": bin_dir / f"papergo-admin{suffix}",
+        "release-database.json": release_database,
         "RELEASES.md": root / "docs" / "releases.md",
+        "config.ini": root / "deploy" / "config.ini",
+        "README.md": root / "deploy" / "README.md",
     }
-    native = root / '.tools/native'
     libraries = {
         'linux': ['libonnxruntime.so', 'libpdfium.so', 'libzvec_c_api.so'],
         'darwin': ['libonnxruntime.dylib', 'libpdfium.dylib', 'libzvec_c_api.dylib'],
