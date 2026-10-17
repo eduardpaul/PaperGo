@@ -864,8 +864,8 @@ Transform PaperGo into a single self-contained executable for Linux (`papergo`) 
    - Configure `zvec` as default search provider on first boot.
 
 5. **Cross-Platform Compilation & Distribution**:
-   - Linux: Statically linked CGO executable with bundled WebP/PDFium/Zvec shared libraries in rpath.
-   - Windows: Self-contained `.exe` built with MSYS2 / MinGW-w64 toolchain.
+   - Linux: One executable containing the native application, libraries and OCR models, extracted automatically into a private runtime cache.
+   - Windows: One `.exe` containing the native application, DLLs, compiler runtimes and OCR models, built with MSYS2 / MinGW-w64.
    - Releases packaged as `.tar.gz` and `.zip` containing only the binary, sample `config.yaml`, and README.
 
 6. **Modernize OIDC (Authentik) & NPM Samples to Use Single Binary**:

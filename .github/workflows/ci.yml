@@ -15,6 +15,34 @@ concurrency:
   group: papergo-verify-${{ github.workflow }}-${{ github.event_name }}-${{ inputs.ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')) }}
 jobs:
+  models:
+    name: Prepare offline model presets
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .tools/decision/model
+            .tools/embedding/models
+          key: presets-${{ hashFiles('internal/decision/manifest.json', 'scripts/fetch-embedding-models.py') }}
+      - name: Prepare and verify all model presets
+        run: python3 scripts/prepare-preset-models.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model-presets
+          path: |
+            .tools/decision/model
+            .tools/embedding/models
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
   frontend:
     name: Build embedded frontend
     runs-on: ubuntu-latest
@@ -89,7 +117,7 @@ jobs:
       - name: Build image and smoke test
         run: bash scripts/docker-smoke.sh
   verify:
-    needs: frontend
+    needs: [frontend, models]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -128,8 +156,14 @@ jobs:
         run: test -z "$(gofmt -l cmd internal ent/schema web/*.go)"
       - name: Vet
         run: go vet ./...
+      - uses: actions/download-artifact@v4
+        with:
+          name: model-presets
+          path: .tools
       - name: Build application
-        run: go build -trimpath -o bin/papergo ./cmd/api
+        run: |
+          python scripts/build-standalone.py --output bin/papergo
+          python scripts/release-smoke.py --binary bin/papergo
   embeddings:
     name: Local embedding engines
     runs-on: ubuntu-latest
@@ -233,14 +267,14 @@ jobs:
           path: .tools/native/installed.json
 
   native-platforms:
-    needs: frontend
+    needs: [frontend, models]
     name: Native SDK smoke (${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:
         runner: [macos-15, windows-2025]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -261,6 +295,10 @@ jobs:
       - name: Exercise native search, PDFs, images and OCR
         shell: bash
         run: go test ./internal/onnx ./internal/ocr/paddle ./internal/imaging ./internal/doctext/pdfium ./internal/search/zvecstore -run 'TestNativeABI|TestReadAndRender|TestRecognize$|TestDecode|TestWebPRoundTripAndResize|TestIdle|TestConcurrentIdle'
+      - uses: actions/download-artifact@v4
+        with:
+          name: model-presets
+          path: .tools
       - name: Verify the packaged executable and library paths
         shell: bash
         run: |
@@ -268,7 +306,7 @@ jobs:
           suffix=''
           if [[ "$RUNNER_OS" == Windows ]]; then suffix='.exe'; fi
           mkdir -p bin
-          go build -trimpath -ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1' -o "bin/papergo$suffix" ./cmd/api
-          go build -trimpath -ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1' -o "bin/papergo-admin$suffix" ./cmd/admin
+          python scripts/build-standalone.py --ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1' --output "bin/papergo$suffix"
+          python scripts/build-standalone.py --command admin --ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1' --output "bin/papergo-admin$suffix"
           python scripts/release-package.py --version v0.0.0-rc.1 --os "$(go env GOOS)" --arch "$(go env GOARCH)"
           python scripts/release-smoke.py

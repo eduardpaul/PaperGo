@@ -5,6 +5,27 @@ RUN npm ci
 COPY web ./
 RUN npm run build
 
+# Export once on a fixed CPU platform; every target uses this verified graph.
+FROM --platform=linux/amd64 python:3.13-slim-bookworm AS laya-export
+WORKDIR /src
+COPY scripts/decision-model/requirements.txt scripts/decision-model/
+RUN pip install --no-cache-dir torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r scripts/decision-model/requirements.txt
+COPY scripts/decision-model/artifacts.json scripts/decision-model/prepare.py \
+    scripts/decision-model/export.py scripts/decision-model/
+COPY internal/decision/manifest.json internal/decision/LICENSE internal/decision/NOTICE internal/decision/
+RUN python scripts/decision-model/prepare.py \
+    && pip install --no-cache-dir --no-deps .tools/decision-build/laya-0.4.8-py3-none-any.whl \
+    && python scripts/decision-model/export.py
+
+FROM scratch AS laya-model
+COPY --from=laya-export /src/.tools/decision-build/onnx/model.onnx \
+    /src/.tools/decision-build/onnx/manifest.json \
+    /src/.tools/decision-build/onnx/LICENSE /src/.tools/decision-build/onnx/NOTICE /
+# The export directory links to the source tokenizer. Copy its bytes so this
+# artifact remains complete after leaving the export container.
+COPY --from=laya-export /src/.tools/decision-build/model/tokenizer/tokenizer.json /tokenizer.json
+
 # Install the native SDKs once, including headers and license notices. Only
 # WebP is compiled here; zvec, PDFium, ONNX and tokenizers use pinned binaries.
 FROM python:3.12-slim-bookworm AS native
@@ -17,32 +38,28 @@ COPY scripts/native-notices scripts/native-notices
 RUN --mount=type=cache,target=/src/.tools/native-downloads python3 scripts/native.py
 
 FROM golang:1.27.2-bookworm AS build
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=native /src/.tools/native /src/.tools/native
+COPY --from=laya-model / /src/.tools/decision/model/
 COPY --from=frontend /src/web/dist ./web/dist
 RUN --mount=type=cache,target=/root/.cache/go-build \
     . .tools/native/env.sh \
-    && go build -trimpath -ldflags="-s -w" -o /out/papergo ./cmd/api \
-    && go build -trimpath -ldflags="-s -w" -o /out/papergo-admin ./cmd/admin \
+    && python3 scripts/build-standalone.py --output /out/papergo \
+    && python3 scripts/build-standalone.py --command admin --output /out/papergo-admin \
     && mkdir -p /state/blobs
 
 FROM gcr.io/distroless/cc-debian12:nonroot
-COPY --from=native /src/.tools/native/lib/libonnxruntime.so /usr/lib/papergo/libonnxruntime.so
-COPY --from=native /src/.tools/native/lib/libpdfium.so /usr/lib/papergo/libpdfium.so
-COPY --from=native /src/.tools/native/lib/libzvec_c_api.so /usr/lib/papergo/libzvec_c_api.so
-COPY --from=native /src/.tools/native/notices /usr/share/doc/papergo
-COPY models/paddleocr /usr/share/papergo/models/paddleocr
-COPY internal/decision/LICENSE internal/decision/NOTICE /usr/share/doc/papergo/decision/
-# Optional Laya weights are mounted separately via AI_DECISION_MODELS_PATH.
 COPY --from=build /out/papergo /papergo
 COPY --from=build /out/papergo-admin /papergo-admin
 COPY migrations /schema
 COPY --from=build --chown=65532:65532 /state /data
 USER 65532:65532
 ENV HTTP_ADDR=0.0.0.0:8080 DATABASE_PATH=/data/papergo.db BLOB_PATH=/data/blobs APP_ENV=production \
-    ONNXRUNTIME_LIB=/usr/lib/papergo/libonnxruntime.so OCR_MODELS=/usr/share/papergo/models/paddleocr
+    XDG_CACHE_HOME=/data/.cache
 EXPOSE 8080
 ENTRYPOINT ["/papergo"]

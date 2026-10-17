@@ -156,7 +156,7 @@ def main():
         run(sys.executable, 'scripts/go-test.py', '--output', '.cache/checks/go-tests', '--', *flags, *packages)
         if args.full:
             (ROOT / 'bin').mkdir(exist_ok=True)
-            run('go', 'build', '-trimpath', '-o', 'bin/papergo.exe' if os.name == 'nt' else 'bin/papergo', './cmd/api')
+            run(sys.executable, 'scripts/build-standalone.py', '--output', 'bin/papergo.exe' if os.name == 'nt' else 'bin/papergo')
     print(f'Checks passed in {time.monotonic() - started:.2f}s.', flush=True)
 
 

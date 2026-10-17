@@ -277,8 +277,8 @@ npm --prefix web run build
 mkdir -p .cache/performance
 python3 scripts/native.py
 source .tools/native/env.sh
-go build -trimpath -ldflags='-s -w' -o .cache/performance/papergo ./cmd/api
-go build -trimpath -ldflags='-s -w' -o .cache/performance/papergo-admin ./cmd/admin
+python3 scripts/build-standalone.py --output .cache/performance/papergo
+python3 scripts/build-standalone.py --command admin --output .cache/performance/papergo-admin
 go test -c -o .cache/performance/dms.test ./internal/dms
 ```
 

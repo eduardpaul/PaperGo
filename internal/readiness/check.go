@@ -1,4 +1,5 @@
-package main
+// Package readiness implements the standalone readiness probe.
+package readiness
 
 import (
 	"context"
@@ -8,7 +9,8 @@ import (
 	"time"
 )
 
-func health(args []string) error {
+// Check probes the optional readiness URL, defaulting to the local server.
+func Check(args []string) error {
 	address := "http://127.0.0.1:8080/health/ready"
 	if len(args) == 1 {
 		address = args[0]

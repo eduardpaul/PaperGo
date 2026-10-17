@@ -19,6 +19,7 @@ import (
 	"papergo/internal/httpapi"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
+	"papergo/internal/readiness"
 	"papergo/internal/resultcache"
 	"papergo/internal/runner"
 	"papergo/internal/search"
@@ -40,7 +41,7 @@ func main() {
 		return
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "--health" {
-		if err := health(os.Args[2:]); err != nil {
+		if err := readiness.Check(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
