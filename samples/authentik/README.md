@@ -84,7 +84,7 @@ Back up PaperGo with its consistent online backup, and authentik with a database
 
 ```sh
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
-docker compose --env-file .env exec -T papergo /papergo-admin backup --file "/data/papergo-$stamp.tar.gz"
+docker compose --env-file .env exec -T papergo /opt/papergo/papergo-admin backup --file "/data/papergo-$stamp.tar.gz"
 docker compose --env-file .env cp "papergo:/data/papergo-$stamp.tar.gz" "generated/papergo-$stamp.tar.gz"
 docker compose --env-file .env exec -T postgresql pg_dump -U authentik -Fc authentik > "generated/authentik-$stamp.dump"
 ```

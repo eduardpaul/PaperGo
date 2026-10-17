@@ -133,7 +133,7 @@ def main():
     if args.publish:
         publish(tag, previous, state, args.publish)
     elif state == "complete":
-        print("Every release asset is already published; build and publication will be skipped")
+        print("Binary release assets are already published; container publication is checked separately")
 
 
 if __name__ == "__main__":

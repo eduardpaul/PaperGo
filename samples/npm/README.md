@@ -86,7 +86,7 @@ docker compose --env-file .env down
 
 ```sh
 backup_name="papergo-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
-docker compose --env-file .env exec -T papergo /papergo-admin backup --file "/data/$backup_name"
+docker compose --env-file .env exec -T papergo /opt/papergo/papergo-admin backup --file "/data/$backup_name"
 docker compose --env-file .env cp "papergo:/data/$backup_name" "generated/$backup_name"
 ```
 

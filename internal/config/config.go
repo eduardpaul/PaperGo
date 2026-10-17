@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"net/netip"
 	"net/url"
 	"os"
@@ -100,9 +101,9 @@ type Config struct {
 	// AdminPassword is the local administrator's initial password. It is
 	// applied only when that account has no password yet.
 	AdminPassword string
-	// AdminPasswordOmitted is set when configuration explicitly clears the
-	// local password. A non-interactive first start then fails instead of
-	// inventing a password.
+	// AdminPasswordOmitted marks an explicitly cleared password or a missing
+	// production password. A non-interactive first start then requires an
+	// existing administrator instead of inventing a password.
 	AdminPasswordOmitted bool
 }
 
@@ -274,12 +275,32 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		if c.AdminSubject == "" {
 			c.AdminSubject = "admin"
 		}
+		passwordFile := lookup("ADMIN_PASSWORD_FILE")
+		if passwordFile != "" && lookup("ADMIN_PASSWORD") != "" {
+			return c, fmt.Errorf("set only one of ADMIN_PASSWORD and ADMIN_PASSWORD_FILE")
+		}
 		switch {
+		case passwordFile != "":
+			file, err := os.Open(passwordFile)
+			if err != nil {
+				return c, fmt.Errorf("read ADMIN_PASSWORD_FILE: %w", err)
+			}
+			password, err := io.ReadAll(io.LimitReader(file, 75))
+			file.Close()
+			if err != nil {
+				return c, fmt.Errorf("read ADMIN_PASSWORD_FILE: %w", err)
+			}
+			c.AdminPassword = strings.TrimRight(string(password), "\r\n")
+			if len(password) == 75 || len(c.AdminPassword) == 0 || len(c.AdminPassword) > 72 {
+				return c, fmt.Errorf("ADMIN_PASSWORD_FILE must contain a password of 1 to 72 bytes")
+			}
 		case lookup("ADMIN_PASSWORD") != "":
 			c.AdminPassword = lookup("ADMIN_PASSWORD")
 		case file.passwordSpecified:
 			c.AdminPassword = file.password
 			c.AdminPasswordOmitted = file.password == ""
+		case c.Env == "production":
+			c.AdminPasswordOmitted = true
 		default:
 			c.AdminPassword = "admin"
 		}

@@ -1,4 +1,5 @@
-FROM node:24-alpine AS frontend
+# syntax=docker/dockerfile:1
+FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -26,6 +27,18 @@ COPY --from=laya-export /src/.tools/decision-build/onnx/model.onnx \
 # artifact remains complete after leaving the export container.
 COPY --from=laya-export /src/.tools/decision-build/model/tokenizer/tokenizer.json /tokenizer.json
 
+# Keep the large, platform-independent models in their own cached image layer.
+# Release CI supplies this stage as a named context containing verified assets.
+FROM python:3.12-slim-bookworm AS model-assets
+WORKDIR /src
+COPY scripts/build-assets.py scripts/prepare-preset-models.py scripts/fetch-embedding-models.py scripts/
+COPY scripts/model-notices scripts/model-notices
+COPY internal/decision/manifest.json internal/decision/
+COPY models/paddleocr models/paddleocr
+COPY --from=laya-model / /src/.tools/decision/model/
+RUN --mount=type=cache,target=/src/.tools/embedding/models \
+    python3 scripts/build-assets.py --output-dir /assets
+
 # Install the native SDKs once, including headers and license notices. Only
 # WebP is compiled here; zvec, PDFium, ONNX and tokenizers use pinned binaries.
 FROM python:3.12-slim-bookworm AS native
@@ -45,20 +58,32 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=native /src/.tools/native /src/.tools/native
-COPY --from=laya-model / /src/.tools/decision/model/
 COPY --from=frontend /src/web/dist ./web/dist
+ARG VERSION=development
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
 RUN --mount=type=cache,target=/root/.cache/go-build \
     . .tools/native/env.sh \
-    && python3 scripts/build-binaries.py --output-dir /out \
-    && python3 scripts/build-assets.py --output-dir /out/assets \
+    && python3 scripts/build-binaries.py --output-dir /out/bin \
+       --ldflags="-s -w -X papergo/internal/buildinfo.Version=$VERSION -X papergo/internal/buildinfo.Commit=$COMMIT -X papergo/internal/buildinfo.Date=$BUILD_DATE" \
     && mkdir -p /state/blobs
 
 FROM gcr.io/distroless/cc-debian12:nonroot
+ARG VERSION=development
+ARG COMMIT=unknown
+ARG SOURCE_URL=https://github.com/eduardpaul/PaperGo
+LABEL org.opencontainers.image.title="PaperGo" \
+    org.opencontainers.image.source=$SOURCE_URL \
+    org.opencontainers.image.version=$VERSION \
+    org.opencontainers.image.revision=$COMMIT
 WORKDIR /opt/papergo
-COPY --from=build /out/ /opt/papergo/
+COPY --from=model-assets /assets/ /opt/papergo/assets/
+COPY --from=build /out/bin/ /opt/papergo/
 COPY migrations /schema
 COPY --from=build --chown=65532:65532 /state /data
 USER 65532:65532
 ENV HTTP_ADDR=0.0.0.0:8080 DATABASE_PATH=/data/papergo.db BLOB_PATH=/data/blobs APP_ENV=production
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD ["/opt/papergo/papergo", "--health"]
 ENTRYPOINT ["/opt/papergo/papergo"]

@@ -14,3 +14,5 @@ Set `PAPERGO_CONFIG` to read a different YAML file. Non-empty environment variab
 Keep the native libraries and `notices/` from the platform ZIP beside the executables. Linux libraries live in `lib/`; Windows DLLs sit beside `papergo.exe`. Linux builds require the target system's glibc. Keep `assets/models/` and `assets/notices/` from the shared ZIP in the same installation. Models are identical across platforms and load directly from disk. macOS release builds are temporarily disabled.
 
 OCR and local decisions use the shared assets automatically. Enable local semantic search with `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b`. Models never download at runtime. `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` select explicit alternatives.
+
+For the all-inclusive container image, persistent volumes, secrets, health checks and source builds, see the [Docker deployment guide](https://github.com/eduardpaul/PaperGo/blob/main/docs/docker.md).

@@ -89,7 +89,7 @@ def start_stack(no_build):
 def verify_egress():
     """Resolve and reach public HTTPS from the actual PaperGo container."""
     try:
-        compose("exec", "-T", "papergo", "/papergo-admin", "health", "--url",
+        compose("exec", "-T", "papergo", "/opt/papergo/papergo-admin", "health", "--url",
                 "https://calendar.google.com/", "--timeout", "15s")
     except subprocess.CalledProcessError:
         raise RuntimeError(

@@ -10,3 +10,17 @@ samples/npm/.env
 samples/npm/__pycache__
 web/node_modules
 web/dist
+dist
+release-assets
+release-tools
+shared
+shared-assets
+container-assets
+previous
+config.yaml
+deploy/secrets
+**/generated
+**/__pycache__
+**/.env
+**/.env.*
+!**/.env.example

@@ -21,10 +21,11 @@ import zlib
 
 ROOT = Path(__file__).resolve().parent.parent
 TOKEN = "papergo-release-smoke-development-token"
+AUTHORIZATION = f'Bearer {TOKEN}'
 
 
 def request(base, path, data=None, method=None):
-    headers = {"Authorization": f"Bearer {TOKEN}"}
+    headers = {"Authorization": AUTHORIZATION}
     if data is not None:
         headers["Content-Type"] = "application/json"
         data = json.dumps(data).encode()
@@ -41,7 +42,7 @@ def upload(base, library, name, data):
     body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{name}"\r\n'
             'Content-Type: application/octet-stream\r\n\r\n').encode() + data + f'\r\n--{boundary}--\r\n'.encode()
     req = urllib.request.Request(base + f'/v1/resources/{library}/documents', data=body, headers={
-        'Authorization': f'Bearer {TOKEN}', 'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'Authorization': AUTHORIZATION, 'Content-Type': f'multipart/form-data; boundary={boundary}',
     })
     with urllib.request.urlopen(req, timeout=10) as response:
         return json.load(response)['item']['id']
@@ -83,11 +84,16 @@ def exercise_native(base, workspace):
         time.sleep(.25)
     else:
         raise RuntimeError(f'shared embedding model could not index PDF text: {status}')
-    result = json.loads(request(base, '/v1/search?' + urllib.parse.urlencode({
-        'q': 'Standalone PDF', 'mode': 'semantic', 'workspace_id': workspace,
-    })))
-    assert result['mode'] == 'semantic', result
-    assert any(hit['id'] == item for hit in result.get('value', [])), result
+    for _ in range(240):
+        result = json.loads(request(base, '/v1/search?' + urllib.parse.urlencode({
+            'q': 'Standalone PDF', 'mode': 'semantic', 'workspace_id': workspace,
+        })))
+        assert result['mode'] == 'semantic', result
+        if any(hit['id'] == item for hit in result.get('value', [])):
+            break
+        time.sleep(.25)
+    else:
+        raise RuntimeError(f'PDF text was not searchable with the selected preset: {result}')
     # Laya must execute an actual decision from the shared assets directory.
     flow = json.loads(request(base, f'/v1/workspaces/{workspace}/workflows', {
         'name': 'Offline decision', 'definition': {'triggers': [{'type': 'manual', 'collection_id': library}],

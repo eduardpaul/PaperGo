@@ -43,7 +43,7 @@ revision, while application code is checked out at the original tag.
 
 An existing published release with no uploaded assets can receive its binaries
 if it is mutable, so creating a release through GitHub's UI also works. Completed
-published releases are successful no-ops on rerun. Only drafts may have their
+published binary releases retain their assets on rerun. Image publication is checked separately, so reruns can finish a missing GHCR image after the binary release has been published. Only drafts may have their
 assets replaced. Partially populated published releases cannot be rebuilt over
 existing files: complete them with the original build artifacts or publish a new
 version. Immutable releases missing assets require a new version. Protect `v*` tags
@@ -54,10 +54,19 @@ releases. See [GitHub's immutable release documentation](https://docs.github.com
 Use GitHub's generated release notes to list changes since the previous release.
 The release-note configuration groups feature, fix, and maintenance PRs by label.
 Version numbering is chosen by the maintainer; tagging and GitHub Releases are
-the only publishing operations. The workflow prepares downloadable binaries;
-it does not install updates on customer machines or publish Docker images.
+the only publishing operations. The workflow publishes downloadable binaries and the container image; it does not install updates on customer machines.
 The Windows archive is not Authenticode-signed; OS trust prompts
 remain possible until platform signing credentials are configured.
+
+## Container images
+
+Each release also builds the root Dockerfile on native Linux amd64 and arm64 runners. The build embeds the same `release-database.json` as the platform binaries and injects the version, commit and commit date. Verified shared models are supplied as a separate BuildKit context and image layer. OCI labels identify the source, version and revision.
+
+Candidate images are uploaded by digest with BuildKit SBOM and provenance attestations. Each exact digest is pulled and tested with production local authentication, persistent `/data`, read-only code, health, graceful shutdown, PDF rendering, OCR, Laya and both embedding models. Only after the binary and image checks pass and GitHub Releases publication succeeds does the workflow expose the tested images as `ghcr.io/eduardpaul/papergo:vX.Y.Z` (or `vX.Y.Z-rc.N`). The multi-platform index includes both native architectures and their attestations. Only the current stable GitHub release can update `latest`; retrying an older release cannot move it backwards.
+
+An existing version image is checked for its source revision and both platforms and is never replaced. A missing image can be completed by rerunning the release workflow; a published database bundle is downloaded and checksum-verified for that image-only retry. Authentication errors fail the workflow instead of being treated as absent tags. A failed image build can leave untagged candidate digests in GHCR; these are not release version tags.
+
+The registry jobs use `GITHUB_TOKEN` with `packages: write`; inspection uses `packages: read`. The package is linked to the source repository. An existing manually created package must grant this repository Actions access. GitHub creates packages as private: set the package Public after first publication if anonymous `docker pull` is intended, or keep it private and authenticate consumers with `read:packages`. See [GitHub's registry instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) and the [Docker deployment guide](https://github.com/eduardpaul/PaperGo/blob/main/docs/docker.md).
 
 ## Release-only database history
 

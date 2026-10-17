@@ -102,6 +102,7 @@ jobs:
       - name: Analyze code and tests
         run: staticcheck ./...
   docker-smoke:
+    needs: models
     name: Docker build and startup
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -109,13 +110,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-python@v5
         with:
-          go-version: '1.27.2'
-          cache: true
-      - uses: ./.github/actions/native
-      - name: Build image and smoke test
-        run: bash scripts/docker-smoke.sh
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: model-presets
+          path: .tools
+      - name: Build image and test production startup and persistence
+        run: |
+          python3 scripts/build-assets.py --output-dir container-assets/assets
+          docker build --build-context model-assets=./container-assets --tag papergo:ci-smoke .
+          python3 scripts/docker-smoke.py --image papergo:ci-smoke
   verify:
     needs: [frontend, models]
     runs-on: ubuntu-latest

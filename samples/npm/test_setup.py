@@ -74,7 +74,7 @@ class EgressTests(unittest.TestCase):
     def test_checks_dns_and_verified_https_inside_papergo(self):
         with patch.object(setup, 'compose') as compose:
             setup.verify_egress()
-        compose.assert_called_once_with('exec', '-T', 'papergo', '/papergo-admin', 'health',
+        compose.assert_called_once_with('exec', '-T', 'papergo', '/opt/papergo/papergo-admin', 'health',
                                         '--url', 'https://calendar.google.com/', '--timeout', '15s')
 
     def test_failed_egress_has_actionable_network_error(self):
