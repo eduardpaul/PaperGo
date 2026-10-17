@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Briefcase, ChevronRight, Inbox } from 'lucide-react';
+import { Briefcase, ChevronRight, FolderOpen, Inbox } from 'lucide-react';
 import { countChildren, homeQuery, meQuery, workspacesQuery } from '@/api/queries';
 import { Page } from '@/components/page';
 import { useHasScope } from '@/features/admin/common';
@@ -62,6 +62,15 @@ function InboxCard() {
         </span>
         <ChevronRight className="size-4 text-muted" />
       </Link>
+      {home.data && <Link
+        to="/w/$workspaceId/l/$listId"
+        params={{ workspaceId: home.data.workspace_id, listId: home.data.documents_library_id }}
+        className="flex items-center gap-3 border-t px-4 py-3 text-sm hover:bg-surface-muted/60"
+      >
+        <FolderOpen className="size-4 text-muted" />
+        <span className="flex-1">My documents</span>
+        <ChevronRight className="size-4 text-muted" />
+      </Link>}
     </Card>
   );
 }

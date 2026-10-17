@@ -2,12 +2,68 @@ package dms
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"papergo/ent"
 	"papergo/ent/grant"
 	"papergo/ent/itemsurface"
 )
+
+func TestMoveInboxFileToWritableFolderInAnotherWorkspace(t *testing.T) {
+	s, _, _ := fixture(t)
+	ctx := t.Context()
+	home, err := s.Home(ctx, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := s.CreateInboxDocument(ctx, "alice", "", home.InboxLibraryID, DocumentMetadata{
+		Name: "Invoice.pdf", Keywords: []string{"Finance"}, Values: map[string]any{"description": "Incoming invoice"},
+	}, content("invoice.pdf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.Create(ctx, "bob", "", CreateResource{Kind: "workspace", Name: "Team"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest, err := s.Create(ctx, "bob", team.ID, CreateResource{Name: "Team documents", TemplateKey: "documents"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder, err := s.Create(ctx, "bob", dest.ID, CreateResource{Kind: "folder", Name: "Incoming"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SetWorkspaceMember(ctx, "bob", team.ID, WorkspaceMember{Subject: "alice", Role: "visitor"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SetPermissions(ctx, "bob", folder.ID, folder.Version, Permissions{Inherit: false, Grants: []Permission{
+		{"user", "bob", "manage", "allow"}, {"user", "alice", "write", "allow"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	item := doc.Item
+	if _, err = s.MoveItem(ctx, "alice", item.ID, item.Version, MoveItem{CollectionID: dest.ID}); !errors.Is(err, ErrForbidden) {
+		t.Fatal("read-only library root accepted a move", err)
+	}
+	moved, err := s.MoveItem(ctx, "alice", item.ID, item.Version, MoveItem{CollectionID: dest.ID, ParentID: folder.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.WorkspaceID != team.ID || *moved.ContainerID != dest.ID || *moved.ParentID != folder.ID ||
+		!slices.Equal(moved.Keywords, item.Keywords) || moved.Values["description"] != "Incoming invoice" {
+		t.Fatal("file location or metadata changed incorrectly", moved)
+	}
+	blob, err := s.GetBlob(ctx, "alice", moved.ID, "")
+	if err != nil || blob.ObjectKey != doc.File.ObjectKey {
+		t.Fatal("moved file must remain readable with its original bytes", blob, err)
+	}
+	page, err := s.Browse(ctx, "alice", Browse{ParentID: home.InboxLibraryID})
+	if err != nil || len(page.Data) != 0 {
+		t.Fatal("moved file is still in Inbox", page, err)
+	}
+}
 
 func moveDestination(t *testing.T, s *Service, workspace, kind, typeID string) *ent.Resource {
 	t.Helper()

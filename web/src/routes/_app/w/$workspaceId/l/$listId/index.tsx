@@ -32,11 +32,11 @@ function CollectionRoute() {
           void navigate({
             to: '/w/$workspaceId/l/$listId',
             params: { workspaceId: moved.workspace_id, listId: destination },
-            search: { item: moved.id },
+            search: { item: moved.id, folder: moved.parent_id !== destination ? moved.parent_id : undefined },
           });
           return;
         }
-        void navigate({ search: (current) => ({ ...current, item: moved.id }) });
+        void navigate({ search: (current) => ({ ...current, item: moved.id, folder: moved.parent_id !== destination ? moved.parent_id : undefined }) });
       }}
     />
   );

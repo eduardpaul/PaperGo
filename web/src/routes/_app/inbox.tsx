@@ -171,7 +171,14 @@ function InboxPage() {
           tab={search.tab ?? 'details'}
           onTab={(tab) => void navigate({ search: (current) => ({ ...current, tab }) })}
           onClose={() => void navigate({ search: (current) => ({ ...current, item: undefined, tab: undefined }) })}
-          onMoved={() => void queryClient.invalidateQueries({ queryKey: keys.resources })}
+          onMoved={(moved) => {
+            void queryClient.invalidateQueries({ queryKey: keys.resources });
+            void navigate({
+              to: '/w/$workspaceId/l/$listId',
+              params: { workspaceId: moved.workspace_id, listId: moved.container_id! },
+              search: { item: moved.id, folder: moved.parent_id !== moved.container_id ? moved.parent_id : undefined },
+            });
+          }}
         />
       )}
     </Page>
