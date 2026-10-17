@@ -7,7 +7,7 @@ DMS and CMS application with its React frontend and Go API in one executable. Us
 [Self-hosting performance](docs/performance.md) records measured CPU, memory,
 query latency and storage costs, sizing estimates, and a reproducible load test.
 
-Building requires Go 1.26+ (CI and the Docker build use Go 1.27.2), Node.js 24 with npm, Python 3.11+, a C compiler, CMake 3.26+, pkg-config, and Atlas for schema setup. Windows also needs the Rust GNU toolchain for its static tokenizer library. Optional local tools live under `.tools/`, which is ignored by Git. No Docker or database service is required for native development.
+Building requires Go 1.27+ (CI and the Docker build use Go 1.27.2), Node.js 24 with npm, Python 3.11+, a C compiler, CMake 3.26+, pkg-config, and Atlas for schema setup. Windows also needs the Rust GNU toolchain for its static tokenizer library. Optional local tools live under `.tools/`, which is ignored by Git. No Docker or database service is required for native development.
 
 For a ready-to-use Linux development environment, open the repository in VS Code
 and run **Dev Containers: Reopen in Container**. The [development guide](docs/development.md)
