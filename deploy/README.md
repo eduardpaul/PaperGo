@@ -9,4 +9,4 @@ Sign in as `admin` with password `admin`. `config.ini` in this directory sets th
 
 Change `admin_password` before you expose the process beyond this computer. Set `[auth] mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. Environment variables override the same settings.
 
-Native libraries ship in `lib/` on Linux and macOS and beside `papergo.exe` on Windows. License notices are in `notices/`.
+Native libraries ship in `lib/` on Linux and macOS and beside `papergo.exe` on Windows. License notices are in `notices/`. Set `ONNXRUNTIME_LIB` to that ONNX Runtime library to use it. OCR stays off until `models/paddleocr` or `OCR_MODELS` is present, and a missing default model directory does not stop the server.

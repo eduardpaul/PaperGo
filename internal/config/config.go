@@ -70,6 +70,9 @@ type Config struct {
 	OCRLibrary string
 	// OCRModels is the directory of the PaddleOCR model files.
 	OCRModels string
+	// OCRModelsSet is true when OCR_MODELS was configured. The default
+	// directory may be absent; an explicit directory must exist.
+	OCRModelsSet bool
 	// OCRThreads is the CPU threads one OCR inference uses.
 	OCRThreads int
 	// Embeddings is the embedding model of semantic search
@@ -203,7 +206,12 @@ func LoadFrom(getenv func(string) string, iniText string) (Config, error) {
 		}
 		c.RunRetention = d
 	}
-	c.OCRLibrary, c.OCRModels, c.OCRThreads = lookup("ONNXRUNTIME_LIB"), value("OCR_MODELS", "models/paddleocr"), 1
+	c.OCRLibrary, c.OCRThreads = lookup("ONNXRUNTIME_LIB"), 1
+	if models := lookup("OCR_MODELS"); models != "" {
+		c.OCRModels, c.OCRModelsSet = models, true
+	} else {
+		c.OCRModels = "models/paddleocr"
+	}
 	if err := c.loadEmbeddings(); err != nil {
 		return c, err
 	}

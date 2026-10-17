@@ -19,7 +19,6 @@ import (
 	"papergo/internal/httpapi"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
-	"papergo/internal/ocr/paddle"
 	"papergo/internal/resultcache"
 	"papergo/internal/runner"
 	"papergo/internal/search"
@@ -238,13 +237,17 @@ func run(log *slog.Logger) error {
 	tools.PDF = pdfium.New()
 	log.Info("pdf reading enabled", "reader", tools.PDF.Name())
 	if c.OCRLibrary != "" {
-		engine, e := paddle.New(paddle.Config{Library: c.OCRLibrary, Models: c.OCRModels, Threads: c.OCRThreads})
+		engine, e := openOCR(c)
 		if e != nil {
-			return fmt.Errorf("configure OCR: %w", e)
+			return e
 		}
-		defer engine.Close()
-		tools.OCR = engine
-		log.Info("ocr enabled", "engine", engine.Info().Engine, "library", c.OCRLibrary, "models", c.OCRModels)
+		if engine == nil {
+			log.Info("ocr disabled", "models", c.OCRModels)
+		} else {
+			defer engine.Close()
+			tools.OCR = engine
+			log.Info("ocr enabled", "engine", engine.Info().Engine, "library", c.OCRLibrary, "models", c.OCRModels)
+		}
 	}
 	workflows := &workflow.Service{DMS: service, Tools: tools}
 	service.OnIntegrationCreated(workflows.EnsureIntegrationWorkflow)

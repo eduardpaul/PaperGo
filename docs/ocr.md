@@ -16,7 +16,7 @@ OCR is off unless the server is given ONNX Runtime:
 | Setting | Meaning |
 | --- | --- |
 | `ONNXRUNTIME_LIB` | Path of the ONNX Runtime shared library (pinned version 1.23.2). Empty turns OCR off; activities that need it fail with a message saying so. |
-| `OCR_MODELS` | Directory of the [model files](../models/paddleocr/README.md) (default `models/paddleocr`). The server checks them when it starts and loads them on first use. |
+| `OCR_MODELS` | Directory of the [model files](../models/paddleocr/README.md) (default `models/paddleocr`). When this is unset and the default directory is absent, OCR stays off and the server starts. An explicit directory must exist. A present directory is checked at startup and loaded on first use. |
 | `OCR_THREADS` | CPU threads one inference uses, 1 to 32 (default 1). |
 
 ## Results
