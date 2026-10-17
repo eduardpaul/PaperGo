@@ -6,12 +6,12 @@ import json
 import os
 from pathlib import Path
 import socket
+import platform
 import shutil
 import struct
 import sqlite3
 import subprocess
 import tempfile
-import tarfile
 import zipfile
 import time
 import urllib.error
@@ -37,7 +37,7 @@ def request(base, path, data=None, method=None):
 
 
 def upload(base, library, name, data):
-    boundary = 'papergo-standalone-smoke'
+    boundary = 'papergo-release-smoke'
     body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{name}"\r\n'
             'Content-Type: application/octet-stream\r\n\r\n').encode() + data + f'\r\n--{boundary}--\r\n'.encode()
     req = urllib.request.Request(base + f'/v1/resources/{library}/documents', data=body, headers={
@@ -71,24 +71,24 @@ def exercise_native(base, workspace):
         if preview[:4] == b'RIFF' and preview[8:12] == b'WEBP':
             break
         if b'unavailable' in preview:
-            raise RuntimeError('bundled PDF renderer could not generate a preview')
+            raise RuntimeError('packaged PDF renderer could not generate a preview')
         time.sleep(.25)
     else:
         raise RuntimeError('PDF preview did not complete')
-    # Require real document and query vectors from the selected bundled preset.
+    # Require real document and query vectors from the selected shared preset.
     for _ in range(240):
         status = json.loads(request(base, '/v1/search/status'))
         if (status.get('embeddings') or {}).get('vectors', 0) > 0:
             break
         time.sleep(.25)
     else:
-        raise RuntimeError(f'bundled embedding model could not index PDF text: {status}')
+        raise RuntimeError(f'shared embedding model could not index PDF text: {status}')
     result = json.loads(request(base, '/v1/search?' + urllib.parse.urlencode({
         'q': 'Standalone PDF', 'mode': 'semantic', 'workspace_id': workspace,
     })))
     assert result['mode'] == 'semantic', result
     assert any(hit['id'] == item for hit in result.get('value', [])), result
-    # Laya must execute an actual decision without an external model directory.
+    # Laya must execute an actual decision from the shared assets directory.
     flow = json.loads(request(base, f'/v1/workspaces/{workspace}/workflows', {
         'name': 'Offline decision', 'definition': {'triggers': [{'type': 'manual', 'collection_id': library}],
         'flow': {'start': 'decide', 'nodes': {'decide': {'activity': 'ai.decide', 'inputs': {
@@ -103,11 +103,11 @@ def exercise_native(base, workspace):
         if run['status'] == 'completed':
             break
         if run['status'] == 'failed':
-            raise RuntimeError(f'bundled Laya failed: {run}')
+            raise RuntimeError(f'shared Laya failed: {run}')
         time.sleep(.25)
     else:
-        raise RuntimeError(f'bundled Laya workflow did not complete: {run}')
-    # A blank PNG exercises ONNX Runtime and the bundled PaddleOCR models.
+        raise RuntimeError(f'shared Laya workflow did not complete: {run}')
+    # A blank PNG exercises ONNX Runtime and the shared PaddleOCR models.
     flow = json.loads(request(base, f'/v1/workspaces/{workspace}/workflow-builtins/documents.optimize',
                               {'collection_id': library, 'enabled': True}, method='PUT'))
     def chunk(kind, data):
@@ -120,13 +120,13 @@ def exercise_native(base, workspace):
         if runs and runs[0]['status'] == 'completed':
             break
         if runs and runs[0]['status'] == 'failed':
-            raise RuntimeError(f'bundled OCR failed: {runs[0]}')
+            raise RuntimeError(f'shared OCR failed: {runs[0]}')
         time.sleep(.25)
     else:
-        raise RuntimeError('bundled OCR workflow did not complete')
+        raise RuntimeError('shared OCR workflow did not complete')
 
 
-def exercise(binary, admin, directory, expected_version=None, model='embeddinggemma-2', cache=None):
+def exercise(binary, admin, directory, expected_version=None, model='embeddinggemma-2'):
     directory.mkdir(parents=True, exist_ok=True)
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -136,7 +136,6 @@ def exercise(binary, admin, directory, expected_version=None, model='embeddingge
                ADMIN_SUBJECT="smoke-admin", DEV_SUBJECT="smoke-admin", HTTP_ADDR=f"127.0.0.1:{port}",
                DATABASE_PATH=str(directory / "papergo.db"), BLOB_PATH=str(directory / "blobs"),
                SEARCH_STORE='zvec', SEARCH_ZVEC_PATH=str(directory / 'zvec'),
-               XDG_CACHE_HOME=str(cache or directory / 'cache'), LOCALAPPDATA=str(cache or directory / 'cache'),
                AI_EMBEDDINGS_PROVIDER='local', AI_EMBEDDINGS_MODEL=model)
     for name in ('ONNXRUNTIME_LIB', 'OCR_MODELS', 'AI_DECISION_MODELS_PATH', 'AI_EMBEDDINGS_MODELS_PATH',
                  'PAPERGO_CONFIG', 'LD_LIBRARY_PATH', 'DYLD_LIBRARY_PATH'):
@@ -191,62 +190,59 @@ def exercise(binary, admin, directory, expected_version=None, model='embeddingge
         assert not db.execute("PRAGMA foreign_key_check").fetchall()
 
 
+def extract_zip(path, directory):
+    with zipfile.ZipFile(path) as archive:
+        archive.extractall(directory)
+        if os.name != 'nt':
+            for entry in archive.infolist():
+                mode = (entry.external_attr >> 16) & 0o777
+                if mode:
+                    (directory / entry.filename).chmod(mode)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group()
-    source.add_argument('--binary', type=Path, help='Smoke test a local standalone build instead of a release archive')
-    source.add_argument('--archive', type=Path, help='Smoke test a specific release archive')
-    parser.add_argument('--admin', type=Path, help='Also test this standalone maintenance executable with --binary')
+    source.add_argument('--bin-dir', type=Path, help='Smoke test a local build directory including assets')
+    source.add_argument('--archive', type=Path, help='Smoke test a specific platform ZIP')
+    parser.add_argument('--assets', type=Path, help='Shared assets ZIP to extract beside the executables')
     args = parser.parse_args()
-    if args.admin and not args.binary:
-        parser.error('--admin requires --binary')
-    if args.binary:
-        with tempfile.TemporaryDirectory(prefix='papergo-standalone-smoke-') as temporary:
-            directory = Path(temporary)
-            binary = directory / args.binary.name
-            shutil.copy2(args.binary, binary)
-            admin = None
-            if args.admin:
-                admin = directory / args.admin.name
-                shutil.copy2(args.admin, admin)
-            exercise(binary, admin, directory)
-            exercise(binary, None, directory / 'harrier', model='harrier-oss-v1-0.6b', cache=directory / 'cache')
-        print('Single-file startup, UI, zvec, PDF rendering, PaddleOCR, Laya and both embedding presets passed.')
-        return
-    suffix = ".exe" if os.name == "nt" else ""
-    archives = [args.archive] if args.archive else sorted((ROOT / 'dist').glob('papergo_*.zip' if os.name == 'nt' else 'papergo_*.tar.gz'))
-    if len(archives) != 1:
-        raise ValueError('Expected one packaged release archive')
-    package = tempfile.TemporaryDirectory(prefix='papergo-release-package-')
-    import atexit
-    atexit.register(package.cleanup)
-    directory = Path(package.name)
-    if os.name == 'nt':
-        with zipfile.ZipFile(archives[0]) as archive:
-            archive.extractall(directory)
-    else:
-        with tarfile.open(archives[0]) as archive:
-            archive.extractall(directory, filter='data')
-    binary = directory / f"papergo{suffix}"
-    admin = directory / f"papergo-admin{suffix}"
-    bundle = json.loads((directory / "release-database.json").read_text())
-    current = bundle["releases"][-1]
-    assert not (directory / 'lib').exists(), 'Release unexpectedly contains external native libraries'
-    with tempfile.TemporaryDirectory(prefix="papergo-release-smoke-") as temp:
-        fresh = (Path(temp) / "fresh").resolve()
-        fresh.mkdir()
-        # Copy only the executables: neither configuration nor neighboring
-        # files from the extracted release may supply runtime dependencies.
-        copied, copied_admin = fresh / binary.name, fresh / admin.name
-        shutil.copy2(binary, copied)
-        shutil.copy2(admin, copied_admin)
-        for executable in (copied, copied_admin):
-            env = dict(os.environ, XDG_CACHE_HOME=str(fresh / 'cache'), LOCALAPPDATA=str(fresh / 'cache'))
-            assert current['version'] in subprocess.check_output([str(executable), '--version'], env=env, cwd=fresh, text=True)
-        exercise(copied, copied_admin, fresh, current["schema_hash"])
-        exercise(copied, None, fresh / 'harrier', current['schema_hash'], model='harrier-oss-v1-0.6b', cache=fresh / 'cache')
-    print("Self-contained binaries, versions, UI, zvec, PDF previews, PaddleOCR, Laya, both embedding presets and backup passed.")
+    suffix = '.exe' if os.name == 'nt' else ''
+    with tempfile.TemporaryDirectory(prefix='papergo-release-package-') as temporary:
+        directory = Path(temporary)
+        package = directory / 'application with spaces'
+        if args.bin_dir:
+            shutil.copytree(args.bin_dir, package)
+            current = None
+        else:
+            if not args.assets:
+                parser.error('--assets is required when testing a platform ZIP')
+            system = platform.system().lower()
+            arch = 'arm64' if platform.machine().lower() in ('aarch64', 'arm64') else 'amd64'
+            archives = [args.archive] if args.archive else sorted((ROOT / 'dist').glob(f'papergo_*_{system}_{arch}.zip'))
+            if len(archives) != 1:
+                raise ValueError('Expected one packaged platform ZIP')
+            extract_zip(archives[0], package)
+            assert not (package / 'assets').exists(), 'Models must ship in the shared assets ZIP'
+            bundle = json.loads((package / 'release-database.json').read_text())
+            current = bundle['releases'][-1]
+        if args.assets:
+            extract_zip(args.assets, package)
+        assert (package / 'assets/models/paddleocr').is_dir()
+        assert (package / 'assets/models/laya').is_dir()
+        for preset in ('embeddinggemma-2', 'harrier-oss-v1-0.6b'):
+            assert (package / 'assets/models/embedding' / preset).is_dir()
+        binary, admin = package / f'papergo{suffix}', package / f'papergo-admin{suffix}'
+        for executable in (binary, admin):
+            version = subprocess.check_output([str(executable), '--version'], cwd=directory, text=True)
+            assert (current['version'] if current else 'PaperGo') in version
+        # Use an unrelated working directory: native libraries and shared models
+        # must be found beside the executable without development loader paths.
+        expected = current['schema_hash'] if current else None
+        exercise(binary, admin, directory / 'fresh', expected)
+        exercise(binary, None, directory / 'harrier', expected, model='harrier-oss-v1-0.6b')
+    print('Platform binaries plus shared assets: versions, UI, zvec, PDF previews, PaddleOCR, Laya, both embedding presets and backup passed.')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

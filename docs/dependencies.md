@@ -47,7 +47,7 @@ HTTPS iCalendar integrations use `github.com/emersion/go-ical` for RFC 5545 deco
 
 ## Native search
 
-The optional [zvec store](search.md#the-store) uses the official v0.7.0 C API SDK and the Go binding's string-array fix from `eduardpaul/zvec-go`. `scripts/native.json` pins the prebuilt SDK archives for Linux amd64/arm64, macOS ARM64 and Windows amd64. PaperGo does not patch or compile zvec sources. Native libraries and notices are embedded in the self-contained executables used by release archives and the Docker image. They are extracted into the private runtime cache at startup. The SDK includes compiler runtime libraries under the GCC Runtime Library Exception; their license texts ship alongside the dependency notices.
+The optional [zvec store](search.md#the-store) uses the official v0.7.0 C API SDK and the Go binding's string-array fix from `eduardpaul/zvec-go`. `scripts/native.json` pins the prebuilt SDK archives for Linux amd64/arm64, macOS ARM64 and Windows amd64. PaperGo does not patch or compile zvec sources. Platform release ZIPs carry native libraries and notices beside the executables (`lib/` on Linux, DLLs beside the EXEs on Windows). The Docker image uses the same layout under `/opt/papergo`. Models and their notices ship in the platform-independent assets ZIP. The SDK includes compiler runtime libraries under the GCC Runtime Library Exception; their license texts ship alongside the dependency notices.
 
 | Bundled component | License |
 | --- | --- |

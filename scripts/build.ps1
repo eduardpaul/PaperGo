@@ -1,4 +1,4 @@
-param([string]$Output = 'bin/papergo.exe')
+param([string]$OutputDirectory = 'bin')
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $taskRoot
@@ -16,7 +16,7 @@ if (Test-Path -LiteralPath $taskGo) {
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & npm --prefix web run build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$taskOutputDirectory = Split-Path -Parent $Output
-if ($taskOutputDirectory) { New-Item -ItemType Directory -Force -Path $taskOutputDirectory | Out-Null }
-& python scripts/build-standalone.py --output $Output
+& python scripts/build-binaries.py --output-dir $OutputDirectory
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& python scripts/build-assets.py --output-dir (Join-Path $OutputDirectory 'assets')
 exit $LASTEXITCODE

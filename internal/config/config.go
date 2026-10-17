@@ -10,6 +10,7 @@ import (
 	"papergo/internal/identity"
 	"papergo/internal/search"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -118,6 +119,14 @@ func Load() (Config, error) {
 // LoadFrom builds configuration from YAML text and getenv. Tests pass the
 // documented file and a map-backed getenv; Load uses the process environment.
 func LoadFrom(getenv func(string) string, yamlText string) (Config, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return Config{}, fmt.Errorf("find executable directory: %w", err)
+	}
+	return loadFrom(getenv, yamlText, filepath.Dir(executable))
+}
+
+func loadFrom(getenv func(string) string, yamlText, directory string) (Config, error) {
 	file, err := parseYAML(yamlText)
 	if err != nil {
 		return Config{}, err
@@ -207,15 +216,28 @@ func LoadFrom(getenv func(string) string, yamlText string) (Config, error) {
 		c.RunRetention = d
 	}
 	c.OCRLibrary, c.OCRThreads = lookup("ONNXRUNTIME_LIB"), 1
-	if models := lookup("OCR_MODELS"); models != "" {
-		c.OCRModels, c.OCRModelsSet = models, true
-	} else {
-		c.OCRModels = "models/paddleocr"
+	if c.OCRLibrary == "" {
+		library := filepath.Join(directory, "lib", "libonnxruntime.so")
+		switch runtime.GOOS {
+		case "windows":
+			library = filepath.Join(directory, "onnxruntime.dll")
+		case "darwin":
+			library = filepath.Join(directory, "lib", "libonnxruntime.dylib")
+		}
+		if info, err := os.Stat(library); err == nil && info.Mode().IsRegular() {
+			c.OCRLibrary = library
+		}
 	}
-	if err := c.loadEmbeddings(); err != nil {
+	models := filepath.Join(directory, "assets", "models")
+	if configured := lookup("OCR_MODELS"); configured != "" {
+		c.OCRModels, c.OCRModelsSet = configured, true
+	} else {
+		c.OCRModels = filepath.Join(models, "paddleocr")
+	}
+	if err := c.loadEmbeddings(models); err != nil {
 		return c, err
 	}
-	if err := c.loadDecisions(); err != nil {
+	if err := c.loadDecisions(models); err != nil {
 		return c, err
 	}
 	if err := c.loadChat(); err != nil {
@@ -472,7 +494,7 @@ func value(key, fallback string) string {
 // threads and token limit, with ONNX Runtime from ONNXRUNTIME_LIB and a
 // statically linked tokenizer; for openai, an endpoint and an API key
 // file.
-func (c *Config) loadEmbeddings() error {
+func (c *Config) loadEmbeddings(models string) error {
 	e := ai.EmbeddingsConfig{Provider: strings.ToLower(value("AI_EMBEDDINGS_PROVIDER", ai.ProviderNone)), Model: os.Getenv("AI_EMBEDDINGS_MODEL")}
 	numbers := []struct {
 		key      string
@@ -485,7 +507,7 @@ func (c *Config) loadEmbeddings() error {
 		return nil
 	case ai.ProviderLocal:
 		e.Model = value("AI_EMBEDDINGS_MODEL", "embeddinggemma-2")
-		e.Models = value("AI_EMBEDDINGS_MODELS_PATH", filepath.Join("models", "embedding", e.Model))
+		e.Models = value("AI_EMBEDDINGS_MODELS_PATH", filepath.Join(models, "embedding", e.Model))
 		e.Library = c.OCRLibrary
 		if e.Library == "" {
 			return fmt.Errorf("AI_EMBEDDINGS_PROVIDER=local requires ONNXRUNTIME_LIB")
@@ -597,8 +619,14 @@ func readAPIKey(path string) (string, error) {
 	return key, nil
 }
 
-func (c *Config) loadDecisions() error {
+func (c *Config) loadDecisions(models string) error {
 	d := decision.Config{Models: os.Getenv("AI_DECISION_MODELS_PATH"), Library: c.OCRLibrary}
+	if d.Models == "" {
+		path := filepath.Join(models, "laya")
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			d.Models = path
+		}
+	}
 	if d.Models == "" {
 		return nil
 	}

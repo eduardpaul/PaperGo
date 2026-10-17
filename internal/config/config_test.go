@@ -201,7 +201,8 @@ func TestEmbeddingsConfig(t *testing.T) {
 		t.Setenv("ONNXRUNTIME_LIB", "/opt/ort/libonnxruntime.so")
 		t.Setenv("AI_EMBEDDINGS_THREADS", "4")
 		c, err := Load()
-		if err != nil || c.Embeddings.Model != "embeddinggemma-2" || c.Embeddings.Models != filepath.Join("models", "embedding", "embeddinggemma-2") || c.Embeddings.Threads != 4 || c.Embeddings.Dimensions != 256 {
+		executable, _ := os.Executable()
+		if err != nil || c.Embeddings.Model != "embeddinggemma-2" || c.Embeddings.Models != filepath.Join(filepath.Dir(executable), "assets", "models", "embedding", "embeddinggemma-2") || c.Embeddings.Threads != 4 || c.Embeddings.Dimensions != 256 {
 			t.Fatalf("%+v %v", c.Embeddings, err)
 		}
 		t.Setenv("AI_EMBEDDINGS_DIMENSIONS", "300")

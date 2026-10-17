@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare every offline preset used by the standalone executable."""
+"""Prepare every offline preset for the shared assets directory."""
 import argparse
 import hashlib
 import json

@@ -2,13 +2,32 @@
 
 DMS and CMS application with its React frontend and Go API in one executable. Uses **SQLite**, **Ent** for data access, and **Atlas** for reviewed, versioned migrations. One organization per deployment, with multiple workspaces. The API is a modular monolith with immutable content/schema revisions, derived read projections, and local immutable blob storage. [Architecture decisions](docs/architecture.md) explain the extension boundaries. [Application foundation](docs/application-foundation.md) documents rich fields, templates, views, taxonomy, typed relationships, and exclusive permission scopes. [Search](docs/search.md) finds items and folders across workspaces, trimmed by permissions. [Workflows](docs/workflows.md) are how anything happens after a change or on a schedule: triggers, conditions and flows of activities that people can change, including the built-in processes PaperGo ships, run durably by an embedded runner.
 
-## Standalone executable
+## Install from a release
 
-`papergo` (or `papergo.exe`) is the only file needed to run the application. It contains the web UI, database schema, zvec, PDFium, ONNX Runtime, PaddleOCR, Laya FP32, EmbeddingGemma 2 and Harrier Q4 models, compiler runtimes and license notices. Copy it to a directory, run it, and open http://localhost:8080. The first start creates the database automatically; no separate migration program, Node.js or Python installation is needed at runtime.
+Download the ZIP for your platform and `papergo_vX.Y.Z_assets.zip` from the same release. Extract the platform ZIP, then extract the shared ZIP into that directory. The resulting `assets/` folder belongs beside `papergo` (or `papergo.exe`) and `config.yaml`:
 
-The executable unpacks its native runtime into a private, content-addressed cache on first launch and verifies cached files on subsequent launches. The cache is under `papergo/runtime` in the OS user cache directory (`$XDG_CACHE_HOME` or `~/.cache` on Linux, `~/Library/Caches` on macOS, `%LocalAppData%` on Windows). It needs writable space and permission to execute native code; the Docker image uses `/data/.cache`. Native notices are in the extracted runtime's `notices` directory. The web server reads its embedded assets directly without extracting individual HTML, JavaScript or CSS files. OCR and local workflow decisions use the bundled models automatically. Set `AI_EMBEDDINGS_PROVIDER=local` and select `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b` to enable local semantic search. No model downloads occur at runtime. `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` select explicit alternatives. Allow about 2 GiB for the extracted runtime in addition to the executable. Linux builds require the target system's glibc; the C++ runtime is bundled.
+```text
+papergo/                 # your installation directory
+  papergo[.exe]
+  papergo-admin[.exe]
+  config.yaml
+  lib/                   # Linux native libraries; Windows DLLs sit beside the EXEs
+  notices/
+  assets/
+    models/
+      paddleocr/
+      laya/
+      embedding/
+        embeddinggemma-2/
+        harrier-oss-v1-0.6b/
+    notices/
+```
 
-Configuration is optional. The sample `config.yaml` listens on port 8080, signs in a local administrator (`admin` / `admin`), and stores the database, files and zvec index under `./data`. Set the initial password before the first start. Set `auth.mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. Non-empty environment variables override matching settings in `config.yaml`. Release archives include the optional configuration, operator documentation and the independently self-contained `papergo-admin` maintenance tool.
+Run the executable from that directory and open http://localhost:8080. The first start creates the database automatically. Node.js and Python are not needed at runtime. Linux amd64/arm64 and Windows amd64 release builds are enabled; macOS builds are temporarily disabled.
+
+The binary ZIP includes the web UI, database schema, native libraries, compiler runtimes and their license notices. The shared ZIP contains PaddleOCR, Laya FP32, EmbeddingGemma 2 and Harrier Q4 models, tokenizers and model notices, and works with every platform. Native libraries and models are read directly from the installation; model paths are resolved beside the executable even when started from another working directory. The web UI stays embedded in the executable. OCR and local workflow decisions use the shared models automatically. Set `AI_EMBEDDINGS_PROVIDER=local` and select `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b` for local semantic search. Inference never downloads models. `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` select explicit alternatives. Linux builds require the target system's glibc.
+
+Configuration is optional. The sample `config.yaml` listens on port 8080, signs in a local administrator (`admin` / `admin`), and stores the database, files and zvec index under `./data`. Set the initial password before the first start. Set `auth.mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. Non-empty environment variables override matching settings in `config.yaml`. Release archives include the optional configuration, operator documentation and the `papergo-admin` maintenance tool, which shares the native libraries.
 
 See the [sample YAML configuration](deploy/config.yaml) for the supported sections. Unknown fields, duplicate keys and multiple YAML documents are rejected. Quote password values; `auth.admin_password: ""` or `null` prompts securely on an interactive first start and fails on a non-interactive one. Proxy configuration uses a YAML list for `auth.proxy_trusted_cidrs`.
 
@@ -60,7 +79,7 @@ To build the deployable executable from the repository root:
 bash scripts/build.sh
 ```
 
-On Windows, run `./scripts/build.ps1`. The scripts install the locked frontend dependencies, build the UI, and compile it into `bin/papergo` or `bin/papergo.exe`. The resulting executable includes its native libraries, every preset model and notices. Preparing Laya from scratch requires Docker for the pinned Linux CPU exporter; it is cached under `.tools/decision/model`. To use an existing verified Laya directory/archive or HTTPS artifact instead, run `python3 scripts/prepare-preset-models.py --laya-bundle PATH_OR_URL` before the build. The build downloads and verifies both embedding presets and their model cards once. You can copy `bin/papergo` or `bin/papergo.exe` alone and run it without sourcing an environment script. Release archives also provide optional `config.yaml` and operator documentation. For local Go commands, first run `python3 scripts/native.py` and source `.tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`). Node.js, npm, a separate web server and the `web/` directory are not needed at runtime. The Docker build produces the same embedded application.
+On Windows, run `./scripts/build.ps1`. These scripts install the locked frontend dependencies, build the UI, then run `scripts/build-binaries.py` and `scripts/build-assets.py`. The `bin/` directory contains both executables, their native libraries and `assets/`; copy the whole directory to deploy it. Preparing Laya from scratch requires Docker for the pinned Linux CPU exporter, cached under `.tools/decision/model`. To use an existing verified Laya directory/archive or HTTPS artifact, run `python3 scripts/prepare-preset-models.py --laya-bundle PATH_OR_URL` before building. Asset preparation also downloads and verifies both embedding presets and their model cards. Binary compilation alone needs no model downloads: `python3 scripts/build-binaries.py`. For local Go commands, first run `python3 scripts/native.py` and source `.tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`). The Docker image uses the same executable, native-library and shared-assets layout under `/opt/papergo`.
 
 For frontend development with hot reload, run this from `web/` alongside PaperGo:
 

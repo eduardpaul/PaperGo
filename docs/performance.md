@@ -277,8 +277,8 @@ npm --prefix web run build
 mkdir -p .cache/performance
 python3 scripts/native.py
 source .tools/native/env.sh
-python3 scripts/build-standalone.py --output .cache/performance/papergo
-python3 scripts/build-standalone.py --command admin --output .cache/performance/papergo-admin
+python3 scripts/build-binaries.py --output-dir .cache/performance
+python3 scripts/build-assets.py --output-dir .cache/performance/assets
 go test -c -o .cache/performance/dms.test ./internal/dms
 ```
 

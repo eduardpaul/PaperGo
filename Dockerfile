@@ -49,17 +49,16 @@ COPY --from=laya-model / /src/.tools/decision/model/
 COPY --from=frontend /src/web/dist ./web/dist
 RUN --mount=type=cache,target=/root/.cache/go-build \
     . .tools/native/env.sh \
-    && python3 scripts/build-standalone.py --output /out/papergo \
-    && python3 scripts/build-standalone.py --command admin --output /out/papergo-admin \
+    && python3 scripts/build-binaries.py --output-dir /out \
+    && python3 scripts/build-assets.py --output-dir /out/assets \
     && mkdir -p /state/blobs
 
 FROM gcr.io/distroless/cc-debian12:nonroot
-COPY --from=build /out/papergo /papergo
-COPY --from=build /out/papergo-admin /papergo-admin
+WORKDIR /opt/papergo
+COPY --from=build /out/ /opt/papergo/
 COPY migrations /schema
 COPY --from=build --chown=65532:65532 /state /data
 USER 65532:65532
-ENV HTTP_ADDR=0.0.0.0:8080 DATABASE_PATH=/data/papergo.db BLOB_PATH=/data/blobs APP_ENV=production \
-    XDG_CACHE_HOME=/data/.cache
+ENV HTTP_ADDR=0.0.0.0:8080 DATABASE_PATH=/data/papergo.db BLOB_PATH=/data/blobs APP_ENV=production
 EXPOSE 8080
-ENTRYPOINT ["/papergo"]
+ENTRYPOINT ["/opt/papergo/papergo"]

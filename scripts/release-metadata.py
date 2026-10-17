@@ -34,13 +34,13 @@ def select_previous(tag, releases):
 
 def expected_assets(tag):
     return {
-        f"papergo_{tag}_{platform}_{arch}.{extension}"
-        for platform, arch, extension in [
-            ("linux", "amd64", "tar.gz"), ("linux", "arm64", "tar.gz"),
-            ("darwin", "arm64", "tar.gz"),
-            ("windows", "amd64", "zip"),
+        f"papergo_{tag}_{platform}_{arch}.zip"
+        for platform, arch in [
+            ("linux", "amd64"), ("linux", "arm64"),
+            ("windows", "amd64"),
+            # ("darwin", "arm64"),
         ]
-    } | {"release-database.json", "SHA256SUMS"}
+    } | {f"papergo_{tag}_assets.zip", "release-database.json", "SHA256SUMS"}
 
 
 def release_state(tag, releases):
@@ -72,7 +72,7 @@ def publish(tag, previous, state, directory):
     directory = Path(directory)
     paths = {p.name: p for p in directory.iterdir() if p.is_file()}
     if set(paths) != expected_assets(tag) or any(p.stat().st_size == 0 for p in paths.values()):
-        raise ValueError("Publication requires all four archives, the database bundle and SHA256SUMS")
+        raise ValueError("Publication requires all three binary ZIPs, the shared assets ZIP, the database bundle and SHA256SUMS")
     if state == "new":
         args = ["gh", "release", "create", tag, "--draft", "--verify-tag",
                 "--title", f"PaperGo {tag}", "--generate-notes"]

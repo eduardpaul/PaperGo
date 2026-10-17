@@ -5,4 +5,4 @@
 - EmbeddingGemma 2: Google DeepMind, Apache-2.0 (`Apache-2.0.txt`). The pinned ONNX Community export and upstream model card are in `models/embedding/embeddinggemma-2/README.md`.
 - Harrier-OSS-v1-0.6B: Microsoft, MIT (`Harrier-MIT.txt`). The pinned ONNX Community export and upstream model card are in `models/embedding/harrier-oss-v1-0.6b/README.md`.
 
-Model cards identify the original authors and include usage guidance and source links. Model/tokenizer revisions and hashes are pinned in the PaperGo build sources; each executable also carries a SHA-256 runtime manifest.
+Model cards identify the original authors and include usage guidance and source links. Model/tokenizer revisions and hashes are pinned in the PaperGo build sources. The release's `SHA256SUMS` covers the shared assets ZIP.

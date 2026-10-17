@@ -85,7 +85,8 @@ def environment(output, system):
     lib = (output / 'lib').as_posix()
     flags = [f'-L{lib}', '-lwebp', '-lsharpyuv', '-lm']
     if system == 'linux':
-        flags += ['-Wl,-rpath,$ORIGIN/lib', '-Wl,-rpath,/usr/lib/papergo']
+        # RPATH also resolves dependencies of the shipped shared libraries.
+        flags += ['-Wl,--disable-new-dtags', '-Wl,-rpath,$ORIGIN/lib']
     elif system == 'darwin':
         flags += ['-Wl,-rpath,@loader_path/lib']
     elif system == 'windows':
@@ -93,7 +94,8 @@ def environment(output, system):
         flags += ['-lntdll']
     env = {'CGO_ENABLED': '1', 'CGO_CFLAGS': shlex.join([f'-I{(output / "include").as_posix()}']),
            'CGO_LDFLAGS': shlex.join(flags), 'PKG_CONFIG_PATH': str(output / 'lib/pkgconfig'),
-           'ONNXRUNTIME_LIB': str(output / 'lib' / {'linux': 'libonnxruntime.so', 'darwin': 'libonnxruntime.dylib', 'windows': 'onnxruntime.dll'}[system])}
+           'ONNXRUNTIME_LIB': str(output / 'lib' / {'linux': 'libonnxruntime.so', 'darwin': 'libonnxruntime.dylib', 'windows': 'onnxruntime.dll'}[system]),
+           'OCR_MODELS': str(ROOT / 'models/paddleocr')}
     # The native loader uses this for local Go tests and development executables.
     loader = {'linux': 'LD_LIBRARY_PATH', 'darwin': 'DYLD_LIBRARY_PATH', 'windows': 'PATH'}[system]
     previous = os.environ.get(loader, '')

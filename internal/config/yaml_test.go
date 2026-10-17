@@ -50,7 +50,11 @@ func TestDefaultsAreLocalZvecOnLocalhost(t *testing.T) {
 	if c.Address != "127.0.0.1:8080" || c.AuthMode != "local" || c.AdminSubject != "admin" || c.AdminPassword != "admin" || c.SearchStore != "zvec" {
 		t.Fatalf("defaults address %s mode %s user %s store %s", c.Address, c.AuthMode, c.AdminSubject, c.SearchStore)
 	}
-	if c.OCRModelsSet || c.OCRModels != "models/paddleocr" {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.OCRModelsSet || c.OCRModels != filepath.Join(filepath.Dir(executable), "assets", "models", "paddleocr") {
 		t.Fatalf("default OCR models set=%v path=%s", c.OCRModelsSet, c.OCRModels)
 	}
 	t.Logf("default address %s mode %s user %s password %s store %s ocr models %s set %v", c.Address, c.AuthMode, c.AdminSubject, c.AdminPassword, c.SearchStore, c.OCRModels, c.OCRModelsSet)

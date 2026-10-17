@@ -24,7 +24,7 @@ trap cleanup EXIT
 docker build --tag papergo:ci-smoke .
 # Check both executables in the final image before database or port setup.
 docker run --rm papergo:ci-smoke --version
-docker run --rm --entrypoint /papergo-admin papergo:ci-smoke --version
+docker run --rm --entrypoint /opt/papergo/papergo-admin papergo:ci-smoke --version
 if ! go run ./cmd/admin initialize --database "$task_dir/papergo.db" --schema migrations > "$task_dir/migrations.log" 2>&1; then
   cat "$task_dir/migrations.log" >&2
   exit 1

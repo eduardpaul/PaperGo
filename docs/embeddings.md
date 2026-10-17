@@ -24,7 +24,7 @@ Other deployment choices add costs for this app:
 
 ## Install and try
 
-The standalone executable and Docker image include both text-only Q4 presets and their tokenizers. Set `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b`; the launcher selects the extracted model automatically. `AI_EMBEDDINGS_MODELS_PATH` selects an explicit alternative. Inference never downloads models. For direct Go development commands, install the assets below; Python 3.11+ is needed only for build-time installation and the comparison harness. The installer verifies pinned revisions and SHA-256 checksums, including cached files.
+The shared assets ZIP includes both text-only Q4 presets and their tokenizers under `assets/models/embedding/`. Extract it beside the executable. The Docker image includes the same directory layout. Set `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` (default) or `harrier-oss-v1-0.6b`; the application selects the matching adjacent model directory automatically. `AI_EMBEDDINGS_MODELS_PATH` selects an explicit alternative. Inference never downloads models. For direct Go development commands, install the assets below; Python 3.11+ is needed only for build-time installation and the comparison harness. The installer verifies pinned revisions and SHA-256 checksums, including cached files.
 
 ```bash
 python3 scripts/native.py

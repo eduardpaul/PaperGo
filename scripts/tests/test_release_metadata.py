@@ -38,6 +38,13 @@ class ReleaseMetadataTests(unittest.TestCase):
             {"tag_name": "v0.1.0"}, {"tag_name": "v0.2.0"},
         ]), "v0.1.0")
 
+    def test_asset_contract_includes_shared_zip_and_enabled_platforms(self):
+        self.assertEqual(metadata.expected_assets("v0.2.0"), {
+            "papergo_v0.2.0_linux_amd64.zip", "papergo_v0.2.0_linux_arm64.zip",
+            "papergo_v0.2.0_windows_amd64.zip", "papergo_v0.2.0_assets.zip",
+            "release-database.json", "SHA256SUMS",
+        })
+
     def test_release_states(self):
         tag = "v0.1.0"
         self.assertEqual(metadata.release_state(tag, []), "new")

@@ -18,12 +18,14 @@ git push origin v0.1.0
 Use `vX.Y.Z` for stable releases and `vX.Y.Z-rc.N` for release candidates.
 The release workflow runs the existing CI and vulnerability workflows against
 that tag, validates a forward-only published history, and prepares the database
-bundle. It builds and runs native smoke tests for Linux amd64/arm64, macOS Apple Silicon, and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
+bundle. It builds and runs native smoke tests for Linux amd64/arm64 and Windows amd64, using [GitHub hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Each archive includes `papergo`,
 `papergo-admin`, the database bundle and this guide. Both executables support
 `--version`; version, commit and commit date are injected into the build.
-Each executable is self-contained: its native libraries, compiler runtimes and license notices are embedded, and `papergo` also embeds every model preset: PaddleOCR, Laya multilingual FP32, EmbeddingGemma 2 Q4 and Harrier Q4. A small Go launcher verifies and unpacks this runtime into a private OS user cache before starting the native application. Copying the executable alone is enough; no neighboring library directory or environment script is required. Cached files are keyed by the bundle's SHA-256 and checked before execution. Linux needs the target system's glibc; macOS and Windows use their OS-provided system libraries. WebP and tokenizers are statically linked into the native application. PDF text reading, OCR and local decisions are enabled in standalone builds. Local embeddings are available with `AI_EMBEDDINGS_PROVIDER=local`; choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. Explicit `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` settings select alternative inference assets. Allow about 2 GiB for the extracted runtime in addition to the executable. The build prepares and checksum-verifies all models before packaging; CI exports Laya on Linux once and shares the verified model artifact with all native builds. The Docker image runs the same bundled executables and keeps their runtime cache in `/data/.cache`.
+Each platform ZIP includes the executables, native libraries, compiler runtimes, license notices, sample `config.yaml` and operator documentation. Linux libraries live in `lib/`; Windows DLLs sit beside the executables. macOS release and native CI builds are temporarily commented out.
 
-Publication creates a draft, uploads all four archives plus
+One platform-independent `papergo_vX.Y.Z_assets.zip` contains PaddleOCR, Laya multilingual FP32, EmbeddingGemma 2 Q4 and Harrier Q4 models, tokenizers and model notices. Extract it into the platform installation directory: `assets/` must sit beside the main executable and `config.yaml`. The application finds native libraries and models relative to its executable and loads them directly from disk. The web UI and database schema remain embedded. Linux requires the target system's glibc; WebP and tokenizers are statically linked. OCR and local decisions use the shared assets automatically. For local embeddings set `AI_EMBEDDINGS_PROVIDER=local` and choose `AI_EMBEDDINGS_MODEL=embeddinggemma-2` or `harrier-oss-v1-0.6b`. Explicit `ONNXRUNTIME_LIB`, `OCR_MODELS`, `AI_DECISION_MODELS_PATH` and `AI_EMBEDDINGS_MODELS_PATH` settings select alternative inference assets. CI prepares and checksum-verifies the models once on Linux, packages one shared ZIP, and tests each platform ZIP with those same assets. The Docker image uses the same directory layout under `/opt/papergo`.
+
+Publication creates a draft, uploads all three platform ZIPs and the shared assets ZIP plus
 `release-database.json` and `SHA256SUMS`, then publishes it. Stable releases become
 Latest; release candidates are marked as prereleases. No personal access token
 is required: the publication job uses GitHub's repository token with
@@ -54,7 +56,7 @@ The release-note configuration groups feature, fix, and maintenance PRs by label
 Version numbering is chosen by the maintainer; tagging and GitHub Releases are
 the only publishing operations. The workflow prepares downloadable binaries;
 it does not install updates on customer machines or publish Docker images.
-The archives are not Authenticode-signed or Apple-notarized; OS trust prompts
+The Windows archive is not Authenticode-signed; OS trust prompts
 remain possible until platform signing credentials are configured.
 
 ## Release-only database history
@@ -100,8 +102,10 @@ bundle. Omit `--previous` for the first release.
 
 ## Install or upgrade
 
-Download the archive for your OS/CPU and verify it against `SHA256SUMS` from the
-same GitHub release. Extract it to an application directory separate from data.
+Download the ZIP for your OS/CPU and the shared assets ZIP from the same release,
+and verify both against `SHA256SUMS`. Extract both into the same application
+directory, separate from data. Keep the resulting `assets/` beside `config.yaml`
+and the executables.
 Set the normal production authentication and storage configuration from the
 README. A fresh published binary creates its schema automatically.
 
@@ -110,8 +114,9 @@ For an upgrade:
 1. Take a full backup with the currently installed `papergo-admin backup`,
    including the referenced blob files, and keep that binary for recovery.
 2. Stop the PaperGo service and wait for its process to exit.
-3. Replace the executables with those from the new release, keeping the same
-   `DATABASE_PATH`, `BLOB_PATH` and authentication configuration.
+3. Install the executables, native libraries and matching `assets/` from the new
+   platform and shared assets ZIPs. Retain your `config.yaml`, `DATABASE_PATH`,
+   `BLOB_PATH` and authentication configuration.
 4. Restart the service. The new binary acquires the exclusive data lease, saves
    a WAL-consistent SQLite snapshot in `papergo-pre-upgrade-*/database.sqlite`
    beside the database, and applies every pending published step in one

@@ -21,7 +21,7 @@ python3 scripts/decision-model/install.py .tools/decision/laya-fp32.tar.gz
 
 HTTPS downloads use a verified local archive cache; corrupt cached files are replaced only by a matching download. The installer does not export or substitute models, and activities have no model-download network access. Standalone build preparation exports the pinned graph when its verified cache is absent.
 
-For a prebuilt offline bundle, only the final install command is needed. The standalone build packages its destination automatically. Direct Go runs use `AI_DECISION_MODELS_PATH` to select the installed directory. All model files must be installed before starting inference. The bundle contains about 1.2 GiB of FP32 graph weights plus its tokenizer.
+For a prebuilt offline bundle, only the final install command is needed. The shared asset build packages its destination under `assets/models/laya`. Direct Go runs use `AI_DECISION_MODELS_PATH` to select the installed directory. All model files must be installed before starting inference. The bundle contains about 1.2 GiB of FP32 graph weights plus its tokenizer.
 
 Diagnostic input contains already-rendered low-level options; prefixes must not be added twice:
 

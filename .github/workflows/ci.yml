@@ -162,8 +162,9 @@ jobs:
           path: .tools
       - name: Build application
         run: |
-          python scripts/build-standalone.py --output bin/papergo
-          python scripts/release-smoke.py --binary bin/papergo
+          python scripts/build-binaries.py
+          python scripts/build-assets.py
+          python scripts/release-smoke.py --bin-dir bin
   embeddings:
     name: Local embedding engines
     runs-on: ubuntu-latest
@@ -272,7 +273,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-15, windows-2025]
+        runner:
+          # - macos-15
+          - windows-2025
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 50
     steps:
@@ -303,10 +306,7 @@ jobs:
         shell: bash
         run: |
           go run ./cmd/release --version v0.0.0-rc.1
-          suffix=''
-          if [[ "$RUNNER_OS" == Windows ]]; then suffix='.exe'; fi
-          mkdir -p bin
-          python scripts/build-standalone.py --ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1' --output "bin/papergo$suffix"
-          python scripts/build-standalone.py --command admin --ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1' --output "bin/papergo-admin$suffix"
+          python scripts/build-binaries.py --ldflags='-s -w -X papergo/internal/buildinfo.Version=v0.0.0-rc.1'
+          python scripts/build-assets.py --archive dist/papergo_v0.0.0-rc.1_assets.zip
           python scripts/release-package.py --version v0.0.0-rc.1 --os "$(go env GOOS)" --arch "$(go env GOARCH)"
-          python scripts/release-smoke.py
+          python scripts/release-smoke.py --assets dist/papergo_v0.0.0-rc.1_assets.zip

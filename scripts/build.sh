@@ -8,4 +8,5 @@ source .tools/native/env.sh
 npm ci --prefix web
 npm --prefix web run build
 mkdir -p bin
-python3 scripts/build-standalone.py --output bin/papergo
+python3 scripts/build-binaries.py
+python3 scripts/build-assets.py

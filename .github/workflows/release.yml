@@ -83,8 +83,34 @@ jobs:
           path: release-assets/release-database.json
           if-no-files-found: error
           retention-days: 14
-  build:
+  assets:
     needs: prepare
+    if: needs.prepare.outputs.state != 'complete'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: model-presets
+          path: .tools
+      - name: Package shared models and assets
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: python3 scripts/build-assets.py --output-dir shared/assets --archive "dist/papergo_${RELEASE_TAG}_assets.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shared-assets
+          path: dist/*_assets.zip
+          if-no-files-found: error
+          retention-days: 14
+  build:
+    needs: [prepare, assets]
     if: needs.prepare.outputs.state != 'complete'
     strategy:
       fail-fast: false
@@ -93,7 +119,7 @@ jobs:
           - {runner: ubuntu-24.04, os: linux, arch: amd64}
           - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
           - {runner: windows-2025, os: windows, arch: amd64}
-          - {runner: macos-15, os: darwin, arch: arm64}
+          # - {runner: macos-15, os: darwin, arch: arm64}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 50
     steps:
@@ -117,11 +143,7 @@ jobs:
         with:
           name: release-database
           path: release-assets
-      - uses: actions/download-artifact@v4
-        with:
-          name: model-presets
-          path: .tools
-      - name: Build embedded UI and both standalone executables
+      - name: Build embedded UI, executables and native libraries
         shell: bash
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -134,12 +156,8 @@ jobs:
           cp release-assets/release-database.json migrations/release.json
           npm ci --prefix web
           npm --prefix web run build
-          mkdir -p bin
-          suffix=''
-          if [[ "$GOOS" == windows ]]; then suffix='.exe'; fi
           flags="-s -w -X papergo/internal/buildinfo.Version=$RELEASE_TAG -X papergo/internal/buildinfo.Commit=$RELEASE_COMMIT -X papergo/internal/buildinfo.Date=$RELEASE_DATE"
-          python scripts/build-standalone.py --ldflags="$flags" --output "bin/papergo$suffix"
-          python scripts/build-standalone.py --command admin --ldflags="$flags" --output "bin/papergo-admin$suffix"
+          python scripts/build-binaries.py --ldflags="$flags"
       - name: Package binaries, database bundle and operator guide
         shell: bash
         env:
@@ -147,9 +165,13 @@ jobs:
           RELEASE_OS: ${{ matrix.os }}
           RELEASE_ARCH: ${{ matrix.arch }}
         run: python scripts/release-package.py --version "$RELEASE_TAG" --os "$RELEASE_OS" --arch "$RELEASE_ARCH"
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-assets
+          path: shared-assets
       - name: Native binary startup and database smoke test
         shell: bash
-        run: python scripts/release-smoke.py
+        run: python scripts/release-smoke.py --assets shared-assets/papergo_${{ needs.prepare.outputs.tag }}_assets.zip
       - uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.os }}-${{ matrix.arch }}
@@ -157,7 +179,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   publish:
-    needs: [prepare, build]
+    needs: [prepare, assets, build]
     if: needs.prepare.outputs.state != 'complete'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -182,6 +204,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release-database
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-assets
           path: dist
       - name: Write asset checksums
         run: python3 scripts/release-checksum.py dist

@@ -16,7 +16,7 @@ Standalone executables and the Docker image include ONNX Runtime and PaddleOCR m
 | Setting | Meaning |
 | --- | --- |
 | `ONNXRUNTIME_LIB` | Path of the ONNX Runtime shared library (pinned version 1.23.2). Standalone builds select their bundled library when unset. In source builds, empty turns OCR off; activities that need it fail with a message saying so. |
-| `OCR_MODELS` | Directory of the [model files](../models/paddleocr/README.md) (the standalone launcher selects bundled models; source builds default to `models/paddleocr`). In source builds, when this is unset and the default directory is absent, OCR stays off and the server starts. An explicit directory must exist. A present directory is checked at startup and loaded on first use. |
+| `OCR_MODELS` | Directory of the [model files](../models/paddleocr/README.md), defaulting to `assets/models/paddleocr` beside the executable. The native development environment selects the source `models/paddleocr` directory. When the default directory is absent, OCR stays off and the server starts. An explicit directory must exist. A present directory is checked at startup and loaded on first use. |
 | `OCR_THREADS` | CPU threads one inference uses, 1 to 32 (default 1). |
 
 ## Results
@@ -62,7 +62,7 @@ Limits:
 
 `internal/onnx` uses [`yalue/onnxruntime_go` v1.25.0](https://github.com/yalue/onnxruntime_go/tree/v1.25.0), a cgo binding for ONNX Runtime 1.23.2. OCR and local embeddings share one environment. Models load from memory or a path, tensors use the SDK, and context cancellation terminates only the active run. CPU arenas and memory patterns are disabled to bound retained memory for varying image shapes.
 
-PaperGo builds with cgo. `python3 scripts/native.py` installs the pinned SDKs and writes `.tools/native/env.sh` and `env.ps1`. The Docker image and release archives include ONNX Runtime, PDFium and zvec. PDF reading is always available; ONNX Runtime inference is enabled with `ONNXRUNTIME_LIB` and the model paths. The Docker image enables OCR and includes its models. Native license notices are under `/usr/share/doc/papergo` in Docker and `notices/` in release archives.
+PaperGo builds with cgo. `python3 scripts/native.py` installs the pinned SDKs and writes `.tools/native/env.sh` and `env.ps1`. The Docker image and release archives include ONNX Runtime, PDFium and zvec. PDF reading is always available; ONNX Runtime inference is enabled with `ONNXRUNTIME_LIB` and the model paths. The Docker image enables OCR and includes its models. Native license notices are under `/opt/papergo/notices` in Docker and `notices/` in platform ZIPs. Shared models and their notices are in `assets/` beside the executable.
 
 Configuration (`paddle.Config`):
 

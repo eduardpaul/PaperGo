@@ -1,47 +1,57 @@
 #!/usr/bin/env python3
-"""Package both executables with the release database artifact and operator guide."""
+"""Package the executables, native libraries, configuration and operator guide."""
 import argparse
 import json
 from pathlib import Path
-import tarfile
 import zipfile
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def package(version, system, arch, bin_dir, release_database, dist):
+    suffix = '.exe' if system == 'windows' else ''
+    inputs = {
+        f'papergo{suffix}': bin_dir / f'papergo{suffix}',
+        f'papergo-admin{suffix}': bin_dir / f'papergo-admin{suffix}',
+        'release-database.json': release_database,
+        'RELEASES.md': ROOT / 'docs/releases.md',
+        'config.yaml': ROOT / 'deploy/config.yaml',
+        'README.md': ROOT / 'deploy/README.md',
+    }
+    for directory in ('lib', 'notices'):
+        for path in sorted((bin_dir / directory).rglob('*')):
+            if path.is_file():
+                inputs[path.relative_to(bin_dir).as_posix()] = path
+    if system == 'windows':
+        inputs.update((path.name, path) for path in sorted(bin_dir.glob('*.dll')))
+    required = ['onnxruntime.dll', 'pdfium.dll', 'zvec_c_api.dll'] if system == 'windows' else [
+        'lib/libonnxruntime.so', 'lib/libpdfium.so', 'lib/libzvec_c_api.so',
+    ] if system == 'linux' else [
+        'lib/libonnxruntime.dylib', 'lib/libpdfium.dylib', 'lib/libzvec_c_api.dylib',
+    ]
+    if any(name not in inputs for name in required):
+        raise ValueError('Build the native libraries alongside both executables before packaging')
+    bundle = json.loads(release_database.read_text())
+    if bundle['releases'][-1]['version'] != version:
+        raise ValueError('Packaged bundle does not match release tag')
+    dist.mkdir(parents=True, exist_ok=True)
+    target = dist / f'papergo_{version}_{system}_{arch}.zip'
+    with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive:
+        for name, source in sorted(inputs.items()):
+            archive.write(source, name)
+    return target
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--version", required=True)
-    parser.add_argument("--os", required=True, choices=["linux", "darwin", "windows"])
-    parser.add_argument("--arch", required=True, choices=["amd64", "arm64"])
-    parser.add_argument("--bin-dir", type=Path, help="Directory containing papergo and papergo-admin")
-    parser.add_argument("--release-database", type=Path, help="release-database.json to embed")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--version', required=True)
+    parser.add_argument('--os', required=True, choices=['linux', 'darwin', 'windows'])
+    parser.add_argument('--arch', required=True, choices=['amd64', 'arm64'])
+    parser.add_argument('--bin-dir', type=Path, default=ROOT / 'bin')
+    parser.add_argument('--release-database', type=Path, default=ROOT / 'migrations/release.json')
     args = parser.parse_args()
-    root = Path(__file__).resolve().parent.parent
-    dist = root / "dist"
-    dist.mkdir(exist_ok=True)
-    suffix = ".exe" if args.os == "windows" else ""
-    bin_dir = args.bin_dir or (root / "bin")
-    release_database = args.release_database or (root / "migrations" / "release.json")
-    inputs = {
-        f"papergo{suffix}": bin_dir / f"papergo{suffix}",
-        f"papergo-admin{suffix}": bin_dir / f"papergo-admin{suffix}",
-        "release-database.json": release_database,
-        "RELEASES.md": root / "docs" / "releases.md",
-        "config.yaml": root / "deploy" / "config.yaml",
-        "README.md": root / "deploy" / "README.md",
-    }
-    bundle = json.loads(inputs["release-database.json"].read_text())
-    if bundle["releases"][-1]["version"] != args.version:
-        raise ValueError("Packaged bundle does not match release tag")
-    name = f"papergo_{args.version}_{args.os}_{args.arch}"
-    if args.os == "windows":
-        with zipfile.ZipFile(dist / f"{name}.zip", "w", zipfile.ZIP_DEFLATED) as archive:
-            for name, source in inputs.items():
-                archive.write(source, name)
-    else:
-        with tarfile.open(dist / f"{name}.tar.gz", "w:gz") as archive:
-            for name, source in inputs.items():
-                archive.add(source, arcname=name)
+    print(package(args.version, args.os, args.arch, args.bin_dir, args.release_database, ROOT / 'dist'))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
