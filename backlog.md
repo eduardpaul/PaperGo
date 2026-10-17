@@ -818,7 +818,7 @@ Transform PaperGo into a single self-contained executable for Linux (`papergo`) 
 |  +-----------------------+           +-----------------------+  |
 |                                                  |              |
 |  +-----------------------------------------------------------+  |
-|  |            Configuration via config.ini                   |  |
+|  |            Configuration via config.yaml                   |  |
 |  +-----------------------------------------------------------+  |
 +-----------------------------------------------------------------+
 ```
@@ -830,33 +830,33 @@ Transform PaperGo into a single self-contained executable for Linux (`papergo`) 
    - Embed into Go executable via `//go:embed all:dist` in `web/web.go`.
    - Serve static assets directly from memory with SPA HTML5 fallback routing.
 
-2. **Configuration File (`config.ini`)**:
-   - Provide clean INI-format configuration as an alternative to environment variables:
-     ```ini
-     [server]
-     port = 8080
-     bind = 0.0.0.0
-     data_dir = ./data
-     public_url = http://localhost:8080
+2. **Configuration File (`config.yaml`)**:
+   - Provide clean YAML configuration as an alternative to environment variables:
+     ```yaml
+     server:
+       port: 8080
+       bind: 0.0.0.0
+       data_dir: ./data
+       public_url: http://localhost:8080
 
-     [auth]
-     mode = local
-     # Default initial credentials on first launch
-     admin_user = admin
-     admin_password = admin
+     auth:
+       mode: local
+       # Default initial credentials on first launch
+       admin_user: admin
+       admin_password: admin
 
-     [search]
-     store = zvec
-     zvec_path = ./data/search/zvec
+     search:
+       store: zvec
+       zvec_path: ./data/search/zvec
 
-     [storage]
-     blob_path = ./data/blobs
-     max_upload_mb = 100
+     storage:
+       blob_path: ./data/blobs
+       max_upload_mb: 100
      ```
 
 3. **Built-in Local Authentication**:
    - Implement `AUTH_MODE=local`:
-   - On initial startup, if no admin account exists, create `admin` with credentials specified in `config.ini` or prompt securely.
+   - On initial startup, if no admin account exists, create `admin` with credentials specified in `config.yaml` or prompt securely.
    - Support standard HTTP Basic Auth and Session Cookies for browser navigation without requiring an external OAuth2/OIDC identity provider.
 
 4. **Default Native Vector Store (`zvec`)**:
@@ -866,14 +866,14 @@ Transform PaperGo into a single self-contained executable for Linux (`papergo`) 
 5. **Cross-Platform Compilation & Distribution**:
    - Linux: Statically linked CGO executable with bundled WebP/PDFium/Zvec shared libraries in rpath.
    - Windows: Self-contained `.exe` built with MSYS2 / MinGW-w64 toolchain.
-   - Releases packaged as `.tar.gz` and `.zip` containing only the binary, sample `config.ini`, and README.
+   - Releases packaged as `.tar.gz` and `.zip` containing only the binary, sample `config.yaml`, and README.
 
 6. **Modernize OIDC (Authentik) & NPM Samples to Use Single Binary**:
    - Update both reference deployment packages (`samples/authentik` and `samples/npm`) to utilize the unified single binary executable instead of multi-step container builds.
    - **Eliminate Separate Migration Containers**:
      - Remove the separate `initialize` services that previously invoked `[/papergo-admin] command: [initialize, --schema, /schema]`. Because the single binary executes self-contained startup schema checks and embedded migrations automatically on boot, auxiliary migration containers are completely redundant.
    - **Simplified Compose & Configuration**:
-     - Modernize `compose.yaml` in both samples to mount a clean `config.ini` (or set concise flags) rather than managing sprawling lists of environment variables.
+     - Modernize `compose.yaml` in both samples to mount a clean `config.yaml` (or set concise flags) rather than managing sprawling lists of environment variables.
      - `samples/npm`: Configured with `auth.mode = proxy`, trusted proxy CIDRs, and `search.store = zvec`.
      - `samples/authentik`: Configured with `auth.mode = oidc`, provider issuer, client ID, and audience.
    - **Sample Setup & Verification Updates**:

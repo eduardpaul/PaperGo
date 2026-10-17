@@ -38,30 +38,30 @@ def write_shared_config(path, content):
 
 def papergo_config(public_url, issuer_url):
     return "\n".join([
-        "[server]",
-        "port = 8080",
-        "bind = 0.0.0.0",
-        "data_dir = /data",
-        f"public_url = {public_url}",
+        "server:",
+        "  port: 8080",
+        "  bind: 0.0.0.0",
+        "  data_dir: /data",
+        f"  public_url: {json.dumps(public_url)}",
         "",
-        "[auth]",
-        "mode = oidc",
-        "admin_group = admins",
+        "auth:",
+        "  mode: oidc",
+        "  admin_group: admins",
         "",
-        "[oidc]",
-        f"issuer = {issuer_url}",
-        "audience = papergo",
-        "client_id = papergo",
-        "groups_claim = groups",
-        "groups_prefix = papergo-",
+        "oidc:",
+        f"  issuer: {json.dumps(issuer_url)}",
+        "  audience: papergo",
+        "  client_id: papergo",
+        "  groups_claim: groups",
+        "  groups_prefix: papergo-",
         "",
-        "[search]",
-        "store = zvec",
-        "zvec_path = /data/search/zvec",
+        "search:",
+        "  store: zvec",
+        "  zvec_path: /data/search/zvec",
         "",
-        "[storage]",
-        "blob_path = /data/blobs",
-        "max_upload_mb = 64",
+        "storage:",
+        "  blob_path: /data/blobs",
+        "  max_upload_mb: 64",
         "",
     ])
 
@@ -295,7 +295,7 @@ def main():
         "HTTP_PORT": str(args.http_port), "HTTPS_PORT": str(args.https_port),
         "PAPERGO_ADMIN_EMAIL": args.email, "IDP_ADMIN_PASSWORD_HASH": credentials["authentik_password_hash"],
         "PAPERGO_ADMIN_PASSWORD_HASH": credentials["papergo_password_hash"]}))
-    write_shared_config(GENERATED / "config.ini", papergo_config(public_url, issuer(settings)))
+    write_shared_config(GENERATED / "config.yaml", papergo_config(public_url, issuer(settings)))
 
     # The issuer must exist before PaperGo starts: PaperGo loads its discovery document at startup.
     compose("up", "-d", "--wait", "--wait-timeout", "600", "caddy", "authentik-server", "authentik-worker")

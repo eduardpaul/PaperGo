@@ -4,7 +4,9 @@ DMS and CMS application with its React frontend and Go API in one executable. Us
 
 ## Standalone executable
 
-A release archive contains `papergo` or `papergo.exe`, `config.ini`, `README.md`, the native zvec, PDFium and ONNX Runtime libraries, and their license notices. Run the executable and open http://localhost:8080. Point `ONNXRUNTIME_LIB` at the bundled ONNX Runtime library to use it. OCR stays off until `models/paddleocr` or `OCR_MODELS` is present, and a missing default model directory does not stop the server. The sample `config.ini` listens on port 8080, signs in a local administrator (`admin` / `admin`) with HTTP Basic or a session cookie, and stores the database, files and zvec index under `./data`. The first start creates that database from the current schema. No separate migration program is required. Change the password before exposing the process. Set `[auth] mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. A non-empty environment variable overrides the same setting from `config.ini`.
+A release archive contains `papergo` or `papergo.exe`, `config.yaml`, `README.md`, the native zvec, PDFium and ONNX Runtime libraries, and their license notices. Run the executable and open http://localhost:8080. Point `ONNXRUNTIME_LIB` at the bundled ONNX Runtime library to use it. OCR stays off until `models/paddleocr` or `OCR_MODELS` is present, and a missing default model directory does not stop the server. The sample `config.yaml` listens on port 8080, signs in a local administrator (`admin` / `admin`) with HTTP Basic or a session cookie, and stores the database, files and zvec index under `./data`. The first start creates that database from the current schema. No separate migration program is required. Change the password before exposing the process. Set `auth.mode` to `oidc` or `proxy` when an identity provider or trusted proxy should sign people in. A non-empty environment variable overrides the same setting from `config.yaml`.
+
+See the [sample YAML configuration](deploy/config.yaml) for the supported sections. Unknown fields, duplicate keys and multiple YAML documents are rejected. Quote password values; `auth.admin_password: ""` or `null` prompts securely on an interactive first start and fails on a non-interactive one. Proxy configuration uses a YAML list for `auth.proxy_trusted_cidrs`.
 
 ## Run locally
 
@@ -32,7 +34,7 @@ New-Item -ItemType Directory -Force data | Out-Null
 ./scripts/dev.ps1
 ```
 
-The dev script builds the frontend, generates a bearer token, prints it once, and starts the UI and API on `http://127.0.0.1:8080`. Supply `-Token` to reuse your own token. `.env.example` documents configuration. The process reads `PAPERGO_CONFIG` or `./config.ini` when that file is present, then applies environment variables. It does not automatically load `.env` files.
+The dev script builds the frontend, generates a bearer token, prints it once, and starts the UI and API on `http://127.0.0.1:8080`. Supply `-Token` to reuse your own token. `.env.example` documents configuration. The process reads `PAPERGO_CONFIG` or `./config.yaml` when that file is present, then applies environment variables. It does not automatically load `.env` files.
 
 With globally installed tools, replace `.tools/atlas.exe` with `atlas`; run `npm ci --prefix web` and `npm --prefix web run build`, then `go run ./cmd/api`. With no configuration file the server listens on `http://127.0.0.1:8080`, uses local authentication (user `admin`, password `admin`) and the zvec search store, and creates the current schema in an empty data directory. Set `AUTH_MODE=development` and `DEV_TOKEN` to a random token of at least 32 characters when you want the development bearer token instead. Building the server, or running Go tests and analysis across `./...`, requires the frontend build in `web/dist` because it is embedded at compile time.
 
@@ -54,7 +56,7 @@ To build the deployable executable from the repository root:
 bash scripts/build.sh
 ```
 
-On Windows, run `./scripts/build.ps1`. The scripts install the locked frontend dependencies, build the UI, and compile it into `bin/papergo` or `bin/papergo.exe`. The release archive adds `config.ini`, `README.md`, the native libraries and their notices beside that executable. For local Go commands, first run `python3 scripts/native.py` and source `.tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`). Node.js, npm, a separate web server and the `web/` directory are not needed at runtime. The Docker build produces the same embedded application.
+On Windows, run `./scripts/build.ps1`. The scripts install the locked frontend dependencies, build the UI, and compile it into `bin/papergo` or `bin/papergo.exe`. The release archive adds `config.yaml`, `README.md`, the native libraries and their notices beside that executable. For local Go commands, first run `python3 scripts/native.py` and source `.tools/native/env.sh` (PowerShell: `. .tools/native/env.ps1`). Node.js, npm, a separate web server and the `web/` directory are not needed at runtime. The Docker build produces the same embedded application.
 
 For frontend development with hot reload, run this from `web/` alongside PaperGo:
 
@@ -95,7 +97,7 @@ Vite listens on `http://127.0.0.1:5173` and proxies `/v1`, `/auth` and `/health`
 
 ## API
 
-Every `/v1` request requires authentication: `Authorization: Bearer <token>` in bearer deployments, or the trusted-proxy identity contract in proxy deployments. The web UI, `/auth/config` and health endpoints are public at the application server; the NPM proxy sample protects the UI and API with its Access List. IDs are UUID strings. Lists of resources and relationships return `{ "value": [...], "@odata.nextLink": "..." }`; follow `@odata.nextLink` to continue; it is null on the final page. Use `$top` to select a page size (default 50, clamped to 1–500); links contain opaque `$skiptoken` continuations. POST query continuations use the same method and body.
+Every `/v1` request requires authentication: HTTP Basic or a session cookie in local deployments, `Authorization: Bearer <token>` in bearer deployments, or the trusted-proxy identity contract in proxy deployments. Local browser sessions are created by `POST /auth/login` and revoked by `POST /auth/logout`; HTTPS deployments set Secure cookies. The web UI, `/auth/config`, local sign-in endpoints and health endpoints are public at the application server; the NPM proxy sample protects the UI and API with its Access List. IDs are UUID strings. Lists of resources and relationships return `{ "value": [...], "@odata.nextLink": "..." }`; follow `@odata.nextLink` to continue; it is null on the final page. Use `$top` to select a page size (default 50, clamped to 1–500); links contain opaque `$skiptoken` continuations. POST query continuations use the same method and body.
 
 `POST /v1/$batch` executes 1–20 independent HTTP calls in order. Send `{"requests":[{"id":"list","method":"GET","url":"workspaces"}]}`. Each `responses` entry contains its ID, status, headers and optional body. Calls inherit authentication and may override request headers. `dependsOn` names earlier calls; failures skip dependents with 424. Successful writes persist independently. Relative API URLs only; nested batches and path traversal are rejected. Non-JSON string bodies become raw text; binary responses become base64 strings, with a 16 MiB limit per result.
 

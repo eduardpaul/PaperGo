@@ -60,14 +60,14 @@ class SingleBinaryTests(unittest.TestCase):
             self.assertNotIn('papergo-admin initialize', text)
             self.assertNotRegex(text, r'(?m)^  initialize:')
         compose = (root / 'compose.yaml').read_text()
-        self.assertIn('./generated/config.ini:/config/config.ini:ro', compose)
-        self.assertIn('PAPERGO_CONFIG: /config/config.ini', compose)
+        self.assertIn('./generated/config.yaml:/config/config.yaml:ro', compose)
+        self.assertIn('PAPERGO_CONFIG: /config/config.yaml', compose)
         self.assertNotIn('AUTH_MODE:', compose)
-        ini = setup.papergo_config('https://docs.example.com', 'papergo-admin', '10.90.0.2/32')
-        self.assertIn('mode = proxy', ini)
-        self.assertIn('proxy_trusted_cidrs = 10.90.0.2/32', ini)
-        self.assertIn('store = zvec', ini)
-        self.assertIn('admin_user = papergo-admin', ini)
+        config = setup.papergo_config('https://docs.example.com', 'papergo-admin', '10.90.0.2/32')
+        self.assertIn('  mode: proxy', config)
+        self.assertIn('  proxy_trusted_cidrs:\n    - "10.90.0.2/32"', config)
+        self.assertIn('  store: zvec', config)
+        self.assertIn('  admin_user: "papergo-admin"', config)
 
 
 class EgressTests(unittest.TestCase):

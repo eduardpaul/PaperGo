@@ -61,7 +61,7 @@ PaperGo validates the actual forwarding peer, secret and username. It rejects du
 
 ## Storage and operations
 
-Named volumes preserve PaperGo data, NPM configuration and certificates. A network-isolated permissions job installs the private bridge secret and prepares the zvec directory. Setup writes `generated/config.ini` and Compose mounts it into the PaperGo container. That file sets `auth.mode = proxy`, the trusted NPM address, and `search.store = zvec`. PaperGo applies the current schema when the application starts. Schema changes require a fresh disposable database; there is no upgrade or repair path.
+Named volumes preserve PaperGo data, NPM configuration and certificates. A network-isolated permissions job installs the private bridge secret and prepares the zvec directory. Setup writes `generated/config.yaml` and Compose mounts it into the PaperGo container. That file sets `auth.mode` to `proxy`, trusts the NPM address in `auth.proxy_trusted_cidrs`, and sets `search.store` to `zvec`. PaperGo applies the current schema when the application starts. Schema changes require a fresh disposable database; there is no upgrade or repair path.
 
 If setup fails, it prints recent service logs. A PaperGo error saying `database schema checksum differs from this application; use a fresh database` requires discarding the PaperGo data volume. From this directory, run:
 

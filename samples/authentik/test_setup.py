@@ -32,14 +32,14 @@ class SingleBinaryTests(unittest.TestCase):
             self.assertNotIn('papergo-admin initialize', text)
             self.assertNotRegex(text, r'(?m)^  initialize:')
         compose = (root / 'compose.yaml').read_text()
-        self.assertIn('./generated/config.ini:/config/config.ini:ro', compose)
-        self.assertIn('PAPERGO_CONFIG: /config/config.ini', compose)
+        self.assertIn('./generated/config.yaml:/config/config.yaml:ro', compose)
+        self.assertIn('PAPERGO_CONFIG: /config/config.yaml', compose)
         self.assertNotIn('AUTH_MODE:', compose)
-        ini = setup.papergo_config('https://docs.example.com', 'https://auth.example.com/application/o/papergo/')
-        self.assertIn('mode = oidc', ini)
-        self.assertIn('issuer = https://auth.example.com/application/o/papergo/', ini)
-        self.assertIn('client_id = papergo', ini)
-        self.assertIn('audience = papergo', ini)
+        config = setup.papergo_config('https://docs.example.com', 'https://auth.example.com/application/o/papergo/')
+        self.assertIn('  mode: oidc', config)
+        self.assertIn('  issuer: "https://auth.example.com/application/o/papergo/"', config)
+        self.assertIn('  client_id: papergo', config)
+        self.assertIn('  audience: papergo', config)
 
 
 class GeneratedConfigurationTests(unittest.TestCase):

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -105,4 +106,105 @@ func TestLocalAdminBasicAndSession(t *testing.T) {
 		t.Fatal("wrong password", deniedRec.Code, deniedRec.Body.String())
 	}
 	t.Logf("basic admin:admin and session cookie succeeded on /v1/search/status; second password was not stored")
+}
+
+func TestLocalAuthenticationPreservesManagedProfile(t *testing.T) {
+	_, service, _ := setup(t)
+	ctx := t.Context()
+	directory := service.Directory()
+	hash, err := auth.HashPassword("password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = directory.SetInitialPasswordHash(ctx, "alice", hash); err != nil {
+		t.Fatal(err)
+	}
+	local := auth.Local{DB: directory.DB}
+	handler := (&API{DMS: service, Auth: local, Logger: slog.Default()}).Handler()
+	getMe := func(cookie string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/v1/identity/me", nil)
+		if cookie == "" {
+			req.SetBasicAuth("alice", "password")
+		} else {
+			req.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: cookie})
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatal(rec.Code, rec.Body.String())
+		}
+	}
+	getMe("")
+	cookie, _, err := local.Login(ctx, "alice", "password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, credential := range []string{"", cookie} {
+		name, email := "Local administrator", "admin@example.test"
+		if _, err = directory.UpdateUser(ctx, "organization-admin", "alice", identity.UserUpdate{DisplayName: &name, Email: &email}); err != nil {
+			t.Fatal(err)
+		}
+		getMe(credential)
+		profile, err := directory.Me(ctx, "alice")
+		if err != nil || profile.DisplayName != name || profile.Email != email {
+			t.Fatalf("local authentication changed the managed profile: %+v, %v", profile, err)
+		}
+	}
+}
+
+func TestLocalSessionCookieSecurityAndLogout(t *testing.T) {
+	_, service, _ := setup(t)
+	directory := service.Directory()
+	hash, err := auth.HashPassword("password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = directory.SetInitialPasswordHash(t.Context(), "alice", hash); err != nil {
+		t.Fatal(err)
+	}
+	local := auth.Local{DB: directory.DB}
+	for _, test := range []struct {
+		name, origin, publicURL string
+		secure                  bool
+	}{
+		{"localhost HTTP", "http://localhost:8080", "", false},
+		{"public HTTP", "http://localhost:8080", "http://localhost:8080", false},
+		{"direct HTTPS", "https://docs.example.test", "", true},
+		{"TLS proxy", "http://localhost:8080", "https://docs.example.test", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var publicURL *url.URL
+			if test.publicURL != "" {
+				publicURL, err = url.Parse(test.publicURL)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			handler := (&API{DMS: service, Auth: local, Logger: slog.Default(), PublicURL: publicURL}).Handler()
+			login := httptest.NewRequest(http.MethodPost, test.origin+"/auth/login", strings.NewReader(`{"username":"alice","password":"password"}`))
+			login.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, login)
+			cookies := rec.Result().Cookies()
+			if rec.Code != http.StatusNoContent || len(cookies) != 1 {
+				t.Fatal(rec.Code, rec.Header())
+			}
+			cookie := cookies[0]
+			if cookie.Name != auth.SessionCookie || !cookie.HttpOnly || cookie.Secure != test.secure || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" || cookie.MaxAge != 12*60*60 {
+				t.Fatalf("unexpected session cookie: %+v", cookie)
+			}
+			logout := httptest.NewRequest(http.MethodPost, test.origin+"/auth/logout", nil)
+			logout.AddCookie(cookie)
+			rec = httptest.NewRecorder()
+			handler.ServeHTTP(rec, logout)
+			cookies = rec.Result().Cookies()
+			if rec.Code != http.StatusNoContent || len(cookies) != 1 || cookies[0].MaxAge != -1 || cookies[0].Secure != test.secure {
+				t.Fatal("logout did not expire the session cookie", rec.Code, rec.Header())
+			}
+			if _, err = local.Session(t.Context(), cookie.Value); err == nil {
+				t.Fatal("logged-out session still authenticates")
+			}
+		})
+	}
 }

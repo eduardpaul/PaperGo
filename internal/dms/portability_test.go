@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"papergo/ent/operation"
+	"papergo/internal/auth"
 	"papergo/internal/database"
 	"papergo/internal/identity"
 	"papergo/internal/search/sqlitestore"
@@ -145,7 +146,7 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 			f, _ := entry.Open()
 			manifest, _ := io.ReadAll(f)
 			f.Close()
-			if bytes.Contains(manifest, []byte("secret_hash")) || bytes.Contains(manifest, []byte("identity_rest_tokens")) {
+			if bytes.Contains(manifest, []byte("secret_hash")) || bytes.Contains(manifest, []byte("password_hash")) || bytes.Contains(manifest, []byte("identity_rest_tokens")) {
 				t.Fatal("credential leaked")
 			}
 		}
@@ -220,6 +221,13 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	}
 	defer index.Close()
 	target.SetSearch(index)
+	hash, err := auth.HashPassword("destination-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = target.Directory().SetInitialPasswordHash(ctx, admin, hash); err != nil {
+		t.Fatal(err)
+	}
 	real, err := target.StartImport(ctx, admin, upload.Key, false, "")
 	if err != nil {
 		t.Fatal(err)
@@ -230,6 +238,9 @@ func TestCorePackageConfigurationContentDryRunAndAtomicImport(t *testing.T) {
 	real, err = target.Client.Operation.Get(ctx, real.ID)
 	if err != nil || real.Status != operation.StatusSucceeded {
 		t.Fatal(err, real.Error)
+	}
+	if _, err = (auth.Local{DB: target.db}).Check(ctx, admin, "destination-password"); err != nil {
+		t.Fatalf("import removed the destination administrator password: %v", err)
 	}
 	restoredHome, err := target.Home(ctx, "alice")
 	if err != nil || restoredHome != home {

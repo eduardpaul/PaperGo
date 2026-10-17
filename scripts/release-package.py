@@ -28,7 +28,7 @@ def main():
         f"papergo-admin{suffix}": bin_dir / f"papergo-admin{suffix}",
         "release-database.json": release_database,
         "RELEASES.md": root / "docs" / "releases.md",
-        "config.ini": root / "deploy" / "config.ini",
+        "config.yaml": root / "deploy" / "config.yaml",
         "README.md": root / "deploy" / "README.md",
     }
     libraries = {

@@ -29,14 +29,14 @@ services:
     image: papergo:npm-sample
     build: ../..
     environment:
-      PAPERGO_CONFIG: /config/config.ini
+      PAPERGO_CONFIG: /config/config.yaml
       # Image defaults must not override the mounted file.
       HTTP_ADDR: ""
       DATABASE_PATH: ""
       BLOB_PATH: ""
     volumes:
       - papergo-data:/data
-      - ./generated/config.ini:/config/config.ini:ro
+      - ./generated/config.yaml:/config/config.yaml:ro
     depends_on:
       volume-permissions:
         condition: service_completed_successfully

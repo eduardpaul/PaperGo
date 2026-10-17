@@ -20,7 +20,7 @@ func (a *API) localLogin(local auth.Local) http.HandlerFunc {
 			a.problem(w, r, 401, "unauthorized", "valid authentication is required")
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: auth.SessionCookie, Value: value, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 12 * 60 * 60})
+		http.SetCookie(w, a.localSessionCookie(r, value, 12*60*60))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -33,7 +33,12 @@ func (a *API) localLogout(local auth.Local) http.HandlerFunc {
 				return
 			}
 		}
-		http.SetCookie(w, &http.Cookie{Name: auth.SessionCookie, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+		http.SetCookie(w, a.localSessionCookie(r, "", -1))
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func (a *API) localSessionCookie(r *http.Request, value string, maxAge int) *http.Cookie {
+	secure := r.TLS != nil || (a.PublicURL != nil && a.PublicURL.Scheme == "https")
+	return &http.Cookie{Name: auth.SessionCookie, Value: value, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: maxAge}
 }

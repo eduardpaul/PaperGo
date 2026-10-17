@@ -852,7 +852,9 @@ func (s *Service) applyCorePackage(ctx context.Context, subject string, p corePa
 					return err
 				}
 				if exists {
-					if _, err = s.tx.ExecContext(ctx, "UPDATE identity_users SET active=?,display_name=?,email=?,password_hash='',deleted_at=? WHERE id=?", row["active"], row["display_name"], row["email"], row["deleted_at"], id); err != nil {
+					// Credentials belong to the destination installation. Only an
+					// imported account deletion clears its existing password.
+					if _, err = s.tx.ExecContext(ctx, "UPDATE identity_users SET active=?,display_name=?,email=?,password_hash=CASE WHEN ? IS NULL THEN password_hash ELSE '' END,deleted_at=? WHERE id=?", row["active"], row["display_name"], row["email"], row["deleted_at"], row["deleted_at"], id); err != nil {
 						return err
 					}
 					continue

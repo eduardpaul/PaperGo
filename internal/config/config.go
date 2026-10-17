@@ -105,20 +105,20 @@ type Config struct {
 	AdminPasswordOmitted bool
 }
 
-// Load reads config.ini from PAPERGO_CONFIG or ./config.ini, then applies
+// Load reads config.yaml from PAPERGO_CONFIG or ./config.yaml, then applies
 // environment variables. Environment variables win when they are non-empty.
 func Load() (Config, error) {
-	text, err := readWorkingINI(os.Getenv)
+	text, err := readWorkingYAML(os.Getenv)
 	if err != nil {
 		return Config{}, err
 	}
 	return LoadFrom(os.Getenv, text)
 }
 
-// LoadFrom builds configuration from ini text and getenv. Tests pass the
+// LoadFrom builds configuration from YAML text and getenv. Tests pass the
 // documented file and a map-backed getenv; Load uses the process environment.
-func LoadFrom(getenv func(string) string, iniText string) (Config, error) {
-	file, err := parseINI(iniText)
+func LoadFrom(getenv func(string) string, yamlText string) (Config, error) {
+	file, err := parseYAML(yamlText)
 	if err != nil {
 		return Config{}, err
 	}

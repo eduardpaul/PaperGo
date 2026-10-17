@@ -7,29 +7,17 @@ import (
 	"testing"
 )
 
-const documentedINI = `
-[server]
-port = 8080
-bind = 0.0.0.0
-data_dir = ./data
-public_url = http://localhost:8080
+func documentedYAML(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "deploy", "config.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}
 
-[auth]
-mode = local
-admin_user = admin
-admin_password = admin
-
-[search]
-store = zvec
-zvec_path = ./data/search/zvec
-
-[storage]
-blob_path = ./data/blobs
-max_upload_mb = 100
-`
-
-func TestDocumentedConfigINI(t *testing.T) {
-	c, err := LoadFrom(func(string) string { return "" }, documentedINI)
+func TestDocumentedConfigYAML(t *testing.T) {
+	c, err := LoadFrom(func(string) string { return "" }, documentedYAML(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +39,7 @@ func TestDocumentedConfigINI(t *testing.T) {
 	if c.MaxUpload != 100*1024*1024 {
 		t.Fatalf("upload %d", c.MaxUpload)
 	}
-	t.Logf("documented ini address %s database %s blob %s public %s mode %s user %s password %s store %s zvec %s upload %d", c.Address, c.DatabasePath, c.BlobPath, c.PublicURL, c.AuthMode, c.AdminSubject, c.AdminPassword, c.SearchStore, c.ZvecPath, c.MaxUpload)
+	t.Logf("documented YAML address %s database %s blob %s public %s mode %s user %s password %s store %s zvec %s upload %d", c.Address, c.DatabasePath, c.BlobPath, c.PublicURL, c.AuthMode, c.AdminSubject, c.AdminPassword, c.SearchStore, c.ZvecPath, c.MaxUpload)
 }
 
 func TestDefaultsAreLocalZvecOnLocalhost(t *testing.T) {
@@ -68,7 +56,7 @@ func TestDefaultsAreLocalZvecOnLocalhost(t *testing.T) {
 	t.Logf("default address %s mode %s user %s password %s store %s ocr models %s set %v", c.Address, c.AuthMode, c.AdminSubject, c.AdminPassword, c.SearchStore, c.OCRModels, c.OCRModelsSet)
 }
 
-func TestEnvironmentOverridesINI(t *testing.T) {
+func TestEnvironmentOverridesYAML(t *testing.T) {
 	c, err := LoadFrom(func(key string) string {
 		if key == "HTTP_ADDR" {
 			return "127.0.0.1:9090"
@@ -86,7 +74,7 @@ func TestEnvironmentOverridesINI(t *testing.T) {
 			return "sqlite"
 		}
 		return ""
-	}, documentedINI)
+	}, documentedYAML(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,16 +86,16 @@ func TestEnvironmentOverridesINI(t *testing.T) {
 
 func TestExplicitOIDCAndProxyAndEmptyPassword(t *testing.T) {
 	oidc := `
-[server]
-public_url = https://docs.example.com
-[auth]
-mode = oidc
-admin_group = admins
-[oidc]
-issuer = https://auth.example.com/application/o/papergo/
-audience = papergo
-client_id = papergo
-groups_claim = groups
+server:
+  public_url: https://docs.example.com
+auth:
+  mode: oidc
+  admin_group: admins
+oidc:
+  issuer: https://auth.example.com/application/o/papergo/
+  audience: papergo
+  client_id: papergo
+  groups_claim: groups
 `
 	c, err := LoadFrom(func(key string) string {
 		if key == "APP_ENV" {
@@ -124,16 +112,16 @@ groups_claim = groups
 		t.Fatal(err)
 	}
 	proxy := `
-[server]
-public_url = https://docs.example.com
-[auth]
-mode = proxy
-admin_user = papergo-admin
-proxy_secret_file = ` + secret + `
-proxy_trusted_cidrs = 172.29.242.2/32
-[search]
-store = zvec
-zvec_path = ` + filepath.Join(dir, "zvec") + `
+server:
+  public_url: https://docs.example.com
+auth:
+  mode: proxy
+  admin_user: papergo-admin
+  proxy_secret_file: ` + secret + `
+  proxy_trusted_cidrs: [172.29.242.2/32]
+search:
+  store: zvec
+  zvec_path: ` + filepath.Join(dir, "zvec") + `
 `
 	c, err = LoadFrom(func(key string) string {
 		if key == "APP_ENV" {
@@ -152,10 +140,10 @@ zvec_path = ` + filepath.Join(dir, "zvec") + `
 	}
 	t.Logf("explicit oidc and proxy loaded; proxy store %s", c.SearchStore)
 	empty := `
-[auth]
-mode = local
-admin_user = admin
-admin_password =
+auth:
+  mode: local
+  admin_user: admin
+  admin_password: ""
 `
 	c, err = LoadFrom(func(string) string { return "" }, empty)
 	if err != nil || !c.AdminPasswordOmitted || c.AdminPassword != "" {
@@ -179,3 +167,81 @@ func TestNonInteractiveMissingPasswordFails(t *testing.T) {
 type ioDiscard struct{}
 
 func (ioDiscard) Write(p []byte) (int, error) { return len(p), nil }
+
+func TestYAMLRejectsInvalidConfiguration(t *testing.T) {
+	for name, text := range map[string]string{
+		"unknown section":      "unknown: {}",
+		"unknown field":        "auth:\n  admin_pasword: secret",
+		"duplicate field":      "auth:\n  mode: local\n  mode: proxy",
+		"malformed YAML":       "auth: [",
+		"multiple documents":   "auth: {}\n---\nauth: {}",
+		"scalar":               "plain text",
+		"invalid port":         "server:\n  port: 0",
+		"non-integer port":     "server:\n  port: http",
+		"invalid bind":         "server:\n  bind: localhost",
+		"empty data directory": "server:\n  data_dir: ''",
+		"invalid upload limit": "storage:\n  max_upload_mb: 1025",
+		"non-string password":  "auth:\n  admin_password: 1234",
+		"non-list CIDRs":       "auth:\n  proxy_trusted_cidrs: 127.0.0.1/32",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := LoadFrom(nil, text); err == nil {
+				t.Fatal("invalid configuration was accepted")
+			}
+		})
+	}
+}
+
+func TestYAMLPasswordPresenceAndEnvironmentOverride(t *testing.T) {
+	for _, test := range []struct {
+		name, text, password string
+		omitted              bool
+	}{
+		{"absent", "auth: {}", "admin", false},
+		{"empty", "auth:\n  admin_password: ''", "", true},
+		{"null", "auth:\n  admin_password: null", "", true},
+		{"blank", "auth:\n  admin_password:", "", true},
+		{"quoted punctuation", "auth:\n  admin_password: ' p:# = true '", " p:# = true ", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c, err := LoadFrom(nil, test.text)
+			if err != nil || c.AdminPassword != test.password || c.AdminPasswordOmitted != test.omitted {
+				t.Fatalf("password presence was not preserved: %+v, %v", c, err)
+			}
+			c, err = LoadFrom(func(key string) string {
+				if key == "ADMIN_PASSWORD" {
+					return "environment-password"
+				}
+				return ""
+			}, test.text)
+			if err != nil || c.AdminPassword != "environment-password" || c.AdminPasswordOmitted {
+				t.Fatal("environment did not override YAML password", err)
+			}
+		})
+	}
+}
+
+func TestYAMLConfigFileSelection(t *testing.T) {
+	t.Chdir(t.TempDir())
+	getenv := func(string) string { return "" }
+	if text, err := readWorkingYAML(getenv); err != nil || text != "" {
+		t.Fatal("absent default config", text, err)
+	}
+	const text = "auth:\n  admin_user: yaml-admin\n"
+	if err := os.WriteFile("config.yaml", []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := readWorkingYAML(getenv); err != nil || got != text {
+		t.Fatal("default config", got, err)
+	}
+	explicit := func(string) string { return "server.yaml" }
+	if _, err := readWorkingYAML(explicit); err == nil {
+		t.Fatal("missing explicit configuration was ignored")
+	}
+	if err := os.WriteFile("server.yaml", []byte("auth: {}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := readWorkingYAML(explicit); err != nil || got != "auth: {}" {
+		t.Fatal("explicit config", got, err)
+	}
+}

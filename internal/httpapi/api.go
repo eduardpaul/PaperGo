@@ -769,7 +769,7 @@ func (a *API) authenticate(next http.Handler) http.Handler {
 			a.problem(w, r, 401, "unauthorized", "valid authentication is required")
 			return
 		}
-		if _, token := identity.RESTTokenContext(r.Context()); !token && a.Auth.Kind() == auth.TrustedProxy {
+		if _, token := identity.RESTTokenContext(r.Context()); !token && (a.Auth.Kind() == auth.TrustedProxy || a.Auth.Kind() == auth.LocalMode) {
 			if err = a.DMS.Directory().EnsureUser(r.Context(), ident.Subject); err != nil {
 				a.failure(w, r, err)
 				return

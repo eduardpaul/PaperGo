@@ -47,7 +47,7 @@ func main() {
 		return
 	}
 	if len(os.Args) > 1 {
-		fmt.Fprintln(os.Stderr, "usage: papergo [--version|--health [url]]; configuration is read from config.ini and environment variables")
+		fmt.Fprintln(os.Stderr, "usage: papergo [--version|--health [url]]; configuration is read from config.yaml and environment variables")
 		os.Exit(1)
 	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -126,10 +126,15 @@ func run(log *slog.Logger) error {
 			return e
 		}
 		if !ready {
+			// Human input has no startup deadline. Give the remaining setup a
+			// fresh context once the password has been entered.
+			cancel()
 			c.AdminPassword, err = config.PromptAdminPassword(os.Stdin, os.Stderr)
 			if err != nil {
 				return err
 			}
+			startup, cancel = context.WithTimeout(context.Background(), timeout)
+			defer cancel()
 		}
 	}
 	store, err := storage.NewLocal(c.BlobPath)

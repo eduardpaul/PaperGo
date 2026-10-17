@@ -38,25 +38,26 @@ def write_shared_config(path, content):
 
 def papergo_config(public_url, admin_user, trusted_cidr):
     return "\n".join([
-        "[server]",
-        "port = 8080",
-        "bind = 0.0.0.0",
-        "data_dir = /data",
-        f"public_url = {public_url}",
+        "server:",
+        "  port: 8080",
+        "  bind: 0.0.0.0",
+        "  data_dir: /data",
+        f"  public_url: {json.dumps(public_url)}",
         "",
-        "[auth]",
-        "mode = proxy",
-        f"admin_user = {admin_user}",
-        "proxy_secret_file = /data/.proxy-secret",
-        f"proxy_trusted_cidrs = {trusted_cidr}",
+        "auth:",
+        "  mode: proxy",
+        f"  admin_user: {json.dumps(admin_user)}",
+        "  proxy_secret_file: /data/.proxy-secret",
+        "  proxy_trusted_cidrs:",
+        f"    - {json.dumps(trusted_cidr)}",
         "",
-        "[search]",
-        "store = zvec",
-        "zvec_path = /data/search/zvec",
+        "search:",
+        "  store: zvec",
+        "  zvec_path: /data/search/zvec",
         "",
-        "[storage]",
-        "blob_path = /data/blobs",
-        "max_upload_mb = 64",
+        "storage:",
+        "  blob_path: /data/blobs",
+        "  max_upload_mb: 64",
         "",
     ])
 
@@ -351,7 +352,7 @@ def main():
                    f"HTTP_PORT={args.http_port}", f"HTTPS_PORT={args.https_port}", f"ADMIN_PORT={args.admin_port}",
                    f"PRIVATE_SUBNET={network}", f"NPM_PRIVATE_IP={npm_ip}",
                    f"PAPERGO_PRIVATE_IP={network.network_address + 3}"]) + "\n")
-    write_shared_config(GENERATED / "config.ini", papergo_config(public_url, args.admin_user, f"{npm_ip}/32"))
+    write_shared_config(GENERATED / "config.yaml", papergo_config(public_url, args.admin_user, f"{npm_ip}/32"))
     private_write(GENERATED / "curl.netrc", f"machine {args.host}\nlogin {args.admin_user}\npassword {credentials['papergo_password']}\n")
     start_stack(args.no_build)
     verify_egress()

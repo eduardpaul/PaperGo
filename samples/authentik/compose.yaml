@@ -145,7 +145,7 @@ services:
     image: papergo:authentik-sample
     build: ../..
     environment:
-      PAPERGO_CONFIG: /config/config.ini
+      PAPERGO_CONFIG: /config/config.yaml
       # Local TLS trusts the generated CA; public certificates use the image's roots.
       SSL_CERT_FILE: ${PAPERGO_TRUST_FILE:?Run setup.py first}
       # Image defaults must not override the mounted file.
@@ -154,7 +154,7 @@ services:
       BLOB_PATH: ""
     volumes:
       - papergo-data:/data
-      - ./generated/config.ini:/config/config.ini:ro
+      - ./generated/config.yaml:/config/config.yaml:ro
     depends_on:
       volume-permissions:
         condition: service_completed_successfully
