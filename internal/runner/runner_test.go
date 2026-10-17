@@ -226,9 +226,9 @@ func TestItemTriggerConditionAndChainedWorkflow(t *testing.T) {
 			"note": {"activity": "item.update", "inputs": {"values": {"note": "seen {item:name} by {trigger:actor}"}}, "next": {"done": "tell"}},
 			"tell": {"activity": "event.raise", "inputs": {"event": "marked", "data": {"by": "{trigger:actor}"}}}
 		}}}`)
-	chained := f.workflow(t, "Tag marked contracts", `{
+	chained := f.workflow(t, "Keyword marked contracts", `{
 		"triggers": [{"type": "wf.`+mark.Key+`.marked"}],
-		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": ["marked", "{trigger:data.by}"]}}}}}`)
+		"flow": {"start": "keyword", "nodes": {"keyword": {"activity": "item.update", "inputs": {"keywords": ["marked", "{trigger:data.by}"]}}}}}`)
 
 	fresh := f.item(t, "bob", "Lease", map[string]any{"status": "new"})
 	f.item(t, "bob", "Archive", map[string]any{"status": "old"})
@@ -238,8 +238,8 @@ func TestItemTriggerConditionAndChainedWorkflow(t *testing.T) {
 	}
 	f.runs(t, chained.ID, 1)
 	item := f.head(t, fresh.ID)
-	if item.Values["note"] != "seen Lease by bob" || strings.Join(item.Tags, ",") != "marked,bob" {
-		t.Fatalf("item after workflows: %v %v", item.Values, item.Tags)
+	if item.Values["note"] != "seen Lease by bob" || keywordLabels(t, f.dms, item.Keywords) != "marked,bob" {
+		t.Fatalf("item after workflows: %v %v", item.Values, item.Keywords)
 	}
 	detail, err := f.r.Run(ctx, "alice", runs[0].ID)
 	if err != nil {
@@ -291,7 +291,7 @@ func TestOutputsChainWorkflows(t *testing.T) {
 		"flow": {"start": "read", "nodes": {"read": {"activity": "item.get"}}}}`)
 	follower := f.workflow(t, "Follow", `{
 		"triggers": [{"type": "wf.`+source.Key+`.completed"}],
-		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": ["{trigger:data.outputs.name}", "{trigger:data.outputs.kind}"], "values": {"total": "{trigger:data.outputs.total}"}}}}}}`)
+		"flow": {"start": "keyword", "nodes": {"keyword": {"activity": "item.update", "inputs": {"keywords": ["{trigger:data.outputs.name}", "{trigger:data.outputs.kind}"], "values": {"total": "{trigger:data.outputs.total}"}}}}}}`)
 	broken := f.workflow(t, "Broken", `{
 		"triggers": [{"type": "item.created", "collection_id": "$LIST"}],
 		"output_schema": {"type": "object", "properties": {"total": {"type": "string"}}},
@@ -314,8 +314,8 @@ func TestOutputsChainWorkflows(t *testing.T) {
 	}
 	f.runs(t, follower.ID, 1)
 	head := f.head(t, item.ID)
-	if strings.Join(head.Tags, ",") != "Lease,contract" || fmt.Sprint(head.Values["total"]) != "7" {
-		t.Fatalf("follower did not read the outputs: %v %v", head.Tags, head.Values)
+	if keywordLabels(t, f.dms, head.Keywords) != "Lease,contract" || fmt.Sprint(head.Values["total"]) != "7" {
+		t.Fatalf("follower did not read the outputs: %v %v", head.Keywords, head.Values)
 	}
 	// Outputs that fail their schema fail the run at finish.
 	runs = f.runs(t, broken.ID, 1)
@@ -553,7 +553,7 @@ func TestCrashRecovery(t *testing.T) {
 		"flow": {"start": "stamp", "nodes": {
 			"stamp": {"activity": "item.update", "inputs": {"values": {"note": "stamped"}}, "next": {"done": "wait"}},
 			"wait": {"activity": "delay", "inputs": {"duration": "2s"}, "next": {"done": "done"}},
-			"done": {"activity": "item.update", "inputs": {"tags": ["recovered"]}}
+			"done": {"activity": "item.update", "inputs": {"keywords": ["recovered"]}}
 		}}}`)
 	if err = f.r.Shutdown(10 * time.Second); err != nil {
 		t.Fatal(err)
@@ -580,7 +580,7 @@ func TestCrashRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// create, stamp, tag: the stamp was not written twice.
+	// create, stamp, keyword: the stamp was not written twice.
 	if len(revisions.Data) != 3 {
 		t.Fatalf("revisions after recovery: %d", len(revisions.Data))
 	}
@@ -602,9 +602,9 @@ func TestEventsLoggedWithoutRunnerStartLater(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := wf.Create(ctx, "alice", ws.ID, workflow.Save{Name: "Tag", Definition: json.RawMessage(`{
+	w, err := wf.Create(ctx, "alice", ws.ID, workflow.Save{Name: "Keyword", Definition: json.RawMessage(`{
 		"triggers": [{"type": "item.created", "collection_id": "` + list.ID + `"}],
-		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": ["seen"]}}}}}`)})
+		"flow": {"start": "keyword", "nodes": {"keyword": {"activity": "item.update", "inputs": {"keywords": ["seen"]}}}}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -621,8 +621,8 @@ func TestEventsLoggedWithoutRunnerStartLater(t *testing.T) {
 	if runs := f.runs(t, w.ID, 1); runs[0].Status != "completed" {
 		t.Fatalf("run: %+v", runs[0])
 	}
-	if tags := f.head(t, it.ID).Tags; strings.Join(tags, ",") != "seen" {
-		t.Fatalf("tags %v", tags)
+	if keywords := f.head(t, it.ID).Keywords; keywordLabels(t, f.dms, keywords) != "seen" {
+		t.Fatalf("keywords %v", keywords)
 	}
 }
 
@@ -686,7 +686,7 @@ func TestSelectionRuns(t *testing.T) {
 	w := f.workflow(t, "Combine", `{
 		"triggers": [{"type": "manual", "collection_id": "$LIST", "selection": "selection"}],
 		"flow": {"start": "primary", "nodes": {
-			"primary": {"activity": "item.update", "inputs": {"tags": ["primary"]}, "next": {"done": "first"}},
+			"primary": {"activity": "item.update", "inputs": {"keywords": ["primary"]}, "next": {"done": "first"}},
 			"first": {"activity": "item.update", "inputs": {"item_id": "{run:items.0}", "values": {"note": "first of {run:items}"}}}
 		}}}`)
 	a, b, c := f.item(t, "alice", "A", nil), f.item(t, "alice", "B", nil), f.item(t, "alice", "C", nil)
@@ -712,8 +712,8 @@ func TestSelectionRuns(t *testing.T) {
 	if run.Status != "completed" || *run.ItemID != b.ID || strings.Join(run.Items, ",") != strings.Join([]string{a.ID, b.ID, c.ID}, ",") {
 		t.Fatalf("selection run: %+v", run)
 	}
-	if tags := f.head(t, b.ID).Tags; strings.Join(tags, ",") != "primary" {
-		t.Fatalf("primary tags %v", tags)
+	if keywords := f.head(t, b.ID).Keywords; keywordLabels(t, f.dms, keywords) != "primary" {
+		t.Fatalf("primary keywords %v", keywords)
 	}
 	if note := f.head(t, a.ID).Values["note"]; note != "first of "+a.ID+", "+b.ID+", "+c.ID {
 		t.Fatalf("note %v", note)
@@ -877,7 +877,7 @@ func TestKeywordsPicker(t *testing.T) {
 		"triggers": [{"type": "manual", "collection_id": "$LIST"}],
 		"input_schema": {"type": "object", "required": ["keywords"], "properties": {
 			"keywords": {"type": "array", "items": {"type": "string"}, "x-papergo": {"kind": "keywords"}}}},
-		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"values": {"keywords": "{input:keywords}"}}}}}}`
+		"flow": {"start": "keyword", "nodes": {"keyword": {"activity": "item.update", "inputs": {"values": {"keywords": "{input:keywords}"}}}}}}`
 	w := f.workflow(t, "Keywords", def)
 	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Old picker", Definition: json.RawMessage(strings.ReplaceAll(strings.Replace(def, `"kind": "keywords"`, `"kind": "keywords", "allow_new": true`, 1), "$LIST", f.list.ID))}); err == nil {
 		t.Fatal("keywords pickers have no options")

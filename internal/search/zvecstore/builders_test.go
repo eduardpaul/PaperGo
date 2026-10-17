@@ -15,14 +15,14 @@ func FuzzNativeFilter(f *testing.F) {
 		if len(input) > 8192 {
 			t.Skip()
 		}
-		out, err := nativeFilter(search.Filter{Access: search.Access{Draft: []string{input}, Read: []string{input}}, WorkspaceID: input, Tag: input, TermIDs: []string{input}})
+		out, err := nativeFilter(search.Filter{Access: search.Access{Draft: []string{input}, Read: []string{input}}, WorkspaceID: input, Keyword: input, TermIDs: []string{input}})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if strings.ContainsAny(out, "\\\x00\r\n") {
 			t.Fatalf("raw input in filter: %q", out)
 		}
-		// Every quoted literal is encoded hex, with optional fixed tag/term prefix.
+		// Every quoted literal is encoded hex, with optional fixed keyword/term prefix.
 		pieces := strings.Split(out, "'")
 		if len(pieces)%2 != 1 {
 			t.Fatal("unbalanced quotes")

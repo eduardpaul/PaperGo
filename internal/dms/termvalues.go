@@ -183,6 +183,7 @@ func (s *Service) RevisionTerms(ctx context.Context, revisionID string) (current
 		if out[i], err = s.ItemTerms(ctx, r.ContainerID, values); err != nil {
 			return nil, nil, err
 		}
+		out[i] = append(out[i], r.Keywords...)
 	}
 	return out[0], out[1], nil
 }

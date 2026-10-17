@@ -8,15 +8,15 @@ import { asList } from './values';
 const nameStaleTime = 5 * 60_000;
 
 /** Distinct ids held by fields of the given types, sorted so the query key stays stable. */
-export function referencedIds(fields: FieldDefinition[], rows: Pick<Resource, 'values'>[], types: string[]): string[] {
+export function referencedIds(fields: FieldDefinition[], rows: Pick<Resource, 'values' | 'keywords'>[], types: string[]): string[] {
   const keys = fields.filter((field) => types.includes(field.type)).map((field) => field.key);
-  const ids = new Set<string>();
+  const ids = new Set<string>(types.includes('keywords') ? rows.flatMap(row => row.keywords ?? []) : []);
   for (const row of rows) for (const key of keys) for (const id of asList(row.values?.[key])) ids.add(id);
   return [...ids].sort();
 }
 
 /** Display names for the people, terms, keywords and looked-up items shown in rows. */
-export function useValueNames(fields: FieldDefinition[], rows: Pick<Resource, 'values'>[]) {
+export function useValueNames(fields: FieldDefinition[], rows: Pick<Resource, 'values' | 'keywords'>[]) {
   const people = usePeopleNames();
   const termIds = referencedIds(fields, rows, ['term', 'keywords']);
   const itemIds = referencedIds(fields, rows, ['lookup']);

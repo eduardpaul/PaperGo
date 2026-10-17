@@ -35,8 +35,8 @@ import { Route as AppSettingsTokensRouteImport } from './routes/_app/settings/to
 import { Route as AppSettingsWebdavRouteImport } from './routes/_app/settings/webdav'
 import { Route as AppWIndexRouteImport } from './routes/_app/w/index'
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/_app/w/$workspaceId/index'
+import { Route as AppWWorkspaceIdKeywordsRouteImport } from './routes/_app/w/$workspaceId/keywords'
 import { Route as AppWWorkspaceIdSettingsRouteImport } from './routes/_app/w/$workspaceId/settings'
-import { Route as AppWWorkspaceIdTagsRouteImport } from './routes/_app/w/$workspaceId/tags'
 import { Route as AppWWorkspaceIdSettingsIndexRouteImport } from './routes/_app/w/$workspaceId/settings/index'
 import { Route as AppWWorkspaceIdSettingsMembersRouteImport } from './routes/_app/w/$workspaceId/settings/members'
 import { Route as AppWWorkspaceIdSettingsRunsRouteImport } from './routes/_app/w/$workspaceId/settings/runs'
@@ -181,14 +181,14 @@ const AppWWorkspaceIdIndexRoute = AppWWorkspaceIdIndexRouteImport.update({
   path: '/w/$workspaceId/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppWWorkspaceIdKeywordsRoute = AppWWorkspaceIdKeywordsRouteImport.update({
+  id: '/w/$workspaceId/keywords',
+  path: '/w/$workspaceId/keywords',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppWWorkspaceIdSettingsRoute = AppWWorkspaceIdSettingsRouteImport.update({
   id: '/w/$workspaceId/settings',
   path: '/w/$workspaceId/settings',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppWWorkspaceIdTagsRoute = AppWWorkspaceIdTagsRouteImport.update({
-  id: '/w/$workspaceId/tags',
-  path: '/w/$workspaceId/tags',
   getParentRoute: () => AppRoute,
 } as any)
 const AppWWorkspaceIdSettingsIndexRoute =
@@ -295,8 +295,8 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AppAdminIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/w/': typeof AppWIndexRoute
+  '/w/$workspaceId/keywords': typeof AppWWorkspaceIdKeywordsRoute
   '/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRouteWithChildren
-  '/w/$workspaceId/tags': typeof AppWWorkspaceIdTagsRoute
   '/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
@@ -335,7 +335,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AppAdminIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/w': typeof AppWIndexRoute
-  '/w/$workspaceId/tags': typeof AppWWorkspaceIdTagsRoute
+  '/w/$workspaceId/keywords': typeof AppWWorkspaceIdKeywordsRoute
   '/w/$workspaceId': typeof AppWWorkspaceIdIndexRoute
   '/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
@@ -377,8 +377,8 @@ export interface FileRoutesById {
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/w/': typeof AppWIndexRoute
+  '/_app/w/$workspaceId/keywords': typeof AppWWorkspaceIdKeywordsRoute
   '/_app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRouteWithChildren
-  '/_app/w/$workspaceId/tags': typeof AppWWorkspaceIdTagsRoute
   '/_app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
   '/_app/w/$workspaceId/settings/members': typeof AppWWorkspaceIdSettingsMembersRoute
   '/_app/w/$workspaceId/settings/runs': typeof AppWWorkspaceIdSettingsRunsRoute
@@ -421,8 +421,8 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/settings/'
     | '/w/'
+    | '/w/$workspaceId/keywords'
     | '/w/$workspaceId/settings'
-    | '/w/$workspaceId/tags'
     | '/w/$workspaceId/'
     | '/w/$workspaceId/settings/members'
     | '/w/$workspaceId/settings/runs'
@@ -461,7 +461,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/settings'
     | '/w'
-    | '/w/$workspaceId/tags'
+    | '/w/$workspaceId/keywords'
     | '/w/$workspaceId'
     | '/w/$workspaceId/settings/members'
     | '/w/$workspaceId/settings/runs'
@@ -502,8 +502,8 @@ export interface FileRouteTypes {
     | '/_app/admin/'
     | '/_app/settings/'
     | '/_app/w/'
+    | '/_app/w/$workspaceId/keywords'
     | '/_app/w/$workspaceId/settings'
-    | '/_app/w/$workspaceId/tags'
     | '/_app/w/$workspaceId/'
     | '/_app/w/$workspaceId/settings/members'
     | '/_app/w/$workspaceId/settings/runs'
@@ -710,18 +710,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/w/$workspaceId/keywords': {
+      id: '/_app/w/$workspaceId/keywords'
+      path: '/w/$workspaceId/keywords'
+      fullPath: '/w/$workspaceId/keywords'
+      preLoaderRoute: typeof AppWWorkspaceIdKeywordsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/w/$workspaceId/settings': {
       id: '/_app/w/$workspaceId/settings'
       path: '/w/$workspaceId/settings'
       fullPath: '/w/$workspaceId/settings'
       preLoaderRoute: typeof AppWWorkspaceIdSettingsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/w/$workspaceId/tags': {
-      id: '/_app/w/$workspaceId/tags'
-      path: '/w/$workspaceId/tags'
-      fullPath: '/w/$workspaceId/tags'
-      preLoaderRoute: typeof AppWWorkspaceIdTagsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/w/$workspaceId/settings/': {
@@ -926,8 +926,8 @@ interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
   AppFFolderIdRoute: typeof AppFFolderIdRoute
   AppWIndexRoute: typeof AppWIndexRoute
+  AppWWorkspaceIdKeywordsRoute: typeof AppWWorkspaceIdKeywordsRoute
   AppWWorkspaceIdSettingsRoute: typeof AppWWorkspaceIdSettingsRouteWithChildren
-  AppWWorkspaceIdTagsRoute: typeof AppWWorkspaceIdTagsRoute
   AppWWorkspaceIdIndexRoute: typeof AppWWorkspaceIdIndexRoute
   AppWWorkspaceIdLListIdRecycleBinRoute: typeof AppWWorkspaceIdLListIdRecycleBinRoute
   AppWWorkspaceIdLListIdSettingsRoute: typeof AppWWorkspaceIdLListIdSettingsRouteWithChildren
@@ -943,8 +943,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppFFolderIdRoute: AppFFolderIdRoute,
   AppWIndexRoute: AppWIndexRoute,
+  AppWWorkspaceIdKeywordsRoute: AppWWorkspaceIdKeywordsRoute,
   AppWWorkspaceIdSettingsRoute: AppWWorkspaceIdSettingsRouteWithChildren,
-  AppWWorkspaceIdTagsRoute: AppWWorkspaceIdTagsRoute,
   AppWWorkspaceIdIndexRoute: AppWWorkspaceIdIndexRoute,
   AppWWorkspaceIdLListIdRecycleBinRoute: AppWWorkspaceIdLListIdRecycleBinRoute,
   AppWWorkspaceIdLListIdSettingsRoute:

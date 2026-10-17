@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { ArrowLeft, Tag } from 'lucide-react';
+import { ArrowLeft, Tag as KeywordIcon } from 'lucide-react';
 import { resourceQuery } from '@/api/queries';
 import { useState } from 'react';
 import { useApiPages } from '@/api/pages';
@@ -10,20 +10,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { QueryFeedback } from '@/features/admin/common';
 
-export const Route = createFileRoute('/_app/w/$workspaceId/tags')({ component: WorkspaceTags });
-function WorkspaceTags() {
+export const Route = createFileRoute('/_app/w/$workspaceId/keywords')({ component: WorkspaceKeywords });
+function WorkspaceKeywords() {
   const { workspaceId } = Route.useParams();
   const workspace = useQuery(resourceQuery(workspaceId));
   const [prefix, setPrefix] = useState('');
-  const [tag, setTag] = useState('');
-  const tags = useApiPages<{ tag: string; count: number }>(
-    ['tags', workspaceId],
-    `/v1/workspaces/${workspaceId}/tags`,
+  const [keyword, setKeyword] = useState('');
+  const keywords = useApiPages<{ keyword: string; name: string; count: number }>(
+    ['keywords', workspaceId],
+    `/v1/workspaces/${workspaceId}/keywords`,
     { query: { prefix } },
   );
-  const matches = useApiPages<Resource>(['resources', workspaceId, 'tag', tag], '/v1/resources', {
-    enabled: !!tag,
-    query: { workspace_id: workspaceId, tag },
+  const matches = useApiPages<Resource>(['resources', workspaceId, 'keyword', keyword], '/v1/resources', {
+    enabled: !!keyword,
+    query: { workspace_id: workspaceId, keyword },
   });
   return (
     <Page>
@@ -35,38 +35,38 @@ function WorkspaceTags() {
         <ArrowLeft className="size-3.5" /> {workspace.data?.name ?? 'Workspace'}
       </Link>
       <PageHeader
-        icon={Tag}
-        title="Tags"
-        description="Tags used in this workspace. Choose one to see what carries it."
+        icon={KeywordIcon}
+        title="Keywords"
+        description="Keywords used in this workspace. Choose one to see what carries it."
       />
       <Input
-        aria-label="Filter tag prefix"
-        placeholder="Filter tags…"
+        aria-label="Filter keyword prefix"
+        placeholder="Filter keywords…"
         value={prefix}
         onChange={(event) => setPrefix(event.target.value)}
       />
-      <QueryFeedback query={tags} />
+      <QueryFeedback query={keywords} />
       <div className="my-3 flex flex-wrap gap-2">
-        {tags.items.map((entry) => (
+        {keywords.items.map((entry) => (
           <Button
-            key={entry.tag}
+            key={entry.keyword}
             size="sm"
-            variant={tag === entry.tag ? 'primary' : 'secondary'}
-            aria-pressed={tag === entry.tag}
-            onClick={() => setTag(tag === entry.tag ? '' : entry.tag)}
+            variant={keyword === entry.keyword ? 'primary' : 'secondary'}
+            aria-pressed={keyword === entry.keyword}
+            onClick={() => setKeyword(keyword === entry.keyword ? '' : entry.keyword)}
           >
-            {entry.tag} · {entry.count}
+            {entry.name} · {entry.count}
           </Button>
         ))}
       </div>
-      {tags.hasNextPage && (
-        <Button onClick={() => void tags.fetchNextPage()} disabled={tags.isFetchingNextPage}>
-          More tags
+      {keywords.hasNextPage && (
+        <Button onClick={() => void keywords.fetchNextPage()} disabled={keywords.isFetchingNextPage}>
+          More keywords
         </Button>
       )}
-      {tag && (
+      {keyword && (
         <>
-          <h2 className="mt-5 mb-2 font-medium">{tag}</h2>
+          <h2 className="mt-5 mb-2 font-medium">{keywords.items.find(entry => entry.keyword === keyword)?.name ?? 'Keyword'}</h2>
           <QueryFeedback query={matches} />
           <ul className="divide-y">
             {matches.items.map((item) => (

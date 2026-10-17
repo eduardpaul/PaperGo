@@ -67,7 +67,7 @@ func TestSearchFacetsVerifySourcesOutsideTheHitPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	private, err := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Report", Tags: []string{"secret-merger"}})
+	private, err := s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: "Report", Keywords: []string{"secret-merger"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestSearchFacetsVerifySourcesOutsideTheHitPage(t *testing.T) {
 	}
 	indexSearch(t, s)
 	out, err = s.Search(ctx, "bob", dms.SearchRequest{CollectionID: list.ID, Limit: 1, Facets: true})
-	if err != nil || out.Facets == nil || len(out.Facets.Tag) != 0 || out.Total != 1 || out.TotalEstimated {
+	if err != nil || out.Facets == nil || len(out.Facets.Keyword) != 0 || out.Total != 1 || out.TotalEstimated {
 		t.Fatalf("settled facets: %+v %v", out, err)
 	}
 }

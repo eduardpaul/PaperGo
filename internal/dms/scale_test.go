@@ -96,11 +96,11 @@ func TestBrowseCandidateAndScanPathsAgree(t *testing.T) {
 	other := create(t, s, w.ID, "list", "Alpha archive", nil)
 	create(t, s, other.ID, "item", "alpha elsewhere", nil)
 	for i := 0; i < 12; i++ {
-		tag := "even"
+		keyword := "even"
 		if i%2 == 1 {
-			tag = "odd"
+			keyword = "odd"
 		}
-		r, err := s.Create(testContext, "alice", list.ID, CreateResource{Kind: "item", Name: fmt.Sprintf("alpha %d", i), Tags: []string{tag}, Values: map[string]any{"n": num(i)}})
+		r, err := s.Create(testContext, "alice", list.ID, CreateResource{Kind: "item", Name: fmt.Sprintf("alpha %d", i), Keywords: []string{keyword}, Values: map[string]any{"n": num(i)}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -112,8 +112,8 @@ func TestBrowseCandidateAndScanPathsAgree(t *testing.T) {
 		}
 		if i%4 == 0 {
 			r = latest(t, s, r.ID)
-			name, tags, values := fmt.Sprintf("secret %d", i), []string{"hidden"}, map[string]any{"n": num(100 + i)}
-			if _, err = s.Update(testContext, "alice", r.ID, r.Version, UpdateResource{Name: &name, Tags: &tags, Values: &values}); err != nil {
+			name, keywords, values := fmt.Sprintf("secret %d", i), []string{"hidden"}, map[string]any{"n": num(100 + i)}
+			if _, err = s.Update(testContext, "alice", r.ID, r.Version, UpdateResource{Name: &name, Keywords: &keywords, Values: &values}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -122,9 +122,9 @@ func TestBrowseCandidateAndScanPathsAgree(t *testing.T) {
 		{WorkspaceID: w.ID, Search: "alpha"},
 		{WorkspaceID: w.ID, Search: "secret"},
 		{WorkspaceID: w.ID, Search: "nothing"},
-		{WorkspaceID: w.ID, Tag: "even"},
-		{WorkspaceID: w.ID, Tag: "hidden"},
-		{ParentID: list.ID, Search: "alpha", Tag: "odd"},
+		{WorkspaceID: w.ID, Keyword: "even"},
+		{WorkspaceID: w.ID, Keyword: "hidden"},
+		{ParentID: list.ID, Search: "alpha", Keyword: "odd"},
 		{ParentID: list.ID, FilterField: "n", FilterOp: "gte", FilterValue: "5"},
 		{ParentID: list.ID, FilterField: "n", FilterOp: "eq", FilterValue: "104"},
 		{ParentID: list.ID, FilterField: "n", FilterOp: "lt", FilterValue: "9", Search: "alpha"},

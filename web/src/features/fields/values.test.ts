@@ -3,10 +3,10 @@ import { parseJSON, stringifyJSON } from '@/api/json';
 import { valuesPatch } from './values';
 
 describe('valuesPatch', () => {
-  const fields = [{ key: 'title' }, { key: 'tags' }];
+  const fields = [{ key: 'title' }, { key: 'keywords' }];
 
   it('omits unchanged fields and clears empty text', () => {
-    expect(valuesPatch(fields, { title: 'A', tags: ['x'] }, { title: 'A', tags: [] })).toEqual({ tags: null });
+    expect(valuesPatch(fields, { title: 'A', keywords: ['x'] }, { title: 'A', keywords: [] })).toEqual({ keywords: null });
     expect(valuesPatch(fields, { title: 'A' }, { title: '' })).toEqual({ title: null });
     expect(valuesPatch(fields, { title: 'A' }, { title: 'A' })).toBeUndefined();
   });

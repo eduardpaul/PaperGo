@@ -32,7 +32,7 @@ const PackageRetention = 7 * 24 * time.Hour
 const OperationKindExport = "portability.export"
 const OperationKindImport = "portability.import"
 
-// This catalog is the portable application graph. Tag projections are rebuilt
+// This catalog is the portable application graph. Keyword projections are rebuilt
 // by database triggers and the search index by a reindex after the import.
 // Text read from files travels with their bytes: reading it again can mean
 // OCR. Credentials, audit, cursors and execution state belong to this

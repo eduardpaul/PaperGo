@@ -65,16 +65,16 @@ func TestWorkflowRoutes(t *testing.T) {
 			t.Fatalf("catalog missing %s: %s", typ, w.Body)
 		}
 	}
-	body := `{"name": "Tag on demand", "definition": {
+	body := `{"name": "Keyword on demand", "definition": {
 		"triggers": [{"type": "manual", "collection_id": "` + list.ID + `"}],
-		"input_schema": {"type": "object", "required": ["tag"], "properties": {"tag": {"type": "string", "minLength": 1}}},
-		"flow": {"start": "tag", "nodes": {"tag": {"activity": "item.update", "inputs": {"tags": ["{input:tag}"]}}}}}}`
+		"input_schema": {"type": "object", "required": ["keyword"], "properties": {"keyword": {"type": "string", "minLength": 1}}},
+		"flow": {"start": "keyword", "nodes": {"keyword": {"activity": "item.update", "inputs": {"keywords": ["{input:keyword}"]}}}}}}`
 	w = request(h, "POST", "/v1/workspaces/"+ws.ID+"/workflows", body, testToken, "", json_)
 	if w.Code != 201 || w.Header().Get("ETag") != `"1"` {
 		t.Fatalf("create: %d %s", w.Code, w.Body)
 	}
 	var created workflow.Workflow
-	if err = json.Unmarshal(w.Body.Bytes(), &created); err != nil || created.Key != "tag-on-demand" {
+	if err = json.Unmarshal(w.Body.Bytes(), &created); err != nil || created.Key != "keyword-on-demand" {
 		t.Fatalf("created: %+v %v", created, err)
 	}
 	bad := strings.Replace(body, `"item.update"`, `"item.teleport"`, 1)
@@ -84,12 +84,12 @@ func TestWorkflowRoutes(t *testing.T) {
 	if w = request(h, "PUT", "/v1/workflows/"+created.ID, body, testToken, "", json_); w.Code != 428 {
 		t.Fatalf("update without If-Match: %d", w.Code)
 	}
-	renamed := strings.Replace(body, "Tag on demand", "Tag items", 1)
+	renamed := strings.Replace(body, "Keyword on demand", "Keyword items", 1)
 	if w = request(h, "PUT", "/v1/workflows/"+created.ID, renamed, testToken, `"1"`, json_); w.Code != 200 || !strings.Contains(w.Body.String(), `"current_version":1`) {
 		t.Fatalf("rename keeps the version: %d %s", w.Code, w.Body)
 	}
 
-	w = request(h, "POST", "/v1/workflows/"+created.ID+"/runs", `{"item_ids": ["`+item.ID+`"], "inputs": {"tag": "approved"}}`, testToken, "", json_)
+	w = request(h, "POST", "/v1/workflows/"+created.ID+"/runs", `{"item_ids": ["`+item.ID+`"], "inputs": {"keyword": "approved"}}`, testToken, "", json_)
 	if w.Code != 202 {
 		t.Fatalf("start: %d %s", w.Code, w.Body)
 	}
@@ -116,8 +116,8 @@ func TestWorkflowRoutes(t *testing.T) {
 		t.Fatalf("steps: %+v", run.Steps)
 	}
 	got, err := s.Get(ctx, "alice", item.ID)
-	if err != nil || strings.Join(got.Tags, ",") != "approved" {
-		t.Fatalf("item tags: %v %v", got.Tags, err)
+	if err != nil || keywordLabels(t, s, got.Keywords) != "approved" {
+		t.Fatalf("item keywords: %v %v", got.Keywords, err)
 	}
 	w = request(h, "GET", "/v1/workspaces/"+ws.ID+"/workflow-runs?workflow_id="+created.ID, "", testToken, "", "")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), started.RunIDs[0]) {
@@ -150,14 +150,17 @@ func TestTagVocabularyRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tags := range [][]string{{"finance", "legal"}, {"finance"}} {
-		if _, err = s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: tags[len(tags)-1], Tags: tags}); err != nil {
+	for _, keywords := range [][]string{{"finance", "legal"}, {"finance"}} {
+		if _, err = s.Create(ctx, "alice", list.ID, dms.CreateResource{Kind: "item", Name: keywords[len(keywords)-1], Keywords: keywords}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	w := request(h, "GET", "/v1/workspaces/"+ws.ID+"/tags?prefix=fin&collection_id="+list.ID, "", testToken, "", "")
-	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"@odata.nextLink":null,"value":[{"tag":"finance","count":2}]}` {
-		t.Fatalf("tags: %d %s", w.Code, w.Body)
+	w := request(h, "GET", "/v1/workspaces/"+ws.ID+"/keywords?prefix=fin&collection_id="+list.ID, "", testToken, "", "")
+	var vocabulary struct {
+		Value []dms.WorkspaceKeywordCount `json:"value"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &vocabulary); err != nil || w.Code != 200 || len(vocabulary.Value) != 1 || vocabulary.Value[0].Name != "finance" || vocabulary.Value[0].Count != 2 {
+		t.Fatalf("keywords: %d %s", w.Code, w.Body)
 	}
 }
 
@@ -174,13 +177,13 @@ func TestDecisionCatalogAndStaticValidation(t *testing.T) {
 	for _, activity := range catalog.Activities {
 		found[activity.Key] = activity
 	}
-	for _, key := range []string{"ai.decide", "taxonomy.decide", "tags.apply"} {
+	for _, key := range []string{"ai.decide", "taxonomy.decide", "keywords.apply"} {
 		a, ok := found[key]
 		if !ok || a.OutputSchema == nil {
 			t.Fatal("missing decision catalog entry", key)
 		}
 	}
-	if _, ok := found["tags.suggest"]; ok {
+	if _, ok := found["keywords.suggest"]; ok {
 		t.Fatal("replaced action in catalog")
 	}
 	data := found["ai.decide"].InputSchema["properties"].(map[string]any)["data"].(map[string]any)

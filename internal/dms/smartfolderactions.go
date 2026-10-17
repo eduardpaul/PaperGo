@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"papergo/ent"
+	"papergo/ent/fielddefinition"
 	"papergo/ent/resource"
 	"slices"
 	"sort"
@@ -124,11 +125,11 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		var item *ent.Resource
 		typID := ""
 		name := ""
-		tags := []string{}
+		keywords := []string{}
 		values := map[string]any{}
 		if in.Create != nil {
 			name = in.Create.Name
-			tags = append(tags, in.Create.Tags...)
+			keywords = append(keywords, in.Create.Keywords...)
 			typID = in.Create.ContentTypeID
 			for key, v := range in.Create.Values {
 				values[key] = v
@@ -148,7 +149,7 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 				return e
 			}
 			name = item.Name
-			tags = append(tags, item.Tags...)
+			keywords = append(keywords, item.Keywords...)
 			typID = *item.ContentTypeID
 		}
 		typ, e := t.contentType(ctx, c.collection.ID, typID)
@@ -201,11 +202,19 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 		if e != nil {
 			return e
 		}
+		filter, e = t.keywordFilters(ctx, filter)
+		if e != nil {
+			return e
+		}
 		if filter != nil {
 			compiler := queryCompiler{defs: definitionMap(c.defs)}
 			if _, _, e = compiler.filter(filter, 0); e != nil {
 				return e
 			}
+		}
+		filter, e = t.keywordFilters(ctx, filter)
+		if e != nil {
+			return e
 		}
 		for _, cond := range smartEqualities(filter) {
 			value, e := decodeValue(cond.Value)
@@ -215,13 +224,13 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 			switch cond.Field {
 			case "$name":
 				name = value.(string)
-			case "$tags":
-				tag, ok := value.(string)
+			case "$keywords":
+				keyword, ok := value.(string)
 				if !ok {
-					return invalid("tag must be text")
+					return invalid("keyword must be text")
 				}
-				if !slices.Contains(tags, tag) {
-					tags = append(tags, tag)
+				if !slices.Contains(keywords, keyword) {
+					keywords = append(keywords, keyword)
 				}
 			default:
 				if strings.HasPrefix(cond.Field, "$") {
@@ -244,6 +253,12 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 					target = fd
 					break
 				}
+			}
+			if target == nil && smartTermField(&ent.FieldDefinition{Type: "keywords", Indexed: true, IndexStatus: fielddefinition.IndexStatusReady}, root) {
+				if !slices.Contains(keywords, root.ID) {
+					keywords = append(keywords, root.ID)
+				}
+				continue
 			}
 			if target == nil {
 				if d.TermMatch == "any" {
@@ -311,10 +326,10 @@ func (s *Service) ClassifySmartFolder(ctx context.Context, subject, id string, i
 			if p.ID != c.collection.ID && (p.Kind != resource.KindFolder || p.ContainerID == nil || *p.ContainerID != c.collection.ID) {
 				return invalid("parent_id is outside the selected collection")
 			}
-			out, e = t.create(ctx, subject, parent, CreateResource{Kind: "item", Name: name, Tags: tags, Values: values, ContentTypeID: typ.ID}, nil)
+			out, e = t.create(ctx, subject, parent, CreateResource{Kind: "item", Name: name, Keywords: keywords, Values: values, ContentTypeID: typ.ID}, nil)
 			created = true
 		} else {
-			out, e = t.update(ctx, subject, item.ID, item.Version, UpdateResource{Name: &name, Tags: &tags, Values: &values})
+			out, e = t.update(ctx, subject, item.ID, item.Version, UpdateResource{Name: &name, Keywords: &keywords, Values: &values})
 		}
 		if e != nil {
 			return e
@@ -443,8 +458,12 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 				values[key] = v
 			}
 		}
-		tags := append([]string{}, item.Tags...)
+		keywords := append([]string{}, item.Keywords...)
 		filter, e := resolveFilter(d.Filter, subject, time.Now().UTC(), definitionMap(c.defs))
+		if e != nil {
+			return e
+		}
+		filter, e = t.keywordFilters(ctx, filter)
 		if e != nil {
 			return e
 		}
@@ -453,8 +472,13 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 			if e != nil {
 				return e
 			}
-			if cond.Field == "$tags" {
-				tags = slices.DeleteFunc(tags, func(x string) bool { return smartEqual(x, v) })
+			if cond.Field == "$keywords" {
+				keywords = slices.DeleteFunc(keywords, func(x string) bool { return smartEqual(x, v) })
+				if id, ok := v.(string); ok {
+					if err := t.smartRemoveTerms(ctx, []string{id}, values, defs); err != nil {
+						return err
+					}
+				}
 				continue
 			}
 			fd := known[cond.Field]
@@ -474,7 +498,18 @@ func (s *Service) UnclassifySmartFolder(ctx context.Context, subject, id, itemID
 		if e = t.smartRemoveTerms(ctx, d.Terms, values, defs); e != nil {
 			return e
 		}
-		out, e = t.update(ctx, subject, item.ID, item.Version, UpdateResource{Tags: &tags, Values: &values})
+		retained := []string{}
+		for _, id := range keywords {
+			match, err := t.MatchTerms(ctx, d.Terms, []string{id})
+			if err != nil {
+				return err
+			}
+			if len(match) == 0 {
+				retained = append(retained, id)
+			}
+		}
+		keywords = retained
+		out, e = t.update(ctx, subject, item.ID, item.Version, UpdateResource{Keywords: &keywords, Values: &values})
 		if e != nil {
 			return e
 		}

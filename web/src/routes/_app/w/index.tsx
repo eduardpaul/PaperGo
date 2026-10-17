@@ -32,7 +32,7 @@ function WorkspacesPage() {
   const setCreate = (open: boolean) => void navigate({ search: open ? { create: true } : {}, replace: true });
   const mutation = useMutation({
     mutationFn: () =>
-      api<Resource>('/v1/workspaces', { method: 'POST', body: { name: name.trim(), description: description.trim(), tags: [] } }).then((result) => result.data),
+      api<Resource>('/v1/workspaces', { method: 'POST', body: { name: name.trim(), description: description.trim(), keywords: [] } }).then((result) => result.data),
     onSuccess: async (workspace) => {
       await queryClient.invalidateQueries({ queryKey: keys.workspaces });
       void navigate({ to: '/w/$workspaceId', params: { workspaceId: workspace.id } });

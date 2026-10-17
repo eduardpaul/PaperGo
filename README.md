@@ -101,15 +101,15 @@ Vite listens on `http://127.0.0.1:5173` and proxies `/v1`, `/auth` and `/health`
 | WebDAV access to libraries | Optional per library (`webdav_enabled`). Windows Explorer, macOS Finder and Office can browse, open, create, overwrite, rename, move, copy, lock and delete files and folders, with the same permissions, publishing and history as the REST API. |
 | Flexible SharePoint-style fields | Per-container typed fields and immutable schema revisions. Types: text/note/email/url/date/datetime, choice, number/integer/decimal, boolean, lookup, term and keywords (by term ID or label); defaults, bounds, length limits, and indexed multi-values. Unknown fields, wrong types and missing required values are rejected. |
 | Library as blob plus list item | A library item has the same metadata and permission behavior as a list item, plus immutable blob revisions stored outside SQLite. |
-| Create a document in one upload | Streaming multipart REST creation accepts a file and metadata, including type, folder, values, tags and language hints, and commits the first revision with content atomically. |
+| Create a document in one upload | Streaming multipart REST creation accepts a file and metadata, including type, folder, values, keywords and language hints, and commits the first revision with content atomically. |
 | Control duplicate uploads | Libraries configure Allow/Warn/Block policies based on file hashes and current documents visible to the caller across workspaces. |
 | Restore an earlier file | Restore retained bytes and filename as a new file version while retaining current metadata and following publication settings. |
 | Unique permissions at every level | SharePoint-style inheritance: only the nearest exclusive scope supplies additive read/read_draft/write/publish/manage grants. Break, copy, or reset inheritance explicitly. Manage implies all actions; write/publish imply draft and published read. Denies are rejected. |
 | Typed item relationships | Every link has a workspace relationship type supplying its key, directed/symmetric policy, validated attributes, cardinality limits, and edge ETags. Indexed incoming/outgoing queries require visible, authorized endpoints before pagination. New cross-workspace links are rejected; item moves preserve existing links, which require readable live endpoints. |
 | Publish any list/library item | Publishing disabled by default: new items, edits and uploads are automatically published. With publishing enabled, changes create drafts and explicit publish/unpublish controls the published pointer. Ordinary readers see published revisions only. Library revisions pin their blob. |
 | Preserve content history | Every item create, metadata edit and upload stores an immutable revision tied to its schema revision. Head and published surfaces are independent in publishing collections; without publishing they are one surface. Lifecycle/ACL changes advance the lock version without creating content revisions. |
-| Tags on all content | Built-in tags on every resource, with a normalized indexed projection maintained by database triggers. The workspace tag vocabulary lists tags in use with counts of what the caller can read. |
-| Read-heavy browsing and search | Keyset pagination and permission filtering before LIMIT; a separate search index kept current by a workflow, and tags, on the selected head/published surface; optional typed field indexes for exact filters and ranges. Multi-step reads use a consistent database snapshot. |
+| Keywords on all content | Shared folksonomy with chips, autocomplete and keyword filters. Intrinsic keywords and keyword fields store term IDs from the Keywords term set in Taxonomy. Workspace browsing counts readable resources on the selected content surface. |
+| Read-heavy browsing and search | Keyset pagination and permission filtering before LIMIT; a separate search index kept current by a workflow, and keywords, on the selected head/published surface; optional typed field indexes for exact filters and ranges. Multi-step reads use a consistent database snapshot. |
 | Enterprise backend foundation | Fail-closed bearer authentication, production OIDC, transactional audit events, optimistic concurrency, strict JSON, upload limits, structured logs, health probes, graceful shutdown and non-root container build. |
 | Reusable application schemas | Organization content-type and field catalogs, live collection attachments, independent defaults, cross-field rules and templates; shared updates advance immutable effective schemas atomically. |
 | Business keys | Indexed scalar uniqueness across head and published values, enforced transactionally for single and bulk writes. |
@@ -128,10 +128,10 @@ Every `/v1` request requires authentication: HTTP Basic or a session cookie in l
 | Method | Route | Purpose |
 | --- | --- | --- |
 | POST / GET | `/v1/workspaces` | Create a workspace / list accessible workspaces |
-| GET / PATCH / DELETE | `/v1/resources/{id}` | Read / update names, tags, item values, `parent_id` (move) and collection settings / delete a folder or item |
+| GET / PATCH / DELETE | `/v1/resources/{id}` | Read / update names, keywords, item values, `parent_id` (move) and collection settings / delete a folder or item |
 | POST / GET | `/v1/resources/{id}/children` | Create / browse children; `kind=folder` (or another kind) lists only that kind |
 | POST | `/v1/resources/{id}/bulk` | Atomically create, update/move, publish, unpublish or delete up to 100 items in one list/library |
-| GET | `/v1/workspaces/{id}/tags` | The tag vocabulary with counts of readable resources; `collection_id`, `prefix`, `$skiptoken`, `$top` |
+| GET | `/v1/workspaces/{id}/keywords` | The keyword vocabulary with counts of readable resources; `collection_id`, `prefix`, `$skiptoken`, `$top` |
 | POST / GET | `/v1/smart-folders` | Create / browse personal and shared query definitions |
 | GET / PUT / DELETE | `/v1/smart-folders/{id}` | Read / replace / delete a definition with its own ETag |
 | POST | `/v1/smart-folders/preview` | Preview unsaved rules, five authorized matches and bounded count |
@@ -141,7 +141,7 @@ Every `/v1` request requires authentication: HTTP Basic or a session cookie in l
 | GET / POST | `/v1/workspaces/{id}/smart-folders/export`, `/import` | Export / atomically merge portable shared definitions |
 | GET | `/v1/items/{id}/text` | Text read from the item's file, page by page; see [documents](docs/documents.md) |
 | GET / POST | `/v1/search` | Global search across readable workspaces, with field filters, facets and relevance order; see [search](docs/search.md) |
-| GET | `/v1/resources?workspace_id=...&q=...&tag=...` | Workspace search and tag filtering; optional `parent_id` narrows to direct children and `kind` to one kind of resource |
+| GET | `/v1/resources?workspace_id=...&q=...&keyword=...` | Workspace search and keyword filtering; optional `parent_id` narrows to direct children and `kind` to one kind of resource |
 | POST / GET | `/v1/resources/{id}/fields` | Add / read list or library field definitions |
 | PATCH | `/v1/resources/{id}/fields/{fieldID}` | Evolve label, choices, required or indexed; uses the container ETag |
 | GET | `/v1/resources/{id}/schemas` | Manager-only schema history; paginate with `$skiptoken` |
@@ -173,26 +173,26 @@ Read/update responses carry a quoted numeric `ETag`. PATCH, resource DELETE, cat
 
 GET and PATCH `/v1/resources/{id}` add `access`: the actions the caller may take on that resource, in the order `read`, `read_draft`, `write`, `publish`, `manage`. It applies the same ACL and module-scope rules as the requests themselves (`write` and `publish` below a workspace also need `list.write`), so clients can offer only allowed actions. The server still checks every request.
 
-GET resources and browsing support `surface=auto|head|published`. Auto chooses head for draft readers and published for ordinary readers. An unpublished item returns 404 to a reader; explicit head requests require draft access. Names, tags, values, search matches, field filters and downloads all use the chosen surface. Readers cannot download draft or arbitrary historical blobs. A published resource's lock version may advance when editors save drafts; its `updated_at` describes the selected content revision.
+GET resources and browsing support `surface=auto|head|published`. Auto chooses head for draft readers and published for ordinary readers. An unpublished item returns 404 to a reader; explicit head requests require draft access. Names, keywords, values, search matches, field filters and downloads all use the chosen surface. Readers cannot download draft or arbitrary historical blobs. A published resource's lock version may advance when editors save drafts; its `updated_at` describes the selected content revision.
 
 Currency pickers accept codes, symbols and names. New currency fields preselect the workspace `default_currency`, or the organization preference (USD by default). Workspace managers can set or clear the override; existing field definitions retain their currency.
 
 Fields use stable immutable keys, types, decimal scales, multiplicity, and reference scopes. Multiple values are supported only by choice, person, lookup, term and keywords. Person values store active enrolled organization subjects; GET `/v1/people` lists eligible IDs with `list.read`. Labels, choices, required and indexed flags can evolve; existing revisions retain their original schema. Adding a required field to a populated collection requires a valid default; setting an existing field required affects future edits. Set `indexed:true` to enable typed queries. Changing this flag queues a background index build; the field is queryable once its `index_status` is `ready`. For example, `GET /v1/resources/{listID}/children?filter_field=amount&filter_op=gte&filter_value=125.00`. Operators: `eq`, `gt`, `gte`, `lt`, `lte`; boolean supports only `eq`. Filters require a list/library/folder scope and apply to direct children.
 
-Read an item's `/schema` for the schema paired with its selected revision, its visible `item` system properties and optional `file` metadata (display filename, media type and byte size). Field inspectors separate system properties and assigned tags/keywords from custom fields. Revision history includes each immutable schema in `edges.schema_revision`, allowing item readers to interpret historical values without collection management access. The collection `/fields` endpoint describes current configuration. Collections accept `versioning:"off"|"major"` and `max_versions` (1–500, default 50) on creation and PATCH with manage access and `If-Match`. Lists and libraries default to history off. Turning history off stops new entries while preserving retained history. Each recorded change trims that item to its configured limit. Trimmed snapshots cannot be read or restored through history; snapshots remain only while referenced by current heads, publications, retained history or undispatched event processing. Unreferenced metadata snapshots are collected. History is newest first. Its `revision_number` increments only for recorded entries, independently of internal content snapshot numbers; pausing history creates no numbering gaps. `is_current` identifies the newest retained record, including while recording is off.
+Read an item's `/schema` for the schema paired with its selected revision, its visible `item` system properties and optional `file` metadata (display filename, media type and byte size). Field inspectors separate system properties and intrinsic keyword assignments from custom fields. Revision history includes each immutable schema in `edges.schema_revision`, allowing item readers to interpret historical values without collection management access. The collection `/fields` endpoint describes current configuration. Collections accept `versioning:"off"|"major"` and `max_versions` (1–500, default 50) on creation and PATCH with manage access and `If-Match`. Lists and libraries default to history off. Turning history off stops new entries while preserving retained history. Each recorded change trims that item to its configured limit. Trimmed snapshots cannot be read or restored through history; snapshots remain only while referenced by current heads, publications, retained history or undispatched event processing. Unreferenced metadata snapshots are collected. History is newest first. Its `revision_number` increments only for recorded entries, independently of internal content snapshot numbers; pausing history creates no numbering gaps. `is_current` identifies the newest retained record, including while recording is off.
 
 `integer` accepts exact JSON integers within signed 64 bits. `decimal` accepts a decimal string or exact JSON number, with fixed `scale` from 0 to 9; it stores a canonical string in content and a signed 64-bit scaled integer in indexes. Excess fractional digits and overflow are rejected without rounding. Use strings for decimals and an exact-number parser in clients; JavaScript clients should avoid unsafe numeric literals above 2^53. `number` is an approximate floating-point query type. Optional null values produce no field-index row.
 
 Example request bodies, in order:
 
 ```json
-{"name":"Engineering","tags":["internal"]}
+{"name":"Engineering","keywords":["internal"]}
 ```
 
 POST the workspace ID's `/children` to create a library:
 
 ```json
-{"kind":"library","name":"Contracts","tags":["legal"],"publishing_enabled":true}
+{"kind":"library","name":"Contracts","keywords":["legal"],"publishing_enabled":true}
 ```
 
 POST the library's `/fields` (requires manage):
@@ -204,7 +204,7 @@ POST the library's `/fields` (requires manage):
 POST the library's `/children`:
 
 ```json
-{"kind":"item","name":"Supplier agreement","values":{"status":"draft"},"tags":["supplier"]}
+{"kind":"item","name":"Supplier agreement","values":{"status":"draft"},"keywords":["supplier"]}
 ```
 
 Upload bytes to the item's `/content` with `Content-Type: application/pdf`, `X-Filename: agreement.pdf`, and `If-Match: "1"`. PDF, TIFF, JPEG, PNG and WebP are accepted by their actual byte signatures; filenames and declared media types do not select the stored type. Unsupported content returns 415 without a new revision. The same policy applies to multipart creation, WebDAV PUT and package import. Upload returns blob metadata and the new item ETag; GET supports Range requests and always sends an attachment disposition. Publish with POST `/publications` and the new `If-Match` value.
@@ -246,7 +246,7 @@ To connect from Windows, choose **Map network drive** in Explorer and enter `htt
 | PUT | Create an item whose first revision holds the content, or add a content revision to an existing file. `If-Match` and `If-None-Match` are honored. |
 | MKCOL | Create a folder. |
 | MOVE | Rename or move within the library in one transaction, replacing the destination unless `Overwrite: F`. Destinations in other libraries return 502, so clients copy and delete instead. |
-| COPY | Create new items carrying the source's bytes, tags and field values; copying onto an existing file adds a content revision. COPY and MOVE refuse (403) a destination that is the source itself, contains it, or lies inside it. |
+| COPY | Create new items carrying the source's bytes, keywords and field values; copying onto an existing file adds a content revision. COPY and MOVE refuse (403) a destination that is the source itself, contains it, or lies inside it. |
 | DELETE | Delete a file or a folder and its contents atomically, requiring write access to every descendant. |
 | LOCK / UNLOCK | Exclusive or shared write locks of at most one hour, refreshable, held in memory and released on restart. |
 | PROPPATCH | Live DAV properties are refused; others, such as Windows timestamps, are acknowledged but not stored. |
@@ -257,7 +257,7 @@ New files take the library's field defaults; a library with a required field tha
 
 During feature development, the whole database schema lives in one file, `migrations/20261007000100_schema.sql`, which is edited in place. Do not add development migration files, backfills, upgrade paths or compatibility code (see [AGENTS.md](AGENTS.md)). Published releases generate their upgrade artifacts only when tagged, outside the development migration directory. Local databases are disposable: delete `data/` and apply the schema again.
 
-`ent/schema/` defines entity fields and generated access code. The schema file also defines composite ownership foreign keys and SQLite-specific tags, type checks, immutable-history and permission-scope triggers, which an Ent-generated table diff does not express.
+`ent/schema/` defines entity fields and generated access code. The schema file also defines composite ownership foreign keys and SQLite-specific keywords, type checks, immutable-history and permission-scope triggers, which an Ent-generated table diff does not express.
 
 ```powershell
 go generate ./ent
@@ -291,13 +291,13 @@ This is an initial backend foundation, not a completed enterprise certification 
 
 The [NPM Compose sample](samples/npm/README.md) provisions an NPM-only authenticated deployment with HTTPS and persistent storage. The [authentik Compose sample](samples/authentik/README.md) provisions an OIDC deployment with authentik for users, groups and MFA, browser sign-in, Caddy for HTTPS, and persistent storage. The [reverse proxy guide](docs/reverse-proxies.md) covers running PaperGo behind Nginx Proxy Manager and other proxies, and syncing identity-provider users and groups.
 
-To scale later, retain the service and API boundaries, introduce a PostgreSQL connection adapter, regenerate/review database-specific Atlas migrations, replace the tag SQL and the search store, and use a shared object-store implementation of the storage port. A database migration is required; changing the connection string alone is insufficient.
+To scale later, retain the service and API boundaries, introduce a PostgreSQL connection adapter, regenerate/review database-specific Atlas migrations, replace the keyword SQL and the search store, and use a shared object-store implementation of the storage port. A database migration is required; changing the connection string alone is insufficient.
 
 Relevant upstream references: [Ent versioned migrations](https://entgo.io/docs/versioned-migrations/), [Atlas](https://atlasgo.io/getting-started).
 
 ### Filtered bulk edits
 
-POST `/v1/resources/{collectionID}/bulk-update` queues a durable operation with list.read, list.write and collection write access. Its `query` uses the same typed `QuerySpec` as collection queries, on readable head content; omit it to select all readable head items. A patch may set `content_type_id`, `name`, `tags` or `values`. For example:
+POST `/v1/resources/{collectionID}/bulk-update` queues a durable operation with list.read, list.write and collection write access. Its `query` uses the same typed `QuerySpec` as collection queries, on readable head content; omit it to select all readable head items. A patch may set `content_type_id`, `name`, `keywords` or `values`. For example:
 
 ```json
 {"query":{"filter":{"field":"status","value":"todo"}},"values":{"status":"done"}}

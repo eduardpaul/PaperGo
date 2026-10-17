@@ -28,7 +28,7 @@ export interface Resource {
   default_currency?: string;
   allow_folders?: boolean;
   template_keys?: string[] | null;
-  tags?: string[] | null;
+  keywords?: string[] | null;
   values?: Record<string, unknown> | null;
   inherit_permissions?: boolean;
   version: number;
@@ -80,7 +80,7 @@ export interface SearchFacets {
   collection: SearchFacetValue[];
   content_type: SearchFacetValue[];
   term: SearchFacetValue[];
-  tag: SearchFacetValue[];
+  keyword: SearchFacetValue[];
 }
 
 export interface SearchPage extends Page<SearchHit> {
@@ -169,7 +169,7 @@ export interface QuerySpec {
   /** Anywhere below this folder: in it or its subfolders. */
   ancestor_id?: string;
   search?: string;
-  tag?: string;
+  keyword?: string;
 }
 
 export interface Me {

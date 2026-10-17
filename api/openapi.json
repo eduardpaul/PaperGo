@@ -408,7 +408,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "type",
@@ -565,7 +565,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -610,7 +610,13 @@
                     "minLength": 1,
                     "maxLength": 200
                   },
-                  "tags": {
+                  "description": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "description": "Workspace description. Only workspaces accept this property; an empty string clears it.",
+                    "default": ""
+                  },
+                  "keywords": {
                     "type": "array",
                     "maxItems": 50,
                     "uniqueItems": true,
@@ -619,12 +625,6 @@
                       "minLength": 1,
                       "maxLength": 64
                     }
-                  },
-                  "description": {
-                    "type": "string",
-                    "maxLength": 2000,
-                    "description": "Workspace description. Only workspaces accept this property; an empty string clears it.",
-                    "default": ""
                   }
                 },
                 "required": [
@@ -700,7 +700,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "workspace_id",
@@ -724,11 +724,12 @@
             }
           },
           {
-            "name": "tag",
+            "name": "keyword",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields."
           },
           {
             "schema": {
@@ -1113,7 +1114,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "schema": {
@@ -1170,11 +1171,12 @@
             }
           },
           {
-            "name": "tag",
+            "name": "keyword",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields."
           },
           {
             "name": "kind",
@@ -1489,7 +1491,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "direction",
@@ -1909,7 +1911,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "description": "Draft readers see lifecycle history. Ordinary readers see publish events for the current published revision only. Required module scopes: list.read. Resource ACLs and any additional use-case checks also apply.",
@@ -2085,7 +2087,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -2125,164 +2127,6 @@
           "list.read",
           "document.read"
         ]
-      }
-    },
-    "/v1/workspaces/{id}/tags": {
-      "get": {
-        "summary": "Tags",
-        "operationId": "workspaceTags",
-        "description": "The workspace's tag vocabulary (keywords), sorted, with how many resources the caller can read carry each tag. Items count with the surface the caller sees. For keyword pickers and autocomplete.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "collection_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Only tags used in this list or library."
-          },
-          {
-            "name": "prefix",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Only tags starting with this text."
-          },
-          {
-            "name": "$skiptoken",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque continuation token supplied by @odata.nextLink."
-          },
-          {
-            "name": "$top",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 500,
-              "default": 50
-            },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TagCountPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/v1/resources/{id}/fields/{fieldID}": {
@@ -2468,7 +2312,7 @@
               "default": 50
             },
             "name": "$top",
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50.",
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
             "in": "query"
           }
         ]
@@ -2538,7 +2382,7 @@
               "default": 50
             },
             "name": "$top",
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50.",
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50.",
             "in": "query"
           }
         ],
@@ -2722,7 +2566,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -3757,7 +3601,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -4013,7 +3857,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -5335,7 +5179,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "x-module-scopes": [
@@ -5719,7 +5563,7 @@
     },
     "/v1/smart-folders/{id}/items/{itemID}": {
       "delete": {
-        "description": "Requires item If-Match and current folder_version. Clears matching equality values/tags and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.",
+        "description": "Requires item If-Match and current folder_version. Clears matching equality values/keywords and selected terms including descendants; ordinary validation and publication rules apply. Rolls back if the result still matches the definition. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply. Only definitions with mode classification permit this action; saved queries reject it.",
         "responses": {
           "200": {
             "content": {
@@ -6782,7 +6626,7 @@
       "post": {
         "summary": "Start Workflow",
         "operationId": "startWorkflow",
-        "description": "Starts one manual workflow run. Standalone triggers require no item IDs and workspace manage access; single-item triggers require exactly one item; selection triggers require 1–100 ordered items. Item starts require write access to every item. Runs start when the request commits.",
+        "description": "Starts one manual workflow run. Standalone triggers require no item IDs and workspace manage access; single-item triggers require exactly one item; selection triggers require 1\u2013100 ordered items. Item starts require write access to every item. Runs start when the request commits.",
         "parameters": [
           {
             "name": "id",
@@ -7379,7 +7223,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -7866,7 +7710,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -8678,7 +8522,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -9385,7 +9229,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -10368,7 +10212,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -11315,7 +11159,7 @@
       ],
       "post": {
         "summary": "Restore historical metadata as a new revision",
-        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, tags and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
+        "description": "Requires item write permission and its current If-Match. Revalidates values against the current schema; removed fields remain removed and current values absent from the snapshot are cleared. Restores the historical content type (which must still be attached), name, keywords and field values, retaining the current blob. Runs ordinary indexing, publication and domain-event logic atomically. Historical revisions are unchanged. Required module scopes: list.write. Resource ACLs and any additional use-case checks also apply.",
         "parameters": [
           {
             "name": "If-Match",
@@ -12422,7 +12266,7 @@
         ],
         "operationId": "startFilteredBulkUpdate",
         "summary": "Bulk edit matching items with durable progress",
-        "description": "Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/tags can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.",
+        "description": "Starts a durable filtered edit of current head content. Requires list.read, list.write and collection write access. The existing typed query selects readable drafts; omitted query selects all readable head items and folders, including nested content. Sort and group_by are rejected. Selection freezes when execution begins. Each item merges values (null removes a value) through current validation, permissions, uniqueness, revision, audit and event handling, in its own commit. Current name/keywords can also be changed. Successful items survive other items' failures. Poll Location for matched, processed, updated, failed, progress and up to 50 failure reasons; failed counts all failures. succeeded means execution finished, including partial success. Access, schema or infrastructure failures stop the operation with status failed. Cancellation on shutdown leaves pending work resumable. Bulk operations and failure details are visible only to their starter, with collection read access. The explicit /bulk endpoint remains an atomic transaction of up to 100 actions.",
         "x-required-scopes": [
           "list.read",
           "list.write"
@@ -12548,7 +12392,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -12942,7 +12786,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -13532,7 +13376,7 @@
         }
       ],
       "get": {
-        "summary": "Synchronize the caller’s visible collection",
+        "summary": "Synchronize the caller\u2019s visible collection",
         "description": "Initial synchronization returns visible items and folders. Follow @odata.nextLink, then persist @odata.deltaLink to retrieve subsequent edits, deletions, moves and access changes. Tokens are bound to caller and collection, durable for 30 days; page continuations expire after five minutes. 410 requires a new initial synchronization. Each synchronization scans the current visible collection and compares stored fingerprints; transient changes that return to the same state between polls are coalesced. Required module scope: list.read.",
         "parameters": [
           {
@@ -13560,7 +13404,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           }
         ],
         "responses": {
@@ -13608,7 +13452,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Page size; values are clamped to 1–500. Missing or invalid values use 50."
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
           },
           {
             "name": "actor",
@@ -16238,13 +16082,13 @@
             "description": "Items holding this term, a descendant, or a term merged into it."
           },
           {
-            "name": "tag",
+            "name": "keyword",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "Only entries with this tag."
+            "description": "Shared keyword term ID or label; includes intrinsic keywords and keywords fields."
           },
           {
             "name": "created_by",
@@ -17252,7 +17096,7 @@
       ],
       "post": {
         "summary": "Move selected items and folders atomically within one collection",
-        "description": "Requires write on each selected resource and destination. Moves 1–100 top-level entries, with each current version in the body. Ancestor/descendant selections, cycles and cross-collection moves are rejected. Every move rolls back on failure. Folder contents remain in their folder. A name_conflict reports the supplied source_item_id; existing_item is included only for a writable replacement file.",
+        "description": "Requires write on each selected resource and destination. Moves 1\u2013100 top-level entries, with each current version in the body. Ancestor/descendant selections, cycles and cross-collection moves are rejected. Every move rolls back on failure. Folder contents remain in their folder. A name_conflict reports the supplied source_item_id; existing_item is included only for a writable replacement file.",
         "requestBody": {
           "required": true,
           "content": {
@@ -17330,7 +17174,7 @@
       "post": {
         "operationId": "previewSmartFolder",
         "summary": "Preview unsaved smart-folder rules",
-        "description": "Read-only evaluation of the caller’s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.",
+        "description": "Read-only evaluation of the caller\u2019s readable collections and visible item revisions. Returns up to five items and a count capped at 10,000; no continuation. No definition, item, version or audit event is saved. Requires list.read.",
         "x-module-scopes": [
           "list.read"
         ],
@@ -17560,6 +17404,164 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{id}/keywords": {
+      "get": {
+        "summary": "Keywords",
+        "operationId": "workspaceTags",
+        "description": "Shared keywords used in this workspace, with names and counts of distinct readable resources. Includes intrinsic keywords and keywords fields on the visible head/published surface. Sorted by normalized name and ID; follow the opaque continuation cursor.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only keywords used in this list or library."
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only keywords starting with this text."
+          },
+          {
+            "name": "$skiptoken",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceKeywordCountPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -17572,7 +17574,7 @@
       "proxyBasicAuth": {
         "type": "http",
         "scheme": "basic",
-        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. Personal-token and WebDAV credential endpoints are unavailable in this mode. Integration REST tokens authenticate directly when the API ingress forwards Authorization: Bearer pgo_…."
+        "description": "In AUTH_MODE=proxy, authenticate at the trusted reverse proxy over HTTPS. PaperGo validates the proxy assertion and applies persisted permissions. Personal-token and WebDAV credential endpoints are unavailable in this mode. Integration REST tokens authenticate directly when the API ingress forwards Authorization: Bearer pgo_\u2026."
       },
       "localBasicAuth": {
         "type": "http",
@@ -17965,16 +17967,6 @@
             "maxLength": 1024,
             "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
           },
-          "tags": {
-            "type": "array",
-            "maxItems": 50,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64
-            }
-          },
           "values": {
             "type": "object",
             "additionalProperties": true,
@@ -18108,6 +18100,17 @@
             "type": "string",
             "pattern": "^([A-Z]{3})?$",
             "description": "Workspace only. Empty inherits the organization default. Changing this affects newly created currency fields, not existing definitions."
+          },
+          "keywords": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary."
           }
         },
         "required": [
@@ -18135,16 +18138,6 @@
             "minLength": 1,
             "maxLength": 1024,
             "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
-          },
-          "tags": {
-            "type": "array",
-            "maxItems": 50,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64
-            }
           },
           "values": {
             "type": "object",
@@ -18218,6 +18211,17 @@
               "block"
             ],
             "description": "Libraries only. Default warn. Compares hashes against current documents visible to the caller across libraries and workspaces. Allow suppresses warnings; block rejects duplicates with 409 duplicate_file."
+          },
+          "keywords": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary."
           }
         },
         "required": [
@@ -18234,16 +18238,6 @@
             "minLength": 1,
             "maxLength": 1024,
             "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
-          },
-          "tags": {
-            "type": "array",
-            "maxItems": 50,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64
-            }
           },
           "values": {
             "type": "object",
@@ -18305,6 +18299,17 @@
             "type": "string",
             "pattern": "^([A-Z]{3})?$",
             "description": "Workspace only. Empty inherits the organization default. Changing this affects newly created currency fields, not existing definitions."
+          },
+          "keywords": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary."
           }
         },
         "required": [],
@@ -18922,16 +18927,6 @@
             "maxLength": 1024,
             "description": "Item and folder titles contain at most 1024 UTF-16 units before trimming. Workspace and collection names allow 200 units. Library names also exclude path separators and control characters and are unique among live siblings ignoring case."
           },
-          "tags": {
-            "type": "array",
-            "maxItems": 50,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64
-            }
-          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -18957,7 +18952,18 @@
             "items": {
               "type": "string"
             },
-            "description": "Sorted fields changed from the preceding revision. $name and $tags identify system metadata. File blob changes are not included."
+            "description": "Sorted fields changed from the preceding revision. $name and $keywords identify system metadata. File blob changes are not included."
+          },
+          "keywords": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary."
           }
         },
         "type": "object",
@@ -18968,7 +18974,7 @@
           "schema_revision_id",
           "revision_number",
           "name",
-          "tags",
+          "keywords",
           "payload",
           "created_by",
           "created_at",
@@ -19300,7 +19306,7 @@
         },
         "required": [],
         "additionalProperties": false,
-        "description": "One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $tags supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision."
+        "description": "One condition or AND/OR/NOT group; maximum 32 nodes and depth 6. Custom fields must be indexed. $id/$name are system fields; $keywords supports equality. Multi-valued eq matches any member; ne requires present with no equal member. Collection and smart-folder rules also accept $file_type for the MIME type of the visible file revision."
       },
       "SortSpec": {
         "type": "object",
@@ -19346,19 +19352,20 @@
             "type": "string",
             "maxLength": 256
           },
-          "tag": {
-            "type": "string",
-            "maxLength": 64
-          },
           "content_type_id": {
             "type": "string",
             "format": "uuid",
             "description": "Optional collection content type filter. Field filters, sorting and grouping must use fields assigned to that type."
+          },
+          "keyword": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Keyword term ID or label. Matches intrinsic keywords and keywords fields on the selected visible surface."
           }
         },
         "required": [],
         "additionalProperties": false,
-        "description": "Collection query over visible surfaces. System fields: $id, $name, $tags, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision."
+        "description": "Collection query over visible surfaces. System fields: $id, $name, $keywords, $created_at, $created_by, $modified_at, $modified_by. Times are RFC3339 UTC and modification metadata follows the selected revision."
       },
       "QueryRequest": {
         "type": "object",
@@ -19387,7 +19394,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Selected custom fields and optional $tags; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
+            "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
           }
         },
         "required": [],
@@ -19418,7 +19425,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Selected custom fields and optional $tags; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
+            "description": "Selected custom fields and optional $keywords; system columns are accepted and the resource metadata envelope remains present. Omitted returns full values on direct queries and saved columns on views; an empty array returns no custom values. Selected fields need not be indexed. Cursors bind this selection."
           }
         },
         "required": [],
@@ -19461,7 +19468,7 @@
           "name"
         ],
         "additionalProperties": false,
-        "description": "Collection-managed saved view. Columns use field keys and $id/$name/$tags; empty columns default to $name. PUT replaces the definition. Layout is a client hint."
+        "description": "Collection-managed saved view. Columns use field keys and $id/$name/$keywords; empty columns default to $name. PUT replaces the definition. Layout is a client hint."
       },
       "QueryResult": {
         "type": "object",
@@ -19883,16 +19890,6 @@
             "maxLength": 1024,
             "description": "Item or folder title. Limited to 1024 UTF-16 units before trimming."
           },
-          "tags": {
-            "type": "array",
-            "maxItems": 50,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64
-            }
-          },
           "values": {
             "type": "object",
             "additionalProperties": true
@@ -19901,6 +19898,17 @@
             "type": "string",
             "format": "uuid",
             "description": "Collection content type ID. Omission selects the collection default."
+          },
+          "keywords": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary."
           }
         }
       },
@@ -19915,16 +19923,6 @@
             "maxLength": 1024,
             "description": "Item or folder title. Limited to 1024 UTF-16 units before trimming."
           },
-          "tags": {
-            "type": "array",
-            "maxItems": 50,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64
-            }
-          },
           "values": {
             "type": "object",
             "additionalProperties": true
@@ -19938,6 +19936,17 @@
             "type": "string",
             "format": "uuid",
             "description": "Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
+          },
+          "keywords": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary."
           }
         }
       },
@@ -21088,7 +21097,7 @@
               "per_item",
               "selection"
             ],
-            "description": "Manual item association: per_item requires exactly one item; selection requires 1–100 ordered items. collection_id optionally scopes either mode. A collection without selection defaults to per_item; a manual trigger with neither is standalone and rejects item_ids."
+            "description": "Manual item association: per_item requires exactly one item; selection requires 1\u2013100 ordered items. collection_id optionally scopes either mode. A collection without selection defaults to per_item; a manual trigger with neither is standalone and rejects item_ids."
           },
           "terms": {
             "type": "array",
@@ -21458,7 +21467,7 @@
               "type": "string"
             },
             "maxItems": 100,
-            "description": "Items to start on; duplicates are dropped. Standalone requires none, per_item requires exactly one, and selection takes 1–100 workspace items. collection_id optionally restricts item modes to one collection. One request starts one run."
+            "description": "Items to start on; duplicates are dropped. Standalone requires none, per_item requires exactly one, and selection takes 1\u2013100 workspace items. collection_id optionally restricts item modes to one collection. One request starts one run."
           },
           "inputs": {
             "type": "object",
@@ -21859,46 +21868,6 @@
         "additionalProperties": true,
         "description": "A JSON Schema form (draft-07 subset; see docs/workflows.md#forms): type, title, description, default, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, uniqueItems, items, properties, required, additionalProperties (boolean or a schema; objects are closed by default). x-papergo on a property makes it a domain picker (item, collection, relationship, terms, keywords, people). The terms picker selects term IDs by default; select: sets selects term-set IDs, optionally narrowed by group_id."
       },
-      "TagCount": {
-        "type": "object",
-        "properties": {
-          "tag": {
-            "type": "string"
-          },
-          "count": {
-            "type": "integer",
-            "description": "Resources the caller can read that carry the tag."
-          }
-        },
-        "required": [
-          "tag",
-          "count"
-        ],
-        "additionalProperties": false
-      },
-      "TagCountPage": {
-        "type": "object",
-        "properties": {
-          "value": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TagCount"
-            }
-          },
-          "@odata.nextLink": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
-          }
-        },
-        "required": [
-          "value",
-          "@odata.nextLink"
-        ],
-        "additionalProperties": false
-      },
       "TermGroupInput": {
         "type": "object",
         "properties": {
@@ -22183,7 +22152,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Ids from the root to the term: /root/…/term/."
+            "description": "Ids from the root to the term: /root/\u2026/term/."
           },
           "labels": {
             "type": "object",
@@ -22388,7 +22357,7 @@
       },
       "TermCSV": {
         "type": "string",
-        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term … Level 7 Term."
+        "description": "SharePoint term set CSV: Term Set Name, Term Set Description, LCID, Available for Tagging, Term Description, Level 1 Term \u2026 Level 7 Term."
       },
       "PortableTerm": {
         "type": "object",
@@ -22851,19 +22820,13 @@
       "FilteredBulkUpdate": {
         "type": "object",
         "additionalProperties": false,
-        "description": "At least one of name, tags or non-empty values is required. Query is optional and uses head content.",
+        "description": "At least one of name, keywords or non-empty values is required. Query is optional and uses head content.",
         "properties": {
           "query": {
             "$ref": "#/components/schemas/QuerySpec"
           },
           "name": {
             "type": "string"
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           },
           "values": {
             "type": "object",
@@ -22874,6 +22837,15 @@
             "type": "string",
             "format": "uuid",
             "description": "Attached destination content type. Items only. Prunes unrelated fields, enforces required fields/rules, retains file content and creates a revision. Creation defaults are not applied."
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary.",
+            "maxItems": 50
           }
         }
       },
@@ -23090,12 +23062,6 @@
             "format": "uuid",
             "description": "A writable folder in this library; defaults to the root."
           },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "values": {
             "type": "object",
             "additionalProperties": true,
@@ -23104,7 +23070,16 @@
           "languages": {
             "type": "string",
             "maxLength": 191,
-            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
+            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2\u201331 letters/underscores."
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary.",
+            "maxItems": 50
           }
         }
       },
@@ -23539,12 +23514,6 @@
             "maxLength": 1024,
             "description": "Item name; defaults to the uploaded filename. Limited to 1024 UTF-16 units before trimming."
           },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "values": {
             "type": "object",
             "additionalProperties": true,
@@ -23553,7 +23522,16 @@
           "languages": {
             "type": "string",
             "maxLength": 191,
-            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2–31 letters/underscores."
+            "description": "Optional lowercase OCR codes joined by '+', e.g. eng+deu; surrounding whitespace is trimmed. At most six codes, each 2\u201331 letters/underscores."
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "description": "Shared folksonomy keywords. Responses contain term IDs. Writes accept existing IDs or trimmed labels; new labels create terms in the organization Keywords term set. Keywords fields use the same vocabulary.",
+            "maxItems": 50
           }
         }
       },
@@ -24451,11 +24429,12 @@
               "$ref": "#/components/schemas/SearchFacetValue"
             }
           },
-          "tag": {
+          "keyword": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SearchFacetValue"
-            }
+            },
+            "description": "Keyword term ID or label. Matches intrinsic keywords and keywords fields on the selected visible surface."
           }
         },
         "additionalProperties": false
@@ -24702,9 +24681,6 @@
           "term_id": {
             "type": "string"
           },
-          "tag": {
-            "type": "string"
-          },
           "created_by": {
             "type": "string"
           },
@@ -24726,6 +24702,10 @@
           "filter": {
             "$ref": "#/components/schemas/FilterExpr",
             "description": "Filter on search fields (GET /v1/search/fields): at most 32 nodes and depth 6. Unknown fields, unsupported operators and mistyped values answer 422."
+          },
+          "keyword": {
+            "type": "string",
+            "description": "Keyword term ID or label. Matches intrinsic keywords and keywords fields on the selected visible surface."
           }
         },
         "additionalProperties": false
@@ -25134,6 +25114,52 @@
             "description": "0 means no expiration."
           }
         }
+      },
+      "WorkspaceKeywordCount": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "description": "Resources the caller can read that carry the keyword."
+          },
+          "keyword": {
+            "type": "string",
+            "description": "Keyword term ID in the shared vocabulary."
+          },
+          "name": {
+            "type": "string",
+            "description": "The current keyword name."
+          }
+        },
+        "required": [
+          "keyword",
+          "name",
+          "count"
+        ],
+        "additionalProperties": false
+      },
+      "WorkspaceKeywordCountPage": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceKeywordCount"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absolute continuation URL, or null on the final page. Repeat the request method and body."
+          }
+        },
+        "required": [
+          "value",
+          "@odata.nextLink"
+        ],
+        "additionalProperties": false
       }
     }
   }

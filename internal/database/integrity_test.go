@@ -20,7 +20,7 @@ func TestIntegrityAndReadPlans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	i, err := s.Create(ctx, "alice", l.ID, dms.CreateResource{Kind: "item", Name: "Item", Tags: []string{"finance"}})
+	i, err := s.Create(ctx, "alice", l.ID, dms.CreateResource{Kind: "item", Name: "Item", Keywords: []string{"finance"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,17 +37,17 @@ func TestIntegrityAndReadPlans(t *testing.T) {
 	if _, err = db.SQL.Exec("DELETE FROM audit_events WHERE resource_id=?", i.ID); err == nil {
 		t.Fatal("database allowed audit deletion")
 	}
-	page, err := s.Browse(ctx, "alice", dms.Browse{WorkspaceID: w.ID, Tag: "finance"})
+	page, err := s.Browse(ctx, "alice", dms.Browse{WorkspaceID: w.ID, Keyword: "finance"})
 	if err != nil || len(page.Data) != 1 {
-		t.Fatalf("tag index: %+v %v", page, err)
+		t.Fatalf("keyword index: %+v %v", page, err)
 	}
-	tags := []string{"legal"}
-	if _, err = s.Update(ctx, "alice", i.ID, i.Version+1, dms.UpdateResource{Tags: &tags}); err != nil {
+	keywords := []string{"legal"}
+	if _, err = s.Update(ctx, "alice", i.ID, i.Version+1, dms.UpdateResource{Keywords: &keywords}); err != nil {
 		t.Fatal(err)
 	}
-	page, err = s.Browse(ctx, "alice", dms.Browse{WorkspaceID: w.ID, Tag: "finance"})
+	page, err = s.Browse(ctx, "alice", dms.Browse{WorkspaceID: w.ID, Keyword: "finance"})
 	if err != nil || len(page.Data) != 0 {
-		t.Fatal("old tag still indexed")
+		t.Fatal("old keyword still indexed")
 	}
 	for _, tc := range []struct {
 		query, index string
@@ -56,7 +56,7 @@ func TestIntegrityAndReadPlans(t *testing.T) {
 		{"SELECT id FROM resources WHERE workspace_id=? AND id>? ORDER BY id LIMIT 100", "resource_workspace_id_id", []any{w.ID, ""}},
 		{"SELECT id FROM relationships WHERE source_id=? AND id>? ORDER BY id LIMIT 100", "relationship_source_id_id", []any{i.ID, ""}},
 		{"SELECT id FROM relationships WHERE target_id=? AND id>? ORDER BY id LIMIT 100", "relationship_target_id_id", []any{i.ID, ""}},
-		{"SELECT resource_id FROM resource_tags WHERE tag=?", "PRIMARY KEY", []any{"legal"}},
+		{"SELECT resource_id FROM resource_keywords WHERE keyword=?", "PRIMARY KEY", []any{"legal"}},
 	} {
 		rows, err := db.SQL.Query("EXPLAIN QUERY PLAN "+tc.query, tc.args...)
 		if err != nil {

@@ -162,7 +162,7 @@ func accessTrimsByScopeAndSurface(t *testing.T, s search.Store) {
 
 func filters(t *testing.T, s search.Store) {
 	a, b, f := doc("a", "Report one"), doc("b", "Report two"), doc("f", "Report folder")
-	a.TermIDs, a.Tags, a.ModifiedBy = []string{"t1", "t2"}, []string{"red"}, "bob"
+	a.TermIDs, a.KeywordIDs, a.ModifiedBy = []string{"t1", "t2"}, []string{"red"}, "bob"
 	b.WorkspaceID, b.CollectionID, b.ContentTypeID, b.CreatedBy, b.ModifiedAt = "w2", "c2", "ct2", "bob", epoch.Add(48*time.Hour)
 	f.Kind = "folder"
 	upsert(t, s, a, b, f)
@@ -175,7 +175,7 @@ func filters(t *testing.T, s search.Store) {
 		"content type":  {search.Filter{ContentTypeID: "ct2"}, []string{"b"}},
 		"kind":          {search.Filter{Kinds: []string{"folder"}}, []string{"f"}},
 		"terms":         {search.Filter{TermIDs: []string{"t2", "t9"}}, []string{"a"}},
-		"tag":           {search.Filter{Tag: "red"}, []string{"a"}},
+		"keyword":       {search.Filter{Keyword: "red"}, []string{"a"}},
 		"created by":    {search.Filter{CreatedBy: "bob"}, []string{"b"}},
 		"modified by":   {search.Filter{ModifiedBy: "bob"}, []string{"a"}},
 		"modified from": {search.Filter{ModifiedFrom: epoch.Add(time.Hour)}, []string{"b"}},
@@ -218,7 +218,7 @@ func pagingAndTotals(t *testing.T, s search.Store) {
 
 func facets(t *testing.T, s search.Store) {
 	a, b, c := doc("a", "Facet"), doc("b", "Facet"), doc("c", "Facet")
-	a.TermIDs, b.TermIDs, a.Tags = []string{"t1"}, []string{"t1", "t2"}, []string{"red"}
+	a.TermIDs, b.TermIDs, a.KeywordIDs = []string{"t1"}, []string{"t1", "t2"}, []string{"red"}
 	c.CollectionID, c.ContentTypeID = "c2", ""
 	upsert(t, s, a, b, c)
 	q, _ := search.Parse("facet")
@@ -232,26 +232,26 @@ func facets(t *testing.T, s search.Store) {
 		Collection:  []search.FacetValue{{Value: "c", Count: 2}, {Value: "c2", Count: 1}},
 		ContentType: []search.FacetValue{{Value: "ct", Count: 2}},
 		Term:        []search.FacetValue{{Value: "t1", Count: 2}, {Value: "t2", Count: 1}},
-		Tag:         []search.FacetValue{{Value: "red", Count: 1}},
+		Keyword:     []search.FacetValue{{Value: "red", Count: 1}},
 	}
 	if !slices.Equal(f.Workspace, want.Workspace) || !slices.Equal(f.Collection, want.Collection) || !slices.Equal(f.ContentType, want.ContentType) ||
-		!slices.Equal(f.Term, want.Term) || !slices.Equal(f.Tag, want.Tag) {
+		!slices.Equal(f.Term, want.Term) || !slices.Equal(f.Keyword, want.Keyword) {
 		t.Fatalf("facets %+v, want %+v", *f, want)
 	}
 }
 
 func upsertReplaces(t *testing.T, s search.Store) {
 	a := doc("a", "Original title")
-	a.TermIDs, a.Tags = []string{"t1"}, []string{"red"}
+	a.TermIDs, a.KeywordIDs = []string{"t1"}, []string{"red"}
 	upsert(t, s, a)
-	a.Name, a.TermIDs, a.Tags = "Renamed", []string{"t2"}, nil
+	a.Name, a.TermIDs, a.KeywordIDs = "Renamed", []string{"t2"}, nil
 	upsert(t, s, a)
 	all := search.Filter{Access: everyone}
 	expect(t, "old text", find(t, s, "original", all))
 	expect(t, "new text", find(t, s, "renamed", all), "a")
 	expect(t, "old term", find(t, s, "", search.Filter{Access: everyone, TermIDs: []string{"t1"}}))
 	expect(t, "new term", find(t, s, "", search.Filter{Access: everyone, TermIDs: []string{"t2"}}), "a")
-	expect(t, "old tag", find(t, s, "", search.Filter{Access: everyone, Tag: "red"}))
+	expect(t, "old keyword", find(t, s, "", search.Filter{Access: everyone, Keyword: "red"}))
 }
 
 func deletes(t *testing.T, s search.Store) {

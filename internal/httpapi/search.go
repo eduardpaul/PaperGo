@@ -60,7 +60,7 @@ type searchBody struct {
 	CollectionID  string          `json:"collection_id"`
 	ContentTypeID string          `json:"content_type_id"`
 	TermID        string          `json:"term_id"`
-	Tag           string          `json:"tag"`
+	Keyword       string          `json:"keyword"`
 	CreatedBy     string          `json:"created_by"`
 	ModifiedBy    string          `json:"modified_by"`
 	ModifiedFrom  *time.Time      `json:"modified_from"`
@@ -79,7 +79,7 @@ func (a *API) searchRequest(w http.ResponseWriter, r *http.Request) (dms.SearchR
 		}
 	} else {
 		b = searchBody{Q: q.Get("q"), Mode: q.Get("mode"), Surface: q.Get("surface"), WorkspaceID: q.Get("workspace_id"), CollectionID: q.Get("collection_id"), ContentTypeID: q.Get("content_type_id"),
-			TermID: q.Get("term_id"), Tag: q.Get("tag"), CreatedBy: q.Get("created_by"), ModifiedBy: q.Get("modified_by")}
+			TermID: q.Get("term_id"), Keyword: q.Get("keyword"), CreatedBy: q.Get("created_by"), ModifiedBy: q.Get("modified_by")}
 		if kind := q.Get("kind"); kind != "" {
 			b.Kind = strings.Split(kind, ",")
 		}
@@ -99,7 +99,7 @@ func (a *API) searchRequest(w http.ResponseWriter, r *http.Request) (dms.SearchR
 		}
 	}
 	in := dms.SearchRequest{Q: b.Q, Mode: b.Mode, Surface: b.Surface, Kinds: b.Kind, WorkspaceID: b.WorkspaceID, CollectionID: b.CollectionID, ContentTypeID: b.ContentTypeID,
-		TermID: b.TermID, Tag: b.Tag, CreatedBy: b.CreatedBy, ModifiedBy: b.ModifiedBy, Filter: b.Filter, Facets: b.Facets == nil || *b.Facets}
+		TermID: b.TermID, Keyword: b.Keyword, CreatedBy: b.CreatedBy, ModifiedBy: b.ModifiedBy, Filter: b.Filter, Facets: b.Facets == nil || *b.Facets}
 	if len(in.Kinds) == 0 {
 		in.Kinds = []string{"item"}
 	}

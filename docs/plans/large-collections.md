@@ -64,7 +64,7 @@ Median of several runs, warm cache. "Total" means `include_total`.
 | **Group counts (board)** | **401 ms** | **503 after 30 s** |
 | Rare filter (amount ≥ 9,990) with total | 457 ms | – |
 | Calendar month (due in March 2025) | 168 ms (279 rows) | – |
-| Workspace tag vocabulary | 914 ms | – |
+| Workspace keyword vocabulary | 914 ms | – |
 | Item read, revisions, file versions, download | 1–4 ms | – |
 | Lookup list first page | 5 ms | – |
 | Library: root, subfolder (500 documents) | 3–6 ms | – |
@@ -104,7 +104,7 @@ Playwright, Chromium, 1400 × 900. Times include rendering and, where noted, a f
 | Move dialog | 264 ms | All 9 top folders, paged |
 | File tab: versions | 202 ms | |
 | Recycle bin | 1.1 s (1 s wait) | **50 entries, no way to see more** |
-| Workspace tags page | 1.5 s | 50 resources for "priority" (of 500) |
+| Workspace keywords page | 1.5 s | 50 resources for "priority" (of 500) |
 | Global search "Acme" | 3 s (3 s wait) | **Empty** until a workspace is chosen |
 
 No page errors and no server errors.
@@ -130,14 +130,14 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
 5. **Totals are missing or slow.** The default view says "50+ entries"; views with a total show "50 of 2490" but that
    count costs 0.4 s at 10,000 and times out at 500,000. People want an idea of size ("about 10,000") quickly and an
    exact number only when it is cheap.
-6. **The recycle bin and the tag page stop at 50.** Neither pages, so after deleting a large folder only the first 50
-   entries can be restored one by one, and the tag page lists 50 of 500 tagged items.
+6. **The recycle bin and the keyword page stop at 50.** Neither pages, so after deleting a large folder only the first 50
+   entries can be restored one by one, and the keyword page lists 50 of 500 tagged items.
 7. **Load more gets slower as the page grows.** Every Load more re-resolves the names of all loaded rows (45 `$batch`
    requests for 10 pages) and the table renders every row (550 rows after 10 loads, 6 s). Scrolling a few hundred rows
    is fine; thousands are not.
 8. **Global search starts empty.** `/search?q=Acme` shows nothing until a workspace is picked, even with only one
    workspace.
-9. **The tag vocabulary takes almost a second** at 10,000 items, so tag suggestions lag while typing.
+9. **The keyword vocabulary takes almost a second** at 10,000 items, so keyword suggestions lag while typing.
 
 ## Done since the test
 
@@ -167,7 +167,7 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
 6. **A recycle bin that pages, one entry per deletion.** The recycle bin lists the newest deletions first, 50 at a
    time with Load more, and only what was deleted directly (`top_level=true`): a deleted folder is one entry saying
    how much it took with it ("with 1,010 entries inside") instead of 1,011 entries. A partial index on deleted rows
-   keeps it fast however large the collection. The tag page already paged ("More resources"); the test had only
+   keeps it fast however large the collection. The keyword page already paged ("More resources"); the test had only
    counted its first page.
 7. **Names read once per id.** Lookup and term names are cached per id and read together for the ids a screen asks
    for at once, so Load more reads only names it has not seen: 10 loads read 445 names in 28 requests, each once
@@ -180,7 +180,7 @@ the collection. Deleting and restoring a folder with hundreds of documents takes
 9. **Search starts where people are.** The search page searches as you type in the workspace last opened (or the only
    one), offers "All workspaces" (one request each, five hits per workspace with a link to the rest), says what and
    where each hit is ("Item in Archive"), and pages with More results.
-10. **Tag list in 35 ms (was 914 ms).** The vocabulary query starts from the tag rows instead of walking every resource
+10. **Keyword list in 35 ms (was 914 ms).** The vocabulary query starts from the keyword rows instead of walking every resource
     in the workspace (a forced join order and an unindexed workspace condition).
 11. **Faster ingest.** A bulk request reads the collection's write permission, field definitions, schema and row once
     instead of per item; the audit hook skips reading old values of rows created in the same transaction; a folder's

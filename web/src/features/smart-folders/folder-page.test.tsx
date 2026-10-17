@@ -17,9 +17,10 @@ function show(mode = 'query', editable = true) {
     let result: unknown = { value: [] };
     if (path === '/v1/identity/me') result = { subject: 'alice', scopes: editable ? ['list.read', 'list.write'] : ['list.read'] };
     if (path === '/v1/smart-folders/f') result = { id: 'f', name: 'My rules', owner_id: 'alice', version: 3, definition: { mode, group_by: [{ field: '$modified_at', by: 'year' }] } };
+    if (path === '/v1/terms') result = { value: [{ id: 'finance-id', name: 'Finance keyword' }] };
     if (path === '/v1/search/fields') result = { value: [] };
     if (path === '/v1/search/content-types') result = [];
-    if (path === '/v1/smart-folders/f/query') result = { total: 1, value: [{ workspace_id: 'w', collection_id: 'lib', collection_name: 'Source library', collection_kind: 'library', item: { id: 'i', workspace_id: 'w', container_id: 'lib', name: 'Visible item', kind: 'item', version: 2 } }] };
+    if (path === '/v1/smart-folders/f/query') result = { total: 1, value: [{ workspace_id: 'w', collection_id: 'lib', collection_name: 'Source library', collection_kind: 'library', item: { id: 'i', workspace_id: 'w', container_id: 'lib', name: 'Visible item', keywords: ['finance-id'], kind: 'item', version: 2 } }] };
     if (path.endsWith('/query/groups')) result = { value: [{ value: '2026', label: '2026', count: 1 }] };
     return new Response(JSON.stringify(result));
   }));
@@ -31,6 +32,8 @@ it('opens matching items directly with provenance, sorting and optional group br
   const { requests, client } = show();
   expect(await screen.findByText('Visible item')).toBeTruthy();
   expect(screen.getByText('Source library')).toBeTruthy();
+  expect(await screen.findByText('Finance keyword')).toBeTruthy();
+  expect(screen.queryByText('finance-id')).toBeNull();
   expect(screen.getByText('Saved search')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Classify item…' })).toBeNull();
   expect(requests.some(request => request.path.endsWith('/query/groups'))).toBe(false);

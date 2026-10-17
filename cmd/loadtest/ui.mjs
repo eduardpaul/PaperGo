@@ -196,8 +196,8 @@ await step('Recycle bin', async () => {
   await page.waitForTimeout(1000);
   return `${await page.locator('main li').count()} entries shown`;
 });
-await step('Workspace tags page', async () => {
-  await page.goto(`${base}/w/${state.workspace}/tags`);
+await step('Workspace keywords page', async () => {
+  await page.goto(`${base}/w/${state.workspace}/keywords`);
   await page.getByRole('button', { name: /priority/ }).waitFor({ timeout: 60000 });
   await page.getByRole('button', { name: /priority/ }).click();
   await page.locator('main ul li').first().waitFor({ timeout: 60000 });

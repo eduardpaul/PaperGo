@@ -88,7 +88,7 @@ func (s *Store) Export(ctx context.Context, yield func(search.Record) error) err
 }
 
 func exportFields(ctx context.Context, tx *sql.Tx, id int64, d *search.Document) error {
-	for query, target := range map[string]*[]string{`SELECT term_id FROM document_terms WHERE doc=? ORDER BY term_id`: &d.TermIDs, `SELECT tag FROM document_tags WHERE doc=? ORDER BY tag`: &d.Tags} {
+	for query, target := range map[string]*[]string{`SELECT term_id FROM document_terms WHERE doc=? ORDER BY term_id`: &d.TermIDs, `SELECT keyword FROM document_keywords WHERE doc=? ORDER BY keyword`: &d.KeywordIDs} {
 		rows, err := tx.QueryContext(ctx, query, id)
 		if err != nil {
 			return err

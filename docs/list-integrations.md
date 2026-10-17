@@ -4,7 +4,7 @@ Integrations are configuration on ordinary lists. They do not introduce another 
 
 Open **List settings → Integrations → Add integration**, choose a name and supply a public HTTPS iCalendar URL. Google Calendar's secret iCal address works without OAuth or an API project. Adding the integration attaches the shared Event content type and queues the first refresh. Use an existing calendar view grouped by **Start**, or create one in **Views**. Recurring instances are expanded in the visible month; opening an occurrence opens its ordinary item. All-day events stay on their calendar date; timed events follow the viewer's preferred time zone.
 
-A list can have up to 50 integrations. The same URL can be used in different lists; a duplicate in the same list is rejected. Each integration has independent event identities, including when two feeds reuse UIDs. Local items and local metadata such as tags are independent of refreshes.
+A list can have up to 50 integrations. The same URL can be used in different lists; a duplicate in the same list is rejected. Each integration has independent event identities, including when two feeds reuse UIDs. Local items and local metadata such as keywords are independent of refreshes.
 
 Reading status requires list read access. Configuration and Refresh now require list Manage and `list.write`; no workspace-owner or external calendar-owner check is needed. Routine responses omit private configuration, provider state, credentials and feed URLs. Subscription URLs must use HTTPS on port 443. Every connection and redirect rejects private, loopback, link-local and other non-public destinations; HTTP redirects, proxies, unbounded responses and more than five redirects are refused.
 

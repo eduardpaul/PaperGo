@@ -29,8 +29,8 @@ const (
 	FieldRevisionID = "revision_id"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
-	// FieldTags holds the string denoting the tags field in the database.
-	FieldTags = "tags"
+	// FieldKeywords holds the string denoting the keywords field in the database.
+	FieldKeywords = "keywords"
 	// FieldPayload holds the string denoting the payload field in the database.
 	FieldPayload = "payload"
 	// FieldItemCreatedAt holds the string denoting the item_created_at field in the database.
@@ -73,7 +73,7 @@ var Columns = []string{
 	FieldSurface,
 	FieldRevisionID,
 	FieldName,
-	FieldTags,
+	FieldKeywords,
 	FieldPayload,
 	FieldItemCreatedAt,
 	FieldItemCreatedBy,

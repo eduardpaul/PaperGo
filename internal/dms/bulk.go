@@ -12,14 +12,14 @@ const MaxBulkOperations = 100
 type BulkCreate struct {
 	ContentTypeID string         `json:"content_type_id,omitempty"`
 	Name          string         `json:"name"`
-	Tags          []string       `json:"tags,omitempty"`
+	Keywords      []string       `json:"keywords,omitempty"`
 	Values        map[string]any `json:"values,omitempty"`
 }
 
 type BulkUpdate struct {
 	ContentTypeID *string         `json:"content_type_id,omitempty"`
 	Name          *string         `json:"name,omitempty"`
-	Tags          *[]string       `json:"tags,omitempty"`
+	Keywords      *[]string       `json:"keywords,omitempty"`
 	Values        *map[string]any `json:"values,omitempty"`
 	ParentID      *string         `json:"parent_id,omitempty"`
 }
@@ -142,7 +142,7 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 		if p.ID != collectionID && (p.Kind != resource.KindFolder || p.ContainerID == nil || *p.ContainerID != collectionID) {
 			return result, invalid("create parent must belong to this collection")
 		}
-		r, err := s.create(ctx, subject, parentID, CreateResource{Kind: "item", Name: op.Create.Name, Tags: op.Create.Tags, Values: op.Create.Values, ContentTypeID: op.Create.ContentTypeID}, nil)
+		r, err := s.create(ctx, subject, parentID, CreateResource{Kind: "item", Name: op.Create.Name, Keywords: op.Create.Keywords, Values: op.Create.Values, ContentTypeID: op.Create.ContentTypeID}, nil)
 		if err != nil {
 			return result, err
 		}
@@ -162,7 +162,7 @@ func (s *Service) bulkOperation(ctx context.Context, subject, collectionID strin
 	}
 	switch op.Action {
 	case "update":
-		_, err = s.update(ctx, subject, op.ID, op.Version, UpdateResource{Name: op.Update.Name, Tags: op.Update.Tags, Values: op.Update.Values, ParentID: op.Update.ParentID, ContentTypeID: op.Update.ContentTypeID})
+		_, err = s.update(ctx, subject, op.ID, op.Version, UpdateResource{Name: op.Update.Name, Keywords: op.Update.Keywords, Values: op.Update.Values, ParentID: op.Update.ParentID, ContentTypeID: op.Update.ContentTypeID})
 	case "publish":
 		_, err = s.publish(ctx, subject, op.ID, op.Version)
 	case "unpublish":

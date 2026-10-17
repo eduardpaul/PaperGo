@@ -171,9 +171,9 @@ func (_c *ResourceCreate) SetNillableAllowFolders(v *bool) *ResourceCreate {
 	return _c
 }
 
-// SetTags sets the "tags" field.
-func (_c *ResourceCreate) SetTags(v []string) *ResourceCreate {
-	_c.mutation.SetTags(v)
+// SetKeywords sets the "keywords" field.
+func (_c *ResourceCreate) SetKeywords(v []string) *ResourceCreate {
+	_c.mutation.SetKeywords(v)
 	return _c
 }
 
@@ -671,9 +671,9 @@ func (_c *ResourceCreate) defaults() {
 		v := resource.DefaultAllowFolders
 		_c.mutation.SetAllowFolders(v)
 	}
-	if _, ok := _c.mutation.Tags(); !ok {
-		v := resource.DefaultTags
-		_c.mutation.SetTags(v)
+	if _, ok := _c.mutation.Keywords(); !ok {
+		v := resource.DefaultKeywords
+		_c.mutation.SetKeywords(v)
 	}
 	if _, ok := _c.mutation.TemplateKeys(); !ok {
 		v := resource.DefaultTemplateKeys
@@ -806,8 +806,8 @@ func (_c *ResourceCreate) check() error {
 	if _, ok := _c.mutation.AllowFolders(); !ok {
 		return &ValidationError{Name: "allow_folders", err: errors.New(`ent: missing required field "Resource.allow_folders"`)}
 	}
-	if _, ok := _c.mutation.Tags(); !ok {
-		return &ValidationError{Name: "tags", err: errors.New(`ent: missing required field "Resource.tags"`)}
+	if _, ok := _c.mutation.Keywords(); !ok {
+		return &ValidationError{Name: "keywords", err: errors.New(`ent: missing required field "Resource.keywords"`)}
 	}
 	if _, ok := _c.mutation.TemplateKeys(); !ok {
 		return &ValidationError{Name: "template_keys", err: errors.New(`ent: missing required field "Resource.template_keys"`)}
@@ -959,9 +959,9 @@ func (_c *ResourceCreate) createSpec() (*Resource, *sqlgraph.CreateSpec) {
 		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
 		_node.AllowFolders = value
 	}
-	if value, ok := _c.mutation.Tags(); ok {
-		_spec.SetField(resource.FieldTags, field.TypeJSON, value)
-		_node.Tags = value
+	if value, ok := _c.mutation.Keywords(); ok {
+		_spec.SetField(resource.FieldKeywords, field.TypeJSON, value)
+		_node.Keywords = value
 	}
 	if value, ok := _c.mutation.TemplateKeys(); ok {
 		_spec.SetField(resource.FieldTemplateKeys, field.TypeJSON, value)

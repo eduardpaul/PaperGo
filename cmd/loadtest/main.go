@@ -183,14 +183,14 @@ func seed(args []string) {
 	}
 
 	var w resource
-	c.must("POST", "/v1/workspaces", map[string]any{"name": fmt.Sprintf("Load test %d", time.Now().Unix()), "description": "Very large lists and libraries", "tags": []string{}}, 0, &w)
+	c.must("POST", "/v1/workspaces", map[string]any{"name": fmt.Sprintf("Load test %d", time.Now().Unix()), "description": "Very large lists and libraries", "keywords": []string{}}, 0, &w)
 	st.Workspace = w.ID
 	for _, user := range st.Users {
 		c.must("POST", "/v1/workspaces/"+w.ID+"/members", map[string]string{"subject": user, "role": "member"}, 0, nil)
 	}
 
 	var sup resource
-	c.must("POST", "/v1/resources/"+w.ID+"/children", map[string]any{"kind": "list", "name": "Suppliers", "tags": []string{}, "values": map[string]any{}}, 0, &sup)
+	c.must("POST", "/v1/resources/"+w.ID+"/children", map[string]any{"kind": "list", "name": "Suppliers", "keywords": []string{}, "values": map[string]any{}}, 0, &sup)
 	st.Suppliers = sup.ID
 	c.must("POST", "/v1/resources/"+sup.ID+"/fields", map[string]any{"key": "city", "label": "City", "type": "text"}, 0, nil)
 	st.SupplierIDs = bulkCreate(c, sup.ID, *suppliers, *workers, "", func(i int) map[string]any {
@@ -198,7 +198,7 @@ func seed(args []string) {
 	}, true)
 
 	var list resource
-	c.must("POST", "/v1/resources/"+w.ID+"/children", map[string]any{"kind": "list", "name": "Invoices", "description": fmt.Sprintf("%d invoices", *items), "tags": []string{}, "values": map[string]any{}}, 0, &list)
+	c.must("POST", "/v1/resources/"+w.ID+"/children", map[string]any{"kind": "list", "name": "Invoices", "description": fmt.Sprintf("%d invoices", *items), "keywords": []string{}, "values": map[string]any{}}, 0, &list)
 	st.List = list.ID
 	for _, field := range []map[string]any{
 		{"key": "amount", "label": "Amount", "type": "currency", "indexed": true, "options": map[string]any{"currency_code": "EUR"}},
@@ -219,16 +219,16 @@ func seed(args []string) {
 	}
 	start := time.Now()
 	ids := bulkCreate(c, list.ID, *items, *workers, "", func(i int) map[string]any {
-		tags := []string{}
+		keywords := []string{}
 		if i%20 == 0 {
-			tags = append(tags, "priority")
+			keywords = append(keywords, "priority")
 		}
 		if i%1000 == 0 {
-			tags = append(tags, "audit-2026")
+			keywords = append(keywords, "audit-2026")
 		}
 		return map[string]any{
-			"name": fmt.Sprintf("Invoice INV-%07d %s %s %s", i, companies[i%len(companies)], trades[(i/7)%len(trades)], months[(i/31)%len(months)]),
-			"tags": tags,
+			"name":     fmt.Sprintf("Invoice INV-%07d %s %s %s", i, companies[i%len(companies)], trades[(i/7)%len(trades)], months[(i/31)%len(months)]),
+			"keywords": keywords,
 			"values": map[string]any{
 				"amount":    float64((i*7919)%1000000) / 100,
 				"status":    statuses[(i/3)%len(statuses)],
@@ -243,7 +243,7 @@ func seed(args []string) {
 	st.SampleItems = ids
 
 	var lib resource
-	c.must("POST", "/v1/resources/"+w.ID+"/children", map[string]any{"kind": "library", "name": "Archive", "description": fmt.Sprintf("%d documents in folders", *items), "tags": []string{}, "values": map[string]any{}}, 0, &lib)
+	c.must("POST", "/v1/resources/"+w.ID+"/children", map[string]any{"kind": "library", "name": "Archive", "description": fmt.Sprintf("%d documents in folders", *items), "keywords": []string{}, "values": map[string]any{}}, 0, &lib)
 	st.Library = lib.ID
 	for _, field := range []map[string]any{
 		{"key": "doc_type", "label": "Document type", "type": "choice", "indexed": true, "choices": docTypes},
@@ -253,11 +253,11 @@ func seed(args []string) {
 	}
 	for i := range *topFolders {
 		var top resource
-		c.must("POST", "/v1/resources/"+lib.ID+"/children", map[string]any{"kind": "folder", "name": fmt.Sprintf("%d %s", 2000+i/12, months[i%12]), "tags": []string{}, "values": map[string]any{}}, 0, &top)
+		c.must("POST", "/v1/resources/"+lib.ID+"/children", map[string]any{"kind": "folder", "name": fmt.Sprintf("%d %s", 2000+i/12, months[i%12]), "keywords": []string{}, "values": map[string]any{}}, 0, &top)
 		st.TopFolders = append(st.TopFolders, top.ID)
 		for j := range *subFolders {
 			var sub resource
-			c.must("POST", "/v1/resources/"+top.ID+"/children", map[string]any{"kind": "folder", "name": fmt.Sprintf("%s %02d", companies[j%len(companies)], j), "tags": []string{}, "values": map[string]any{}}, 0, &sub)
+			c.must("POST", "/v1/resources/"+top.ID+"/children", map[string]any{"kind": "folder", "name": fmt.Sprintf("%s %02d", companies[j%len(companies)], j), "keywords": []string{}, "values": map[string]any{}}, 0, &sub)
 			st.SubFolders = append(st.SubFolders, sub.ID)
 		}
 	}
@@ -608,8 +608,8 @@ func measure(args []string) {
 	record("list: search no match (zzzz)", *runs, get("/v1/resources/"+l+"/children?q=zzzz&$top=50"))
 	record("list: search prefix (Acm)", *runs, get("/v1/resources/"+l+"/children?q=Acm&$top=50"))
 	record("list: search Acme sorted by amount", *runs, query("/v1/resources/"+l+"/query?$top=50", map[string]any{"query": map[string]any{"parent_id": l, "search": "Acme", "sort": []map[string]string{{"field": "amount", "direction": "desc"}}}}))
-	record("list: tag filter (audit-2026, 1 in 1000 items)", *runs, get("/v1/resources/"+l+"/children?tag=audit-2026&$top=50"))
-	record("workspace tags vocabulary", *runs, get("/v1/workspaces/"+st.Workspace+"/tags"))
+	record("list: keyword filter (audit-2026, 1 in 1000 items)", *runs, get("/v1/resources/"+l+"/children?keyword=audit-2026&$top=50"))
+	record("workspace keywords vocabulary", *runs, get("/v1/workspaces/"+st.Workspace+"/keywords"))
 	record("workspace search (Acme)", *runs, get("/v1/resources?workspace_id="+st.Workspace+"&q=Acme&$top=50"))
 	record("item read", *runs, get("/v1/resources/"+st.SampleItems[0]))
 	record("item revisions", *runs, get("/v1/items/"+st.SampleItems[0]+"/revisions"))
@@ -636,7 +636,7 @@ func measure(args []string) {
 		return s, "", err
 	})
 	record("item create", 1, func() (int, string, error) {
-		s, err := c.do("POST", "/v1/resources/"+l+"/children", map[string]any{"kind": "item", "name": "Fresh invoice", "tags": []string{}, "values": map[string]any{"status": "Open"}}, 0, nil)
+		s, err := c.do("POST", "/v1/resources/"+l+"/children", map[string]any{"kind": "item", "name": "Fresh invoice", "keywords": []string{}, "values": map[string]any{"status": "Open"}}, 0, nil)
 		return s, "", err
 	})
 	record("bulk field update of 50 selected items (operation)", 1, func() (int, string, error) {

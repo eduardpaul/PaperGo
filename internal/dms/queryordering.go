@@ -54,18 +54,18 @@ func querySelection(defs map[string]*ent.FieldDefinition, selection []string) ([
 		return nil, false, invalid("at most 50 selected fields")
 	}
 	fields := []string{}
-	tags := false
+	keywords := false
 	seen := map[string]bool{}
 	for _, key := range selection {
 		if seen[key] || !builtinColumn(key) && defs[key] == nil {
 			return nil, false, invalid("select must contain unique known fields")
 		}
 		seen[key] = true
-		if key == "$tags" {
-			tags = true
+		if key == "$keywords" {
+			keywords = true
 		} else if !builtinColumn(key) {
 			fields = append(fields, key)
 		}
 	}
-	return fields, tags, nil
+	return fields, keywords, nil
 }

@@ -9,12 +9,12 @@ import { Select } from '@/components/ui/select';
 export const systemFields: FieldDefinition[] = [
   ['$name', 'Name', 'text'],
   ['$id', 'ID', 'text'],
-  ['$tags', 'Tag', 'text'],
+  ['$keywords', 'Keywords', 'keywords'],
   ['$created_at', 'Created', 'datetime'],
   ['$modified_at', 'Modified', 'datetime'],
   ['$created_by', 'Created by', 'person'],
   ['$modified_by', 'Modified by', 'person'],
-].map(([key, label, type]) => ({ id: key, key, label, type, indexed: true }));
+].map(([key, label, type]) => ({ id: key, key, label, type, indexed: true, options: key === '$keywords' ? { multiple: true } : undefined }));
 
 export const comparisonLabels: Record<string, string> = { eq: 'is', ne: 'is not', in: 'is one of', missing: 'is empty', present: 'has a value', gt: 'is after / greater than', gte: 'is on or after / at least', lt: 'is before / less than', lte: 'is on or before / at most', contains: 'contains', under: 'is in this topic' };
 export const relativeLabels: Record<string, string> = { today: 'Today', yesterday: 'Yesterday', tomorrow: 'Tomorrow', last7Days: 'Past week', next7Days: 'Next week', last30Days: 'Past month', next30Days: 'Next month', weekStart: 'Start of week', weekEnd: 'End of week', monthStart: 'Start of month', monthEnd: 'End of month', me: 'Current user' };
@@ -106,7 +106,7 @@ export function FilterEditor({
   const field = fields.find((field) => field.key === filter.field);
   const op = filter.op || 'eq';
   const operators =
-    filter.field === '$tags'
+    filter.field === '$keywords'
       ? ['eq', 'ne']
       : [
           'eq',

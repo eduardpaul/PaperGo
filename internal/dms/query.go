@@ -27,7 +27,7 @@ type Browse struct {
 	ParentID    string
 	WorkspaceID string
 	Search      string
-	Tag         string
+	Keyword     string
 	After       string
 	Limit       int
 	Surface     string
@@ -71,6 +71,13 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 	if in.Kind != "" && resource.KindValidator(resource.Kind(in.Kind)) != nil {
 		return Page[*ent.Resource]{}, invalid("kind must be workspace, list, library, folder or item")
 	}
+	if in.Keyword != "" {
+		var err error
+		in.Keyword, err = s.keywordFilter(ctx, in.Keyword)
+		if err != nil {
+			return Page[*ent.Resource]{}, err
+		}
+	}
 	q := s.Client.Resource.Query().Where(resource.DeletedAtIsNil())
 	// Search text matches items and folders in the search store, within the
 	// parent's collection or the workspace, and other resources by name.
@@ -100,8 +107,8 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		}
 		q.Where(resource.WorkspaceIDEQ(in.WorkspaceID))
 	} else {
-		if in.Search != "" || in.Tag != "" {
-			return Page[*ent.Resource]{}, invalid("search and tags require workspace_id or parent_id")
+		if in.Search != "" || in.Keyword != "" {
+			return Page[*ent.Resource]{}, invalid("search and keywords require workspace_id or parent_id")
 		}
 		q.Where(resource.KindEQ(resource.KindWorkspace))
 	}
@@ -121,14 +128,14 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		fieldPredicate = predicate
 		candidates = append(candidates, candidate)
 	}
-	if in.Tag != "" {
-		candidates = append(candidates, candidateSet{
-			sql:          "SELECT resource_id FROM resource_tags WHERE tag=? UNION ALL SELECT p.item_id FROM item_surface_tags t JOIN item_surfaces p ON p.id=t.surface_id WHERE t.tag=?",
-			args:         []any{in.Tag, in.Tag},
-			estimate:     "SELECT 1 FROM resource_tags WHERE tag=? UNION ALL SELECT 1 FROM item_surface_tags WHERE tag=?",
-			estimateArgs: []any{in.Tag, in.Tag},
-		})
+
+	if in.Keyword != "" {
+		aliases := "SELECT id FROM terms WHERE id=? OR merged_into_id=?"
+		keywordQuery := "SELECT resource_id AS id FROM resource_keywords WHERE keyword IN (" + aliases + ") UNION ALL SELECT p.item_id FROM item_surface_keywords k JOIN item_surfaces p ON p.id=k.surface_id WHERE k.keyword IN (" + aliases + ") UNION ALL SELECT item_id FROM field_values WHERE field_type IN ('keywords','term') AND value_text IN (" + aliases + ")"
+		args := []any{in.Keyword, in.Keyword, in.Keyword, in.Keyword, in.Keyword, in.Keyword}
+		candidates = append(candidates, candidateSet{sql: keywordQuery, args: args, estimate: keywordQuery, estimateArgs: args})
 	}
+
 	var head, published, name string
 	capped := false
 	if strings.TrimSpace(in.Search) != "" {
@@ -164,14 +171,13 @@ func (s *Service) Browse(ctx context.Context, subject string, in Browse) (Page[*
 		text, args := visibleSQL(ctx, sel.C(resource.FieldID), subject, in.Surface)
 		sel.Where(entsql.ExprP(text, args...))
 	})
-	if in.Tag != "" {
+	if in.Keyword != "" {
 		q.Where(func(sel *entsql.Selector) {
-			selected, args := surfaceSQL(ctx, sel.C(resource.FieldID), subject, in.Surface)
-			query := "(" + sel.C(resource.FieldKind) + " NOT IN ('item','folder') AND " + sel.C(resource.FieldID) + " IN (SELECT resource_id FROM resource_tags WHERE tag=?) OR " + sel.C(resource.FieldKind) + " IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p JOIN item_surface_tags t ON t.surface_id=p.id WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND t.tag=?))"
-			values := []any{in.Tag}
-			values = append(values, args...)
-			values = append(values, in.Tag)
-			sel.Where(entsql.ExprP(query, values...))
+			selected, a := surfaceSQL(ctx, sel.C(resource.FieldID), subject, in.Surface)
+			query := "(" + sel.C(resource.FieldKind) + " NOT IN ('item','folder') AND EXISTS(SELECT 1 FROM resource_keywords k JOIN terms kt ON kt.id=k.keyword WHERE k.resource_id=" + sel.C(resource.FieldID) + " AND coalesce(kt.merged_into_id,kt.id)=?) OR " + sel.C(resource.FieldKind) + " IN ('item','folder') AND EXISTS (SELECT 1 FROM item_surfaces p WHERE p.item_id=" + sel.C(resource.FieldID) + " AND p.surface=" + selected + " AND EXISTS(SELECT 1 FROM (" + surfaceKeywordsSQL + ") k JOIN terms kt ON kt.id=k.keyword WHERE coalesce(kt.merged_into_id,kt.id)=?)))"
+			args := append([]any{in.Keyword}, a...)
+			args = append(args, in.Keyword)
+			sel.Where(entsql.ExprP(query, args...))
 		})
 	}
 	if strings.TrimSpace(in.Search) != "" {
@@ -322,7 +328,7 @@ func (s *Service) overlayPage(ctx context.Context, subject, surface string, rows
 			return nil, err
 		}
 		r.Name = p.Name
-		r.Tags = p.Tags
+		r.Keywords = p.Keywords
 		r.Values = values
 		r.UpdatedBy = p.ModifiedBy
 		if rev := revisionLookup[p.RevisionID]; rev != nil {

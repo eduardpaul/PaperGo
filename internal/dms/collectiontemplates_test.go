@@ -52,7 +52,11 @@ func TestCollectionTemplatesProvisionShareAndPreserveTypes(t *testing.T) {
 	if err != nil || docs.Kind != "library" || !docs.AllowFolders {
 		t.Fatal(docs, err)
 	}
-	if _, err = s.Create(ctx, "alice", docs.ID, CreateResource{Kind: "item", Name: "a.txt", Values: map[string]any{"description": "Example", "keywords": []any{"alpha", "beta"}}}); err != nil {
+	fields, err := s.Fields(ctx, "alice", docs.ID)
+	if err != nil || len(fields) != 1 || fields[0].Key != "description" {
+		t.Fatal("document template must use intrinsic keywords instead of adding a duplicate field", fields, err)
+	}
+	if _, err = s.Create(ctx, "alice", docs.ID, CreateResource{Kind: "item", Name: "a.txt", Keywords: []string{"alpha", "beta"}, Values: map[string]any{"description": "Example"}}); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -516,6 +516,11 @@ var (
 		},
 		Indexes: []*schema.Index{
 			{
+				Name:    "fieldvalue_field_type_value_text_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{FieldValuesColumns[6], FieldValuesColumns[9], FieldValuesColumns[3]},
+			},
+			{
 				Name:    "fieldvalue_surface_id_field_key_ordinal",
 				Unique:  true,
 				Columns: []*schema.Column{FieldValuesColumns[12], FieldValuesColumns[5], FieldValuesColumns[7]},
@@ -916,7 +921,7 @@ var (
 		{Name: "filename", Type: field.TypeString, Size: 4096, Default: ""},
 		{Name: "revision_number", Type: field.TypeInt},
 		{Name: "name", Type: field.TypeString, Size: 4096},
-		{Name: "tags", Type: field.TypeJSON},
+		{Name: "keywords", Type: field.TypeJSON},
 		{Name: "payload", Type: field.TypeJSON},
 		{Name: "created_by", Type: field.TypeString},
 		{Name: "blob_id", Type: field.TypeString, Nullable: true, Size: 36},
@@ -969,7 +974,7 @@ var (
 		{Name: "workspace_id", Type: field.TypeString},
 		{Name: "surface", Type: field.TypeEnum, Enums: []string{"head", "published"}},
 		{Name: "name", Type: field.TypeString},
-		{Name: "tags", Type: field.TypeJSON},
+		{Name: "keywords", Type: field.TypeJSON},
 		{Name: "payload", Type: field.TypeJSON},
 		{Name: "item_created_at", Type: field.TypeString},
 		{Name: "item_created_by", Type: field.TypeString},
@@ -1374,7 +1379,7 @@ var (
 		{Name: "description", Type: field.TypeString, Size: 2000, Default: ""},
 		{Name: "default_currency", Type: field.TypeString, Size: 3, Default: ""},
 		{Name: "allow_folders", Type: field.TypeBool, Default: true},
-		{Name: "tags", Type: field.TypeJSON},
+		{Name: "keywords", Type: field.TypeJSON},
 		{Name: "template_keys", Type: field.TypeJSON},
 		{Name: "values", Type: field.TypeJSON},
 		{Name: "inherit_permissions", Type: field.TypeBool, Default: true},

@@ -103,9 +103,9 @@ func (_c *ItemRevisionCreate) SetName(v string) *ItemRevisionCreate {
 	return _c
 }
 
-// SetTags sets the "tags" field.
-func (_c *ItemRevisionCreate) SetTags(v []string) *ItemRevisionCreate {
-	_c.mutation.SetTags(v)
+// SetKeywords sets the "keywords" field.
+func (_c *ItemRevisionCreate) SetKeywords(v []string) *ItemRevisionCreate {
+	_c.mutation.SetKeywords(v)
 	return _c
 }
 
@@ -259,8 +259,8 @@ func (_c *ItemRevisionCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "ItemRevision.name": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.Tags(); !ok {
-		return &ValidationError{Name: "tags", err: errors.New(`ent: missing required field "ItemRevision.tags"`)}
+	if _, ok := _c.mutation.Keywords(); !ok {
+		return &ValidationError{Name: "keywords", err: errors.New(`ent: missing required field "ItemRevision.keywords"`)}
 	}
 	if _, ok := _c.mutation.Payload(); !ok {
 		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "ItemRevision.payload"`)}
@@ -343,9 +343,9 @@ func (_c *ItemRevisionCreate) createSpec() (*ItemRevision, *sqlgraph.CreateSpec)
 		_spec.SetField(itemrevision.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := _c.mutation.Tags(); ok {
-		_spec.SetField(itemrevision.FieldTags, field.TypeJSON, value)
-		_node.Tags = value
+	if value, ok := _c.mutation.Keywords(); ok {
+		_spec.SetField(itemrevision.FieldKeywords, field.TypeJSON, value)
+		_node.Keywords = value
 	}
 	if value, ok := _c.mutation.Payload(); ok {
 		_spec.SetField(itemrevision.FieldPayload, field.TypeJSON, value)

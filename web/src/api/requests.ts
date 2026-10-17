@@ -164,7 +164,7 @@ export interface SearchParams {
   q?: string;
   workspaceId?: string;
   collectionId?: string;
-  tag?: string;
+  keyword?: string;
   kind?: 'item' | 'folder' | 'all';
 }
 
@@ -178,7 +178,7 @@ export function searchRequest(params: SearchParams): ApiCall {
       workspace_id: params.workspaceId,
       collection_id: params.collectionId,
       content_type_id: params.contentTypeId,
-      tag: params.tag,
+      keyword: params.keyword,
       kind: params.kind === 'all' ? 'item,folder' : params.kind,
       $top: 25,
     },

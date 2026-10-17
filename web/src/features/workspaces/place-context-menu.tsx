@@ -40,7 +40,7 @@ export function PlaceContextMenu({ resource, children, onNavigate }: { resource:
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => { void navigate({ to: workspace ? '/w/$workspaceId' : '/w/$workspaceId/l/$listId', params }); onNavigate?.(); }}>Open</ContextMenuItem>
-        {workspace && <ContextMenuItem onSelect={() => { void navigate({ to: '/w/$workspaceId/tags', params }); onNavigate?.(); }}>Tags</ContextMenuItem>}
+        {workspace && <ContextMenuItem onSelect={() => { void navigate({ to: '/w/$workspaceId/keywords', params }); onNavigate?.(); }}>Keywords</ContextMenuItem>}
         {workspace && can(fresh.data, 'manage') && <>
           <ContextMenuItem onSelect={() => setCreating(true)}>New list or library…</ContextMenuItem>
           <ContextMenuItem onSelect={() => { void navigate({ to: '/w/$workspaceId/settings/members', params }); onNavigate?.(); }}>Manage members</ContextMenuItem>

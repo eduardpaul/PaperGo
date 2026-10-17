@@ -38,7 +38,7 @@ func BenchmarkItemUpdates(b *testing.B) {
 				values := map[string]any{"amount": json.Number("9007199254740993")}
 				update := BulkUpdate{Name: &name, Values: &values}
 				for i := range operations {
-					item, err := s.Create(ctx, "writer", list.ID, CreateResource{Kind: "item", Name: fmt.Sprintf("Record %d", i), Tags: []string{"finance"}, Values: values})
+					item, err := s.Create(ctx, "writer", list.ID, CreateResource{Kind: "item", Name: fmt.Sprintf("Record %d", i), Keywords: []string{"finance"}, Values: values})
 					if err != nil {
 						b.Fatal(err)
 					}
@@ -102,8 +102,8 @@ func BenchmarkBulkCreate(b *testing.B) {
 		for i := range operations {
 			created++
 			operations[i] = BulkOperation{Action: "create", Create: &BulkCreate{
-				Name: fmt.Sprintf("Invoice INV-%07d Acme Travel", created),
-				Tags: []string{"finance"},
+				Name:     fmt.Sprintf("Invoice INV-%07d Acme Travel", created),
+				Keywords: []string{"finance"},
 				Values: map[string]any{
 					"amount": json.Number(fmt.Sprintf("%d.%02d", created%10000, created%100)), "status": "Open", "due": "2026-10-13",
 					"owner": "writer", "reference": fmt.Sprintf("PO-%06d", created), "count": json.Number(fmt.Sprint(created % 50)),

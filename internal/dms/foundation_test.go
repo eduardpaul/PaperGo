@@ -49,17 +49,17 @@ func TestPublishingSurfacesAndLifecycle(t *testing.T) {
 	}
 	item = current(t, s, item.ID)
 	name := "Secretedit"
-	tags := []string{"secret"}
-	item, err = s.Update(testContext, "editor", item.ID, item.Version, UpdateResource{Name: &name, Tags: &tags})
+	keywords := []string{"secret"}
+	item, err = s.Update(testContext, "editor", item.ID, item.Version, UpdateResource{Name: &name, Keywords: &keywords})
 	if err != nil {
 		t.Fatal(err)
 	}
 	visible, err := s.Get(testContext, "reader", item.ID)
-	if err != nil || visible.Name != "Hiddenword" || len(visible.Tags) != 0 || visible.HeadRevisionID != nil {
+	if err != nil || visible.Name != "Hiddenword" || len(visible.Keywords) != 0 || visible.HeadRevisionID != nil {
 		t.Fatalf("published surface leaked: %+v %v", visible, err)
 	}
 	indexSearch(t, s)
-	for _, in := range []Browse{{ParentID: list.ID, Search: "Secretedit"}, {ParentID: list.ID, Tag: "secret"}} {
+	for _, in := range []Browse{{ParentID: list.ID, Search: "Secretedit"}, {ParentID: list.ID, Keyword: "secret"}} {
 		p, err = s.Browse(testContext, "reader", in)
 		if err != nil || len(p.Data) != 0 {
 			t.Fatalf("draft query leaked: %+v %v", p, err)

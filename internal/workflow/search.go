@@ -8,7 +8,7 @@ import (
 	"papergo/internal/forms"
 )
 
-// RoleSearchIndex keeps items' and folders' names, fields, terms, tags and
+// RoleSearchIndex keeps items' and folders' names, fields, terms, keywords and
 // permissions in the search store.
 const RoleSearchIndex = "search.index"
 
@@ -29,7 +29,7 @@ func init() {
 		run:          runSearchItemsWithTerm})
 
 	RegisterRole(&Role{Key: RoleSearchIndex, Name: "Search index",
-		Description: "Keeps the names, fields, terms, tags and permissions of items and folders searchable. Turned off for a collection, searches inside it answer search_off, and global search keeps its entries as last indexed, still trimmed by current permissions."})
+		Description: "Keeps the names, fields, terms, keywords and permissions of items and folders searchable. Turned off for a collection, searches inside it answer search_off, and global search keeps its entries as last indexed, still trimmed by current permissions."})
 	RegisterBuiltIn(&BuiltIn{Key: "search.index", Name: "Index for search", Role: RoleSearchIndex, Default: true, System: true,
 		Description:      "Keeps items and folders searchable: on every change, permission change and term relabel, re-reads the entry and writes it to the search index.",
 		ParametersSchema: forms.MustParse(`{"type": "object", "properties": {}}`),

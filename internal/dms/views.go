@@ -35,7 +35,7 @@ func (s *Service) validateView(ctx context.Context, subject, containerID string,
 	if e != nil {
 		return e
 	}
-	known := map[string]bool{"$id": true, "$name": true, "$tags": true, "$created_at": true, "$created_by": true, "$modified_at": true, "$modified_by": true}
+	known := map[string]bool{"$id": true, "$name": true, "$keywords": true, "$created_at": true, "$created_by": true, "$modified_at": true, "$modified_by": true}
 	for _, d := range defs {
 		known[d.Key] = true
 	}
@@ -188,9 +188,9 @@ func (s *Service) QueryView(ctx context.Context, subject, id string, in ViewQuer
 		if e != nil {
 			return out, e
 		}
-		if !q.includeTags {
+		if !q.includeKeywords {
 			for _, r := range out.Data {
-				r.Tags = []string{}
+				r.Keywords = []string{}
 			}
 		}
 		return out, nil

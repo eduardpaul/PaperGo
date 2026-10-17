@@ -29,5 +29,5 @@ func (FieldValue) Edges() []ent.Edge {
 	return []ent.Edge{edge.To("item_surface", ItemSurface.Type).Field("surface_id").Unique().Required().Immutable()}
 }
 func (FieldValue) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("surface_id", "field_key", "ordinal").Unique(), index.Fields("container_id", "surface", "field_key", "value_integer", "item_id"), index.Fields("container_id", "surface", "field_key", "value_text", "item_id"), index.Fields("container_id", "surface", "field_key", "value_boolean", "item_id")}
+	return []ent.Index{index.Fields("field_type", "value_text", "item_id"), index.Fields("surface_id", "field_key", "ordinal").Unique(), index.Fields("container_id", "surface", "field_key", "value_integer", "item_id"), index.Fields("container_id", "surface", "field_key", "value_text", "item_id"), index.Fields("container_id", "surface", "field_key", "value_boolean", "item_id")}
 }

@@ -137,8 +137,8 @@ func (s *Service) WriteTarget(ctx context.Context, subject, libraryID string, pa
 type PutFile struct {
 	FileConditions
 	Blob BlobInput
-	// Tags and Values describe a new file; replacing content keeps its metadata.
-	Tags          []string
+	// Keywords and Values describe a new file; replacing content keeps its metadata.
+	Keywords      []string
 	Values        map[string]any
 	ContentTypeID string
 }
@@ -192,7 +192,7 @@ func (s *Service) PutFile(ctx context.Context, subject, libraryID string, path [
 			}
 			id = existing.ID
 		} else {
-			r, e := t.create(ctx, subject, parent.ID, CreateResource{Kind: "item", Name: path[len(path)-1], Tags: in.Tags, Values: in.Values, ContentTypeID: in.ContentTypeID}, &in.Blob)
+			r, e := t.create(ctx, subject, parent.ID, CreateResource{Kind: "item", Name: path[len(path)-1], Keywords: in.Keywords, Values: in.Values, ContentTypeID: in.ContentTypeID}, &in.Blob)
 			if e != nil {
 				return e
 			}

@@ -13,12 +13,12 @@ func TestRevisionHistoryChangesPaginationAndRestore(t *testing.T) {
 	fieldOK(t, s, list.ID, CreateField{Key: "b", Label: "B", Type: "text"})
 	item := create(t, s, list.ID, "item", "Original", map[string]any{"a": "old"})
 	values := map[string]any{"a": "new", "b": "remove on restore"}
-	item, err := s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: ptr("Changed"), Tags: &[]string{"new"}, Values: &values})
+	item, err := s.Update(testContext, "alice", item.ID, item.Version, UpdateResource{Name: ptr("Changed"), Keywords: &[]string{"new"}, Values: &values})
 	if err != nil {
 		t.Fatal(err)
 	}
 	history, err := s.RevisionHistory(testContext, "alice", item.ID, 0, 1)
-	if err != nil || len(history.Data) != 1 || !history.Data[0].IsCurrent || !slices.Equal(history.Data[0].ChangedFields, []string{"$name", "$tags", "a", "b"}) {
+	if err != nil || len(history.Data) != 1 || !history.Data[0].IsCurrent || !slices.Equal(history.Data[0].ChangedFields, []string{"$keywords", "$name", "a", "b"}) {
 		t.Fatal(history, err)
 	}
 	if history.Data[0].Edges.SchemaRevision == nil {
@@ -41,7 +41,7 @@ func TestRevisionHistoryChangesPaginationAndRestore(t *testing.T) {
 		t.Fatal("stale restore", err)
 	}
 	restored, err := s.RestoreRevision(testContext, "alice", item.ID, 1, item.Version)
-	if err != nil || restored.Name != "Original" || len(restored.Tags) != 0 || restored.Values["a"] != "old" {
+	if err != nil || restored.Name != "Original" || len(restored.Keywords) != 0 || restored.Values["a"] != "old" {
 		t.Fatal(restored, err)
 	}
 	if _, ok := restored.Values["b"]; ok {

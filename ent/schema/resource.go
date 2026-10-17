@@ -31,7 +31,7 @@ func (Resource) Fields() []ent.Field {
 		field.String("default_currency").Default("").MaxLen(3),
 		// Collections only: controls creation of physical folders.
 		field.Bool("allow_folders").Default(true),
-		field.JSON("tags", []string{}).Default([]string{}),
+		field.JSON("keywords", []string{}).Default([]string{}),
 		// Keys of schema templates explicitly adopted into a collection.
 		field.JSON("template_keys", []string{}).Default([]string{}),
 		field.JSON("values", map[string]any{}).Default(map[string]any{}),

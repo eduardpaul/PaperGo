@@ -121,7 +121,7 @@ func (a *API) Handler() http.Handler {
 	api.HandleFunc("GET /v1/items/{id}/text", a.itemText)
 	api.HandleFunc("POST /v1/items/{id}/content/versions/{number}/restore", a.restoreBlob)
 	api.HandleFunc("GET /v1/audit", a.audit)
-	api.HandleFunc("GET /v1/workspaces/{id}/tags", a.tags)
+	api.HandleFunc("GET /v1/workspaces/{id}/keywords", a.keywords)
 	if a.Auth == nil || a.Auth.Kind() != auth.TrustedProxy {
 		api.HandleFunc("GET /v1/webdav-credentials", a.webdavCredentials)
 		api.HandleFunc("POST /v1/webdav-credentials", a.createWebDAVCredential)
@@ -475,12 +475,12 @@ func (a *API) workspace(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name        string   `json:"name"`
 		Description string   `json:"description"`
-		Tags        []string `json:"tags"`
+		Keywords    []string `json:"keywords"`
 	}
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.DMS.Create(r.Context(), subject(r), "", dms.CreateResource{Kind: "workspace", Name: in.Name, Description: in.Description, Tags: in.Tags})
+	out, err := a.DMS.Create(r.Context(), subject(r), "", dms.CreateResource{Kind: "workspace", Name: in.Name, Description: in.Description, Keywords: in.Keywords})
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -568,11 +568,11 @@ func (a *API) delete(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) children(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")})
+	a.list(w, r, dms.Browse{ParentID: r.PathValue("id"), Search: q.Get("q"), Keyword: q.Get("keyword"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")})
 }
 func (a *API) browse(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Tag: q.Get("tag"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")}
+	in := dms.Browse{WorkspaceID: q.Get("workspace_id"), ParentID: q.Get("parent_id"), Search: q.Get("q"), Keyword: q.Get("keyword"), After: q.Get("$skiptoken"), Limit: queryInt(r, "$top"), Surface: q.Get("surface"), FilterField: q.Get("filter_field"), FilterOp: q.Get("filter_op"), FilterValue: q.Get("filter_value"), Kind: q.Get("kind")}
 	if r.URL.Path == "/v1/workspaces" {
 		in = dms.Browse{After: q.Get("$skiptoken"), Limit: queryInt(r, "$top")}
 	}
@@ -841,11 +841,11 @@ func (a *API) observe(next http.Handler) http.Handler {
 	})
 }
 
-// tags lists the workspace's tag vocabulary (keywords) for pickers and autocomplete.
-func (a *API) tags(w http.ResponseWriter, r *http.Request) {
+// keywords lists the workspace's keyword vocabulary (keywords) for pickers and autocomplete.
+func (a *API) keywords(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit := queryInt(r, "$top")
-	out, err := a.DMS.Tags(r.Context(), subject(r), r.PathValue("id"), dms.TagsQuery{CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("$skiptoken"), Limit: limit})
+	out, err := a.DMS.WorkspaceKeywords(r.Context(), subject(r), r.PathValue("id"), dms.WorkspaceKeywordsQuery{CollectionID: q.Get("collection_id"), Prefix: q.Get("prefix"), After: q.Get("$skiptoken"), Limit: limit})
 	if err != nil {
 		a.failure(w, r, err)
 		return

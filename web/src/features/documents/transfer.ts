@@ -9,7 +9,7 @@ export interface DocumentMetadata {
   name?: string;
   content_type_id?: string;
   folder_id?: string;
-  tags?: string[];
+  keywords?: string[];
   values?: Record<string, unknown>;
   languages?: string;
 }

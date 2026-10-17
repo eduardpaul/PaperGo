@@ -27,7 +27,7 @@ measurements below have not been rerun with that allocator policy.
   The service benchmarks also exercise an ordinary reader with fragmented ACLs
   and mixed draft/published surfaces.
 - Collections contain small invoice-like items with two indexed fields and a
-  tag. HTTP collection publishing and metadata versioning are off; library
+  keyword. HTTP collection publishing and metadata versioning are off; library
   versioning uses its default. Write stages add items, so collection size grows
   after the initial read stages. An extended run also edits items repeatedly.
 - Closed-loop clients reuse HTTP connections on localhost, with no think time.

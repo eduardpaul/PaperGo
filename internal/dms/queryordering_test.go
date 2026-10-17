@@ -26,7 +26,7 @@ func TestMultiSortExactRanksMissingValuesProjectionAndPublication(t *testing.T) 
 		if in.serial != "" {
 			values["serial"] = json.Number(in.serial)
 		}
-		item, e := s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: in.name, Tags: []string{"tag"}, Values: values})
+		item, e := s.Create(testContext, "alice", l.ID, CreateResource{Kind: "item", Name: in.name, Keywords: []string{"keyword"}, Values: values})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -58,8 +58,8 @@ func TestMultiSortExactRanksMissingValuesProjectionAndPublication(t *testing.T) 
 		}
 		for _, r := range out.Data {
 			ids = append(ids, r.ID)
-			if _, ok := r.Values["notes"]; ok || len(r.Tags) != 0 {
-				t.Fatal("selection leaked fields", r.Values, r.Tags)
+			if _, ok := r.Values["notes"]; ok || len(r.Keywords) != 0 {
+				t.Fatal("selection leaked fields", r.Values, r.Keywords)
 			}
 		}
 		if out.NextCursor == "" {
@@ -101,8 +101,8 @@ func TestMultiSortExactRanksMissingValuesProjectionAndPublication(t *testing.T) 
 	if e != nil || head.Data[0].ID != items[0].ID || len(head.Data[0].Values) != 0 {
 		t.Fatal(head, e)
 	}
-	selected, e := s.Query(testContext, "reader", l.ID, QueryRequest{Select: []string{"notes", "$tags"}, Limit: 1})
-	if e != nil || len(selected.Data[0].Values) != 1 || len(selected.Data[0].Tags) != 1 {
+	selected, e := s.Query(testContext, "reader", l.ID, QueryRequest{Select: []string{"notes", "$keywords"}, Limit: 1})
+	if e != nil || len(selected.Data[0].Values) != 1 || len(selected.Data[0].Keywords) != 1 {
 		t.Fatal(selected, e)
 	}
 	in.After = firstCursor

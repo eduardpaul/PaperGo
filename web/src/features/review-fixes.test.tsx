@@ -72,12 +72,41 @@ describe('reviewed frontend flows', () => {
     await waitFor(() => expect((screen.getByLabelText('Amount') as HTMLInputElement).value).toBe('9007199254740993'));
   });
 
+  it('accepts canonical keyword IDs after saving intrinsic and custom keyword labels', async () => {
+    let item: Resource = { id: 'item', workspace_id: 'workspace', container_id: 'collection', kind: 'item', name: 'Invoice', version: 1, keywords: [], values: {}, access: ['read', 'read_draft', 'write'] };
+    let patch: Record<string, unknown> | undefined;
+    mockAPI((url, init) => {
+      if (init.method === 'PATCH') {
+        patch = parseJSON(String(init.body)) as Record<string, unknown>;
+        item = { ...item, keywords: ['finance-id'], values: { topics: ['review-id'] }, version: 2 };
+        return item;
+      }
+      if (url.pathname === '/v1/resources/item') return item;
+      if (url.pathname === '/v1/terms') return { value: [{ id: 'finance-id', name: 'Finance' }, { id: 'review-id', name: 'Review' }] };
+      return { value: [] };
+    });
+    renderPage(<ItemSheet itemId="item" collection={collection()} fields={[{ id: 'topics', key: 'topics', label: 'Topics', type: 'keywords', options: { multiple: true } }]} contentTypes={[]} tab="details" onTab={vi.fn()} onClose={vi.fn()} onMoved={vi.fn()} />);
+    const keywords = await screen.findByLabelText('Keywords');
+    fireEvent.change(keywords, { target: { value: 'Finance' } });
+    fireEvent.keyDown(keywords, { key: 'Enter' });
+    const topics = screen.getByLabelText('Topics');
+    fireEvent.change(topics, { target: { value: 'Review' } });
+    fireEvent.keyDown(topics, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(patch).toEqual({ keywords: ['Finance'], values: { topics: ['Review'] } }));
+    await waitFor(() => expect(screen.queryByText('Unsaved changes')).toBeNull());
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByRole('button', { name: 'Remove keyword Finance' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Remove keyword Review' })).toBeTruthy();
+  });
+
   it.each([false, true])('writes a keywords field with multiple=%s using its declared shape', async (multiple) => {
     let submitted: unknown;
     mockAPI(() => ({ value: [{ id: 'keyword', name: 'Finance' }] }));
-    renderPage(<FieldEditor field={{ id: 'tags', key: 'tags', label: 'Keywords', type: 'keywords', options: { multiple } }} value={undefined} onChange={(value) => { submitted = value; }} />);
+    renderPage(<FieldEditor field={{ id: 'keywords', key: 'keywords', label: 'Keywords', type: 'keywords', options: { multiple } }} value={undefined} onChange={(value) => { submitted = value; }} />);
+    fireEvent.focus(screen.getByLabelText('Keywords'));
     fireEvent.change(screen.getByLabelText('Keywords'), { target: { value: 'fin' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Finance' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Finance' }));
     expect(submitted).toEqual(multiple ? ['keyword'] : 'keyword');
   });
 

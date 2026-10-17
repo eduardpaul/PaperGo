@@ -1,7 +1,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/api/http';
-import { keywords, peopleQuery, terms } from '@/api/queries';
+import { KeywordInput } from '@/components/keyword-input';
+import { peopleQuery, terms } from '@/api/queries';
 import { lookupOptionsRequest } from '@/api/requests';
 import type { FieldDefinition, Page, Resource } from '@/api/types';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
@@ -68,12 +69,12 @@ function Control({
   if (field.type === 'lookup' && field.options?.lookup_container_id) {
     return <LookupEditor id={id} containerId={field.options.lookup_container_id} multiple={multiple} value={value} onChange={onChange} />;
   }
-  if ((field.type === 'term' && field.options?.term_set_id) || field.type === 'keywords') {
+  if (field.type === 'keywords') return <KeywordInput id={id} value={asList(value)} limit={multiple ? 100 : 1} onChange={next => onChange(multiple ? next : next[0] ?? '')} />;
+  if (field.type === 'term' && field.options?.term_set_id) {
     return (
       <TermEditor
         id={id}
         setId={field.type === 'term' ? field.options?.term_set_id : undefined}
-        keywords={field.type === 'keywords'}
         multiple={multiple}
         value={value}
         onChange={onChange}
@@ -225,14 +226,12 @@ function LookupEditor({
 function TermEditor({
   id,
   setId,
-  keywords: keywordField,
   multiple,
   value,
   onChange,
 }: {
   id: string;
   setId?: string;
-  keywords: boolean;
   multiple: boolean;
   value: unknown;
   onChange: (value: unknown) => void;
@@ -251,7 +250,7 @@ function TermEditor({
       setOptions([]);
       return;
     }
-    const found = keywordField ? await keywords(next.trim()) : setId ? await terms(setId, next.trim()) : [];
+    const found = setId ? await terms(setId, next.trim()) : [];
     setOptions(found.map((term) => ({ id: term.id, name: term.name })));
   }
 

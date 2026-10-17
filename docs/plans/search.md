@@ -60,7 +60,7 @@ The same EF Core code runs on both providers. Only the full-text engine differs,
 
 - **Tables:**
   - `documents`: title, keywords, body cut at 200,000 characters, language, scope, metadata;
-  - `document_tags`, one row per document and term;
+  - `document_keywords`, one row per document and term;
   - `document_fields`, one row per value, indexed by (name, kind, text) and (name, kind, number);
   - `passages`: about 1,200 characters each, overlapping by 150, cut at word boundaries, at most 400 per document. Each passage has its page, the SHA-256 of title plus text (`ContentHash`), and a float32 embedding blob with the model and a `VectorStamp`.
 - **SQLite:**
@@ -188,7 +188,7 @@ These differences shape the Go design. Each changes something in the port.
               main database (papergo.db)                               search store (search.db | zvec)
  ┌────────────────────────────────────────────────┐              ┌───────────────────────────────────────────────┐
  │ writes ─► domain_events (item.*, folder.*,     │              │ documents (resource, surface): metadata, text │
- │           permissions.changed per item [E2],   │              │ fields, terms, tags                           │
+ │           permissions.changed per item [E2],   │              │ fields, terms, keywords                           │
  │           term.*, file.added)                  │              │ chunks (item, blob, generation) + full text   │
  │ resources / item_surfaces / field_values       │              │ vectors (input hash, model)                   │
  │ blob_texts (page text per SHA-256)             │              └───────▲───────────────────▲───────────────────┘
@@ -241,10 +241,10 @@ type Document struct {
     RevisionID         string
     BlobID             string   // current file of this surface, "" when none: selects its content
     Name               string
-    Keywords           string   // high weight: tags, term labels and synonyms, high-weight fields
+    Keywords           string   // high weight: keywords, term labels and synonyms, high-weight fields
     Body               string   // other field text, notes
     Language           string   // Snowball name or ""
-    Tags               []string
+    Keywords               []string
     TermIDs            []string
     Fields             []Field
     CreatedBy, ModifiedBy string
@@ -342,7 +342,7 @@ The two stores are separate packages with nothing in common but the `search` con
     - `name`, `keywords`, `body`, `language`;
     - author and time columns, `stamp`;
     - indexes on `(collection_id, parent_id)`, `(scope_id)`, `(workspace_id)` and `(modified_at)`.
-  - `document_terms(doc, term_id)` and `document_tags(doc, tag)`.
+  - `document_terms(doc, term_id)` and `document_keywords(doc, keyword)`.
   - `document_fields(doc, key, kind, ordinal, text, int, ordkey)`, indexed by `(key, kind, text)`, `(key, kind, int)` and `(key, kind, ordkey)`. `ordkey` is the fixed-width decimal ordering key `field_values` already uses, so `number` filters are exact.
   - `chunks(id, item_id, blob_id, generation, published, ordinal, page, text, enrichment, input_hash, language)`, indexed by `(item_id, blob_id, published)` and `(input_hash)`.
   - `vectors(model, input_hash, dims, vector BLOB, stamp)`: normalized float32 little-endian, primary key `(model, input_hash)`, plus an index on `(model, stamp)` for cheap change checks.
@@ -369,7 +369,7 @@ The two stores are separate packages with nothing in common but the `search` con
   - memory is chunks × dimensions × 4 bytes, reported in `Stats`.
 
   P0 measures a pure-Go dot product, unrolled by 8, at 100k × 768. If it is too slow, P3 adds an int8 scan with a float32 rescore of the top 1,000. Larger indexes use zvec.
-- **Facets:** exact `GROUP BY` over the keyword match set, or over the fused candidates. Workspace, collection, content type, terms and tags, top 20 each.
+- **Facets:** exact `GROUP BY` over the keyword match set, or over the fused candidates. Workspace, collection, content type, terms and keywords, top 20 each.
 - **Scope lists:** passed as one JSON parameter (`scope_id IN (SELECT value FROM json_each(?))`), so 20,000 scopes are not 20,000 placeholders.
 
 ### 6.2 `zvec` (optional)
@@ -410,7 +410,7 @@ A port of `PaperDotNet.Search.Zvec`, with the lessons of its implementation note
 
 Everything after a change is a workflow ([workflows](../workflows.md#building-features-on-workflows)). Search ships **two** built-ins:
 
-- **`search.index`** keeps the basic list and library data in the index: name, tags, fields, terms, permissions and surfaces.
+- **`search.index`** keeps the basic list and library data in the index: name, keywords, fields, terms, permissions and surfaces.
 - **`search.content`** turns a file into searchable content. It is composed of activities (`read text → chunk → [AI steps] → embed → publish`), and every library or workspace can change it.
 
 Both can be turned off, replaced or copied and edited, per workspace or per collection, like any built-in. The engine and a few fixed activities guarantee what must never vary (section 7.4).
@@ -505,7 +505,7 @@ Built-ins today are either per collection (`PerCollection`) or workspace-wide (n
   - `permissions.changed` (actions `replace`);
   - `term.changed` (when `name`, `labels` or `synonyms` changed) and `term.merged`.
 - **The default flow is one node, `search.sync`.**
-  - It reads the resource's **current** surfaces on one read snapshot: name, tags, fields with their kinds, term labels and synonyms, scope, workspace, collection, parent, revision and current blob.
+  - It reads the resource's **current** surfaces on one read snapshot: name, keywords, fields with their kinds, term labels and synonyms, scope, workspace, collection, parent, revision and current blob.
   - It upserts them, and deletes surfaces that are gone along with content of blobs no surface references any more.
   - It reads state, not event payloads, so replays, duplicates and order do not matter. Per-item `permissions.changed` (E2) makes scope moves plain syncs: no batch activity is needed.
 - **Term events have no item.** For `term.changed` and `term.merged`, a `forEach` over `search.items_with_term` (pages of 500 IDs of the workspace's resources holding the term) runs `search.sync` per ID.
@@ -526,7 +526,7 @@ Built-ins today are either per collection (`PerCollection`) or workspace-wide (n
   | date, datetime | date (days), datetime (ns) | (none) | as integer |
   | person, lookup | reference | display name, or the target item's name for lookups | `eq ne in` |
   | term, keywords | terms | labels and synonyms in **keywords** | `eq ne in under` |
-  | `$name`, `$tags` | (system) | name in heading, tags in keywords | the `tag` parameter |
+  | `$name`, `$keywords` | (system) | name in heading, keywords in keywords | the `keyword` parameter |
 
   All scalar fields are filterable in search, not only the `indexed` ones, because the search store is separate from the main writer. A field option `search_weight: none|normal|high` is added in P2: `none` leaves the field's text out, and `high` moves it to keywords.
 - **Cost.** One run per change, bounded by `coalesce`, the system queue and short retention of system runs. P1 measures request write throughput with and without the built-in, and the lag at the 95th percentile. The exit criterion is a loss of at most 15%.
@@ -668,14 +668,14 @@ Personalization changes quality and cost, never permissions or inclusion.
 | `mode` | `keyword`, `semantic` or `hybrid`. The default is hybrid when embeddings are configured, else keyword |
 | `surface` | `auto` (default), `head` or `published` |
 | `kind` | `item` (default), `folder` or both |
-| `workspace_id`, `collection_id`, `content_type_id`, `tag`, `created_by`, `modified_by`, `modified_from`, `modified_to` | Filters |
+| `workspace_id`, `collection_id`, `content_type_id`, `keyword`, `created_by`, `modified_by`, `modified_from`, `modified_to` | Filters |
 | `term_id` | Matches the term, its descendants and terms merged into it |
 | `filter` (POST body) | PaperGo filter nodes on search fields: `{"field":"amount","op":"gt","value":"100"}`. At most 32 nodes and depth 6. Unknown fields return 400 |
 | `$top` (1–100, default 25), `$skiptoken` | Paging. The token is opaque and binds the caller, the query and an offset into the candidates |
 | `facets` | `true` by default |
 
 - **Each hit** has `id`, `kind`, `surface`, `workspace_id`, `collection_id`, `content_type_id`, `name`, `snippet`, `highlights`, `page`, `matched_by`, `rank`, `modified_at` and `modified_by`.
-- **The response** has `value`, `total`, `total_estimated`, `facets` (workspace, collection, content type, terms with labels when the caller has `taxonomy.read`, and tags), `mode` and `@odata.nextLink`.
+- **The response** has `value`, `total`, `total_estimated`, `facets` (workspace, collection, content type, terms with labels when the caller has `taxonomy.read`, and keywords), `mode` and `@odata.nextLink`.
 - `GET /v1/search/fields` lists the filterable search fields.
 - `GET /v1/search/status` reports the store, the queued `search.index`/`search.content` runs, chunks without vectors, the model, the reindex in progress, the size and the vector memory.
 - **Failure modes:**
@@ -782,7 +782,7 @@ Sizes are rough working days for one person. Each phase updates its docs in the 
 | Phase | Scope | Exit criteria | Size |
 | --- | --- | --- | --- |
 | **P0 Spike** | `contentless_delete` FTS5 in modernc; `SearchScopes` cost at 20k scopes; pure-Go dot product at 100k × 768; the zvec cgo SDK (string arrays and native filters); zvec string range comparison; PDFium through cgo SDKs (text and rendering) versus a pure-Go reader; Snowball and language-detection libraries | A short results section in this plan; go or no-go per choice | 4 |
-| **P1 Engine additions and keyword search** | E1 workflow outputs and role output contracts; E2 per-item `permissions.changed` with dispatcher expansion and `actions`; E3 folder events; E4 `coalesce`; E5 workspace built-ins with collection overrides and the roles view; system queue and short retention for built-in runs; `internal/search` contracts, parser and service; `sqlitestore` (documents, terms, tags, `doc_fts`, `Match`); `search.sync`, `search.items_with_term`; the `search.index` built-in; `dms.SearchScopes` and `VisibleSurfaces`; `GET /v1/search` (keyword, filters, facets, paging); **collection queries and listings move to `Match`, and `item_surface_search` and `resource_search` are deleted**; reindex and start-up rebuild (backups leave `search.db` out; a restore removes it, so it rebuilds at start); conformance (keyword part) | Global search works across workspaces, trimmed by permissions and surfaces; collection-query parity tests pass on the store; turning `search.index` off for a collection gives `search_off`; the write-throughput criterion of 7.2 holds | 16 |
+| **P1 Engine additions and keyword search** | E1 workflow outputs and role output contracts; E2 per-item `permissions.changed` with dispatcher expansion and `actions`; E3 folder events; E4 `coalesce`; E5 workspace built-ins with collection overrides and the roles view; system queue and short retention for built-in runs; `internal/search` contracts, parser and service; `sqlitestore` (documents, terms, keywords, `doc_fts`, `Match`); `search.sync`, `search.items_with_term`; the `search.index` built-in; `dms.SearchScopes` and `VisibleSurfaces`; `GET /v1/search` (keyword, filters, facets, paging); **collection queries and listings move to `Match`, and `item_surface_search` and `resource_search` are deleted**; reindex and start-up rebuild (backups leave `search.db` out; a restore removes it, so it rebuilds at start); conformance (keyword part) | Global search works across workspaces, trimmed by permissions and surfaces; collection-query parity tests pass on the store; turning `search.index` off for a collection gives `search_off`; the write-throughput criterion of 7.2 holds | 16 |
 | **P2 Fields and languages** | `document_fields` with exact kinds; `filter` on search; `/v1/search/fields`; the `search_weight` option; Snowball stemming columns; `/v1/search/status`; web search page | Conformance field tests pass; `invoices` finds `invoice` in the configured languages | 6 |
 | **P3 File text** | E6 `media_types`; `internal/doctext` (PDF reader as decided in P0, OCR through the port); `document.read_text`; `blob_texts` with export and import; language hints and detection | A text PDF, a scanned PDF and a photo get page text; a composed PDF is not OCRed again; an import keeps text | 7 |
 | **P4 Content as workflows** | Chunks and `chunk_fts`; `search.chunk` (all sources and kinds), `search.publish`; the chunkers; the `search.content` built-in with its outputs; page hits and snippets; file text in `doc_fts`, so collection `search` matches content; reindex with `content: true` | Uploading a PDF makes its text findable with `page`, also in the library's search; a library overrides the chunker; a chained workflow reads `text_id`; a rename re-chunks nothing | 6 |

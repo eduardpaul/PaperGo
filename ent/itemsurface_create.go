@@ -73,9 +73,9 @@ func (_c *ItemSurfaceCreate) SetName(v string) *ItemSurfaceCreate {
 	return _c
 }
 
-// SetTags sets the "tags" field.
-func (_c *ItemSurfaceCreate) SetTags(v []string) *ItemSurfaceCreate {
-	_c.mutation.SetTags(v)
+// SetKeywords sets the "keywords" field.
+func (_c *ItemSurfaceCreate) SetKeywords(v []string) *ItemSurfaceCreate {
+	_c.mutation.SetKeywords(v)
 	return _c
 }
 
@@ -206,8 +206,8 @@ func (_c *ItemSurfaceCreate) check() error {
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "ItemSurface.name"`)}
 	}
-	if _, ok := _c.mutation.Tags(); !ok {
-		return &ValidationError{Name: "tags", err: errors.New(`ent: missing required field "ItemSurface.tags"`)}
+	if _, ok := _c.mutation.Keywords(); !ok {
+		return &ValidationError{Name: "keywords", err: errors.New(`ent: missing required field "ItemSurface.keywords"`)}
 	}
 	if _, ok := _c.mutation.Payload(); !ok {
 		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "ItemSurface.payload"`)}
@@ -290,9 +290,9 @@ func (_c *ItemSurfaceCreate) createSpec() (*ItemSurface, *sqlgraph.CreateSpec) {
 		_spec.SetField(itemsurface.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := _c.mutation.Tags(); ok {
-		_spec.SetField(itemsurface.FieldTags, field.TypeJSON, value)
-		_node.Tags = value
+	if value, ok := _c.mutation.Keywords(); ok {
+		_spec.SetField(itemsurface.FieldKeywords, field.TypeJSON, value)
+		_node.Keywords = value
 	}
 	if value, ok := _c.mutation.Payload(); ok {
 		_spec.SetField(itemsurface.FieldPayload, field.TypeJSON, value)

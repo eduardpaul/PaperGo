@@ -43,18 +43,18 @@ func TestCollectionHistorySettingsAPI(t *testing.T) {
 	}
 	c = *current
 	endpoint := "/v1/resources/" + c.ID
-	tag := strconv.Quote(strconv.Itoa(c.Version))
+	keyword := strconv.Quote(strconv.Itoa(c.Version))
 	for _, body := range []string{`{"max_versions":0}`, `{"max_versions":501}`, `{"versioning":"minor"}`} {
-		res = request(h, "PATCH", endpoint, body, testToken, tag, "application/json")
+		res = request(h, "PATCH", endpoint, body, testToken, keyword, "application/json")
 		if res.Code != 422 {
 			t.Fatal(res.Code, res.Body.String())
 		}
 	}
-	res = request(h, "PATCH", endpoint, `{"versioning":"off","max_versions":500}`, testToken, tag, "application/json")
+	res = request(h, "PATCH", endpoint, `{"versioning":"off","max_versions":500}`, testToken, keyword, "application/json")
 	if res.Code != 200 {
 		t.Fatal(res.Code, res.Body.String())
 	}
-	res = request(h, "PATCH", endpoint, `{"versioning":"major"}`, testToken, tag, "application/json")
+	res = request(h, "PATCH", endpoint, `{"versioning":"major"}`, testToken, keyword, "application/json")
 	if res.Code != 412 {
 		t.Fatal(res.Code, res.Body.String())
 	}

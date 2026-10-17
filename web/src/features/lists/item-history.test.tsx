@@ -10,11 +10,11 @@ vi.mock('@/features/fields/people', () => ({ usePeopleNames: () => new Map([['al
 vi.mock('@/features/fields/names', () => ({ useTermNames: () => new Map([['term', 'Finance']]) }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-it('shows intrinsic properties and tags without custom fields and follows the selected surface', async () => {
+it('shows intrinsic properties and keywords without custom fields and follows the selected surface', async () => {
   const fetch = vi.fn(async (input: URL | string) => {
     const url = new URL(String(input));
     const published = url.searchParams.get('surface') === 'published';
-    return new Response(JSON.stringify({ revision_number: 1, item: { id: 'a', name: published ? 'Published invoice' : 'Draft invoice', tags: ['Review'], created_by: 'alice' }, file: { filename: 'invoice.pdf', size: 2048, content_type: 'application/pdf' }, definition: { fields: [] } }));
+    return new Response(JSON.stringify({ revision_number: 1, item: { id: 'a', name: published ? 'Published invoice' : 'Draft invoice', keywords: ['Review'], created_by: 'alice' }, file: { filename: 'invoice.pdf', size: 2048, content_type: 'application/pdf' }, definition: { fields: [] } }));
   });
   vi.stubGlobal('fetch', fetch);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

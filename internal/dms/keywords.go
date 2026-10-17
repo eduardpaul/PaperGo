@@ -2,6 +2,7 @@ package dms
 
 import (
 	"context"
+	"encoding/json"
 	"papergo/ent"
 	"papergo/ent/term"
 	"papergo/ent/termset"
@@ -129,13 +130,9 @@ func (s *Service) PopularKeywords(ctx context.Context, subject string, top int) 
 		if e != nil {
 			return nil, e
 		}
-		rows, e := t.Client.QueryContext(ctx, `SELECT f.value_text,count(DISTINCT f.item_id) n
-FROM field_definitions fd JOIN content_types ct ON EXISTS(SELECT 1 FROM json_each(ct.field_ids) WHERE value=fd.id)
-JOIN collection_types ca ON ca.content_type_id=ct.id JOIN resources c ON c.id=ca.container_id AND c.deleted_at IS NULL
-JOIN field_values f ON f.container_id=ca.container_id AND f.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END AND f.field_key=fd.key
-JOIN terms t ON t.id=f.value_text AND t.deprecated=0 AND (t.term_set_id=? OR t.available_as_keyword)
-WHERE fd.indexed AND fd.index_status='ready' AND (fd.type='keywords' OR fd.type='term' AND json_extract(fd.options,'$.term_set_id')=?)
-GROUP BY f.value_text ORDER BY n DESC,f.value_text LIMIT ?`, set.ID, set.ID, top)
+		rows, e := t.Client.QueryContext(ctx, `WITH usage AS (
+ SELECT p.item_id,coalesce(t.merged_into_id,t.id) keyword FROM item_surfaces p JOIN resources c ON c.id=p.container_id AND c.deleted_at IS NULL JOIN resources r ON r.id=p.item_id AND r.deleted_at IS NULL JOIN terms t ON t.id IN (`+surfaceKeywordsSQL+`) WHERE p.surface=CASE WHEN c.publishing_enabled THEN 'head' ELSE 'published' END
+ ) SELECT u.keyword,count(DISTINCT u.item_id) n FROM usage u JOIN terms t ON t.id=u.keyword WHERE t.deprecated=0 AND (t.term_set_id=? OR t.available_as_keyword) GROUP BY u.keyword ORDER BY n DESC,u.keyword LIMIT ?`, set.ID, top)
 		if e != nil {
 			return nil, e
 		}
@@ -240,4 +237,109 @@ func (s *Service) PromoteKeyword(ctx context.Context, subject, id string, versio
 		return t.auditTaxonomy(ctx, subject, action, map[string]any{"term_id": id, "term_set_id": set.ID, "result_term_id": promoted.ID})
 	})
 	return
+}
+
+// normalizeKeywords gives every resource the same term-backed folksonomy as
+// keywords fields. Labels create or reuse terms in the shared keywords set.
+func (s *Service) normalizeKeywords(ctx context.Context, subject string, values, previous []string) ([]string, error) {
+	if len(values) == 0 {
+		return []string{}, nil
+	}
+	if err := validateKeywords(values); err != nil {
+		return nil, err
+	}
+	input := make([]any, len(values))
+	old := map[string]bool{}
+	for i, value := range values {
+		input[i] = value
+	}
+	for _, value := range previous {
+		old[value] = true
+	}
+	normalized, err := s.resolveTermValues(ctx, subject, &ent.FieldDefinition{Key: "$keywords", Type: "keywords"}, input, old)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(normalized))
+	for i, value := range normalized {
+		out[i] = value.(string)
+	}
+	return out, nil
+}
+
+// Surface keywords include the intrinsic keywords and every indexed keywords
+// field, with one occurrence per term even if several fields hold it.
+const surfaceKeywordsSQL = "SELECT keyword FROM item_surface_keywords WHERE surface_id=p.id UNION SELECT value_text FROM field_values WHERE surface_id=p.id AND (field_type='keywords' OR field_type='term' AND value_text IN (SELECT t.id FROM terms t JOIN term_sets ts ON ts.id=t.term_set_id WHERE ts.is_keywords OR t.available_as_keyword))"
+
+// Keyword filters accept the same IDs and labels as keyword assignment, but
+// querying never adds terms to the vocabulary.
+func (s *Service) keywordFilter(ctx context.Context, raw string) (string, error) {
+	if raw == "" {
+		return raw, nil
+	}
+	found, err := s.Client.Term.Get(ctx, raw)
+	if err != nil && !ent.IsNotFound(err) {
+		return "", err
+	}
+	if found == nil {
+		found, _, err = s.keyword(ctx, strings.TrimSpace(raw))
+		if err != nil {
+			return "", err
+		}
+	}
+	if found == nil {
+		return raw, nil
+	}
+	if found.MergedIntoID != nil {
+		return *found.MergedIntoID, nil
+	}
+	return found.ID, nil
+}
+
+func (s *Service) keywordFilters(ctx context.Context, filter *FilterExpr) (*FilterExpr, error) {
+	if filter == nil {
+		return nil, nil
+	}
+	out := *filter
+	var err error
+	if filter.Field == "$keywords" && len(filter.Value) > 0 {
+		var value string
+		if json.Unmarshal(filter.Value, &value) == nil {
+			value, err = s.keywordFilter(ctx, value)
+			if err != nil {
+				return nil, err
+			}
+			out.Value, _ = json.Marshal(value)
+		}
+	}
+	out.And = append([]FilterExpr(nil), filter.And...)
+	out.Or = append([]FilterExpr(nil), filter.Or...)
+	for _, children := range [][]FilterExpr{out.And, out.Or} {
+		for i := range children {
+			child, e := s.keywordFilters(ctx, &children[i])
+			if e != nil {
+				return nil, e
+			}
+			children[i] = *child
+		}
+	}
+	out.Not, err = s.keywordFilters(ctx, filter.Not)
+	return &out, err
+}
+
+// normalizeKeywordDefault stores keyword and taxonomy defaults as the same
+// term IDs used by assigned values, including in portable schema definitions.
+func (s *Service) normalizeKeywordDefault(ctx context.Context, subject string, d *ent.FieldDefinition) error {
+	values := map[string]any{}
+	if err := s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, values, nil, true); err != nil {
+		return err
+	}
+	if d.Type == "keywords" || d.Type == "term" {
+		raw, err := json.Marshal(values[d.Key])
+		if err != nil {
+			return err
+		}
+		d.Options.DefaultValue = raw
+	}
+	return nil
 }

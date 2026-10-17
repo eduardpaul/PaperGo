@@ -58,15 +58,15 @@ func (_u *ItemSurfaceUpdate) SetNillableName(v *string) *ItemSurfaceUpdate {
 	return _u
 }
 
-// SetTags sets the "tags" field.
-func (_u *ItemSurfaceUpdate) SetTags(v []string) *ItemSurfaceUpdate {
-	_u.mutation.SetTags(v)
+// SetKeywords sets the "keywords" field.
+func (_u *ItemSurfaceUpdate) SetKeywords(v []string) *ItemSurfaceUpdate {
+	_u.mutation.SetKeywords(v)
 	return _u
 }
 
-// AppendTags appends value to the "tags" field.
-func (_u *ItemSurfaceUpdate) AppendTags(v []string) *ItemSurfaceUpdate {
-	_u.mutation.AppendTags(v)
+// AppendKeywords appends value to the "keywords" field.
+func (_u *ItemSurfaceUpdate) AppendKeywords(v []string) *ItemSurfaceUpdate {
+	_u.mutation.AppendKeywords(v)
 	return _u
 }
 
@@ -207,12 +207,12 @@ func (_u *ItemSurfaceUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(itemsurface.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Tags(); ok {
-		_spec.SetField(itemsurface.FieldTags, field.TypeJSON, value)
+	if value, ok := _u.mutation.Keywords(); ok {
+		_spec.SetField(itemsurface.FieldKeywords, field.TypeJSON, value)
 	}
-	if value, ok := _u.mutation.AppendedTags(); ok {
+	if value, ok := _u.mutation.AppendedKeywords(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, itemsurface.FieldTags, value)
+			sqljson.Append(u, itemsurface.FieldKeywords, value)
 		})
 	}
 	if value, ok := _u.mutation.Payload(); ok {
@@ -312,15 +312,15 @@ func (_u *ItemSurfaceUpdateOne) SetNillableName(v *string) *ItemSurfaceUpdateOne
 	return _u
 }
 
-// SetTags sets the "tags" field.
-func (_u *ItemSurfaceUpdateOne) SetTags(v []string) *ItemSurfaceUpdateOne {
-	_u.mutation.SetTags(v)
+// SetKeywords sets the "keywords" field.
+func (_u *ItemSurfaceUpdateOne) SetKeywords(v []string) *ItemSurfaceUpdateOne {
+	_u.mutation.SetKeywords(v)
 	return _u
 }
 
-// AppendTags appends value to the "tags" field.
-func (_u *ItemSurfaceUpdateOne) AppendTags(v []string) *ItemSurfaceUpdateOne {
-	_u.mutation.AppendTags(v)
+// AppendKeywords appends value to the "keywords" field.
+func (_u *ItemSurfaceUpdateOne) AppendKeywords(v []string) *ItemSurfaceUpdateOne {
+	_u.mutation.AppendKeywords(v)
 	return _u
 }
 
@@ -491,12 +491,12 @@ func (_u *ItemSurfaceUpdateOne) sqlSave(ctx context.Context) (_node *ItemSurface
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(itemsurface.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Tags(); ok {
-		_spec.SetField(itemsurface.FieldTags, field.TypeJSON, value)
+	if value, ok := _u.mutation.Keywords(); ok {
+		_spec.SetField(itemsurface.FieldKeywords, field.TypeJSON, value)
 	}
-	if value, ok := _u.mutation.AppendedTags(); ok {
+	if value, ok := _u.mutation.AppendedKeywords(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, itemsurface.FieldTags, value)
+			sqljson.Append(u, itemsurface.FieldKeywords, value)
 		})
 	}
 	if value, ok := _u.mutation.Payload(); ok {

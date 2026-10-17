@@ -20,7 +20,7 @@ func (ItemSurface) Fields() []ent.Field {
 		field.Enum("surface").Values("head", "published").Immutable(),
 		field.String("revision_id"),
 		field.String("name"),
-		field.JSON("tags", []string{}),
+		field.JSON("keywords", []string{}),
 		field.JSON("payload", json.RawMessage{}),
 		// TermText holds the names, labels and synonyms of the payload's
 		// terms when the surface was written, for full-text search.

@@ -20620,8 +20620,8 @@ type ItemRevisionMutation struct {
 	revision_number        *int
 	addrevision_number     *int
 	name                   *string
-	tags                   *[]string
-	appendtags             []string
+	keywords               *[]string
+	appendkeywords         []string
 	payload                *jsontext.Value
 	appendpayload          jsontext.Value
 	created_by             *string
@@ -21100,55 +21100,55 @@ func (m *ItemRevisionMutation) ResetName() {
 	m.name = nil
 }
 
-// SetTags sets the "tags" field.
-func (m *ItemRevisionMutation) SetTags(s []string) {
-	m.tags = &s
-	m.appendtags = nil
+// SetKeywords sets the "keywords" field.
+func (m *ItemRevisionMutation) SetKeywords(s []string) {
+	m.keywords = &s
+	m.appendkeywords = nil
 }
 
-// Tags returns the value of the "tags" field in the mutation.
-func (m *ItemRevisionMutation) Tags() (r []string, exists bool) {
-	v := m.tags
+// Keywords returns the value of the "keywords" field in the mutation.
+func (m *ItemRevisionMutation) Keywords() (r []string, exists bool) {
+	v := m.keywords
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldTags returns the old "tags" field's value of the ItemRevision entity.
+// OldKeywords returns the old "keywords" field's value of the ItemRevision entity.
 // If the ItemRevision object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ItemRevisionMutation) OldTags(ctx context.Context) (v []string, err error) {
+func (m *ItemRevisionMutation) OldKeywords(ctx context.Context) (v []string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTags is only allowed on UpdateOne operations")
+		return v, errors.New("OldKeywords is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTags requires an ID field in the mutation")
+		return v, errors.New("OldKeywords requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTags: %w", err)
+		return v, fmt.Errorf("querying old value for OldKeywords: %w", err)
 	}
-	return oldValue.Tags, nil
+	return oldValue.Keywords, nil
 }
 
-// AppendTags adds s to the "tags" field.
-func (m *ItemRevisionMutation) AppendTags(s []string) {
-	m.appendtags = append(m.appendtags, s...)
+// AppendKeywords adds s to the "keywords" field.
+func (m *ItemRevisionMutation) AppendKeywords(s []string) {
+	m.appendkeywords = append(m.appendkeywords, s...)
 }
 
-// AppendedTags returns the list of values that were appended to the "tags" field in this mutation.
-func (m *ItemRevisionMutation) AppendedTags() ([]string, bool) {
-	if len(m.appendtags) == 0 {
+// AppendedKeywords returns the list of values that were appended to the "keywords" field in this mutation.
+func (m *ItemRevisionMutation) AppendedKeywords() ([]string, bool) {
+	if len(m.appendkeywords) == 0 {
 		return nil, false
 	}
-	return m.appendtags, true
+	return m.appendkeywords, true
 }
 
-// ResetTags resets all changes to the "tags" field.
-func (m *ItemRevisionMutation) ResetTags() {
-	m.tags = nil
-	m.appendtags = nil
+// ResetKeywords resets all changes to the "keywords" field.
+func (m *ItemRevisionMutation) ResetKeywords() {
+	m.keywords = nil
+	m.appendkeywords = nil
 }
 
 // SetPayload sets the "payload" field.
@@ -21420,8 +21420,8 @@ func (m *ItemRevisionMutation) Fields() []string {
 	if m.name != nil {
 		fields = append(fields, itemrevision.FieldName)
 	}
-	if m.tags != nil {
-		fields = append(fields, itemrevision.FieldTags)
+	if m.keywords != nil {
+		fields = append(fields, itemrevision.FieldKeywords)
 	}
 	if m.payload != nil {
 		fields = append(fields, itemrevision.FieldPayload)
@@ -21455,8 +21455,8 @@ func (m *ItemRevisionMutation) Field(name string) (ent.Value, bool) {
 		return m.RevisionNumber()
 	case itemrevision.FieldName:
 		return m.Name()
-	case itemrevision.FieldTags:
-		return m.Tags()
+	case itemrevision.FieldKeywords:
+		return m.Keywords()
 	case itemrevision.FieldPayload:
 		return m.Payload()
 	case itemrevision.FieldCreatedBy:
@@ -21488,8 +21488,8 @@ func (m *ItemRevisionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldRevisionNumber(ctx)
 	case itemrevision.FieldName:
 		return m.OldName(ctx)
-	case itemrevision.FieldTags:
-		return m.OldTags(ctx)
+	case itemrevision.FieldKeywords:
+		return m.OldKeywords(ctx)
 	case itemrevision.FieldPayload:
 		return m.OldPayload(ctx)
 	case itemrevision.FieldCreatedBy:
@@ -21566,12 +21566,12 @@ func (m *ItemRevisionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetName(v)
 		return nil
-	case itemrevision.FieldTags:
+	case itemrevision.FieldKeywords:
 		v, ok := value.([]string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetTags(v)
+		m.SetKeywords(v)
 		return nil
 	case itemrevision.FieldPayload:
 		v, ok := value.(jsontext.Value)
@@ -21687,8 +21687,8 @@ func (m *ItemRevisionMutation) ResetField(name string) error {
 	case itemrevision.FieldName:
 		m.ResetName()
 		return nil
-	case itemrevision.FieldTags:
-		m.ResetTags()
+	case itemrevision.FieldKeywords:
+		m.ResetKeywords()
 		return nil
 	case itemrevision.FieldPayload:
 		m.ResetPayload()
@@ -21839,8 +21839,8 @@ type ItemSurfaceMutation struct {
 	workspace_id    *string
 	surface         *itemsurface.Surface
 	name            *string
-	tags            *[]string
-	appendtags      []string
+	keywords        *[]string
+	appendkeywords  []string
 	payload         *jsontext.Value
 	appendpayload   jsontext.Value
 	item_created_at *string
@@ -22213,55 +22213,55 @@ func (m *ItemSurfaceMutation) ResetName() {
 	m.name = nil
 }
 
-// SetTags sets the "tags" field.
-func (m *ItemSurfaceMutation) SetTags(s []string) {
-	m.tags = &s
-	m.appendtags = nil
+// SetKeywords sets the "keywords" field.
+func (m *ItemSurfaceMutation) SetKeywords(s []string) {
+	m.keywords = &s
+	m.appendkeywords = nil
 }
 
-// Tags returns the value of the "tags" field in the mutation.
-func (m *ItemSurfaceMutation) Tags() (r []string, exists bool) {
-	v := m.tags
+// Keywords returns the value of the "keywords" field in the mutation.
+func (m *ItemSurfaceMutation) Keywords() (r []string, exists bool) {
+	v := m.keywords
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldTags returns the old "tags" field's value of the ItemSurface entity.
+// OldKeywords returns the old "keywords" field's value of the ItemSurface entity.
 // If the ItemSurface object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ItemSurfaceMutation) OldTags(ctx context.Context) (v []string, err error) {
+func (m *ItemSurfaceMutation) OldKeywords(ctx context.Context) (v []string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTags is only allowed on UpdateOne operations")
+		return v, errors.New("OldKeywords is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTags requires an ID field in the mutation")
+		return v, errors.New("OldKeywords requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTags: %w", err)
+		return v, fmt.Errorf("querying old value for OldKeywords: %w", err)
 	}
-	return oldValue.Tags, nil
+	return oldValue.Keywords, nil
 }
 
-// AppendTags adds s to the "tags" field.
-func (m *ItemSurfaceMutation) AppendTags(s []string) {
-	m.appendtags = append(m.appendtags, s...)
+// AppendKeywords adds s to the "keywords" field.
+func (m *ItemSurfaceMutation) AppendKeywords(s []string) {
+	m.appendkeywords = append(m.appendkeywords, s...)
 }
 
-// AppendedTags returns the list of values that were appended to the "tags" field in this mutation.
-func (m *ItemSurfaceMutation) AppendedTags() ([]string, bool) {
-	if len(m.appendtags) == 0 {
+// AppendedKeywords returns the list of values that were appended to the "keywords" field in this mutation.
+func (m *ItemSurfaceMutation) AppendedKeywords() ([]string, bool) {
+	if len(m.appendkeywords) == 0 {
 		return nil, false
 	}
-	return m.appendtags, true
+	return m.appendkeywords, true
 }
 
-// ResetTags resets all changes to the "tags" field.
-func (m *ItemSurfaceMutation) ResetTags() {
-	m.tags = nil
-	m.appendtags = nil
+// ResetKeywords resets all changes to the "keywords" field.
+func (m *ItemSurfaceMutation) ResetKeywords() {
+	m.keywords = nil
+	m.appendkeywords = nil
 }
 
 // SetPayload sets the "payload" field.
@@ -22569,8 +22569,8 @@ func (m *ItemSurfaceMutation) Fields() []string {
 	if m.name != nil {
 		fields = append(fields, itemsurface.FieldName)
 	}
-	if m.tags != nil {
-		fields = append(fields, itemsurface.FieldTags)
+	if m.keywords != nil {
+		fields = append(fields, itemsurface.FieldKeywords)
 	}
 	if m.payload != nil {
 		fields = append(fields, itemsurface.FieldPayload)
@@ -22609,8 +22609,8 @@ func (m *ItemSurfaceMutation) Field(name string) (ent.Value, bool) {
 		return m.RevisionID()
 	case itemsurface.FieldName:
 		return m.Name()
-	case itemsurface.FieldTags:
-		return m.Tags()
+	case itemsurface.FieldKeywords:
+		return m.Keywords()
 	case itemsurface.FieldPayload:
 		return m.Payload()
 	case itemsurface.FieldItemCreatedAt:
@@ -22644,8 +22644,8 @@ func (m *ItemSurfaceMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldRevisionID(ctx)
 	case itemsurface.FieldName:
 		return m.OldName(ctx)
-	case itemsurface.FieldTags:
-		return m.OldTags(ctx)
+	case itemsurface.FieldKeywords:
+		return m.OldKeywords(ctx)
 	case itemsurface.FieldPayload:
 		return m.OldPayload(ctx)
 	case itemsurface.FieldItemCreatedAt:
@@ -22714,12 +22714,12 @@ func (m *ItemSurfaceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetName(v)
 		return nil
-	case itemsurface.FieldTags:
+	case itemsurface.FieldKeywords:
 		v, ok := value.([]string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetTags(v)
+		m.SetKeywords(v)
 		return nil
 	case itemsurface.FieldPayload:
 		v, ok := value.(jsontext.Value)
@@ -22826,8 +22826,8 @@ func (m *ItemSurfaceMutation) ResetField(name string) error {
 	case itemsurface.FieldName:
 		m.ResetName()
 		return nil
-	case itemsurface.FieldTags:
-		m.ResetTags()
+	case itemsurface.FieldKeywords:
+		m.ResetKeywords()
 		return nil
 	case itemsurface.FieldPayload:
 		m.ResetPayload()
@@ -30954,8 +30954,8 @@ type ResourceMutation struct {
 	description               *string
 	default_currency          *string
 	allow_folders             *bool
-	tags                      *[]string
-	appendtags                []string
+	keywords                  *[]string
+	appendkeywords            []string
 	template_keys             *[]string
 	appendtemplate_keys       []string
 	values                    *map[string]interface{}
@@ -31623,55 +31623,55 @@ func (m *ResourceMutation) ResetAllowFolders() {
 	m.allow_folders = nil
 }
 
-// SetTags sets the "tags" field.
-func (m *ResourceMutation) SetTags(s []string) {
-	m.tags = &s
-	m.appendtags = nil
+// SetKeywords sets the "keywords" field.
+func (m *ResourceMutation) SetKeywords(s []string) {
+	m.keywords = &s
+	m.appendkeywords = nil
 }
 
-// Tags returns the value of the "tags" field in the mutation.
-func (m *ResourceMutation) Tags() (r []string, exists bool) {
-	v := m.tags
+// Keywords returns the value of the "keywords" field in the mutation.
+func (m *ResourceMutation) Keywords() (r []string, exists bool) {
+	v := m.keywords
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldTags returns the old "tags" field's value of the Resource entity.
+// OldKeywords returns the old "keywords" field's value of the Resource entity.
 // If the Resource object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ResourceMutation) OldTags(ctx context.Context) (v []string, err error) {
+func (m *ResourceMutation) OldKeywords(ctx context.Context) (v []string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTags is only allowed on UpdateOne operations")
+		return v, errors.New("OldKeywords is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTags requires an ID field in the mutation")
+		return v, errors.New("OldKeywords requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTags: %w", err)
+		return v, fmt.Errorf("querying old value for OldKeywords: %w", err)
 	}
-	return oldValue.Tags, nil
+	return oldValue.Keywords, nil
 }
 
-// AppendTags adds s to the "tags" field.
-func (m *ResourceMutation) AppendTags(s []string) {
-	m.appendtags = append(m.appendtags, s...)
+// AppendKeywords adds s to the "keywords" field.
+func (m *ResourceMutation) AppendKeywords(s []string) {
+	m.appendkeywords = append(m.appendkeywords, s...)
 }
 
-// AppendedTags returns the list of values that were appended to the "tags" field in this mutation.
-func (m *ResourceMutation) AppendedTags() ([]string, bool) {
-	if len(m.appendtags) == 0 {
+// AppendedKeywords returns the list of values that were appended to the "keywords" field in this mutation.
+func (m *ResourceMutation) AppendedKeywords() ([]string, bool) {
+	if len(m.appendkeywords) == 0 {
 		return nil, false
 	}
-	return m.appendtags, true
+	return m.appendkeywords, true
 }
 
-// ResetTags resets all changes to the "tags" field.
-func (m *ResourceMutation) ResetTags() {
-	m.tags = nil
-	m.appendtags = nil
+// ResetKeywords resets all changes to the "keywords" field.
+func (m *ResourceMutation) ResetKeywords() {
+	m.keywords = nil
+	m.appendkeywords = nil
 }
 
 // SetTemplateKeys sets the "template_keys" field.
@@ -33279,8 +33279,8 @@ func (m *ResourceMutation) Fields() []string {
 	if m.allow_folders != nil {
 		fields = append(fields, resource.FieldAllowFolders)
 	}
-	if m.tags != nil {
-		fields = append(fields, resource.FieldTags)
+	if m.keywords != nil {
+		fields = append(fields, resource.FieldKeywords)
 	}
 	if m.template_keys != nil {
 		fields = append(fields, resource.FieldTemplateKeys)
@@ -33374,8 +33374,8 @@ func (m *ResourceMutation) Field(name string) (ent.Value, bool) {
 		return m.DefaultCurrency()
 	case resource.FieldAllowFolders:
 		return m.AllowFolders()
-	case resource.FieldTags:
-		return m.Tags()
+	case resource.FieldKeywords:
+		return m.Keywords()
 	case resource.FieldTemplateKeys:
 		return m.TemplateKeys()
 	case resource.FieldValues:
@@ -33449,8 +33449,8 @@ func (m *ResourceMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldDefaultCurrency(ctx)
 	case resource.FieldAllowFolders:
 		return m.OldAllowFolders(ctx)
-	case resource.FieldTags:
-		return m.OldTags(ctx)
+	case resource.FieldKeywords:
+		return m.OldKeywords(ctx)
 	case resource.FieldTemplateKeys:
 		return m.OldTemplateKeys(ctx)
 	case resource.FieldValues:
@@ -33584,12 +33584,12 @@ func (m *ResourceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAllowFolders(v)
 		return nil
-	case resource.FieldTags:
+	case resource.FieldKeywords:
 		v, ok := value.([]string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetTags(v)
+		m.SetKeywords(v)
 		return nil
 	case resource.FieldTemplateKeys:
 		v, ok := value.([]string)
@@ -33930,8 +33930,8 @@ func (m *ResourceMutation) ResetField(name string) error {
 	case resource.FieldAllowFolders:
 		m.ResetAllowFolders()
 		return nil
-	case resource.FieldTags:
-		m.ResetTags()
+	case resource.FieldKeywords:
+		m.ResetKeywords()
 		return nil
 	case resource.FieldTemplateKeys:
 		m.ResetTemplateKeys()

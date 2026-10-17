@@ -50,6 +50,7 @@ function stub(search: (url: URL) => unknown) {
           { id: 'ws2', kind: 'workspace', name: 'Legal' },
         ],
       };
+    else if (url.pathname === '/v1/terms') body = { value: [{ id: 'paid', name: 'Paid' }] };
     else if (url.pathname === '/v1/search/content-types') body = [{ id: 'invoice', name: 'Invoice type' }];
     else if (url.pathname.endsWith('/relationships')) body = { value: [{ id: 'link', source_id: 'a', target_id: 'other', type_id: 'rel', directed: true, related_item: { id: 'other', name: 'Related contract', workspace_id: 'ws1', container_id: 'col1' } }] };
     else if (url.pathname === '/v1/relationship-types') body = { value: [{ id: 'rel', term: { name: 'Contract' } }] };
@@ -106,7 +107,7 @@ it('shows hits with highlighted snippets, totals and facets that narrow the sear
       ],
       content_type: [],
       term: [],
-      tag: [{ value: 'paid', count: 1 }],
+      keyword: [{ value: 'paid', count: 1 }],
     },
     '@odata.nextLink': null,
   }));
@@ -133,11 +134,11 @@ it('shows hits with highlighted snippets, totals and facets that narrow the sear
 });
 
 it('sends facet filters and clears them from their chips', async () => {
-  navigation.search = { q: 'invoice', workspace: 'ws1', tag: 'paid', kind: 'all' };
+  navigation.search = { q: 'invoice', workspace: 'ws1', keyword: 'paid', kind: 'all' };
   const fetch = stub(() => ({
     value: [hit('a', 'Invoice March')],
     total: 1,
-    facets: { workspace: [], collection: [], content_type: [], term: [], tag: [] },
+    facets: { workspace: [], collection: [], content_type: [], term: [], keyword: [] },
   }));
   show();
   expect(await screen.findByText('Invoice March')).toBeTruthy();
@@ -145,16 +146,16 @@ it('sends facet filters and clears them from their chips', async () => {
     .map(([input]) => new URL(String(input), window.location.origin))
     .find((url) => url.pathname === '/v1/search')!;
   expect(request.searchParams.get('workspace_id')).toBe('ws1');
-  expect(request.searchParams.get('tag')).toBe('paid');
+  expect(request.searchParams.get('keyword')).toBe('paid');
   expect(request.searchParams.get('kind')).toBe('item,folder');
-  fireEvent.click(screen.getByRole('button', { name: 'Remove filter #paid' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove filter Paid' }));
   const update = navigation.navigate.mock.lastCall![0].search as (current: object) => object;
-  expect(update({ q: 'invoice', workspace: 'ws1', tag: 'paid' })).toEqual({ q: 'invoice', workspace: 'ws1', tag: undefined });
+  expect(update({ q: 'invoice', workspace: 'ws1', keyword: 'paid' })).toEqual({ q: 'invoice', workspace: 'ws1', keyword: undefined });
 });
 
 it('offers workspaces whose names match, which the index does not hold', async () => {
   navigation.search = { q: 'fin' };
-  stub(() => ({ value: [], total: 0, facets: { workspace: [], collection: [], content_type: [], term: [], tag: [] } }));
+  stub(() => ({ value: [], total: 0, facets: { workspace: [], collection: [], content_type: [], term: [], keyword: [] } }));
   show();
   const places = await screen.findByRole('navigation', { name: 'Workspaces' });
   expect(within(places).getByText('Finance')).toBeTruthy();

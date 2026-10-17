@@ -24,7 +24,7 @@ const (
 	EventFileUpdated        = "file.updated"
 	EventPermissionsChanged = "permissions.changed"
 	EventTermChanged        = "term.changed"
-	// Folder events mirror item events for folders: their name, tags and
+	// Folder events mirror item events for folders: their name, keywords and
 	// place change, they are deleted, restored and purged.
 	EventFolderCreated  = "folder.created"
 	EventFolderUpdated  = "folder.updated"

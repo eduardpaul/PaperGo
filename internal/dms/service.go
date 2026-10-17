@@ -176,7 +176,7 @@ type CreateResource struct {
 	Name              string         `json:"name"`
 	Description       string         `json:"description,omitempty"`
 	AllowFolders      *bool          `json:"allow_folders,omitempty"`
-	Tags              []string       `json:"tags"`
+	Keywords          []string       `json:"keywords"`
 	Values            map[string]any `json:"values"`
 	Versioning        *string        `json:"versioning,omitempty"`
 	MaxVersions       *int           `json:"max_versions,omitempty"`
@@ -254,11 +254,12 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	if in.Kind == "item" || in.Kind == "folder" {
 		in.Name = strings.TrimSpace(in.Name)
 	}
-	if err := validateTags(in.Tags); err != nil {
+	if err := validateKeywords(in.Keywords); err != nil {
 		return nil, err
 	}
-	if in.Tags == nil {
-		in.Tags = []string{}
+	var keywordErr error
+	if in.Keywords, keywordErr = s.normalizeKeywords(ctx, subject, in.Keywords, nil); keywordErr != nil {
+		return nil, keywordErr
 	}
 	if in.Values == nil {
 		in.Values = map[string]any{}
@@ -360,7 +361,7 @@ func (s *Service) create(ctx context.Context, subject, parentID string, in Creat
 	} else if len(in.Values) > 0 {
 		return nil, invalid("custom values are supported on items and folders only")
 	}
-	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetTags(in.Tags).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
+	builder := s.Client.Resource.Create().SetID(id).SetWorkspaceID(workspaceID).SetKind(resource.Kind(in.Kind)).SetName(in.Name).SetKeywords(in.Keywords).SetValues(in.Values).SetNillableContainerID(containerID).SetPublishingEnabled(in.PublishingEnabled).SetWebdavEnabled(in.WebDAVEnabled).SetNillableNameKey(key)
 	if template != nil {
 		if e = s.RequireScope(ctx, subject, "contentType.read"); e != nil {
 			return nil, e
@@ -492,7 +493,7 @@ type UpdateResource struct {
 	Name              *string         `json:"name,omitempty"`
 	Description       *string         `json:"description,omitempty"`
 	AllowFolders      *bool           `json:"allow_folders,omitempty"`
-	Tags              *[]string       `json:"tags,omitempty"`
+	Keywords          *[]string       `json:"keywords,omitempty"`
 	Values            *map[string]any `json:"values,omitempty"`
 	ContentTypeID     *string         `json:"content_type_id,omitempty"`
 	Versioning        *string         `json:"versioning,omitempty"`
@@ -512,18 +513,29 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 	return
 }
 func (s *Service) update(ctx context.Context, subject, id string, version int, in UpdateResource) (*ent.Resource, error) {
-	content := in.Name != nil || in.Description != nil || in.Tags != nil || in.Values != nil || in.ContentTypeID != nil
+	content := in.Name != nil || in.Description != nil || in.Keywords != nil || in.Values != nil || in.ContentTypeID != nil
 	if !content && in.DefaultCurrency == nil && in.DuplicatePolicy == nil && in.PublishingEnabled == nil && in.WebDAVEnabled == nil && in.AllowFolders == nil && in.ParentID == nil && in.Versioning == nil && in.MaxVersions == nil {
 		return nil, invalid("at least one change is required")
 	}
-	if in.Tags != nil {
-		if err := validateTags(*in.Tags); err != nil {
+	if in.Keywords != nil {
+		if err := validateKeywords(*in.Keywords); err != nil {
 			return nil, err
 		}
 	}
 	r, e := s.authorize(ctx, subject, id, "write")
 	if e != nil {
 		return nil, e
+	}
+	if in.Keywords == nil && content && contentKind(r.Kind) {
+		keywords := append([]string{}, r.Keywords...)
+		in.Keywords = &keywords
+	}
+	if in.Keywords != nil {
+		normalized, err := s.normalizeKeywords(ctx, subject, *in.Keywords, r.Keywords)
+		if err != nil {
+			return nil, err
+		}
+		in.Keywords = &normalized
 	}
 	if in.Name != nil {
 		if err := validateResourceName(string(r.Kind), *in.Name); err != nil {
@@ -642,8 +654,8 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		if in.Name != nil {
 			r.Name = *in.Name
 		}
-		if in.Tags != nil {
-			r.Tags = *in.Tags
+		if in.Keywords != nil {
+			r.Keywords = *in.Keywords
 		}
 		if in.Values != nil {
 			// Prune fields removed from the live schema before applying this patch.
@@ -684,8 +696,8 @@ func (s *Service) update(ctx context.Context, subject, id string, version int, i
 		}
 		b.SetValues(r.Values)
 	}
-	if in.Tags != nil {
-		b.SetTags(*in.Tags)
+	if in.Keywords != nil {
+		b.SetKeywords(*in.Keywords)
 	}
 	if in.Versioning != nil {
 		b.SetVersioning(resource.Versioning(*in.Versioning))
@@ -998,7 +1010,7 @@ func (s *Service) createField(ctx context.Context, subject string, c *ent.Resour
 		return nil, e
 	}
 	if len(d.Options.DefaultValue) > 0 {
-		if e := s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil, true); e != nil {
+		if e := s.normalizeKeywordDefault(ctx, subject, d); e != nil {
 			return nil, e
 		}
 	}

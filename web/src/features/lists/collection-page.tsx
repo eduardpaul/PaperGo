@@ -23,7 +23,7 @@ import { contentTypesQuery, fieldsQuery, keys, resourceQuery, viewsQuery } from 
 import type { Page, QuerySpec, Resource } from '@/api/types';
 import { Page as Screen, PageHeader } from '@/components/page';
 import { FormDialog } from '@/components/form-dialog';
-import { TagInput } from '@/components/tag-input';
+import { KeywordInput } from '@/components/keyword-input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, Kbd, Skeleton, Spinner } from '@/components/ui/feedback';
@@ -812,7 +812,7 @@ function CreateDialog({
   const [name, setName] = useState('');
   const [type, setType] = useState('');
   const [values, setValues] = useState<Record<string, unknown>>({});
-  const [tags, setTags] = useState<string[]>([]);
+  const [keywords, setKeywords] = useState<string[]>([]);
   const typeList = types.data ?? [];
   const defaultType = typeList.find((entry) => entry.is_default) ?? typeList[0];
   const chosenType = type || defaultType?.id || '';
@@ -825,7 +825,7 @@ function CreateDialog({
           body: {
             kind,
             name: name.trim(),
-            tags,
+            keywords,
             values: kind === 'item' ? (valuesPatch(visible, {}, values) ?? {}) : {},
             content_type_id: kind === 'item' && type ? type : undefined,
           },
@@ -865,8 +865,8 @@ function CreateDialog({
           onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
         />
       ))}
-      <Label htmlFor="draft-tags">Tags</Label>
-      <TagInput id="draft-tags" value={tags} onChange={setTags} workspaceId={collection.workspace_id} />
+      <Label htmlFor="draft-keywords">Keywords</Label>
+      <KeywordInput id="draft-keywords" value={keywords} onChange={setKeywords} />
     </FormDialog>
   );
 }

@@ -22,7 +22,7 @@ func (ItemRevision) Fields() []ent.Field {
 		field.String("filename").Default("").MaxLen(4096).Immutable(),
 		field.Int("revision_number").Positive().Immutable(),
 		field.String("name").NotEmpty().MaxLen(4096).Validate(model.ValidateTitle).Immutable(),
-		field.JSON("tags", []string{}).Immutable(),
+		field.JSON("keywords", []string{}).Immutable(),
 		field.JSON("payload", json.RawMessage{}).Immutable(),
 		field.String("created_by").NotEmpty().Immutable(),
 	}

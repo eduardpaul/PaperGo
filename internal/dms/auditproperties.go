@@ -137,8 +137,8 @@ func (s *Service) captureAuditProperties() {
 					if prior == nil || !reflect.DeepEqual(prior.BlobID, latest.BlobID) {
 						s.auditProperties[id]["blob_id"] = true
 					}
-					if prior == nil || !reflect.DeepEqual(prior.Tags, latest.Tags) {
-						s.auditProperties[id]["tags"] = true
+					if prior == nil || !reflect.DeepEqual(prior.Keywords, latest.Keywords) {
+						s.auditProperties[id]["keywords"] = true
 					}
 					if prior == nil || prior.ContentTypeID != latest.ContentTypeID {
 						s.auditProperties[id]["content_type_id"] = true

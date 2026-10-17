@@ -39,7 +39,7 @@ func (s *Service) CreateCatalogField(ctx context.Context, subject string, in Cre
 			return e
 		}
 		if len(d.Options.DefaultValue) > 0 {
-			if e := t.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil, true); e != nil {
+			if e := t.normalizeKeywordDefault(ctx, subject, d); e != nil {
 				return e
 			}
 		}
@@ -121,4 +121,4 @@ func schemaFilterKnown(f *FilterExpr, defs map[string]*ent.FieldDefinition) bool
 	return true
 }
 
-func builtinColumn(key string) bool { _, d := systemField(key); return d != nil || key == "$tags" }
+func builtinColumn(key string) bool { _, d := systemField(key); return d != nil || key == "$keywords" }

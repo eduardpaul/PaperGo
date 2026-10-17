@@ -41,8 +41,8 @@ type ItemRevision struct {
 	RevisionNumber int `json:"revision_number,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
-	// Tags holds the value of the "tags" field.
-	Tags []string `json:"tags,omitempty"`
+	// Keywords holds the value of the "keywords" field.
+	Keywords []string `json:"keywords,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload jsontext.Value `json:"payload,omitempty"`
 	// CreatedBy holds the value of the "created_by" field.
@@ -117,7 +117,7 @@ func (*ItemRevision) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case itemrevision.FieldTags, itemrevision.FieldPayload:
+		case itemrevision.FieldKeywords, itemrevision.FieldPayload:
 			values[i] = new([]byte)
 		case itemrevision.FieldRevisionNumber:
 			values[i] = new(sql.NullInt64)
@@ -201,12 +201,12 @@ func (_m *ItemRevision) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Name = value.String
 			}
-		case itemrevision.FieldTags:
+		case itemrevision.FieldKeywords:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field tags", values[i])
+				return fmt.Errorf("unexpected type %T for field keywords", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.Tags); err != nil {
-					return fmt.Errorf("unmarshal field tags: %w", err)
+				if err := json.Unmarshal(*value, &_m.Keywords); err != nil {
+					return fmt.Errorf("unmarshal field keywords: %w", err)
 				}
 			}
 		case itemrevision.FieldPayload:
@@ -308,8 +308,8 @@ func (_m *ItemRevision) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	builder.WriteString("tags=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Tags))
+	builder.WriteString("keywords=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Keywords))
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Payload))

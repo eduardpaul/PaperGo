@@ -150,7 +150,7 @@ export function TermStore() {
         {selected ? (
           <SettingsSection
             title={selected.name}
-            description={selected.is_open ? 'People can add terms while tagging.' : 'Managed terms.'}
+            description={selected.is_open ? 'People can add terms when assigning metadata.' : 'Managed terms.'}
             actions={
               canEdit &&
               !selected.is_keywords && (
@@ -173,7 +173,7 @@ export function TermStore() {
         ) : (
           <SettingsSection
             title="Choose a term set"
-            description="Shared tags and categories for managed metadata and free keywords."
+            description="Shared keywords and categories for managed metadata and free keywords."
           />
         )}
       </div>
@@ -262,7 +262,7 @@ function TaxonomyNameDialog({
       {kind === 'set' && (
         <label className="flex gap-2">
           <Checkbox checked={open} onChange={(event) => setOpen(event.target.checked)} />
-          Allow people to add terms while tagging
+          Allow people to add terms when assigning metadata
         </label>
       )}
     </FormDialog>

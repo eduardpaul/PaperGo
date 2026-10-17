@@ -39,8 +39,8 @@ const (
 	FieldDefaultCurrency = "default_currency"
 	// FieldAllowFolders holds the string denoting the allow_folders field in the database.
 	FieldAllowFolders = "allow_folders"
-	// FieldTags holds the string denoting the tags field in the database.
-	FieldTags = "tags"
+	// FieldKeywords holds the string denoting the keywords field in the database.
+	FieldKeywords = "keywords"
 	// FieldTemplateKeys holds the string denoting the template_keys field in the database.
 	FieldTemplateKeys = "template_keys"
 	// FieldValues holds the string denoting the values field in the database.
@@ -223,7 +223,7 @@ var Columns = []string{
 	FieldDescription,
 	FieldDefaultCurrency,
 	FieldAllowFolders,
-	FieldTags,
+	FieldKeywords,
 	FieldTemplateKeys,
 	FieldValues,
 	FieldInheritPermissions,
@@ -283,8 +283,8 @@ var (
 	DefaultCurrencyValidator func(string) error
 	// DefaultAllowFolders holds the default value on creation for the "allow_folders" field.
 	DefaultAllowFolders bool
-	// DefaultTags holds the default value on creation for the "tags" field.
-	DefaultTags []string
+	// DefaultKeywords holds the default value on creation for the "keywords" field.
+	DefaultKeywords []string
 	// DefaultTemplateKeys holds the default value on creation for the "template_keys" field.
 	DefaultTemplateKeys []string
 	// DefaultValues holds the default value on creation for the "values" field.

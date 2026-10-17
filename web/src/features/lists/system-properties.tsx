@@ -8,7 +8,8 @@ import { useFormat } from '@/lib/preferences';
 export function SystemProperties({ item, file, keywords = [], contentType }: { item?: Resource; keywords?: string[]; contentType?: string; file?: { filename: string; content_type: string; size: number } }) {
   const format = useFormat();
   const people = usePeopleNames();
-  const terms = useTermNames(keywords);
+  const assigned = [...new Set([...(item?.keywords ?? []), ...keywords])];
+  const terms = useTermNames(assigned);
   const properties = [
     ['Name', 'Text', item?.name],
     ['File name', 'Text', file?.filename],
@@ -27,8 +28,8 @@ export function SystemProperties({ item, file, keywords = [], contentType }: { i
         <dt className="text-muted">{label} <span className="text-xs">· {type}</span></dt>
         {item && <dd className="break-words">{value ?? '—'}</dd>}
       </div>)}
-      <div><dt className="text-muted">Tags / Keywords <span className="text-xs">· Terms</span></dt>
-        {item && <dd className="flex flex-wrap gap-1">{(item.tags?.length || keywords.length) ? <>{item.tags?.map(tag => <Link key={tag} to="/search" search={{ q: undefined, workspace: undefined, collection: undefined, kind: undefined, tag }} className="rounded border px-1.5 text-accent hover:underline">{tag}</Link>)}{keywords.map(id => <span key={id} className="rounded border px-1.5">{terms.get(id) ?? id}</span>)}</> : '—'}</dd>}
+      <div><dt className="text-muted">Keywords <span className="text-xs">· Terms</span></dt>
+        {item && <dd className="flex flex-wrap gap-1">{assigned.length ? assigned.map(keyword => <Link key={keyword} to="/search" search={{ q: undefined, workspace: undefined, collection: undefined, kind: undefined, keyword }} className="rounded border px-1.5 text-accent hover:underline">{terms.get(keyword) ?? keyword}</Link>) : '—'}</dd>}
       </div>
     </dl>
   </section>;

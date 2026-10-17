@@ -128,7 +128,7 @@ function ViewDialog({
     ...systemFields,
     ...fields.filter((field) => field.indexed && (!field.index_status || field.index_status === 'ready')),
   ];
-  const sortable = queryable.filter((field) => field.key !== '$tags' && !field.options?.multiple);
+  const sortable = queryable.filter((field) => field.key !== '$keywords' && !field.options?.multiple);
   const grouping =
     layout === 'board'
       ? sortable.filter((field) => field.type === 'choice')
@@ -324,11 +324,11 @@ function ViewDialog({
           value={query.search ?? ''}
           onChange={(event) => patchQuery({ search: event.target.value || undefined })}
         />
-        <Label htmlFor="view-tag">Tag</Label>
+        <Label htmlFor="view-keyword">Keyword</Label>
         <Input
-          id="view-tag"
-          value={query.tag ?? ''}
-          onChange={(event) => patchQuery({ tag: event.target.value || undefined })}
+          id="view-keyword"
+          value={query.keyword ?? ''}
+          onChange={(event) => patchQuery({ keyword: event.target.value || undefined })}
         />
         <Label htmlFor="view-parent">Folder</Label>
         <Input

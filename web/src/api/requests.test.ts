@@ -66,10 +66,10 @@ describe('listing and search requests', () => {
   });
 
   it('searches every readable workspace, narrowed by facets', () => {
-    expect(searchRequest({ q: 'invoice', workspaceId: 'ws', tag: 'paid', kind: 'all' })).toEqual({
+    expect(searchRequest({ q: 'invoice', workspaceId: 'ws', keyword: 'paid', kind: 'all' })).toEqual({
       path: '/v1/search',
       method: 'GET',
-      query: { q: 'invoice', workspace_id: 'ws', collection_id: undefined, tag: 'paid', kind: 'item,folder', $top: 25 },
+      query: { q: 'invoice', workspace_id: 'ws', collection_id: undefined, keyword: 'paid', kind: 'item,folder', $top: 25 },
     });
     expect(searchRequest({ q: 'invoice' }).query?.kind).toBeUndefined();
   });

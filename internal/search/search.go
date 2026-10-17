@@ -45,15 +45,15 @@ type Document struct {
 	// BlobID is the surface's current file, empty when none.
 	BlobID string
 	Name   string
-	// Keywords rank between the name and the body: tags, term labels and
+	// Keywords rank between the name and the body: keywords, term labels and
 	// synonyms, and high-weight fields.
 	Keywords string
 	// Body is the other searchable field text.
 	Body string
 	// Language is a Snowball language name, or empty.
-	Language string
-	Tags     []string
-	TermIDs  []string
+	Language   string
+	KeywordIDs []string
+	TermIDs    []string
 	// Fields are the surface's typed values, for filters.
 	Fields     []Field
 	CreatedBy  string
@@ -127,7 +127,7 @@ type Filter struct {
 	// TermIDs matches documents holding any of them; the service adds the
 	// descendants of a requested term and terms merged into it.
 	TermIDs      []string
-	Tag          string
+	Keyword      string
 	CreatedBy    string
 	ModifiedBy   string
 	ModifiedFrom time.Time
@@ -214,13 +214,13 @@ type FacetValue struct {
 }
 
 // Facets count the matches per workspace, collection, content type, term
-// and tag: the most frequent values of each.
+// and keyword: the most frequent values of each.
 type Facets struct {
 	Workspace   []FacetValue `json:"workspace"`
 	Collection  []FacetValue `json:"collection"`
 	ContentType []FacetValue `json:"content_type"`
 	Term        []FacetValue `json:"term"`
-	Tag         []FacetValue `json:"tag"`
+	Keyword     []FacetValue `json:"keyword"`
 }
 
 // FacetSize is how many values each facet lists.

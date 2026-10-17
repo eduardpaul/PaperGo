@@ -103,7 +103,7 @@ The `data` for each event type:
 - `item.created` / `item.updated`: `revision_id`, `revision_number`, `content_type_id`, `blob_id`
 - `file.added` and `file.updated`: `filename`, `source`, `file_version`, `blob_id`, `content_type` (the file's media type), `size`, `revision_id`, `content_type_id`. `file.updated` also includes `previous_blob_id`. Metadata edits emit `item.updated` without a file event; content processors subscribe to the two file events.
 - `permissions.changed`: `resource_kind` (`item` or `folder`), `action`, `root_id` and `root_kind` (the resource whose ACL changed, that moved, or the workspace), `root_event_id`, and `previous_scope_id` / `current_scope_id` for `replace` and `move` (the permission scope the entry read through before and after). Membership actions add `member_subject`, `previous_role` and `role`; an empty role means no membership.
-- `folder.created` / `folder.updated`: `revision_id`, `revision_number`, `content_type_id` for a new name or tags; `from_parent_id` and `parent_id` for a move
+- `folder.created` / `folder.updated`: `revision_id`, `revision_number`, `content_type_id` for a new name or keywords; `from_parent_id` and `parent_id` for a move
 - `item.published`: `revision_id`, `revision_number`, `publication_id`
 - `item.unpublished`: `revision_id`
 - `schedule`: `workflow_id`, `occurrence`
@@ -182,8 +182,8 @@ A `forEach` node runs its body once per element:
 - `end` and `fail` inside a body end the run.
 
 ```json
-"members": {"activity": "forEach", "inputs": {"items": "{run:items}", "as": "member"}, "next": {"body": "tag", "done": "finish"}},
-"tag": {"activity": "item.update", "inputs": {"item_id": "{var:member}", "tags": ["reviewed"]}}
+"members": {"activity": "forEach", "inputs": {"items": "{run:items}", "as": "member"}, "next": {"body": "keyword", "done": "finish"}},
+"keyword": {"activity": "item.update", "inputs": {"item_id": "{var:member}", "keywords": ["reviewed"]}}
 ```
 
 ## Tokens
@@ -192,7 +192,7 @@ Strings in node inputs can read run data:
 
 | Token | Value |
 | --- | --- |
-| `{item:path}` | the run's item: `id`, `name`, `tags`, `values.<field>`, `collection_id`, `content_type_id`, `version`, `published`, `created_by`, `updated_by`, `created_at`, `updated_at` |
+| `{item:path}` | the run's item: `id`, `name`, `keywords`, `values.<field>`, `collection_id`, `content_type_id`, `version`, `published`, `created_by`, `updated_by`, `created_at`, `updated_at` |
 | `{trigger:path}` | the event that started the run (see above) |
 | `{input:path}` | the launch form's values, defaults applied, such as `{input:reviewer}` or `{input:options.mode}` |
 | `{var:name}` | run variables (`variables`, and `set_variable`) |
@@ -239,8 +239,8 @@ A workflow can declare what a completed run returns, so other workflows can foll
 | `item.has_terms` | flow | tests whether the item's term and keywords fields hold `terms` (or descendants, or terms merged into them): any of them, or all with `match: "all"`; ports `matched`/`unmatched` | `matched`, `terms` (those held) |
 | `end` / `fail` | flow | completes the run / fails it with `message` | |
 | `item.get` | action | reads an item | the item |
-| `item.update` | action | sets `content_type_id`, `name`, `tags`, and `values` (merged; `null` removes a value) | the item |
-| `item.create` | action | creates an item in `collection_id` (optional `parent_id`, `content_type_id`, `tags`, `values`) | `item_id`, `item` |
+| `item.update` | action | sets `content_type_id`, `name`, `keywords`, and `values` (merged; `null` removes a value) | the item |
+| `item.create` | action | creates an item in `collection_id` (optional `parent_id`, `content_type_id`, `keywords`, `values`) | `item_id`, `item` |
 | `items.query` | action | queries `collection_id` with `filter`, `sort`, `limit` (≤ 100), on the head surface | `items`, `count` |
 | `item.publish` | action | publishes the head revision, if not already published | `published` |
 | `item.unpublish` | action | unpublishes, if published | `unpublished` |
@@ -257,7 +257,7 @@ A workflow can declare what a completed run returns, so other workflows can foll
 | `ai.complete` | action | asks the [chat model](#ai-steps) to do what `prompt` says with `input` (text or field values), `chunk` (from `search.read_chunks`), `text_id` (from `document.read_text` for the item's file, `blob_id` optional) or `image` (a file version, alone or with text), cut at `max_chars` (default 20,000): summarize, extract, clean up. With `output_schema` (a form schema of an object), the answer is a JSON object checked against it, else text. `execution` is `immediate` or `batch` (empty uses the deployment default) and `queue` names a batch queue. Equal requests reuse the cached answer. Heavy work | `text` or `json`, `cached`, `model` |
 | `ai.decide` | action | answers ordered choice, noul or ordinal score questions from `input`, JSON `data`, or guarded document `text_id` and `blob_id`; see [workflow decisions](decisions.md). Heavy work | `answers`, `model`, `input_hash`, `cached`, document `source` |
 | `taxonomy.decide` | action | evaluates managed candidates of `term_set_id`, independently (`multiple`) or jointly (`single`); ports `done` and `none`; see [workflow decisions](decisions.md). Heavy work | `term_ids`, `scores`, `taxonomy_guard`, `source`, `model`, `input_hash`, `cached` |
-| `tags.apply` | action | adds `tags` while keeping existing tags; requires the source `blob_id` to remain current | item snapshot |
+| `keywords.apply` | action | adds `keywords` while keeping existing keywords; requires the source `blob_id` to remain current | item snapshot |
 | `document.read_text` | action | reads the text of the item's current file page by page (see [reading text](#reading-text)): `ocr` (`auto`, `always`, `never`), `max_pages` (default 500, at most 2,000), `languages` (OCR codes such as `eng+deu`; default the file's). Ports `done`, `no_text` (the file holds none) and `unsupported` (another format, a protected or broken PDF). Heavy work | `text_id`, `item_id`, `blob_id`, `pages`, `chars`, `language`, `ocr_pages`, `skipped_pages`, `truncated`, `reused`, `reason` (unsupported) |
 | `search.chunk` | action | splits the text of the item's file (`text_id` of `document.read_text`, or `text` given directly, such as a summary) with a `chunker` (`window`, `pages`, `paragraphs`, `headings`, `whole`; `max_chars`, `overlap`, `max_chunks`) into chunks of a `kind` (`content`, `summary`, `extract`), and stages them in the search index under a new `generation`, or one of this run given to add to. See [file content steps](#file-content-steps). Heavy work | `generation`, `chunks`, `truncated`, `item_id`, `blob_id` |
 | `search.read_chunks` | action | reads a bounded page from a generation owned by this run, with complete references usable by `ai.complete` | `chunks`, `next_offset`, `more` |
@@ -410,7 +410,7 @@ Property names are lowercase identifiers, and forms nest at most 6 levels.
 | `keywords` | organization keywords, not deprecated: terms of its keywords set and terms available as keywords | |
 | `people` | principal subjects that have access to the workspace | `access`: `read` (default), `read_draft`, `write`, `publish` or `manage` |
 
-Set selection uses `{"kind":"terms","select":"sets"}` and browses `GET /v1/term-sets`, returning term-set IDs. Term selection returns term IDs. Term pickers browse `GET /v1/term-sets/{id}/terms`; keyword pickers suggest from `GET /v1/keywords?q=` and add new keywords with `POST /v1/keywords` before the form is submitted (see [taxonomy](application-foundation.md#controlled-taxonomy)).
+Set selection uses `{"kind":"terms","select":"sets"}` and browses `GET /v1/term-sets`, returning term-set IDs. Term selection returns term IDs. Term pickers browse `GET /v1/term-sets/{id}/terms`; keyword pickers suggest from `GET /v1/keywords?q=` ; keyword field labels create terms on save, and API callers can add terms with `POST /v1/keywords` (see [taxonomy](application-foundation.md#controlled-taxonomy)).
 
 Saving a workflow checks that collections and relationship types belong to the workspace, and that taxonomy pickers reference existing organization groups, sets and terms. Taxonomy pickers require `taxonomy.read`.
 

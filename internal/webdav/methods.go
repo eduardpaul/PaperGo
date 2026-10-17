@@ -84,12 +84,12 @@ func (h *Handler) put(w http.ResponseWriter, r *request) error {
 
 // store writes body to blob storage, then commits it as the file at path.
 // Bytes of a rejected commit are removed again.
-func (h *Handler) store(r *request, path []string, body io.Reader, cond dms.FileConditions, tags []string, values map[string]any, typeID string) (*dms.File, bool, error) {
+func (h *Handler) store(r *request, path []string, body io.Reader, cond dms.FileConditions, keywords []string, values map[string]any, typeID string) (*dms.File, bool, error) {
 	object, mediaType, err := storage.PutDocument(r.Context(), h.Storage, body, h.MaxUpload)
 	if err != nil {
 		return nil, false, err
 	}
-	in := dms.PutFile{FileConditions: cond, Tags: tags, Values: values, ContentTypeID: typeID, Blob: dms.BlobInput{ObjectKey: object.Key, Filename: path[len(path)-1], ContentType: mediaType, Size: object.Size, SHA256: object.SHA256, Source: dms.FileWebDAV}}
+	in := dms.PutFile{FileConditions: cond, Keywords: keywords, Values: values, ContentTypeID: typeID, Blob: dms.BlobInput{ObjectKey: object.Key, Filename: path[len(path)-1], ContentType: mediaType, Size: object.Size, SHA256: object.SHA256, Source: dms.FileWebDAV}}
 	f, created, err := h.DMS.PutFile(r.Context(), r.subject, r.library, path, in)
 	if err != nil {
 		if cleanupErr := h.Storage.Delete(context.WithoutCancel(r.Context()), object.Key); cleanupErr != nil {
@@ -226,7 +226,7 @@ func (h *Handler) destination(r *request) ([]string, error) {
 const maxCopyEntries = dms.MaxFolderEntries
 
 // copy duplicates the source into dst: files gain new items carrying the
-// source's tags, values and bytes; an existing destination file instead gets a
+// source's keywords, values and bytes; an existing destination file instead gets a
 // new content revision. Collections are recreated, recursively for infinity.
 func (h *Handler) copy(r *request, dst []string, overwrite, infinite bool) (bool, error) {
 	src, err := h.DMS.LibraryFile(r.Context(), r.subject, r.library, r.path)
@@ -265,7 +265,7 @@ func (h *Handler) copyTree(r *request, f *dms.File, from, to []string, infinite 
 	*budget--
 	if !f.Collection() {
 		if f.Blob == nil {
-			_, err := h.DMS.MakeEmptyFile(r.Context(), r.subject, r.library, to, dms.CreateResource{Tags: f.Tags, Values: f.Values, ContentTypeID: *f.ContentTypeID}, dms.FileConditions{})
+			_, err := h.DMS.MakeEmptyFile(r.Context(), r.subject, r.library, to, dms.CreateResource{Keywords: f.Keywords, Values: f.Values, ContentTypeID: *f.ContentTypeID}, dms.FileConditions{})
 			return err
 		}
 		var content io.Reader
@@ -295,7 +295,7 @@ func (h *Handler) copyTree(r *request, f *dms.File, from, to []string, infinite 
 				values[key] = value
 			}
 		}
-		_, _, err = h.store(r, to, content, dms.FileConditions{}, f.Tags, values, typ.ID)
+		_, _, err = h.store(r, to, content, dms.FileConditions{}, f.Keywords, values, typ.ID)
 		return err
 	}
 	if _, err := h.DMS.MakeFolder(r.Context(), r.subject, r.library, to); err != nil {

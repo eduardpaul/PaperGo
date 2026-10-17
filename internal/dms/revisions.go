@@ -117,7 +117,7 @@ func overlayRevision(r *ent.Resource, rev *ent.ItemRevision) error {
 		return err
 	}
 	r.Name = rev.Name
-	r.Tags = append([]string{}, rev.Tags...)
+	r.Keywords = append([]string{}, rev.Keywords...)
 	r.Values = values
 	r.ContentTypeID = &rev.ContentTypeID
 	r.UpdatedAt = rev.CreatedAt
@@ -215,7 +215,7 @@ func (s *Service) recordRevision(ctx context.Context, actor string, r *ent.Resou
 			return nil, invalid("invalid attachment filename")
 		}
 	}
-	builder := s.Client.ItemRevision.Create().SetFilename(filename).SetItemID(r.ID).SetContainerID(c.ID).SetContentTypeID(*r.ContentTypeID).SetSchemaRevisionID(schema.ID).SetRevisionNumber(r.NextRevisionNumber).SetName(r.Name).SetTags(r.Tags).SetPayload(raw).SetCreatedBy(actor).SetNillableBlobID(blobID)
+	builder := s.Client.ItemRevision.Create().SetFilename(filename).SetItemID(r.ID).SetContainerID(c.ID).SetContentTypeID(*r.ContentTypeID).SetSchemaRevisionID(schema.ID).SetRevisionNumber(r.NextRevisionNumber).SetName(r.Name).SetKeywords(r.Keywords).SetPayload(raw).SetCreatedBy(actor).SetNillableBlobID(blobID)
 	rev, err := builder.Save(ctx)
 	if err != nil {
 		return nil, err
@@ -288,9 +288,9 @@ func (s *Service) replaceSurface(ctx context.Context, r *ent.Resource, rev *ent.
 	existing, err := s.Client.ItemSurface.Query().Where(itemsurface.ItemIDEQ(r.ID), itemsurface.SurfaceEQ(surface)).Only(ctx)
 	var projection *ent.ItemSurface
 	if ent.IsNotFound(err) {
-		projection, err = s.Client.ItemSurface.Create().SetItemID(r.ID).SetContainerID(*r.ContainerID).SetWorkspaceID(r.WorkspaceID).SetSurface(surface).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetItemCreatedAt(queryTime(r.CreatedAt)).SetItemCreatedBy(r.CreatedBy).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
+		projection, err = s.Client.ItemSurface.Create().SetItemID(r.ID).SetContainerID(*r.ContainerID).SetWorkspaceID(r.WorkspaceID).SetSurface(surface).SetRevisionID(rev.ID).SetName(rev.Name).SetKeywords(rev.Keywords).SetPayload(rev.Payload).SetItemCreatedAt(queryTime(r.CreatedAt)).SetItemCreatedBy(r.CreatedBy).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
 	} else if err == nil {
-		projection, err = s.Client.ItemSurface.UpdateOne(existing).SetRevisionID(rev.ID).SetName(rev.Name).SetTags(rev.Tags).SetPayload(rev.Payload).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
+		projection, err = s.Client.ItemSurface.UpdateOne(existing).SetRevisionID(rev.ID).SetName(rev.Name).SetKeywords(rev.Keywords).SetPayload(rev.Payload).SetModifiedAt(queryTime(rev.CreatedAt)).SetModifiedBy(rev.CreatedBy).Save(ctx)
 	}
 	if err != nil {
 		return err
@@ -419,7 +419,7 @@ func (s *Service) publishRevision(ctx context.Context, actor string, r *ent.Reso
 	if err = s.replaceSurface(ctx, r, rev, itemsurface.SurfacePublished, defs); err != nil {
 		return nil, err
 	}
-	snapshot := map[string]any{"id": r.ID, "name": rev.Name, "tags": rev.Tags, "values": rev.Payload, "revision_id": rev.ID, "revision_number": rev.RevisionNumber, "schema_revision_id": rev.SchemaRevisionID, "filename": rev.Filename}
+	snapshot := map[string]any{"id": r.ID, "name": rev.Name, "keywords": rev.Keywords, "values": rev.Payload, "revision_id": rev.ID, "revision_number": rev.RevisionNumber, "schema_revision_id": rev.SchemaRevisionID, "filename": rev.Filename}
 	if rev.BlobID != nil {
 		snapshot["blob_id"] = *rev.BlobID
 	}

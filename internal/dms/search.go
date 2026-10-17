@@ -213,6 +213,36 @@ func (s *Service) SearchDocuments(ctx context.Context, ids []string) (docs []sea
 			if err != nil {
 				return err
 			}
+			keywordIDs := append([]string{}, p.Keywords...)
+			for _, field := range content.fields {
+				if field.Type == "keywords" {
+					for _, value := range field.Values {
+						keywordIDs = append(keywordIDs, value.Text)
+					}
+				}
+			}
+			if len(keywordIDs) > 0 {
+				raw, _ := json.Marshal(keywordIDs)
+				rows, err := s.Client.QueryContext(ctx, "SELECT DISTINCT coalesce(merged_into_id,id) FROM terms WHERE id IN (SELECT value FROM json_each(?)) ORDER BY 1", string(raw))
+				if err != nil {
+					return err
+				}
+				keywordIDs = []string{}
+				for rows.Next() {
+					var id string
+					if err = rows.Scan(&id); err != nil {
+						rows.Close()
+						return err
+					}
+					keywordIDs = append(keywordIDs, id)
+				}
+				err = errors.Join(rows.Err(), rows.Close())
+				if err != nil {
+					return err
+				}
+			}
+			content.terms = append(content.terms, p.Keywords...)
+			content.wordTerms = append(content.wordTerms, p.Keywords...)
 			words, err := s.termWords(ctx, content.wordTerms)
 			if err != nil {
 				return err
@@ -226,8 +256,8 @@ func (s *Service) SearchDocuments(ctx context.Context, ids []string) (docs []sea
 				views |= search.ViewHead
 			}
 			d := search.Document{ResourceID: r.ID, Kind: string(r.Kind), Surface: string(p.Surface), Views: views, WorkspaceID: r.WorkspaceID,
-				CollectionID: *r.ContainerID, ContentTypeID: rev.ContentTypeID, RevisionID: rev.ID, Name: p.Name, Tags: p.Tags,
-				Keywords: strings.TrimSpace(strings.Join(slices.Concat(p.Tags, content.keywords, []string{words}), " ")), Body: strings.Join(content.body, "\n"),
+				CollectionID: *r.ContainerID, ContentTypeID: rev.ContentTypeID, RevisionID: rev.ID, Name: p.Name, KeywordIDs: keywordIDs,
+				Keywords: strings.TrimSpace(strings.Join(slices.Concat(content.keywords, []string{words}), " ")), Body: strings.Join(content.body, "\n"),
 				TermIDs: content.terms, Fields: content.fields,
 				CreatedBy: p.ItemCreatedBy, ModifiedBy: p.ModifiedBy}
 			if r.ParentID != nil {

@@ -68,8 +68,8 @@ func nativeFilter(f search.Filter) (string, error) {
 		}
 		parts = append(parts, "tokens CONTAIN_ANY ('"+strings.Join(tokens, "', '")+"')")
 	}
-	if f.Tag != "" {
-		parts = append(parts, "tokens CONTAIN_ANY ('g"+encode(f.Tag)+"')")
+	if f.Keyword != "" {
+		parts = append(parts, "tokens CONTAIN_ANY ('g"+encode(f.Keyword)+"')")
 	}
 	if !f.ModifiedFrom.IsZero() {
 		parts = append(parts, "modified_at >= "+strconv.FormatInt(f.ModifiedFrom.UnixNano(), 10))

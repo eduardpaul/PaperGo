@@ -31,11 +31,11 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 			values["x"] = json.Number(fmt.Sprintf("%d.5", i%3))
 		}
 		name := fmt.Sprintf("item %02d", i%7)
-		tags := []string{}
+		keywords := []string{}
 		if i%2 == 0 {
-			tags = []string{"even"}
+			keywords = []string{"even"}
 		}
-		r, err := s.Create(testContext, "alice", list.ID, CreateResource{Kind: "item", Name: name, Tags: tags, Values: values})
+		r, err := s.Create(testContext, "alice", list.ID, CreateResource{Kind: "item", Name: name, Keywords: keywords, Values: values})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -67,7 +67,7 @@ func TestSeekPagesMatchSortedEligibleRows(t *testing.T) {
 	specs := []QuerySpec{
 		{},
 		{Filter: &FilterExpr{Field: "n", Op: "gte", Value: json.RawMessage("1")}},
-		{Tag: "even"},
+		{Keyword: "even"},
 		{Search: "item"},
 	}
 	sorts := []string{"", "$name", "$modified_at", "$created_by", "n", "label", "x"}
@@ -153,7 +153,7 @@ func TestViewRowsProjectTheirColumns(t *testing.T) {
 			values["done"] = true
 			delete(values, "labels")
 		}
-		r, err := s.Create(testContext, "alice", list.ID, CreateResource{Kind: "item", Name: fmt.Sprintf("Item %d", i), Tags: []string{"t"}, Values: values})
+		r, err := s.Create(testContext, "alice", list.ID, CreateResource{Kind: "item", Name: fmt.Sprintf("Item %d", i), Keywords: []string{"t"}, Values: values})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -169,7 +169,7 @@ func TestViewRowsProjectTheirColumns(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, columns := range [][]string{{"$name"}, {"$name", "amount", "labels", "done", "missing_key"}, {"$tags", "serial"}} {
+	for _, columns := range [][]string{{"$name"}, {"$name", "amount", "labels", "done", "missing_key"}, {"$keywords", "serial"}} {
 		view, err := s.CreateView(testContext, "alice", list.ID, ViewInput{Name: fmt.Sprint(columns), Columns: columns})
 		if err != nil && columns[len(columns)-1] == "missing_key" {
 			columns = columns[:len(columns)-1]
@@ -199,8 +199,8 @@ func TestViewRowsProjectTheirColumns(t *testing.T) {
 					}
 				}
 				want.Values = values
-				if !slices.Contains(columns, "$tags") {
-					want.Tags = []string{}
+				if !slices.Contains(columns, "$keywords") {
+					want.Keywords = []string{}
 				}
 				got, _ := json.Marshal(r)
 				expected, _ := json.Marshal(&want)

@@ -127,7 +127,7 @@ export function ClassifyDialog({
               ? {
                   name: name.trim(),
                   content_type_id: typeId || undefined,
-                  tags: [],
+                  keywords: [],
                   values: valuesPatch(visible, {}, values) ?? {},
                 }
               : undefined,

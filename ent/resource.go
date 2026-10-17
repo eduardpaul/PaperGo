@@ -45,8 +45,8 @@ type Resource struct {
 	DefaultCurrency string `json:"default_currency,omitempty"`
 	// AllowFolders holds the value of the "allow_folders" field.
 	AllowFolders bool `json:"allow_folders,omitempty"`
-	// Tags holds the value of the "tags" field.
-	Tags []string `json:"tags,omitempty"`
+	// Keywords holds the value of the "keywords" field.
+	Keywords []string `json:"keywords,omitempty"`
 	// TemplateKeys holds the value of the "template_keys" field.
 	TemplateKeys []string `json:"template_keys,omitempty"`
 	// Values holds the value of the "values" field.
@@ -282,7 +282,7 @@ func (*Resource) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case resource.FieldTags, resource.FieldTemplateKeys, resource.FieldValues:
+		case resource.FieldKeywords, resource.FieldTemplateKeys, resource.FieldValues:
 			values[i] = new([]byte)
 		case resource.FieldAllowFolders, resource.FieldInheritPermissions, resource.FieldPublishingEnabled, resource.FieldWebdavEnabled:
 			values[i] = new(sql.NullBool)
@@ -390,12 +390,12 @@ func (_m *Resource) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AllowFolders = value.Bool
 			}
-		case resource.FieldTags:
+		case resource.FieldKeywords:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field tags", values[i])
+				return fmt.Errorf("unexpected type %T for field keywords", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.Tags); err != nil {
-					return fmt.Errorf("unmarshal field tags: %w", err)
+				if err := json.Unmarshal(*value, &_m.Keywords); err != nil {
+					return fmt.Errorf("unmarshal field keywords: %w", err)
 				}
 			}
 		case resource.FieldTemplateKeys:
@@ -686,8 +686,8 @@ func (_m *Resource) String() string {
 	builder.WriteString("allow_folders=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AllowFolders))
 	builder.WriteString(", ")
-	builder.WriteString("tags=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Tags))
+	builder.WriteString("keywords=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Keywords))
 	builder.WriteString(", ")
 	builder.WriteString("template_keys=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TemplateKeys))

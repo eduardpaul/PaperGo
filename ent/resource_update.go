@@ -206,15 +206,15 @@ func (_u *ResourceUpdate) SetNillableAllowFolders(v *bool) *ResourceUpdate {
 	return _u
 }
 
-// SetTags sets the "tags" field.
-func (_u *ResourceUpdate) SetTags(v []string) *ResourceUpdate {
-	_u.mutation.SetTags(v)
+// SetKeywords sets the "keywords" field.
+func (_u *ResourceUpdate) SetKeywords(v []string) *ResourceUpdate {
+	_u.mutation.SetKeywords(v)
 	return _u
 }
 
-// AppendTags appends value to the "tags" field.
-func (_u *ResourceUpdate) AppendTags(v []string) *ResourceUpdate {
-	_u.mutation.AppendTags(v)
+// AppendKeywords appends value to the "keywords" field.
+func (_u *ResourceUpdate) AppendKeywords(v []string) *ResourceUpdate {
+	_u.mutation.AppendKeywords(v)
 	return _u
 }
 
@@ -1084,12 +1084,12 @@ func (_u *ResourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AllowFolders(); ok {
 		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.Tags(); ok {
-		_spec.SetField(resource.FieldTags, field.TypeJSON, value)
+	if value, ok := _u.mutation.Keywords(); ok {
+		_spec.SetField(resource.FieldKeywords, field.TypeJSON, value)
 	}
-	if value, ok := _u.mutation.AppendedTags(); ok {
+	if value, ok := _u.mutation.AppendedKeywords(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, resource.FieldTags, value)
+			sqljson.Append(u, resource.FieldKeywords, value)
 		})
 	}
 	if value, ok := _u.mutation.TemplateKeys(); ok {
@@ -1935,15 +1935,15 @@ func (_u *ResourceUpdateOne) SetNillableAllowFolders(v *bool) *ResourceUpdateOne
 	return _u
 }
 
-// SetTags sets the "tags" field.
-func (_u *ResourceUpdateOne) SetTags(v []string) *ResourceUpdateOne {
-	_u.mutation.SetTags(v)
+// SetKeywords sets the "keywords" field.
+func (_u *ResourceUpdateOne) SetKeywords(v []string) *ResourceUpdateOne {
+	_u.mutation.SetKeywords(v)
 	return _u
 }
 
-// AppendTags appends value to the "tags" field.
-func (_u *ResourceUpdateOne) AppendTags(v []string) *ResourceUpdateOne {
-	_u.mutation.AppendTags(v)
+// AppendKeywords appends value to the "keywords" field.
+func (_u *ResourceUpdateOne) AppendKeywords(v []string) *ResourceUpdateOne {
+	_u.mutation.AppendKeywords(v)
 	return _u
 }
 
@@ -2843,12 +2843,12 @@ func (_u *ResourceUpdateOne) sqlSave(ctx context.Context) (_node *Resource, err 
 	if value, ok := _u.mutation.AllowFolders(); ok {
 		_spec.SetField(resource.FieldAllowFolders, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.Tags(); ok {
-		_spec.SetField(resource.FieldTags, field.TypeJSON, value)
+	if value, ok := _u.mutation.Keywords(); ok {
+		_spec.SetField(resource.FieldKeywords, field.TypeJSON, value)
 	}
-	if value, ok := _u.mutation.AppendedTags(); ok {
+	if value, ok := _u.mutation.AppendedKeywords(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, resource.FieldTags, value)
+			sqljson.Append(u, resource.FieldKeywords, value)
 		})
 	}
 	if value, ok := _u.mutation.TemplateKeys(); ok {

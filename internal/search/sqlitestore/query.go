@@ -112,9 +112,9 @@ func where(f search.Filter) (string, []any, error) {
 		conds = append(conds, "EXISTS (SELECT 1 FROM document_terms t WHERE t.doc=d.rowid AND t.term_id IN (SELECT value FROM json_each(?)))")
 		args = append(args, jsonList(f.TermIDs))
 	}
-	if f.Tag != "" {
-		conds = append(conds, "EXISTS (SELECT 1 FROM document_tags g WHERE g.doc=d.rowid AND g.tag=?)")
-		args = append(args, f.Tag)
+	if f.Keyword != "" {
+		conds = append(conds, "EXISTS (SELECT 1 FROM document_keywords g WHERE g.doc=d.rowid AND g.keyword=?)")
+		args = append(args, f.Keyword)
 	}
 	if !f.ModifiedFrom.IsZero() {
 		conds = append(conds, "d.modified_at>=?")
@@ -483,7 +483,7 @@ func (s *Store) pageHits(ctx context.Context, tx *sql.Tx, q *search.FullTextQuer
 }
 
 // facets counts the matches by workspace, collection, content type, term
-// and tag.
+// and keyword.
 func facets(ctx context.Context, tx *sql.Tx, matches string, args []any) (*search.Facets, error) {
 	f := &search.Facets{}
 	for _, facet := range []struct {
@@ -494,7 +494,7 @@ func facets(ctx context.Context, tx *sql.Tx, matches string, args []any) (*searc
 		{&f.Collection, "SELECT d.collection_id, count(*) FROM (" + matches + ") m JOIN documents d ON d.rowid=m.doc WHERE d.collection_id<>'' GROUP BY 1"},
 		{&f.ContentType, "SELECT d.content_type_id, count(*) FROM (" + matches + ") m JOIN documents d ON d.rowid=m.doc WHERE d.content_type_id<>'' GROUP BY 1"},
 		{&f.Term, "SELECT t.term_id, count(*) FROM (" + matches + ") m JOIN document_terms t ON t.doc=m.doc GROUP BY 1"},
-		{&f.Tag, "SELECT g.tag, count(*) FROM (" + matches + ") m JOIN document_tags g ON g.doc=m.doc GROUP BY 1"},
+		{&f.Keyword, "SELECT g.keyword, count(*) FROM (" + matches + ") m JOIN document_keywords g ON g.doc=m.doc GROUP BY 1"},
 	} {
 		rows, err := tx.QueryContext(ctx, facet.query+" ORDER BY 2 DESC, 1 LIMIT ?", append(args, search.FacetSize)...)
 		if err != nil {

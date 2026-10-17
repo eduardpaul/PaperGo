@@ -53,7 +53,7 @@ func (s *Service) templateDefinition(ctx context.Context, subject, workspaceID s
 			return nil, e
 		}
 		if len(d.Options.DefaultValue) > 0 {
-			if e := s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil, true); e != nil {
+			if e := s.normalizeKeywordDefault(ctx, subject, d); e != nil {
 				return nil, e
 			}
 		}
@@ -187,7 +187,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, subject, containerID, templ
 				return e
 			}
 			if len(d.Options.DefaultValue) > 0 {
-				if e = t.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{d}, map[string]any{}, nil, true); e != nil {
+				if e = t.normalizeKeywordDefault(ctx, subject, d); e != nil {
 					return e
 				}
 			}

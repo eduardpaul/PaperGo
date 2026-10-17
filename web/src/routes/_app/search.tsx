@@ -14,13 +14,13 @@ import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { Input, Label } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
-import { useResourceNames } from '@/features/fields/names';
+import { useResourceNames, useTermNames } from '@/features/fields/names';
 import { highlightParts } from '@/lib/highlight';
 import { useFormat } from '@/lib/preferences';
 import { textParam } from '@/lib/search';
 import { useDebounced } from '@/lib/use-debounced';
 
-interface SearchRouteParams { q?: string; workspace?: string; collection?: string; tag?: string; content_type?: string; kind?: Kind }
+interface SearchRouteParams { q?: string; workspace?: string; collection?: string; keyword?: string; content_type?: string; kind?: Kind }
 
 type Kind = 'item' | 'folder' | 'all';
 
@@ -30,7 +30,7 @@ export const Route = createFileRoute('/_app/search')({
     q: textParam(search.q),
     workspace: textParam(search.workspace),
     collection: textParam(search.collection),
-    tag: textParam(search.tag),
+    keyword: textParam(search.keyword),
     kind: (['item', 'folder', 'all'] as const).find((kind) => kind === search.kind),
   }),
   component: SearchPage,
@@ -38,7 +38,7 @@ export const Route = createFileRoute('/_app/search')({
 
 function SearchPage() {
   const params = Route.useSearch();
-  const { q, workspace, collection, tag, content_type } = params;
+  const { q, workspace, collection, keyword, content_type } = params;
   const types = useQuery({ queryKey: ['search', 'content-types', workspace, collection], queryFn: async () => (await api<{ id: string; name: string }[]>('/v1/search/content-types', { query: { workspace_id: workspace, collection_id: collection } })).data });
   const kind: Kind = params.kind ?? 'item';
   const navigate = useNavigate({ from: Route.fullPath });
@@ -56,7 +56,7 @@ function SearchPage() {
     const entry = workspaces.data?.find((candidate) => candidate.id === id);
     return entry?.personal_owner_id ? 'Home' : (entry?.name ?? 'Workspace');
   };
-  const filtered = !!(workspace || collection || tag || content_type);
+  const filtered = !!(workspace || collection || keyword || content_type);
   // Workspaces are not in the search index: their names match here.
   const places = q
     ? (workspaces.data ?? []).filter((entry) => workspaceName(entry.id).toLowerCase().includes(q.toLowerCase())).slice(0, 8)
@@ -64,7 +64,7 @@ function SearchPage() {
 
   return (
     <Page>
-      <PageHeader icon={SearchIcon} title="Search" description="Find items and folders across your workspaces by name, fields and tags." />
+      <PageHeader icon={SearchIcon} title="Search" description="Find items and folders across your workspaces by name, fields and keywords." />
       <form
         role="search"
         className="mb-4 flex flex-wrap items-end gap-2"
@@ -133,11 +133,11 @@ function SearchPage() {
       )}
       {!q && !filtered ? (
         <EmptyState icon={SearchIcon} title="Type to search">
-          Every word must match, in names, fields or tags; other forms of a word match too. Use quotes for a phrase, * for the start of a
+          Every word must match, in names, fields or keywords; other forms of a word match too. Use quotes for a phrase, * for the start of a
           word and - to leave a word out.
         </EmptyState>
       ) : (
-        <Results contentType={content_type} typeNames={new Map((types.data ?? []).map(type => [type.id, type.name]))} q={q} workspace={workspace} collection={collection} tag={tag} kind={kind} workspaceName={workspaceName} />
+        <Results contentType={content_type} typeNames={new Map((types.data ?? []).map(type => [type.id, type.name]))} q={q} workspace={workspace} collection={collection} keyword={keyword} kind={kind} workspaceName={workspaceName} />
       )}
     </Page>
   );
@@ -149,7 +149,7 @@ function Results({
   q,
   workspace,
   collection,
-  tag,
+  keyword,
   kind,
   workspaceName,
 }: {
@@ -158,7 +158,7 @@ function Results({
   q?: string;
   workspace?: string;
   collection?: string;
-  tag?: string;
+  keyword?: string;
   kind: Kind;
   workspaceName: (id: string) => string;
 }) {
@@ -168,12 +168,13 @@ function Results({
     workspaceId: workspace,
     collectionId: collection,
     contentTypeId: contentType,
-    tag,
+    keyword,
     kind,
   });
-  const results = useApiPages<SearchHit>(['search', q, workspace, collection, tag, kind, contentType], request.path, { query: request.query });
+  const results = useApiPages<SearchHit>(['search', q, workspace, collection, keyword, kind, contentType], request.path, { query: request.query });
   const first = results.data?.pages[0] as SearchPage | undefined;
   const facets = first?.facets;
+  const keywordNames = useTermNames([...new Set([...(facets?.keyword ?? []).map(entry => entry.value), ...(keyword ? [keyword] : [])])]);
   const collectionIds = [
     ...new Set([
       ...results.items.map((hit) => hit.collection_id),
@@ -183,7 +184,7 @@ function Results({
   ].sort();
   const collectionNames = useResourceNames(collectionIds);
   const collectionName = (id: string) => collectionNames.get(id) ?? 'List';
-  const filter = (patch: { workspace?: string; collection?: string; tag?: string; content_type?: string }) =>
+  const filter = (patch: { workspace?: string; collection?: string; keyword?: string; content_type?: string }) =>
     void navigate({ search: (current) => ({ ...current, ...patch }) });
 
   if (results.isPending) return <Skeleton className="h-16" />;
@@ -198,7 +199,7 @@ function Results({
       label: collectionName(collection),
       clear: { collection: undefined },
     },
-    tag && { label: `#${tag}`, clear: { tag: undefined } },
+    keyword && { label: keywordNames.get(keyword) ?? 'Keyword', clear: { keyword: undefined } },
   ].filter((chip) => !!chip);
   const total = first?.total ?? results.items.length;
 
@@ -253,7 +254,7 @@ function Results({
             />
           )}
           {!contentType && <Facet title="Content types" values={facets.content_type ?? []} label={id => typeNames.get(id) ?? 'Content type'} onPick={value => filter({ content_type: value })} />}
-          {!tag && <Facet title="Tags" values={facets.tag} label={(value) => `#${value}`} onPick={(value) => filter({ tag: value })} />}
+          {!keyword && <Facet title="Keywords" values={facets.keyword} label={(value) => keywordNames.get(value) ?? value} onPick={(value) => filter({ keyword: value })} />}
         </aside>
       )}
     </div>

@@ -16,7 +16,7 @@ type DocumentMetadata struct {
 	Name          string         `json:"name,omitempty"`
 	ContentTypeID string         `json:"content_type_id,omitempty"`
 	FolderID      string         `json:"folder_id,omitempty"`
-	Tags          []string       `json:"tags,omitempty"`
+	Keywords      []string       `json:"keywords,omitempty"`
 	Values        map[string]any `json:"values,omitempty"`
 	Languages     string         `json:"languages,omitempty"`
 }
@@ -101,7 +101,7 @@ func (s *Service) CreateDocument(ctx context.Context, subject, libraryID string,
 		if !ent.IsNotFound(err) {
 			return err
 		}
-		item, err := t.create(ctx, subject, parent.ID, CreateResource{Kind: "item", Name: name, ContentTypeID: metadata.ContentTypeID, Tags: metadata.Tags, Values: metadata.Values}, &content)
+		item, err := t.create(ctx, subject, parent.ID, CreateResource{Kind: "item", Name: name, ContentTypeID: metadata.ContentTypeID, Keywords: metadata.Keywords, Values: metadata.Values}, &content)
 		if err != nil {
 			return err
 		}

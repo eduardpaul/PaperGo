@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { api } from '@/api/http';
 import { parseJSON, stringifyJSON } from '@/api/json';
-import { collectionChildren, keys, resourceQuery, templatesQuery, workspacesQuery } from '@/api/queries';
+import { collectionChildren, keys, resourceQuery, templatesQuery, termsById, workspacesQuery } from '@/api/queries';
 import type { FieldDefinition, FilterExpr, Page, SmartFolder, SmartFolderDefinition, SmartFolderEntry } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Alert } from '@/components/ui/feedback';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { QueryFeedback, useHasScope } from '@/features/admin/common';
-import { FieldEditor } from '@/features/fields/editor';
+import { KeywordInput } from '@/components/keyword-input';
 import { can } from '@/features/lists/access';
 import { fileTypeField, FilterEditor, normalizeFilter, systemFields } from '@/features/lists/filter-editor';
 import { problemMessage } from '@/lib/errors';
@@ -79,8 +79,15 @@ function Editor({ folder, onClose, onSaved }: { folder?: SmartFolder; onClose: (
     mutationFn: () => api<SmartFolder>(folder ? `/v1/smart-folders/${folder.id}` : '/v1/smart-folders', { method: folder ? 'PUT' : 'POST', ifMatch: folder?.version, body }).then(result => result.data),
     onSuccess: async result => { await client.invalidateQueries({ queryKey: keys.smartFolders }); onSaved(result); },
   });
+  const keywordAssignment = useMutation({
+    mutationFn: async (values: string[]) => {
+      const known = new Set((await termsById(values)).map(term => term.id));
+      return [...new Set(await Promise.all(values.map(async value => known.has(value) ? value : (await api<{ id: string }>('/v1/keywords', { method: 'POST', body: { name: value } })).data.id)))];
+    },
+    onSuccess: async values => { setTerms(values); await client.invalidateQueries({ queryKey: ['keywords'] }); },
+  });
   const allowed = canWrite && (personal || can(workspace.data, 'manage'));
-  const ready = allowed && !!name.trim() && !invalid && !updating && preview.isSuccess;
+  const ready = !keywordAssignment.isPending && allowed && !!name.trim() && !invalid && !updating && preview.isSuccess;
   return <FormDialog open title={folder ? 'Edit smart folder rules' : 'New smart folder'} description="Choose rules using your collections and fields, then preview the matching items." submitLabel={folder ? 'Save rules' : 'Create'} pending={save.isPending} submitDisabled={!ready} onClose={onClose} onSubmit={() => ready && save.mutate()}>
     {save.error && <Alert>{problemMessage(save.error)}</Alert>}
     <Label htmlFor="smart-name">Name</Label><Input id="smart-name" value={name} onChange={event => setName(event.target.value)} required autoFocus />
@@ -100,7 +107,7 @@ function Editor({ folder, onClose, onSaved }: { folder?: SmartFolder; onClose: (
     <Label id="smart-types-label">Content types (optional)</Label><Combobox aria-labelledby="smart-types-label" multiple selected={contentTypes.map(value => typeOptions.find(option => option.value.toLowerCase() === value.toLowerCase()) ?? { value, label: value })} options={typeOptions} onChange={options => setContentTypes(options.map(option => option.value))} />
     <label className="flex gap-2 text-sm"><input type="checkbox" checked={includeFolders} onChange={event => setIncludeFolders(event.target.checked)} />Include physical folders</label>
     <section className="grid gap-2"><h3 className="font-medium">Rules</h3><QueryFeedback query={metadata} /><FilterEditor fields={fields} filter={filter} onChange={setFilter} /><p className="text-xs text-muted">Custom rules use filterable fields. Choose a collection to resolve fields with different definitions.</p></section>
-    {taxonomy && <section className="grid gap-2"><FieldEditor field={{ id: 'smart-keywords', key: 'smart-keywords', label: 'Keywords (optional)', type: 'keywords', options: { multiple: true } }} value={terms} onChange={value => setTerms(Array.isArray(value) ? value as string[] : [])} /><Select aria-label="Match keywords" value={termMatch} onChange={event => setTermMatch(event.target.value)}><option value="all">All selected keywords</option><option value="any">Any selected keyword</option></Select></section>}
+    {taxonomy && <section className="grid gap-2"><Label htmlFor="smart-keywords">Keywords (optional)</Label><KeywordInput id="smart-keywords" value={terms} disabled={keywordAssignment.isPending} onChange={values => keywordAssignment.mutate(values)} />{keywordAssignment.error && <Alert>{problemMessage(keywordAssignment.error)}</Alert>}<Select aria-label="Match keywords" value={termMatch} onChange={event => setTermMatch(event.target.value)}><option value="all">All selected keywords</option><option value="any">Any selected keyword</option></Select></section>}
     <details><summary className="cursor-pointer text-sm">Optional grouping and templates</summary><div className="grid gap-2 pt-2">
       <Label id="smart-templates-label">Collection templates</Label><Combobox aria-labelledby="smart-templates-label" multiple selected={templates.map(value => ({ value, label: templateList.data?.find(template => template.key === value)?.name ?? value }))} options={(templateList.data ?? []).map(template => ({ value: template.key, label: template.name }))} onChange={options => setTemplates(options.map(option => option.value))} />
       {groups.map((group, index) => <div key={index} className="flex gap-2"><Select aria-label={`Group level ${index + 1}`} value={group.field} onChange={event => setGroups(groups.map((group, i) => i === index ? { field: event.target.value } : group))}>{fields.filter(field => field.key !== '$file_type' && !field.options?.multiple).map(field => <option key={field.key} value={field.key}>{field.label}</option>)}</Select>{['date', 'datetime'].includes(fields.find(field => field.key === group.field)?.type ?? '') && <Select aria-label={`Group period ${index + 1}`} value={group.by ?? ''} onChange={event => setGroups(groups.map((group, i) => i === index ? { ...group, by: event.target.value || undefined } : group))}><option value="">Exact date</option><option value="year">Year</option><option value="month">Month</option></Select>}<Button onClick={() => setGroups(groups.filter((_, i) => i !== index))}>Remove level</Button></div>)}

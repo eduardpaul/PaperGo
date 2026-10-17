@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/select';
 import { QueryFeedback } from '@/features/admin/common';
-import { usePeopleNames } from '@/features/fields/people';
+import { useValueNames } from '@/features/fields/names';
 import { can } from '@/features/lists/access';
 import { ItemContextMenu } from '@/features/lists/item-context-menu';
 import { ItemsGallery } from '@/features/lists/items-layouts';
@@ -48,7 +48,7 @@ function FolderContents({ folderId, edit }: { folderId: string; edit: boolean })
   const call = smartFolderQueryRequest(folderId, activePath, sort);
   const entries = useApiPages<SmartFolderEntry>(['smart-folders', folderId, 'entries'], call.path, { enabled: !!folder.data && !grouped, query: call.query, body: call.body });
   const groups = useApiPages<SmartFolderGroup>(['smart-folders', folderId, 'groups'], `/v1/smart-folders/${folderId}/query/groups`, { enabled: !!folder.data && grouped, body: { path: activePath } });
-  const people = usePeopleNames();
+  const names = useValueNames([], entries.items.map(entry => entry.item));
   const refresh = async () => { await client.invalidateQueries({ queryKey: keys.smartFolders }); await client.invalidateQueries({ queryKey: keys.resources }); };
   const remove = useMutation({
     meta: { silent: true },
@@ -95,7 +95,7 @@ function FolderContents({ folderId, edit }: { folderId: string; edit: boolean })
     {grouping && <nav aria-label="Group path" className="mb-3 flex flex-wrap gap-2 text-sm"><button type="button" className="text-accent" onClick={() => { setGrouping(false); setPath([]); }}>All results</button><button type="button" className="text-accent" onClick={() => setPath([])}>Groups</button>{path.map((segment, index) => <button type="button" key={index} onClick={() => setPath(path.slice(0, index + 1))}>/ {segment.label}</button>)}</nav>}
     <QueryFeedback query={grouped ? groups : entries} />
     {grouped ? <><ul className="divide-y rounded-lg border bg-surface">{groups.items.map(group => <li key={String(group.value)}><button type="button" className="flex w-full justify-between px-4 py-3 text-left text-sm hover:bg-surface-muted" onClick={() => setPath([...path, { value: group.value == null ? null : String(group.value), label: group.label || String(group.value ?? 'No value') }])}><span>{group.label || String(group.value ?? 'No value')}</span><Badge>{group.count}</Badge></button></li>)}</ul>{groups.isSuccess && !groups.items.length && <EmptyState title="No matching groups" />}{groups.hasNextPage && <Button className="mt-3" disabled={groups.isFetchingNextPage} onClick={() => void groups.fetchNextPage()}>More groups</Button>}</> : <>
-      {entries.items.length > 0 && (layout === 'gallery' ? <ItemsGallery previewItems={new Set(entries.items.filter(entry => entry.collection_kind === 'library').map(entry => entry.item.id))} items={entries.items.map(entry => entry.item)} fields={[]} provenance={provenance} onOpen={open} renderItem={renderItem} /> : <ItemsTable rows={entries.items.map(entry => entry.item)} columns={['$name', '$modified_at', '$tags']} fields={[]} publishing={false} names={people} selectable={false} selected={new Map()} sortable={new Set(['$name', '$modified_at'])} sort={sort} onSort={next => setSort(next ?? { field: '$modified_at', direction: 'desc' })} onToggle={() => {}} onToggleAll={() => {}} onOpen={open} provenance={provenance} renderRow={renderItem} />)}
+      {entries.items.length > 0 && (layout === 'gallery' ? <ItemsGallery previewItems={new Set(entries.items.filter(entry => entry.collection_kind === 'library').map(entry => entry.item.id))} items={entries.items.map(entry => entry.item)} fields={[]} provenance={provenance} onOpen={open} renderItem={renderItem} /> : <ItemsTable rows={entries.items.map(entry => entry.item)} columns={['$name', '$modified_at', '$keywords']} fields={[]} publishing={false} names={names} selectable={false} selected={new Map()} sortable={new Set(['$name', '$modified_at'])} sort={sort} onSort={next => setSort(next ?? { field: '$modified_at', direction: 'desc' })} onToggle={() => {}} onToggleAll={() => {}} onOpen={open} provenance={provenance} renderRow={renderItem} />)}
       {entries.isSuccess && !entries.items.length && <EmptyState title="No matching items">Matching items appear here automatically as their information changes.</EmptyState>}
       {classification && writable && entries.items.length > 0 && <details className="mt-4 text-sm"><summary className="cursor-pointer">Remove a classification</summary><ul>{entries.items.filter(entry => entry.item.kind === 'item').map(entry => <li key={entry.item.id} className="flex items-center justify-between gap-2 py-1"><span>{entry.item.name}</span><Button size="sm" onClick={() => setUnclassifying(entry)}>Remove classification</Button></li>)}</ul></details>}
       {entries.hasNextPage && <Button className="mt-3" disabled={entries.isFetchingNextPage} onClick={() => void entries.fetchNextPage()}>More results</Button>}

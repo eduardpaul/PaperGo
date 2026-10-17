@@ -9,11 +9,11 @@ The index holds one **document** per item or folder and surface. A collection wi
 | Part | From |
 | --- | --- |
 | Name | the surface's name |
-| Keywords | the surface's tags, and the names, localized labels and synonyms of the terms in its term and keywords fields; matches here and in the name rank highest |
+| Keywords | the names, localized labels and synonyms of the terms in its term and keywords fields; matches here and in the name rank highest |
 | Body | the text of the surface's text, note, email, URL, choice and number fields. Dates, booleans, people and lookups are not text; term and keywords fields give their words to keywords. A field's `search_weight` moves its text to keywords (`high`) or leaves it out (`none`) |
 | Stems | the words of the name, keywords and body as their stems in each of `SEARCH_LANGUAGES` |
 | Fields | every field value except notes, typed as collection queries index them, for [field filters](#field-filters) |
-| Filters | kind, workspace, collection, parent folder, content type, tags, terms, creator, last modifier, creation and modification times |
+| Filters | kind, workspace, collection, parent folder, content type, keywords, terms, creator, last modifier, creation and modification times |
 | Access | the entry's permission scope |
 
 The text of files is indexed too, as [file content](#file-content), separately from metadata so it is searched only when the caller has `document.read`.
@@ -73,7 +73,8 @@ A revoked permission or membership therefore applies to the next search at once,
 | `kind` | `item` (default), `folder`, or both comma-separated |
 | `workspace_id`, `collection_id`, `content_type_id` | restrict to one |
 | `term_id` | items holding the term, a descendant of it, or a term merged into it |
-| `tag`, `created_by`, `modified_by` | exact values |
+| `keyword` | shared keyword term ID or label; matches intrinsic keywords and keywords fields |
+| `created_by`, `modified_by` | exact values |
 | `modified_from`, `modified_to` | RFC 3339 times |
 | `facets` | `false` leaves out the facet counts |
 | `$top` | page size, default 25, at most 100 |
@@ -81,7 +82,7 @@ A revoked permission or membership therefore applies to the next search at once,
 
 `q` takes words, which all must match, quoted `"phrases"`, `OR` between words, `-word` or `NOT word` to exclude, and `word*` for a prefix; at most 32 terms and 256 bytes. Matching ignores case and diacritics.
 
-The response holds `value` (hits), `total`, `mode` (the mode the search ran in), `facets` (counts by workspace, collection, content type, term and tag) and `@odata.nextLink`. Each hit gives `id`, `kind`, `surface`, `workspace_id`, `collection_id`, `content_type_id`, `name`, `rank`, `modified_at`, `modified_by`, `matched_by`, and a `snippet` around the first match with `highlights` (byte ranges in the snippet): from the best matching chunk of the file, with its `page`, when the file's text matched, else from the body. Hits are ordered by relevance, the name and keywords weighing ten times the body. `matched_by` says how a hit was found: `keyword`, `semantic` or both.
+The response holds `value` (hits), `total`, `mode` (the mode the search ran in), `facets` (counts by workspace, collection, content type, term and keyword) and `@odata.nextLink`. Each hit gives `id`, `kind`, `surface`, `workspace_id`, `collection_id`, `content_type_id`, `name`, `rank`, `modified_at`, `modified_by`, `matched_by`, and a `snippet` around the first match with `highlights` (byte ranges in the snippet): from the best matching chunk of the file, with its `page`, when the file's text matched, else from the body. Hits are ordered by relevance, the name and keywords weighing ten times the body. `matched_by` says how a hit was found: `keyword`, `semantic` or both.
 
 ## Semantic and hybrid search
 
@@ -132,7 +133,7 @@ On Linux/glibc, PaperGo limits native allocator arenas and trims unused allocato
 
 After five minutes without a native search or write, maintenance flushes and closes both native collections. The idle deadline is checked every 30 seconds, after active readers and writers finish. The next full-text/vector search or write reopens the persisted indexes without rebuilding or embedding again. The source catalog and cached vectors stay in Go memory, so status checks, exports, embedding work lists and filter-only queries remain available without waking the native indexes. The store keeps its exclusive ownership lease until shutdown.
 
-`python3 scripts/native.py` installs the pinned zvec v0.7.0 SDK for Linux amd64/arm64, macOS ARM64 and Windows amd64, along with the other native dependencies. Source `.tools/native/env.sh` or `.tools/native/env.ps1` before invoking Go directly. The Go SDK owns native calls, resource handles and thread-local errors; PaperGo uses its copied string-array setter for tag/term filters. CI tests real native stores. Platform ZIPs contain the native libraries and notices alongside the executables. Extract the shared assets ZIP into the same directory to supply models. The Docker image includes that directory layout under `/opt/papergo`.
+`python3 scripts/native.py` installs the pinned zvec v0.7.0 SDK for Linux amd64/arm64, macOS ARM64 and Windows amd64, along with the other native dependencies. Source `.tools/native/env.sh` or `.tools/native/env.ps1` before invoking Go directly. The Go SDK owns native calls, resource handles and thread-local errors; PaperGo uses its copied string-array setter for keyword/term filters. CI tests real native stores. Platform ZIPs contain the native libraries and notices alongside the executables. Extract the shared assets ZIP into the same directory to supply models. The Docker image includes that directory layout under `/opt/papergo`.
 
 Search paths must differ from the application database and its sidecar files, including through symbolic or hard links. The zvec directory must not overlap the database, blob directory or SQLite search file. Startup rejects unrelated databases at the search path.
 

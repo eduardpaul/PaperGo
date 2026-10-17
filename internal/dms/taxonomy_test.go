@@ -41,7 +41,7 @@ func TestOrganizationTaxonomyGroupsAndSets(t *testing.T) {
 	if _, err = s.CreateTermSet(testContext, "alice", TermSetInput{GroupID: system.ID, Key: "extra", Name: "Extra"}); err == nil {
 		t.Fatal("set in the system group")
 	}
-	if _, err = s.UpdateTermSet(testContext, "alice", keywords.ID, keywords.Version, TermSetInput{Name: "Tags"}); err == nil {
+	if _, err = s.UpdateTermSet(testContext, "alice", keywords.ID, keywords.Version, TermSetInput{Name: "Keywords"}); err == nil {
 		t.Fatal("closed the keywords set")
 	}
 	if err = s.DeleteTermSet(testContext, "alice", keywords.ID, keywords.Version); err == nil {

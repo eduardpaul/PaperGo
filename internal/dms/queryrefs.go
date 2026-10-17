@@ -66,7 +66,7 @@ func resolveFilter(f *FilterExpr, subject string, now time.Time, defs map[string
 			return &out, e
 		}
 		if !fieldKey.MatchString(f.Field) {
-			if _, d := systemField(f.Field); d == nil && f.Field != "$tags" {
+			if _, d := systemField(f.Field); d == nil && f.Field != "$keywords" {
 				return nil, invalid("invalid filter field")
 			}
 		}
@@ -84,7 +84,7 @@ func resolveFilter(f *FilterExpr, subject string, now time.Time, defs map[string
 			if len(f.Value) > 0 {
 				return nil, invalid("give either value or value_ref")
 			}
-			if f.ValueRef != "me" && f.Field == "$tags" {
+			if f.ValueRef != "me" && f.Field == "$keywords" {
 				return nil, invalid("date value_ref requires a date or datetime field")
 			}
 			value, e := relativeValue(f.ValueRef, subject, now)

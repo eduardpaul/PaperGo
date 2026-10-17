@@ -19,13 +19,13 @@ type FilteredBulkUpdate struct {
 	ContentTypeID *string        `json:"content_type_id,omitempty"`
 	Query         QuerySpec      `json:"query"`
 	Name          *string        `json:"name,omitempty"`
-	Tags          *[]string      `json:"tags,omitempty"`
+	Keywords      *[]string      `json:"keywords,omitempty"`
 	Values        map[string]any `json:"values,omitempty"`
 }
 
 func (s *Service) StartBulkUpdate(ctx context.Context, subject, collectionID string, in FilteredBulkUpdate) (out *ent.Operation, err error) {
-	if in.Name == nil && in.Tags == nil && len(in.Values) == 0 && in.ContentTypeID == nil {
-		return nil, invalid("a content type, name, tags or non-empty values patch is required")
+	if in.Name == nil && in.Keywords == nil && len(in.Values) == 0 && in.ContentTypeID == nil {
+		return nil, invalid("a content type, name, keywords or non-empty values patch is required")
 	}
 	if len(in.Query.Sort) != 0 || in.Query.GroupBy != "" {
 		return nil, invalid("bulk selection does not accept sort or group_by")
@@ -157,7 +157,7 @@ func (s *Service) bulkUpdateItem(ctx context.Context, op *ent.Operation, in Filt
 		if r.ContainerID == nil || *r.ContainerID != op.ContainerID || !contentKind(r.Kind) {
 			e = invalid("bulk target is outside the collection")
 		} else {
-			patch := UpdateResource{Name: in.Name, Tags: in.Tags, ContentTypeID: in.ContentTypeID}
+			patch := UpdateResource{Name: in.Name, Keywords: in.Keywords, ContentTypeID: in.ContentTypeID}
 			if len(in.Values) > 0 {
 				values := maps.Clone(in.Values)
 				patch.Values = &values

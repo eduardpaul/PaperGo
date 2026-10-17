@@ -603,7 +603,7 @@ func (s *Store) metadata(r *row, d search.Document, key string) {
 	for _, v := range d.TermIDs {
 		tokens = append(tokens, "t"+encode(v))
 	}
-	for _, v := range d.Tags {
+	for _, v := range d.KeywordIDs {
 		tokens = append(tokens, "g"+encode(v))
 	}
 	r.array("tokens", tokens)

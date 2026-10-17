@@ -292,7 +292,7 @@ function Cell({
   names: Map<string, string>;
   formatDate: (value: string) => string;
 }) {
-  if (column === '$tags') return <span className="text-muted">{(resource.tags ?? []).join(', ') || '—'}</span>;
+  if (column === '$keywords') return <span className="text-muted">{(resource.keywords ?? []).map(id => names.get(id) ?? id).join(', ') || '—'}</span>;
   if (column === '$modified_at' || column === '$created_at') {
     const value = column === '$modified_at' ? resource.updated_at : resource.created_at;
     return <span className="whitespace-nowrap text-muted">{value ? formatDate(value) : '—'}</span>;

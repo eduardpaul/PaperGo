@@ -230,7 +230,7 @@ func inputs(properties string, required ...string) map[string]any {
 
 const (
 	itemIDProp  = `"item_id": {"type": "string", "title": "Item", "description": "The item; defaults to the run's item.", "x-papergo": {"kind": "item"}}`
-	itemOutput  = `{"type": "object", "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "values": {"type": "object"}, "collection_id": {"type": "string"}, "content_type_id": {"type": "string"}, "version": {"type": "integer"}, "published": {"type": "boolean"}, "created_by": {"type": "string"}, "updated_by": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}, "updated_at": {"type": "string", "format": "date-time"}}}`
+	itemOutput  = `{"type": "object", "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "keywords": {"type": "array", "items": {"type": "string"}}, "values": {"type": "object"}, "collection_id": {"type": "string"}, "content_type_id": {"type": "string"}, "version": {"type": "integer"}, "published": {"type": "boolean"}, "created_by": {"type": "string"}, "updated_by": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}, "updated_at": {"type": "string", "format": "date-time"}}}`
 	filterProp  = `{"type": "object", "title": "Filter", "description": "A query filter, as in collection queries."}`
 	collectProp = `"collection_id": {"type": "string", "title": "List or library", "x-papergo": {"kind": "collection"}}`
 )
@@ -256,11 +256,11 @@ func init() {
 		InputSchema: inputs(`"message": {"type": "string", "title": "Message"}`, "message"), run: runFail})
 	register(&Activity{Key: "item.get", Kind: "action", Description: "Reads an item; its fields become the output.",
 		InputSchema: inputs(itemIDProp), OutputSchema: forms.MustParse(itemOutput), run: runItemGet})
-	register(&Activity{Key: "item.update", Kind: "action", Description: "Changes an item's content type, name, tags or field values. Values are merged; null removes a value.",
-		InputSchema:  inputs(itemIDProp + `, "expected_version":{"type":"integer","title":"Expected item version","minimum":1},"expected_blob_id":{"type":"string","title":"Expected current file"},"expected_taxonomy":` + taxonomyGuardSchema + `, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`),
+	register(&Activity{Key: "item.update", Kind: "action", Description: "Changes an item's content type, name, keywords or field values. Values are merged; null removes a value.",
+		InputSchema:  inputs(itemIDProp + `, "expected_version":{"type":"integer","title":"Expected item version","minimum":1},"expected_blob_id":{"type":"string","title":"Expected current file"},"expected_taxonomy":` + taxonomyGuardSchema + `, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "keywords": {"type": "array", "title": "Keywords", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`),
 		OutputSchema: forms.MustParse(itemOutput), run: runItemUpdate})
 	register(&Activity{Key: "item.create", Kind: "action", Description: "Creates an item; the output has its item_id.",
-		InputSchema:  inputs(collectProp+`, "parent_id": {"type": "string", "title": "Folder", "description": "Defaults to the collection."}, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "tags": {"type": "array", "title": "Tags", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`, "collection_id", "name"),
+		InputSchema:  inputs(collectProp+`, "parent_id": {"type": "string", "title": "Folder", "description": "Defaults to the collection."}, "content_type_id": {"type": "string", "title": "Content type"}, "name": {"type": "string", "title": "Name"}, "keywords": {"type": "array", "title": "Keywords", "items": {"type": "string"}}, "values": {"type": "object", "title": "Field values"}`, "collection_id", "name"),
 		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"item_id": {"type": "string"}, "item": ` + itemOutput + `}}`), run: runItemCreate})
 	register(&Activity{Key: "items.query", Kind: "action", Description: "Queries a collection's items (head surface); the output has items and count.",
 		InputSchema:  inputs(collectProp+`, "filter": `+filterProp+`, "sort": {"type": "array", "title": "Sort", "maxItems": 8, "items": {"type": "object", "properties": {"field": {"type": "string"}, "direction": {"type": "string", "enum": ["asc", "desc"]}}, "required": ["field"]}}, "limit": {"type": "integer", "title": "Limit", "minimum": 1, "maximum": 100, "default": 50}`, "collection_id"),
@@ -307,7 +307,7 @@ func (e *env) load(id string) (*ent.Resource, error) {
 
 // snapshot is the token and output view of an item.
 func snapshot(r *ent.Resource) map[string]any {
-	out := map[string]any{"id": r.ID, "name": r.Name, "tags": anyList(r.Tags), "values": forms.Plain(r.Values), "version": r.Version, "created_by": r.CreatedBy, "updated_by": r.UpdatedBy, "created_at": r.CreatedAt.UTC().Format(time.RFC3339Nano), "updated_at": r.UpdatedAt.UTC().Format(time.RFC3339Nano), "published": r.PublishedRevisionID != nil}
+	out := map[string]any{"id": r.ID, "name": r.Name, "keywords": anyList(r.Keywords), "values": forms.Plain(r.Values), "version": r.Version, "created_by": r.CreatedBy, "updated_by": r.UpdatedBy, "created_at": r.CreatedAt.UTC().Format(time.RFC3339Nano), "updated_at": r.UpdatedAt.UTC().Format(time.RFC3339Nano), "published": r.PublishedRevisionID != nil}
 	if r.ContainerID != nil {
 		out["collection_id"] = *r.ContainerID
 	}
@@ -317,9 +317,9 @@ func snapshot(r *ent.Resource) map[string]any {
 	return out
 }
 
-func anyList(tags []string) []any {
-	out := make([]any, len(tags))
-	for i, t := range tags {
+func anyList(keywords []string) []any {
+	out := make([]any, len(keywords))
+	for i, t := range keywords {
 		out[i] = t
 	}
 	return out
@@ -393,6 +393,7 @@ func runItemHasTerms(e *env, in map[string]any) (outcome, error) {
 		}
 	}
 	values, err := e.t.ItemTerms(e.ctx, *r.ContainerID, r.Values)
+	values = append(values, r.Keywords...)
 	if err != nil {
 		return outcome{}, err
 	}
@@ -689,12 +690,12 @@ func runItemUpdate(e *env, in map[string]any) (outcome, error) {
 		}
 		u.Name = &name
 	}
-	if v, ok := in["tags"]; ok {
-		tags, err := e.strings("tags", v)
+	if v, ok := in["keywords"]; ok {
+		keywords, err := e.strings("keywords", v)
 		if err != nil {
 			return outcome{}, err
 		}
-		u.Tags = &tags
+		u.Keywords = &keywords
 	}
 	if v, ok := in["values"]; ok {
 		changes, err := e.object(v)
@@ -703,8 +704,8 @@ func runItemUpdate(e *env, in map[string]any) (outcome, error) {
 		}
 		u.Values = &changes
 	}
-	if u.Name == nil && u.Tags == nil && u.Values == nil && u.ContentTypeID == nil {
-		return outcome{}, errors.New("item.update needs a content type, name, tags or values")
+	if u.Name == nil && u.Keywords == nil && u.Values == nil && u.ContentTypeID == nil {
+		return outcome{}, errors.New("item.update needs a content type, name, keywords or values")
 	}
 	out, err := e.t.Update(e.ctx, e.author, id, r.Version, u)
 	if err != nil {
@@ -733,8 +734,8 @@ func runItemCreate(e *env, in map[string]any) (outcome, error) {
 			return outcome{}, err
 		}
 	}
-	if v, ok := in["tags"]; ok {
-		if c.Tags, err = e.strings("tags", v); err != nil {
+	if v, ok := in["keywords"]; ok {
+		if c.Keywords, err = e.strings("keywords", v); err != nil {
 			return outcome{}, err
 		}
 	}

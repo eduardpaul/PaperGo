@@ -15,7 +15,7 @@ import (
 // query counts the rows it may read.
 func (s *Service) countedGroups(ctx context.Context, subject, collection string, in QueryRequest, d *ent.FieldDefinition) (groups []QueryGroup, ok bool, err error) {
 	spec := in.Query
-	if in.After != "" || in.rowACL || spec.Filter != nil || spec.Search != "" || spec.Tag != "" || spec.ContentTypeID != "" || spec.ParentID != "" || spec.AncestorID != "" {
+	if in.After != "" || in.rowACL || spec.Filter != nil || spec.Search != "" || spec.Keyword != "" || spec.ContentTypeID != "" || spec.ParentID != "" || spec.AncestorID != "" {
 		return nil, false, nil
 	}
 	if d == nil || d.Type != "choice" || d.Options.Multiple {

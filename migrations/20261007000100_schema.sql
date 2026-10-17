@@ -85,11 +85,11 @@ CREATE TABLE blob_previews (
 );
 CREATE UNIQUE INDEX blobpreview_sha256 ON blob_previews(sha256);
 CREATE INDEX blobpreview_object_key ON blob_previews(object_key);
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, personal_owner_id TEXT REFERENCES identity_users(id) CHECK(personal_owner_id IS NULL OR kind='workspace'), system_key TEXT CHECK(system_key IS NULL OR (kind='library' AND system_key IN ('home.documents','home.inbox'))), `kind` text NOT NULL, `name` text NOT NULL, default_currency TEXT NOT NULL DEFAULT '' CHECK(default_currency='' OR (kind='workspace' AND length(default_currency)=3 AND default_currency NOT GLOB '*[^A-Z]*')), `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind IN ('workspace','list','library') OR description='')), allow_folders BOOLEAN NOT NULL DEFAULT 1 CHECK(allow_folders IN (0,1) AND (kind IN ('list','library') OR allow_folders=1)), `tags` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, versioning TEXT NOT NULL DEFAULT 'off' CHECK(versioning IN ('off','major') AND (kind IN ('list','library') OR versioning='off')), max_versions INTEGER NOT NULL DEFAULT 50 CHECK(max_versions BETWEEN 1 AND 500 AND (kind IN ('list','library') OR max_versions=50)), webdav_enabled BOOLEAN NOT NULL DEFAULT 0, duplicate_policy TEXT NOT NULL DEFAULT 'warn' CHECK(duplicate_policy IN ('allow','warn','block') AND (kind='library' OR duplicate_policy='warn')), name_key TEXT NULL, deleted_at DATETIME NULL, deleted_by TEXT NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind IN ('item','folder'))=(content_type_id IS NOT NULL)), FOREIGN KEY(content_type_id) REFERENCES content_types(id));
-CREATE TABLE resource_tags (
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, personal_owner_id TEXT REFERENCES identity_users(id) CHECK(personal_owner_id IS NULL OR kind='workspace'), system_key TEXT CHECK(system_key IS NULL OR (kind='library' AND system_key IN ('home.documents','home.inbox'))), `kind` text NOT NULL, `name` text NOT NULL, default_currency TEXT NOT NULL DEFAULT '' CHECK(default_currency='' OR (kind='workspace' AND length(default_currency)=3 AND default_currency NOT GLOB '*[^A-Z]*')), `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind IN ('workspace','list','library') OR description='')), allow_folders BOOLEAN NOT NULL DEFAULT 1 CHECK(allow_folders IN (0,1) AND (kind IN ('list','library') OR allow_folders=1)), `keywords` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, versioning TEXT NOT NULL DEFAULT 'off' CHECK(versioning IN ('off','major') AND (kind IN ('list','library') OR versioning='off')), max_versions INTEGER NOT NULL DEFAULT 50 CHECK(max_versions BETWEEN 1 AND 500 AND (kind IN ('list','library') OR max_versions=50)), webdav_enabled BOOLEAN NOT NULL DEFAULT 0, duplicate_policy TEXT NOT NULL DEFAULT 'warn' CHECK(duplicate_policy IN ('allow','warn','block') AND (kind='library' OR duplicate_policy='warn')), name_key TEXT NULL, deleted_at DATETIME NULL, deleted_by TEXT NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind IN ('item','folder'))=(content_type_id IS NOT NULL)), FOREIGN KEY(content_type_id) REFERENCES content_types(id));
+CREATE TABLE resource_keywords (
   resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-  tag TEXT NOT NULL,
-  PRIMARY KEY (tag,resource_id)
+  keyword TEXT NOT NULL REFERENCES terms(id),
+  PRIMARY KEY (keyword,resource_id)
 ) WITHOUT ROWID;
 CREATE TABLE schema_revisions (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, container_id TEXT NOT NULL REFERENCES resources(id),
@@ -116,7 +116,7 @@ CREATE TABLE item_revisions (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
  item_id TEXT NOT NULL REFERENCES resources(id), container_id TEXT NOT NULL REFERENCES resources(id),
  schema_revision_id TEXT NOT NULL, content_type_id TEXT NOT NULL, revision_number INTEGER NOT NULL CHECK(revision_number>0),
- name TEXT NOT NULL, tags JSON NOT NULL CHECK(json_valid(tags) AND json_type(tags)='array'), payload JSON NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
+ name TEXT NOT NULL, keywords JSON NOT NULL CHECK(json_valid(keywords) AND json_type(keywords)='array'), payload JSON NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
  created_by TEXT NOT NULL, blob_id TEXT REFERENCES blobs(id), filename TEXT NOT NULL DEFAULT '' CHECK((blob_id IS NULL)=(filename='')),
  FOREIGN KEY(container_id,schema_revision_id) REFERENCES schema_revisions(container_id,id),
   FOREIGN KEY(content_type_id) REFERENCES content_types(id)
@@ -135,11 +135,11 @@ CREATE TABLE item_surfaces (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, item_id TEXT NOT NULL REFERENCES resources(id),
  container_id TEXT NOT NULL REFERENCES resources(id), workspace_id TEXT NOT NULL,
  surface TEXT NOT NULL CHECK(surface IN ('head','published')), revision_id TEXT NOT NULL,
- name TEXT NOT NULL, tags JSON NOT NULL CHECK(json_valid(tags) AND json_type(tags)='array'), payload JSON NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
+ name TEXT NOT NULL, keywords JSON NOT NULL CHECK(json_valid(keywords) AND json_type(keywords)='array'), payload JSON NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
  item_created_at TEXT NOT NULL, item_created_by TEXT NOT NULL, modified_at TEXT NOT NULL, modified_by TEXT NOT NULL,
  FOREIGN KEY(item_id,revision_id) REFERENCES item_revisions(item_id,id)
 );
-CREATE TABLE item_surface_tags(surface_id TEXT NOT NULL REFERENCES item_surfaces(id) ON DELETE CASCADE,tag TEXT NOT NULL,PRIMARY KEY(tag,surface_id)) WITHOUT ROWID;
+CREATE TABLE item_surface_keywords(surface_id TEXT NOT NULL REFERENCES item_surfaces(id) ON DELETE CASCADE,keyword TEXT NOT NULL REFERENCES terms(id),PRIMARY KEY(keyword,surface_id)) WITHOUT ROWID;
 CREATE TABLE "field_values" (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, surface_id TEXT NOT NULL REFERENCES item_surfaces(id),
  container_id TEXT NOT NULL, item_id TEXT NOT NULL, surface TEXT NOT NULL, field_key TEXT NOT NULL, field_type TEXT NOT NULL,
@@ -370,7 +370,7 @@ CREATE INDEX collectiontype_content_type_id_container_id ON collection_types(con
 CREATE UNIQUE INDEX collectiontype_container_id ON collection_types(container_id) WHERE is_default=1;
 CREATE UNIQUE INDEX businesskey_container_id_field_key_value ON business_keys(container_id,field_key,value);
 CREATE INDEX businesskey_item_id ON business_keys(item_id);
-CREATE INDEX resource_tags_by_resource ON resource_tags(resource_id,tag);
+CREATE INDEX resource_keywords_by_resource ON resource_keywords(resource_id,keyword);
 CREATE INDEX resource_workspace_id_id_scope_id ON resources(workspace_id,id,scope_id);
 CREATE UNIQUE INDEX resource_parent_id_name_key ON resources(parent_id,name_key) WHERE name_key IS NOT NULL;
 CREATE INDEX resource_head_revision_id ON resources(head_revision_id) WHERE head_revision_id IS NOT NULL;
@@ -389,7 +389,8 @@ CREATE INDEX itemsurface_workspace_id_surface_item_id ON item_surfaces(workspace
 CREATE INDEX itemsurface_container_id_surface_item_id ON item_surfaces(container_id,surface,item_id);
 CREATE INDEX itemsurface_revision_id ON item_surfaces(revision_id);
 CREATE UNIQUE INDEX publication_item_id_version_action ON publications(item_id,version,action);
-CREATE INDEX item_surface_tags_by_surface ON item_surface_tags(surface_id,tag);
+CREATE INDEX item_surface_keywords_by_surface ON item_surface_keywords(surface_id,keyword);
+CREATE INDEX fieldvalue_field_type_value_text_item_id ON field_values(field_type,value_text,item_id);
 CREATE UNIQUE INDEX fieldvalue_surface_id_field_key_ordinal ON field_values(surface_id,field_key,ordinal);
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_integer_item_id ON field_values(container_id,surface,field_key,value_integer,item_id);
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_text_item_id ON field_values(container_id,surface,field_key,value_text,item_id);
@@ -466,12 +467,12 @@ CREATE TRIGGER resource_scope_inheritance AFTER UPDATE OF inherit_permissions ON
     SELECT new.id UNION ALL SELECT c.id FROM resources c JOIN sub ON c.parent_id=sub.id WHERE c.inherit_permissions
    ) SELECT id FROM sub);
 END;
-CREATE TRIGGER resource_tags_insert AFTER INSERT ON resources BEGIN
-  INSERT INTO resource_tags(resource_id,tag) SELECT new.id,value FROM json_each(new.tags);
+CREATE TRIGGER resource_keywords_insert AFTER INSERT ON resources BEGIN
+  INSERT INTO resource_keywords(resource_id,keyword) SELECT new.id,value FROM json_each(new.keywords);
 END;
-CREATE TRIGGER resource_tags_update AFTER UPDATE OF tags ON resources BEGIN
-  DELETE FROM resource_tags WHERE resource_id=old.id;
-  INSERT INTO resource_tags(resource_id,tag) SELECT new.id,value FROM json_each(new.tags);
+CREATE TRIGGER resource_keywords_update AFTER UPDATE OF keywords ON resources BEGIN
+  DELETE FROM resource_keywords WHERE resource_id=old.id;
+  INSERT INTO resource_keywords(resource_id,keyword) SELECT new.id,value FROM json_each(new.keywords);
 END;
 CREATE TRIGGER resource_validate_insert BEFORE INSERT ON resources BEGIN
   SELECT CASE WHEN new.kind IN ('item','folder') AND NOT EXISTS(SELECT 1 FROM collection_types WHERE container_id=new.container_id AND content_type_id=new.content_type_id) THEN RAISE(ABORT,'content type must be attached to its collection') END;
@@ -577,10 +578,10 @@ CREATE TRIGGER audit_retained BEFORE DELETE ON audit_events BEGIN
   SELECT RAISE(ABORT,'audit events are retained');
 END;
 CREATE TRIGGER publication_immutable BEFORE UPDATE ON publications BEGIN SELECT RAISE(ABORT,'publication snapshots are immutable'); END;
-CREATE TRIGGER item_surface_tags_insert AFTER INSERT ON item_surfaces BEGIN INSERT INTO item_surface_tags SELECT new.id,value FROM json_each(new.tags); END;
-CREATE TRIGGER item_surface_tags_update AFTER UPDATE OF tags ON item_surfaces BEGIN
- DELETE FROM item_surface_tags WHERE surface_id=old.id;
- INSERT INTO item_surface_tags SELECT new.id,value FROM json_each(new.tags);
+CREATE TRIGGER item_surface_keywords_insert AFTER INSERT ON item_surfaces BEGIN INSERT INTO item_surface_keywords SELECT new.id,value FROM json_each(new.keywords); END;
+CREATE TRIGGER item_surface_keywords_update AFTER UPDATE OF keywords ON item_surfaces BEGIN
+ DELETE FROM item_surface_keywords WHERE surface_id=old.id;
+ INSERT INTO item_surface_keywords SELECT new.id,value FROM json_each(new.keywords);
 END;
 -- Live counts of single-choice values per collection and surface, kept by
 -- triggers, so board columns count without reading every item. The row with
@@ -661,12 +662,12 @@ CREATE TRIGGER field_identity_immutable BEFORE UPDATE OF key,type,scale ON field
  THEN RAISE(ABORT,'field keys, types and scales are immutable') END;
 END;
 CREATE TRIGGER item_surface_validate_insert BEFORE INSERT ON item_surfaces BEGIN
- SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources r JOIN item_revisions v ON v.id=new.revision_id WHERE r.id=new.item_id AND r.kind IN ('item','folder') AND r.container_id=new.container_id AND r.workspace_id=new.workspace_id AND v.item_id=r.id AND v.name=new.name AND v.tags=new.tags AND v.payload=new.payload)
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources r JOIN item_revisions v ON v.id=new.revision_id WHERE r.id=new.item_id AND r.kind IN ('item','folder') AND r.container_id=new.container_id AND r.workspace_id=new.workspace_id AND v.item_id=r.id AND v.name=new.name AND v.keywords=new.keywords AND v.payload=new.payload)
  THEN RAISE(ABORT,'invalid surface projection') END;
 END;
 CREATE TRIGGER item_surface_validate_update BEFORE UPDATE ON item_surfaces BEGIN
  SELECT CASE WHEN new.item_id IS NOT old.item_id OR new.container_id IS NOT old.container_id OR new.workspace_id IS NOT old.workspace_id OR new.surface IS NOT old.surface
- OR NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.revision_id AND item_id=new.item_id AND name=new.name AND tags=new.tags AND payload=new.payload)
+ OR NOT EXISTS(SELECT 1 FROM item_revisions WHERE id=new.revision_id AND item_id=new.item_id AND name=new.name AND keywords=new.keywords AND payload=new.payload)
  THEN RAISE(ABORT,'invalid surface projection') END;
 END;
 CREATE TRIGGER additive_grants_insert BEFORE INSERT ON grants BEGIN

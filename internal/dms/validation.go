@@ -38,16 +38,29 @@ func validateName(name string) error {
 	}
 	return nil
 }
-func validateTags(tags []string) error {
-	if len(tags) > 50 {
-		return invalid("at most 50 tags are allowed")
+func validateKeywords(keywords []string) error {
+	if len(keywords) > 50 {
+		return invalid("at most 50 keywords are allowed")
 	}
 	seen := map[string]bool{}
-	for _, tag := range tags {
-		if strings.TrimSpace(tag) != tag || tag == "" || utf8.RuneCountInString(tag) > 64 || seen[tag] {
-			return invalid("tags must be unique, nonempty, trimmed strings of at most 64 characters")
+	for _, keyword := range keywords {
+		if strings.TrimSpace(keyword) != keyword || keyword == "" || utf8.RuneCountInString(keyword) > 255 || seen[keyword] {
+			return invalid("keywords must be unique, nonempty, trimmed strings of at most 255 characters")
 		}
-		seen[tag] = true
+		seen[keyword] = true
+	}
+	return nil
+}
+func validateChoices(choices []string) error {
+	if len(choices) > 50 {
+		return invalid("at most 50 choices are allowed")
+	}
+	seen := map[string]bool{}
+	for _, choice := range choices {
+		if strings.TrimSpace(choice) != choice || choice == "" || utf8.RuneCountInString(choice) > 64 || seen[choice] {
+			return invalid("choices must be unique, nonempty, trimmed strings of at most 64 characters")
+		}
+		seen[choice] = true
 	}
 	return nil
 }

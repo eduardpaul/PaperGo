@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"papergo/ent"
 	"papergo/ent/contenttype"
-	"papergo/internal/model"
 	"reflect"
 	"sort"
 )
@@ -32,8 +31,7 @@ func builtInCollectionTemplates() map[string]CollectionTemplate {
 		"documents": {Key: "documents", Name: "Documents", Description: "Document library with descriptions and keywords", Kind: "library", AllowFolders: true, Versioning: "off", MaxVersions: 50,
 			ContentTypes: []TemplateInput{{Key: "document", Name: "Document", Fields: []CreateField{
 				{Key: "description", Label: "Description", Type: "note"},
-				{Key: "keywords", Label: "Keywords", Type: "keywords", Indexed: true, Options: model.FieldOptions{Multiple: true}},
-			}}}, Views: []ViewInput{{Name: "All documents", Columns: []string{"$name", "description", "keywords"}, Layout: "table", IsDefault: true}}},
+			}}}, Views: []ViewInput{{Name: "All documents", Columns: []string{"$name", "description", "$keywords"}, Layout: "table", IsDefault: true}}},
 		"contacts": {Key: "contacts", Name: "Contacts", Description: "Contact list", Kind: "list", AllowFolders: true, Versioning: "off", MaxVersions: 50,
 			ContentTypes: []TemplateInput{{Key: "contact", Name: "Contact", Fields: []CreateField{
 				{Key: "email", Label: "Email", Type: "email"}, {Key: "phone", Label: "Phone", Type: "text"},

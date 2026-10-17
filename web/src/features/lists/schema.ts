@@ -3,7 +3,7 @@ import type { ContentType, FieldDefinition, Resource } from '@/api/types';
 const labels: Record<string, string> = {
   $name: 'Name',
   $id: 'ID',
-  $tags: 'Tags',
+  $keywords: 'Keywords',
   $created_at: 'Created',
   $created_by: 'Created by',
   $modified_at: 'Modified',

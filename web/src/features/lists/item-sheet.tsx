@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/menu';
 import { Select } from '@/components/ui/select';
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
-import { TagInput } from '@/components/tag-input';
+import { KeywordInput } from '@/components/keyword-input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FilePreview } from '@/features/documents/preview';
 import { downloadContent, replaceContent } from '@/features/documents/transfer';
@@ -275,7 +275,7 @@ function Details({
   const managed = new Set(ownership.data?.managed_fields ?? []);
   const ownershipPending = item.kind === 'item' && !ownership.data;
   const [name, setName] = useState(item.name);
-  const [tags, setTags] = useState<string[]>(item.tags ?? []);
+  const [keywords, setKeywords] = useState<string[]>(item.keywords ?? []);
   const [contentTypeId, setContentTypeId] = useState(item.content_type_id ?? '');
   const visible = fieldsForType(fields, contentTypes, contentTypeId || item.content_type_id);
   const [values, setValues] = useState<Record<string, unknown>>({ ...(item.values ?? {}) });
@@ -283,7 +283,7 @@ function Details({
   const body = () => {
     const changes: Record<string, unknown> = {};
     if (name.trim() !== item.name) changes.name = name.trim();
-    if (tags.join('\n') !== (item.tags ?? []).join('\n')) changes.tags = tags;
+    if (keywords.join('\n') !== (item.keywords ?? []).join('\n')) changes.keywords = keywords;
     if (contentTypeId && contentTypeId !== (item.content_type_id ?? '')) changes.content_type_id = contentTypeId;
     const patch = valuesPatch(visible, item.values, values);
     if (patch) changes.values = patch;
@@ -296,6 +296,10 @@ function Details({
     mutationFn: async () =>
       (await api<Resource>(`/v1/resources/${item.id}`, { method: 'PATCH', ifMatch: item.version, body: body() })).data,
     onSuccess: async (updated) => {
+      setName(updated.name);
+      setKeywords(updated.keywords ?? []);
+      setValues({ ...(updated.values ?? {}) });
+      setContentTypeId(updated.content_type_id ?? '');
       queryClient.setQueryData(keys.resource(item.id), updated);
       await queryClient.invalidateQueries({ queryKey: keys.resources });
       toast.success('Saved');
@@ -310,7 +314,7 @@ function Details({
         if (dirty) save.mutate();
       }}
     >
-      <fieldset disabled={readOnly} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
+      <fieldset disabled={readOnly || save.isPending} className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
         {readOnly && <p className="text-xs text-muted">You can read this item but not change it.</p>}
         <Label htmlFor="item-name">Name</Label>
         <Input id="item-name" disabled={ownershipPending || managed.has('$name')} value={name} onChange={(event) => setName(event.target.value)} required />
@@ -337,8 +341,8 @@ function Details({
             onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
           />{managed.has(field.key) && <p className="text-xs text-muted">Managed by integration</p>}</fieldset>
         ))}
-        <Label htmlFor="item-tags">Tags</Label>
-        <TagInput id="item-tags" value={tags} onChange={setTags} workspaceId={item.workspace_id} disabled={readOnly} />
+        <Label htmlFor="item-keywords">Keywords</Label>
+        <KeywordInput id="item-keywords" value={keywords} onChange={setKeywords} disabled={readOnly} />
       </fieldset>
       {!readOnly && (
       <footer className="flex shrink-0 items-center justify-end gap-2 border-t bg-surface px-4 py-3">
@@ -348,7 +352,7 @@ function Details({
           disabled={!dirty || save.isPending}
           onClick={() => {
             setName(item.name);
-            setTags(item.tags ?? []);
+            setKeywords(item.keywords ?? []);
             setContentTypeId(item.content_type_id ?? '');
             setValues({ ...(item.values ?? {}) });
           }}
@@ -418,7 +422,7 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
       </div>
       <FilePreview itemId={item.id} version={item.version} alt={`Preview of ${item.name}`} />
       {canWrite && (
-        <p className="text-xs text-muted">Replacing the file keeps the name, tags and columns, and adds a new file version.</p>
+        <p className="text-xs text-muted">Replacing the file keeps the name, keywords and columns, and adds a new file version.</p>
       )}
       <section aria-labelledby="file-versions" className="flex flex-col gap-2">
         <h3 id="file-versions" className="text-[13px] font-medium">
@@ -474,7 +478,7 @@ function Content({ item, canWrite }: { item: Resource; canWrite: boolean }) {
         open={restoring !== undefined}
         onOpenChange={(open) => !open && setRestoring(undefined)}
         title={`Restore file version ${restoring?.version ?? ''}?`}
-        description="The earlier file becomes the current file as a new version. The name, tags and columns stay as they are, and the current file stays in the version list."
+        description="The earlier file becomes the current file as a new version. The name, keywords and columns stay as they are, and the current file stays in the version list."
         confirm="Restore file"
         busy={restore.isPending}
         error={restore.error}
@@ -507,7 +511,7 @@ function Versions({ item, collection, canWrite }: { item: Resource; collection: 
       <p className="text-xs text-muted">
         {collection.versioning === 'off'
           ? `Version history is off for this ${collection.kind === 'library' ? 'library' : 'list'}. Retained earlier versions are shown.`
-          : 'Restoring brings back the name, tags and columns of that version as a new version.'}
+          : 'Restoring brings back the name, keywords and columns of that version as a new version.'}
         {collection.kind === 'library' && ' The file stays as it is; restore files on the File tab.'}
       </p>
       {rows.map((revision) => (

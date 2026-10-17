@@ -35,8 +35,8 @@ type ItemSurface struct {
 	RevisionID string `json:"revision_id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
-	// Tags holds the value of the "tags" field.
-	Tags []string `json:"tags,omitempty"`
+	// Keywords holds the value of the "keywords" field.
+	Keywords []string `json:"keywords,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload jsontext.Value `json:"payload,omitempty"`
 	// ItemCreatedAt holds the value of the "item_created_at" field.
@@ -91,7 +91,7 @@ func (*ItemSurface) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case itemsurface.FieldTags, itemsurface.FieldPayload:
+		case itemsurface.FieldKeywords, itemsurface.FieldPayload:
 			values[i] = new([]byte)
 		case itemsurface.FieldID, itemsurface.FieldItemID, itemsurface.FieldContainerID, itemsurface.FieldWorkspaceID, itemsurface.FieldSurface, itemsurface.FieldRevisionID, itemsurface.FieldName, itemsurface.FieldItemCreatedAt, itemsurface.FieldItemCreatedBy, itemsurface.FieldModifiedAt, itemsurface.FieldModifiedBy:
 			values[i] = new(sql.NullString)
@@ -160,12 +160,12 @@ func (_m *ItemSurface) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Name = value.String
 			}
-		case itemsurface.FieldTags:
+		case itemsurface.FieldKeywords:
 			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field tags", values[i])
+				return fmt.Errorf("unexpected type %T for field keywords", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.Tags); err != nil {
-					return fmt.Errorf("unmarshal field tags: %w", err)
+				if err := json.Unmarshal(*value, &_m.Keywords); err != nil {
+					return fmt.Errorf("unmarshal field keywords: %w", err)
 				}
 			}
 		case itemsurface.FieldPayload:
@@ -267,8 +267,8 @@ func (_m *ItemSurface) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	builder.WriteString("tags=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Tags))
+	builder.WriteString("keywords=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Keywords))
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Payload))

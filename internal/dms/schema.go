@@ -76,7 +76,7 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 		if len(*in.Choices) == 0 {
 			return nil, invalid("choice field requires choices")
 		}
-		if err = validateTags(*in.Choices); err != nil {
+		if err = validateChoices(*in.Choices); err != nil {
 			return
 		}
 	}
@@ -111,7 +111,7 @@ func (s *Service) updateCatalogField(ctx context.Context, subject string, d *ent
 		return nil, e
 	}
 	if len(candidate.Options.DefaultValue) > 0 {
-		if e = s.normalizeItemValues(ctx, subject, []*ent.FieldDefinition{&candidate}, map[string]any{}, nil, true); e != nil {
+		if e = s.normalizeKeywordDefault(ctx, subject, &candidate); e != nil {
 			return nil, e
 		}
 	}

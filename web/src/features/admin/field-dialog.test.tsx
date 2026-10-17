@@ -65,3 +65,18 @@ it.each([['EUR', 'EUR'], ['', 'GBP']])('preselects currency using workspace=%s a
   expect(JSON.parse(String(init?.body)).options.currency_code).toBe(expected);
   client.clear();
 });
+
+it('requires selecting a term set for a taxonomy field', async () => {
+  const fetch = vi.fn(async (input: URL | string) => new Response(JSON.stringify(new URL(String(input)).pathname === '/v1/term-sets' ? { value: [{ id: 'departments', name: 'Departments' }] } : {})));
+  vi.stubGlobal('fetch', fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><FieldDialog onClose={vi.fn()} /></QueryClientProvider>);
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Department' } });
+  fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'term' } });
+  const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save field' });
+  expect(save.disabled).toBe(true);
+  expect(await screen.findByRole('option', { name: 'Departments' })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Term set'), { target: { value: 'departments' } });
+  expect(save.disabled).toBe(false);
+  client.clear();
+});

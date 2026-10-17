@@ -71,7 +71,7 @@ func scalarMatch(d search.Document, f search.Filter) bool {
 	if !visible(d, f) || len(f.Kinds) > 0 && !slices.Contains(f.Kinds, d.Kind) {
 		return false
 	}
-	if f.WorkspaceID != "" && d.WorkspaceID != f.WorkspaceID || f.CollectionID != "" && d.CollectionID != f.CollectionID || f.ContentTypeID != "" && d.ContentTypeID != f.ContentTypeID || f.CreatedBy != "" && d.CreatedBy != f.CreatedBy || f.ModifiedBy != "" && d.ModifiedBy != f.ModifiedBy || f.Tag != "" && !slices.Contains(d.Tags, f.Tag) {
+	if f.WorkspaceID != "" && d.WorkspaceID != f.WorkspaceID || f.CollectionID != "" && d.CollectionID != f.CollectionID || f.ContentTypeID != "" && d.ContentTypeID != f.ContentTypeID || f.CreatedBy != "" && d.CreatedBy != f.CreatedBy || f.ModifiedBy != "" && d.ModifiedBy != f.ModifiedBy || f.Keyword != "" && !slices.Contains(d.KeywordIDs, f.Keyword) {
 		return false
 	}
 	if !f.ModifiedFrom.IsZero() && d.ModifiedAt.Before(f.ModifiedFrom) || !f.ModifiedTo.IsZero() && !d.ModifiedAt.Before(f.ModifiedTo) {
@@ -422,8 +422,8 @@ func (s *Store) facets(matches []match) *search.Facets {
 		for _, term := range slices.Compact(slices.Sorted(slices.Values(d.TermIDs))) {
 			counts[3][term]++
 		}
-		for _, tag := range slices.Compact(slices.Sorted(slices.Values(d.Tags))) {
-			counts[4][tag]++
+		for _, keyword := range slices.Compact(slices.Sorted(slices.Values(d.KeywordIDs))) {
+			counts[4][keyword]++
 		}
 	}
 	values := func(counts map[string]int) []search.FacetValue {
@@ -442,7 +442,7 @@ func (s *Store) facets(matches []match) *search.Facets {
 		}
 		return out
 	}
-	return &search.Facets{Workspace: values(counts[0]), Collection: values(counts[1]), ContentType: values(counts[2]), Term: values(counts[3]), Tag: values(counts[4])}
+	return &search.Facets{Workspace: values(counts[0]), Collection: values(counts[1]), ContentType: values(counts[2]), Term: values(counts[3]), Keyword: values(counts[4])}
 }
 
 func (s *Store) Match(ctx context.Context, q search.MatchQuery) (out search.Matches, err error) {

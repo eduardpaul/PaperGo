@@ -60,7 +60,7 @@ func packageReferences(value any, visit func(string), fieldTypes map[string]stri
 		}
 	case map[string]any:
 		for key, child := range v {
-			if slices.Contains([]string{"name", "label", "title", "description", "choices", "search", "tag"}, key) || (key == "value" && literalPackageFilter(v, fieldTypes) && !personPackageFilter(v, fieldTypes)) {
+			if slices.Contains([]string{"name", "label", "title", "description", "choices", "search"}, key) || (key == "value" && literalPackageFilter(v, fieldTypes) && !personPackageFilter(v, fieldTypes)) {
 				continue
 			}
 			if key == "options" && !portableDependencyType(fmt.Sprint(v["type"])) {
@@ -299,7 +299,7 @@ func remapPackageJSON(value any, ids map[string]string, fieldTypes map[string]st
 	case map[string]any:
 		out := make(map[string]any, len(v))
 		for key, child := range v {
-			if slices.Contains([]string{"choices", "name", "label", "title", "description", "search", "tag"}, key) || (key == "value" && literalPackageFilter(v, fieldTypes)) {
+			if slices.Contains([]string{"choices", "name", "label", "title", "description", "search"}, key) || (key == "value" && literalPackageFilter(v, fieldTypes)) {
 				out[key] = child
 				continue
 			}
@@ -347,7 +347,7 @@ func remapPackageRow(table string, row map[string]any, ids map[string]string, js
 					}
 				}
 			}
-			if slices.Contains([]string{"tags", "choices", "changed_fields", "columns", "template_keys", "labels", "synonyms"}, key) {
+			if slices.Contains([]string{"choices", "changed_fields", "columns", "template_keys", "labels", "synonyms"}, key) {
 				mapped = node
 			}
 			raw, err := json.Marshal(mapped)
@@ -739,7 +739,8 @@ func preserveWorkspaceValues(table string, source, mapped map[string]any, graph 
 		}
 	}
 	if table == "publications" {
-		// Snapshot metadata contains entity references; title/tags and typed values do not.
+		// Snapshot keyword IDs and other entity references follow the imported graph.
+		values["keywords"] = remapPackageJSON(values["keywords"], ids, nil)
 		for _, key := range []string{"id", "revision_id", "schema_revision_id", "blob_id"} {
 			if id, ok := values[key].(string); ok && ids[id] != "" {
 				values[key] = ids[id]
@@ -782,7 +783,7 @@ func validateWorkspaceReferences(p corePackage) error {
 				}
 			}
 		case string:
-			if slices.Contains(referenceKeys, key) || key == "field_ids" || key == "terms" {
+			if slices.Contains(referenceKeys, key) || key == "field_ids" || key == "terms" || key == "keywords" || key == "keyword" {
 				if _, err := uuid.Parse(v); err == nil && !known[v] {
 					return invalid("workspace package has an unresolved reference in " + key)
 				}
@@ -965,6 +966,17 @@ func validateWorkspaceValues(p corePackage) error {
 		}
 		return check(value, known)
 	}
+	for _, table := range []string{"resources", "item_revisions", "item_surfaces"} {
+		for _, row := range rows[table] {
+			var ids any
+			if err := json.Unmarshal([]byte(fmt.Sprint(row["keywords"])), &ids); err != nil {
+				return err
+			}
+			if err := check(ids, terms); err != nil {
+				return err
+			}
+		}
+	}
 	for _, schema := range graph.schemas {
 		for _, field := range schema.Fields {
 			if len(field.Options.DefaultValue) > 0 && portableDependencyType(field.Type) {
@@ -990,6 +1002,9 @@ func validateWorkspaceValues(p corePackage) error {
 			}
 			schemaID := row["schema_revision_id"]
 			if table == "publications" {
+				if err := check(values["keywords"], terms); err != nil {
+					return err
+				}
 				schemaID = values["schema_revision_id"]
 				values, _ = values["values"].(map[string]any)
 			}
@@ -1017,7 +1032,7 @@ func workspaceRowReferences(table string, row map[string]any, graph workspaceVal
 		if !ok || !(strings.HasPrefix(text, "{") || strings.HasPrefix(text, "[")) {
 			continue
 		}
-		if slices.Contains([]string{"tags", "choices", "changed_fields", "columns", "template_keys", "models", "labels", "synonyms"}, column) || table == "integration_revision_data" {
+		if slices.Contains([]string{"choices", "changed_fields", "columns", "template_keys", "models", "labels", "synonyms"}, column) || table == "integration_revision_data" {
 			continue
 		}
 		var node any
@@ -1038,6 +1053,7 @@ func workspaceRowReferences(table string, row map[string]any, graph workspaceVal
 			var schema SchemaDefinition
 			if table == "publications" {
 				schema = graph.schemas[fmt.Sprint(payload["schema_revision_id"])]
+				packageReferences(payload["keywords"], visit, fieldTypes)
 				packageReferences(payload["schema_revision_id"], visit, fieldTypes)
 				payload, _ = payload["values"].(map[string]any)
 			} else if revision != nil {
@@ -1176,7 +1192,7 @@ func literalPackageFilter(node map[string]any, types map[string]string) bool {
 		return false
 	}
 	if strings.HasPrefix(field, "$") {
-		return !slices.Contains([]string{"$id", "$parent_id", "$container_id", "$workspace_id", "$content_type_id"}, field)
+		return !slices.Contains([]string{"$id", "$keywords", "$parent_id", "$container_id", "$workspace_id", "$content_type_id"}, field)
 	}
 	kind := types[field]
 	return kind != "" && kind != "mixed" && !portableReferenceType(kind)

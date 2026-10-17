@@ -188,7 +188,7 @@ func (s *Store) upsertDocuments(ctx context.Context, tx *sql.Tx, docs []search.D
 		if err != nil {
 			return err
 		}
-		for _, statement := range []string{`DELETE FROM doc_fts WHERE rowid=?`, `DELETE FROM document_terms WHERE doc=?`, `DELETE FROM document_tags WHERE doc=?`, `DELETE FROM document_fields WHERE doc=?`} {
+		for _, statement := range []string{`DELETE FROM doc_fts WHERE rowid=?`, `DELETE FROM document_terms WHERE doc=?`, `DELETE FROM document_keywords WHERE doc=?`, `DELETE FROM document_fields WHERE doc=?`} {
 			if _, err = tx.ExecContext(ctx, statement, rowid); err != nil {
 				return err
 			}
@@ -217,8 +217,8 @@ func (s *Store) upsertDocuments(ctx context.Context, tx *sql.Tx, docs []search.D
 				return err
 			}
 		}
-		for _, tag := range unique(d.Tags) {
-			if _, err = tx.ExecContext(ctx, `INSERT INTO document_tags(tag,doc) VALUES (?,?)`, tag, rowid); err != nil {
+		for _, keyword := range unique(d.KeywordIDs) {
+			if _, err = tx.ExecContext(ctx, `INSERT INTO document_keywords(keyword,doc) VALUES (?,?)`, keyword, rowid); err != nil {
 				return err
 			}
 		}
@@ -280,7 +280,7 @@ func deleteRows(ctx context.Context, tx *sql.Tx, where string, args ...any) erro
 		return err
 	}
 	for _, id := range ids {
-		for _, statement := range []string{`DELETE FROM doc_fts WHERE rowid=?`, `DELETE FROM document_terms WHERE doc=?`, `DELETE FROM document_tags WHERE doc=?`, `DELETE FROM document_fields WHERE doc=?`, `DELETE FROM documents WHERE rowid=?`} {
+		for _, statement := range []string{`DELETE FROM doc_fts WHERE rowid=?`, `DELETE FROM document_terms WHERE doc=?`, `DELETE FROM document_keywords WHERE doc=?`, `DELETE FROM document_fields WHERE doc=?`, `DELETE FROM documents WHERE rowid=?`} {
 			if _, err = tx.ExecContext(ctx, statement, id); err != nil {
 				return err
 			}

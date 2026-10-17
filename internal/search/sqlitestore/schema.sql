@@ -19,8 +19,8 @@ CREATE INDEX documents_modified ON documents (modified_at, resource_id);
 CREATE INDEX documents_stamp ON documents (stamp);
 CREATE TABLE document_terms (term_id TEXT NOT NULL, doc INTEGER NOT NULL REFERENCES documents(rowid) ON DELETE CASCADE, PRIMARY KEY (term_id, doc)) WITHOUT ROWID;
 CREATE INDEX document_terms_doc ON document_terms (doc);
-CREATE TABLE document_tags (tag TEXT NOT NULL, doc INTEGER NOT NULL REFERENCES documents(rowid) ON DELETE CASCADE, PRIMARY KEY (tag, doc)) WITHOUT ROWID;
-CREATE INDEX document_tags_doc ON document_tags (doc);
+CREATE TABLE document_keywords (keyword TEXT NOT NULL, doc INTEGER NOT NULL REFERENCES documents(rowid) ON DELETE CASCADE, PRIMARY KEY (keyword, doc)) WITHOUT ROWID;
+CREATE INDEX document_keywords_doc ON document_keywords (doc);
 -- Typed field values, encoded as PaperGo's field index encodes them.
 CREATE TABLE document_fields (
  doc INTEGER NOT NULL REFERENCES documents(rowid) ON DELETE CASCADE,

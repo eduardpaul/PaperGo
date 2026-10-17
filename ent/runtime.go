@@ -2001,10 +2001,10 @@ func init() {
 	resourceDescAllowFolders := resourceFields[10].Descriptor()
 	// resource.DefaultAllowFolders holds the default value on creation for the allow_folders field.
 	resource.DefaultAllowFolders = resourceDescAllowFolders.Default.(bool)
-	// resourceDescTags is the schema descriptor for tags field.
-	resourceDescTags := resourceFields[11].Descriptor()
-	// resource.DefaultTags holds the default value on creation for the tags field.
-	resource.DefaultTags = resourceDescTags.Default.([]string)
+	// resourceDescKeywords is the schema descriptor for keywords field.
+	resourceDescKeywords := resourceFields[11].Descriptor()
+	// resource.DefaultKeywords holds the default value on creation for the keywords field.
+	resource.DefaultKeywords = resourceDescKeywords.Default.([]string)
 	// resourceDescTemplateKeys is the schema descriptor for template_keys field.
 	resourceDescTemplateKeys := resourceFields[12].Descriptor()
 	// resource.DefaultTemplateKeys holds the default value on creation for the template_keys field.

@@ -301,7 +301,8 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 	parts := []string{}
 	args := []any{}
 	for _, root := range roots {
-		eligible := false
+		keyword := smartTermField(&ent.FieldDefinition{Type: "keywords", Indexed: true, IndexStatus: fielddefinition.IndexStatusReady}, root)
+		eligible := keyword
 		for _, fd := range c.defs {
 			if smartTermField(fd, root) {
 				eligible = true
@@ -320,6 +321,11 @@ func appendSmartTerms(q *compiledQuery, c smartCandidate, d SmartFolderDefinitio
 		}
 		parts = append(parts, `EXISTS(SELECT 1 FROM field_values f JOIN field_definitions fd ON fd.key=f.field_key JOIN collection_types ca ON ca.container_id=f.container_id JOIN content_types ct ON ct.id=ca.content_type_id AND EXISTS(SELECT 1 FROM json_each(ct.field_ids) WHERE value=fd.id) JOIN smart_terms st ON st.id=f.value_text WHERE f.surface_id=p.id AND fd.indexed=1 AND `+fields+` AND st.root=?)`)
 		args = append(args, root.TermSetID, root.ID)
+		if keyword {
+			last := len(parts) - 1
+			parts[last] = "(" + parts[last] + " OR EXISTS(SELECT 1 FROM item_surface_keywords k JOIN smart_terms st ON st.id=k.keyword WHERE k.surface_id=p.id AND st.root=?))"
+			args = append(args, root.ID)
+		}
 	}
 	if len(parts) == 0 {
 		return false

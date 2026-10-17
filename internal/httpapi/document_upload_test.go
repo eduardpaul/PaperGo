@@ -80,7 +80,7 @@ func TestDocumentMultipartCreateAtomicMetadataAndContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metadata := `{"name":"Invoice","folder_id":"` + folder.ID + `","content_type_id":"` + typ.ContentTypeID + `","tags":["finance"],"values":{"amount":9223372036854775807},"languages":" eng+deu "}`
+	metadata := `{"name":"Invoice","folder_id":"` + folder.ID + `","content_type_id":"` + typ.ContentTypeID + `","keywords":["finance"],"values":{"amount":9223372036854775807},"languages":" eng+deu "}`
 	endpoint := "/v1/resources/" + lib.ID + "/documents"
 	// Metadata may follow the file; no item is created until the full multipart
 	// body has been parsed and validated.

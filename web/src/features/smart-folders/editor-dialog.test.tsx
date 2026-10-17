@@ -50,3 +50,31 @@ it('omits fields with incompatible shapes while keeping built-in rules', () => {
   expect(fields.some(field => field.key === '$modified_at')).toBe(true);
   expect(fields.some(field => field.key === '$file_type')).toBe(true);
 });
+
+it('adds a new keyword to the term store before previewing and saving its rule', async () => {
+  let created: Record<string, unknown> | undefined;
+  const previews: { terms?: string[] }[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (input: URL | string, init: RequestInit = {}) => {
+    const path = new URL(String(input)).pathname;
+    const body = init.body ? JSON.parse(String(init.body)) : {};
+    let result: unknown = { value: [] };
+    if (path === '/v1/identity/me') result = { subject: 'alice', scopes: ['list.read', 'list.write', 'taxonomy.read'] };
+    if (path === '/v1/search/content-types' || path === '/v1/collection-templates') result = [];
+    if (path === '/v1/keywords' && init.method === 'POST') result = { id: 'finance-id', name: 'Finance' };
+    if (path === '/v1/smart-folders/preview') { previews.push(body.definition); result = { value: [], total: 0 }; }
+    if (path === '/v1/smart-folders' && init.method === 'POST') { created = body; result = { ...body, id: 'saved', version: 1 }; }
+    return new Response(JSON.stringify(result));
+  }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><SmartFolderDialog open onClose={vi.fn()} onSaved={vi.fn()} /></QueryClientProvider>);
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Finance' } });
+  const keywords = await screen.findByLabelText('Keywords (optional)');
+  fireEvent.change(keywords, { target: { value: 'Finance' } });
+  fireEvent.keyDown(keywords, { key: 'Enter' });
+  await waitFor(() => expect(previews.some(definition => definition.terms?.[0] === 'finance-id')).toBe(true));
+  await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Create' }).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+  await waitFor(() => expect(created).toMatchObject({ definition: { terms: ['finance-id'] } }));
+  expect(previews.some(definition => definition.terms?.includes('Finance'))).toBe(false);
+  client.clear();
+});

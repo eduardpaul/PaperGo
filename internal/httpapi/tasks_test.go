@@ -30,8 +30,8 @@ func TestTaskRoutes(t *testing.T) {
 	const json_ = "application/json"
 	body := `{"name": "Ask", "definition": {"triggers": [{"type": "manual", "collection_id": "` + list.ID + `"}],
 		"flow": {"start": "ask", "nodes": {
-			"ask": {"activity": "approval", "inputs": {"title": "Check {item:name}"}, "next": {"approved": "tag"}},
-			"tag": {"activity": "item.update", "inputs": {"tags": ["{step:ask.comment}"]}}}}}}`
+			"ask": {"activity": "approval", "inputs": {"title": "Check {item:name}"}, "next": {"approved": "keyword"}},
+			"keyword": {"activity": "item.update", "inputs": {"keywords": ["{step:ask.comment}"]}}}}}}`
 	w := request(h, "POST", "/v1/workspaces/"+ws.ID+"/workflows", body, testToken, "", json_)
 	if w.Code != 201 {
 		t.Fatalf("create: %d %s", w.Code, w.Body)
@@ -81,8 +81,8 @@ func TestTaskRoutes(t *testing.T) {
 		t.Fatalf("respond twice: %d %s", w.Code, w.Body)
 	}
 	runStatus("completed")
-	if got, _ := s.Get(ctx, "alice", item.ID); strings.Join(got.Tags, ",") != "checked" {
-		t.Fatalf("tags %v", got.Tags)
+	if got, _ := s.Get(ctx, "alice", item.ID); keywordLabels(t, s, got.Keywords) != "checked" {
+		t.Fatalf("keywords %v", got.Keywords)
 	}
 	if w = request(h, "GET", "/v1/workspaces/"+ws.ID+"/tasks", "", testToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), id) {
 		t.Fatalf("workspace tasks: %d %s", w.Code, w.Body)

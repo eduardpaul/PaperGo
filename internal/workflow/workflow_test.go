@@ -92,7 +92,7 @@ func TestDefinitionValidation(t *testing.T) {
 func TestTokens(t *testing.T) {
 	s := &scope{ctx: context.Background(), now: time.Date(2026, 10, 9, 8, 30, 0, 0, time.UTC),
 		trigger: map[string]any{"actor": "bob", "data": map[string]any{"revision_number": 3.0}},
-		inputs:  map[string]any{"tags": []any{"a", "b"}},
+		inputs:  map[string]any{"keywords": []any{"a", "b"}},
 		vars:    map[string]any{"limit": 100.0},
 		steps:   map[string]any{"read item": map[string]any{"values": map[string]any{"total": 42.5}}},
 		run:     map[string]any{"id": "run-1"},
@@ -102,8 +102,8 @@ func TestTokens(t *testing.T) {
 	for in, want := range map[string]any{
 		"{var:limit}":                   100.0,
 		"{step:read item.values.total}": 42.5,
-		"{input:tags}":                  []any{"a", "b"},
-		"tags {input:tags}":             "tags a, b",
+		"{input:keywords}":              []any{"a", "b"},
+		"keywords {input:keywords}":     "keywords a, b",
 		"{item:name} for {item:values.owner} by {trigger:actor}": "Lease for carol by bob",
 		"rev {trigger:data.revision_number} on {today}":          "rev 3 on 2026-10-09",
 		"{{literal}} {missing:x}":                                "{literal} {missing:x}",

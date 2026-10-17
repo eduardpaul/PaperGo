@@ -132,7 +132,7 @@ func TestRelativeFiltersAreTypedAndBounded(t *testing.T) {
 	if _, err := resolveFilter(&FilterExpr{Field: "owner", ValueRef: "today"}, "alice", now, defs); !isValidation(err) {
 		t.Fatal(err)
 	}
-	if _, err := resolveFilter(&FilterExpr{Field: "$tags", ValueRef: "today"}, "alice", now, defs); !isValidation(err) {
+	if _, err := resolveFilter(&FilterExpr{Field: "$keywords", ValueRef: "today"}, "alice", now, defs); !isValidation(err) {
 		t.Fatal(err)
 	}
 	if _, err := resolveFilter(&FilterExpr{Field: "due", Value: json.RawMessage(`"2026-10-08"`), ValueRef: "today"}, "alice", now, defs); !isValidation(err) {

@@ -36,7 +36,7 @@ type QuerySpec struct {
 	// AncestorID keeps what is anywhere below a folder: in it or its subfolders.
 	AncestorID string `json:"ancestor_id,omitempty"`
 	Search     string `json:"search,omitempty"`
-	Tag        string `json:"tag,omitempty"`
+	Keyword    string `json:"keyword,omitempty"`
 }
 type QueryRequest struct {
 	Select  []string  `json:"select,omitempty"`
@@ -83,10 +83,10 @@ type compiledQuery struct {
 	rankDef *ent.FieldDefinition
 	// seek, set for ungrouped collection queries, pages from the sort index
 	// instead of sorting every eligible row.
-	seek        *seekPlan
-	orders      []queryOrder
-	projection  []string
-	includeTags bool
+	seek            *seekPlan
+	orders          []queryOrder
+	projection      []string
+	includeKeywords bool
 	// searchCapped means the search text matched more entries than queries
 	// consider (searchMatchLimit).
 	searchCapped bool
@@ -233,23 +233,23 @@ func (q *queryCompiler) filter(f *FilterExpr, depth int) (string, []any, error) 
 	builtin := d != nil
 	if builtin {
 		// System metadata belongs to the selected immutable content surface.
-	} else if f.Field == "$tags" {
+	} else if f.Field == "$keywords" {
 		if op != "eq" && op != "ne" {
-			return "", nil, invalid("tags support eq and ne")
+			return "", nil, invalid("keywords support eq and ne")
 		}
 		v, e := decodeValue(f.Value)
 		if e != nil {
-			return "", nil, invalid("invalid tag filter")
+			return "", nil, invalid("invalid keyword filter")
 		}
-		tag, ok := v.(string)
+		keyword, ok := v.(string)
 		if !ok {
-			return "", nil, invalid("tag must be text")
+			return "", nil, invalid("keyword must be text")
 		}
-		text := "EXISTS (SELECT 1 FROM item_surface_tags WHERE surface_id=p.id AND tag=?)"
+		text := "EXISTS (SELECT 1 FROM (" + surfaceKeywordsSQL + ") k JOIN terms kt ON kt.id=k.keyword WHERE coalesce(kt.merged_into_id,kt.id)=coalesce((SELECT merged_into_id FROM terms WHERE id=?),?))"
 		if op == "ne" {
 			text = "NOT (" + text + ")"
 		}
-		return text, []any{tag}, nil
+		return text, []any{keyword, keyword}, nil
 	} else {
 		d = q.defs[f.Field]
 		if d == nil || !queryable(d) {
@@ -363,8 +363,17 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 	if in.Surface != "auto" && in.Surface != "head" && in.Surface != "published" {
 		return compiledQuery{}, invalid("invalid query surface")
 	}
-	if len(in.Query.Search) > 256 || len(in.Query.Tag) > 64 {
-		return compiledQuery{}, invalid("search or tag exceeds size limit")
+	if len(in.Query.Search) > 256 || len(in.Query.Keyword) > 255 {
+		return compiledQuery{}, invalid("search or keyword exceeds size limit")
+	}
+	var keywordErr error
+	in.Query.Keyword, keywordErr = s.keywordFilter(ctx, in.Query.Keyword)
+	if keywordErr != nil {
+		return compiledQuery{}, keywordErr
+	}
+	in.Query.Filter, keywordErr = s.keywordFilters(ctx, in.Query.Filter)
+	if keywordErr != nil {
+		return compiledQuery{}, keywordErr
 	}
 	resolved, e := resolveFilter(in.Query.Filter, subject, time.Now().UTC(), definitionMap(defs))
 	if e != nil {
@@ -416,7 +425,7 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		}
 		orders = []SortSpec{{Field: in.Query.GroupBy}}
 	}
-	projection, includeTags, err := querySelection(compiler.defs, in.Select)
+	projection, includeKeywords, err := querySelection(compiler.defs, in.Select)
 	if err != nil {
 		return compiledQuery{}, err
 	}
@@ -478,9 +487,9 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		text += " AND (" + filter + ")"
 		args = append(args, a...)
 	}
-	if in.Query.Tag != "" {
-		text += " AND EXISTS(SELECT 1 FROM item_surface_tags WHERE surface_id=p.id AND tag=?)"
-		args = append(args, in.Query.Tag)
+	if in.Query.Keyword != "" {
+		text += " AND EXISTS(SELECT 1 FROM (" + surfaceKeywordsSQL + ") k JOIN terms kt ON kt.id=k.keyword WHERE coalesce(kt.merged_into_id,kt.id)=coalesce((SELECT merged_into_id FROM terms WHERE id=?),?))"
+		args = append(args, in.Query.Keyword, in.Query.Keyword)
 	}
 	searchCapped := false
 	if strings.TrimSpace(in.Query.Search) != "" {
@@ -510,7 +519,7 @@ func (s *Service) compileCollectionQuery(ctx context.Context, subject string, c 
 		Select                               []string
 	}{subject, c.ID, in.Surface, *c.SchemaHeadID, in.Query, grouped, in.Select})
 	sum := sha256.Sum256(fingerprint)
-	q := compiledQuery{sql: text, args: args, eligible: eligible, fingerprint: hex.EncodeToString(sum[:]), descending: compiledOrders[0].descending, kind: compiledOrders[0].kind, rankDef: compiler.defs[rankField], orders: compiledOrders, projection: projection, includeTags: includeTags, searchCapped: searchCapped}
+	q := compiledQuery{sql: text, args: args, eligible: eligible, fingerprint: hex.EncodeToString(sum[:]), descending: compiledOrders[0].descending, kind: compiledOrders[0].kind, rankDef: compiler.defs[rankField], orders: compiledOrders, projection: projection, includeKeywords: includeKeywords, searchCapped: searchCapped}
 	if !grouped && len(compiledOrders) == 1 {
 		column, _ := systemField(rankField)
 		if column == "r.id" {
@@ -644,9 +653,9 @@ func (s *Service) Query(ctx context.Context, subject, containerID string, in Que
 			return QueryResult{}, e
 		}
 		out, err := t.queryCompiled(ctx, subject, in, q, q.projection)
-		if in.Select != nil && !q.includeTags {
+		if in.Select != nil && !q.includeKeywords {
 			for _, r := range out.Data {
-				r.Tags = []string{}
+				r.Keywords = []string{}
 			}
 		}
 		return out, err

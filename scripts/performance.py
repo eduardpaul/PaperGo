@@ -214,7 +214,7 @@ def main():
 
                 def seed(conn, _, iteration):
                     operations = [{"action": "create", "create": {
-                        "name": f"Invoice {i:06d} Acme", "tags": ["finance"],
+                        "name": f"Invoice {i:06d} Acme", "keywords": ["finance"],
                         "values": {"n": i, "status": ["open", "closed", "held"][i % 3]}}}
                         for i in range(iteration * 100, min(args.items, (iteration + 1) * 100))]
                     return server.request(conn, "POST", f"/v1/resources/{collection}/bulk", {"operations": operations})

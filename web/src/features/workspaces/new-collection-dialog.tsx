@@ -64,8 +64,8 @@ export function NewCollectionDialog({
       api<Resource>(`/v1/resources/${workspaceId}/children`, {
         method: 'POST',
         body: choice.template
-          ? { name: name.trim(), description: description.trim(), template_key: choice.template, tags: [], values: {} }
-          : { kind: choice.kind, name: name.trim(), description: description.trim(), tags: [], values: {} },
+          ? { name: name.trim(), description: description.trim(), template_key: choice.template, keywords: [], values: {} }
+          : { kind: choice.kind, name: name.trim(), description: description.trim(), keywords: [], values: {} },
       }).then((result) => result.data),
     onSuccess: async (collection) => {
       await queryClient.invalidateQueries({ queryKey: keys.resources });

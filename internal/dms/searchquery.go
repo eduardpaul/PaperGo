@@ -25,7 +25,7 @@ type SearchRequest struct {
 	ContentTypeID string
 	// TermID matches the term, its descendants and terms merged into them.
 	TermID       string
-	Tag          string
+	Keyword      string
 	CreatedBy    string
 	ModifiedBy   string
 	ModifiedFrom time.Time
@@ -126,8 +126,13 @@ func (s *Service) Search(ctx context.Context, subject string, in SearchRequest) 
 	if in.Offset < 0 {
 		return SearchResult{}, invalid("invalid page position")
 	}
+	var keywordErr error
+	in.Keyword, keywordErr = s.keywordFilter(ctx, in.Keyword)
+	if keywordErr != nil {
+		return SearchResult{}, keywordErr
+	}
 	q := search.Query{Mode: in.Mode, Vector: in.vector, Model: in.model, Filter: search.Filter{Surface: in.Surface, Kinds: in.Kinds, WorkspaceID: in.WorkspaceID, CollectionID: in.CollectionID, ContentTypeID: in.ContentTypeID,
-		Tag: in.Tag, CreatedBy: in.CreatedBy, ModifiedBy: in.ModifiedBy, ModifiedFrom: in.ModifiedFrom, ModifiedTo: in.ModifiedTo}, Facets: in.Facets}
+		Keyword: in.Keyword, CreatedBy: in.CreatedBy, ModifiedBy: in.ModifiedBy, ModifiedFrom: in.ModifiedFrom, ModifiedTo: in.ModifiedTo}, Facets: in.Facets}
 	if strings.TrimSpace(in.Q) != "" {
 		var err error
 		// A semantic search needs no keyword syntax: exclusions alone are
@@ -135,7 +140,7 @@ func (s *Service) Search(ctx context.Context, subject string, in SearchRequest) 
 		if q.Text, err = search.Parse(in.Q); err != nil && in.Mode != search.ModeSemantic {
 			return SearchResult{}, invalid(err.Error())
 		}
-	} else if in.WorkspaceID == "" && in.CollectionID == "" && in.ContentTypeID == "" && in.TermID == "" && in.Tag == "" && in.CreatedBy == "" && in.ModifiedBy == "" && in.Filter == nil {
+	} else if in.WorkspaceID == "" && in.CollectionID == "" && in.ContentTypeID == "" && in.TermID == "" && in.Keyword == "" && in.CreatedBy == "" && in.ModifiedBy == "" && in.Filter == nil {
 		return SearchResult{}, invalid("enter words to search for, or at least one filter")
 	}
 	if in.TermID != "" {

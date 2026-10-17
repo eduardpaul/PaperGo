@@ -178,8 +178,8 @@ func TestIntegrationRefreshIdentityOwnershipAndReconciliation(t *testing.T) {
 	if _, err = s.Update(ctx, "alice", itemID, item.Version, UpdateResource{Values: &changes}); err == nil {
 		t.Fatal("source field changed locally")
 	}
-	tags := []string{"local"}
-	_, err = s.Update(ctx, "alice", itemID, item.Version, UpdateResource{Tags: &tags})
+	keywords := []string{"local"}
+	_, err = s.Update(ctx, "alice", itemID, item.Version, UpdateResource{Keywords: &keywords})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestIntegrationRefreshIdentityOwnershipAndReconciliation(t *testing.T) {
 		t.Fatal(failed, err)
 	}
 	item, err = s.Get(ctx, "alice", itemID)
-	if err != nil || len(item.Tags) != 1 {
+	if err != nil || len(item.Keywords) != 1 {
 		t.Fatal(item, err)
 	}
 	// Empty is a valid complete snapshot: only this subscription is recycled.
@@ -235,7 +235,7 @@ func TestIntegrationRefreshIdentityOwnershipAndReconciliation(t *testing.T) {
 		t.Fatal(err)
 	}
 	item, err = s.Get(ctx, "alice", itemID)
-	if err != nil || len(item.Tags) != 1 {
+	if err != nil || len(item.Keywords) != 1 {
 		t.Fatal("identity or local metadata lost", item, err)
 	}
 	// Paused still owns fields; removal detaches existing content.
@@ -422,8 +422,8 @@ func TestGenericIntegrationRevisionDataAndFieldOwnership(t *testing.T) {
 	if _, err := s.Update(ctx, "alice", item.ID, item.Version, UpdateResource{Name: ptr("Local title")}); err == nil {
 		t.Fatal("generic ownership was ignored")
 	}
-	tags := []string{"local"}
-	item, err = s.Update(ctx, "alice", item.ID, item.Version, UpdateResource{Tags: &tags})
+	keywords := []string{"local"}
+	item, err = s.Update(ctx, "alice", item.ID, item.Version, UpdateResource{Keywords: &keywords})
 	if err != nil {
 		t.Fatal(err)
 	}

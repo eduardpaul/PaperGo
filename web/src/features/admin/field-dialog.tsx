@@ -46,7 +46,7 @@ const typeLabels: Record<string, string> = {
   boolean: 'Yes/No',
   lookup: 'Lookup (item in another list)',
   person: 'Person',
-  term: 'Managed metadata (term set)',
+  term: 'Taxonomy (term set)',
   keywords: 'Keywords',
 };
 
@@ -152,7 +152,7 @@ export function FieldDialog({
           : 'Organization fields are shared. Editing a field updates every collection using it.'
       }
       submitLabel="Save field"
-      submitDisabled={!canManage}
+      submitDisabled={!canManage || (type === 'term' && !options.term_set_id)}
       pending={save.isPending}
       onClose={onClose}
       onSubmit={() => canManage && save.mutate()}
@@ -318,7 +318,7 @@ export function FieldDialog({
           </Field>
         )}
         {type === 'term' && (
-          <Field id="field-term-set" label="Term set">
+          <Field id="field-term-set" label="Term set" hint="Choose the term set that defines this taxonomy field.">
             <Select
               id="field-term-set"
               required
