@@ -46713,7 +46713,10 @@ type WorkflowMutation struct {
 	key                *string
 	name               *string
 	description        *string
-	enabled            *bool
+	automatic_enabled  *bool
+	manual_enabled     *bool
+	automatic_provider *bool
+	state              *string
 	builtin_key        *string
 	collection_id      *string
 	role               *string
@@ -47051,40 +47054,148 @@ func (m *WorkflowMutation) ResetDescription() {
 	m.description = nil
 }
 
-// SetEnabled sets the "enabled" field.
-func (m *WorkflowMutation) SetEnabled(b bool) {
-	m.enabled = &b
+// SetAutomaticEnabled sets the "automatic_enabled" field.
+func (m *WorkflowMutation) SetAutomaticEnabled(b bool) {
+	m.automatic_enabled = &b
 }
 
-// Enabled returns the value of the "enabled" field in the mutation.
-func (m *WorkflowMutation) Enabled() (r bool, exists bool) {
-	v := m.enabled
+// AutomaticEnabled returns the value of the "automatic_enabled" field in the mutation.
+func (m *WorkflowMutation) AutomaticEnabled() (r bool, exists bool) {
+	v := m.automatic_enabled
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldEnabled returns the old "enabled" field's value of the Workflow entity.
+// OldAutomaticEnabled returns the old "automatic_enabled" field's value of the Workflow entity.
 // If the Workflow object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+func (m *WorkflowMutation) OldAutomaticEnabled(ctx context.Context) (v bool, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+		return v, errors.New("OldAutomaticEnabled is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEnabled requires an ID field in the mutation")
+		return v, errors.New("OldAutomaticEnabled requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+		return v, fmt.Errorf("querying old value for OldAutomaticEnabled: %w", err)
 	}
-	return oldValue.Enabled, nil
+	return oldValue.AutomaticEnabled, nil
 }
 
-// ResetEnabled resets all changes to the "enabled" field.
-func (m *WorkflowMutation) ResetEnabled() {
-	m.enabled = nil
+// ResetAutomaticEnabled resets all changes to the "automatic_enabled" field.
+func (m *WorkflowMutation) ResetAutomaticEnabled() {
+	m.automatic_enabled = nil
+}
+
+// SetManualEnabled sets the "manual_enabled" field.
+func (m *WorkflowMutation) SetManualEnabled(b bool) {
+	m.manual_enabled = &b
+}
+
+// ManualEnabled returns the value of the "manual_enabled" field in the mutation.
+func (m *WorkflowMutation) ManualEnabled() (r bool, exists bool) {
+	v := m.manual_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldManualEnabled returns the old "manual_enabled" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldManualEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldManualEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldManualEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldManualEnabled: %w", err)
+	}
+	return oldValue.ManualEnabled, nil
+}
+
+// ResetManualEnabled resets all changes to the "manual_enabled" field.
+func (m *WorkflowMutation) ResetManualEnabled() {
+	m.manual_enabled = nil
+}
+
+// SetAutomaticProvider sets the "automatic_provider" field.
+func (m *WorkflowMutation) SetAutomaticProvider(b bool) {
+	m.automatic_provider = &b
+}
+
+// AutomaticProvider returns the value of the "automatic_provider" field in the mutation.
+func (m *WorkflowMutation) AutomaticProvider() (r bool, exists bool) {
+	v := m.automatic_provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutomaticProvider returns the old "automatic_provider" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldAutomaticProvider(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutomaticProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutomaticProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutomaticProvider: %w", err)
+	}
+	return oldValue.AutomaticProvider, nil
+}
+
+// ResetAutomaticProvider resets all changes to the "automatic_provider" field.
+func (m *WorkflowMutation) ResetAutomaticProvider() {
+	m.automatic_provider = nil
+}
+
+// SetState sets the "state" field.
+func (m *WorkflowMutation) SetState(s string) {
+	m.state = &s
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *WorkflowMutation) State() (r string, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the Workflow entity.
+// If the Workflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowMutation) OldState(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *WorkflowMutation) ResetState() {
+	m.state = nil
 }
 
 // SetBuiltinKey sets the "builtin_key" field.
@@ -47537,7 +47648,7 @@ func (m *WorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 19)
 	if m.created_at != nil {
 		fields = append(fields, workflow.FieldCreatedAt)
 	}
@@ -47556,8 +47667,17 @@ func (m *WorkflowMutation) Fields() []string {
 	if m.description != nil {
 		fields = append(fields, workflow.FieldDescription)
 	}
-	if m.enabled != nil {
-		fields = append(fields, workflow.FieldEnabled)
+	if m.automatic_enabled != nil {
+		fields = append(fields, workflow.FieldAutomaticEnabled)
+	}
+	if m.manual_enabled != nil {
+		fields = append(fields, workflow.FieldManualEnabled)
+	}
+	if m.automatic_provider != nil {
+		fields = append(fields, workflow.FieldAutomaticProvider)
+	}
+	if m.state != nil {
+		fields = append(fields, workflow.FieldState)
 	}
 	if m.builtin_key != nil {
 		fields = append(fields, workflow.FieldBuiltinKey)
@@ -47606,8 +47726,14 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case workflow.FieldDescription:
 		return m.Description()
-	case workflow.FieldEnabled:
-		return m.Enabled()
+	case workflow.FieldAutomaticEnabled:
+		return m.AutomaticEnabled()
+	case workflow.FieldManualEnabled:
+		return m.ManualEnabled()
+	case workflow.FieldAutomaticProvider:
+		return m.AutomaticProvider()
+	case workflow.FieldState:
+		return m.State()
 	case workflow.FieldBuiltinKey:
 		return m.BuiltinKey()
 	case workflow.FieldCollectionID:
@@ -47647,8 +47773,14 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldName(ctx)
 	case workflow.FieldDescription:
 		return m.OldDescription(ctx)
-	case workflow.FieldEnabled:
-		return m.OldEnabled(ctx)
+	case workflow.FieldAutomaticEnabled:
+		return m.OldAutomaticEnabled(ctx)
+	case workflow.FieldManualEnabled:
+		return m.OldManualEnabled(ctx)
+	case workflow.FieldAutomaticProvider:
+		return m.OldAutomaticProvider(ctx)
+	case workflow.FieldState:
+		return m.OldState(ctx)
 	case workflow.FieldBuiltinKey:
 		return m.OldBuiltinKey(ctx)
 	case workflow.FieldCollectionID:
@@ -47718,12 +47850,33 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDescription(v)
 		return nil
-	case workflow.FieldEnabled:
+	case workflow.FieldAutomaticEnabled:
 		v, ok := value.(bool)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetEnabled(v)
+		m.SetAutomaticEnabled(v)
+		return nil
+	case workflow.FieldManualEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetManualEnabled(v)
+		return nil
+	case workflow.FieldAutomaticProvider:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutomaticProvider(v)
+		return nil
+	case workflow.FieldState:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
 		return nil
 	case workflow.FieldBuiltinKey:
 		v, ok := value.(string)
@@ -47909,8 +48062,17 @@ func (m *WorkflowMutation) ResetField(name string) error {
 	case workflow.FieldDescription:
 		m.ResetDescription()
 		return nil
-	case workflow.FieldEnabled:
-		m.ResetEnabled()
+	case workflow.FieldAutomaticEnabled:
+		m.ResetAutomaticEnabled()
+		return nil
+	case workflow.FieldManualEnabled:
+		m.ResetManualEnabled()
+		return nil
+	case workflow.FieldAutomaticProvider:
+		m.ResetAutomaticProvider()
+		return nil
+	case workflow.FieldState:
+		m.ResetState()
 		return nil
 	case workflow.FieldBuiltinKey:
 		m.ResetBuiltinKey()

@@ -119,14 +119,14 @@ func TestSearchIndexBuiltInKeepsTheStoreCurrent(t *testing.T) {
 	}
 	var index workflow.Workflow
 	for _, w := range all {
-		if w.BuiltInKey != nil && *w.BuiltInKey == workflow.RoleSearchIndex {
+		if w.BuiltInKey != nil && *w.BuiltInKey == workflow.RoleSearchIndex && w.CollectionID != nil && *w.CollectionID == f.list.ID {
 			index = w
 		}
 	}
-	if index.ID == "" || !index.Enabled || index.CollectionID != nil {
+	if index.ID == "" || !index.AutomaticEnabled || index.CollectionID == nil || *index.CollectionID != f.list.ID {
 		t.Fatalf("default built-in: %+v", index)
 	}
-	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, workflow.RoleSearchIndex, workflow.SetBuiltIn{CollectionID: f.list.ID, Enabled: false}); err != nil {
+	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, workflow.RoleSearchIndex, workflow.SetBuiltIn{CollectionID: f.list.ID, AutomaticEnabled: false, Version: index.Version}); err != nil {
 		t.Fatal(err)
 	}
 	// Its documents would go stale, so searching inside it says so.
@@ -153,6 +153,17 @@ func TestSearchIndexBuiltInKeepsTheStoreCurrent(t *testing.T) {
 	}
 	if page, err = f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{WorkflowID: index.ID}); err != nil || len(page.Data) == 0 {
 		t.Fatalf("system runs by workflow: %v %v", len(page.Data), err)
+	}
+	// Deleting the provider must not silently make stale collection search available.
+	paused, err := f.wf.Get(ctx, "alice", index.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.wf.Delete(ctx, "alice", index.ID, paused.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.dms.Browse(ctx, "alice", dms.Browse{ParentID: f.list.ID, Search: "plan"}); !errors.Is(err, dms.ErrSearchOff) {
+		t.Fatal("deleted provider exposed stale search", err)
 	}
 }
 
@@ -205,7 +216,7 @@ func TestSearchRefreshesAliasesOfRenamedAndMergedTerms(t *testing.T) {
 	if _, err = f.r.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	index := f.builtIn(t, "search.index", "")
+	index := f.builtIn(t, "search.index", f.list.ID)
 	page, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{WorkflowID: index.ID, Limit: 100})
 	if err != nil {
 		t.Fatal(err)

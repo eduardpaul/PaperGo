@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 
 // Run is a workflow run as the API shows it.
 type Run struct {
+	Outcome         string  `json:"outcome,omitempty"`
 	ID              string  `json:"id"`
 	WorkflowID      string  `json:"workflow_id"`
 	WorkflowVersion int     `json:"workflow_version"`
@@ -60,12 +62,16 @@ type Step struct {
 }
 
 // RunFilter selects runs of a workspace. Without a WorkflowID, the runs of
-// system built-ins (search.index) are left out.
+// automatic system runs are left out unless IncludeSystem is true. Manual
+// system invocations remain visible.
 type RunFilter struct {
-	WorkflowID string
-	ItemID     string
-	After      string
-	Limit      int
+	Origin        string
+	Status        string
+	IncludeSystem bool
+	WorkflowID    string
+	ItemID        string
+	After         string
+	Limit         int
 }
 
 // RunPage is one page of runs, newest first.
@@ -136,6 +142,9 @@ func (r *Runner) attach(runs []Run, output bool) error {
 		if s.Error != nil {
 			runs[i].Error = s.Error.Error()
 		}
+		if result, ok := decodeOutput(s.Output).(map[string]any); ok && result["outcome"] == "unchanged" {
+			runs[i].Outcome = "unchanged"
+		}
 		if output {
 			runs[i].Result = decodeOutput(s.Output)
 			if in, ok := decodeOutput(s.Input).(map[string]any); ok {
@@ -175,17 +184,30 @@ func (r *Runner) Runs(ctx context.Context, subject, workspaceID string, f RunFil
 			restricted = true
 		}
 		q := t.Client.WorkflowRun.Query().Where(workflowrun.WorkspaceIDEQ(workspaceID))
+		if f.Origin == "manual" || f.Origin == "schedule" {
+			q.Where(workflowrun.EventTypeEQ(f.Origin))
+		} else if f.Origin == "automatic" {
+			q.Where(workflowrun.EventTypeNotIn("manual", "schedule"))
+		} else if f.Origin != "" {
+			return RunPage{}, dms.Invalid("origin must be manual, schedule or automatic")
+		}
+		if f.Status != "" {
+			if !slices.Contains([]string{"queued", "running", "waiting", "completed", "failed", "cancelled"}, f.Status) {
+				return RunPage{}, dms.Invalid("invalid run status")
+			}
+			q.Where(workflowrun.LiveStatusEQ(f.Status))
+		}
+
 		if f.WorkflowID != "" {
 			q.Where(workflowrun.WorkflowIDEQ(f.WorkflowID))
-		} else if keys := workflow.SystemBuiltIns(); len(keys) > 0 && f.ItemID == "" {
-			// System built-ins run on every change; their runs are listed
-			// only when asked for by workflow.
+		} else if keys := workflow.SystemBuiltIns(); len(keys) > 0 && f.ItemID == "" && !f.IncludeSystem {
+			// Hide high-volume system automation while retaining explicit manual runs.
 			system, err := t.Client.Workflow.Query().Where(entworkflow.WorkspaceIDEQ(workspaceID), entworkflow.BuiltinKeyIn(keys...)).IDs(ctx)
 			if err != nil {
 				return RunPage{}, err
 			}
 			if len(system) > 0 {
-				q.Where(workflowrun.WorkflowIDNotIn(system...))
+				q.Where(workflowrun.Or(workflowrun.WorkflowIDNotIn(system...), workflowrun.EventTypeEQ("manual")))
 			}
 		}
 		if f.ItemID != "" {
@@ -536,7 +558,7 @@ func (r *Runner) PurgeSystemRuns(ctx context.Context) (int, error) {
 			if err != nil || len(system) == 0 {
 				return err
 			}
-			ids, err = t.Client.WorkflowRun.Query().Where(workflowrun.IDGT(after), workflowrun.CreatedAtLT(cutoff), workflowrun.WorkflowIDIn(system...)).
+			ids, err = t.Client.WorkflowRun.Query().Where(workflowrun.IDGT(after), workflowrun.CreatedAtLT(cutoff), workflowrun.WorkflowIDIn(system...), workflowrun.EventTypeNEQ("manual")).
 				Order(ent.Asc(workflowrun.FieldID)).Limit(purgePage).IDs(ctx)
 			return err
 		})

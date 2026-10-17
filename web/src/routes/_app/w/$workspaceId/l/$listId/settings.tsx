@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
-import { Activity, ArrowLeft, Columns3, LayoutList, Plug, Settings2, ShieldCheck } from 'lucide-react';
+import { Activity, ArrowLeft, Columns3, LayoutList, Plug, Settings2, ShieldCheck, Workflow } from 'lucide-react';
 import { resourceQuery } from '@/api/queries';
 import { Page, PageHeader } from '@/components/page';
 import { SubNav, SubNavLayout, SubNavLink } from '@/components/sub-nav';
@@ -49,6 +49,7 @@ function CollectionSettingsLayout() {
             <SubNavLink to="/w/$workspaceId/l/$listId/settings/permissions" params={params}>
               <ShieldCheck /> Permissions
             </SubNavLink>
+            <SubNavLink to="/w/$workspaceId/settings/workflows" params={{ workspaceId: params.workspaceId }} search={{ collection: params.listId }}><Workflow /> Workflows</SubNavLink>
             {!library && <SubNavLink to="/w/$workspaceId/l/$listId/settings/integrations" params={params}><Plug /> Integrations</SubNavLink>}
             <SubNavLink to="/w/$workspaceId/l/$listId/settings/activity" params={params}>
               <Activity /> Background work

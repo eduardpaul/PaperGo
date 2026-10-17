@@ -37,6 +37,10 @@ func (f *fixture) waitContent(t *testing.T, itemID, blobID string) search.Conten
 
 func (f *fixture) builtIn(t *testing.T, key, collectionID string) workflow.Workflow {
 	t.Helper()
+	_, err := f.wf.ListBuiltIns(ctx, "alice", f.ws.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	all, err := f.wf.List(ctx, "alice", f.ws.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +84,7 @@ func TestSearchContentMakesFileTextFindable(t *testing.T) {
 	}
 
 	// A rename re-indexes the name and keeps the content as it is.
-	index := f.builtIn(t, "search.content", "")
+	index := f.builtIn(t, "search.content", lib.ID)
 	before := f.runs(t, index.ID, 1)
 	current := f.head(t, file.ID)
 	name := "lease-2026.pdf"
@@ -107,7 +111,7 @@ func TestSearchContentMakesFileTextFindable(t *testing.T) {
 	f.runs(t, follower.ID, 2)
 
 	// The library chunks page by page.
-	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{CollectionID: lib.ID, Enabled: true, Parameters: map[string]any{"chunker": "pages", "max_chars": 5000}}); err != nil {
+	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{CollectionID: lib.ID, Version: index.Version, AutomaticEnabled: true, Parameters: map[string]any{"chunker": "pages", "max_chars": 5000}}); err != nil {
 		t.Fatal(err)
 	}
 	words := strings.Repeat("clause ", 400)
@@ -116,7 +120,7 @@ func TestSearchContentMakesFileTextFindable(t *testing.T) {
 		t.Fatalf("pages chunker: %+v", c)
 	}
 	own := f.builtIn(t, "search.content", lib.ID)
-	f.runs(t, own.ID, 1)
+	f.runs(t, own.ID, 3)
 	f.runs(t, follower.ID, 3)
 }
 
@@ -142,7 +146,7 @@ func TestSearchPublishChecks(t *testing.T) {
 	if run := f.wait(t, ids[0], finished); run.Status != "completed" {
 		t.Fatalf("stale generation: %+v", run)
 	}
-	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Bad role", Definition: []byte(`{"triggers": [{"type": "role.nothing.completed"}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`)}); !errors.As(err, new(*dms.ValidationError)) {
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Bad role", Definition: []byte(`{"triggers": [{"type": "role.nothing.completed"}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`)}); !errors.As(err, new(*dms.ValidationError)) {
 		t.Fatalf("unknown role accepted: %v", err)
 	}
 }
@@ -155,12 +159,15 @@ func TestContentReindex(t *testing.T) {
 	if _, err := f.r.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	index := f.builtIn(t, "search.content", "")
-	off, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{Enabled: false, Version: index.Version})
+	lib, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "library", Name: "Archive", WebDAVEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	lib, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "library", Name: "Archive", WebDAVEnabled: true})
+	if _, err = f.r.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	index := f.builtIn(t, "search.content", lib.ID)
+	off, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: false, Version: index.Version})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +176,7 @@ func TestContentReindex(t *testing.T) {
 	if c, err := f.dms.SearchStore().Content(ctx, file.ID, file.Blob.ID); err != nil || c.Generation != "" {
 		t.Fatalf("content while search.content is off: %+v %v", c, err)
 	}
-	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{Enabled: true, Version: off.Version}); err != nil {
+	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: true, Version: off.Version}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.dms.StartSearchReindex(ctx, "alice", dms.SearchReindex{Force: true}); err == nil {

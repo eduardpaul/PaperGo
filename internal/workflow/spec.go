@@ -87,6 +87,7 @@ const (
 // to one list or library, and makes a schedule start one run per item of
 // that collection that meets the condition on Surface (head by default).
 type Trigger struct {
+	Disabled      bool   `json:"disabled,omitempty"`
 	Type          string `json:"type"`
 	CollectionID  string `json:"collection_id,omitempty"`
 	ContentTypeID string `json:"content_type_id,omitempty"`
@@ -254,6 +255,9 @@ func (d Definition) validate() error {
 	}
 	manual := 0
 	for i, t := range d.Triggers {
+		if t.Type == TriggerManual && t.Disabled {
+			return dms.Invalid("use manual_enabled to control manual runs")
+		}
 		at := fmt.Sprintf("triggers[%d]: ", i)
 		if t.Surface != "" && (t.Type != TriggerSchedule || t.CollectionID == "" || t.Surface != "head" && t.Surface != "published") {
 			return dms.Invalid(at + "surface is head or published, on schedule triggers with collection_id")

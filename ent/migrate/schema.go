@@ -2092,7 +2092,10 @@ var (
 		{Name: "key", Type: field.TypeString, Size: 100},
 		{Name: "name", Type: field.TypeString, Size: 400},
 		{Name: "description", Type: field.TypeString, Default: ""},
-		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "automatic_enabled", Type: field.TypeBool, Default: false},
+		{Name: "manual_enabled", Type: field.TypeBool, Default: true},
+		{Name: "automatic_provider", Type: field.TypeBool, Default: false},
+		{Name: "state", Type: field.TypeString, Default: "published"},
 		{Name: "builtin_key", Type: field.TypeString, Nullable: true},
 		{Name: "collection_id", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "role", Type: field.TypeString, Nullable: true, Size: 100},
@@ -2133,7 +2136,7 @@ var (
 			{
 				Name:    "workflow_workspace_id_role_collection_id",
 				Unique:  false,
-				Columns: []*schema.Column{WorkflowsColumns[3], WorkflowsColumns[10], WorkflowsColumns[9]},
+				Columns: []*schema.Column{WorkflowsColumns[3], WorkflowsColumns[13], WorkflowsColumns[12]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "role IS NOT NULL AND deleted_at IS NULL",
 				},

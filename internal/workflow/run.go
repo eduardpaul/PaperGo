@@ -34,7 +34,8 @@ type RunInput struct {
 	// of one partition execute one at a time.
 	Partition string `json:"partition,omitempty"`
 	// System runs belong to a system built-in: they use the runner's system
-	// queue and are kept a day once they succeed.
+	// queue. Successful automatic system runs are kept a day; manual runs
+	// use ordinary retention.
 	System bool `json:"system,omitempty"`
 }
 
@@ -62,6 +63,8 @@ type Exec interface {
 
 // Result is a finished run's output.
 type Result struct {
+	Outcome   string         `json:"outcome,omitempty"`
+	Reason    string         `json:"reason,omitempty"`
 	Status    string         `json:"status"`
 	Node      string         `json:"node,omitempty"`
 	Variables map[string]any `json:"variables,omitempty"`
@@ -508,6 +511,12 @@ func (r *runState) finish(node string, failure error) (Result, error) {
 	if failure != nil {
 		res.Status = "failed"
 		return res, fmt.Errorf("%w at node %s: %v", ErrRunFailed, node, failure)
+	}
+	if out, ok := r.steps[node].(map[string]any); ok {
+		if reason, ok := out["reason"].(string); ok && reason != "" {
+			res.Outcome = "unchanged"
+			res.Reason = reason
+		}
 	}
 	res.Outputs = f.Outputs
 	return res, nil

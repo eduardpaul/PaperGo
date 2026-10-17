@@ -26,29 +26,23 @@ var ErrSearchOff = errors.New("search is turned off for this collection")
 // current (workflow.RoleSearchIndex).
 const searchRole = "search.index"
 
-// searchOff reports whether no enabled workflow fills searchRole for the
-// collection: its own fillers decide when it has live ones, else the
-// workspace's. A workspace that never had a filler is on: its default
-// built-in is created when its first event is dispatched.
+// searchOff reports whether a configured collection provider is unavailable.
+// Before defaults have been prepared, indexing is treated as on. Explicitly
+// paused, archived or deleted providers keep collection search off.
 func (s *Service) searchOff(ctx context.Context, collectionID string) (bool, error) {
 	c, err := s.Client.Resource.Query().Where(resource.IDEQ(collectionID)).Select(resource.FieldWorkspaceID).Only(ctx)
 	if err != nil {
 		return false, err
 	}
-	own, err := s.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(c.WorkspaceID), workflow.RoleEQ(searchRole), workflow.CollectionIDEQ(collectionID), workflow.DeletedAtIsNil()).
-		Select(workflow.FieldEnabled).All(ctx)
+	own, err := s.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(c.WorkspaceID), workflow.RoleEQ(searchRole), workflow.AutomaticProviderEQ(true), workflow.CollectionIDEQ(collectionID)).
+		Select(workflow.FieldAutomaticEnabled, workflow.FieldState, workflow.FieldDeletedAt).All(ctx)
 	if err != nil {
 		return false, err
 	}
 	if len(own) > 0 {
-		return !slices.ContainsFunc(own, func(w *ent.Workflow) bool { return w.Enabled }), nil
+		return !slices.ContainsFunc(own, func(w *ent.Workflow) bool { return w.DeletedAt == nil && w.AutomaticEnabled && w.State == "published" }), nil
 	}
-	ws, err := s.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(c.WorkspaceID), workflow.RoleEQ(searchRole), workflow.CollectionIDIsNil()).
-		Select(workflow.FieldEnabled, workflow.FieldDeletedAt).All(ctx)
-	if err != nil {
-		return false, err
-	}
-	return len(ws) > 0 && !slices.ContainsFunc(ws, func(w *ent.Workflow) bool { return w.Enabled && w.DeletedAt == nil }), nil
+	return false, nil
 }
 
 // SyncSearch brings the search documents of items and folders to their

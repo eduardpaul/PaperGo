@@ -64,7 +64,7 @@ func (s *Service) EnsureIntegrationWorkflow(ctx context.Context, t *dms.Service,
 	if err != nil {
 		return err
 	}
-	w, err := t.Client.Workflow.Create().SetWorkspaceID(list.WorkspaceID).SetKey(key).SetName(b.Name).SetDescription(b.Description).SetEnabled(true).SetBuiltinKey(b.Key).SetParameters(map[string]any{}).SetCurrentVersion(1).SetCreatedBy(subject).SetUpdatedBy(subject).Save(ctx)
+	w, err := t.Client.Workflow.Create().SetWorkspaceID(list.WorkspaceID).SetKey(key).SetName(b.Name).SetDescription(b.Description).SetAutomaticEnabled(true).SetBuiltinKey(b.Key).SetParameters(map[string]any{}).SetCurrentVersion(1).SetCreatedBy(subject).SetUpdatedBy(subject).Save(ctx)
 	if err != nil {
 		return err
 	}
@@ -74,5 +74,5 @@ func (s *Service) EnsureIntegrationWorkflow(ctx context.Context, t *dms.Service,
 	if err = index(ctx, t, w, def); err != nil {
 		return err
 	}
-	return audit(ctx, t, subject, "workflow.builtin", w, map[string]any{"workflow_id": w.ID, "builtin_key": b.Key, "enabled": true, "version": 1})
+	return audit(ctx, t, subject, "workflow.builtin", w, map[string]any{"workflow_id": w.ID, "builtin_key": b.Key, "automatic_enabled": true, "version": 1})
 }

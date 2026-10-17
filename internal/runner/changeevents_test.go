@@ -200,7 +200,7 @@ func TestTermChangedSubscriptionsRequireTaxonomyRead(t *testing.T) {
 	f := setup(t)
 	readerRole := workspaceOnlyAuthor(t, f)
 	definition := json.RawMessage(`{"triggers":[{"type":"term.changed"}],"flow":{"start":"done","nodes":{"done":{"activity":"end"}}}}`)
-	in := workflow.Save{Name: "Term curation", Definition: definition}
+	in := workflow.Save{AutomaticEnabled: new(true), Name: "Term curation", Definition: definition}
 	if _, err := f.wf.Create(ctx, "bob", f.ws.ID, in); !errors.Is(err, dms.ErrForbidden) {
 		t.Fatalf("unreadable taxonomy subscription saved: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestTermChangedSubscriptionsRequireTaxonomyRead(t *testing.T) {
 	if err = directory.SetAssignment(ctx, "alice", readerRole, principal, false); err != nil {
 		t.Fatal(err)
 	}
-	authorized, err := f.wf.Create(ctx, "bob", f.ws.ID, workflow.Save{Name: "Authorized curation", Definition: definition})
+	authorized, err := f.wf.Create(ctx, "bob", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Authorized curation", Definition: definition})
 	if err != nil {
 		t.Fatal("taxonomy reader could not subscribe", err)
 	}
@@ -251,7 +251,7 @@ func TestTermChangedRunRechecksTaxonomyReadAfterWait(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := json.RawMessage(`{"triggers":[{"type":"term.changed"}],"flow":{"start":"wait","nodes":{"wait":{"activity":"delay","inputs":{"duration":"1s"},"next":{"done":"read"}},"read":{"activity":"fail","inputs":{"message":"{trigger:data.current.name}"}}}}}`)
-	flow, err := f.wf.Create(ctx, "bob", f.ws.ID, workflow.Save{Name: "Delayed taxonomy read", Definition: definition})
+	flow, err := f.wf.Create(ctx, "bob", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Delayed taxonomy read", Definition: definition})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestTermRelabelStartsRunsInEveryLiveWorkspace(t *testing.T) {
 	}
 	definition := `{"triggers":[{"type":"term.changed"}],"flow":{"start":"check","nodes":{"check":{"activity":"if","inputs":{"left":"{trigger:data.current.labels.es}","op":"eq","right":"Contabilidad"},"next":{"true":"done","false":"bad"}},"done":{"activity":"end"},"bad":{"activity":"fail","inputs":{"message":"missing changed label"}}}}}`
 	first := f.workflow(t, "Term curation", definition)
-	second, err := f.wf.Create(ctx, "alice", other.ID, workflow.Save{Name: "Term curation", Definition: json.RawMessage(definition)})
+	second, err := f.wf.Create(ctx, "alice", other.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Term curation", Definition: json.RawMessage(definition)})
 	if err != nil {
 		t.Fatal(err)
 	}

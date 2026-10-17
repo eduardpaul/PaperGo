@@ -70,16 +70,58 @@ func (_u *WorkflowUpdate) SetNillableDescription(v *string) *WorkflowUpdate {
 	return _u
 }
 
-// SetEnabled sets the "enabled" field.
-func (_u *WorkflowUpdate) SetEnabled(v bool) *WorkflowUpdate {
-	_u.mutation.SetEnabled(v)
+// SetAutomaticEnabled sets the "automatic_enabled" field.
+func (_u *WorkflowUpdate) SetAutomaticEnabled(v bool) *WorkflowUpdate {
+	_u.mutation.SetAutomaticEnabled(v)
 	return _u
 }
 
-// SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (_u *WorkflowUpdate) SetNillableEnabled(v *bool) *WorkflowUpdate {
+// SetNillableAutomaticEnabled sets the "automatic_enabled" field if the given value is not nil.
+func (_u *WorkflowUpdate) SetNillableAutomaticEnabled(v *bool) *WorkflowUpdate {
 	if v != nil {
-		_u.SetEnabled(*v)
+		_u.SetAutomaticEnabled(*v)
+	}
+	return _u
+}
+
+// SetManualEnabled sets the "manual_enabled" field.
+func (_u *WorkflowUpdate) SetManualEnabled(v bool) *WorkflowUpdate {
+	_u.mutation.SetManualEnabled(v)
+	return _u
+}
+
+// SetNillableManualEnabled sets the "manual_enabled" field if the given value is not nil.
+func (_u *WorkflowUpdate) SetNillableManualEnabled(v *bool) *WorkflowUpdate {
+	if v != nil {
+		_u.SetManualEnabled(*v)
+	}
+	return _u
+}
+
+// SetAutomaticProvider sets the "automatic_provider" field.
+func (_u *WorkflowUpdate) SetAutomaticProvider(v bool) *WorkflowUpdate {
+	_u.mutation.SetAutomaticProvider(v)
+	return _u
+}
+
+// SetNillableAutomaticProvider sets the "automatic_provider" field if the given value is not nil.
+func (_u *WorkflowUpdate) SetNillableAutomaticProvider(v *bool) *WorkflowUpdate {
+	if v != nil {
+		_u.SetAutomaticProvider(*v)
+	}
+	return _u
+}
+
+// SetState sets the "state" field.
+func (_u *WorkflowUpdate) SetState(v string) *WorkflowUpdate {
+	_u.mutation.SetState(v)
+	return _u
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_u *WorkflowUpdate) SetNillableState(v *string) *WorkflowUpdate {
+	if v != nil {
+		_u.SetState(*v)
 	}
 	return _u
 }
@@ -205,6 +247,11 @@ func (_u *WorkflowUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Workflow.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.State(); ok {
+		if err := workflow.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Workflow.state": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.CurrentVersion(); ok {
 		if err := workflow.CurrentVersionValidator(v); err != nil {
 			return &ValidationError{Name: "current_version", err: fmt.Errorf(`ent: validator failed for field "Workflow.current_version": %w`, err)}
@@ -239,8 +286,17 @@ func (_u *WorkflowUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(workflow.FieldDescription, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Enabled(); ok {
-		_spec.SetField(workflow.FieldEnabled, field.TypeBool, value)
+	if value, ok := _u.mutation.AutomaticEnabled(); ok {
+		_spec.SetField(workflow.FieldAutomaticEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ManualEnabled(); ok {
+		_spec.SetField(workflow.FieldManualEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AutomaticProvider(); ok {
+		_spec.SetField(workflow.FieldAutomaticProvider, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.State(); ok {
+		_spec.SetField(workflow.FieldState, field.TypeString, value)
 	}
 	if _u.mutation.BuiltinKeyCleared() {
 		_spec.ClearField(workflow.FieldBuiltinKey, field.TypeString)
@@ -337,16 +393,58 @@ func (_u *WorkflowUpdateOne) SetNillableDescription(v *string) *WorkflowUpdateOn
 	return _u
 }
 
-// SetEnabled sets the "enabled" field.
-func (_u *WorkflowUpdateOne) SetEnabled(v bool) *WorkflowUpdateOne {
-	_u.mutation.SetEnabled(v)
+// SetAutomaticEnabled sets the "automatic_enabled" field.
+func (_u *WorkflowUpdateOne) SetAutomaticEnabled(v bool) *WorkflowUpdateOne {
+	_u.mutation.SetAutomaticEnabled(v)
 	return _u
 }
 
-// SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (_u *WorkflowUpdateOne) SetNillableEnabled(v *bool) *WorkflowUpdateOne {
+// SetNillableAutomaticEnabled sets the "automatic_enabled" field if the given value is not nil.
+func (_u *WorkflowUpdateOne) SetNillableAutomaticEnabled(v *bool) *WorkflowUpdateOne {
 	if v != nil {
-		_u.SetEnabled(*v)
+		_u.SetAutomaticEnabled(*v)
+	}
+	return _u
+}
+
+// SetManualEnabled sets the "manual_enabled" field.
+func (_u *WorkflowUpdateOne) SetManualEnabled(v bool) *WorkflowUpdateOne {
+	_u.mutation.SetManualEnabled(v)
+	return _u
+}
+
+// SetNillableManualEnabled sets the "manual_enabled" field if the given value is not nil.
+func (_u *WorkflowUpdateOne) SetNillableManualEnabled(v *bool) *WorkflowUpdateOne {
+	if v != nil {
+		_u.SetManualEnabled(*v)
+	}
+	return _u
+}
+
+// SetAutomaticProvider sets the "automatic_provider" field.
+func (_u *WorkflowUpdateOne) SetAutomaticProvider(v bool) *WorkflowUpdateOne {
+	_u.mutation.SetAutomaticProvider(v)
+	return _u
+}
+
+// SetNillableAutomaticProvider sets the "automatic_provider" field if the given value is not nil.
+func (_u *WorkflowUpdateOne) SetNillableAutomaticProvider(v *bool) *WorkflowUpdateOne {
+	if v != nil {
+		_u.SetAutomaticProvider(*v)
+	}
+	return _u
+}
+
+// SetState sets the "state" field.
+func (_u *WorkflowUpdateOne) SetState(v string) *WorkflowUpdateOne {
+	_u.mutation.SetState(v)
+	return _u
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_u *WorkflowUpdateOne) SetNillableState(v *string) *WorkflowUpdateOne {
+	if v != nil {
+		_u.SetState(*v)
 	}
 	return _u
 }
@@ -485,6 +583,11 @@ func (_u *WorkflowUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Workflow.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.State(); ok {
+		if err := workflow.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Workflow.state": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.CurrentVersion(); ok {
 		if err := workflow.CurrentVersionValidator(v); err != nil {
 			return &ValidationError{Name: "current_version", err: fmt.Errorf(`ent: validator failed for field "Workflow.current_version": %w`, err)}
@@ -536,8 +639,17 @@ func (_u *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err 
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(workflow.FieldDescription, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Enabled(); ok {
-		_spec.SetField(workflow.FieldEnabled, field.TypeBool, value)
+	if value, ok := _u.mutation.AutomaticEnabled(); ok {
+		_spec.SetField(workflow.FieldAutomaticEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ManualEnabled(); ok {
+		_spec.SetField(workflow.FieldManualEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AutomaticProvider(); ok {
+		_spec.SetField(workflow.FieldAutomaticProvider, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.State(); ok {
+		_spec.SetField(workflow.FieldState, field.TypeString, value)
 	}
 	if _u.mutation.BuiltinKeyCleared() {
 		_spec.ClearField(workflow.FieldBuiltinKey, field.TypeString)

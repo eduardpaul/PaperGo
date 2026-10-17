@@ -80,16 +80,58 @@ func (_c *WorkflowCreate) SetNillableDescription(v *string) *WorkflowCreate {
 	return _c
 }
 
-// SetEnabled sets the "enabled" field.
-func (_c *WorkflowCreate) SetEnabled(v bool) *WorkflowCreate {
-	_c.mutation.SetEnabled(v)
+// SetAutomaticEnabled sets the "automatic_enabled" field.
+func (_c *WorkflowCreate) SetAutomaticEnabled(v bool) *WorkflowCreate {
+	_c.mutation.SetAutomaticEnabled(v)
 	return _c
 }
 
-// SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (_c *WorkflowCreate) SetNillableEnabled(v *bool) *WorkflowCreate {
+// SetNillableAutomaticEnabled sets the "automatic_enabled" field if the given value is not nil.
+func (_c *WorkflowCreate) SetNillableAutomaticEnabled(v *bool) *WorkflowCreate {
 	if v != nil {
-		_c.SetEnabled(*v)
+		_c.SetAutomaticEnabled(*v)
+	}
+	return _c
+}
+
+// SetManualEnabled sets the "manual_enabled" field.
+func (_c *WorkflowCreate) SetManualEnabled(v bool) *WorkflowCreate {
+	_c.mutation.SetManualEnabled(v)
+	return _c
+}
+
+// SetNillableManualEnabled sets the "manual_enabled" field if the given value is not nil.
+func (_c *WorkflowCreate) SetNillableManualEnabled(v *bool) *WorkflowCreate {
+	if v != nil {
+		_c.SetManualEnabled(*v)
+	}
+	return _c
+}
+
+// SetAutomaticProvider sets the "automatic_provider" field.
+func (_c *WorkflowCreate) SetAutomaticProvider(v bool) *WorkflowCreate {
+	_c.mutation.SetAutomaticProvider(v)
+	return _c
+}
+
+// SetNillableAutomaticProvider sets the "automatic_provider" field if the given value is not nil.
+func (_c *WorkflowCreate) SetNillableAutomaticProvider(v *bool) *WorkflowCreate {
+	if v != nil {
+		_c.SetAutomaticProvider(*v)
+	}
+	return _c
+}
+
+// SetState sets the "state" field.
+func (_c *WorkflowCreate) SetState(v string) *WorkflowCreate {
+	_c.mutation.SetState(v)
+	return _c
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_c *WorkflowCreate) SetNillableState(v *string) *WorkflowCreate {
+	if v != nil {
+		_c.SetState(*v)
 	}
 	return _c
 }
@@ -249,9 +291,21 @@ func (_c *WorkflowCreate) defaults() {
 		v := workflow.DefaultDescription
 		_c.mutation.SetDescription(v)
 	}
-	if _, ok := _c.mutation.Enabled(); !ok {
-		v := workflow.DefaultEnabled
-		_c.mutation.SetEnabled(v)
+	if _, ok := _c.mutation.AutomaticEnabled(); !ok {
+		v := workflow.DefaultAutomaticEnabled
+		_c.mutation.SetAutomaticEnabled(v)
+	}
+	if _, ok := _c.mutation.ManualEnabled(); !ok {
+		v := workflow.DefaultManualEnabled
+		_c.mutation.SetManualEnabled(v)
+	}
+	if _, ok := _c.mutation.AutomaticProvider(); !ok {
+		v := workflow.DefaultAutomaticProvider
+		_c.mutation.SetAutomaticProvider(v)
+	}
+	if _, ok := _c.mutation.State(); !ok {
+		v := workflow.DefaultState
+		_c.mutation.SetState(v)
 	}
 	if _, ok := _c.mutation.Parameters(); !ok {
 		v := workflow.DefaultParameters
@@ -302,8 +356,22 @@ func (_c *WorkflowCreate) check() error {
 	if _, ok := _c.mutation.Description(); !ok {
 		return &ValidationError{Name: "description", err: errors.New(`ent: missing required field "Workflow.description"`)}
 	}
-	if _, ok := _c.mutation.Enabled(); !ok {
-		return &ValidationError{Name: "enabled", err: errors.New(`ent: missing required field "Workflow.enabled"`)}
+	if _, ok := _c.mutation.AutomaticEnabled(); !ok {
+		return &ValidationError{Name: "automatic_enabled", err: errors.New(`ent: missing required field "Workflow.automatic_enabled"`)}
+	}
+	if _, ok := _c.mutation.ManualEnabled(); !ok {
+		return &ValidationError{Name: "manual_enabled", err: errors.New(`ent: missing required field "Workflow.manual_enabled"`)}
+	}
+	if _, ok := _c.mutation.AutomaticProvider(); !ok {
+		return &ValidationError{Name: "automatic_provider", err: errors.New(`ent: missing required field "Workflow.automatic_provider"`)}
+	}
+	if _, ok := _c.mutation.State(); !ok {
+		return &ValidationError{Name: "state", err: errors.New(`ent: missing required field "Workflow.state"`)}
+	}
+	if v, ok := _c.mutation.State(); ok {
+		if err := workflow.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Workflow.state": %w`, err)}
+		}
 	}
 	if v, ok := _c.mutation.CollectionID(); ok {
 		if err := workflow.CollectionIDValidator(v); err != nil {
@@ -404,9 +472,21 @@ func (_c *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 		_spec.SetField(workflow.FieldDescription, field.TypeString, value)
 		_node.Description = value
 	}
-	if value, ok := _c.mutation.Enabled(); ok {
-		_spec.SetField(workflow.FieldEnabled, field.TypeBool, value)
-		_node.Enabled = value
+	if value, ok := _c.mutation.AutomaticEnabled(); ok {
+		_spec.SetField(workflow.FieldAutomaticEnabled, field.TypeBool, value)
+		_node.AutomaticEnabled = value
+	}
+	if value, ok := _c.mutation.ManualEnabled(); ok {
+		_spec.SetField(workflow.FieldManualEnabled, field.TypeBool, value)
+		_node.ManualEnabled = value
+	}
+	if value, ok := _c.mutation.AutomaticProvider(); ok {
+		_spec.SetField(workflow.FieldAutomaticProvider, field.TypeBool, value)
+		_node.AutomaticProvider = value
+	}
+	if value, ok := _c.mutation.State(); ok {
+		_spec.SetField(workflow.FieldState, field.TypeString, value)
+		_node.State = value
 	}
 	if value, ok := _c.mutation.BuiltinKey(); ok {
 		_spec.SetField(workflow.FieldBuiltinKey, field.TypeString, value)

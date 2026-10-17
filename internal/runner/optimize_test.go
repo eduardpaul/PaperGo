@@ -103,7 +103,7 @@ func TestOptimizeImageBuiltIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "documents.optimize", workflow.SetBuiltIn{CollectionID: lib.ID, Enabled: true})
+	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "documents.optimize", workflow.SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,6 +175,9 @@ func TestOptimizeImageBuiltIn(t *testing.T) {
 	f.upload(t, lib.ID, "contract.pdf", "application/pdf", []byte("%PDF-1.7 test"))
 	pdfRun := f.runsOf(t, w.ID, 4)[0]
 	done := f.status(t, pdfRun, "completed")
+	if done.Outcome != "unchanged" {
+		t.Fatalf("unsupported automatic input should report no changes: %+v", done)
+	}
 	if open, _ := pageData(f.tasks().Workspace(ctx, "alice", f.ws.ID, tasks.Filter{Status: "open"})); len(open) != 0 {
 		t.Fatalf("a PDF asked for review: %+v (run %+v)", open, done)
 	}
@@ -226,7 +229,7 @@ func TestPhotosToPDFBuiltIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "documents.photos_to_pdf", workflow.SetBuiltIn{CollectionID: lib.ID, Enabled: true})
+	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "documents.photos_to_pdf", workflow.SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +315,7 @@ func TestPhotosToPDFRefusesChangedAndUnsupportedPhotos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "documents.photos_to_pdf", workflow.SetBuiltIn{CollectionID: lib.ID, Enabled: true})
+	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "documents.photos_to_pdf", workflow.SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,14 +324,8 @@ func TestPhotosToPDFRefusesChangedAndUnsupportedPhotos(t *testing.T) {
 	pdf := f.upload(t, lib.ID, "contract.pdf", "application/pdf", []byte("%PDF-1.7 test"))
 
 	runs, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{photo.ID, pdf.ID}, PrimaryItemID: photo.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = f.r.Dispatch(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if run := f.status(t, runs[0], "failed"); !strings.Contains(run.Error, "not a JPEG, PNG or WebP photo") {
-		t.Fatalf("PDF member: %+v", run)
+	if err == nil || !strings.Contains(err.Error(), "Requires a JPEG, PNG or WebP") {
+		t.Fatalf("unsupported selections must be rejected before queueing: %v", err)
 	}
 
 	// A photo replaced while the review waits cannot be promoted.
@@ -351,4 +348,54 @@ func TestPhotosToPDFRefusesChangedAndUnsupportedPhotos(t *testing.T) {
 	if _, err = f.dms.GetSurface(ctx, "alice", other.ID, "head"); err != nil {
 		t.Fatalf("the changed photo was deleted: %v", err)
 	}
+}
+
+func TestOptimizeImageCanRunManuallyWithAutomationOff(t *testing.T) {
+	f := setup(t)
+	lib, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "library", Name: "Manual photos", WebDAVEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "documents.optimize", workflow.SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: false, ManualEnabled: new(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo := f.upload(t, lib.ID, "photo.png", "image/png", scan(t, 800, 600))
+	f.runs(t, w.ID, 0)
+	launch := workflow.Start{ItemIDs: []string{photo.ID}, WorkflowVersion: w.CurrentVersion}
+	ready, err := f.wf.CheckStart(ctx, "alice", w.ID, launch, true)
+	if err != nil || !ready.CanRun {
+		t.Fatal(ready, err)
+	}
+	f.wf.Tools.OCR = nil
+	blocked, err := f.wf.CheckStart(ctx, "alice", w.ID, launch, true)
+	if err != nil || blocked.CanRun || blocked.Code != "needs_setup" {
+		t.Fatal(blocked, err)
+	}
+	f.wf.Tools.OCR = textEngine{}
+	ids, err := f.wf.StartRuns(ctx, "alice", w.ID, launch)
+	if err != nil || len(ids) != 1 {
+		t.Fatal(ids, err)
+	}
+	if _, err = f.r.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	approval := f.approvalOf(t, ids[0])
+	if _, err = f.tasks().Respond(ctx, "alice", approval.ID, tasks.Response{Outcome: "rejected", Comment: "Keep the original"}); err != nil {
+		t.Fatal(err)
+	}
+	f.status(t, ids[0], "completed")
+	current, err := f.wf.Get(ctx, "alice", w.ID)
+	if err != nil || current.AutomaticEnabled || current.Version != w.Version {
+		t.Fatal("manual invocation changed automatic settings", current, err)
+	}
+	if b := f.current(t, photo.ID); b.Version != 1 {
+		t.Fatal("rejected proposal changed original", b)
+	}
+	pdf := f.upload(t, lib.ID, "unsupported.pdf", "application/pdf", []byte("pdf"))
+	unsupported, err := f.wf.CheckStart(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{pdf.ID}}, true)
+	if err != nil || unsupported.CanRun || unsupported.Code != "unsupported_file" {
+		t.Fatal(unsupported, err)
+	}
+	f.runs(t, w.ID, 1)
 }

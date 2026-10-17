@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { problemMessage } from '@/lib/errors';
 import { batch } from '@/api/batch';
-import { keys, resourceQuery, workflows } from '@/api/queries';
-import type { Resource, Workflow } from '@/api/types';
+import { keys, resourceQuery } from '@/api/queries';
+import type { Resource, Workflow, WorkflowAction } from '@/api/types';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { downloadContent } from '@/features/documents/transfer';
 import { ConfirmDialog } from '@/features/settings/section';
 import { AddToSmartFolder } from '@/features/smart-folders/classification';
-import { applicableWorkflows } from '@/features/workflows/item-workflows';
+import { api } from '@/api/http';
 import { LaunchWorkflow } from '@/features/workflows/workflow-tools';
 import { can } from './access';
 import { MoveDialog } from './move-dialog';
@@ -27,8 +27,8 @@ export function ItemContextMenu({ item, collection, selection = [item], onSelect
   const writable = can(current.data, 'write');
   const bulk = selection.length > 1;
   const items = bulk ? selection.map(item => item.id === fresh.id ? fresh : item) : [fresh];
-  const definitions = useQuery({ queryKey: ['workflows', item.workspace_id], queryFn: () => workflows(item.workspace_id), enabled: open && writable && items.every(item => item.kind === 'item') });
-  const choices = applicableWorkflows(definitions.data ?? [], collection.id, items.length);
+  const definitions = useQuery({ queryKey: ['workflow-actions', item.workspace_id, items.map(item => [item.id, item.version])], queryFn: async () => (await api<{value: WorkflowAction[]}>(`/v1/workspaces/${item.workspace_id}/workflow-actions`, { method: 'POST', body: {item_ids: items.map(item => item.id)} })).data.value, enabled: open && writable && items.every(item => item.kind === 'item') });
+  const choices = definitions.data ?? [];
   const remove = useMutation({
     meta: { silent: true },
     mutationFn: () => batch(items.map(item => ({ id: item.id, method: 'DELETE', url: `/v1/resources/${item.id}${item.kind === 'folder' ? '?recursive=true' : ''}`, headers: { 'If-Match': `"${item.version}"` } }))),
@@ -49,7 +49,7 @@ export function ItemContextMenu({ item, collection, selection = [item], onSelect
           {items.every(item => item.kind === 'item') && <ContextMenuSub>
             <ContextMenuSubTrigger>Run workflow{bulk ? ` (${items.length} items)` : ''} ›</ContextMenuSubTrigger>
             <ContextMenuSubContent>
-              {choices.map(workflow => <ContextMenuItem key={workflow.id} onSelect={() => setLaunching(workflow)}>{workflow.name}</ContextMenuItem>)}
+              {choices.map(action => <ContextMenuItem key={action.workflow?.id ?? action.builtin?.key} disabled={!action.availability.can_run} onSelect={() => action.workflow && setLaunching(action.workflow)}>{action.workflow?.name ?? action.builtin?.name}{!action.availability.can_run && ` — ${action.availability.reason}`}</ContextMenuItem>)}
               {!choices.length && <ContextMenuItem disabled>{definitions.isPending ? 'Loading workflows…' : 'No applicable workflows'}</ContextMenuItem>}
             </ContextMenuSubContent>
           </ContextMenuSub>}

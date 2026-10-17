@@ -23,7 +23,7 @@ func init() {
 		run:          runSearchSync})
 	register(&Activity{Key: "search.items_with_term", Kind: "action",
 		Description: "Lists, 500 at a time, the items of the workspace holding the term of the term.changed or term.merged event that started the run, for search.sync in a forEach. Follow next until it is empty.",
-		InputSchema: inputs(`"collection_id": {"type": "string", "title": "Collection", "description": "Only this list or library; otherwise every collection without its own search.index workflow."},
+		InputSchema: inputs(`"collection_id": {"type": "string", "title": "Collection", "description": "Only this list or library; otherwise every collection in the workspace."},
 			"after": {"type": "string", "title": "After", "description": "The next of the previous page."}`),
 		OutputSchema: forms.MustParse(`{"type": "object", "properties": {"items": {"type": "array", "items": {"type": "string"}}, "next": {"type": "string"}}}`),
 		run:          runSearchItemsWithTerm})
@@ -120,14 +120,8 @@ func runSearchItemsWithTerm(e *env, in map[string]any) (outcome, error) {
 			}
 		}
 	}
-	var skip []string
-	if collection == "" {
-		// Collections with their own search.index workflow index themselves.
-		if skip, err = OverriddenCollections(e.ctx, e.t, e.workspaceID, RoleSearchIndex); err != nil {
-			return outcome{}, err
-		}
-	}
-	items, err := e.t.EntriesWithTerms(e.ctx, e.workspaceID, collection, skip, aliases, after, searchTermBatch)
+
+	items, err := e.t.EntriesWithTerms(e.ctx, e.workspaceID, collection, nil, aliases, after, searchTermBatch)
 	if err != nil {
 		return outcome{}, err
 	}

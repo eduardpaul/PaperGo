@@ -94,9 +94,24 @@ func Description(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldEQ(FieldDescription, v))
 }
 
-// Enabled applies equality check predicate on the "enabled" field. It's identical to EnabledEQ.
-func Enabled(v bool) predicate.Workflow {
-	return predicate.Workflow(sql.FieldEQ(FieldEnabled, v))
+// AutomaticEnabled applies equality check predicate on the "automatic_enabled" field. It's identical to AutomaticEnabledEQ.
+func AutomaticEnabled(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldAutomaticEnabled, v))
+}
+
+// ManualEnabled applies equality check predicate on the "manual_enabled" field. It's identical to ManualEnabledEQ.
+func ManualEnabled(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldManualEnabled, v))
+}
+
+// AutomaticProvider applies equality check predicate on the "automatic_provider" field. It's identical to AutomaticProviderEQ.
+func AutomaticProvider(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldAutomaticProvider, v))
+}
+
+// State applies equality check predicate on the "state" field. It's identical to StateEQ.
+func State(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldState, v))
 }
 
 // BuiltinKey applies equality check predicate on the "builtin_key" field. It's identical to BuiltinKeyEQ.
@@ -479,14 +494,99 @@ func DescriptionContainsFold(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldContainsFold(FieldDescription, v))
 }
 
-// EnabledEQ applies the EQ predicate on the "enabled" field.
-func EnabledEQ(v bool) predicate.Workflow {
-	return predicate.Workflow(sql.FieldEQ(FieldEnabled, v))
+// AutomaticEnabledEQ applies the EQ predicate on the "automatic_enabled" field.
+func AutomaticEnabledEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldAutomaticEnabled, v))
 }
 
-// EnabledNEQ applies the NEQ predicate on the "enabled" field.
-func EnabledNEQ(v bool) predicate.Workflow {
-	return predicate.Workflow(sql.FieldNEQ(FieldEnabled, v))
+// AutomaticEnabledNEQ applies the NEQ predicate on the "automatic_enabled" field.
+func AutomaticEnabledNEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldAutomaticEnabled, v))
+}
+
+// ManualEnabledEQ applies the EQ predicate on the "manual_enabled" field.
+func ManualEnabledEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldManualEnabled, v))
+}
+
+// ManualEnabledNEQ applies the NEQ predicate on the "manual_enabled" field.
+func ManualEnabledNEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldManualEnabled, v))
+}
+
+// AutomaticProviderEQ applies the EQ predicate on the "automatic_provider" field.
+func AutomaticProviderEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldAutomaticProvider, v))
+}
+
+// AutomaticProviderNEQ applies the NEQ predicate on the "automatic_provider" field.
+func AutomaticProviderNEQ(v bool) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldAutomaticProvider, v))
+}
+
+// StateEQ applies the EQ predicate on the "state" field.
+func StateEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldState, v))
+}
+
+// StateNEQ applies the NEQ predicate on the "state" field.
+func StateNEQ(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldState, v))
+}
+
+// StateIn applies the In predicate on the "state" field.
+func StateIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldIn(FieldState, vs...))
+}
+
+// StateNotIn applies the NotIn predicate on the "state" field.
+func StateNotIn(vs ...string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotIn(FieldState, vs...))
+}
+
+// StateGT applies the GT predicate on the "state" field.
+func StateGT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGT(FieldState, v))
+}
+
+// StateGTE applies the GTE predicate on the "state" field.
+func StateGTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldGTE(FieldState, v))
+}
+
+// StateLT applies the LT predicate on the "state" field.
+func StateLT(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLT(FieldState, v))
+}
+
+// StateLTE applies the LTE predicate on the "state" field.
+func StateLTE(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldLTE(FieldState, v))
+}
+
+// StateContains applies the Contains predicate on the "state" field.
+func StateContains(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContains(FieldState, v))
+}
+
+// StateHasPrefix applies the HasPrefix predicate on the "state" field.
+func StateHasPrefix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasPrefix(FieldState, v))
+}
+
+// StateHasSuffix applies the HasSuffix predicate on the "state" field.
+func StateHasSuffix(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldHasSuffix(FieldState, v))
+}
+
+// StateEqualFold applies the EqualFold predicate on the "state" field.
+func StateEqualFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEqualFold(FieldState, v))
+}
+
+// StateContainsFold applies the ContainsFold predicate on the "state" field.
+func StateContainsFold(v string) predicate.Workflow {
+	return predicate.Workflow(sql.FieldContainsFold(FieldState, v))
 }
 
 // BuiltinKeyEQ applies the EQ predicate on the "builtin_key" field.

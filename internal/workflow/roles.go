@@ -14,8 +14,7 @@ import (
 
 // Role is a product process that a workflow fills, such as search.index.
 // A role's built-in fills it by default; copies and alternatives fill it
-// instead, one enabled filler per scope: the workspace, or one collection,
-// which takes precedence for its own items. A filler declares outputs
+// instead, one automatic provider per collection. A filler declares outputs
 // compatible with the role's OutputSchema, so workflows that follow the role
 // (wf.{role}.completed) keep working when the filler is replaced.
 type Role struct {
@@ -70,10 +69,10 @@ func (r *Role) fills(def Definition) error {
 // enabled fillers of the role in the same workspace and collection are
 // turned off.
 func claimRole(ctx context.Context, t *dms.Service, subject string, w *ent.Workflow) error {
-	if w.Role == nil || !w.Enabled {
+	if w.Role == nil || !w.AutomaticEnabled || w.State != "published" || !w.AutomaticProvider {
 		return nil
 	}
-	q := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(w.WorkspaceID), workflow.RoleEQ(*w.Role), workflow.EnabledEQ(true), workflow.DeletedAtIsNil(), workflow.IDNEQ(w.ID))
+	q := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(w.WorkspaceID), workflow.RoleEQ(*w.Role), workflow.AutomaticEnabledEQ(true), workflow.StateEQ("published"), workflow.DeletedAtIsNil(), workflow.IDNEQ(w.ID))
 	if w.CollectionID != nil {
 		q.Where(workflow.CollectionIDEQ(*w.CollectionID))
 	} else {
@@ -84,7 +83,7 @@ func claimRole(ctx context.Context, t *dms.Service, subject string, w *ent.Workf
 		return err
 	}
 	for _, other := range others {
-		other, _, err = revise(ctx, t, subject, other, mustCurrent(ctx, t, other), func(u *ent.WorkflowUpdateOne) { u.SetEnabled(false) })
+		other, _, err = revise(ctx, t, subject, other, mustCurrent(ctx, t, other), func(u *ent.WorkflowUpdateOne) { u.SetAutomaticEnabled(false) })
 		if err != nil {
 			return err
 		}
@@ -103,37 +102,8 @@ func claimRole(ctx context.Context, t *dms.Service, subject string, w *ent.Workf
 	return nil
 }
 
-// overridden reports whether the collection has its own filler of the role,
-// enabled or not. Then the workspace's fillers do not run for its items, and
-// a disabled filler turns the role off there.
-func overridden(ctx context.Context, t *dms.Service, workspaceID, role, collectionID string) (bool, error) {
-	if collectionID == "" {
-		return false, nil
-	}
-	return t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.RoleEQ(role), workflow.CollectionIDEQ(collectionID), workflow.DeletedAtIsNil()).Exist(ctx)
-}
-
-// OverriddenCollections lists the collections of the workspace that have
-// their own filler of the role, enabled or not: work a workspace-wide filler
-// does across collections skips them.
-func OverriddenCollections(ctx context.Context, t *dms.Service, workspaceID, role string) ([]string, error) {
-	rows, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.RoleEQ(role), workflow.CollectionIDNotNil(), workflow.DeletedAtIsNil()).All(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := []string{}
-	for _, w := range rows {
-		if !slices.Contains(out, *w.CollectionID) {
-			out = append(out, *w.CollectionID)
-		}
-	}
-	return out, nil
-}
-
-// EnsureDefaults turns on the default built-ins (BuiltIn.Default) in a live
-// workspace that has never had them and has no other filler of their role:
-// the workspace's creator becomes their author. A built-in turned off,
-// copied, replaced or deleted stays as people left it.
+// EnsureDefaults prepares manual catalog entries and collection-specific default
+// providers. Explicit settings, including paused or deleted providers, are preserved.
 func EnsureDefaults(ctx context.Context, t *dms.Service, workspaceID string) error {
 	ws, err := t.Client.Resource.Query().Where(resource.IDEQ(workspaceID), resource.KindEQ(resource.KindWorkspace), resource.DeletedAtIsNil()).Only(ctx)
 	if ent.IsNotFound(err) {
@@ -142,33 +112,48 @@ func EnsureDefaults(ctx context.Context, t *dms.Service, workspaceID string) err
 	if err != nil {
 		return err
 	}
+	collections, err := t.Client.Resource.Query().Where(resource.WorkspaceIDEQ(workspaceID), resource.KindIn(resource.KindList, resource.KindLibrary), resource.DeletedAtIsNil()).All(ctx)
+	if err != nil {
+		return err
+	}
 	for _, b := range BuiltIns() {
 		if !b.Default {
 			continue
 		}
-		had, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.Or(workflow.BuiltinKeyEQ(b.Key), workflow.RoleEQ(b.Role))).Exist(ctx)
+		// Workspace entries expose manual use; automatic processing belongs to collections.
+		had, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.BuiltinKeyEQ(b.Key), workflow.CollectionIDIsNil()).Exist(ctx)
 		if err != nil {
 			return err
 		}
-		if had {
-			continue
+		if !had && b.ManualMode != "none" {
+			if _, _, err = createBuiltIn(ctx, t, ws.CreatedBy, workspaceID, b, nil, false, map[string]any{}); err != nil {
+				return err
+			}
 		}
-		if _, _, err = createBuiltIn(ctx, t, ws.CreatedBy, workspaceID, b, nil, true, map[string]any{}); err != nil {
-			return fmt.Errorf("turn on %s: %w", b.Key, err)
+		for _, collection := range collections {
+			had, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(workspaceID), workflow.CollectionIDEQ(collection.ID), workflow.Or(workflow.BuiltinKeyEQ(b.Key), workflow.And(workflow.RoleEQ(b.Role), workflow.AutomaticProviderEQ(true)))).Exist(ctx)
+			if err != nil {
+				return err
+			}
+			if !had {
+				if _, _, err = createBuiltIn(ctx, t, ws.CreatedBy, workspaceID, b, collection, true, map[string]any{}); err != nil {
+					return err
+				}
+			}
 		}
 	}
+
 	return nil
 }
 
-// RoleState is who fills a role for a collection: the collection's own
-// filler, else the workspace's.
+// RoleState identifies a collection's automatic provider.
 type RoleState struct {
 	Role *Role `json:"role"`
-	// Scope is collection or workspace, where the filler comes from; empty
+	// Scope is collection when a provider is configured; empty
 	// when nothing fills the role.
-	Scope    string    `json:"scope,omitempty"`
-	Enabled  bool      `json:"enabled"`
-	Workflow *Workflow `json:"workflow,omitempty"`
+	Scope            string    `json:"scope,omitempty"`
+	AutomaticEnabled bool      `json:"automatic_enabled"`
+	Workflow         *Workflow `json:"workflow,omitempty"`
 }
 
 // CollectionRoles reports which workflow fills each role for a collection.
@@ -187,30 +172,27 @@ func (s *Service) CollectionRoles(ctx context.Context, subject, collectionID str
 		}
 		for _, r := range Roles() {
 			st := RoleState{Role: r}
-			for _, scope := range []string{"collection", "workspace"} {
-				q := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(c.WorkspaceID), workflow.RoleEQ(r.Key), workflow.DeletedAtIsNil())
-				if scope == "collection" {
-					q.Where(workflow.CollectionIDEQ(c.ID))
-				} else {
-					q.Where(workflow.CollectionIDIsNil())
+			rows, err := t.Client.Workflow.Query().Where(workflow.WorkspaceIDEQ(c.WorkspaceID), workflow.RoleEQ(r.Key), workflow.CollectionIDEQ(c.ID), workflow.AutomaticProviderEQ(true), workflow.DeletedAtIsNil()).Order(ent.Desc(workflow.FieldAutomaticEnabled), ent.Asc(workflow.FieldID)).All(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(rows) > 0 {
+				selected := rows[0]
+				for _, candidate := range rows {
+					if candidate.AutomaticEnabled && candidate.State == "published" {
+						selected = candidate
+						break
+					}
 				}
-				rows, err := q.Order(ent.Desc(workflow.FieldEnabled), ent.Asc(workflow.FieldID)).All(ctx)
+				v, err := current(ctx, t, selected)
 				if err != nil {
 					return nil, err
 				}
-				if len(rows) == 0 {
-					continue
-				}
-				v, err := current(ctx, t, rows[0])
+				w, err := toWorkflow(selected, v)
 				if err != nil {
 					return nil, err
 				}
-				w, err := toWorkflow(rows[0], v)
-				if err != nil {
-					return nil, err
-				}
-				st.Scope, st.Enabled, st.Workflow = scope, rows[0].Enabled, &w
-				break
+				st.Scope, st.AutomaticEnabled, st.Workflow = "collection", selected.AutomaticEnabled && selected.State == "published", &w
 			}
 			out = append(out, st)
 		}

@@ -39,7 +39,7 @@ func TestCollectionSettingsAndDeleteAPI(t *testing.T) {
 		t.Fatal(collection, err)
 	}
 	wf := &workflow.Service{DMS: s}
-	bound, err := wf.Create(t.Context(), "alice", workspace.ID, workflow.Save{Name: "Manual collection workflow", Definition: json.RawMessage(`{"triggers":[{"type":"manual","collection_id":"` + collection.ID + `"}],"flow":{"start":"end","nodes":{"end":{"activity":"end"}}}}`)})
+	bound, err := wf.Create(t.Context(), "alice", workspace.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Manual collection workflow", Definition: json.RawMessage(`{"triggers":[{"type":"manual","collection_id":"` + collection.ID + `"}],"flow":{"start":"end","nodes":{"end":{"activity":"end"}}}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestCollectionSettingsAndDeleteAPI(t *testing.T) {
 	if deleted.Code != 204 {
 		t.Fatal(deleted.Code, deleted.Body.String())
 	}
-	if stored, err := s.Client.Workflow.Get(t.Context(), bound.ID); err != nil || stored.Enabled || stored.DeletedAt == nil {
+	if stored, err := s.Client.Workflow.Get(t.Context(), bound.ID); err != nil || stored.AutomaticEnabled || stored.DeletedAt == nil {
 		t.Fatal("bound workflow survived", stored, err)
 	}
 	if gone := request(h, "GET", path, "", testToken, "", ""); gone.Code != 404 {

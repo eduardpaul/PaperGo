@@ -24,18 +24,18 @@ The text of files is indexed too, as [file content](#file-content), separately f
 
 ## Keeping it current
 
-The **`search.index`** [built-in workflow](workflows.md#built-in-workflows) fills the `search.index` [role](workflows.md#roles). It is on by default in every workspace, runs on the system queue as the system subject, and `coalesce`s: a burst of changes to one entry costs at most two runs, and the last one sees the final state.
+The **`search.index`** [built-in workflow](workflows.md#built-in-workflows) fills the `search.index` [role](workflows.md#roles). It is on by default in every collection, runs on the system queue as the system subject, and `coalesce`s: a burst of changes to one entry costs at most two runs, and the last one sees the final state.
 
 - **Triggers.** Item and folder changes (`created`, `updated`, `published`, `unpublished`, `deleted`, `restored`, `purged`), `permissions.changed` (once per affected entry, for `replace` and `move`), `term.changed` and `term.merged`, and `manual`.
 - **`search.sync`** re-reads the entry and writes its documents, or removes them when it is gone. It reads state, not the event, so running it again, late or out of order is harmless.
-- **Terms.** A term whose name, labels or synonyms change, and both terms of a merge, are re-read for every item that holds them or an alias merged into them: `search.items_with_term` lists them 500 at a time for `search.sync` in a `forEach`. A collection with its own `search.index` filler is left to it.
-- **Turning it off.** `PUT /v1/workspaces/{id}/workflow-builtins/search.index` with a `collection_id` and `"enabled": false` gives the collection its own, disabled filler. Searching inside that collection then answers `400 search_off`, because its documents would go stale; global search keeps its entries as last indexed, still trimmed by current permissions. Copying the built-in replaces it with an editable workflow that fills the same role.
+- **Terms.** A term whose name, labels or synonyms change, and both terms of a merge, are re-read for every item that holds them or an alias merged into them: `search.items_with_term` lists them 500 at a time for `search.sync` in a `forEach`. Each provider refreshes only its own collection.
+- **Turning it off.** `PUT /v1/workspaces/{id}/workflow-builtins/search.index` with a `collection_id` and `"automatic_enabled": false` pauses the collection's automatic provider. Searching inside that collection then answers `400 search_off`, because its documents would go stale; global search keeps its entries as last indexed, still trimmed by current permissions. Duplicating creates a draft; explicitly publishing and enabling that copy replaces the automatic provider in that collection.
 
 Because indexing is asynchronous, a change appears in search after its run, usually within a second.
 
 ## File content
 
-The **`search.content`** built-in fills the `search.content` role. It is on by default in every workspace, runs on the system queue and `coalesce`s. When a PDF or an image is added (uploaded, through WebDAV, restored, from a workflow, or by a content reindex), it:
+The **`search.content`** built-in fills the `search.content` role. It is on by default in every collection, runs on the system queue and `coalesce`s. When a PDF or an image is added (uploaded, through WebDAV, restored, from a workflow, or by a content reindex), it:
 
 1. reads the file's text with [`document.read_text`](workflows.md#reading-text) (text layers, OCR for scans and photos when configured), reused for identical files;
 2. splits it into chunks with [`search.chunk`](workflows.md#file-content-steps), under a new generation, staged and not yet searched;

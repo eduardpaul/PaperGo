@@ -912,12 +912,12 @@ func (s *Service) delete(ctx context.Context, subject, id string, version int, r
 	now := time.Now().UTC()
 	if r.Kind == resource.KindWorkspace {
 		// Schedules and event dispatch only select enabled, live workflows.
-		if _, err = s.Client.ExecContext(ctx, `UPDATE workflows SET enabled=0, deleted_at=?, updated_at=?, updated_by=?, version=version+1 WHERE workspace_id=? AND deleted_at IS NULL`, now, now, subject, id); err != nil {
+		if _, err = s.Client.ExecContext(ctx, `UPDATE workflows SET automatic_enabled=0,manual_enabled=0, deleted_at=?, updated_at=?, updated_by=?, version=version+1 WHERE workspace_id=? AND deleted_at IS NULL`, now, now, subject, id); err != nil {
 			return err
 		}
 	}
 	if collection {
-		if _, err = s.Client.ExecContext(ctx, `UPDATE workflows SET enabled=0, deleted_at=?, updated_at=?, updated_by=?, version=version+1 WHERE deleted_at IS NULL AND (collection_id=? OR id IN (SELECT workflow_id FROM workflow_triggers WHERE collection_id=?))`, now, now, subject, id, id); err != nil {
+		if _, err = s.Client.ExecContext(ctx, `UPDATE workflows SET automatic_enabled=0,manual_enabled=0, deleted_at=?, updated_at=?, updated_by=?, version=version+1 WHERE deleted_at IS NULL AND (collection_id=? OR id IN (SELECT v.workflow_id FROM workflow_versions v JOIN workflows w ON w.id=v.workflow_id AND w.current_version=v.number, json_each(v.definition, '$.triggers') tr WHERE json_extract(tr.value, '$.collection_id')=?))`, now, now, subject, id, id); err != nil {
 			return err
 		}
 	}

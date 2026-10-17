@@ -42,7 +42,7 @@ func EnsureCoordinator(ctx context.Context, workflows *workflow.Service, subject
 	if workflows == nil || workspaceID == "" {
 		return nil
 	}
-	_, err := workflows.UpdateBuiltIn(ctx, subject, workspaceID, builtinKey, workflow.SetBuiltIn{Enabled: true})
+	_, err := workflows.UpdateBuiltIn(ctx, subject, workspaceID, builtinKey, workflow.SetBuiltIn{AutomaticEnabled: true})
 	if errors.Is(err, dms.ErrPreconditionFailed) {
 		return nil
 	}

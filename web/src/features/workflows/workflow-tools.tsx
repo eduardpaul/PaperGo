@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { api } from '@/api/http';
 import { stringifyJSON } from '@/api/json';
 import { allPages, useApiPages } from '@/api/pages';
-import type { Resource, Workflow } from '@/api/types';
+import type { Resource, Workflow, WorkflowAvailability } from '@/api/types';
 import { FormDialog } from '@/components/form-dialog';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
@@ -18,6 +18,7 @@ import { useFormat } from '@/lib/preferences';
 import { formDefaults, manualItemMode, normalizeForm } from './model';
 import type { WorkflowDefinition } from './model';
 import { SchemaFields } from './schema-form';
+import { automaticSummary } from './presentation';
 
 export function LaunchWorkflow({
   workflow,
@@ -52,21 +53,18 @@ export function LaunchWorkflow({
   const options = (fixedSelection ?? items.items)
     .filter((item) => item.kind === 'item')
     .map((item) => ({ value: item.id, label: item.name }));
+  const launchBody = { workflow_version: workflow.current_version, item_ids: itemIds.length ? itemIds : undefined, primary_item_id: manual?.selection === 'selection' ? (itemIds.includes(primary) ? primary : itemIds[0]) : undefined, inputs: normalizeForm(schema, inputs) };
+  const check = useQuery({ queryKey: ['workflow-launch-check', workflow.id, workflow.version, launchBody], queryFn: async () => (await api<WorkflowAvailability>(`/v1/workflows/${workflow.id}/check`, { method: 'POST', body: launchBody })).data });
   const launch = useMutation({
     meta: { silent: true },
     mutationFn: () =>
       api<{ run_ids: string[] }>(`/v1/workflows/${workflow.id}/runs`, {
         method: 'POST',
-        body: {
-          item_ids: itemIds.length ? itemIds : undefined,
-          primary_item_id:
-            manual?.selection === 'selection' ? (itemIds.includes(primary) ? primary : itemIds[0]) : undefined,
-          inputs: normalizeForm(schema, inputs),
-        },
+        body: launchBody,
       }),
     onSuccess: async (result) => {
-      toast.success(`${result.data.run_ids.length} workflow run${result.data.run_ids.length === 1 ? '' : 's'} started`, {
-        description: <a className="underline" href={`/w/${workflow.workspace_id}/settings/runs?run=${result.data.run_ids[0]}`}>View run details</a>,
+      toast.success(`${result.data.run_ids.length} workflow run${result.data.run_ids.length === 1 ? '' : 's'} queued`, {
+        description: <a className="underline" href={(() => { const first = (fixedSelection ?? items.items).find(item => item.id === (launchBody.primary_item_id ?? itemIds[0])); return first?.container_id ? `/w/${workflow.workspace_id}/l/${first.container_id}?item=${first.id}&tab=workflows` : `/w/${workflow.workspace_id}/settings/runs?run=${result.data.run_ids[0]}`; })()}>View status</a>,
       });
       await client.invalidateQueries({ queryKey: ['workflow-runs'] });
       onClose();
@@ -83,12 +81,16 @@ export function LaunchWorkflow({
     <FormDialog
       open
       title={`Run ${workflow.name}`}
-      submitLabel="Run workflow"
+      submitLabel="Run once"
       pending={launch.isPending}
-      submitDisabled={!workflow.enabled || !manual || (itemMode === 'single' ? itemIds.length !== 1 : itemMode === 'multiple' ? itemIds.length < 1 || itemIds.length > 100 : itemIds.length !== 0)}
+      submitDisabled={check.isPending || check.isError || !check.data?.can_run || !manual || (itemMode === 'single' ? itemIds.length !== 1 : itemMode === 'multiple' ? itemIds.length < 1 || itemIds.length > 100 : itemIds.length !== 0)}
       onClose={onClose}
-      onSubmit={() => launch.mutate()}
+      onSubmit={() => { if (check.data?.can_run) launch.mutate(); }}
     >
+      <p className="text-sm">Automatic runs: {automaticSummary(workflow)}. Running once keeps these settings unchanged.</p>
+      <p className="text-xs text-muted">Execution author: {workflow.execution_author ?? 'Workflow author'}. The server rechecks permissions before execution.</p>
+      <QueryFeedback query={check} />
+      {check.data && <p role="status" className="text-sm">{check.data.reason}</p>}
       {launch.error && <Alert>{problemMessage(launch.error)}</Alert>}
       {fixedSelection && <p className="text-sm">{fixedSelection.length} selected: {fixedSelection.map((item) => item.name).join(', ')}</p>}
       {manual && itemMode !== 'none' && (
@@ -244,9 +246,9 @@ export function CopyBuiltIn({
   return (
     <FormDialog
       open
-      title="Copy and customize built-in"
-      description="The copy becomes an editable workflow. The built-in is turned off for this collection."
-      submitLabel="Copy workflow"
+      title="Duplicate to customize"
+      description="Creates an editable draft with automatic runs off. Current automatic processing stays unchanged."
+      submitLabel="Create draft"
       pending={copy.isPending}
       onClose={onClose}
       onSubmit={() => copy.mutate()}

@@ -17,7 +17,7 @@ func TestWorkspaceDeletionDisablesWorkflows(t *testing.T) {
 		t.Fatal(err)
 	}
 	wf := &workflow.Service{DMS: s}
-	created, err := wf.Create(ctx, "alice", w.ID, workflow.Save{Name: "Manual", Definition: json.RawMessage(`{"triggers":[{"type":"manual"}],"flow":{"start":"end","nodes":{"end":{"activity":"end"}}}}`)})
+	created, err := wf.Create(ctx, "alice", w.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Manual", Definition: json.RawMessage(`{"triggers":[{"type":"manual"}],"flow":{"start":"end","nodes":{"end":{"activity":"end"}}}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestWorkspaceDeletionDisablesWorkflows(t *testing.T) {
 		t.Fatal(response.Code, response.Body.String())
 	}
 	stored, err := s.Client.Workflow.Get(ctx, created.ID)
-	if err != nil || stored.Enabled || stored.DeletedAt == nil || stored.Version != created.Version+1 {
+	if err != nil || stored.AutomaticEnabled || stored.DeletedAt == nil || stored.Version != created.Version+1 {
 		t.Fatal("workflow remained active", stored, err)
 	}
 	if _, err = wf.Get(ctx, "alice", created.ID); err == nil {

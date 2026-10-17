@@ -611,7 +611,7 @@ func TestTaskNodeValidationAndRecipients(t *testing.T) {
 		"ports without wait":  {`{"triggers": [{"type": "manual"}], "flow": {"start": "a", "nodes": {"a": {"activity": "task", "inputs": {"title": "x", "wait": false}, "next": {"done": "b", "x": "b"}}, "b": {"activity": "end"}}}}`, "no port x"},
 		"task key on item":    {`{"triggers": [{"type": "item.created", "task_key": "x"}], "flow": {"start": "a", "nodes": {"a": {"activity": "end"}}}}`, "task_key"},
 	} {
-		if _, err := f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: name, Definition: json.RawMessage(c.def)}); err == nil || !strings.Contains(err.Error(), c.err) {
+		if _, err := f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: name, Definition: json.RawMessage(c.def)}); err == nil || !strings.Contains(err.Error(), c.err) {
 			t.Errorf("%s: %v, want %q", name, err, c.err)
 		}
 	}
@@ -660,7 +660,7 @@ func TestTaskFormsCheckTheirPickers(t *testing.T) {
 		t.Fatal(err)
 	}
 	picker := `{"type": "object", "properties": {"doc": {"type": "string", "x-papergo": {"kind": "item", "collection_id": "` + elsewhere.ID + `"}}}}`
-	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Pick", Definition: json.RawMessage(`{"triggers": [{"type": "manual"}],
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Pick", Definition: json.RawMessage(`{"triggers": [{"type": "manual"}],
 		"flow": {"start": "a", "nodes": {"a": {"activity": "task", "inputs": {"title": "x", "input_schema": ` + picker + `}}}}}`)}); err == nil || !strings.Contains(err.Error(), "collection_id") {
 		t.Errorf("a task form picking from another workspace: %v", err)
 	}

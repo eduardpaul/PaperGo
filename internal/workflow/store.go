@@ -38,23 +38,27 @@ type Service struct {
 
 // Workflow is a workflow with its current definition.
 type Workflow struct {
-	ID             string         `json:"id"`
-	WorkspaceID    string         `json:"workspace_id"`
-	Key            string         `json:"key"`
-	Name           string         `json:"name"`
-	Description    string         `json:"description"`
-	Enabled        bool           `json:"enabled"`
-	BuiltInKey     *string        `json:"builtin_key,omitempty"`
-	Role           *string        `json:"role,omitempty"`
-	CollectionID   *string        `json:"collection_id,omitempty"`
-	Parameters     map[string]any `json:"parameters,omitempty"`
-	CurrentVersion int            `json:"current_version"`
-	Definition     Definition     `json:"definition"`
-	CreatedBy      string         `json:"created_by"`
-	UpdatedBy      string         `json:"updated_by"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	Version        int            `json:"version"`
+	ExecutionAuthor   string         `json:"execution_author"`
+	ID                string         `json:"id"`
+	WorkspaceID       string         `json:"workspace_id"`
+	Key               string         `json:"key"`
+	Name              string         `json:"name"`
+	Description       string         `json:"description"`
+	AutomaticEnabled  bool           `json:"automatic_enabled"`
+	ManualEnabled     bool           `json:"manual_enabled"`
+	AutomaticProvider bool           `json:"automatic_provider"`
+	State             string         `json:"state"`
+	BuiltInKey        *string        `json:"builtin_key,omitempty"`
+	Role              *string        `json:"role,omitempty"`
+	CollectionID      *string        `json:"collection_id,omitempty"`
+	Parameters        map[string]any `json:"parameters,omitempty"`
+	CurrentVersion    int            `json:"current_version"`
+	Definition        Definition     `json:"definition"`
+	CreatedBy         string         `json:"created_by"`
+	UpdatedBy         string         `json:"updated_by"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	Version           int            `json:"version"`
 }
 
 // Version is one immutable definition of a workflow.
@@ -68,13 +72,15 @@ type Version struct {
 // Save creates or replaces a workflow. Key is optional on create (it is made
 // from the name) and immutable afterwards.
 type Save struct {
-	Key         string          `json:"key,omitempty"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Enabled     *bool           `json:"enabled,omitempty"`
-	Definition  json.RawMessage `json:"definition"`
+	Key              string          `json:"key,omitempty"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	AutomaticEnabled *bool           `json:"automatic_enabled,omitempty"`
+	ManualEnabled    *bool           `json:"manual_enabled,omitempty"`
+	State            string          `json:"state,omitempty"`
+	Definition       json.RawMessage `json:"definition"`
 	// Role makes the workflow a filler of that role (see Role), in the
-	// workspace or, with CollectionID, for one collection. Both are set when
+	// collection (CollectionID). Both are set when
 	// the workflow is created.
 	Role         string `json:"role,omitempty"`
 	CollectionID string `json:"collection_id,omitempty"`
@@ -105,7 +111,7 @@ func toWorkflow(w *ent.Workflow, v *ent.WorkflowVersion) (Workflow, error) {
 	if err != nil {
 		return Workflow{}, err
 	}
-	out := Workflow{ID: w.ID, WorkspaceID: w.WorkspaceID, Key: w.Key, Name: w.Name, Description: w.Description, Enabled: w.Enabled, BuiltInKey: w.BuiltinKey, Role: w.Role, CollectionID: w.CollectionID,
+	out := Workflow{ExecutionAuthor: v.CreatedBy, ID: w.ID, WorkspaceID: w.WorkspaceID, Key: w.Key, Name: w.Name, Description: w.Description, AutomaticEnabled: w.AutomaticEnabled, ManualEnabled: w.ManualEnabled, State: w.State, AutomaticProvider: w.AutomaticProvider, BuiltInKey: w.BuiltinKey, Role: w.Role, CollectionID: w.CollectionID,
 		CurrentVersion: w.CurrentVersion, Definition: def, CreatedBy: w.CreatedBy, UpdatedBy: w.UpdatedBy, CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, Version: w.Version}
 	if w.BuiltinKey != nil {
 		out.Parameters = w.Parameters
@@ -239,10 +245,25 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 		} else if key, err = freeKey(ctx, t, workspaceID, keyFromName(in.Name)); err != nil {
 			return err
 		}
-		enabled := in.Enabled == nil || *in.Enabled
-		create := t.Client.Workflow.Create().SetWorkspaceID(workspaceID).SetKey(key).SetName(in.Name).SetDescription(in.Description).SetEnabled(enabled).SetCurrentVersion(1).SetCreatedBy(subject).SetUpdatedBy(subject)
+		state := in.State
+		if state == "" {
+			state = "published"
+		}
+		if err = validState(state); err != nil {
+			return err
+		}
+		if state == "published" && in.AutomaticEnabled != nil && *in.AutomaticEnabled {
+			if in.Role != "" && in.CollectionID == "" {
+				return dms.Invalid("An automatic role provider requires a specific list or library.")
+			}
+			if err = automaticScope(def); err != nil {
+				return err
+			}
+		}
+
+		create := t.Client.Workflow.Create().SetWorkspaceID(workspaceID).SetKey(key).SetName(in.Name).SetDescription(in.Description).SetAutomaticEnabled(in.AutomaticEnabled != nil && *in.AutomaticEnabled).SetManualEnabled(in.ManualEnabled == nil || *in.ManualEnabled).SetState(state).SetCurrentVersion(1).SetCreatedBy(subject).SetUpdatedBy(subject)
 		if in.Role != "" {
-			create.SetRole(in.Role)
+			create.SetRole(in.Role).SetAutomaticProvider(in.AutomaticEnabled != nil && *in.AutomaticEnabled && state == "published")
 		}
 		if in.CollectionID != "" {
 			create.SetCollectionID(in.CollectionID)
@@ -406,11 +427,37 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 				return err
 			}
 		}
-		enabled := w.Enabled
-		if in.Enabled != nil {
-			enabled = *in.Enabled
+		enabled := w.AutomaticEnabled
+		if in.AutomaticEnabled != nil {
+			enabled = *in.AutomaticEnabled
 		}
-		w, v, err := revise(ctx, t, subject, w, raw, func(u *ent.WorkflowUpdateOne) { u.SetName(in.Name).SetDescription(in.Description).SetEnabled(enabled) })
+		nextState := w.State
+		if in.State != "" {
+			nextState = in.State
+		}
+		if err = validState(nextState); err != nil {
+			return err
+		}
+		if enabled && nextState == "published" {
+			if w.Role != nil && w.CollectionID == nil {
+				return dms.Invalid("An automatic role provider requires a specific list or library.")
+			}
+			if err := automaticScope(def); err != nil {
+				return err
+			}
+		}
+		w, v, err := revise(ctx, t, subject, w, raw, func(u *ent.WorkflowUpdateOne) {
+			u.SetName(in.Name).SetDescription(in.Description).SetAutomaticEnabled(enabled)
+			if enabled && nextState == "published" && w.Role != nil {
+				u.SetAutomaticProvider(true)
+			}
+			if in.ManualEnabled != nil {
+				u.SetManualEnabled(*in.ManualEnabled)
+			}
+			if in.State != "" {
+				u.SetState(in.State)
+			}
+		})
 		if err != nil {
 			return err
 		}
@@ -423,7 +470,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 		if out, err = toWorkflow(w, v); err != nil {
 			return err
 		}
-		return audit(ctx, t, subject, "workflow.update", w, map[string]any{"workflow_id": w.ID, "version": w.CurrentVersion, "enabled": w.Enabled})
+		return audit(ctx, t, subject, "workflow.update", w, map[string]any{"workflow_id": w.ID, "version": w.CurrentVersion, "automatic_enabled": w.AutomaticEnabled})
 	})
 	return
 }
@@ -485,11 +532,14 @@ func index(ctx context.Context, t *dms.Service, w *ent.Workflow, def Definition)
 	if _, err := t.Client.WorkflowTrigger.Delete().Where(workflowtrigger.WorkflowIDEQ(w.ID)).Exec(ctx); err != nil {
 		return err
 	}
-	if !w.Enabled || w.DeletedAt != nil {
+	if !w.AutomaticEnabled || w.State != "published" || w.DeletedAt != nil || w.Role != nil && w.CollectionID != nil && !w.AutomaticProvider {
 		return nil
 	}
 	now := time.Now().UTC()
 	for i, tr := range def.Triggers {
+		if tr.Type == TriggerManual || tr.Disabled {
+			continue
+		}
 		c := t.Client.WorkflowTrigger.Create().SetWorkflowID(w.ID).SetWorkspaceID(w.WorkspaceID).SetType(tr.Type).SetPosition(i)
 		if tr.CollectionID != "" {
 			c.SetCollectionID(tr.CollectionID)
@@ -515,9 +565,10 @@ func RunID(workflowID, eventID string) string { return "wf:" + workflowID + ":" 
 // A trigger with selection mode starts one run for all items, in their
 // order; PrimaryItemID (default: the first) is that run's item.
 type Start struct {
-	ItemIDs       []string       `json:"item_ids,omitempty"`
-	PrimaryItemID string         `json:"primary_item_id,omitempty"`
-	Inputs        map[string]any `json:"inputs,omitempty"`
+	WorkflowVersion int            `json:"workflow_version,omitempty"`
+	ItemIDs         []string       `json:"item_ids,omitempty"`
+	PrimaryItemID   string         `json:"primary_item_id,omitempty"`
+	Inputs          map[string]any `json:"inputs,omitempty"`
 }
 
 // MaxStartItems bounds one manual start, and one selection.
@@ -530,6 +581,21 @@ const MaxStartItems = 100
 // dispatcher starts the runs moments later.
 func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (runs []string, err error) {
 	err = s.DMS.Write(ctx, func(t *dms.Service) error {
+		events, e := s.planStart(ctx, t, subject, id, in, true)
+		if e != nil {
+			return e
+		}
+		for _, event := range events {
+			t.Emit(ctx, event)
+			runs = append(runs, RunID(id, event.ID))
+		}
+		return nil
+	})
+	return
+}
+
+func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id string, in Start, checkInputs bool) (events []dms.Event, err error) {
+	err = func() error {
 		w, err := live(ctx, t, id)
 		if err != nil {
 			return err
@@ -537,12 +603,18 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 		if err = workspace(ctx, t, subject, w.WorkspaceID, "read"); err != nil {
 			return err
 		}
-		if !w.Enabled {
-			return dms.Invalid("the workflow is turned off")
+		if err = t.RequireScope(ctx, subject, "list.write"); err != nil {
+			return err
+		}
+		if !w.ManualEnabled || w.State != "published" {
+			return dms.Invalid("manual use requires a published workflow with manual runs allowed")
 		}
 		v, err := current(ctx, t, w)
 		if err != nil {
 			return err
+		}
+		if in.WorkflowVersion > 0 && in.WorkflowVersion != v.Number {
+			return dms.ErrPreconditionFailed
 		}
 		def, err := ParseDefinition(v.Definition)
 		if err != nil {
@@ -557,13 +629,16 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 		if manual == nil {
 			return dms.Invalid("the workflow has no manual trigger")
 		}
-		inputs, err := def.launchInputs(in.Inputs)
-		if err != nil {
-			return err
-		}
-		if def.InputSchema != nil {
-			if err = forms.CheckValues(ctx, t, subject, w.WorkspaceID, def.InputSchema, inputs, "inputs"); err != nil {
+		inputs := in.Inputs
+		if checkInputs {
+			inputs, err = def.launchInputs(in.Inputs)
+			if err != nil {
 				return err
+			}
+			if def.InputSchema != nil {
+				if err = forms.CheckValues(ctx, t, subject, w.WorkspaceID, def.InputSchema, inputs, "inputs"); err != nil {
+					return err
+				}
 			}
 		}
 		// Duplicates are dropped; the first occurrence keeps its place.
@@ -584,22 +659,24 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			return dms.Invalid("standalone workflows do not accept item_ids")
 		}
 		if itemBound && !selection && len(items) != 1 {
-			return dms.Invalid("single-item workflows require exactly one item")
+			return issue("selection_required", "Choose exactly one item for this workflow.")
 		}
 		if in.PrimaryItemID != "" && (!selection || !seen[in.PrimaryItemID]) {
 			return dms.Invalid("primary_item_id must be one of item_ids, on a selection workflow")
 		}
-		data := map[string]any{"workflow_id": w.ID, "inputs": inputs}
+		data := map[string]any{"workflow_id": w.ID, "workflow_version": v.Number, "inputs": inputs}
 		if len(items) == 0 {
 			if itemBound {
-				return dms.Invalid("this workflow requires item_ids")
+				return issue("selection_required", "Choose items before running this workflow.")
 			}
 			if err = workspace(ctx, t, subject, w.WorkspaceID, "manage"); err != nil {
 				return err
 			}
+			if err = s.manualReadiness(ctx, t, w, v.CreatedBy, def, nil); err != nil {
+				return err
+			}
 			e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, Actor: subject, Data: data}
-			t.Emit(ctx, e)
-			runs = append(runs, RunID(w.ID, e.ID))
+			events = append(events, e)
 			return nil
 		}
 		collection := ""
@@ -610,10 +687,10 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 				return err
 			}
 			if r.Kind != resource.KindItem || r.WorkspaceID != w.WorkspaceID {
-				return dms.Invalid("item_ids must be items of the workflow's workspace")
+				return issue("wrong_workspace", "Choose items from this workflow's workspace.")
 			}
 			if manual.CollectionID != "" && (r.ContainerID == nil || *r.ContainerID != manual.CollectionID) {
-				return dms.Invalid("item " + itemID + " is not in the workflow's collection")
+				return issue("wrong_collection", "Choose items from this workflow's library or list.")
 			}
 			collection = *r.ContainerID
 			collections[itemID] = collection
@@ -628,9 +705,11 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			}
 			if !selection {
 				e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, CollectionID: collection, ResourceID: itemID, Actor: subject, Data: data}
-				t.Emit(ctx, e)
-				runs = append(runs, RunID(w.ID, e.ID))
+				events = append(events, e)
 			}
+		}
+		if err = s.manualReadiness(ctx, t, w, v.CreatedBy, def, items); err != nil {
+			return err
 		}
 		if selection {
 			primary := in.PrimaryItemID
@@ -643,11 +722,10 @@ func (s *Service) StartRuns(ctx context.Context, subject, id string, in Start) (
 			}
 			data["items"] = members
 			e := dms.Event{ID: dms.NewEventID(), Type: TriggerManual, WorkspaceID: w.WorkspaceID, CollectionID: collections[primary], ResourceID: primary, Actor: subject, Data: data}
-			t.Emit(ctx, e)
-			runs = append(runs, RunID(w.ID, e.ID))
+			events = append(events, e)
 		}
 		return nil
-	})
+	}()
 	return
 }
 
@@ -670,8 +748,6 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 	versions := map[string]*matchable{}
 	// A bulk write raises many events of few kinds; look each kind up once.
 	lookups := map[[3]string][]*ent.Workflow{}
-	// overrides caches whether a collection has its own filler of a role.
-	overrides := map[[3]string]bool{}
 	for _, e := range events {
 		if e.Depth >= MaxDepth {
 			continue
@@ -692,7 +768,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 		switch e.Type {
 		case TriggerManual, TriggerSchedule:
 			id, _ := e.Data["workflow_id"].(string)
-			w, err := live(ctx, t, id)
+			w, err := t.Client.Workflow.Get(ctx, id)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -718,37 +794,30 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 					list = append(list, id)
 				}
 				sort.Strings(list)
-				if candidates, err = t.Client.Workflow.Query().Where(workflow.IDIn(list...), workflow.EnabledEQ(true), workflow.DeletedAtIsNil()).Order(ent.Asc(workflow.FieldID)).All(ctx); err != nil {
+				if candidates, err = t.Client.Workflow.Query().Where(workflow.IDIn(list...), workflow.AutomaticEnabledEQ(true), workflow.StateEQ("published"), workflow.DeletedAtIsNil()).Order(ent.Asc(workflow.FieldID)).All(ctx); err != nil {
 					return nil, nil, err
 				}
 			}
 			lookups[key] = candidates
 		}
 		for _, w := range candidates {
-			if w.Role != nil && e.CollectionID != "" {
-				// A collection's own filler of a role replaces the workspace's
-				// for its items, and runs for no other collection.
-				if w.CollectionID != nil && *w.CollectionID != e.CollectionID {
-					continue
-				}
-				if w.CollectionID == nil {
-					key := [3]string{e.WorkspaceID, *w.Role, e.CollectionID}
-					over, ok := overrides[key]
-					if !ok {
-						var err error
-						if over, err = overridden(ctx, t, e.WorkspaceID, *w.Role, e.CollectionID); err != nil {
-							return nil, nil, err
-						}
-						overrides[key] = over
-					}
-					if over {
-						continue
-					}
-				}
+			if e.Type != TriggerManual && w.Role != nil && (w.CollectionID == nil || e.CollectionID != "" && *w.CollectionID != e.CollectionID || !w.AutomaticProvider) {
+				continue
 			}
-			m := versions[w.ID]
+			versionKey := w.ID
+			if e.Type == TriggerManual {
+				versionKey += fmt.Sprint(e.Data["workflow_version"])
+			}
+			m := versions[versionKey]
 			if m == nil {
 				v, err := current(ctx, t, w)
+				if e.Type == TriggerManual {
+					number, ok := forms.Number(e.Data["workflow_version"])
+					if !ok {
+						return nil, nil, dms.Invalid("manual event requires its accepted workflow version")
+					}
+					v, err = t.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(w.ID), workflowversion.NumberEQ(int(number))).Only(ctx)
+				}
 				if err != nil {
 					return nil, nil, err
 				}
@@ -757,7 +826,7 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 					return nil, nil, err
 				}
 				m = &matchable{w: w, v: v, def: def}
-				versions[w.ID] = m
+				versions[versionKey] = m
 			}
 			ok, err := m.accepts(ctx, t, e)
 			if err != nil {
@@ -786,6 +855,14 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 				}
 			}
 			members := eventMembers(e)
+			if e.Type == TriggerManual {
+				for _, id := range members {
+					if _, err := t.Authorize(ctx, e.Actor, id, "write"); err != nil {
+						startError = "Manual run is no longer authorized for the selected items."
+						break
+					}
+				}
+			}
 			if c := m.def.Concurrency; c != "" && c != ConcurrencyParallel && len(members) > 0 {
 				busy, err := activeRuns(ctx, t, w.ID, members, active)
 				if err != nil {
@@ -949,7 +1026,7 @@ func (m *matchable) accepts(ctx context.Context, t *dms.Service, e dms.Event) (b
 	}
 	accepted := false
 	for _, tr := range m.def.Triggers {
-		if tr.Type != e.Type || tr.CollectionID != "" && tr.CollectionID != e.CollectionID {
+		if tr.Disabled || tr.Type != e.Type || tr.CollectionID != "" && tr.CollectionID != e.CollectionID {
 			continue
 		}
 		if tr.TaskKey != "" {
@@ -1143,7 +1220,7 @@ func Listens(ctx context.Context, t *dms.Service, root dms.Event) (bool, error) 
 	for i, r := range rows {
 		list[i] = r.WorkflowID
 	}
-	ids, err := t.Client.Workflow.Query().Where(workflow.IDIn(list...), workflow.EnabledEQ(true), workflow.DeletedAtIsNil()).All(ctx)
+	ids, err := t.Client.Workflow.Query().Where(workflow.IDIn(list...), workflow.AutomaticEnabledEQ(true), workflow.StateEQ("published"), workflow.DeletedAtIsNil()).All(ctx)
 	if err != nil {
 		return false, err
 	}

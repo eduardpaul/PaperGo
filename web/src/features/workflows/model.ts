@@ -42,6 +42,7 @@ export interface FormSchema {
   };
 }
 export interface Trigger {
+  disabled?: boolean;
   type: string;
   collection_id?: string;
   content_type_id?: string;

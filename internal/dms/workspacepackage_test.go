@@ -148,7 +148,7 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 	var flow *ent.Workflow
 	if err = s.Write(ctx, func(tx *Service) error {
 		var err error
-		flow, err = tx.Client.Workflow.Create().SetWorkspaceID(ws.ID).SetKey("copy-test").SetName("Copy test").SetCurrentVersion(1).SetCreatedBy("alice").SetUpdatedBy("alice").SetParameters(map[string]any{"list": invoices.ID}).Save(ctx)
+		flow, err = tx.Client.Workflow.Create().SetAutomaticEnabled(true).SetWorkspaceID(ws.ID).SetKey("copy-test").SetName("Copy test").SetCurrentVersion(1).SetCreatedBy("alice").SetUpdatedBy("alice").SetParameters(map[string]any{"list": invoices.ID}).Save(ctx)
 		if err != nil {
 			return err
 		}
@@ -759,6 +759,34 @@ func TestWorkspacePackageCollectedPublicationRevision(t *testing.T) {
 			}
 			if err = validateWorkspaceReferences(manifest); err == nil || !strings.Contains(err.Error(), "resources.head_revision_id") {
 				t.Fatal("unresolved live revision accepted", err)
+			}
+		})
+	}
+}
+
+func TestWorkspacePackageAutomaticRulesRequireACollection(t *testing.T) {
+	for _, test := range []struct {
+		name, trigger, role string
+		wantError           bool
+	}{
+		{"unscoped upload", `{"type":"file.added"}`, "", true},
+		{"scoped upload", `{"type":"file.added","collection_id":"photos"}`, "", false},
+		{"paused upload", `{"type":"file.added","disabled":true}`, "", false},
+		{"manual catalog", `{"type":"manual"}`, "", false},
+		{"workspace provider", `{"type":"term.changed"}`, "search.index", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var role any
+			if test.role != "" {
+				role = test.role
+			}
+			p := corePackage{Tables: map[string]packageTable{
+				"workflows":         {Columns: []string{"id", "current_version", "automatic_enabled", "state", "role", "collection_id"}, Rows: [][]any{{"flow", int64(1), true, "published", role, nil}}},
+				"workflow_versions": {Columns: []string{"workflow_id", "number", "definition"}, Rows: [][]any{{"flow", int64(1), `{"triggers":[` + test.trigger + `]}`}}},
+				"workflow_triggers": {Columns: []string{"id", "workflow_id", "type", "collection_id"}},
+			}}
+			if err := rebuildWorkspaceTriggers(&p, time.Now().UTC()); (err != nil) != test.wantError {
+				t.Fatal(err)
 			}
 		})
 	}

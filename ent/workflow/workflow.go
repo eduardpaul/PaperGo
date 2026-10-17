@@ -25,8 +25,14 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
-	// FieldEnabled holds the string denoting the enabled field in the database.
-	FieldEnabled = "enabled"
+	// FieldAutomaticEnabled holds the string denoting the automatic_enabled field in the database.
+	FieldAutomaticEnabled = "automatic_enabled"
+	// FieldManualEnabled holds the string denoting the manual_enabled field in the database.
+	FieldManualEnabled = "manual_enabled"
+	// FieldAutomaticProvider holds the string denoting the automatic_provider field in the database.
+	FieldAutomaticProvider = "automatic_provider"
+	// FieldState holds the string denoting the state field in the database.
+	FieldState = "state"
 	// FieldBuiltinKey holds the string denoting the builtin_key field in the database.
 	FieldBuiltinKey = "builtin_key"
 	// FieldCollectionID holds the string denoting the collection_id field in the database.
@@ -58,7 +64,10 @@ var Columns = []string{
 	FieldKey,
 	FieldName,
 	FieldDescription,
-	FieldEnabled,
+	FieldAutomaticEnabled,
+	FieldManualEnabled,
+	FieldAutomaticProvider,
+	FieldState,
 	FieldBuiltinKey,
 	FieldCollectionID,
 	FieldRole,
@@ -93,8 +102,16 @@ var (
 	NameValidator func(string) error
 	// DefaultDescription holds the default value on creation for the "description" field.
 	DefaultDescription string
-	// DefaultEnabled holds the default value on creation for the "enabled" field.
-	DefaultEnabled bool
+	// DefaultAutomaticEnabled holds the default value on creation for the "automatic_enabled" field.
+	DefaultAutomaticEnabled bool
+	// DefaultManualEnabled holds the default value on creation for the "manual_enabled" field.
+	DefaultManualEnabled bool
+	// DefaultAutomaticProvider holds the default value on creation for the "automatic_provider" field.
+	DefaultAutomaticProvider bool
+	// DefaultState holds the default value on creation for the "state" field.
+	DefaultState string
+	// StateValidator is a validator for the "state" field. It is called by the builders before save.
+	StateValidator func(string) error
 	// CollectionIDValidator is a validator for the "collection_id" field. It is called by the builders before save.
 	CollectionIDValidator func(string) error
 	// RoleValidator is a validator for the "role" field. It is called by the builders before save.
@@ -151,9 +168,24 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
 }
 
-// ByEnabled orders the results by the enabled field.
-func ByEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEnabled, opts...).ToFunc()
+// ByAutomaticEnabled orders the results by the automatic_enabled field.
+func ByAutomaticEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutomaticEnabled, opts...).ToFunc()
+}
+
+// ByManualEnabled orders the results by the manual_enabled field.
+func ByManualEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldManualEnabled, opts...).ToFunc()
+}
+
+// ByAutomaticProvider orders the results by the automatic_provider field.
+func ByAutomaticProvider(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutomaticProvider, opts...).ToFunc()
+}
+
+// ByState orders the results by the state field.
+func ByState(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldState, opts...).ToFunc()
 }
 
 // ByBuiltinKey orders the results by the builtin_key field.

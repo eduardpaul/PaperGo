@@ -17,7 +17,7 @@ import { SmartFolderDialog } from './smart-folders/editor-dialog';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...await importOriginal<typeof Router>(),
-  createFileRoute: () => (options: unknown) => ({ options, useParams: () => ({ workspaceId: 'workspace' }) }),
+  createFileRoute: () => (options: unknown) => ({ options, useParams: () => ({ workspaceId: 'workspace' }), useSearch: () => ({}) }),
 }));
 
 const clients: QueryClient[] = [];
@@ -151,8 +151,8 @@ describe('reviewed frontend flows', () => {
   });
 
   it('uses the selected built-in workflow version and resets parameters when switching collections', async () => {
-    const workflow = (id: string, version: number, field: string): Workflow => ({ id, collection_id: id, workspace_id: 'workspace', key: id, name: id, description: '', enabled: true, current_version: 1, definition: {}, version, parameters: { field } });
-    const builtin: BuiltInState = { key: 'items.expire', name: 'Expire', description: '', per_collection: true, parameters_schema: { properties: { field: { title: 'Expiry field', default: 'default' } } }, workflows: [workflow('a', 2, 'expiry_a'), workflow('b', 9, 'expiry_b')] };
+    const workflow = (id: string, version: number, field: string): Workflow => ({ id, collection_id: id, workspace_id: 'workspace', key: id, name: id, description: '', automatic_enabled: false, manual_enabled: true, state: 'published', automatic_provider: false, current_version: 1, definition: {triggers: [{type: 'schedule'}]}, version, parameters: { field } });
+    const builtin: BuiltInState = { key: 'items.expire', name: 'Expire', description: '', per_collection: true, parameters_schema: { properties: { field: { type: 'string', title: 'Expiry field', default: 'default' } } }, workflows: [workflow('a', 2, 'expiry_a'), workflow('b', 9, 'expiry_b')] };
     const writes: { version?: string; body: { collection_id: string; parameters: { field: string } } }[] = [];
     mockAPI((url, init) => {
       if (init.method === 'PUT') {
@@ -170,23 +170,29 @@ describe('reviewed frontend flows', () => {
     });
     const Page = WorkflowsRoute.options.component as ComponentType;
     await act(async () => { renderPage(<Suspense fallback="Loading workflows"><Page /></Suspense>); });
-    const picker = await screen.findByLabelText('Collection');
+    const picker = await screen.findByLabelText('Library or list');
     await screen.findByRole('option', { name: 'c' });
     fireEvent.change(picker, { target: { value: 'b' } });
     expect((screen.getByLabelText('Expiry field') as HTMLInputElement).value).toBe('expiry_b');
-    fireEvent.click(screen.getByRole('button', { name: 'Enable' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
     await waitFor(() => expect(writes).toHaveLength(1));
-    expect(writes[0]).toEqual({ version: '"9"', body: { collection_id: 'b', enabled: true, parameters: { field: 'expiry_b' } } });
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Enable' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
+    expect(writes[0]).toEqual({ version: '"9"', body: { collection_id: 'b', automatic_enabled: false, manual_enabled: true, state: 'published', disabled_triggers: [], parameters: { field: 'expiry_b' } } });
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Save settings' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
     await waitFor(() => expect(writes).toHaveLength(2));
     expect(writes[1].version).toBe('"10"');
     fireEvent.change(picker, { target: { value: 'c' } });
     expect((screen.getByLabelText('Expiry field') as HTMLInputElement).value).toBe('default');
-    fireEvent.click(screen.getByRole('button', { name: 'Enable' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
     await waitFor(() => expect(writes).toHaveLength(3));
     expect(writes[2].version).toBeUndefined();
     expect(writes[2].body.collection_id).toBe('c');
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Save settings' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByLabelText('Run automatically in this collection'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    await waitFor(() => expect(writes).toHaveLength(4));
+    expect(writes[3].body).toMatchObject({ collection_id: 'c', automatic_enabled: true });
+    expect(builtin.workflows?.filter(entry => entry.collection_id !== 'c').every(entry => !entry.automatic_enabled)).toBe(true);
   });
 
   it.each([

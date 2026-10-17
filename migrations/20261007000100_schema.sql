@@ -232,7 +232,7 @@ CREATE TABLE domain_events (
 CREATE TABLE workflows (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
  workspace_id TEXT NOT NULL REFERENCES resources(id), key TEXT NOT NULL CHECK(length(key) BETWEEN 1 AND 100),
- name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', enabled BOOLEAN NOT NULL DEFAULT 1,
+ name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', automatic_enabled BOOLEAN NOT NULL DEFAULT 0 CHECK(automatic_enabled IN (0,1)), manual_enabled BOOLEAN NOT NULL DEFAULT 1 CHECK(manual_enabled IN (0,1)), automatic_provider BOOLEAN NOT NULL DEFAULT 0 CHECK(automatic_provider IN (0,1)), state TEXT NOT NULL DEFAULT 'published' CHECK(state IN ('draft','published','archived')),
  builtin_key TEXT, collection_id TEXT REFERENCES resources(id),
  parameters JSON NOT NULL DEFAULT '{}' CHECK(json_valid(parameters) AND json_type(parameters)='object'),
  current_version INTEGER NOT NULL CHECK(current_version>0),

@@ -5974,7 +5974,7 @@
       "post": {
         "summary": "Create Workflow",
         "operationId": "createWorkflow",
-        "description": "Workspace managers create workflows; key defaults to one made from the name and is immutable.",
+        "description": "Create a reusable workflow. automatic_enabled defaults false, manual_enabled true and state published; the editor creates drafts explicitly. Automatic file, item, folder and permission rules require a specific collection_id on each active rule. Saving manual use does not create automatic subscriptions.",
         "parameters": [
           {
             "name": "id",
@@ -6235,7 +6235,7 @@
       "put": {
         "summary": "Update Workflow",
         "operationId": "updateWorkflow",
-        "description": "A changed definition becomes a new version; running runs keep theirs. Built-in workflows change through their parameters.",
+        "description": "Update a workflow using If-Match. Manual policy, automatic policy and publication state are independent. Publishing an automatic role provider replaces the other automatic provider only in its collection, preserving manual use. Accepted runs keep their immutable version.",
         "parameters": [
           {
             "name": "id",
@@ -6626,7 +6626,7 @@
       "post": {
         "summary": "Start Workflow",
         "operationId": "startWorkflow",
-        "description": "Starts one manual workflow run. Standalone triggers require no item IDs and workspace manage access; single-item triggers require exactly one item; selection triggers require 1\u2013100 ordered items. Item starts require write access to every item. Runs start when the request commits.",
+        "description": "Accept a manual run for a published workflow with manual_enabled and a manual entry point. Automatic processing may be off. Item starts require write access to every item; standalone starts require workspace manage. Accepted invocations pin their definition version and are queued after commit. Automatic provider selection never suppresses a targeted manual invocation.",
         "parameters": [
           {
             "name": "id",
@@ -6873,7 +6873,7 @@
       "put": {
         "summary": "Set Built-in Workflow",
         "operationId": "setWorkflowBuiltIn",
-        "description": "Turns a built-in on or off and sets its parameters, creating its workflow on first use.",
+        "description": "Save built-in parameters, manual_enabled, automatic_enabled, state and disabled_triggers independently. Automatic content processing requires collection_id. Configuring manual use with automatic_enabled false does not subscribe to events. Existing settings require If-Match.",
         "parameters": [
           {
             "name": "id",
@@ -7031,7 +7031,7 @@
       "post": {
         "summary": "Copy Built-in Workflow",
         "operationId": "copyWorkflowBuiltIn",
-        "description": "Creates an editable workflow from a built-in and turns the built-in off where it was on.",
+        "description": "Create an editable draft with automatic processing off. The source workflow and active automatic provider remain unchanged. Publishing and selecting automatic processing is a separate explicit action.",
         "parameters": [
           {
             "name": "id",
@@ -7176,7 +7176,7 @@
       "get": {
         "summary": "Workflow Runs",
         "operationId": "workflowRuns",
-        "description": "Lists runs newest first. Workspace managers may list all runs. With item_id, users with draft-read access to that item may read scoped summaries, including selection membership, without execution errors, inputs, outputs, steps or other member identities. Execution details and retry/cancel remain manager-only.",
+        "description": "Page through workflow runs. Workspace managers may list all runs; item-scoped summaries require item read_draft and omit protected payloads. Explicit manual system runs are always included. include_system=true adds high-volume automatic system runs.",
         "parameters": [
           {
             "name": "id",
@@ -7224,6 +7224,41 @@
               "default": 50
             },
             "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "manual",
+                "automatic",
+                "schedule"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "running",
+                "waiting",
+                "completed",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "include_system",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -15981,7 +16016,7 @@
             }
           }
         },
-        "description": "Which workflow fills each role for a list or library: its own filler, else the workspace's, with its scope and whether it is enabled. Requires read access to the collection and the workspace."
+        "description": "The automatic provider of each role for this list or library, with its collection scope and automatic_enabled state. Requires read access to the collection and the workspace."
       }
     },
     "/v1/search": {
@@ -17561,6 +17596,402 @@
             }
           }
         }
+      }
+    },
+    "/v1/workflows/{id}/check": {
+      "post": {
+        "summary": "Check manual launch eligibility, required inputs, permissions and known dependencies without starting runs",
+        "operationId": "checkWorkflow",
+        "description": "Check manual launch eligibility, required inputs, permissions and known dependencies without starting runs. Automatic settings are independent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Eligibility result; no events or activities are executed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowAvailability"
+                }
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/workflow-actions": {
+      "post": {
+        "summary": "List authorized workflow actions and reasons they cannot run for a selection, including built-ins that need setup",
+        "operationId": "workflowActions",
+        "description": "List authorized workflow actions and reasons they cannot run for a selection, including built-ins that need setup. Does not create events or subscriptions.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Eligibility result; no events or activities are executed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowActionPage"
+                }
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ]
+      }
+    },
+    "/v1/workflows/{id}/explain": {
+      "post": {
+        "summary": "Explain automatic event eligibility for a readable item using the dispatch matcher without creating events or running activities",
+        "operationId": "explainWorkflow",
+        "description": "Explain automatic event eligibility for a readable item using the dispatch matcher without creating events or running activities.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowExplain"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Eligibility result; no events or activities are executed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExplanation"
+                }
+              }
+            }
+          }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ]
       }
     }
   },
@@ -21158,6 +21589,11 @@
               "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/([a-z0-9][a-z0-9!#$&^_.+-]{0,62}|\\*)$"
             },
             "description": "On file.added and file.updated: only files of these media types start runs, exact (application/pdf) or wildcards (image/*)."
+          },
+          "disabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Pause this automatic rule without deleting its configuration. Use manual_enabled to control manual invocation."
           }
         },
         "required": [
@@ -21297,9 +21733,6 @@
           "description": {
             "type": "string"
           },
-          "enabled": {
-            "type": "boolean"
-          },
           "definition": {
             "$ref": "#/components/schemas/WorkflowDefinition"
           },
@@ -21310,6 +21743,25 @@
           "collection_id": {
             "type": "string",
             "description": "With role: fill the role for this list or library only; set at creation."
+          },
+          "automatic_enabled": {
+            "type": "boolean",
+            "description": "Whether configured automatic rules accept new events. Independent of manual use.",
+            "default": false
+          },
+          "manual_enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow explicit manual starts when a manual entry point exists and the workflow is published."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "archived"
+            ],
+            "default": "published"
           }
         },
         "required": [
@@ -21335,9 +21787,6 @@
           },
           "description": {
             "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
           },
           "builtin_key": {
             "type": "string"
@@ -21375,6 +21824,35 @@
           "role": {
             "type": "string",
             "description": "The role this workflow fills."
+          },
+          "automatic_enabled": {
+            "type": "boolean",
+            "description": "Whether configured automatic rules accept new events. Independent of manual use.",
+            "default": false
+          },
+          "manual_enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow explicit manual starts when a manual entry point exists and the workflow is published."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "archived"
+            ],
+            "default": "published"
+          },
+          "automatic_provider": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "Participates in selecting the automatic role provider for its collection. Draft copies do not participate."
+          },
+          "execution_author": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Author of the current immutable definition version; steps execute with this identity."
           }
         },
         "required": [
@@ -21382,10 +21860,14 @@
           "workspace_id",
           "key",
           "name",
-          "enabled",
+          "automatic_enabled",
           "current_version",
           "definition",
-          "version"
+          "version",
+          "manual_enabled",
+          "state",
+          "automatic_provider",
+          "execution_author"
         ],
         "additionalProperties": false
       },
@@ -21476,6 +21958,11 @@
           "primary_item_id": {
             "type": "string",
             "description": "Selection workflows: the run's item; must be one of item_ids. Default: the first."
+          },
+          "workflow_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Expected published definition version. A concurrent edit returns 412; accepted requests pin their version."
           }
         },
         "required": [],
@@ -21563,22 +22050,45 @@
           },
           "role": {
             "type": "string",
-            "description": "The role the built-in fills; role built-ins are workspace-wide and may be set per collection."
+            "description": "The role the built-in fills. Automatic providers are configured per collection; catalog entries support manual use."
           },
           "default": {
             "type": "boolean",
-            "description": "On in every workspace until people turn it off, copy or replace it."
+            "description": "Default automatic providers are prepared per collection. Explicit paused, replaced or deleted configurations are preserved."
           },
           "system": {
             "type": "boolean",
-            "description": "A product process: system queue, successful runs kept a day."
+            "description": "A product process using the system queue. Successful automatic runs use one-day retention; manual runs use ordinary retention."
+          },
+          "manual_mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "single",
+              "selection",
+              "standalone"
+            ]
+          },
+          "manual_media_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "automatic_triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowTrigger"
+            }
           }
         },
         "required": [
           "key",
           "name",
           "per_collection",
-          "parameters_schema"
+          "parameters_schema",
+          "manual_mode",
+          "automatic_triggers"
         ],
         "additionalProperties": false
       },
@@ -21653,6 +22163,39 @@
           },
           "parameters_schema": {
             "$ref": "#/components/schemas/WorkflowForm"
+          },
+          "manual_mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "single",
+              "selection",
+              "standalone"
+            ]
+          },
+          "manual_media_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "automatic_triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowTrigger"
+            }
+          },
+          "role": {
+            "type": "string",
+            "description": "The role the built-in fills. Automatic providers are configured per collection; catalog entries support manual use."
+          },
+          "default": {
+            "type": "boolean",
+            "description": "Default automatic providers are prepared per collection. Explicit paused, replaced or deleted configurations are preserved."
+          },
+          "system": {
+            "type": "boolean",
+            "description": "A product process using the system queue. Successful automatic runs use one-day retention; manual runs use ordinary retention."
           }
         },
         "required": [
@@ -21660,7 +22203,9 @@
           "name",
           "per_collection",
           "parameters_schema",
-          "workflows"
+          "workflows",
+          "manual_mode",
+          "automatic_triggers"
         ],
         "additionalProperties": false
       },
@@ -21693,16 +22238,40 @@
           "collection_id": {
             "type": "string"
           },
-          "enabled": {
-            "type": "boolean"
-          },
           "parameters": {
             "type": "object",
             "additionalProperties": true
+          },
+          "automatic_enabled": {
+            "type": "boolean",
+            "description": "Whether configured automatic rules accept new events. Independent of manual use.",
+            "default": false
+          },
+          "manual_enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow explicit manual starts when a manual entry point exists and the workflow is published."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "archived"
+            ],
+            "default": "published"
+          },
+          "disabled_triggers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true,
+            "description": "Automatic trigger types to pause while preserving the shipped definition. Manual is not a valid value."
           }
         },
         "required": [
-          "enabled"
+          "automatic_enabled"
         ],
         "additionalProperties": false
       },
@@ -21826,6 +22395,13 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Launch form values of a manual run, defaults applied (run detail only)."
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "unchanged"
+            ],
+            "description": "Successful execution reported an explicit no-change reason."
           }
         },
         "required": [
@@ -24345,21 +24921,22 @@
           "scope": {
             "type": "string",
             "enum": [
-              "collection",
-              "workspace"
+              "collection"
             ],
-            "description": "Where the filler comes from; absent when nothing fills the role."
-          },
-          "enabled": {
-            "type": "boolean"
+            "description": "Present when an automatic provider is configured for this collection."
           },
           "workflow": {
             "$ref": "#/components/schemas/Workflow"
+          },
+          "automatic_enabled": {
+            "type": "boolean",
+            "description": "Whether configured automatic rules accept new events. Independent of manual use.",
+            "default": false
           }
         },
         "required": [
           "role",
-          "enabled"
+          "automatic_enabled"
         ],
         "additionalProperties": false
       },
@@ -25160,6 +25737,118 @@
           "@odata.nextLink"
         ],
         "additionalProperties": false
+      },
+      "WorkflowAvailability": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "can_run": {
+            "type": "boolean"
+          },
+          "code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "manual_mode": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "can_run",
+          "code",
+          "reason",
+          "manual_mode",
+          "version"
+        ]
+      },
+      "WorkflowAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "workflow": {
+            "$ref": "#/components/schemas/Workflow"
+          },
+          "builtin": {
+            "$ref": "#/components/schemas/WorkflowBuiltIn"
+          },
+          "availability": {
+            "$ref": "#/components/schemas/WorkflowAvailability"
+          }
+        },
+        "required": [
+          "availability"
+        ]
+      },
+      "WorkflowActionPage": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowAction"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ]
+      },
+      "WorkflowExplain": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "file.added",
+              "file.updated",
+              "item.updated"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "upload",
+              "webdav",
+              "restore",
+              "workflow",
+              "reindex"
+            ],
+            "default": "upload"
+          }
+        },
+        "required": [
+          "item_id",
+          "event_type"
+        ]
+      },
+      "WorkflowExplanation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "eligible": {
+            "type": "boolean"
+          },
+          "code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "eligible",
+          "code",
+          "reason"
+        ]
       }
     }
   }

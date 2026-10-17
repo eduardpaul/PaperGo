@@ -5,12 +5,12 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { parseJSON, stringifyJSON } from '@/api/json';
 import type { Resource, Workflow } from '@/api/types';
 import { RunDetails } from './run-details';
-import { applicableWorkflows, ItemWorkflows, RunWorkflowAction } from './item-workflows';
+import { ItemWorkflows, RunWorkflowAction } from './item-workflows';
 
 const clients: QueryClient[] = [];
 afterEach(() => { cleanup(); clients.splice(0).forEach((client) => client.clear()); vi.unstubAllGlobals(); });
 const flow = (id: string, trigger: object, enabled = true): Workflow => ({
-  id, key: id, name: id, workspace_id: 'workspace', description: '', version: 1, current_version: 1, enabled,
+  id, key: id, name: id, workspace_id: 'workspace', description: '', version: 1, current_version: 1, automatic_enabled: false, manual_enabled: enabled, state: 'published', automatic_provider: false,
   definition: { triggers: [trigger], flow: { start: 'end', nodes: { end: { activity: 'end' } } } },
 });
 const entries = [
@@ -22,13 +22,6 @@ const entries = [
   flow('automatic', { type: 'file.updated' }),
   flow('disabled', { type: 'manual', collection_id: 'collection' }, false),
 ];
-it('filters manual workflows by collection, selection size and enabled state', () => {
-  expect(applicableWorkflows(entries, 'collection', 1).map((entry) => entry.id)).toEqual(['single', 'any-single', 'multiple']);
-  expect(applicableWorkflows(entries, 'collection', 2).map((entry) => entry.id)).toEqual(['multiple']);
-  expect(applicableWorkflows(entries, 'collection', 0)).toEqual([]);
-  expect(applicableWorkflows(entries, 'collection', 101)).toEqual([]);
-});
-
 it('launches the selected items with typed inputs and displays a denied launch inline', async () => {
   const base = entries.find((entry) => entry.id === 'multiple')!;
   const multiple = { ...base, definition: { ...base.definition as object,
@@ -36,8 +29,9 @@ it('launches the selected items with typed inputs and displays a denied launch i
   } };
   let denied = true;
   const fetch = vi.fn(async (url: URL | string, _init?: RequestInit) => {
+    if (String(url).endsWith('/check')) return new Response(stringifyJSON({can_run: true, code: 'ready', reason: 'Ready for this selection'}));
     if (String(url).endsWith('/runs')) return new Response(stringifyJSON(denied ? { title: 'Forbidden', detail: 'You cannot write this item' } : { run_ids: ['run'] }), { status: denied ? 403 : 202 });
-    return new Response(stringifyJSON({ value: [multiple] }));
+    return new Response(stringifyJSON({ value: [{ workflow: multiple, availability: { can_run: true, code: 'ready', reason: 'Ready' } }] }));
   });
   vi.stubGlobal('fetch', fetch);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -45,19 +39,21 @@ it('launches the selected items with typed inputs and displays a denied launch i
   const items = ['a', 'b'].map((id) => ({ id, name: `Item ${id}`, kind: 'item', version: 1, workspace_id: 'workspace' }) as Resource);
   render(<QueryClientProvider client={client}><RunWorkflowAction workspaceId="workspace" collectionId="collection" items={items} /></QueryClientProvider>);
   fireEvent.pointerDown(screen.getByRole('button', { name: 'Run workflow' }), { button: 0, ctrlKey: false });
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'multiple' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: /multiple/ }));
   expect(await screen.findByText('2 selected: Item a, Item b')).toBeTruthy();
   expect(screen.queryByRole('combobox', { name: 'Items' })).toBeNull();
   fireEvent.change(screen.getByLabelText('Reason *'), { target: { value: 'Review invoices' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Run once' }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
   expect(await screen.findByRole('alert')).toBeTruthy();
   denied = false;
-  fireEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Run once' }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   const start = fetch.mock.calls.find(([url]) => String(url).endsWith('/runs'));
-  expect(parseJSON(String(start?.[1]?.body))).toEqual({ item_ids: ['a', 'b'], primary_item_id: 'a', inputs: { reason: 'Review invoices' } });
+  expect(parseJSON(String(start?.[1]?.body))).toEqual({ workflow_version: 1, item_ids: ['a', 'b'], primary_item_id: 'a', inputs: { reason: 'Review invoices' } });
   // The fixed selection does not fetch an unrelated item picker.
-  expect(fetch.mock.calls.every(([url]) => /workflows/.test(String(url)))).toBe(true);
+  expect(fetch.mock.calls.every(([url]) => /workflow/.test(String(url)))).toBe(true);
 });
 
 it('shows item-scoped history and refreshes its status without exposing manager actions', async () => {
@@ -74,12 +70,12 @@ it('shows item-scoped history and refreshes its status without exposing manager 
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   render(<QueryClientProvider client={client}><ItemWorkflows item={{ id: 'item', name: 'Invoice', kind: 'item', version: 1, workspace_id: 'workspace' }} collectionId="collection" canWrite /></QueryClientProvider>);
-  expect(await screen.findByText('running')).toBeTruthy();
+  expect(await screen.findByText('Running')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Run workflow' })).toBeTruthy();
   expect(screen.queryByText('View steps')).toBeNull();
   status = 'completed';
   await act(() => client.invalidateQueries({ queryKey: ['workflow-runs'] }));
-  expect(await screen.findByText('completed')).toBeTruthy();
+  expect(await screen.findByText('Completed')).toBeTruthy();
 });
 
 it('shows execution steps and queues a failed run retry for managers', async () => {

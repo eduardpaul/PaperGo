@@ -145,7 +145,21 @@ func pageData(p dms.Page[tasks.View], err error) ([]tasks.View, error) { return 
 func (f *fixture) workflow(t testing.TB, name string, def string) workflow.Workflow {
 	t.Helper()
 	def = strings.ReplaceAll(def, "$LIST", f.list.ID)
-	w, err := f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: name, Definition: json.RawMessage(def)})
+	parsed, parseErr := workflow.ParseDefinition(json.RawMessage(def))
+	if parseErr != nil {
+		t.Fatal(parseErr)
+	}
+	for i, tr := range parsed.Triggers {
+		if tr.CollectionID == "" && (strings.HasPrefix(tr.Type, "file.") || strings.HasPrefix(tr.Type, "item.") || strings.HasPrefix(tr.Type, "folder.") || tr.Type == dms.EventPermissionsChanged) {
+			parsed.Triggers[i].CollectionID = f.list.ID
+		}
+	}
+	encoded, parseErr := json.Marshal(parsed)
+	if parseErr != nil {
+		t.Fatal(parseErr)
+	}
+	def = string(encoded)
+	w, err := f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: name, Definition: json.RawMessage(def)})
 	if err != nil {
 		t.Fatalf("create workflow %s: %v", name, err)
 	}
@@ -163,15 +177,19 @@ func (f *fixture) searchOff(t testing.TB) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	found := false
 	for _, w := range all {
-		if w.BuiltInKey != nil && *w.BuiltInKey == workflow.RoleSearchIndex {
-			if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, *w.BuiltInKey, workflow.SetBuiltIn{Enabled: false, Version: w.Version}); err != nil {
+		if w.BuiltInKey != nil && *w.BuiltInKey == workflow.RoleSearchIndex && w.CollectionID != nil {
+			found = true
+			if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, *w.BuiltInKey, workflow.SetBuiltIn{CollectionID: *w.CollectionID, AutomaticEnabled: false, Version: w.Version}); err != nil {
 				t.Fatal(err)
 			}
-			return
 		}
 	}
-	t.Fatal("no search.index built-in")
+	if !found {
+		t.Fatal("no search.index built-in")
+	}
+
 }
 
 func (f *fixture) item(t testing.TB, subject, name string, values map[string]any) *ent.Resource {
@@ -385,14 +403,14 @@ func TestBuiltInExpiryOnSchedule(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "items.expire", workflow.SetBuiltIn{CollectionID: f.list.ID, Enabled: true}); err == nil || !strings.Contains(err.Error(), "field") {
+	if _, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "items.expire", workflow.SetBuiltIn{CollectionID: f.list.ID, AutomaticEnabled: true}); err == nil || !strings.Contains(err.Error(), "field") {
 		t.Fatalf("missing parameter: %v", err)
 	}
-	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "items.expire", workflow.SetBuiltIn{CollectionID: f.list.ID, Enabled: true, Parameters: map[string]any{"field": "expires"}})
+	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "items.expire", workflow.SetBuiltIn{CollectionID: f.list.ID, AutomaticEnabled: true, Parameters: map[string]any{"field": "expires"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.wf.Update(ctx, "alice", w.ID, w.Version, workflow.Save{Name: "Mine", Definition: json.RawMessage(`{}`)}); err == nil {
+	if _, err = f.wf.Update(ctx, "alice", w.ID, w.Version, workflow.Save{AutomaticEnabled: new(true), Name: "Mine", Definition: json.RawMessage(`{}`)}); err == nil {
 		t.Fatal("built-in definition was edited in place")
 	}
 	// Make the schedule due and tick.
@@ -424,7 +442,7 @@ func TestBuiltInExpiryOnSchedule(t *testing.T) {
 		t.Fatal(err)
 	}
 	i := slices.IndexFunc(states, func(s workflow.BuiltInState) bool { return s.Key == "items.expire" })
-	if i < 0 || len(states[i].Workflows) != 1 || states[i].Workflows[0].Enabled {
+	if i < 0 || len(states[i].Workflows) != 1 || !states[i].Workflows[0].AutomaticEnabled || copied.AutomaticEnabled || copied.State != "draft" {
 		t.Fatalf("built-in after copy: %+v", states)
 	}
 }
@@ -454,7 +472,7 @@ func TestFailedRunRetriesFromFailedStep(t *testing.T) {
 	if err := f.dms.SetWorkspaceMember(ctx, "alice", f.ws.ID, dms.WorkspaceMember{Subject: "bob", Role: "owner"}); err != nil {
 		t.Fatal(err)
 	}
-	w, err := f.wf.Create(ctx, "bob", f.ws.ID, workflow.Save{Name: "Stamp", Definition: json.RawMessage(strings.ReplaceAll(`{
+	w, err := f.wf.Create(ctx, "bob", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Stamp", Definition: json.RawMessage(strings.ReplaceAll(`{
 		"triggers": [{"type": "item.created", "collection_id": "$LIST"}],
 		"flow": {"start": "read", "nodes": {
 			"read": {"activity": "item.get", "next": {"done": "stamp"}},
@@ -602,7 +620,7 @@ func TestEventsLoggedWithoutRunnerStartLater(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := wf.Create(ctx, "alice", ws.ID, workflow.Save{Name: "Keyword", Definition: json.RawMessage(`{
+	w, err := wf.Create(ctx, "alice", ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Keyword", Definition: json.RawMessage(`{
 		"triggers": [{"type": "item.created", "collection_id": "` + list.ID + `"}],
 		"flow": {"start": "keyword", "nodes": {"keyword": {"activity": "item.update", "inputs": {"keywords": ["seen"]}}}}}`)})
 	if err != nil {
@@ -808,11 +826,11 @@ func TestLaunchFormDomainPickers(t *testing.T) {
 		"flow": {"start": "note", "nodes": {"note": {"activity": "item.update", "inputs": {"values": {"note": "{input:priority} by {input:reviewer}"}}}}}}`
 	}
 	def := strings.ReplaceAll(form(foreign.ID), "$LIST", f.list.ID)
-	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Foreign terms", Definition: json.RawMessage(def)}); err != nil {
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Foreign terms", Definition: json.RawMessage(def)}); err != nil {
 		t.Fatalf("shared organization term set: %v", err)
 	}
 	def = strings.Replace(strings.ReplaceAll(form(set.ID), "$LIST", f.list.ID), `"kind": "terms",`, `"kind": "terms", "group_id": "`+otherGroup.ID+`",`, 1)
-	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Foreign group", Definition: json.RawMessage(def)}); err != nil {
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Foreign group", Definition: json.RawMessage(def)}); err != nil {
 		t.Fatalf("organization group configuration: %v", err)
 	}
 	w := f.workflow(t, "Review", form(set.ID))
@@ -879,7 +897,7 @@ func TestKeywordsPicker(t *testing.T) {
 			"keywords": {"type": "array", "items": {"type": "string"}, "x-papergo": {"kind": "keywords"}}}},
 		"flow": {"start": "keyword", "nodes": {"keyword": {"activity": "item.update", "inputs": {"values": {"keywords": "{input:keywords}"}}}}}}`
 	w := f.workflow(t, "Keywords", def)
-	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Old picker", Definition: json.RawMessage(strings.ReplaceAll(strings.Replace(def, `"kind": "keywords"`, `"kind": "keywords", "allow_new": true`, 1), "$LIST", f.list.ID))}); err == nil {
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Old picker", Definition: json.RawMessage(strings.ReplaceAll(strings.Replace(def, `"kind": "keywords"`, `"kind": "keywords", "allow_new": true`, 1), "$LIST", f.list.ID))}); err == nil {
 		t.Fatal("keywords pickers have no options")
 	}
 	it := f.item(t, "alice", "Target", nil)
@@ -947,7 +965,7 @@ func TestTermTriggersAndHasTerms(t *testing.T) {
 		"unknown term":   `{"type": "item.updated", "terms": ["nope"]}`,
 		"merged options": `{"type": "term.merged", "collection_id": "$LIST"}`,
 	} {
-		if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: name, Definition: json.RawMessage(strings.ReplaceAll(def(trigger, end), "$LIST", f.list.ID))}); err == nil {
+		if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: name, Definition: json.RawMessage(strings.ReplaceAll(def(trigger, end), "$LIST", f.list.ID))}); err == nil {
 			t.Fatalf("%s: saved", name)
 		}
 	}

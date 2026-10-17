@@ -35,6 +35,9 @@ func (f *fixture) folder(t *testing.T, parent, name string) {
 
 // fillers returns the workspace's workflows that fill test.index.
 func (f *fixture) fillers(t *testing.T) []workflow.Workflow {
+	if _, err := f.wf.ListBuiltIns(ctx, "alice", f.ws.ID); err != nil {
+		t.Fatal(err)
+	}
 	t.Helper()
 	all, err := f.wf.List(ctx, "alice", f.ws.ID)
 	if err != nil {
@@ -43,7 +46,7 @@ func (f *fixture) fillers(t *testing.T) []workflow.Workflow {
 	return slices.DeleteFunc(all, func(w workflow.Workflow) bool { return w.Role == nil || *w.Role != "test.index" })
 }
 
-func TestRoleBuiltInsDefaultsOverridesAndCopies(t *testing.T) {
+func TestRoleBuiltInsAreCollectionScopedAndCopiesDoNotReplaceProviders(t *testing.T) {
 	f := setup(t)
 	other, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "list", Name: "Other"})
 	if err != nil {
@@ -52,77 +55,76 @@ func TestRoleBuiltInsDefaultsOverridesAndCopies(t *testing.T) {
 	if _, err = f.r.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	// Default built-ins are turned on in the workspace by its creator.
 	fillers := f.fillers(t)
-	if len(fillers) != 1 || !fillers[0].Enabled || fillers[0].CollectionID != nil || fillers[0].CreatedBy != "alice" {
-		t.Fatalf("default filler: %+v", fillers)
+	if len(fillers) != 2 {
+		t.Fatalf("one default per collection: %+v", fillers)
 	}
-	workspaceFiller := fillers[0]
+	var own, peer workflow.Workflow
+	for _, w := range fillers {
+		if !w.AutomaticEnabled || w.CollectionID == nil {
+			t.Fatal(w)
+		}
+		if *w.CollectionID == f.list.ID {
+			own = w
+		} else if *w.CollectionID == other.ID {
+			peer = w
+		}
+	}
 	f.folder(t, f.list.ID, "A")
-	runs := f.runs(t, workspaceFiller.ID, 1)
-	detail, err := f.r.Run(ctx, "alice", runs[0].ID)
-	if err != nil || detail.Status != "completed" || detail.Result.(map[string]any)["outputs"].(map[string]any)["seen"] != "A" {
-		t.Fatalf("workspace filler run: %+v %v", detail, err)
-	}
-
-	// The list gets its own filler: the workspace's no longer runs for it.
-	own, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "test.index", workflow.SetBuiltIn{CollectionID: f.list.ID, Enabled: true})
-	if err != nil || own.Role == nil || own.CollectionID == nil || *own.CollectionID != f.list.ID {
-		t.Fatalf("collection filler: %+v %v", own, err)
-	}
-	f.folder(t, f.list.ID, "B")
-	f.folder(t, other.ID, "C")
 	f.runs(t, own.ID, 1)
-	f.runs(t, workspaceFiller.ID, 2)
-
-	// Turned off for the list, the role does nothing there.
-	if own, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "test.index", workflow.SetBuiltIn{CollectionID: f.list.ID, Enabled: false, Version: own.Version}); err != nil {
+	copy, err := f.wf.CopyBuiltIn(ctx, "alice", f.ws.ID, "test.index", workflow.CopyBuiltIn{Name: "Custom index", CollectionID: f.list.ID})
+	if err != nil {
 		t.Fatal(err)
 	}
-	f.folder(t, f.list.ID, "D")
+	if copy.State != "draft" || copy.AutomaticEnabled || copy.AutomaticProvider {
+		t.Fatal(copy)
+	}
+	current, err := f.wf.Get(ctx, "alice", own.ID)
+	if err != nil || current.Version != own.Version || !current.AutomaticEnabled {
+		t.Fatal("copy changed source", current, err)
+	}
+	f.folder(t, other.ID, "B")
+	f.runs(t, peer.ID, 1)
+	raw, err := json.Marshal(copy.Definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.wf.Update(ctx, "alice", copy.ID, copy.Version, workflow.Save{Name: copy.Name, State: "published", AutomaticEnabled: new(true), Definition: raw}); err != nil {
+		t.Fatal(err)
+	}
+	f.folder(t, f.list.ID, "C")
+	f.runs(t, copy.ID, 1)
 	states, err := f.wf.CollectionRoles(ctx, "alice", f.list.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	i := slices.IndexFunc(states, func(s workflow.RoleState) bool { return s.Role.Key == "test.index" })
-	if i < 0 || states[i].Scope != "collection" || states[i].Enabled {
-		t.Fatalf("roles of the list: %+v", states)
+	i := slices.IndexFunc(states, func(st workflow.RoleState) bool { return st.Role.Key == "test.index" })
+	if i < 0 || states[i].Workflow.ID != copy.ID || !states[i].AutomaticEnabled {
+		t.Fatal(states)
 	}
-
-	// A filler must keep the role's outputs.
-	broken := json.RawMessage(`{"triggers": [{"type": "folder.created"}], "flow": {"start": "end", "nodes": {"end": {"activity": "end"}}}}`)
-	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Broken index", Role: "test.index", Definition: broken}); err == nil || !strings.Contains(err.Error(), "declares output seen") {
-		t.Fatalf("filler without outputs: %v", err)
-	}
-	// A copy fills the role in the workspace and turns the built-in off.
-	copied, err := f.wf.CopyBuiltIn(ctx, "alice", f.ws.ID, "test.index", workflow.CopyBuiltIn{Name: "Custom index"})
-	if err != nil || copied.Role == nil || !copied.Enabled {
-		t.Fatalf("copy: %+v %v", copied, err)
-	}
-	f.folder(t, other.ID, "E")
-	f.runs(t, copied.ID, 1)
-	f.runs(t, workspaceFiller.ID, 2)
-	f.runs(t, own.ID, 1)
-	for _, w := range f.fillers(t) {
-		if w.Enabled != (w.ID == copied.ID) {
-			t.Fatalf("one enabled filler per scope: %+v", f.fillers(t))
-		}
-	}
-	// Turning the built-in back on turns the copy off.
-	builtin, err := f.wf.Get(ctx, "alice", workspaceFiller.ID)
+	current, err = f.wf.Get(ctx, "alice", own.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "test.index", workflow.SetBuiltIn{Enabled: true, Version: builtin.Version}); err != nil {
+	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "test.index", workflow.SetBuiltIn{CollectionID: f.list.ID, AutomaticEnabled: true, Version: current.Version}); err != nil {
 		t.Fatal(err)
 	}
-	if again, err := f.wf.Get(ctx, "alice", copied.ID); err != nil || again.Enabled {
-		t.Fatalf("copy after the built-in returned: %+v %v", again, err)
+	copied, err := f.wf.Get(ctx, "alice", copy.ID)
+	if err != nil || copied.AutomaticEnabled {
+		t.Fatal(copied, err)
 	}
-	// A collection scope needs a role, and the collection must be the workspace's.
+	// Another collection's provider is unaffected by replacement.
+	current, err = f.wf.Get(ctx, "alice", peer.ID)
+	if err != nil || !current.AutomaticEnabled {
+		t.Fatal(current, err)
+	}
+	broken := json.RawMessage(`{"triggers":[{"type":"folder.created"}],"flow":{"start":"end","nodes":{"end":{"activity":"end"}}}}`)
+	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Broken", Role: "test.index", AutomaticEnabled: new(true), Definition: broken}); err == nil || !strings.Contains(err.Error(), "declares output seen") {
+		t.Fatal(err)
+	}
 	var invalid *dms.ValidationError
 	if _, err = f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Scoped", CollectionID: f.list.ID, Definition: broken}); !errors.As(err, &invalid) {
-		t.Fatalf("scope without a role: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -147,4 +149,52 @@ func TestSystemRunsAreKeptADay(t *testing.T) {
 	}
 	f.runs(t, fillers[0].ID, 0)
 	f.runs(t, user.ID, 1)
+}
+
+func TestManualSystemRunsAreVisiblePagedAndRetained(t *testing.T) {
+	f := setup(t)
+	item := f.item(t, "alice", "Manual indexing", nil)
+	root := f.builtIn(t, "search.index", "")
+	if root.AutomaticEnabled {
+		t.Fatal(root)
+	}
+	ids := []string{}
+	for range 2 {
+		queued, err := f.wf.StartRuns(ctx, "alice", root.ID, workflow.Start{ItemIDs: []string{item.ID}})
+		if err != nil || len(queued) != 1 {
+			t.Fatal(queued, err)
+		}
+		ids = append(ids, queued[0])
+		if _, err = f.r.Dispatch(ctx); err != nil {
+			t.Fatal(err)
+		}
+		f.status(t, queued[0], "completed")
+	}
+	page, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{Origin: "manual", Status: "completed", Limit: 1})
+	if err != nil || len(page.Data) != 1 || page.Data[0].ID != ids[1] || page.NextCursor == "" {
+		t.Fatal(page, err)
+	}
+	next, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{Origin: "manual", Status: "completed", Limit: 1, After: page.NextCursor})
+	if err != nil || len(next.Data) != 1 || next.Data[0].ID != ids[0] || next.NextCursor != "" {
+		t.Fatal(next, err)
+	}
+	automatic, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{Origin: "automatic", IncludeSystem: true})
+	if err != nil || len(automatic.Data) == 0 {
+		t.Fatal(automatic, err)
+	}
+	hidden, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{Origin: "automatic"})
+	if err != nil || len(hidden.Data) != 0 {
+		t.Fatal(hidden, err)
+	}
+	saved := systemRetention
+	systemRetention = time.Millisecond
+	t.Cleanup(func() { systemRetention = saved })
+	time.Sleep(10 * time.Millisecond)
+	if _, err = f.r.PurgeSystemRuns(ctx); err != nil {
+		t.Fatal(err)
+	}
+	retained, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{Origin: "manual"})
+	if err != nil || len(retained.Data) != 2 {
+		t.Fatal("manual system runs must use ordinary retention", retained, err)
+	}
 }

@@ -30,8 +30,14 @@ type Workflow struct {
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
-	// Enabled holds the value of the "enabled" field.
-	Enabled bool `json:"enabled,omitempty"`
+	// AutomaticEnabled holds the value of the "automatic_enabled" field.
+	AutomaticEnabled bool `json:"automatic_enabled,omitempty"`
+	// ManualEnabled holds the value of the "manual_enabled" field.
+	ManualEnabled bool `json:"manual_enabled,omitempty"`
+	// AutomaticProvider holds the value of the "automatic_provider" field.
+	AutomaticProvider bool `json:"automatic_provider,omitempty"`
+	// State holds the value of the "state" field.
+	State string `json:"state,omitempty"`
 	// BuiltinKey holds the value of the "builtin_key" field.
 	BuiltinKey *string `json:"builtin_key,omitempty"`
 	// CollectionID holds the value of the "collection_id" field.
@@ -60,11 +66,11 @@ func (*Workflow) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case workflow.FieldParameters:
 			values[i] = new([]byte)
-		case workflow.FieldEnabled:
+		case workflow.FieldAutomaticEnabled, workflow.FieldManualEnabled, workflow.FieldAutomaticProvider:
 			values[i] = new(sql.NullBool)
 		case workflow.FieldCurrentVersion, workflow.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case workflow.FieldID, workflow.FieldWorkspaceID, workflow.FieldKey, workflow.FieldName, workflow.FieldDescription, workflow.FieldBuiltinKey, workflow.FieldCollectionID, workflow.FieldRole, workflow.FieldCreatedBy, workflow.FieldUpdatedBy:
+		case workflow.FieldID, workflow.FieldWorkspaceID, workflow.FieldKey, workflow.FieldName, workflow.FieldDescription, workflow.FieldState, workflow.FieldBuiltinKey, workflow.FieldCollectionID, workflow.FieldRole, workflow.FieldCreatedBy, workflow.FieldUpdatedBy:
 			values[i] = new(sql.NullString)
 		case workflow.FieldCreatedAt, workflow.FieldUpdatedAt, workflow.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -125,11 +131,29 @@ func (_m *Workflow) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Description = value.String
 			}
-		case workflow.FieldEnabled:
+		case workflow.FieldAutomaticEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field enabled", values[i])
+				return fmt.Errorf("unexpected type %T for field automatic_enabled", values[i])
 			} else if value.Valid {
-				_m.Enabled = value.Bool
+				_m.AutomaticEnabled = value.Bool
+			}
+		case workflow.FieldManualEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field manual_enabled", values[i])
+			} else if value.Valid {
+				_m.ManualEnabled = value.Bool
+			}
+		case workflow.FieldAutomaticProvider:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field automatic_provider", values[i])
+			} else if value.Valid {
+				_m.AutomaticProvider = value.Bool
+			}
+		case workflow.FieldState:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field state", values[i])
+			} else if value.Valid {
+				_m.State = value.String
 			}
 		case workflow.FieldBuiltinKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -245,8 +269,17 @@ func (_m *Workflow) String() string {
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)
 	builder.WriteString(", ")
-	builder.WriteString("enabled=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))
+	builder.WriteString("automatic_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AutomaticEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("manual_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ManualEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("automatic_provider=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AutomaticProvider))
+	builder.WriteString(", ")
+	builder.WriteString("state=")
+	builder.WriteString(_m.State)
 	builder.WriteString(", ")
 	if v := _m.BuiltinKey; v != nil {
 		builder.WriteString("builtin_key=")

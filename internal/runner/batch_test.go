@@ -149,7 +149,7 @@ func batchTools(t *testing.T, azure bool) (*aitest.BatchServer, *batchClock, fun
 func (f *fixture) enableBatch(t *testing.T, params map[string]any) workflow.Workflow {
 	t.Helper()
 	f.organizationManager(t, "alice")
-	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "ai.batch", workflow.SetBuiltIn{Enabled: true, Parameters: params})
+	w, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "ai.batch", workflow.SetBuiltIn{AutomaticEnabled: true, Parameters: params})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func (f *fixture) disableSearch(t *testing.T, workspaceID string) {
 	}
 	for _, w := range all {
 		if w.BuiltInKey != nil && *w.BuiltInKey == workflow.RoleSearchIndex {
-			if _, err = f.wf.UpdateBuiltIn(ctx, "alice", workspaceID, *w.BuiltInKey, workflow.SetBuiltIn{Enabled: false, Version: w.Version}); err != nil {
+			if _, err = f.wf.UpdateBuiltIn(ctx, "alice", workspaceID, *w.BuiltInKey, workflow.SetBuiltIn{AutomaticEnabled: false, Version: w.Version}); err != nil {
 				t.Fatal(err)
 			}
 			return
@@ -381,7 +381,7 @@ func TestBatchDailyFlushSendsAPartialAndKeepsWorkspacesApart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	askB, err := f.wf.Create(ctx, "alice", other.ID, workflow.Save{Name: "Extract B", Definition: json.RawMessage(batchFlow(list.ID, "secret-b-cedar", false))})
+	askB, err := f.wf.Create(ctx, "alice", other.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Extract B", Definition: json.RawMessage(batchFlow(list.ID, "secret-b-cedar", false))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,10 +484,7 @@ func TestBatchAzureImagesUnorderedPartialAndSchema(t *testing.T) {
 	server, clock, tools := batchTools(t, true)
 	f := setup(t, tools)
 	f.searchOff(t)
-	content := f.builtIn(t, "search.content", "")
-	if _, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{Enabled: false, Version: content.Version}); err != nil {
-		t.Fatal(err)
-	}
+
 	coord := f.enableBatch(t, map[string]any{"policy": "both", "flush_cron": "* * * * *", "time_zone": "UTC"})
 	textW := f.workflow(t, "Text", batchFlow(f.list.ID, "Extract", false))
 	schemaW := f.workflow(t, "Schema", batchFlow(f.list.ID, "Extract", true))
@@ -495,12 +492,17 @@ func TestBatchAzureImagesUnorderedPartialAndSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	content := f.builtIn(t, "search.content", lib.ID)
+	if _, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: false, Version: content.Version}); err != nil {
+		t.Fatal(err)
+	}
+
 	png, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
 	if err != nil {
 		t.Fatal(err)
 	}
 	file := f.upload(t, lib.ID, "ticket.png", "image/png", png)
-	imageW, err := f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{Name: "Image", Definition: json.RawMessage(fmt.Sprintf(`{"triggers":[{"type":"manual","collection_id":%q}],"input_schema":{"type":"object","required":["image"],"properties":{"image":{"type":"string"}}},"flow":{"start":"ask","nodes":{"ask":{"activity":"ai.complete","inputs":{"prompt":"Read the receipt","image":"{input:image}","execution":"batch","queue":"shared"},"next":{"done":"save","error":"bad"}},"save":{"activity":"set_variable","inputs":{"name":"answer","value":"{step:ask.text}"}},"bad":{"activity":"set_variable","inputs":{"name":"answer","value":"{step:ask.error}"}}}}}`, lib.ID))})
+	imageW, err := f.wf.Create(ctx, "alice", f.ws.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Image", Definition: json.RawMessage(fmt.Sprintf(`{"triggers":[{"type":"manual","collection_id":%q}],"input_schema":{"type":"object","required":["image"],"properties":{"image":{"type":"string"}}},"flow":{"start":"ask","nodes":{"ask":{"activity":"ai.complete","inputs":{"prompt":"Read the receipt","image":"{input:image}","execution":"batch","queue":"shared"},"next":{"done":"save","error":"bad"}},"save":{"activity":"set_variable","inputs":{"name":"answer","value":"{step:ask.text}"}},"bad":{"activity":"set_variable","inputs":{"name":"answer","value":"{step:ask.error}"}}}}}`, lib.ID))})
 	if err != nil {
 		t.Fatal(err)
 	}

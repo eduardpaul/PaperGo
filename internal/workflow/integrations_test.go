@@ -30,7 +30,7 @@ func TestIntegrationWorkflowNeedsOnlyListManageAndRespectsDisable(t *testing.T) 
 		t.Fatal(err)
 	}
 	row, err := service.Client.Workflow.Query().Where(workflow.BuiltinKeyEQ(IntegrationRefreshBuiltIn)).Only(ctx)
-	if err != nil || !row.Enabled {
+	if err != nil || !row.AutomaticEnabled {
 		t.Fatal(row, err)
 	}
 	version, err := current(ctx, service, row)
@@ -47,14 +47,14 @@ func TestIntegrationWorkflowNeedsOnlyListManageAndRespectsDisable(t *testing.T) 
 	if len(def.Triggers) != 1 || def.Triggers[0].Cron != "*/15 * * * *" {
 		t.Fatal(def)
 	}
-	if err = service.Client.Workflow.UpdateOne(row).SetEnabled(false).Exec(ctx); err != nil {
+	if err = service.Client.Workflow.UpdateOne(row).SetAutomaticEnabled(false).Exec(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err = service.Write(ctx, func(t *dms.Service) error { return flows.EnsureIntegrationWorkflow(ctx, t, "bob", list) }); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := service.Client.Workflow.Query().Where(workflow.BuiltinKeyEQ(IntegrationRefreshBuiltIn)).All(ctx)
-	if err != nil || len(rows) != 1 || rows[0].Enabled {
+	if err != nil || len(rows) != 1 || rows[0].AutomaticEnabled {
 		t.Fatal(rows, err)
 	}
 }

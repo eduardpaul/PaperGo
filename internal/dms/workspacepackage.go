@@ -852,7 +852,7 @@ func workspaceValueGraphFor(rows map[string][]map[string]any) (workspaceValueGra
 	return graph, nil
 }
 
-// The trigger index is derived from the enabled current definitions. Schedule
+// The trigger index is derived from published definitions with automatic use on. Schedule
 // cursors start at import time, so a copy never replays the source's overdue run.
 func rebuildWorkspaceTriggers(p *corePackage, now time.Time) error {
 	versions := map[string]map[string]any{}
@@ -862,9 +862,12 @@ func rebuildWorkspaceTriggers(p *corePackage, now time.Time) error {
 	table := p.Tables["workflow_triggers"]
 	table.Rows = [][]any{}
 	for _, row := range packageMaps(p.Tables["workflows"]) {
-		enabled := fmt.Sprint(row["enabled"])
-		if enabled != "1" && enabled != "true" || row["deleted_at"] != nil {
+		enabled := fmt.Sprint(row["automatic_enabled"])
+		if enabled != "1" && enabled != "true" || row["deleted_at"] != nil || row["state"] != "published" || row["role"] != nil && row["collection_id"] != nil && fmt.Sprint(row["automatic_provider"]) != "true" && fmt.Sprint(row["automatic_provider"]) != "1" {
 			continue
+		}
+		if row["role"] != nil && row["collection_id"] == nil {
+			return invalid("automatic role providers require a specific list or library")
 		}
 		version := versions[fmt.Sprint(row["id"])+":"+fmt.Sprint(row["current_version"])]
 		if version == nil {
@@ -872,6 +875,7 @@ func rebuildWorkspaceTriggers(p *corePackage, now time.Time) error {
 		}
 		var definition struct {
 			Triggers []struct {
+				Disabled     bool   `json:"disabled"`
 				Type         string `json:"type"`
 				CollectionID string `json:"collection_id"`
 				Cron         string `json:"cron"`
@@ -882,6 +886,12 @@ func rebuildWorkspaceTriggers(p *corePackage, now time.Time) error {
 			return invalid("invalid workspace workflow definition")
 		}
 		for position, trigger := range definition.Triggers {
+			if trigger.Type == "manual" || trigger.Disabled {
+				continue
+			}
+			if trigger.CollectionID == "" && (strings.HasPrefix(trigger.Type, "file.") || strings.HasPrefix(trigger.Type, "item.") || strings.HasPrefix(trigger.Type, "folder.") || trigger.Type == EventPermissionsChanged) {
+				return invalid("automatic content processing requires a specific list or library")
+			}
 			tr := map[string]any{"id": uuid.NewString(), "created_at": row["created_at"], "workflow_id": row["id"], "workspace_id": row["workspace_id"], "collection_id": nil, "type": trigger.Type, "position": int64(position), "next_at": nil}
 			if trigger.CollectionID != "" {
 				tr["collection_id"] = trigger.CollectionID

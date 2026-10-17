@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	"fmt"
 	"time"
 )
 
@@ -22,12 +23,15 @@ func (Workflow) Fields() []ent.Field {
 		field.String("key").NotEmpty().MaxLen(100).Immutable(),
 		field.String("name").NotEmpty().MaxLen(400),
 		field.String("description").Default(""),
-		field.Bool("enabled").Default(true),
+		field.Bool("automatic_enabled").Default(false),
+		field.Bool("manual_enabled").Default(true),
+		field.Bool("automatic_provider").Default(false),
+		field.String("state").Default("published").Validate(workflowState),
 		field.String("builtin_key").Optional().Nillable().Immutable(),
 		field.String("collection_id").Optional().Nillable().Immutable().MaxLen(36),
 		// Role is the product process the workflow fills, such as
 		// search.index: a built-in with that role, its copy or an alternative.
-		// One enabled filler per scope (the workspace, or CollectionID) runs.
+		// One published automatic provider per CollectionID runs.
 		field.String("role").Optional().Nillable().Immutable().MaxLen(100),
 		field.JSON("parameters", map[string]any{}).Default(map[string]any{}),
 		field.Int("current_version").Positive(),
@@ -136,4 +140,11 @@ func (WorkflowRunItem) Indexes() []ent.Index {
 		index.Fields("run_id", "item_id").Unique(),
 		index.Fields("item_id"),
 	}
+}
+
+func workflowState(s string) error {
+	if s != "draft" && s != "published" && s != "archived" {
+		return fmt.Errorf("workflow state must be draft, published or archived")
+	}
+	return nil
 }

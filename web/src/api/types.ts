@@ -1,3 +1,4 @@
+import type { Trigger } from '@/features/workflows/model';
 import type { FormSchema } from '@/features/workflows/model';
 
 export type Kind = 'workspace' | 'list' | 'library' | 'folder' | 'item';
@@ -323,7 +324,11 @@ export interface Workflow {
   key: string;
   name: string;
   description: string;
-  enabled: boolean;
+  execution_author?: string;
+  automatic_enabled: boolean;
+  manual_enabled: boolean;
+  state: 'draft' | 'published' | 'archived';
+  automatic_provider: boolean;
   builtin_key?: string;
   role?: string;
   collection_id?: string;
@@ -333,12 +338,19 @@ export interface Workflow {
   version: number;
 }
 
+export interface WorkflowAvailability { can_run: boolean; code: string; reason: string; manual_mode: string; version: number }
+export interface WorkflowAction { workflow?: Workflow; builtin?: BuiltInState; availability: WorkflowAvailability }
+
 export interface BuiltInState {
+  manual_mode?: 'none' | 'single' | 'selection' | 'standalone';
+  manual_media_types?: string[];
+  automatic_triggers?: Trigger[];
+
   key: string;
   name: string;
   description: string;
   per_collection?: boolean;
-  /** Role built-ins are workspace-wide; a collection can have its own, on or off. */
+  /** Automatic role providers belong to one collection; manual catalog use is independent. */
   role?: string;
   default?: boolean;
   system?: boolean;
@@ -349,6 +361,7 @@ export interface BuiltInState {
 }
 
 export interface WorkflowRun {
+  outcome?: string;
   updated_at?: string;
   inputs?: Record<string, unknown>;
   result?: unknown;

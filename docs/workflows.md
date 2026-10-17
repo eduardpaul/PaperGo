@@ -1,6 +1,6 @@
 # Workflows
 
-Workflows are how PaperGo does anything that happens **after** a change or **on a schedule**. A workflow is data that workspace managers can read, change, turn off or replace. That includes the processes PaperGo ships, which are *built-in workflows* rather than hidden code. New features that react to changes are delivered as workflow activities and built-in workflows.
+Workflows are reusable features that people run **on demand**, **after a change**, or **on a schedule**. A workflow is data that workspace managers can read, change, turn off or replace. That includes the processes PaperGo ships, which are *built-in workflows* rather than hidden code. New features that react to changes are delivered as workflow activities and built-in workflows.
 
 A workflow has:
 
@@ -18,6 +18,9 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 ```json
 {
   "name": "Review new contracts",
+  "automatic_enabled": true,
+  "manual_enabled": true,
+  "state": "published",
   "definition": {
     "triggers": [{"type": "item.created", "collection_id": "<contracts list>"}],
     "condition": {"field": "status", "op": "eq", "value": "new"},
@@ -35,9 +38,16 @@ Runs are durable. Each node runs as one step that commits exactly once. A run co
 }
 ```
 
-Select items in a list or library and choose **Run workflow** to launch an enabled
-manual workflow for that collection and selection size. The confirmation dialog
-keeps the selected items, collects any launch inputs, and links to the started run.
+## Manual use and automatic processing
+
+A workflow has independent `manual_enabled` and `automatic_enabled` settings. Its lifecycle is `draft`, `published` or `archived`; only published workflows accept new runs. New custom workflows in the editor and duplicated built-ins start as drafts with automatic processing off. Publishing makes the allowed entry points usable. Pausing automatic processing leaves manual use available.
+
+**Workspace settings → Workflows** shows separate Manual use and Automatic runs summaries. Choose a library or list to configure its built-ins; the same view is linked from that collection's settings. Content rules (`file.*`, `item.*`, `folder.*`, `permissions.changed`) require a collection. There is no inherited workspace-wide content automation. Genuine workspace services, such as the AI batch coordinator, can use workspace schedules.
+
+For example, prepare Optimize image storage in the Photos library with manual use allowed and Automatic runs off. Run it once on a selected photo without subscribing to uploads or replacements. To process future uploads in that library, turn automatic runs on and choose the active event rules. Other libraries keep their own settings. Each automatic trigger can also be disabled independently with `disabled: true`.
+
+Select items in a list or library and choose **Run workflow**, then **Run once**, to launch an available manual workflow for that collection and selection size. The confirmation dialog
+keeps the selected items, collects any launch inputs, and links to the queued run. A server preflight explains missing setup, selection or permission requirements; the start request repeats these checks.
 Select individual items (up to 100); the all-matching bulk selection cannot launch
 a workflow. The server rechecks write permission on every item before starting.
 
@@ -504,6 +514,10 @@ steps and other selection members. Workspace managers can follow **View steps**
 to inspect node results and retry failed runs. General run listing, execution
 details, cancellation and retry require workspace manage access.
 
+The history view supports manual, automatic and scheduled origins, status filters and paging. Manual system runs are included by default; high-volume automatic system runs can be included explicitly. Successful runs with an explicit no-change reason display **No changes needed** (`outcome: "unchanged"`) rather than implying the file changed. Item readers see scoped summaries; managers can inspect full results and steps.
+
+The automatic eligibility check evaluates a chosen item against an upload, replacement or metadata-change scenario using current rules and conditions. It writes no events and executes no activities; matching a rule does not guarantee eventual execution succeeds.
+
 ## Who a run acts as
 
 A run acts as the **author of its workflow version**: the subject who saved that version, or who configured the built-in. Every step checks that author's permissions, as an API request would. A workflow therefore never does more than its author may, and a run fails visibly if the author loses access. `{trigger:actor}` and `{run:actor}` still name who caused the run.
@@ -518,29 +532,27 @@ Built-in workflows are processes PaperGo ships, in the same model.
 | --- | --- | --- | --- |
 | `documents.optimize` | Optimize image storage: when an image is added (uploaded, through WebDAV or restored), or on demand, `file.optimize_image` proposes a smaller copy and an `approval` asks the `approvers` to compare it with the current file at full size; approving promotes it as a new file version, rejecting discards it. `concurrency: replace`, so a newer file cancels a waiting review. | per library | `target_height`, `min_confidence`, `percentile`, `max_analysis_dimension`, `minimum_scale`, `quality` (see [image optimization](#image-optimization)), `approvers` (people; none means the workspace's owners) |
 | `documents.photos_to_pdf` | Photos to PDF: started on a selection (`selection: "selection"`, launch screen with image previews and a page order), `file.compose_pdf` combines the photos into one searchable PDF and an `approval` asks the `approvers` to review it (`file.preview`). Approving atomically promotes it as the primary item's new file version, keeping its metadata and history, and sends the other photos to the recycle bin; rejecting discards it. `concurrency: skip`, so a second conversion with any of the same photos is not started while one waits. | per library | `target_height` (default 32), `quality` (default 80), `approvers` (people; none means the workspace's owners) |
-| `search.content` | Index file content: when a PDF or an image is added (also through WebDAV, a restore, a workflow or a content reindex), `document.read_text`, `search.chunk`, `search.embed` and `search.publish` make its text searchable with pages and, with an embedding model, by meaning ([search](search.md#file-content)). `concurrency: coalesce`. A system built-in filling the `search.content` role, on by default; outputs `blob_id`, `text_id`, `pages`, `language`, `generation`, `chunks` | role (workspace, or per list or library) | `ocr`, `max_pages`, `chunker`, `max_chars`, `overlap`, `max_chunks`, `embed` |
-| `search.index` | Index for search: on item and folder changes, `permissions.changed` (`replace`, `move`), `term.changed`, `term.merged` and manual starts, `search.sync` rewrites the entry's [search](search.md) documents; term events reindex every item holding the term. `concurrency: coalesce`. A system built-in filling the `search.index` role, on by default. | role (workspace, or per list or library) | none |
+| `search.content` | Index file content: when a PDF or an image is added (also through WebDAV, a restore, a workflow or a content reindex), `document.read_text`, `search.chunk`, `search.embed` and `search.publish` make its text searchable with pages and, with an embedding model, by meaning ([search](search.md#file-content)). `concurrency: coalesce`. A system built-in filling the `search.content` role, on by default; outputs `blob_id`, `text_id`, `pages`, `language`, `generation`, `chunks` | per list or library (manual catalog entry available) | `ocr`, `max_pages`, `chunker`, `max_chars`, `overlap`, `max_chunks`, `embed` |
+| `search.index` | Index for search: on item and folder changes, `permissions.changed` (`replace`, `move`), `term.changed`, `term.merged` and manual starts, `search.sync` rewrites the entry's [search](search.md) documents; term events reindex every item holding the term. `concurrency: coalesce`. A system built-in filling the `search.index` role, on by default. | per list or library (manual catalog entry available) | none |
 | `items.expire` | Unpublish expired items: every day, unpublishes the published items whose date `field` is before today | per list or library | `field` (an indexed date field), `cron` (default `0 1 * * *`), `time_zone` (default `UTC`) |
 | `ai.batch` | AI batch coordinator: each minute, admits one named queue of parked AI requests for the installation. Full groups of `batch_size` go on every pass when the policy includes a threshold; the daily flush also sends a partial group; in-flight batches are polled. Originating workflows keep their own authors. A system built-in. Startup turns it on in `AI_BATCH_WORKSPACE` when a batch provider is configured, and leaves an existing copy as it is. See [AI steps](#ai-steps) | one workspace | `batch_size` (1–100, default 20), `queue` (default `shared`), `policy` (`threshold`, `schedule` or `both`, default `both`), `flush_cron` (default `0 1 * * *`), `time_zone` (default `Europe/Madrid`) |
 
 How people use them:
 
-- **Turn on, off, and set parameters:** `PUT /v1/workspaces/{id}/workflow-builtins/{key}` with `{"collection_id", "enabled", "parameters"}`. Each built-in describes its parameters as a form (`parameters_schema` in the catalog); they get its defaults and checks.
-  - The first call creates the built-in's workflow. Later calls need its ETag in `If-Match`.
-  - The workflow's definition is the release definition with the parameters filled in. Its runs, versions and history work like any workflow's.
-- **Edit freely:** a built-in's definition cannot be edited in place. `POST .../workflow-builtins/{key}/copy` creates an ordinary workflow from it and turns the built-in off where it was on, so the copy replaces it.
-- **Release updates:** when PaperGo starts, every built-in workflow is brought to the running release, and a changed release definition becomes a new version. A built-in no longer shipped, or whose parameters no longer validate, is turned off.
+- **Configure use and parameters:** `PUT /v1/workspaces/{id}/workflow-builtins/{key}` with `collection_id`, `automatic_enabled`, `manual_enabled`, `state`, `disabled_triggers` (automatic event names) and `parameters`. The catalog supplies typed `parameters_schema`, manual selection mode, supported file types and automatic rules. The first call creates the configuration; later calls require its ETag in `If-Match`.
+- **Run once:** manual admission is independent of automatic subscriptions and role provider selection. The server checks the selection, inputs, caller permissions and known execution dependencies. The accepted event pins the workflow version, including its execution author. Editing, pausing or archiving afterward does not discard accepted work.
+- **Duplicate to customize:** `POST .../workflow-builtins/{key}/copy` creates an ordinary draft workflow with automatic processing off. The source configuration stays as configured. Publish the copy and explicitly enable automatic processing to replace a provider in that collection.
+- **Release updates:** built-ins receive the running release definition as a new immutable version when needed. Their manual/automatic policies and disabled event rules are retained. Missing built-ins or invalid parameters pause automatic processing.
 
 ### Roles
 
 Some processes are **roles**: product processes that one workflow fills, which people can turn off or replace with their own process. The catalog lists them in `roles`, each with the `output_schema` its fillers return.
 
-- **Fillers.** A role's built-in fills it by default. A copy of the built-in fills it too, and so does any workflow created with `"role": "<role>"`. A filler declares outputs compatible with the role's `output_schema` (the same names and types, and every required one), which saving checks. Workflows that follow a role trigger on `role.{role}.completed` (or `failed`), which every filler raises with its outputs, whichever fills the role for the item's collection.
-- **Scopes.** A filler fills its role for the whole workspace or, created with `collection_id`, for one list or library. For an item, a folder or a file of a collection, the collection's own filler runs instead of the workspace's; a collection whose own filler is turned off has the role off. `PUT .../workflow-builtins/{key}` with `collection_id` gives a collection its own copy of a role built-in, on or off.
-- **One per scope.** Turning a filler on, or creating one enabled, turns the other enabled fillers of the role in the same scope off.
-- **Defaults.** Default role built-ins are turned on in every workspace, by the workspace's creator, before its first change is dispatched. A built-in people turned off, copied, replaced or deleted stays as they left it.
-- **What fills a collection's role:** `GET /v1/resources/{id}/workflow-roles` lists each role with the workflow that fills it for the list or library, its `scope` (`collection` or `workspace`) and whether it is `enabled`.
-- **System built-ins** (`system` in the catalog) are product processes. Their runs use a queue of their own, so they never delay people's workflows; their successful runs are kept a day. Their release definitions receive `term.changed` whatever their author's scopes, because they never expose its data.
+- **Providers.** A workflow declares a role and compatible outputs. Every provider raises `role.{role}.completed` or `role.{role}.failed`, letting other workflows follow the feature regardless of which implementation supplies it.
+- **Collection scope.** Automatic role providers require `collection_id`. Enabling a published provider pauses other automatic providers of that role in the same collection. Their manual use stays independent, and other collections are unaffected. A draft copy does not claim automatic ownership.
+- **Defaults.** Default role built-ins are prepared per collection under the workspace creator. Listing the catalog or dispatching the first event prepares missing defaults. Explicit paused, replaced or deleted configurations are preserved.
+- **Inspect providers:** `GET /v1/resources/{id}/workflow-roles` lists each role, its configured workflow, `scope: "collection"` and `automatic_enabled`.
+- **System built-ins** use a separate execution queue. Their successful automatic runs use one-day retention. Manual runs remain visible in ordinary history and use normal run retention. Their release definitions may receive taxonomy events without exposing that data to users.
 
 ## Runs
 
@@ -590,11 +602,14 @@ Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default
 | GET / POST | /v1/workspaces/{id}/workflows | List or create workflows |
 | GET / PUT / DELETE | /v1/workflows/{id} | Read, replace (If-Match), delete (If-Match) |
 | GET | /v1/workflows/{id}/versions | Versions, newest first |
-| POST | /v1/workflows/{id}/runs | Manual start: `{"item_ids": [...], "inputs": {...}}` (202 with `run_ids`) |
+| POST | /v1/workflows/{id}/runs | Manual start: `{"item_ids": [...], "inputs": {...}, "workflow_version": 1}` (202 with `run_ids`) |
+| POST | /v1/workflows/{id}/check | Read-only manual preflight with the same launch body |
+| POST | /v1/workspaces/{id}/workflow-actions | Manual actions and availability reasons for a selection |
+| POST | /v1/workflows/{id}/explain | Read-only automatic eligibility for an item and event scenario |
 | GET | /v1/workspaces/{id}/workflow-builtins | Built-ins with the workspace's built-in workflows |
 | PUT | /v1/workspaces/{id}/workflow-builtins/{key} | Turn on/off, set parameters |
 | POST | /v1/workspaces/{id}/workflow-builtins/{key}/copy | Copy into an editable workflow |
-| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `$skiptoken`, `$top`) |
+| GET | /v1/workspaces/{id}/workflow-runs | Runs, newest first (`workflow_id`, `item_id`, `origin`, `status`, `include_system`, `$skiptoken`, `$top`) |
 | GET | /v1/workflow-runs/{id} | A run with result and steps |
 | POST | /v1/workflow-runs/{id}/cancel, /retry | Cancel, or retry a failed run |
 | GET | /v1/workflow-waits | Open waits of one `kind` (`queue`, `workspace_id`, `$top` at most 100, `$skiptoken`) |

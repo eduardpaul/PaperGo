@@ -15,7 +15,7 @@ it('preserves an ordered selection, explicit primary item and exact typed launch
     async (url: URL | string, _options?: RequestInit) =>
       new Response(
         stringifyJSON(
-          String(url).endsWith('/runs')
+          String(url).endsWith('/check') ? { can_run: true, code: 'ready', reason: 'Ready to run once', version: 1 } : String(url).endsWith('/runs')
             ? { run_ids: ['run'] }
             : {
                 value: [
@@ -33,7 +33,7 @@ it('preserves an ordered selection, explicit primary item and exact typed launch
     workspace_id: 'workspace',
     name: 'Process',
     description: '',
-    enabled: true,
+    automatic_enabled: false, manual_enabled: true, state: 'published', automatic_provider: false,
     version: 1,
     current_version: 1,
     definition: {
@@ -54,7 +54,8 @@ it('preserves an ordered selection, explicit primary item and exact typed launch
   );
   fireEvent.change(screen.getByLabelText('Amount *'), { target: { value: '9007199254740993' } });
   fireEvent.click(screen.getAllByRole('button', { name: 'Up' })[1]);
-  fireEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Run once' }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
   await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/runs'))).toBe(true));
   const start = fetch.mock.calls.find(([url]) => String(url).endsWith('/runs'));
   const body = parseJSON(String(start?.[1]?.body)) as {
@@ -62,6 +63,8 @@ it('preserves an ordered selection, explicit primary item and exact typed launch
     primary_item_id: string;
     inputs: { amount: unknown };
   };
+  expect(parseJSON(String(start?.[1]?.body))).toMatchObject({ workflow_version: 1 });
+  expect(fetch.mock.calls.some(([url]) => String(url).includes('/workflow-builtins/'))).toBe(false);
   expect(body.item_ids).toEqual(['second', 'first']);
   expect(body.primary_item_id).toBe('first');
   expect(String(body.inputs.amount)).toBe('9007199254740993');
@@ -82,7 +85,7 @@ it('shows selection hints and image previews of the ordered items', async () => 
     workspace_id: 'workspace',
     name: 'Photos to PDF',
     description: '',
-    enabled: true,
+    automatic_enabled: false, manual_enabled: true, state: 'published', automatic_provider: false,
     version: 1,
     current_version: 1,
     definition: {
@@ -109,5 +112,29 @@ it('shows selection hints and image previews of the ordered items', async () => 
   await waitFor(() => expect(order.querySelectorAll('img[src="blob:preview"]')).toHaveLength(2));
   expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/v1/items/second/preview'))).toBe(true);
   expect(fetch.mock.calls.some(([url]) => String(url).includes('/content'))).toBe(false);
+  client.clear();
+});
+
+it('explains server readiness failures and prevents an unavailable run', async () => {
+  const fetch = vi.fn(async (url: URL | string) => new Response(stringifyJSON(
+    String(url).endsWith('/check')
+      ? { can_run: false, code: 'needs_setup', reason: 'Needs setup: image text detection is unavailable.', version: 1 }
+      : { value: [] },
+  )));
+  vi.stubGlobal('fetch', fetch);
+  const workflow: Workflow = {
+    id: 'optimizer', key: 'optimizer', workspace_id: 'workspace', name: 'Optimize', description: '',
+    automatic_enabled: false, manual_enabled: true, automatic_provider: false, state: 'published',
+    version: 1, current_version: 1,
+    definition: { triggers: [{ type: 'manual', selection: 'per_item' }, { type: 'file.added', collection_id: 'photos' }], flow: { start: 'end', nodes: { end: { activity: 'end' } } } },
+  };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><LaunchWorkflow workflow={workflow} itemIds={['photo']} onClose={vi.fn()} /></QueryClientProvider>);
+  await screen.findByText('Needs setup: image text detection is unavailable.');
+  expect(screen.getByText(/Automatic runs: Off/)).toBeTruthy();
+  const run = screen.getByRole('button', { name: 'Run once' }) as HTMLButtonElement;
+  expect(run.disabled).toBe(true);
+  fireEvent.click(run);
+  expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/runs'))).toBe(false);
   client.clear();
 });

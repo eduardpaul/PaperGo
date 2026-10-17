@@ -64,7 +64,7 @@ func TestSearchContentEmbedsForSemanticSearch(t *testing.T) {
 	late := f.upload(t, lib.ID, "water.pdf", "application/pdf", doctexttest.TextPDF("Water bill reminder for the overdue amount"))
 	f.waitContent(t, late.ID, late.Blob.ID)
 	f.searchNames(t, "alice", dms.SearchRequest{Q: "reminder", Mode: "keyword", Surface: "head"}, "water.pdf")
-	content := f.builtIn(t, "search.content", "")
+	content := f.builtIn(t, "search.content", lib.ID)
 	runs := f.runs(t, content.ID, 2)
 	for _, run := range runs {
 		if run.Status != "completed" {
@@ -111,7 +111,7 @@ func TestSearchEmbedLaterAndWithoutModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{CollectionID: lib.ID, Enabled: true, Parameters: map[string]any{"embed": "later"}}); err != nil {
+	if _, err = f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, "search.content", workflow.SetBuiltIn{CollectionID: lib.ID, AutomaticEnabled: true, Parameters: map[string]any{"embed": "later"}}); err != nil {
 		t.Fatal(err)
 	}
 	file := f.upload(t, lib.ID, "bill.pdf", "application/pdf", doctexttest.TextPDF("Gas bill"))

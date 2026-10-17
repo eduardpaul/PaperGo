@@ -374,7 +374,7 @@ func (s *Service) QueueScheduledIntegrationRefreshes(ctx context.Context, workfl
 	if err != nil {
 		return 0, err
 	}
-	if w.BuiltinKey == nil || *w.BuiltinKey != "integrations.refresh" || !w.Enabled || w.DeletedAt != nil {
+	if w.BuiltinKey == nil || *w.BuiltinKey != "integrations.refresh" || !w.AutomaticEnabled || w.State != "published" || w.DeletedAt != nil {
 		return 0, ErrForbidden
 	}
 	return s.queueIntegrationRefreshes(ctx, w.CreatedBy, w.WorkspaceID, "", true)

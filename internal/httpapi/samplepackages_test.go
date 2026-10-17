@@ -164,7 +164,7 @@ func checkImportedSampleSource(t *testing.T, s *dms.Service, w workflow.Workflow
 	case "Decision routing":
 		source = sampleWorkflowSource(t, "workflows/decision-routing.json")
 	case "AI batch coordinator":
-		if w.BuiltInKey == nil || *w.BuiltInKey != "ai.batch" || !w.Enabled || w.Parameters["queue"] != "shared" || w.Parameters["policy"] != "both" {
+		if w.BuiltInKey == nil || *w.BuiltInKey != "ai.batch" || !w.AutomaticEnabled || w.Parameters["queue"] != "shared" || w.Parameters["policy"] != "both" {
 			t.Fatal("sample lost its enabled batch coordinator", w)
 		}
 		return
@@ -426,9 +426,9 @@ func TestSampleWorkspacePackages(t *testing.T) {
 					}
 					var got workflow.Workflow
 					if w.BuiltInKey != nil {
-						got, err = (&workflow.Service{DMS: s}).UpdateBuiltIn(t.Context(), "organization-admin", w.WorkspaceID, *w.BuiltInKey, workflow.SetBuiltIn{Enabled: true, Version: w.Version, Parameters: w.Parameters})
+						got, err = (&workflow.Service{DMS: s}).UpdateBuiltIn(t.Context(), "organization-admin", w.WorkspaceID, *w.BuiltInKey, workflow.SetBuiltIn{AutomaticEnabled: true, Version: w.Version, Parameters: w.Parameters})
 					} else {
-						got, err = (&workflow.Service{DMS: s}).Update(t.Context(), "organization-admin", w.ID, w.Version, workflow.Save{Name: w.Name, Description: w.Description, Definition: mustJSON(t, w.Definition)})
+						got, err = (&workflow.Service{DMS: s}).Update(t.Context(), "organization-admin", w.ID, w.Version, workflow.Save{AutomaticEnabled: new(true), Name: w.Name, Description: w.Description, Definition: mustJSON(t, w.Definition)})
 					}
 					if err != nil || got.ID != w.ID {
 						t.Fatal("imported workflow cannot be saved", w.Name, err)

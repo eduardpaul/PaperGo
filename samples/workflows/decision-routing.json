@@ -101,5 +101,8 @@
         }
       }
     }
-  }
+  },
+  "automatic_enabled": false,
+  "manual_enabled": true,
+  "state": "published"
 }

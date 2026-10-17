@@ -50,7 +50,9 @@ export function WorkflowEditor({
   const client = useQueryClient();
   const [name, setName] = useState(workflow?.name ?? "");
   const [description, setDescription] = useState(workflow?.description ?? "");
-  const [enabled, setEnabled] = useState(workflow?.enabled ?? true);
+  const [automatic, setAutomatic] = useState(workflow?.automatic_enabled ?? false);
+  const [manual, setManual] = useState(workflow?.manual_enabled ?? true);
+  const [state, setState] = useState<Workflow['state']>(workflow?.state ?? 'draft');
   const [definition, setDefinition] = useState<WorkflowDefinition>(
     (workflow?.definition as WorkflowDefinition) ?? {
       triggers: [{ type: "manual" }],
@@ -122,7 +124,9 @@ export function WorkflowEditor({
           body: {
             name: name.trim(),
             description,
-            enabled,
+            automatic_enabled: automatic,
+            manual_enabled: manual,
+            state,
             definition: normalized,
           },
         },
@@ -187,11 +191,16 @@ export function WorkflowEditor({
             />
             <label className="flex gap-2">
               <Checkbox
-                checked={enabled}
-                onChange={(event) => setEnabled(event.target.checked)}
+                checked={automatic}
+                onChange={(event) => setAutomatic(event.target.checked)}
               />
-              Enabled
+              Run automatically in the selected collections
             </label>
+            <label className="flex gap-2"><Checkbox checked={manual} onChange={event => setManual(event.target.checked)} />Allow manual runs</label>
+            <Label htmlFor="workflow-state">Publication state</Label>
+            <Select id="workflow-state" value={state} onChange={event => setState(event.target.value as Workflow['state'])}><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></Select>
+            <p className="text-xs text-muted">Drafts and archived workflows accept no new runs. Publishing makes allowed manual use available; automatic rules run only when automatic processing is selected and every content rule names a library or list.</p>
+            {workflow?.role && automatic && <p className="text-sm">Saving a published automatic workflow replaces the automatic provider for this role in its collection. Manual use of other workflows stays available.</p>}
             <QueryFeedback query={catalog} />
             {asJSON ? (
               <JsonInput
@@ -270,6 +279,7 @@ export function WorkflowEditor({
                           placeholder="wf.workflow-key.completed"
                         />
                       )}
+                      {trigger.type !== 'manual' && <label className="flex items-center gap-2 text-sm"><Checkbox checked={!trigger.disabled} onChange={event => changeTrigger(index, { ...trigger, disabled: !event.target.checked })} />Use this automatic rule</label>}
                       {!trigger.type.startsWith("term.") && trigger.type !== "manual" && (
                         <Select
                           aria-label={`Trigger collection ${index + 1}`}
@@ -284,7 +294,7 @@ export function WorkflowEditor({
                             })
                           }
                         >
-                          <option value="">Whole workspace</option>
+                          <option value="">Choose a list or library for automatic processing</option>
                           {collections.data?.map((collection) => (
                             <option key={collection.id} value={collection.id}>
                               {collection.name}

@@ -2829,28 +2829,42 @@ func init() {
 	workflowDescDescription := workflowFields[4].Descriptor()
 	// workflow.DefaultDescription holds the default value on creation for the description field.
 	workflow.DefaultDescription = workflowDescDescription.Default.(string)
-	// workflowDescEnabled is the schema descriptor for enabled field.
-	workflowDescEnabled := workflowFields[5].Descriptor()
-	// workflow.DefaultEnabled holds the default value on creation for the enabled field.
-	workflow.DefaultEnabled = workflowDescEnabled.Default.(bool)
+	// workflowDescAutomaticEnabled is the schema descriptor for automatic_enabled field.
+	workflowDescAutomaticEnabled := workflowFields[5].Descriptor()
+	// workflow.DefaultAutomaticEnabled holds the default value on creation for the automatic_enabled field.
+	workflow.DefaultAutomaticEnabled = workflowDescAutomaticEnabled.Default.(bool)
+	// workflowDescManualEnabled is the schema descriptor for manual_enabled field.
+	workflowDescManualEnabled := workflowFields[6].Descriptor()
+	// workflow.DefaultManualEnabled holds the default value on creation for the manual_enabled field.
+	workflow.DefaultManualEnabled = workflowDescManualEnabled.Default.(bool)
+	// workflowDescAutomaticProvider is the schema descriptor for automatic_provider field.
+	workflowDescAutomaticProvider := workflowFields[7].Descriptor()
+	// workflow.DefaultAutomaticProvider holds the default value on creation for the automatic_provider field.
+	workflow.DefaultAutomaticProvider = workflowDescAutomaticProvider.Default.(bool)
+	// workflowDescState is the schema descriptor for state field.
+	workflowDescState := workflowFields[8].Descriptor()
+	// workflow.DefaultState holds the default value on creation for the state field.
+	workflow.DefaultState = workflowDescState.Default.(string)
+	// workflow.StateValidator is a validator for the "state" field. It is called by the builders before save.
+	workflow.StateValidator = workflowDescState.Validators[0].(func(string) error)
 	// workflowDescCollectionID is the schema descriptor for collection_id field.
-	workflowDescCollectionID := workflowFields[7].Descriptor()
+	workflowDescCollectionID := workflowFields[10].Descriptor()
 	// workflow.CollectionIDValidator is a validator for the "collection_id" field. It is called by the builders before save.
 	workflow.CollectionIDValidator = workflowDescCollectionID.Validators[0].(func(string) error)
 	// workflowDescRole is the schema descriptor for role field.
-	workflowDescRole := workflowFields[8].Descriptor()
+	workflowDescRole := workflowFields[11].Descriptor()
 	// workflow.RoleValidator is a validator for the "role" field. It is called by the builders before save.
 	workflow.RoleValidator = workflowDescRole.Validators[0].(func(string) error)
 	// workflowDescParameters is the schema descriptor for parameters field.
-	workflowDescParameters := workflowFields[9].Descriptor()
+	workflowDescParameters := workflowFields[12].Descriptor()
 	// workflow.DefaultParameters holds the default value on creation for the parameters field.
 	workflow.DefaultParameters = workflowDescParameters.Default.(map[string]interface{})
 	// workflowDescCurrentVersion is the schema descriptor for current_version field.
-	workflowDescCurrentVersion := workflowFields[10].Descriptor()
+	workflowDescCurrentVersion := workflowFields[13].Descriptor()
 	// workflow.CurrentVersionValidator is a validator for the "current_version" field. It is called by the builders before save.
 	workflow.CurrentVersionValidator = workflowDescCurrentVersion.Validators[0].(func(int) error)
 	// workflowDescVersion is the schema descriptor for version field.
-	workflowDescVersion := workflowFields[14].Descriptor()
+	workflowDescVersion := workflowFields[17].Descriptor()
 	// workflow.DefaultVersion holds the default value on creation for the version field.
 	workflow.DefaultVersion = workflowDescVersion.Default.(int)
 	// workflow.VersionValidator is a validator for the "version" field. It is called by the builders before save.

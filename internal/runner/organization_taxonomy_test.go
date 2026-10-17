@@ -15,7 +15,7 @@ func TestSharedTaxonomyMergeDispatchesToBothWorkspaces(t *testing.T) {
 	}
 	definition := `{"triggers":[{"type":"term.merged"}],"flow":{"start":"done","nodes":{"done":{"activity":"end"}}}}`
 	first := f.workflow(t, "Curation notification", definition)
-	second, err := f.wf.Create(ctx, "alice", otherWorkspace.ID, workflow.Save{Name: "Curation notification", Definition: json.RawMessage(definition)})
+	second, err := f.wf.Create(ctx, "alice", otherWorkspace.ID, workflow.Save{AutomaticEnabled: new(true), Name: "Curation notification", Definition: json.RawMessage(definition)})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -762,7 +762,7 @@ func (h *receiptEnv) editWorkflow(t *testing.T) {
 	}
 	body, err := json.Marshal(map[string]any{
 		"name": name, "description": "Edited through the workflow API",
-		"definition": json.RawMessage(doc["definition"]), "enabled": true,
+		"definition": json.RawMessage(doc["definition"]), "automatic_enabled": true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -853,7 +853,7 @@ func (h *receiptEnv) turnOff(t *testing.T, key string) {
 			h.fail(t, "missing built-in %s", key)
 		}
 		if len(found.Workflows) == 0 {
-			rec := h.call(t, http.MethodPut, "/v1/workspaces/"+h.workspace+"/workflow-builtins/"+key, []byte(`{"enabled":false}`), testToken, "", "application/json", "")
+			rec := h.call(t, http.MethodPut, "/v1/workspaces/"+h.workspace+"/workflow-builtins/"+key, []byte(`{"automatic_enabled":false}`), testToken, "", "application/json", "")
 			if rec.Code == http.StatusPreconditionFailed {
 				continue
 			}
@@ -864,11 +864,11 @@ func (h *receiptEnv) turnOff(t *testing.T, key string) {
 		}
 		done := true
 		for _, w := range found.Workflows {
-			if !w.Enabled {
+			if !w.AutomaticEnabled {
 				continue
 			}
 			done = false
-			body := map[string]any{"enabled": false}
+			body := map[string]any{"automatic_enabled": false}
 			if w.CollectionID != nil {
 				body["collection_id"] = *w.CollectionID
 			}
@@ -895,10 +895,10 @@ func (h *receiptEnv) turnOff(t *testing.T, key string) {
 type builtinRow struct {
 	Key       string `json:"key"`
 	Workflows []struct {
-		ID           string  `json:"id"`
-		Version      int     `json:"version"`
-		Enabled      bool    `json:"enabled"`
-		CollectionID *string `json:"collection_id"`
+		ID               string  `json:"id"`
+		Version          int     `json:"version"`
+		AutomaticEnabled bool    `json:"automatic_enabled"`
+		CollectionID     *string `json:"collection_id"`
 	} `json:"workflows"`
 }
 
@@ -974,10 +974,10 @@ func (h *receiptEnv) enableCoordinator(t *testing.T) {
 	}
 	// The imported coordinator is enabled already. Revise it as Bob because this
 	// test removes Alice's organization role to exercise source-author revocation.
-	rec := h.send(t, http.MethodPut, "/v1/workspaces/"+h.workspace+"/workflow-builtins/ai.batch", map[string]any{"enabled": true}, bobToken, strconv.Quote(strconv.Itoa(version)), 200)
+	rec := h.send(t, http.MethodPut, "/v1/workspaces/"+h.workspace+"/workflow-builtins/ai.batch", map[string]any{"automatic_enabled": true}, bobToken, strconv.Quote(strconv.Itoa(version)), 200)
 	var saved workflow.Workflow
 	decodeJSON(t, rec, &saved)
-	if !saved.Enabled || saved.ID == "" {
+	if !saved.AutomaticEnabled || saved.ID == "" {
 		h.fail(t, "coordinator: %s", rec.Body.String())
 	}
 	if saved.Parameters["queue"] != "shared" || saved.Parameters["policy"] != "both" || saved.Parameters["flush_cron"] != "0 1 * * *" || saved.Parameters["time_zone"] != "Europe/Madrid" {

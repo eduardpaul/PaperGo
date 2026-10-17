@@ -18,6 +18,9 @@ func (a *API) registerWorkflows(api *http.ServeMux) {
 	api.HandleFunc("DELETE /v1/workflows/{id}", a.deleteWorkflow)
 	api.HandleFunc("GET /v1/workflows/{id}/versions", a.workflowVersions)
 	api.HandleFunc("POST /v1/workflows/{id}/runs", a.startWorkflow)
+	api.HandleFunc("POST /v1/workflows/{id}/check", a.checkWorkflow)
+	api.HandleFunc("POST /v1/workflows/{id}/explain", a.explainWorkflow)
+	api.HandleFunc("POST /v1/workspaces/{id}/workflow-actions", a.workflowActions)
 	api.HandleFunc("GET /v1/workspaces/{id}/workflow-builtins", a.workflowBuiltIns)
 	api.HandleFunc("PUT /v1/workspaces/{id}/workflow-builtins/{key}", a.setWorkflowBuiltIn)
 	api.HandleFunc("POST /v1/workspaces/{id}/workflow-builtins/{key}/copy", a.copyWorkflowBuiltIn)
@@ -62,7 +65,7 @@ func (a *API) workflowCatalog(w http.ResponseWriter, r *http.Request) {
 }
 
 // collectionWorkflowRoles shows which workflow fills each role for a list or
-// library: its own, else the workspace's.
+// library, with automatic availability independent of manual use.
 func (a *API) collectionWorkflowRoles(w http.ResponseWriter, r *http.Request) {
 	out, err := a.Workflows.CollectionRoles(r.Context(), subject(r), r.PathValue("id"))
 	if err != nil {
@@ -207,7 +210,7 @@ func (a *API) copyWorkflowBuiltIn(w http.ResponseWriter, r *http.Request) {
 func (a *API) workflowRuns(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit := queryInt(r, "$top")
-	out, err := a.Runner.Runs(r.Context(), subject(r), r.PathValue("id"), runner.RunFilter{WorkflowID: q.Get("workflow_id"), ItemID: q.Get("item_id"), After: q.Get("$skiptoken"), Limit: limit})
+	out, err := a.Runner.Runs(r.Context(), subject(r), r.PathValue("id"), runner.RunFilter{WorkflowID: q.Get("workflow_id"), ItemID: q.Get("item_id"), After: q.Get("$skiptoken"), Limit: limit, Origin: q.Get("origin"), Status: q.Get("status"), IncludeSystem: q.Get("include_system") == "true"})
 	if err != nil {
 		a.failure(w, r, err)
 		return
