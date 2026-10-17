@@ -13,6 +13,7 @@ func (IdentityUser) Fields() []ent.Field {
 		field.String("display_name").Default(""),
 		field.String("email").Default(""),
 		field.String("sync_hash").Default(""),
+		field.String("password_hash").Default("").Sensitive().MaxLen(200),
 		field.Time("deleted_at").Optional().Nillable(),
 		field.Bool("active").Default(true),
 		field.Bool("service").Default(false).Immutable(),

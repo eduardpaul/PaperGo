@@ -18034,6 +18034,7 @@ type IdentityUserMutation struct {
 	display_name  *string
 	email         *string
 	sync_hash     *string
+	password_hash *string
 	deleted_at    *time.Time
 	active        *bool
 	service       *bool
@@ -18256,6 +18257,42 @@ func (m *IdentityUserMutation) ResetSyncHash() {
 	m.sync_hash = nil
 }
 
+// SetPasswordHash sets the "password_hash" field.
+func (m *IdentityUserMutation) SetPasswordHash(s string) {
+	m.password_hash = &s
+}
+
+// PasswordHash returns the value of the "password_hash" field in the mutation.
+func (m *IdentityUserMutation) PasswordHash() (r string, exists bool) {
+	v := m.password_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPasswordHash returns the old "password_hash" field's value of the IdentityUser entity.
+// If the IdentityUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IdentityUserMutation) OldPasswordHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPasswordHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPasswordHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPasswordHash: %w", err)
+	}
+	return oldValue.PasswordHash, nil
+}
+
+// ResetPasswordHash resets all changes to the "password_hash" field.
+func (m *IdentityUserMutation) ResetPasswordHash() {
+	m.password_hash = nil
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (m *IdentityUserMutation) SetDeletedAt(t time.Time) {
 	m.deleted_at = &t
@@ -18447,7 +18484,7 @@ func (m *IdentityUserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IdentityUserMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.display_name != nil {
 		fields = append(fields, identityuser.FieldDisplayName)
 	}
@@ -18456,6 +18493,9 @@ func (m *IdentityUserMutation) Fields() []string {
 	}
 	if m.sync_hash != nil {
 		fields = append(fields, identityuser.FieldSyncHash)
+	}
+	if m.password_hash != nil {
+		fields = append(fields, identityuser.FieldPasswordHash)
 	}
 	if m.deleted_at != nil {
 		fields = append(fields, identityuser.FieldDeletedAt)
@@ -18483,6 +18523,8 @@ func (m *IdentityUserMutation) Field(name string) (ent.Value, bool) {
 		return m.Email()
 	case identityuser.FieldSyncHash:
 		return m.SyncHash()
+	case identityuser.FieldPasswordHash:
+		return m.PasswordHash()
 	case identityuser.FieldDeletedAt:
 		return m.DeletedAt()
 	case identityuser.FieldActive:
@@ -18506,6 +18548,8 @@ func (m *IdentityUserMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldEmail(ctx)
 	case identityuser.FieldSyncHash:
 		return m.OldSyncHash(ctx)
+	case identityuser.FieldPasswordHash:
+		return m.OldPasswordHash(ctx)
 	case identityuser.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
 	case identityuser.FieldActive:
@@ -18543,6 +18587,13 @@ func (m *IdentityUserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSyncHash(v)
+		return nil
+	case identityuser.FieldPasswordHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPasswordHash(v)
 		return nil
 	case identityuser.FieldDeletedAt:
 		v, ok := value.(time.Time)
@@ -18638,6 +18689,9 @@ func (m *IdentityUserMutation) ResetField(name string) error {
 		return nil
 	case identityuser.FieldSyncHash:
 		m.ResetSyncHash()
+		return nil
+	case identityuser.FieldPasswordHash:
+		m.ResetPasswordHash()
 		return nil
 	case identityuser.FieldDeletedAt:
 		m.ResetDeletedAt()

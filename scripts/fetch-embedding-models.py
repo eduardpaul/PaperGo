@@ -12,6 +12,7 @@ MODELS = {
         "repo": "onnx-community/embeddinggemma-2-ONNX",
         "revision": "daa72c51243991dfcaf9f9137d2c573d8f7790c0",
         "files": {
+            "README.md": "4fe21bf1b86938ac62c7cd2d1511822e4ea6e8654e015e00b06a72676b5420e6",
             "tokenizer.json": "4d777ef5bdc1aa36227abdfb77c3e49e7b9c892d16e1b6bda41c393504828be4",
             "onnx/model_q4.onnx": "f9eeba97acddf139b8ee2ddf04bc30dceafa88de93fadf74d7644e0d61a477a9",
             "onnx/model_q4.onnx_data": "c3975f2d1ab7a1878ae31a7d7a9b7804a827aff3800b60dfceafce21cac3df49",
@@ -21,6 +22,7 @@ MODELS = {
         "repo": "onnx-community/harrier-oss-v1-0.6b-ONNX",
         "revision": "e4daffa011e666dcd2ff2a3c6c05084090ac314d",
         "files": {
+            "README.md": "a0f942c14c676015916e74e1826346c9876c42b49979335f94f0bba0c85cb751",
             "tokenizer.json": "2320ebaed2032c36f5c539cb8531d0642a10024e164f1d81ebbe163b259e3ba5",
             "onnx/model_q4.onnx": "4a41218d088c2e31fd6a3953d838d08536a27e98cf987796104a9511f9d9a671",
             "onnx/model_q4.onnx_data": "5dee6d2aecd2657464eb80e833ce79593a94430c3abca3d0c1f5424f0713e59e",

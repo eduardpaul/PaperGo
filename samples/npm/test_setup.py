@@ -33,9 +33,9 @@ class StartupTests(unittest.TestCase):
         startup, logs = run.call_args_list
         self.assertIn('--build', startup.args[0])
         self.assertTrue(startup.kwargs['check'])
-        self.assertEqual(logs.args[0][-8:],
+        self.assertEqual(logs.args[0][-7:],
                          ['logs', '--no-color', '--tail', '80',
-                          'volume-permissions', 'initialize', 'papergo', 'npm'])
+                          'volume-permissions', 'papergo', 'npm'])
         self.assertFalse(logs.kwargs['check'])
 
     def test_log_failure_keeps_startup_error(self):
@@ -50,6 +50,24 @@ class StartupTests(unittest.TestCase):
             setup.start_stack(no_build=True)
         run.assert_called_once()
         self.assertNotIn('--build', run.call_args.args[0])
+
+
+class SingleBinaryTests(unittest.TestCase):
+    def test_compose_has_no_initialize_service_and_mounts_proxy_zvec_config(self):
+        root = Path(__file__).parent
+        for name in ('compose.yaml', 'setup.py', 'verify.py'):
+            text = (root / name).read_text()
+            self.assertNotIn('papergo-admin initialize', text)
+            self.assertNotRegex(text, r'(?m)^  initialize:')
+        compose = (root / 'compose.yaml').read_text()
+        self.assertIn('./generated/config.yaml:/config/config.yaml:ro', compose)
+        self.assertIn('PAPERGO_CONFIG: /config/config.yaml', compose)
+        self.assertNotIn('AUTH_MODE:', compose)
+        config = setup.papergo_config('https://docs.example.com', 'papergo-admin', '10.90.0.2/32')
+        self.assertIn('  mode: proxy', config)
+        self.assertIn('  proxy_trusted_cidrs:\n    - "10.90.0.2/32"', config)
+        self.assertIn('  store: zvec', config)
+        self.assertIn('  admin_user: "papergo-admin"', config)
 
 
 class EgressTests(unittest.TestCase):

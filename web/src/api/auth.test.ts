@@ -8,6 +8,7 @@ import {
   loadAuthentication,
   oidcSignIn,
   setToken,
+  signInLocal,
   token,
 } from './auth';
 import { safeReturnPath } from './oidc';
@@ -55,6 +56,29 @@ it('discovers proxy mode without a stale bearer and uses browser credentials for
     expect(options.credentials).toBe('same-origin');
     expect(new Headers(options.headers).has('Authorization')).toBe(false);
   }
+  expect(authorizationHeaders()).toEqual({});
+});
+
+it('accepts local sign-in and sends the session cookie instead of a bearer token', async () => {
+  const fetch = vi.fn(async (url: URL | string) => {
+    if (String(url) === '/auth/login') {
+      return new Response(null, { status: 204, headers: { 'Set-Cookie': 'papergo_session=session-secret; Path=/; HttpOnly' } });
+    }
+    return new Response(String(url) === '/auth/config' ? '{"mode":"local"}' : '{"subject":"admin"}');
+  });
+  vi.stubGlobal('fetch', fetch);
+  await loadAuthentication();
+  expect(authenticationMode()).toBe('local');
+  await signInLocal('admin', 'admin');
+  await api('/v1/identity/me');
+  const login = fetch.mock.calls[1] as unknown as [string, RequestInit];
+  expect(login[0]).toBe('/auth/login');
+  expect(login[1].credentials).toBe('same-origin');
+  expect(login[1].body).toBe(JSON.stringify({ username: 'admin', password: 'admin' }));
+  const me = fetch.mock.calls[2] as unknown as [string | URL, RequestInit];
+  expect(new URL(me[0], 'http://localhost').pathname).toBe('/v1/identity/me');
+  expect(me[1].credentials).toBe('same-origin');
+  expect(new Headers(me[1].headers).has('Authorization')).toBe(false);
   expect(authorizationHeaders()).toEqual({});
 });
 

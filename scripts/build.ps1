@@ -18,5 +18,5 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $taskOutputDirectory = Split-Path -Parent $Output
 if ($taskOutputDirectory) { New-Item -ItemType Directory -Force -Path $taskOutputDirectory | Out-Null }
-& $taskGo build -trimpath '-ldflags=-s -w' -o $Output ./cmd/api
+& python scripts/build-standalone.py --output $Output
 exit $LASTEXITCODE

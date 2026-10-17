@@ -70,6 +70,9 @@ type Config struct {
 	OCRLibrary string
 	// OCRModels is the directory of the PaddleOCR model files.
 	OCRModels string
+	// OCRModelsSet is true when OCR_MODELS was configured. The default
+	// directory may be absent; an explicit directory must exist.
+	OCRModelsSet bool
 	// OCRThreads is the CPU threads one OCR inference uses.
 	OCRThreads int
 	// Embeddings is the embedding model of semantic search
@@ -93,18 +96,56 @@ type Config struct {
 	BatchWorkspace    string
 	ProxySecret       string
 	ProxyTrustedCIDRs []netip.Prefix
+	// AdminPassword is the local administrator's initial password. It is
+	// applied only when that account has no password yet.
+	AdminPassword string
+	// AdminPasswordOmitted is set when configuration explicitly clears the
+	// local password. A non-interactive first start then fails instead of
+	// inventing a password.
+	AdminPasswordOmitted bool
 }
 
+// Load reads config.yaml from PAPERGO_CONFIG or ./config.yaml, then applies
+// environment variables. Environment variables win when they are non-empty.
 func Load() (Config, error) {
-	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "oidc"), DevToken: os.Getenv("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: os.Getenv("OIDC_ISSUER"), Audience: os.Getenv("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour}
+	text, err := readWorkingYAML(os.Getenv)
+	if err != nil {
+		return Config{}, err
+	}
+	return LoadFrom(os.Getenv, text)
+}
+
+// LoadFrom builds configuration from YAML text and getenv. Tests pass the
+// documented file and a map-backed getenv; Load uses the process environment.
+func LoadFrom(getenv func(string) string, yamlText string) (Config, error) {
+	file, err := parseYAML(yamlText)
+	if err != nil {
+		return Config{}, err
+	}
+	if getenv == nil {
+		getenv = func(string) string { return "" }
+	}
+	lookup := func(key string) string {
+		if v := getenv(key); v != "" {
+			return v
+		}
+		return file.values[key]
+	}
+	value := func(key, fallback string) string {
+		if v := lookup(key); v != "" {
+			return v
+		}
+		return fallback
+	}
+	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour}
 	c.SearchPath = value("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search.db"))
-	c.SearchStore = value("SEARCH_STORE", "sqlite")
+	c.SearchStore = value("SEARCH_STORE", "zvec")
 	if c.SearchStore != "sqlite" && c.SearchStore != "zvec" {
 		return c, fmt.Errorf("SEARCH_STORE must be sqlite or zvec")
 	}
 	c.ZvecPath = value("SEARCH_ZVEC_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search", "zvec"))
 	c.ZvecKeywordCandidates = 10000
-	if raw := os.Getenv("SEARCH_ZVEC_KEYWORD_CANDIDATES"); raw != "" {
+	if raw := lookup("SEARCH_ZVEC_KEYWORD_CANDIDATES"); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil || n < 1 || n > 99999 {
 			return c, fmt.Errorf("SEARCH_ZVEC_KEYWORD_CANDIDATES must be between 1 and 99999")
@@ -129,43 +170,48 @@ func Load() (Config, error) {
 	if _, err := search.NewStemmer(c.SearchLanguages); err != nil {
 		return c, fmt.Errorf("SEARCH_LANGUAGES: %w", err)
 	}
-	c.AdminSubject = os.Getenv("ADMIN_SUBJECT")
-	c.GroupsClaim = os.Getenv("OIDC_GROUPS_CLAIM")
-	c.GroupsPrefix = os.Getenv("OIDC_GROUPS_PREFIX")
-	c.AdminGroup = os.Getenv("ADMIN_GROUP")
-	c.TokenType = os.Getenv("OIDC_TOKEN_TYPE")
-	c.GroupsFromUserInfo = os.Getenv("OIDC_GROUPS_FROM_USERINFO") == "true"
-	c.ClientID = os.Getenv("OIDC_CLIENT_ID")
-	c.ClientScopes = os.Getenv("OIDC_CLIENT_SCOPES")
-	if v := os.Getenv("MAX_UPLOAD_BYTES"); v != "" {
+	c.AdminSubject = lookup("ADMIN_SUBJECT")
+	c.GroupsClaim = lookup("OIDC_GROUPS_CLAIM")
+	c.GroupsPrefix = lookup("OIDC_GROUPS_PREFIX")
+	c.AdminGroup = lookup("ADMIN_GROUP")
+	c.TokenType = lookup("OIDC_TOKEN_TYPE")
+	c.GroupsFromUserInfo = lookup("OIDC_GROUPS_FROM_USERINFO") == "true"
+	c.ClientID = lookup("OIDC_CLIENT_ID")
+	c.ClientScopes = lookup("OIDC_CLIENT_SCOPES")
+	if v := lookup("MAX_UPLOAD_BYTES"); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || n < 1 || n > 1024*1024*1024 {
 			return c, fmt.Errorf("MAX_UPLOAD_BYTES must be between 1 and 1073741824")
 		}
 		c.MaxUpload = n
 	}
-	if v := os.Getenv("MAX_IN_FLIGHT"); v != "" {
+	if v := lookup("MAX_IN_FLIGHT"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 10000 {
 			return c, fmt.Errorf("MAX_IN_FLIGHT must be between 1 and 10000")
 		}
 		c.MaxInFlight = n
 	}
-	if v := os.Getenv("REQUEST_TIMEOUT"); v != "" {
+	if v := lookup("REQUEST_TIMEOUT"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil || d < time.Second || d > 10*time.Minute {
 			return c, fmt.Errorf("REQUEST_TIMEOUT must be a duration between 1s and 10m")
 		}
 		c.RequestTimeout = d
 	}
-	if v := os.Getenv("RUN_RETENTION"); v != "" {
+	if v := lookup("RUN_RETENTION"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil || d < time.Hour || d > 10*365*24*time.Hour {
 			return c, fmt.Errorf("RUN_RETENTION must be a duration between 1h and 87600h")
 		}
 		c.RunRetention = d
 	}
-	c.OCRLibrary, c.OCRModels, c.OCRThreads = os.Getenv("ONNXRUNTIME_LIB"), value("OCR_MODELS", "models/paddleocr"), 1
+	c.OCRLibrary, c.OCRThreads = lookup("ONNXRUNTIME_LIB"), 1
+	if models := lookup("OCR_MODELS"); models != "" {
+		c.OCRModels, c.OCRModelsSet = models, true
+	} else {
+		c.OCRModels = "models/paddleocr"
+	}
 	if err := c.loadEmbeddings(); err != nil {
 		return c, err
 	}
@@ -178,14 +224,14 @@ func Load() (Config, error) {
 	if err := c.loadBatch(); err != nil {
 		return c, err
 	}
-	if v := os.Getenv("OCR_THREADS"); v != "" {
+	if v := lookup("OCR_THREADS"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 32 {
 			return c, fmt.Errorf("OCR_THREADS must be between 1 and 32")
 		}
 		c.OCRThreads = n
 	}
-	if v := os.Getenv("PUBLIC_URL"); v != "" {
+	if v := lookup("PUBLIC_URL"); v != "" {
 		u, err := url.Parse(v)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.Opaque != "" || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
 			return c, fmt.Errorf("PUBLIC_URL must be an http or https origin without a path, such as https://docs.example.com")
@@ -198,16 +244,32 @@ func Load() (Config, error) {
 	if c.Env != "development" && c.Env != "test" && c.Env != "production" {
 		return c, fmt.Errorf("invalid APP_ENV")
 	}
-	if c.Env == "production" && c.PublicURL != nil && c.PublicURL.Scheme != "https" {
-		return c, fmt.Errorf("production PUBLIC_URL requires HTTPS")
-	}
 	switch c.AuthMode {
+	case "local":
+		if c.AdminGroup != "" {
+			return c, fmt.Errorf("local authentication does not support ADMIN_GROUP")
+		}
+		if c.AdminSubject == "" {
+			c.AdminSubject = "admin"
+		}
+		switch {
+		case lookup("ADMIN_PASSWORD") != "":
+			c.AdminPassword = lookup("ADMIN_PASSWORD")
+		case file.passwordSpecified:
+			c.AdminPassword = file.password
+			c.AdminPasswordOmitted = file.password == ""
+		default:
+			c.AdminPassword = "admin"
+		}
+		if c.ClientID != "" || c.ClientScopes != "" || c.Issuer != "" || c.Audience != "" {
+			return c, fmt.Errorf("OIDC settings require AUTH_MODE=oidc")
+		}
 	case "development":
 		if c.AdminSubject == "" && c.AdminGroup == "" {
 			c.AdminSubject = c.DevSubject
 		}
 		if c.Env == "production" {
-			return c, fmt.Errorf("production requires oidc or proxy authentication")
+			return c, fmt.Errorf("production requires local, oidc or proxy authentication")
 		}
 		if len(c.DevToken) < 32 {
 			return c, fmt.Errorf("DEV_TOKEN requires at least 32 characters")
@@ -235,7 +297,7 @@ func Load() (Config, error) {
 		if c.PublicURL == nil || c.PublicURL.Scheme != "https" {
 			return c, fmt.Errorf("proxy authentication requires an HTTPS PUBLIC_URL")
 		}
-		secretPath := os.Getenv("PROXY_SECRET_FILE")
+		secretPath := lookup("PROXY_SECRET_FILE")
 		if secretPath == "" {
 			return c, fmt.Errorf("PROXY_SECRET_FILE is required")
 		}
@@ -247,7 +309,7 @@ func Load() (Config, error) {
 		if len(c.ProxySecret) < 32 || len(c.ProxySecret) > 256 || strings.ContainsAny(c.ProxySecret, "\r\n\x00") {
 			return c, fmt.Errorf("proxy secret must contain 32 to 256 bytes without line breaks")
 		}
-		for _, raw := range strings.Split(os.Getenv("PROXY_TRUSTED_CIDRS"), ",") {
+		for _, raw := range strings.Split(lookup("PROXY_TRUSTED_CIDRS"), ",") {
 			prefix, err := netip.ParsePrefix(strings.TrimSpace(raw))
 			if err != nil {
 				return c, fmt.Errorf("PROXY_TRUSTED_CIDRS requires valid CIDRs")
@@ -261,7 +323,10 @@ func Load() (Config, error) {
 			return c, fmt.Errorf("proxy authentication does not accept OIDC settings")
 		}
 	default:
-		return c, fmt.Errorf("AUTH_MODE must be development, oidc or proxy")
+		return c, fmt.Errorf("AUTH_MODE must be local, development, oidc or proxy")
+	}
+	if c.Env == "production" && c.PublicURL != nil && c.PublicURL.Scheme != "https" && c.AuthMode != "local" {
+		return c, fmt.Errorf("production PUBLIC_URL requires HTTPS")
 	}
 	if c.AdminGroup != "" {
 		if c.GroupsClaim == "" {

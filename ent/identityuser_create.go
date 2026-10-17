@@ -62,6 +62,20 @@ func (_c *IdentityUserCreate) SetNillableSyncHash(v *string) *IdentityUserCreate
 	return _c
 }
 
+// SetPasswordHash sets the "password_hash" field.
+func (_c *IdentityUserCreate) SetPasswordHash(v string) *IdentityUserCreate {
+	_c.mutation.SetPasswordHash(v)
+	return _c
+}
+
+// SetNillablePasswordHash sets the "password_hash" field if the given value is not nil.
+func (_c *IdentityUserCreate) SetNillablePasswordHash(v *string) *IdentityUserCreate {
+	if v != nil {
+		_c.SetPasswordHash(*v)
+	}
+	return _c
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (_c *IdentityUserCreate) SetDeletedAt(v time.Time) *IdentityUserCreate {
 	_c.mutation.SetDeletedAt(v)
@@ -171,6 +185,10 @@ func (_c *IdentityUserCreate) defaults() {
 		v := identityuser.DefaultSyncHash
 		_c.mutation.SetSyncHash(v)
 	}
+	if _, ok := _c.mutation.PasswordHash(); !ok {
+		v := identityuser.DefaultPasswordHash
+		_c.mutation.SetPasswordHash(v)
+	}
 	if _, ok := _c.mutation.Active(); !ok {
 		v := identityuser.DefaultActive
 		_c.mutation.SetActive(v)
@@ -195,6 +213,14 @@ func (_c *IdentityUserCreate) check() error {
 	}
 	if _, ok := _c.mutation.SyncHash(); !ok {
 		return &ValidationError{Name: "sync_hash", err: errors.New(`ent: missing required field "IdentityUser.sync_hash"`)}
+	}
+	if _, ok := _c.mutation.PasswordHash(); !ok {
+		return &ValidationError{Name: "password_hash", err: errors.New(`ent: missing required field "IdentityUser.password_hash"`)}
+	}
+	if v, ok := _c.mutation.PasswordHash(); ok {
+		if err := identityuser.PasswordHashValidator(v); err != nil {
+			return &ValidationError{Name: "password_hash", err: fmt.Errorf(`ent: validator failed for field "IdentityUser.password_hash": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Active(); !ok {
 		return &ValidationError{Name: "active", err: errors.New(`ent: missing required field "IdentityUser.active"`)}
@@ -256,6 +282,10 @@ func (_c *IdentityUserCreate) createSpec() (*IdentityUser, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.SyncHash(); ok {
 		_spec.SetField(identityuser.FieldSyncHash, field.TypeString, value)
 		_node.SyncHash = value
+	}
+	if value, ok := _c.mutation.PasswordHash(); ok {
+		_spec.SetField(identityuser.FieldPasswordHash, field.TypeString, value)
+		_node.PasswordHash = value
 	}
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(identityuser.FieldDeletedAt, field.TypeTime, value)

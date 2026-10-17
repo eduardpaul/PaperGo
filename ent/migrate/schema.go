@@ -817,6 +817,7 @@ var (
 		{Name: "display_name", Type: field.TypeString, Default: ""},
 		{Name: "email", Type: field.TypeString, Default: ""},
 		{Name: "sync_hash", Type: field.TypeString, Default: ""},
+		{Name: "password_hash", Type: field.TypeString, Size: 200, Default: ""},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "active", Type: field.TypeBool, Default: true},
 		{Name: "service", Type: field.TypeBool, Default: false},

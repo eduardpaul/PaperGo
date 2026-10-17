@@ -24,6 +24,24 @@ PUBLIC = {**LOCAL, 'host': 'docs.example.com', 'auth_host': 'auth.example.com', 
           'http_port': 80, 'https_port': 443}
 
 
+class SingleBinaryTests(unittest.TestCase):
+    def test_compose_has_no_initialize_service_and_config_sets_oidc(self):
+        root = Path(__file__).parent
+        for name in ('compose.yaml', 'setup.py', 'verify.py'):
+            text = (root / name).read_text()
+            self.assertNotIn('papergo-admin initialize', text)
+            self.assertNotRegex(text, r'(?m)^  initialize:')
+        compose = (root / 'compose.yaml').read_text()
+        self.assertIn('./generated/config.yaml:/config/config.yaml:ro', compose)
+        self.assertIn('PAPERGO_CONFIG: /config/config.yaml', compose)
+        self.assertNotIn('AUTH_MODE:', compose)
+        config = setup.papergo_config('https://docs.example.com', 'https://auth.example.com/application/o/papergo/')
+        self.assertIn('  mode: oidc', config)
+        self.assertIn('  issuer: "https://auth.example.com/application/o/papergo/"', config)
+        self.assertIn('  client_id: papergo', config)
+        self.assertIn('  audience: papergo', config)
+
+
 class GeneratedConfigurationTests(unittest.TestCase):
     def test_issuer_is_the_per_provider_url_on_the_public_origin(self):
         self.assertEqual(setup.issuer(PUBLIC), 'https://auth.example.com/application/o/papergo/')

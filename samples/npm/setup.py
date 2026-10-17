@@ -29,6 +29,39 @@ def private_write(path, content):
     os.chmod(path, 0o600)
 
 
+def write_shared_config(path, content):
+    """The container user must be able to read the mounted file."""
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644), "w") as f:
+        f.write(content)
+    os.chmod(path, 0o644)
+
+
+def papergo_config(public_url, admin_user, trusted_cidr):
+    return "\n".join([
+        "server:",
+        "  port: 8080",
+        "  bind: 0.0.0.0",
+        "  data_dir: /data",
+        f"  public_url: {json.dumps(public_url)}",
+        "",
+        "auth:",
+        "  mode: proxy",
+        f"  admin_user: {json.dumps(admin_user)}",
+        "  proxy_secret_file: /data/.proxy-secret",
+        "  proxy_trusted_cidrs:",
+        f"    - {json.dumps(trusted_cidr)}",
+        "",
+        "search:",
+        "  store: zvec",
+        "  zvec_path: /data/search/zvec",
+        "",
+        "storage:",
+        "  blob_path: /data/blobs",
+        "  max_upload_mb: 64",
+        "",
+    ])
+
+
 def compose(*args, check=True):
     subprocess.run(["docker", "compose", "--env-file", str(ROOT / ".env"),
                     "-f", str(ROOT / "compose.yaml"), *args], check=check)
@@ -41,12 +74,12 @@ def start_stack(no_build):
         print("Docker Compose startup failed; recent service logs:", flush=True)
         try:
             compose("logs", "--no-color", "--tail", "80",
-                    "volume-permissions", "initialize", "papergo", "npm", check=False)
+                    "volume-permissions", "papergo", "npm", check=False)
         except OSError:
             pass
         raise RuntimeError(
             f"Docker Compose startup failed (exit {error.returncode}). Setup is incomplete. "
-            "Inspect the service logs above. If initialize reports a schema checksum mismatch, "
+            "Inspect the service logs above. If PaperGo reports a schema checksum mismatch, "
             "recreate the disposable PaperGo data volume using the commands in "
             "samples/npm/README.md under Storage and operations, then rerun setup."
         ) from None
@@ -314,10 +347,12 @@ def main():
     if not re.fullmatch(r"[0-9a-f]{64}", secret):
         raise RuntimeError("generated/proxy-secret must contain exactly 64 lowercase hexadecimal characters")
     public_url = "https://" + args.host + ("" if args.https_port == 443 else f":{args.https_port}")
-    private_write(ROOT / ".env", "\n".join([f"PUBLIC_URL={public_url}", f"PAPERGO_ADMIN={args.admin_user}",
+    npm_ip = network.network_address + 2
+    private_write(ROOT / ".env", "\n".join([
                    f"HTTP_PORT={args.http_port}", f"HTTPS_PORT={args.https_port}", f"ADMIN_PORT={args.admin_port}",
-                   f"PRIVATE_SUBNET={network}", f"NPM_PRIVATE_IP={network.network_address + 2}",
+                   f"PRIVATE_SUBNET={network}", f"NPM_PRIVATE_IP={npm_ip}",
                    f"PAPERGO_PRIVATE_IP={network.network_address + 3}"]) + "\n")
+    write_shared_config(GENERATED / "config.yaml", papergo_config(public_url, args.admin_user, f"{npm_ip}/32"))
     private_write(GENERATED / "curl.netrc", f"machine {args.host}\nlogin {args.admin_user}\npassword {credentials['papergo_password']}\n")
     start_stack(args.no_build)
     verify_egress()

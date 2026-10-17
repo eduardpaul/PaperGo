@@ -70,6 +70,20 @@ func (_u *IdentityUserUpdate) SetNillableSyncHash(v *string) *IdentityUserUpdate
 	return _u
 }
 
+// SetPasswordHash sets the "password_hash" field.
+func (_u *IdentityUserUpdate) SetPasswordHash(v string) *IdentityUserUpdate {
+	_u.mutation.SetPasswordHash(v)
+	return _u
+}
+
+// SetNillablePasswordHash sets the "password_hash" field if the given value is not nil.
+func (_u *IdentityUserUpdate) SetNillablePasswordHash(v *string) *IdentityUserUpdate {
+	if v != nil {
+		_u.SetPasswordHash(*v)
+	}
+	return _u
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (_u *IdentityUserUpdate) SetDeletedAt(v time.Time) *IdentityUserUpdate {
 	_u.mutation.SetDeletedAt(v)
@@ -136,7 +150,20 @@ func (_u *IdentityUserUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *IdentityUserUpdate) check() error {
+	if v, ok := _u.mutation.PasswordHash(); ok {
+		if err := identityuser.PasswordHashValidator(v); err != nil {
+			return &ValidationError{Name: "password_hash", err: fmt.Errorf(`ent: validator failed for field "IdentityUser.password_hash": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *IdentityUserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(identityuser.Table, identityuser.Columns, sqlgraph.NewFieldSpec(identityuser.FieldID, field.TypeString))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -153,6 +180,9 @@ func (_u *IdentityUserUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.SyncHash(); ok {
 		_spec.SetField(identityuser.FieldSyncHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PasswordHash(); ok {
+		_spec.SetField(identityuser.FieldPasswordHash, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.DeletedAt(); ok {
 		_spec.SetField(identityuser.FieldDeletedAt, field.TypeTime, value)
@@ -221,6 +251,20 @@ func (_u *IdentityUserUpdateOne) SetSyncHash(v string) *IdentityUserUpdateOne {
 func (_u *IdentityUserUpdateOne) SetNillableSyncHash(v *string) *IdentityUserUpdateOne {
 	if v != nil {
 		_u.SetSyncHash(*v)
+	}
+	return _u
+}
+
+// SetPasswordHash sets the "password_hash" field.
+func (_u *IdentityUserUpdateOne) SetPasswordHash(v string) *IdentityUserUpdateOne {
+	_u.mutation.SetPasswordHash(v)
+	return _u
+}
+
+// SetNillablePasswordHash sets the "password_hash" field if the given value is not nil.
+func (_u *IdentityUserUpdateOne) SetNillablePasswordHash(v *string) *IdentityUserUpdateOne {
+	if v != nil {
+		_u.SetPasswordHash(*v)
 	}
 	return _u
 }
@@ -304,7 +348,20 @@ func (_u *IdentityUserUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *IdentityUserUpdateOne) check() error {
+	if v, ok := _u.mutation.PasswordHash(); ok {
+		if err := identityuser.PasswordHashValidator(v); err != nil {
+			return &ValidationError{Name: "password_hash", err: fmt.Errorf(`ent: validator failed for field "IdentityUser.password_hash": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *IdentityUserUpdateOne) sqlSave(ctx context.Context) (_node *IdentityUser, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(identityuser.Table, identityuser.Columns, sqlgraph.NewFieldSpec(identityuser.FieldID, field.TypeString))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -338,6 +395,9 @@ func (_u *IdentityUserUpdateOne) sqlSave(ctx context.Context) (_node *IdentityUs
 	}
 	if value, ok := _u.mutation.SyncHash(); ok {
 		_spec.SetField(identityuser.FieldSyncHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PasswordHash(); ok {
+		_spec.SetField(identityuser.FieldPasswordHash, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.DeletedAt(); ok {
 		_spec.SetField(identityuser.FieldDeletedAt, field.TypeTime, value)

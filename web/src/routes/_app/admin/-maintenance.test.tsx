@@ -25,21 +25,22 @@ it('exports the selected workspace without data and sends import validation and 
   });
   vi.stubGlobal('fetch', fetch);
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}><PortabilityPage /></QueryClientProvider>);
-  await screen.findByRole('option', { name: 'Finance' });
+  // The Finance option is painted after the workspace query. Role lookup can exceed one second when the suite runs in parallel.
+  await screen.findByRole('option', { name: 'Finance' }, { timeout: 8_000 });
   expect(screen.queryByRole('option', { name: 'Personal Home' })).toBeNull();
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: 'Export workspace' }));
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.pathname === '/v1/portability/exports')).toBe(true));
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.pathname === '/v1/portability/exports')).toBe(true), { timeout: 8_000 });
   const exported = fetch.mock.calls.find(([url]) => url.pathname === '/v1/portability/exports')!;
   expect(JSON.parse(exported[1].body as string)).toEqual({ workspace_id: 'finance', include_data: false });
   const file = new File(['package'], 'workspace.zip', { type: 'application/zip' });
   fireEvent.change(screen.getByLabelText('Import a package'), { target: { files: [file] } });
   fireEvent.change(screen.getByLabelText('New workspace name (optional, workspace packages only)'), { target: { value: 'Finance copy' } });
   fireEvent.click(screen.getByRole('button', { name: 'Try it' }));
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.pathname === '/v1/portability/imports')).toBe(true));
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.pathname === '/v1/portability/imports')).toBe(true), { timeout: 8_000 });
   const imported = fetch.mock.calls.find(([url]) => url.pathname === '/v1/portability/imports')!;
   expect(imported[0].searchParams.get('dry_run')).toBe('true');
   expect(imported[0].searchParams.get('workspace_name')).toBe('Finance copy');
   expect(imported[1].body).toBe(file);
   expect(imported[1].headers).toMatchObject({ 'Content-Type': 'application/zip' });
-});
+}, 20_000);

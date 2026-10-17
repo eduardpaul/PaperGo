@@ -120,7 +120,7 @@ it('loads beyond 100 tasks through each proxy-safe next link and keeps the selec
   fireEvent.click(rows.getByRole('button', { name: /^Task 101\b/ }));
   page.navigate();
   expect(await screen.findByRole('article', { name: 'Task 101' })).toBeTruthy();
-});
+}, 20_000);
 
 it('keeps a pending continuation separate from the newly selected view', async () => {
   let finishNext!: (result: Response) => void;

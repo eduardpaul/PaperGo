@@ -23,6 +23,8 @@ type IdentityUser struct {
 	Email string `json:"email,omitempty"`
 	// SyncHash holds the value of the "sync_hash" field.
 	SyncHash string `json:"sync_hash,omitempty"`
+	// PasswordHash holds the value of the "password_hash" field.
+	PasswordHash string `json:"-"`
 	// DeletedAt holds the value of the "deleted_at" field.
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// Active holds the value of the "active" field.
@@ -41,7 +43,7 @@ func (*IdentityUser) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case identityuser.FieldActive, identityuser.FieldService:
 			values[i] = new(sql.NullBool)
-		case identityuser.FieldID, identityuser.FieldDisplayName, identityuser.FieldEmail, identityuser.FieldSyncHash:
+		case identityuser.FieldID, identityuser.FieldDisplayName, identityuser.FieldEmail, identityuser.FieldSyncHash, identityuser.FieldPasswordHash:
 			values[i] = new(sql.NullString)
 		case identityuser.FieldDeletedAt, identityuser.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -83,6 +85,12 @@ func (_m *IdentityUser) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field sync_hash", values[i])
 			} else if value.Valid {
 				_m.SyncHash = value.String
+			}
+		case identityuser.FieldPasswordHash:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field password_hash", values[i])
+			} else if value.Valid {
+				_m.PasswordHash = value.String
 			}
 		case identityuser.FieldDeletedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -153,6 +161,8 @@ func (_m *IdentityUser) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("sync_hash=")
 	builder.WriteString(_m.SyncHash)
+	builder.WriteString(", ")
+	builder.WriteString("password_hash=<sensitive>")
 	builder.WriteString(", ")
 	if v := _m.DeletedAt; v != nil {
 		builder.WriteString("deleted_at=")

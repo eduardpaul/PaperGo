@@ -11,12 +11,12 @@ Workflow activities use it: [`file.optimize_image`](workflows.md#image-optimizat
 
 ## Configuration
 
-OCR is off unless the server is given ONNX Runtime:
+Standalone executables and the Docker image include ONNX Runtime and PaddleOCR models and enable OCR automatically. Source builds (`go run ./cmd/api`) use the following environment settings:
 
 | Setting | Meaning |
 | --- | --- |
-| `ONNXRUNTIME_LIB` | Path of the ONNX Runtime shared library (pinned version 1.23.2). Empty turns OCR off; activities that need it fail with a message saying so. |
-| `OCR_MODELS` | Directory of the [model files](../models/paddleocr/README.md) (default `models/paddleocr`). The server checks them when it starts and loads them on first use. |
+| `ONNXRUNTIME_LIB` | Path of the ONNX Runtime shared library (pinned version 1.23.2). Standalone builds select their bundled library when unset. In source builds, empty turns OCR off; activities that need it fail with a message saying so. |
+| `OCR_MODELS` | Directory of the [model files](../models/paddleocr/README.md) (the standalone launcher selects bundled models; source builds default to `models/paddleocr`). In source builds, when this is unset and the default directory is absent, OCR stays off and the server starts. An explicit directory must exist. A present directory is checked at startup and loaded on first use. |
 | `OCR_THREADS` | CPU threads one inference uses, 1 to 32 (default 1). |
 
 ## Results

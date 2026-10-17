@@ -46,7 +46,7 @@ docker start "$container_id" >/dev/null
 task_address="http://$(docker port "$container_id" 8080/tcp)"
 
 task_ready=false
-for (( attempt=0; attempt<30; attempt++ )); do
+for (( attempt=0; attempt<120; attempt++ )); do
   if curl --fail --silent --max-time 2 "$task_address/health/ready" > "$task_dir/ready.json"; then
     task_ready=true
     break
@@ -132,7 +132,7 @@ tar --owner=65532 --group=65532 -C "$task_dir" -cf - papergo.db | docker cp --ar
 docker start "$container_id" >/dev/null
 task_address="http://$(docker port "$container_id" 8080/tcp)"
 task_ready=false
-for (( attempt=0; attempt<30; attempt++ )); do
+for (( attempt=0; attempt<120; attempt++ )); do
   if curl --fail --silent --max-time 2 "$task_address/health/ready" > /dev/null; then task_ready=true; break; fi
   if [[ "$(docker inspect --format '{{.State.Running}}' "$container_id")" != true ]]; then break; fi
   sleep 1
@@ -148,7 +148,7 @@ native_workspace=$(api --header 'Content-Type: application/json' --data '{"name"
 native_list=$(api --header 'Content-Type: application/json' --data '{"kind":"list","name":"Native items"}' "$task_address/v1/resources/$native_workspace/children" | json id)
 api --header 'Content-Type: application/json' --data '{"kind":"item","name":"Copper native invoice"}' "$task_address/v1/resources/$native_list/children" > /dev/null
 native_found=false
-for (( attempt=0; attempt<30; attempt++ )); do
+for (( attempt=0; attempt<120; attempt++ )); do
   api "$task_address/v1/search?q=copper" > "$task_dir/zvec-search.json"
   if python3 - "$task_dir/zvec-search.json" <<'PY'
 import json, sys

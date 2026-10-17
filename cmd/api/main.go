@@ -17,8 +17,9 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/doctext/pdfium"
 	"papergo/internal/httpapi"
+	"papergo/internal/identity"
 	"papergo/internal/integration"
-	"papergo/internal/ocr/paddle"
+	"papergo/internal/readiness"
 	"papergo/internal/resultcache"
 	"papergo/internal/runner"
 	"papergo/internal/search"
@@ -39,8 +40,15 @@ func main() {
 		fmt.Println(buildinfo.String())
 		return
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "--health" {
+		if err := readiness.Check(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 {
-		fmt.Fprintln(os.Stderr, "usage: papergo [--version]; configure the server through environment variables")
+		fmt.Fprintln(os.Stderr, "usage: papergo [--version|--health [url]]; configuration is read from config.yaml and environment variables")
 		os.Exit(1)
 	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -64,9 +72,8 @@ func run(log *slog.Logger) error {
 	resolved, err := filepath.EvalSymlinks(c.DatabasePath)
 	if err == nil {
 		c.DatabasePath = resolved
-	}
-	if err != nil && !(migrations.Published() && os.IsNotExist(err)) {
-		return fmt.Errorf("resolve database path (apply the Atlas schema before startup): %w", err)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("resolve database path: %w", err)
 	}
 	dataLease, err := database.AcquireLease(c.DatabasePath, migrations.Published())
 	if err != nil {
@@ -108,17 +115,41 @@ func run(log *slog.Logger) error {
 			return e
 		}
 		db = reopened
+	} else if err = db.EnsureSchema(startup); err != nil {
+		return err
 	}
 	if err = db.CheckSchema(startup); err != nil {
 		return err
+	}
+	if c.AuthMode == "local" && c.AdminPassword == "" {
+		ready, e := identity.HasAdministrator(startup, db.SQL)
+		if e != nil {
+			return e
+		}
+		if !ready {
+			// Human input has no startup deadline. Give the remaining setup a
+			// fresh context once the password has been entered.
+			cancel()
+			c.AdminPassword, err = config.PromptAdminPassword(os.Stdin, os.Stderr)
+			if err != nil {
+				return err
+			}
+			startup, cancel = context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+		}
 	}
 	store, err := storage.NewLocal(c.BlobPath)
 	if err != nil {
 		return err
 	}
-	verifier, err := auth.New(startup, c)
-	if err != nil {
-		return fmt.Errorf("initialize authentication: %w", err)
+	var verifier auth.Authenticator
+	if c.AuthMode == "local" {
+		verifier = auth.Local{DB: db.SQL}
+	} else {
+		verifier, err = auth.New(startup, c)
+		if err != nil {
+			return fmt.Errorf("initialize authentication: %w", err)
+		}
 	}
 	service := dms.NewService(db.SQL)
 	configuredIntegrations, err := service.Client.ListIntegration.Query().Exist(startup)
@@ -166,6 +197,18 @@ func run(log *slog.Logger) error {
 	if err = service.Directory().Initialize(startup, c.AdminSubject, c.AdminGroup); err != nil {
 		return fmt.Errorf("initialize organization directory: %w", err)
 	}
+	if c.AuthMode == "local" {
+		hash := ""
+		if c.AdminPassword != "" {
+			hash, err = auth.HashPassword(c.AdminPassword)
+			if err != nil {
+				return err
+			}
+		}
+		if err = service.Directory().SetInitialPasswordHash(startup, c.AdminSubject, hash); err != nil {
+			return fmt.Errorf("initialize local administrator: %w", err)
+		}
+	}
 	if err = service.RegisterPortability(store); err != nil {
 		return err
 	}
@@ -200,13 +243,17 @@ func run(log *slog.Logger) error {
 	tools.PDF = pdfium.New()
 	log.Info("pdf reading enabled", "reader", tools.PDF.Name())
 	if c.OCRLibrary != "" {
-		engine, e := paddle.New(paddle.Config{Library: c.OCRLibrary, Models: c.OCRModels, Threads: c.OCRThreads})
+		engine, e := openOCR(c)
 		if e != nil {
-			return fmt.Errorf("configure OCR: %w", e)
+			return e
 		}
-		defer engine.Close()
-		tools.OCR = engine
-		log.Info("ocr enabled", "engine", engine.Info().Engine, "library", c.OCRLibrary, "models", c.OCRModels)
+		if engine == nil {
+			log.Info("ocr disabled", "models", c.OCRModels)
+		} else {
+			defer engine.Close()
+			tools.OCR = engine
+			log.Info("ocr enabled", "engine", engine.Info().Engine, "library", c.OCRLibrary, "models", c.OCRModels)
+		}
 	}
 	workflows := &workflow.Service{DMS: service, Tools: tools}
 	service.OnIntegrationCreated(workflows.EnsureIntegrationWorkflow)
