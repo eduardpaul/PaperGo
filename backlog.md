@@ -87,6 +87,10 @@ Scope: ISSUE-21, ISSUE-22, ISSUE-20 and ISSUE-19. ISSUE-23 and FEAT-01 are defer
 
 **Completed the four selected Phase 4 issues on 2026-10-17.** Final validation: all 1,000 Go test cases passed (15 optional integration cases skipped), all 171 frontend tests and all 56 Python tests passed, with frontend typecheck/lint, production API/admin/frontend builds, full Go vet/staticcheck, module checksum verification, reproducible Ent generation, Atlas validation and regenerated sample packages. The built Docker image passed fresh-volume startup, native zvec indexing, outbound calendar DNS/HTTPS, scoped service-token authentication/revocation and asynchronous preview/original-preservation checks. ISSUE-23 and FEAT-01 remain deferred.
 
+**CI follow-up 2026-10-17:** The module minimum and documented build requirement are Go 1.27, matching the workflow JSON API and the Go 1.27.2 CI/container toolchain. Full-project vet, CI-pinned Staticcheck, complete race-test discovery and reproducible Ent generation pass under Go 1.27.2 without local experiment flags.
+
+The CI race suite also exposed photos-to-PDF tests starting state deadlines while manual events were waiting behind background file-processing writes. Those tests explicitly dispatch manual events before checking conversion and approval states. The 20 ms polling cadence and existing deadlines remain intact, and status failures include runner logs. Both affected photos-to-PDF tests pass in three consecutive repetitions with race detection under Go 1.27.2.
+
 ## 1. Backlog Summary Matrix
 
 | ID | Title | Domain | Priority | Effort | Impact |

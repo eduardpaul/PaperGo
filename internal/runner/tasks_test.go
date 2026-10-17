@@ -25,6 +25,7 @@ func (f *fixture) status(t *testing.T, id, want string) Run {
 			return run
 		}
 		if time.Now().After(deadline) {
+			t.Log(f.logs.String())
 			t.Fatalf("run %s is %s (%v), want %s; error %s; steps %+v", id, run.Status, err, want, run.Error, run.Steps)
 		}
 		time.Sleep(20 * time.Millisecond)

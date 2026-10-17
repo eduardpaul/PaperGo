@@ -239,6 +239,11 @@ func TestPhotosToPDFBuiltIn(t *testing.T) {
 		if err != nil || len(runs) != 1 {
 			t.Fatalf("start: %v %v", runs, err)
 		}
+		// Dispatch can wait behind source-file processing. Complete it before
+		// the bounded conversion and approval state assertions.
+		if _, err = f.r.Dispatch(ctx); err != nil {
+			t.Fatal(err)
+		}
 		return runs[0]
 	}
 
@@ -275,6 +280,9 @@ func TestPhotosToPDFBuiltIn(t *testing.T) {
 	a = f.approvalOf(t, run)
 	rejected, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{first.ID, second.ID}, PrimaryItemID: first.ID})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.r.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if result := f.wait(t, rejected[0], finished); result.Status != "failed" || !strings.Contains(result.Error, "another run is active") {
@@ -316,6 +324,9 @@ func TestPhotosToPDFRefusesChangedAndUnsupportedPhotos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err = f.r.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if run := f.status(t, runs[0], "failed"); !strings.Contains(run.Error, "not a JPEG, PNG or WebP photo") {
 		t.Fatalf("PDF member: %+v", run)
 	}
@@ -323,6 +334,9 @@ func TestPhotosToPDFRefusesChangedAndUnsupportedPhotos(t *testing.T) {
 	// A photo replaced while the review waits cannot be promoted.
 	runs, err = f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{photo.ID, other.ID}, PrimaryItemID: photo.ID})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.r.Dispatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	a := f.approvalOf(t, runs[0])
