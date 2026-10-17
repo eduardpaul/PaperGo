@@ -95,9 +95,7 @@ func open(t testing.TB, path, node string, configure ...func(*workflow.Tools)) *
 	}
 	f.dms.SetEmbeddings(tools.Embeddings)
 	f.wf = &workflow.Service{DMS: f.dms, Tools: tools}
-	// Queue polls run SQLite transactions. Leave time between polls for
-	// workflow steps when the SQLite driver is instrumented for races.
-	f.r, err = New(Config{Concurrency: 1, DatabasePath: path, NodeID: node, PollInterval: 100 * time.Millisecond, TickSchedule: "0 0 0 1 1 *", Logger: slog.New(slog.NewTextHandler(f.logs, nil))}, db.SQL, f.dms, f.wf)
+	f.r, err = New(Config{Concurrency: 1, DatabasePath: path, NodeID: node, PollInterval: 20 * time.Millisecond, TickSchedule: "0 0 0 1 1 *", Logger: slog.New(slog.NewTextHandler(f.logs, nil))}, db.SQL, f.dms, f.wf)
 	if err != nil {
 		t.Fatal(err)
 	}

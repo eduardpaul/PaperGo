@@ -89,7 +89,7 @@ Scope: ISSUE-21, ISSUE-22, ISSUE-20 and ISSUE-19. ISSUE-23 and FEAT-01 are defer
 
 **CI follow-up 2026-10-17:** The module minimum and documented build requirement are Go 1.27, matching the workflow JSON API and the Go 1.27.2 CI/container toolchain. Full-project vet, CI-pinned Staticcheck, complete race-test discovery and reproducible Ent generation pass under Go 1.27.2 without local experiment flags.
 
-The CI race suite also exposed photos-to-PDF runs missing their queue deadline. Runner test fixtures poll at 100 ms so race-instrumented SQLite transactions leave time for workflow steps; existing deadlines stay intact, and status failures include runner logs. Both affected photos-to-PDF tests pass with race detection.
+The CI race suite also exposed photos-to-PDF tests starting state deadlines while manual events were waiting behind background file-processing writes. Those tests explicitly dispatch manual events before checking conversion and approval states. The 20 ms polling cadence and existing deadlines remain intact, and status failures include runner logs. Both affected photos-to-PDF tests pass in three consecutive repetitions with race detection under Go 1.27.2.
 
 ## 1. Backlog Summary Matrix
 
