@@ -34,7 +34,7 @@ type BuiltIn struct {
 	Default bool `json:"default,omitempty"`
 	// System built-ins are product processes: their runs use the runner's
 	// system queue, so they never delay people's workflows. Successful automatic
-	// runs are kept a day; manual runs use ordinary retention, and their release definitions may read taxonomy
+	// runs follow SYSTEM_RUN_RETENTION; manual runs use ordinary retention, and their release definitions may read taxonomy
 	// events whatever their author's scopes.
 	System            bool      `json:"system,omitempty"`
 	AutomaticTriggers []Trigger `json:"automatic_triggers"`

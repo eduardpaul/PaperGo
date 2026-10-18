@@ -34,8 +34,8 @@ type RunInput struct {
 	// of one partition execute one at a time.
 	Partition string `json:"partition,omitempty"`
 	// System runs belong to a system built-in: they use the runner's system
-	// queue. Successful automatic system runs are kept a day; manual runs
-	// use ordinary retention.
+	// queue. Successful automatic system runs follow SYSTEM_RUN_RETENTION;
+	// manual runs use ordinary retention.
 	System bool `json:"system,omitempty"`
 }
 
@@ -75,21 +75,36 @@ type Result struct {
 // ErrRunFailed wraps the reason a run failed.
 var ErrRunFailed = errors.New("workflow run failed")
 
+// loaded is the context a run executes with. The definition is the immutable
+// version named by the load record; it is not stored on the run.
 type loaded struct {
-	Key    string `json:"key"`
-	Author string `json:"author"`
-	System bool   `json:"system,omitempty"`
+	Key    string
+	Author string
+	System bool
 	// Role is the role the workflow fills: its runs also raise the role's
 	// events.
-	Role       string     `json:"role,omitempty"`
-	Definition Definition `json:"definition"`
+	Role       string
+	Definition Definition
+}
+
+// loadedRef is the load step's stored output. Key, author, system and role
+// are taken from the workflow row when the run loads, because a later edit
+// can change that row. The definition stays on the version.
+type loadedRef struct {
+	Key        string `json:"key"`
+	Author     string `json:"author"`
+	System     bool   `json:"system,omitempty"`
+	Role       string `json:"role,omitempty"`
+	WorkflowID string `json:"workflow_id"`
+	Version    int    `json:"version"`
 }
 
 // Execute interprets the run's workflow version: it starts at the flow's
 // start node and follows the port each node's outcome selects. Every node is
 // one durable step, or three for activities with heavy work, so after a
 // crash the run continues at the node it reached. Workflow code here only
-// routes between recorded step results.
+// routes between recorded step results. The load step records a version
+// reference, and the definition is read from that version afterwards.
 func (s *Service) Execute(ctx context.Context, x Exec, in RunInput) (Result, error) {
 	raw, err := x.Step("load", func(ctx context.Context, t *dms.Service, _ func(dms.Event)) (json.RawMessage, error) {
 		w, err := t.Client.Workflow.Get(ctx, in.WorkflowID)
@@ -100,31 +115,49 @@ func (s *Service) Execute(ctx context.Context, x Exec, in RunInput) (Result, err
 		if err != nil {
 			return nil, err
 		}
-		def, err := ParseDefinition(v.Definition)
-		if err != nil {
+		if _, err = ParseDefinition(v.Definition); err != nil {
 			return nil, err
 		}
 		if in.StartError != "" {
 			return nil, errors.New(in.StartError)
 		}
-		l := loaded{Key: w.Key, Author: v.CreatedBy, System: systemWorkflow(w), Definition: def}
+		ref := loadedRef{Key: w.Key, Author: v.CreatedBy, System: systemWorkflow(w), WorkflowID: in.WorkflowID, Version: in.Version}
 		if w.Role != nil {
-			l.Role = *w.Role
+			ref.Role = *w.Role
 		}
-		return json.Marshal(l)
+		return json.Marshal(ref)
 	})
 	if err != nil {
 		return Result{Status: "failed"}, err
 	}
-	var l loaded
-	if err = decode(raw, &l); err != nil {
+	var ref loadedRef
+	if err = decode(raw, &ref); err != nil {
 		return Result{Status: "failed"}, err
 	}
+	def, err := s.versionDefinition(ctx, ref)
+	if err != nil {
+		return Result{Status: "failed"}, err
+	}
+	l := loaded{Key: ref.Key, Author: ref.Author, System: ref.System, Role: ref.Role, Definition: def}
 	r := &runState{in: in, x: x, l: l, tools: s.Tools, vars: map[string]any{}, steps: map[string]any{}}
 	for k, v := range l.Definition.Variables {
 		r.vars[k] = forms.Plain(v)
 	}
 	return r.execute(ctx)
+}
+
+// versionDefinition reads the immutable version named by a load record.
+// The read sits outside the load step so the durable engine does not store
+// the definition again. A missing or unreadable version fails the run.
+func (s *Service) versionDefinition(ctx context.Context, ref loadedRef) (Definition, error) {
+	if ref.WorkflowID == "" || ref.Version < 1 {
+		return Definition{}, errors.New("workflow version reference is invalid")
+	}
+	v, err := s.DMS.Client.WorkflowVersion.Query().Where(workflowversion.WorkflowIDEQ(ref.WorkflowID), workflowversion.NumberEQ(ref.Version)).Only(ctx)
+	if err != nil {
+		return Definition{}, fmt.Errorf("resolve workflow %s version %d: %w", ref.WorkflowID, ref.Version, err)
+	}
+	return ParseDefinition(v.Definition)
 }
 
 type runState struct {

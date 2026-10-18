@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +62,15 @@ func TestResumedActionCanRunWorkAndCommit(t *testing.T) {
 	vars, _ := run.Result.(map[string]any)["variables"].(map[string]any)
 	if vars["result"] != true {
 		t.Fatalf("resume work never committed: %+v", vars)
+	}
+	foundWork := false
+	for _, step := range run.Steps {
+		if out, ok := step.Output.(map[string]any); strings.HasSuffix(step.Name, " work") && ok && out["processed"] == true {
+			foundWork = true
+		}
+	}
+	if !foundWork {
+		t.Fatalf("work output missing from run details: %+v", run.Steps)
 	}
 }
 func TestCycleCreatesNewWaitForEachVisit(t *testing.T) {

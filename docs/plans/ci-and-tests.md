@@ -201,7 +201,7 @@ guard/recovery assertions remain mapped to an executing test.
 
 `internal/testutil/database.go` repeatedly validates migration files, applies the
 whole schema, initializes identity, creates 20 users, creates a role and assigns
-it. `database.Open` also uses WAL and `synchronous(FULL)`. Runner fixtures launch
+it. `database.Open` also uses WAL, `synchronous(FULL)`, `wal_autocheckpoint=256` and `journal_size_limit=1048576`. Runner fixtures launch
 the dispatcher and seed several fields even when the scenario needs less.
 
 - Profile fixture setup separately before changing it. Cache immutable schema

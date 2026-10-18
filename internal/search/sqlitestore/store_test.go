@@ -9,9 +9,33 @@ import (
 	"path/filepath"
 	"testing"
 
+	"papergo/internal/database"
 	"papergo/internal/search"
 	"papergo/internal/search/storetest"
 )
+
+func TestOpenUsesTheSharedWALPolicy(t *testing.T) {
+	s, err := Open(context.Background(), filepath.Join(t.TempDir(), "search.db"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	var mode string
+	var synchronous, auto int
+	var limit int64
+	if err = s.DB().QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "wal" {
+		t.Fatalf("journal mode %s: %v", mode, err)
+	}
+	if err = s.DB().QueryRow("PRAGMA synchronous").Scan(&synchronous); err != nil || synchronous != 2 {
+		t.Fatalf("synchronous %d: %v", synchronous, err)
+	}
+	if err = s.DB().QueryRow("PRAGMA wal_autocheckpoint").Scan(&auto); err != nil || auto != database.WALAutoCheckpointPages {
+		t.Fatalf("wal_autocheckpoint %d: %v", auto, err)
+	}
+	if err = s.DB().QueryRow("PRAGMA journal_size_limit").Scan(&limit); err != nil || limit != database.JournalSizeLimitBytes {
+		t.Fatalf("journal_size_limit %d: %v", limit, err)
+	}
+}
 
 func TestOpenRejectsUnrelatedDatabaseWithoutChangingItsData(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "search.db")

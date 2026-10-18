@@ -29,9 +29,23 @@ func DatabaseAt(t testing.TB, path string) *database.Database {
 			t.Fatalf("apply %s: %v", f.Name(), err)
 		}
 	}
-	var foreignKeys int
+	var foreignKeys, synchronous, autoCheckpoint int
+	var journalMode string
+	var journalLimit int64
 	if err = db.SQL.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeys); err != nil || foreignKeys != 1 {
 		t.Fatalf("foreign keys disabled: %d %v", foreignKeys, err)
+	}
+	if err = db.SQL.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil || journalMode != "wal" {
+		t.Fatalf("journal mode: %s %v", journalMode, err)
+	}
+	if err = db.SQL.QueryRow("PRAGMA synchronous").Scan(&synchronous); err != nil || synchronous != 2 {
+		t.Fatalf("synchronous: %d %v", synchronous, err)
+	}
+	if err = db.SQL.QueryRow("PRAGMA wal_autocheckpoint").Scan(&autoCheckpoint); err != nil || autoCheckpoint != database.WALAutoCheckpointPages {
+		t.Fatalf("wal_autocheckpoint: %d %v", autoCheckpoint, err)
+	}
+	if err = db.SQL.QueryRow("PRAGMA journal_size_limit").Scan(&journalLimit); err != nil || journalLimit != database.JournalSizeLimitBytes {
+		t.Fatalf("journal_size_limit: %d %v", journalLimit, err)
 	}
 	directory := identity.Directory{DB: db.SQL}
 	if err = directory.Initialize(context.Background(), "organization-admin", ""); err != nil {

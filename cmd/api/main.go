@@ -235,7 +235,7 @@ func run(log *slog.Logger) error {
 		defer decisions.Close()
 		log.Info("local decisions enabled", "model", decisions.ID())
 	}
-	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload, Search: index, Embeddings: embeddings, Results: resultcache.New(db.SQL), ResultTTL: c.RunRetention, Languages: c.SearchLanguages}
+	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload, Search: index, Embeddings: embeddings, Results: resultcache.New(db.SQL), ResultTTL: c.ResultCacheTTL, Languages: c.SearchLanguages}
 	workflowai.Configure(&tools, workflowai.Runtime{Chat: chat, Batch: batch, DefaultExecution: c.AIExecution, BatchDeadline: c.BatchDeadline})
 	if decisions != nil {
 		tools.Decisions = decisions
@@ -267,7 +267,7 @@ func run(log *slog.Logger) error {
 		}
 		log.Info("ai batch coordinator enabled", "workspace", c.BatchWorkspace, "queue", "shared")
 	}
-	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, NodeID: c.NodeID, Retention: c.RunRetention, Logger: log}, db.SQL, service, workflows)
+	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, NodeID: c.NodeID, Retention: c.RunRetention, SystemRetention: c.SystemRunRetention, Logger: log}, db.SQL, service, workflows)
 	if err != nil {
 		return err
 	}

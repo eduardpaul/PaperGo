@@ -235,9 +235,18 @@ func (s *Store) Purge(ctx context.Context, now time.Time) error {
 		return err
 	}
 
-	_, err := s.q.ExecContext(ctx, `DELETE FROM activity_records WHERE expires_at<=? AND NOT EXISTS(SELECT 1 FROM activity_references WHERE record_id=activity_records.id) AND (lease_until IS NULL OR lease_until<=?)`, now, now)
-	if err != nil {
-		return fmt.Errorf("purge activity records: %w", err)
+	for {
+		res, err := s.q.ExecContext(ctx, `DELETE FROM activity_records WHERE id IN (
+			SELECT id FROM activity_records WHERE expires_at<=? AND NOT EXISTS(SELECT 1 FROM activity_references WHERE record_id=activity_records.id) AND (lease_until IS NULL OR lease_until<=?) LIMIT ?)`, now, now, activityPurgePage)
+		if err != nil {
+			return fmt.Errorf("purge activity records: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil || n < activityPurgePage {
+			return err
+		}
 	}
-	return nil
 }
+
+// activityPurgePage bounds one activity-record delete.
+const activityPurgePage = 200

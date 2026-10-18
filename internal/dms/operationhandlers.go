@@ -139,26 +139,37 @@ func (s *Service) operationContext(ctx context.Context, op *ent.Operation) (cont
 }
 
 // Terminal payloads/results expire together. Pending work is retained for resume.
+// Each pass deletes operationPurgePage rows and continues until the expired set is drained.
 func (s *Service) CollectExpiredOperations(ctx context.Context, now time.Time) error {
-	return s.write(ctx, func(t *Service) error {
-		rows, err := t.Client.Operation.Query().Where(operation.StatusNEQ(operation.StatusPending), operation.UpdatedAtLTE(now.UTC().Add(-OperationRetention))).Limit(1000).All(ctx)
-		if err != nil {
+	cutoff := now.UTC().Add(-OperationRetention)
+	for {
+		var n int
+		err := s.write(ctx, func(t *Service) error {
+			rows, err := t.Client.Operation.Query().Where(operation.StatusNEQ(operation.StatusPending), operation.UpdatedAtLTE(cutoff)).Limit(operationPurgePage).All(ctx)
+			if err != nil {
+				return err
+			}
+			ids := make([]string, len(rows))
+			for i, row := range rows {
+				ids[i] = row.ID
+			}
+			n = len(ids)
+			if n == 0 {
+				return nil
+			}
+			if _, err = t.Client.OperationItem.Delete().Where(operationitem.OperationIDIn(ids...)).Exec(ctx); err != nil {
+				return err
+			}
+			_, err = t.Client.Operation.Delete().Where(operation.IDIn(ids...)).Exec(ctx)
+			return err
+		})
+		if err != nil || n < operationPurgePage {
 			return err
 		}
-		ids := make([]string, len(rows))
-		for i, row := range rows {
-			ids[i] = row.ID
-		}
-		if len(ids) == 0 {
-			return nil
-		}
-		if _, err = t.Client.OperationItem.Delete().Where(operationitem.OperationIDIn(ids...)).Exec(ctx); err != nil {
-			return err
-		}
-		_, err = t.Client.Operation.Delete().Where(operation.IDIn(ids...)).Exec(ctx)
-		return err
-	})
+	}
 }
+
+const operationPurgePage = 200
 
 func (s *Service) failOperation(ctx context.Context, op *ent.Operation, cause error) error {
 	return s.write(ctx, func(t *Service) error {

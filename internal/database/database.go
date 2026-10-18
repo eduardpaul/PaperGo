@@ -63,6 +63,15 @@ type Options struct {
 // failing with SQLITE_BUSY. Read-only transactions stay deferred.
 var DefaultOptions = Options{TxLock: "immediate", BusyTimeout: 30 * time.Second}
 
+// WALAutoCheckpointPages is the passive checkpoint threshold, in pages.
+// At the 4096-byte page size, 256 pages are about 1 MiB of journal.
+const WALAutoCheckpointPages = 256
+
+// JournalSizeLimitBytes is the retained -wal size after a checkpoint resets
+// the journal. A large transaction or a blocked checkpoint can grow the file
+// past this until the next successful checkpoint.
+const JournalSizeLimitBytes = 1 << 20
+
 // DSN returns the data source name of the SQLite file at the absolute path
 // abs, so every handle on the file uses the same pragmas.
 func DSN(abs string, o Options) string {
@@ -76,7 +85,14 @@ func DSN(abs string, o Options) string {
 	if o.TxLock != "" {
 		q.Set("_txlock", o.TxLock)
 	}
-	for _, pragma := range []string{"foreign_keys(1)", fmt.Sprintf("busy_timeout(%d)", o.BusyTimeout.Milliseconds()), "journal_mode(WAL)", "synchronous(FULL)"} {
+	for _, pragma := range []string{
+		"foreign_keys(1)",
+		fmt.Sprintf("busy_timeout(%d)", o.BusyTimeout.Milliseconds()),
+		"journal_mode(WAL)",
+		"synchronous(FULL)",
+		fmt.Sprintf("wal_autocheckpoint(%d)", WALAutoCheckpointPages),
+		fmt.Sprintf("journal_size_limit(%d)", JournalSizeLimitBytes),
+	} {
 		q.Add("_pragma", pragma)
 	}
 	u.RawQuery = q.Encode()

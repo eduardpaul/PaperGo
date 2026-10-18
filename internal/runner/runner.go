@@ -45,6 +45,11 @@ const (
 	purgeName       = "papergo.retention"
 	systemPurgeName = "papergo.system-retention"
 	searchEmbedName = "papergo.search_embed"
+	// retentionSchedule is hourly at :45. systemRetentionSchedule is hourly
+	// at :15, so the two passes do not start together. A finished record can
+	// wait one hour for the next pass.
+	retentionSchedule       = "0 45 * * * *"
+	systemRetentionSchedule = "0 15 * * * *"
 )
 
 // Config configures the runner.
@@ -55,7 +60,10 @@ type Config struct {
 	NodeID string
 	// Retention is how long finished runs are kept.
 	Retention time.Duration
-	Logger    *slog.Logger
+	// SystemRetention is how long successful automatic system runs are kept.
+	// Zero uses the package default. Retention is a ceiling.
+	SystemRetention time.Duration
+	Logger          *slog.Logger
 	// TickSchedule is the 6-field cron (with seconds) of the schedule tick;
 	// default every minute.
 	TickSchedule string
@@ -170,8 +178,8 @@ func (r *Runner) Launch(ctx context.Context) error {
 	r.dms.RegisterRunPurger(r.purgeHomeRunPayloads)
 	if err := dbos.ApplySchedules(r.ctx, []dbos.ScheduleSpec{
 		{ScheduleName: tickName, Schedule: r.cfg.TickSchedule, Workflow: r.tick},
-		{ScheduleName: purgeName, Schedule: "0 30 3 * * *", Workflow: r.purge},
-		{ScheduleName: systemPurgeName, Schedule: "0 15 * * * *", Workflow: r.purgeSystem},
+		{ScheduleName: purgeName, Schedule: retentionSchedule, Workflow: r.purge},
+		{ScheduleName: systemPurgeName, Schedule: systemRetentionSchedule, Workflow: r.purgeSystem},
 		{ScheduleName: searchEmbedName, Schedule: "0 */15 * * * *", Workflow: r.sweepEmbeddings},
 	}); err != nil {
 		return fmt.Errorf("apply runner schedules: %w", err)

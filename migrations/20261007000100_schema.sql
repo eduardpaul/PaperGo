@@ -296,10 +296,13 @@ CREATE TABLE task_responses (
  subject TEXT NOT NULL,assignee TEXT NOT NULL,outcome TEXT NOT NULL,comment TEXT NOT NULL DEFAULT '' CHECK(length(comment)<=4000),
  input JSON CHECK(input IS NULL OR json_valid(input))
 );
+-- Rowid table: a WITHOUT ROWID composite key puts variable JSON outputs on
+-- overflow pages and leaves most of each page unused. The primary key remains
+-- the unique index on (run_id, step_id).
 CREATE TABLE runner_step_results (
  run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL,
  PRIMARY KEY (run_id, step_id)
-) WITHOUT ROWID;
+);
 -- Waits are completion rendezvous owned by real workflow runs. DBOS owns
 -- durable suspension, inbox delivery and timeout checkpointing. Large action
 -- payloads use activity_records; explicit blob_leases protect source bytes.

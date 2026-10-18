@@ -72,6 +72,7 @@ func (a *API) Handler() http.Handler {
 	a.registerSmartFolders(api)
 	a.registerWorkflows(api)
 	a.registerSearch(api)
+	a.registerStorage(api)
 	a.registerTasks(api)
 	// Subrequests already share the outer admission slot; authenticating them
 	// separately preserves authorization overrides without recursively queueing.

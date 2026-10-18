@@ -369,9 +369,16 @@ func (r *Runner) Run(ctx context.Context, subject, id string) (Run, error) {
 	if err != nil {
 		return Run{}, err
 	}
+	bodies, err := r.stepBodies(ctx, id)
+	if err != nil {
+		return Run{}, err
+	}
 	runs[0].Steps = make([]Step, 0, len(steps))
 	for _, s := range steps {
 		step := Step{ID: s.StepID, Name: s.StepName, Output: decodeOutput(s.Output)}
+		if body, ok := bodies[s.StepID]; ok {
+			step.Output = decodeOutput(body)
+		}
 		if s.Error != nil {
 			step.Error = s.Error.Error()
 		}
@@ -386,6 +393,26 @@ func (r *Runner) Run(ctx context.Context, subject, id string) (Run, error) {
 		runs[0].Steps = append(runs[0].Steps, step)
 	}
 	return runs[0], nil
+}
+
+// stepBodies loads transactional outputs in one query. Work steps and DBOS
+// waits keep their outputs in DBOS; transactional steps keep only pointers there.
+func (r *Runner) stepBodies(ctx context.Context, runID string) (map[int]json.RawMessage, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT step_id, output FROM runner_step_results WHERE run_id=?`, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[int]json.RawMessage)
+	for rows.Next() {
+		var id int
+		var body json.RawMessage
+		if err := rows.Scan(&id, &body); err != nil {
+			return nil, err
+		}
+		out[id] = body
+	}
+	return out, rows.Err()
 }
 
 // decodeOutput shows a step's recorded JSON as JSON, not as a string.
@@ -450,9 +477,17 @@ func (r *Runner) Retry(ctx context.Context, subject, id string) (Run, error) {
 		return Run{}, errors.New("the failed run has no failed step")
 	}
 	retryID := "retry:" + uuid.NewString()
-	// DBOS writes the fork on its own connection, so it must not run inside a
-	// PaperGo write transaction, which holds the SQLite write lock.
+	// The step reference names a step number and is resolved against whichever
+	// workflow is running. Copy the reused bodies onto the new run before the
+	// fork exists, so a worker cannot replay a reference with no row. DBOS
+	// writes the fork on its own connection and must not run inside a PaperGo
+	// write transaction, which holds the SQLite write lock.
+	if _, err = r.db.ExecContext(ctx, `INSERT INTO runner_step_results (run_id, step_id, step, output)
+		SELECT ?, step_id, step, output FROM runner_step_results WHERE run_id=? AND step_id<?`, retryID, id, start); err != nil {
+		return Run{}, fmt.Errorf("retry run %s: %w", id, err)
+	}
 	if _, err = dbos.ForkWorkflow[any](r.ctx, dbos.ForkWorkflowInput{OriginalWorkflowID: id, ForkedWorkflowID: retryID, StartStep: uint(start), QueueName: runQueue}); err != nil {
+		r.discardStepResults(ctx, retryID)
 		return Run{}, fmt.Errorf("retry run %s: %w", id, err)
 	}
 	err = r.dms.Write(ctx, func(t *dms.Service) error {
@@ -478,9 +513,17 @@ func (r *Runner) Retry(ctx context.Context, subject, id string) (Run, error) {
 	})
 	if err != nil {
 		_ = dbos.CancelWorkflow(r.ctx, retryID)
+		r.discardStepResults(ctx, retryID)
 		return Run{}, fmt.Errorf("retry run %s: %w", id, err)
 	}
 	return r.Run(ctx, subject, retryID)
+}
+
+// discardStepResults removes a run's step bodies. Retry calls it when the
+// fork or the run row does not stick, so a copied body cannot outlive that
+// attempt.
+func (r *Runner) discardStepResults(ctx context.Context, runID string) {
+	_, _ = r.db.ExecContext(ctx, `DELETE FROM runner_step_results WHERE run_id=?`, runID)
 }
 
 // purge deletes runs that finished more than the retention ago, with their
@@ -504,11 +547,10 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	cutoff := time.Now().Add(-r.cfg.Retention)
+	if err := r.deleteDispatchedEvents(ctx, cutoff); err != nil {
+		return 0, err
+	}
 	if err := r.dms.Write(ctx, func(t *dms.Service) error {
-		_, err := t.Client.DomainEvent.Delete().Where(domainevent.DispatchedAtLT(cutoff)).Exec(ctx)
-		if err != nil {
-			return err
-		}
 		return t.CollectRevisions(ctx)
 	}); err != nil {
 		return 0, err
@@ -518,8 +560,11 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 	for {
 		done, err := dbos.ListWorkflows(r.ctx, dbos.WithFilterName(runName), dbos.WithFilterStatus(dbos.WorkflowStatusSuccess, dbos.WorkflowStatusError, dbos.WorkflowStatusCancelled, dbos.WorkflowStatusMaxRecoveryAttemptsExceeded),
 			dbos.WithFilterCompletedBefore(cutoff), dbos.WithFilterLimit(purgePage), dbos.WithFilterLoadInput(false), dbos.WithFilterLoadOutput(false))
-		if err != nil || len(done) == 0 {
+		if err != nil {
 			return deleted, err
+		}
+		if len(done) == 0 {
+			break
 		}
 		ids := make([]string, 0, len(done))
 		for _, s := range done {
@@ -530,25 +575,71 @@ func (r *Runner) Purge(ctx context.Context) (int, error) {
 		}
 		deleted += len(ids)
 	}
+	if err := r.collectMaintenance(ctx); err != nil {
+		return deleted, err
+	}
+	return deleted, nil
+}
+
+// deleteDispatchedEvents removes dispatched events in pages. Each page is its
+// own transaction, so a large backlog releases the writer between pages.
+func (r *Runner) deleteDispatchedEvents(ctx context.Context, cutoff time.Time) error {
+	for {
+		var n int64
+		err := r.dms.Write(ctx, func(t *dms.Service) error {
+			ids, err := t.Client.DomainEvent.Query().Where(domainevent.DispatchedAtLT(cutoff)).Limit(purgePage).IDs(ctx)
+			if err != nil || len(ids) == 0 {
+				n = int64(len(ids))
+				return err
+			}
+			deleted, err := t.Client.DomainEvent.Delete().Where(domainevent.IDIn(ids...)).Exec(ctx)
+			n = int64(deleted)
+			return err
+		})
+		if err != nil || n < int64(purgePage) {
+			return err
+		}
+	}
 }
 
 func (r *Runner) purgeSystem(ctx dbos.Context, _ dbos.ScheduledWorkflowInput) (any, error) {
-	return r.PurgeSystemRuns(ctx)
+	n, err := r.PurgeSystemRuns(ctx)
+	if err != nil {
+		return n, err
+	}
+	if err = r.collectMaintenance(ctx); err != nil {
+		return n, err
+	}
+	return n, nil
 }
 
-// systemRetention is how long successful runs of system built-ins are kept.
-// Tests lower it.
+// systemRetention is how long successful automatic runs of system built-ins
+// are kept when SystemRetention is unset. Tests lower it.
 var systemRetention = 24 * time.Hour
 
-// PurgeSystemRuns deletes the successful runs of system built-ins finished
-// more than a day ago: they run on every change, and failures stay for the
-// full retention.
+// systemRunRetention applies the configured system-run lifetime. Run
+// retention is a ceiling because the application retention pass collects
+// every finished application run.
+func (r *Runner) systemRunRetention() time.Duration {
+	kept := systemRetention
+	if r.cfg.SystemRetention > 0 {
+		kept = r.cfg.SystemRetention
+	}
+	if r.cfg.Retention > 0 && r.cfg.Retention < kept {
+		kept = r.cfg.Retention
+	}
+	return kept
+}
+
+// PurgeSystemRuns deletes the successful automatic runs of system built-ins
+// finished before systemRunRetention. Failures and manual runs stay for the
+// full run retention.
 func (r *Runner) PurgeSystemRuns(ctx context.Context) (int, error) {
 	keys := workflow.SystemBuiltIns()
 	if len(keys) == 0 {
 		return 0, nil
 	}
-	cutoff := time.Now().Add(-min(systemRetention, r.cfg.Retention))
+	cutoff := time.Now().Add(-r.systemRunRetention())
 	deleted, after := 0, ""
 	for {
 		var ids []string

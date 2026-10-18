@@ -35,8 +35,23 @@ func (s *Service) LiveChanges(ctx context.Context, after int64) ([]*ent.LiveChan
 	return s.Client.LiveChange.Query().Where(livechange.IDGT(after)).Order(ent.Asc(livechange.FieldID)).Limit(500).All(ctx)
 }
 func (s *Service) CollectExpiredLiveChanges(ctx context.Context, now time.Time) error {
-	return s.write(ctx, func(t *Service) error {
-		_, err := t.Client.LiveChange.Delete().Where(livechange.CreatedAtLTE(now.UTC().Add(-LiveRetention))).Exec(ctx)
-		return err
-	})
+	cutoff := now.UTC().Add(-LiveRetention)
+	for {
+		var n int64
+		err := s.write(ctx, func(t *Service) error {
+			ids, err := t.Client.LiveChange.Query().Where(livechange.CreatedAtLTE(cutoff)).Limit(livePurgePage).IDs(ctx)
+			if err != nil || len(ids) == 0 {
+				n = int64(len(ids))
+				return err
+			}
+			deleted, err := t.Client.LiveChange.Delete().Where(livechange.IDIn(ids...)).Exec(ctx)
+			n = int64(deleted)
+			return err
+		})
+		if err != nil || n < livePurgePage {
+			return err
+		}
+	}
 }
+
+const livePurgePage = 200

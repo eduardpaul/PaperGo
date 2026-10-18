@@ -133,9 +133,31 @@ The fixture uses roughly **8 KiB of metadata database per small item**, includin
 indexes, projections, audit records and domain events. This is an estimate for
 this schema, not a general per-document allowance. Stored file bytes are extra.
 WAL size is the physical file high water, not a count of currently uncheckpointed
-bytes. Concurrent readers can prevent WAL reset/reuse; file size may remain high
-after load and change on checkpoint or clean shutdown. Allow substantial WAL
-headroom instead of estimating disk from the main `.db` file alone.
+bytes. Connections set `wal_autocheckpoint=256` and `journal_size_limit=1048576`.
+A finished passive checkpoint copies frames and leaves the file in place. The
+next write restarts that journal and retains about 1 MiB. A large transaction
+keeps the frames it wrote, and a reader that blocks the checkpoint leaves a
+larger `-wal` file until a later write. `GET /v1/storage/status` runs a passive
+checkpoint and reports busy, log, and checkpointed frame counts plus the journal
+size.
+`PRAGMA wal_checkpoint(TRUNCATE)` during a quiet period reclaims that file and
+leaves the main database file as it is. `VACUUM` rewrites the main database to
+pack free pages; it is a separate operation, and PaperGo does not schedule it.
+Allow journal headroom for an in-flight transaction or a blocked checkpoint,
+and size the main file from retained data.
+
+`GET /v1/storage/status` runs the passive checkpoint, then splits the main file
+into pages `dbstat` can name and freelist pages it omits. Accounted bytes plus
+freelist bytes equal `page_count * page_size`. When the checkpoint finishes, the
+main file is that size. A blocked checkpoint can leave newer pages only in the
+journal, so the file stays smaller until a later checkpoint copies them. Unused
+bytes are slack inside pages that still belong to a table or index; they are not
+freelist pages, and deleting whole pages moves that space to the freelist. The
+same response reports the search store separately and sums available blob sizes
+once per SHA-256. Those file bytes live outside SQLite. A fresh database in this
+tree was 1,298,432 bytes across 317 pages, with 1,168,059 bytes of slack and no
+freelist pages, beside a 238,968-byte SQLite search file that held no documents.
+File count does not predict the database file.
 
 Six uploaded file versions represented 144 MiB of logical content, with only
 80 MiB of distinct content. The 2,000-item run ended with 80 MiB of physical files;
@@ -222,8 +244,8 @@ Collections can retain 1–500 metadata versions per item (default 50 when
 versioning is enabled). With versioning off, replaced files enter byte reclamation
 after the grace period. With versioning enabled, file versions are retained
 independently; `max_versions` does not cap stored file bytes. Dispatched events and finished workflow runs use the
-30-day default runner retention; live changes use seven days. Ordinary audit
-history has no general automatic expiry. Retention deletions free SQLite pages
+30-day default runner retention (`RUN_RETENTION`); successful automatic system runs use `SYSTEM_RUN_RETENTION` (default 24h) and reusable answers use `RESULT_CACHE_TTL` (default 720h). Cleanup is hourly, so an eligible row can wait up to one hour. Live changes use seven days. Ordinary audit
+history has no general automatic expiry, and publication snapshots stay while the item is live. Retention deletions free SQLite pages
 for reuse; they do not inherently shrink the database file. The server logs
 every request, so configure log rotation independently of application retention.
 
@@ -299,3 +321,20 @@ The service fixtures do not run the workflow dispatcher. In particular,
 repeated-edit throughput is a backlog stress case. Use the HTTP extended edit
 stages, which run the dispatcher, for a closer estimate of normal server edits.
 Allocation `B/op` is bytes allocated per operation, not retained process RAM.
+
+For a repeatable storage comparison against a Git revision, run:
+
+```sh
+python3 scripts/native.py
+python3 scripts/compare-storage.py --base origin/main --repeats 3
+```
+
+The [comparison harness](../scripts/compare-storage.py) builds the same
+[durable workflow benchmark](../internal/runner/storage_benchmark_test.go) in
+the current working tree and a disposable copy of the baseline revision. It
+alternates execution order, creates fresh databases for each sample, and writes
+raw measurements and a Markdown report under `reports/storage-efficiency-comparison`.
+It measures main-file growth, step allocation and payloads, retained WAL, workflow
+completion, run inspection and maintenance retention. Run it without other test
+or load processes. The workload and measurement limits are recorded in the report;
+timing improvements are observations rather than assertions in the test suite.

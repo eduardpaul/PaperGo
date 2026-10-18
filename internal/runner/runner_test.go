@@ -523,6 +523,21 @@ func TestFailedRunRetriesFromFailedStep(t *testing.T) {
 	if note := f.head(t, it.ID).Values["note"]; note != "stamped Lease" {
 		t.Fatalf("note %v", note)
 	}
+	// A fork owns its reused step bodies; inspecting it does not need the source.
+	if _, err = f.db.SQL.Exec(`DELETE FROM runner_step_results WHERE run_id=?`, runs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	retried, err = f.r.Run(ctx, "alice", retried.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(retried.Steps) == 0 || retried.Steps[0].Name != "load" {
+		t.Fatalf("missing reused load step: %+v", retried.Steps)
+	}
+	load, ok := retried.Steps[0].Output.(map[string]any)
+	if !ok || load["workflow_id"] != w.ID {
+		t.Fatalf("reused load output: %+v", retried.Steps[0].Output)
+	}
 }
 
 const crashEnv = "PAPERGO_RUNNER_CRASH"

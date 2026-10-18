@@ -11,7 +11,7 @@ A workflow has:
 
 Every save that changes the definition creates a new immutable **version**. A run always executes the version it started with.
 
-Runs are durable. Each node runs as one step that commits exactly once. A run continues at the node it reached after a crash or restart, and waits such as `delay` and parked activities survive restarts. The engine is described in the [runner plan](plans/runner.md).
+Runs are durable. Each node runs as one step that commits exactly once. A run continues at the node it reached after a crash or restart, and waits such as `delay` and parked activities survive restarts. The load step records the workflow id, version, key, author, system flag and role. The definition stays on that immutable version and is read when the run executes. Each later transactional step stores its body once; the durable engine stores a step reference and reads the body back for the run that is executing, including a retry that copied the steps it reuses. The engine is described in the [runner plan](plans/runner.md).
 
 ## Example
 
@@ -318,14 +318,14 @@ Each minute the coordinator admits its queue, including while earlier batches ar
 `search.enrich` writes context for each chunk of `generation` following `instructions`. `scope` `chunk` (default) shows the model the chunk; `document` also shows the beginning of the document (`context_chars`, default 6,000). The context is searched and embedded with the chunk. The output is `generation`, `enriched`, `cached` and `model`. Embeddings and local decision models are separate from this remote batching.
 
 - **Immediate requests** run at temperature 0, time out after two minutes, and are retried on 429 and 5xx, honouring `Retry-After` up to 30 seconds.
-- **Cached results.** Answers are cached by the model, endpoint and request. For `ai.complete` that is the prompt, schema, input and image. For `search.enrich` it is the chunk text, instructions and context. A rerun, reindex or identical file reuses an unexpired answer. Each validated answer is saved immediately, so a failed enrichment keeps the answers of its completed chunks for retry. Concurrent misses or a crash between a provider response and saving it can repeat a request. Answers expire after the idle lifetime set by `RUN_RETENTION`. Backups keep them with the database; content packages leave them out. Batch request bodies and authoritative provider responses use durable activity records, independently of answer-cache eviction. Waits and submitted batches retain their payloads; explicit blob leases keep source bytes until consumption or cancellation.
+- **Cached results.** Answers are cached by the model, endpoint and request. For `ai.complete` that is the prompt, schema, input and image. For `search.enrich` it is the chunk text, instructions and context. A rerun, reindex or identical file reuses an unexpired answer. Each validated answer is saved immediately, so a failed enrichment keeps the answers of its completed chunks for retry. Concurrent misses or a crash between a provider response and saving it can repeat a request. Answers expire after the idle lifetime set by `RESULT_CACHE_TTL`. Backups keep them with the database; content packages leave them out. Batch request bodies and authoritative provider responses use durable activity records, independently of answer-cache eviction. Waits and submitted batches retain their payloads; explicit blob leases keep source bytes until consumption or cancellation.
 - **Samples.** [`samples/workflows`](../samples/workflows/README.md) has two `search.content` fillers that call the model immediately: receipts with a model-written summary chunk, and contracts split at headings with context per section. [`samples/receipts-package`](../samples/receipts-package/README.md) extracts structured purchase lines from a ticket photo through batch execution and ordinary item and relationship actions.
 
 ### Reusable action results
 
 Actions use `Tools.Results` (`internal/resultcache`) for results shared across runs. The main database's `cached_results` table stores a namespace, sharing scope, caller-defined key, opaque JSON payload, creation/use timestamps and expiry. Each namespace owns its keys and payload validation; the store accepts JSON within 1 MiB and has no action-specific columns. `Get` treats expired entries as misses and extends live entries' expiry on access, at most once a day or half their lifetime. `PutIfAbsent` atomically returns the first live payload, replacing expired entries. The retention job collects expired entries independently of run age.
 
-`ai.complete` and `search.enrich` store answers in separate namespaces and the `installation` scope, with `RUN_RETENTION` as their idle lifetime. Their keys include model endpoint identity and request hashes. Reads and writes of a cached answer that happen inside a step use that step's transaction; provider calls stay outside it. Scope controls reuse, grants no permissions and is selected by trusted action code after authorizing its inputs. Workflow configuration and run outputs stay in their existing stores; durable integration state, revision-bound content and search vectors keep their own lifecycles.
+`ai.complete` and `search.enrich` store answers in separate namespaces and the `installation` scope, with `RESULT_CACHE_TTL` as their idle lifetime. Their keys include model endpoint identity and request hashes. Reads and writes of a cached answer that happen inside a step use that step's transaction; provider calls stay outside it. Scope controls reuse, grants no permissions and is selected by trusted action code after authorizing its inputs. Workflow configuration and run outputs stay in their existing stores; durable integration state, revision-bound content and search vectors keep their own lifecycles.
 
 ### Staged files
 
@@ -552,7 +552,7 @@ Some processes are **roles**: product processes that one workflow fills, which p
 - **Collection scope.** Automatic role providers require `collection_id`. Enabling a published provider pauses other automatic providers of that role in the same collection. Their manual use stays independent, and other collections are unaffected. A draft copy does not claim automatic ownership.
 - **Defaults.** Default role built-ins are prepared per collection under the workspace creator. Listing the catalog or dispatching the first event prepares missing defaults. Explicit paused, replaced or deleted configurations are preserved.
 - **Inspect providers:** `GET /v1/resources/{id}/workflow-roles` lists each role, its configured workflow, `scope: "collection"` and `automatic_enabled`.
-- **System built-ins** use a separate execution queue. Their successful automatic runs use one-day retention. Manual runs remain visible in ordinary history and use normal run retention. Their release definitions may receive taxonomy events without exposing that data to users.
+- **System built-ins** use a separate execution queue. Their successful automatic runs are kept for `SYSTEM_RUN_RETENTION` (default 24h), or for `RUN_RETENTION` when that is shorter. Manual runs remain visible in ordinary history and use normal run retention. Their release definitions may receive taxonomy events without exposing that data to users.
 
 ## Runs
 
@@ -576,7 +576,29 @@ A manual start returns run IDs at once. Until its event is dispatched, the run s
 
 Run lists leave out the runs of system built-ins, which run on every change, unless `workflow_id` selects their workflow or `item_id` selects the item being inspected.
 
-Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default 30 days). Deleting a workflow stops it from matching triggers; its versions and runs are kept, and running runs finish with their version.
+Finished runs, and dispatched events, are deleted after `RUN_RETENTION` (default 30 days). A run's step bodies are deleted with the run. A retried run has its own copies of the steps it reuses, written before the retry starts. Deleting a workflow stops it from matching triggers; its versions and runs are kept, and running runs finish with their version.
+
+Successful automatic runs of system built-ins are deleted after `SYSTEM_RUN_RETENTION` (default 24h). When `RUN_RETENTION` is shorter, they follow `RUN_RETENTION`, because that pass collects every finished application run. Failures and manual system runs use `RUN_RETENTION`. Pending, running and waiting runs stay.
+
+Successful executions of the maintenance schedules `papergo.tick`, `papergo.search_embed`, `papergo.system-retention` and `papergo.retention` are kept for two hours. Their failures are kept for `RUN_RETENTION`. Pending and running executions stay. Each schedule's workflow id is `sched-<name>-<scheduled time>`, and missed ticks are not backfilled, so deleting an execution older than two hours does not dispatch that tick again after a restart. The system-retention pass runs hourly at minute 15 and the retention pass runs hourly at minute 45. Both collect these executions in bounded pages, including their inputs, outputs and runtime records, and each pass leaves its own running execution in place until a later pass. This cleanup does not delete application runs, step markers, waits or staged files; those stay on the application-run path.
+
+An eligible record can remain for up to one hour, until the next hourly pass. Dispatched events and expired activity records are deleted in bounded pages on the retention pass. Live changes, terminal operations and delta tokens are collected hourly with background operations. Reusable answers expire after `RESULT_CACHE_TTL` (default 720h) of idle time and are collected by the retention pass; changing `RUN_RETENTION` leaves an explicitly configured cache lifetime as it is.
+
+| Record | Lifetime | Collected |
+| --- | --- | --- |
+| Finished application runs, failed runs, manual system runs, dispatched events | `RUN_RETENTION` (default 720h) | Hourly at :45 |
+| Successful automatic system runs | `SYSTEM_RUN_RETENTION` (default 24h), or `RUN_RETENTION` when shorter | Hourly at :15 |
+| Successful maintenance executions | 2h, or `RUN_RETENTION` when shorter | Both hourly passes |
+| Reusable answers | `RESULT_CACHE_TTL` (default 720h), extended on read | Hourly at :45 |
+| Live changes | 7 days | Hourly |
+| Delta tokens | 30 days; a materialized page lasts 5 minutes | Hourly |
+| Terminal operations | 30 days; pending operations stay | Hourly |
+| Content packages | 7 days on the export result | Blob collection after that result expires |
+| Item and file history | The collection's versioning and `max_versions` | On the collection's own writes |
+| Audit events | Kept. The schema rejects updates and deletes | |
+| Publication snapshots | Kept while the item is live. History settings do not remove them | |
+
+Audit events and publication snapshots are a separate product record. Run retention, history limits and cache expiry do not delete them, and their schema guards stay in place. Turning user-visible history off keeps the live and published snapshots, including a calendar item's publication.
 
 ## Permissions
 
@@ -637,7 +659,9 @@ Configuration:
 | Setting | Meaning |
 | --- | --- |
 | `NODE_ID` | This process's identity (default `local`); a restarted process recovers the runs it was executing |
-| `RUN_RETENTION` | How long finished runs are kept (default `720h`) |
+| `RUN_RETENTION` | How long finished application runs, dispatched events, failed runs and failed maintenance executions are kept (default `720h`). This is also the ceiling for successful automatic system runs |
+| `SYSTEM_RUN_RETENTION` | How long successful automatic system runs are kept (default `24h`) |
+| `RESULT_CACHE_TTL` | Idle lifetime of reusable answers (default `720h`). Independent of `RUN_RETENTION` |
 
 ## Building features on workflows
 

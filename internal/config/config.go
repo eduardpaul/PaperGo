@@ -47,8 +47,15 @@ type Config struct {
 	// NodeID identifies this process to the workflow runner; a restarted
 	// node recovers the runs it was executing.
 	NodeID string
-	// RunRetention is how long finished workflow runs are kept.
+	// RunRetention is how long finished workflow runs, dispatched events
+	// and failed runs are kept.
 	RunRetention time.Duration
+	// SystemRunRetention is how long successful automatic runs of system
+	// built-ins are kept. RunRetention is a ceiling.
+	SystemRunRetention time.Duration
+	// ResultCacheTTL is the idle lifetime of reusable activity answers.
+	// It is independent of RunRetention.
+	ResultCacheTTL time.Duration
 	// PublicURL is the scheme and host clients use, for example behind a
 	// TLS-terminating reverse proxy. Nil uses each request's own.
 	PublicURL *url.URL
@@ -147,7 +154,7 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		return fallback
 	}
-	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour}
+	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
 	c.SearchPath = value("SEARCH_DATABASE_PATH", filepath.Join(filepath.Dir(c.DatabasePath), "search.db"))
 	c.SearchStore = value("SEARCH_STORE", "zvec")
 	if c.SearchStore != "sqlite" && c.SearchStore != "zvec" {
@@ -209,12 +216,23 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		c.RequestTimeout = d
 	}
-	if v := lookup("RUN_RETENTION"); v != "" {
+	for _, setting := range []struct {
+		key string
+		dst *time.Duration
+	}{
+		{"RUN_RETENTION", &c.RunRetention},
+		{"SYSTEM_RUN_RETENTION", &c.SystemRunRetention},
+		{"RESULT_CACHE_TTL", &c.ResultCacheTTL},
+	} {
+		v := lookup(setting.key)
+		if v == "" {
+			continue
+		}
 		d, err := time.ParseDuration(v)
 		if err != nil || d < time.Hour || d > 10*365*24*time.Hour {
-			return c, fmt.Errorf("RUN_RETENTION must be a duration between 1h and 87600h")
+			return c, fmt.Errorf("%s must be a duration between 1h and 87600h", setting.key)
 		}
-		c.RunRetention = d
+		*setting.dst = d
 	}
 	c.OCRLibrary, c.OCRThreads = lookup("ONNXRUNTIME_LIB"), 1
 	if c.OCRLibrary == "" {

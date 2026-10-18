@@ -17993,6 +17993,37 @@
           "list.read"
         ]
       }
+    },
+    "/v1/storage/status": {
+      "get": {
+        "tags": [
+          "Storage"
+        ],
+        "operationId": "storageStatus",
+        "summary": "Database allocation and journal checkpoint",
+        "description": "Reports main-file allocation, a passive checkpoint, search and distinct blob bytes, workflow run counts, and rows a cleanup pass can collect. The response does not delete rows. Passive mode copies committed frames into the database file and leaves the journal file in place. journal_size_limit is applied by a later write that restarts a fully checkpointed journal. A large transaction keeps its frames, and a blocked checkpoint leaves the file at its high water until that later write. dbstat omits freelist pages, so accounted_bytes plus freelist_bytes equals the main file. unused_bytes is slack inside pages that still belong to a table or index. blob_bytes counts each available SHA-256 once; those file bytes live outside SQLite.",
+        "x-required-scopes": [
+          "organization.manage"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -25151,6 +25182,222 @@
           "total",
           "mode",
           "@odata.nextLink"
+        ],
+        "additionalProperties": false
+      },
+      "StorageStatus": {
+        "type": "object",
+        "properties": {
+          "busy": {
+            "type": "integer",
+            "description": "1 when the passive checkpoint could not finish because a reader or writer was active."
+          },
+          "log": {
+            "type": "integer",
+            "description": "Frames in the write-ahead log. -1 when the connection has no WAL."
+          },
+          "checkpointed": {
+            "type": "integer",
+            "description": "Frames copied back into the database file by this checkpoint."
+          },
+          "incomplete": {
+            "type": "boolean",
+            "description": "True when busy is set or frames remain in the journal."
+          },
+          "journal_bytes": {
+            "type": "integer",
+            "description": "Size of the -wal file in bytes. 0 when the file is absent."
+          },
+          "journal_size_limit": {
+            "type": "integer",
+            "description": "Retained journal size in bytes after a completed checkpoint. The file can grow past this during a large transaction or a blocked checkpoint."
+          },
+          "wal_autocheckpoint": {
+            "type": "integer",
+            "description": "Page threshold of the automatic passive checkpoint. 256 pages of 4096 bytes are about 1 MiB."
+          },
+          "journal_mode": {
+            "type": "string",
+            "description": "SQLite journal mode. PaperGo uses wal."
+          },
+          "synchronous": {
+            "type": "string",
+            "description": "SQLite synchronous setting. PaperGo uses FULL."
+          },
+          "database_bytes": {
+            "type": "integer",
+            "description": "Size of the main database file after the passive checkpoint. It equals page_count times page_size when that checkpoint finishes. A blocked checkpoint can leave newer pages only in the journal, so the file stays smaller until a later checkpoint copies them."
+          },
+          "page_size": {
+            "type": "integer"
+          },
+          "page_count": {
+            "type": "integer"
+          },
+          "freelist_count": {
+            "type": "integer",
+            "description": "Pages on the freelist. dbstat does not list these pages."
+          },
+          "freelist_bytes": {
+            "type": "integer",
+            "description": "freelist_count times page_size."
+          },
+          "unused_bytes": {
+            "type": "integer",
+            "description": "Slack inside pages that still belong to a table or index. Distinct from freelist pages."
+          },
+          "accounted_bytes": {
+            "type": "integer",
+            "description": "Sum of dbstat page sizes. accounted_bytes plus freelist_bytes equals database_bytes."
+          },
+          "tables": {
+            "type": "array",
+            "description": "Pages owned by each table or index. Names are schema objects, never row values.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer",
+                  "description": "Pages owned by this object, including unused slack."
+                },
+                "unused": {
+                  "type": "integer",
+                  "description": "Slack inside those pages."
+                }
+              },
+              "required": [
+                "name",
+                "bytes",
+                "unused"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "search_store": {
+            "type": "string",
+            "description": "sqlite or zvec, or an empty string when search is not configured."
+          },
+          "search_bytes": {
+            "type": "integer",
+            "description": "Bytes reported by the search store. Zero when search is not configured."
+          },
+          "search_documents": {
+            "type": "integer",
+            "description": "Documents reported by the search store. Zero when search is not configured."
+          },
+          "blob_bytes": {
+            "type": "integer",
+            "description": "Sum of distinct available blob sizes, one per SHA-256. File content is stored outside the database."
+          },
+          "orphan_step_results": {
+            "type": "integer",
+            "description": "runner_step_results rows whose run_id is not a workflow_runs id. The request does not delete them."
+          },
+          "runs": {
+            "type": "array",
+            "description": "Workflow executions grouped by name and status. When workflow_status exists, name and status come from that table. Otherwise they are workflow_runs event_type and live_status. Payload columns are not read.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "status",
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "expired": {
+            "type": "object",
+            "description": "Rows a cleanup pass can collect. The request does not delete them.",
+            "properties": {
+              "cached_results": {
+                "type": "integer",
+                "description": "Rows whose expires_at is at or before the request."
+              },
+              "activity_records": {
+                "type": "integer",
+                "description": "Expired rows with no reference and no active lease."
+              },
+              "live_changes": {
+                "type": "integer",
+                "description": "Rows older than the seven-day live retention."
+              },
+              "operations": {
+                "type": "integer",
+                "description": "Terminal operations older than the 30-day operation retention."
+              },
+              "dispatched_events": {
+                "type": "integer",
+                "description": "Events dispatched at least 30 days ago, the default run retention."
+              }
+            },
+            "required": [
+              "cached_results",
+              "activity_records",
+              "live_changes",
+              "operations",
+              "dispatched_events"
+            ],
+            "additionalProperties": false
+          },
+          "retained": {
+            "type": "object",
+            "description": "Records cleanup leaves in place.",
+            "properties": {
+              "audit_events": {
+                "type": "integer"
+              },
+              "publications": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "audit_events",
+              "publications"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "busy",
+          "log",
+          "checkpointed",
+          "incomplete",
+          "journal_bytes",
+          "journal_size_limit",
+          "wal_autocheckpoint",
+          "journal_mode",
+          "synchronous",
+          "database_bytes",
+          "page_size",
+          "page_count",
+          "freelist_count",
+          "freelist_bytes",
+          "unused_bytes",
+          "accounted_bytes",
+          "tables",
+          "search_store",
+          "search_bytes",
+          "search_documents",
+          "blob_bytes",
+          "orphan_step_results",
+          "runs",
+          "expired",
+          "retained"
         ],
         "additionalProperties": false
       },

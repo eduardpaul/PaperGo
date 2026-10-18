@@ -147,6 +147,29 @@ func TestConfigurationFailsClosed(t *testing.T) {
 		t.Fatal("missing OIDC settings accepted")
 	}
 }
+func TestRetentionSettingsAreIndependent(t *testing.T) {
+	t.Setenv("APP_ENV", "test")
+	t.Setenv("AUTH_MODE", "development")
+	t.Setenv("DEV_TOKEN", "0123456789abcdef0123456789abcdef")
+	c, err := Load()
+	if err != nil || c.RunRetention != 30*24*time.Hour || c.SystemRunRetention != 24*time.Hour || c.ResultCacheTTL != 30*24*time.Hour {
+		t.Fatalf("defaults: run %s system %s cache %s (%v)", c.RunRetention, c.SystemRunRetention, c.ResultCacheTTL, err)
+	}
+	t.Setenv("RUN_RETENTION", "2h")
+	if c, err = Load(); err != nil || c.RunRetention != 2*time.Hour || c.SystemRunRetention != 24*time.Hour || c.ResultCacheTTL != 30*24*time.Hour {
+		t.Fatalf("run retention changed another lifetime: run %s system %s cache %s (%v)", c.RunRetention, c.SystemRunRetention, c.ResultCacheTTL, err)
+	}
+	t.Setenv("SYSTEM_RUN_RETENTION", "3h")
+	t.Setenv("RESULT_CACHE_TTL", "48h")
+	if c, err = Load(); err != nil || c.RunRetention != 2*time.Hour || c.SystemRunRetention != 3*time.Hour || c.ResultCacheTTL != 48*time.Hour {
+		t.Fatalf("explicit lifetimes: run %s system %s cache %s (%v)", c.RunRetention, c.SystemRunRetention, c.ResultCacheTTL, err)
+	}
+	t.Setenv("RESULT_CACHE_TTL", "30m")
+	if _, err = Load(); err == nil {
+		t.Fatal("short cache lifetime accepted")
+	}
+}
+
 func TestLoadLimitsValidatesAndDefaults(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("AUTH_MODE", "development")

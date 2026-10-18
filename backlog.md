@@ -23,6 +23,12 @@ This backlog synthesizes user feedback and feature requests into actionable engi
    - [ISSUE-24: Changing Any Field in a List Schema](#issue-24-changing-any-field-in-a-list-schema)
    - [ISSUE-13: Workspace Package Export Publications Reference Fix](#issue-13-workspace-package-export-publications-reference-fix)
    - [ISSUE-23: Simplified SQLite Migrations via sqlite3def (sqldef) and Embedded Sequential Upgrades](#issue-23-simplified-sqlite-migrations-via-sqlite3def-sqldef-and-embedded-sequential-upgrades)
+   - [ISSUE-25: Retention for Scheduled Maintenance Executions](#issue-25-retention-for-scheduled-maintenance-executions)
+   - [ISSUE-26: Compact Transactional Step-Result Storage](#issue-26-compact-transactional-step-result-storage)
+   - [ISSUE-27: Deduplicate Durable Workflow Payloads](#issue-27-deduplicate-durable-workflow-payloads)
+   - [ISSUE-28: Operational Retention Policies and Cleanup Cadence](#issue-28-operational-retention-policies-and-cleanup-cadence)
+   - [ISSUE-29: WAL Allocation and Checkpoint Controls](#issue-29-wal-allocation-and-checkpoint-controls)
+   - [ISSUE-30: Storage Diagnostics and Growth Regression Coverage](#issue-30-storage-diagnostics-and-growth-regression-coverage)
 4. [Workflow Engine & Automation](#4-workflow-engine--automation)
    - [ISSUE-14: Granular `file.updated` vs `item.updated` Events](#issue-14-granular-fileupdated-vs-itemupdated-events)
    - [ISSUE-15: Manual Workflow Execution on Selected Item(s)](#issue-15-manual-workflow-execution-on-selected-items)
@@ -118,6 +124,12 @@ The CI race suite also exposed photos-to-PDF tests starting state deadlines whil
 | **ISSUE-20** | Admin REST Tokens for External Integrations | Identity / Admin | High | Medium | External scripting & automation |
 | **ISSUE-21** | iCal Integration DNS Resolution in Docker NPM | Samples / Network | High | Small | Fixes external integration |
 | **ISSUE-22** | Configure NPM Sample with Native Zvec Search | Samples / DevOps | Medium | Small | Production parity sample |
+| **ISSUE-25** | Retention for Scheduled Maintenance Executions | Workflow / Storage | High | Small | Bounds database growth while idle |
+| **ISSUE-26** | Compact Transactional Step-Result Storage | Database / Workflow | High | Small | Measured 288 KiB sample database reduction |
+| **ISSUE-27** | Deduplicate Durable Workflow Payloads | Workflow Engine | High | Medium | Reduces repeated results and workflow definitions |
+| **ISSUE-28** | Operational Retention Policies and Cleanup Cadence | Workflow / DMS / Config | Medium | Medium | Bounds high-volume operational records |
+| **ISSUE-29** | WAL Allocation and Checkpoint Controls | Database / Operations | Medium | Small | Controls retained journal allocation |
+| **ISSUE-30** | Storage Diagnostics and Growth Regression Coverage | Observability / Testing | Medium | Medium | Explains allocation and detects sustained growth |
 | **FEAT-01** | Standalone Single Binary Distribution & Samples Update | Architecture / Ops | Very High | Epic | Single binary deployment; OIDC & NPM samples updated to use it |
 
 ---
@@ -539,6 +551,171 @@ This setup has significant drawbacks:
 
 ---
 
+### ISSUE-25: Retention for Scheduled Maintenance Executions
+
+**Status:** Done. **Priority:** High. **Effort:** Small.
+
+#### Findings
+Successful executions of `papergo.tick`, `papergo.search_embed`, `papergo.system-retention` and `papergo.retention` are deleted two hours after they finish, capped by `RUN_RETENTION`. Failures and max-recovery executions stay for `RUN_RETENTION`. Pending and running executions are not selected. Cleanup is paged, deletes DBOS child rows before the status row, and runs from both the hourly system-retention pass and the hourly retention pass. The running pass is not terminal, so it is collected later. Application runs, step markers, waits and staged files stay on `deleteRuns`. Schedule ids are `sched-<name>-<time>` and automatic backfill is off, so a collected tick is not dispatched again after restart. `TestMaintenanceRetentionKeepsActiveWorkAndApplicationRuns` covers an aged page, a pending execution, a failure, a recent success, payload and notification removal, an application run, and a restart.
+
+#### Problem Statement
+Scheduled maintenance creates durable DBOS executions while PaperGo is idle, but the application-run retention paths do not collect them. The [sample storage analysis](reports/database-storage-analysis.md) found 55 successful `papergo.tick` executions, four `papergo.search_embed` executions and one `papergo.system-retention` execution within about 55 minutes of recorded activity.
+
+#### Technical Analysis
+- `internal/runner/runner.go` schedules ticks every minute, embeddings every 15 minutes, system retention hourly and general retention daily: approximately 1,561 maintenance executions per continuously running day.
+- `Runner.Purge` filters DBOS executions to `papergo.run`; `PurgeSystemRuns` selects application runs through `workflow_runs`. Neither path collects these maintenance executions, so `RUN_RETENTION` alone does not bound them.
+
+#### Proposed Specification
+1. Add bounded, paginated cleanup for terminal executions of the explicit maintenance workflow names, including their DBOS inputs, outputs and associated runtime records.
+2. Retain active/pending executions and enough completed schedule history for scheduler deduplication and diagnostics. Keep application runs on their existing coordinated cleanup path.
+3. Make cleanup restart-safe and ensure its own completed executions are eventually collected.
+
+#### Acceptance Criteria
+- An idle workload spanning multiple cleanup windows has bounded maintenance execution and payload counts.
+- Pending/running executions survive cleanup; completed maintenance executions outside retention are removed without duplicate schedule dispatch after restart.
+- Cleanup does not bypass application-run marker, wait, task or staged-file cleanup.
+
+---
+
+### ISSUE-26: Compact Transactional Step-Result Storage
+
+**Status:** Done. **Priority:** High. **Effort:** Small.
+
+#### Findings
+`runner_step_results` is an ordinary rowid table. The unique `(run_id, step_id)` key is unchanged, and there is no Ent model for this table. A 419-row workload (300 outputs of 64 bytes, 24 of 900 bytes and 95 of 1,200 bytes; 154,800 payload bytes) allocated 516,096 bytes as `WITHOUT ROWID` and 225,280 bytes as a rowid table plus its primary-key index, measured with `PRAGMA page_count` at a 4,096-byte page. `TestCrashRecovery` still finishes the committed stamp once after the process dies before DBOS records the rest of the run. Concurrent inserts keep one row, lookup returns that output, and delete removes it.
+
+#### Problem Statement
+`runner_step_results` uses `WITHOUT ROWID` for variable JSON outputs, causing disproportionate overflow-page allocation. The sample contains 419 rows with 136,537 bytes of output, but the table occupies 496 KiB, including 95 overflow pages. Ordinary `VACUUM` on the sample saved zero bytes.
+
+#### Proposed Specification
+1. Use an ordinary rowid table while retaining the unique `(run_id, step_id)` key and current transactional replay semantics. An isolated full-sample copy with this layout and compaction was 288 KiB smaller (7.8% of the database).
+2. Edit `migrations/20261007000100_schema.sql` in place, keep Ent metadata consistent where applicable, regenerate Ent and refresh the Atlas checksum. Do not add migrations, compatibility paths or data conversion procedures.
+3. Measure table plus primary-key-index allocation on representative step sizes, including outputs around the overflow threshold.
+
+#### Acceptance Criteria
+- A reproducible sample-shaped workload demonstrates lower total allocation, including indexes, with identical retained records.
+- Recovery after a committed domain write but before DBOS records completion does not repeat the write.
+- Concurrent attempts retain one result per run/step, and lookup, retry and retention behavior remain correct.
+
+---
+
+### ISSUE-27: Deduplicate Durable Workflow Payloads
+
+**Status:** Done. **Priority:** High. **Effort:** Medium.
+
+#### Findings
+Each transactional step body is stored once, in `runner_step_results` (the rowid table from ISSUE-26). DBOS records `{"$papergo":"step","step":N}`, and the runner reads the body for the workflow that is executing. The load step records the workflow id, version, key, author, system flag and role. The definition is read from that immutable version after the step. A retry copies the reused step bodies onto the new run before the fork exists, and removes those copies when the fork or the run row does not stick. Finished runs delete their own bodies with the run, so a retry keeps the copies it needs.
+
+`TestDurableStepReferences` ran two item-created runs of one version whose definition is 8,384 bytes. The two load markers are identical and total 210 bytes. Both runs' step bodies total 238 bytes. The six durable step outputs stored by DBOS total 240 bytes. `TestCrashRecovery` still finishes the committed stamp once. `TestFailedRunRetriesFromFailedStep` still stamps the item once.
+
+#### Problem Statement
+All 419 transactional step outputs in the sample are also stored as exact base64-encoded duplicates in DBOS: 136,537 raw bytes become another 182,372 encoded bytes. Separately, 104 `load` outputs repeat full workflow definitions, totaling 121,404 bytes for only five distinct payloads whose combined size is 3,696 bytes.
+
+#### Technical Analysis
+- `internal/runner/steps.go` commits the domain write and replay marker atomically; DBOS separately stores the returned result. Removing the marker would compromise exactly-once writes.
+- `internal/workflow/run.go` includes the full parsed definition in every loaded result despite retaining immutable workflow versions.
+
+#### Proposed Specification
+1. Store transactional results once and return a small stable reference through DBOS. Resolve references consistently on first execution, replay and retry.
+2. Replace repeated loaded definitions with retained immutable workflow-version references while preserving the exact definition, author and execution context selected for the run.
+3. Coordinate reference lifetime with run retention, retry, cancellation and account deletion. Retain referenced payloads and definitions for active or waiting consumers.
+4. Implement one current representation and update callers, tests and documentation together. Measure combined savings with ISSUE-26 rather than adding overlapping estimates.
+
+#### Acceptance Criteria
+- DBOS transactional-step outputs no longer duplicate full result bodies.
+- Repeated runs of one workflow version do not persist full definitions per run.
+- Crash recovery, replay, retry and long waits produce the same results without repeating committed domain writes.
+- Cleanup cannot leave dangling references or delete payloads still needed by active consumers.
+
+---
+
+### ISSUE-28: Operational Retention Policies and Cleanup Cadence
+
+**Status:** Done. **Priority:** Medium. **Effort:** Medium.
+
+#### Findings
+`SYSTEM_RUN_RETENTION` defaults to 24h for successful automatic system runs. `RUN_RETENTION` remains the ceiling, because the application retention pass collects every finished application run. Failures and manual system runs use `RUN_RETENTION`. `RESULT_CACHE_TTL` defaults to 720h and is parsed on its own: `RUN_RETENTION=2h` leaves the cache at 720h and system retention at 24h. Explicit values of 3h and 48h stay beside that 2h run retention. A 30-minute cache lifetime is rejected.
+
+`papergo.system-retention` runs hourly at minute 15 and `papergo.retention` hourly at minute 45, so an eligible row can wait at most one hour. Dispatched events, expired activity records, live changes and terminal operations are deleted in bounded pages. `TestDispatchedEventsDeleteInPages` clears a dispatched set larger than the page. `TestPurgeLeavesAuditAndPublications` runs a purge with audit rows and a publication present and both counts stay the same. History limits still keep the published snapshot when user-visible history is off.
+
+#### Problem Statement
+Operational records dominate storage after short usage, but retention settings and cleanup schedules do not distinguish all workloads. The sample has 104 application runs, 395 domain events and 523 live notifications. Search indexing accounts for 91 runs. `RUN_RETENTION` defaults to 720h, successful system built-ins retain up to 24h, and general cleanup runs daily.
+
+#### Proposed Specification
+1. Define and configure retention for successful high-volume system runs separately from failures and user workflow runs. Preserve active/waiting runs and records needed for replay or diagnostics.
+2. Align cleanup frequency with configured lifetimes, use bounded batches and collect eligible dispatched events and expired durable activity records consistently.
+3. Separate reusable answer-cache lifetime from run retention where their requirements differ; document effective defaults and maximum cleanup delay.
+4. Document the distinct lifetimes of runs, events, live/delta records, caches, file history, audit events and publication snapshots. Explicitly state that audit/publication retention is a separate product policy; do not implicitly delete these records or weaken their schema guards.
+
+#### Acceptance Criteria
+- Retention boundaries, status-specific policies and cleanup delays are validated and documented.
+- Expired operational records are collected within the documented delay without breaking active workflows or retained business snapshots.
+- Shortening run retention does not silently alter an independently configured cache lifetime.
+- Calendar/publication activity is accounted for even when user-visible item history is disabled.
+
+---
+
+### ISSUE-29: WAL Allocation and Checkpoint Controls
+
+**Status:** Done. **Priority:** Medium. **Effort:** Small.
+
+#### Findings
+The shared DSN sets `wal_autocheckpoint=256` and `journal_size_limit=1048576` on every connection from `database.Open`, from a second handle opened with `database.DSN` (the runner and the SQLite search store), and again after the file is closed and reopened. `journal_mode` stays `wal` and `synchronous` stays `FULL`.
+
+One local comparison wrote 700 rows of 3000-byte payloads in a single transaction on a 4096-byte page, ran a passive checkpoint, then inserted one more row. With the policy, the write took 40.0 ms, the passive checkpoint 0.60 ms, and the follow-up 0.79 ms. The journal was 2,900,512 bytes after the large commit and 1,048,576 bytes after the follow-up; 704 frames were copied. The same write with the default 1000-page autocheckpoint and no journal size limit took 32.8 ms, its passive checkpoint 6.81 ms, and its follow-up 0.14 ms, and the journal stayed at 2,900,512 bytes. These timings are one run on this machine.
+
+A 500-row transaction with a 32 KiB page cache grew the journal to 2,055,912 bytes before commit. A reader that started earlier kept the passive checkpoint incomplete and the journal at 2,080,632 bytes. That reader still saw only the seed row, and the committed rows stayed readable on another connection. After the reader finished, the passive checkpoint completed and left the file at 2,080,632 bytes. The next insert truncated it to 1,048,576 bytes and the seed row was still present. The passive read does not delete the journal or discard committed frames.
+
+`GET /v1/storage/status` (`organization.manage`) runs that passive checkpoint and reports busy, log, checkpointed, incomplete, journal bytes, the size limit, the autocheckpoint, journal mode, and synchronous. `PRAGMA wal_checkpoint(TRUNCATE)` during a quiet period reclaims the journal file and leaves the main database file as it is. `VACUUM` rewrites the main database, and PaperGo does not schedule it.
+
+#### Problem Statement
+A WAL near 4 MB is consistent with SQLite's default 1,000-page automatic checkpoint threshold and retained journal reuse. PaperGo needs an explicit, measurable allocation policy so operators can control journal overhead and distinguish normal reuse from blocked checkpoints. The supplied sample did not include its live WAL, so checkpoint starvation is not established.
+
+#### Proposed Specification
+1. Benchmark `wal_autocheckpoint=256` and `journal_size_limit=1048576` as a starting point for roughly 1 MiB retained allocation, comparing write latency and checkpoint I/O with current defaults.
+2. Apply the chosen settings to every relevant connection through the shared DSN used by the API, runner and SQLite search store. Preserve WAL mode and FULL durability.
+3. Expose checkpoint progress, incomplete checkpoints and retained journal size through operational diagnostics. Document that the retained size limit is not a hard ceiling during large transactions or blocked checkpoints.
+4. Document quiet-period `wal_checkpoint(TRUNCATE)` maintenance and distinguish journal reclamation from main-database compaction. Do not use frequent full `VACUUM` as a substitute for retention or correct table layout.
+
+#### Acceptance Criteria
+- Multiple connections and restarts consistently apply the selected settings.
+- Completed checkpoints and journal resets bound retained allocation under a representative workload, with measured latency/I/O tradeoffs.
+- Long readers and large transactions have regression coverage; incomplete checkpoints are observable and never cause journal deletion or loss of committed data.
+
+---
+
+### ISSUE-30: Storage Diagnostics and Growth Regression Coverage
+
+**Status:** Done. **Priority:** Medium. **Effort:** Medium.
+
+#### Findings
+`GET /v1/storage/status` (`organization.manage`) runs a passive checkpoint and then reports main-file allocation. `dbstat` lists pages owned by a table or index and omits freelist pages. Accounted bytes plus freelist bytes equal `page_count * page_size`. Unused bytes are slack inside named pages. The route does not delete rows and does not call `wal_checkpoint(TRUNCATE)`.
+
+A probe that inserted 200 rows of 500 bytes and deleted 100 reconciled to a 110,592-byte file (27 pages): `dbstat` accounted 61,440 bytes, the freelist held 49,152 bytes (12 pages), and named pages contained 10,049 bytes of slack. The same totals held after the file was closed and reopened.
+
+A fresh API database was 1,298,432 bytes across 317 pages, with 1,168,059 bytes of slack and no freelist pages. Its SQLite search file was 238,968 bytes and held no documents. Two blob rows that shared one SHA-256 and a 2,000,000-byte size counted once as blob bytes, and the database file stayed smaller than that content. File bytes stay in the object store.
+
+The same response counts workflow runs from `workflow_status` name and status when that table exists, and otherwise from `workflow_runs` event type and live status, without reading payload columns. Expired counts use each row's `expires_at` for caches and activity records, seven days for live changes, and 30 days for terminal operations and dispatched events. Audit events and publications are reported separately because cleanup leaves them. Orphan `runner_step_results` are counted, not deleted.
+
+A soak planted an expired cache row, an eight-day live change, and an orphan step result. After the cache purge, live-change collection, and deletion of that orphan, a second and third status stayed at zero for those counts and the audit count was unchanged. A reader that had selected from `live_changes` made the following checkpoint incomplete with a non-zero journal; after that reader finished, the next checkpoint completed. An unchanged calendar refresh, including a not-modified download, added no item revision, publication, workflow run, or `item.updated` event. Changing the summary added a revision and an `item.updated` event and left the publication and run counts unchanged.
+
+#### Problem Statement
+File count alone does not explain storage growth. The analyzed database is 3.61 MiB, with a 1.43 MiB empty-schema baseline, 57 calendar items and three file-backed items. It has zero freelist pages despite substantial spare bytes inside allocated pages. Operators need a breakdown that separates fixed schema overhead, retained data, indexes, journals and external file/search storage.
+
+#### Proposed Specification
+1. Provide storage diagnostics for main database, WAL, search and blob bytes; page/freelist counts; table/index allocation; run counts by name/status; expired records; and cleanup/checkpoint outcomes. Exclude document payloads and credentials from diagnostic output.
+2. Add a reproducible workload covering idle scheduling, initial calendar import, unchanged calendar refresh, changed calendar items, uploads and repeated processing.
+3. Verify that unchanged calendar refreshes create no new item revisions, publications or search runs. The sample's 84 calendar publication snapshots across 57 calendar items justify coverage, but do not prove redundant refresh writes.
+4. Measure growth across retention windows and restarts. Report bounded operational allocation separately from intentionally retained content, audit and publication growth.
+
+#### Acceptance Criteria
+- Diagnostics reconcile SQLite page allocation with per-table/index totals and distinguish internal page slack from freelist pages.
+- Idle operational record counts stabilize after retention; unchanged calendar refreshes produce no content/workflow fan-out.
+- A soak workload detects missing cleanup, growing orphan payloads and stalled checkpoints without requiring the private sample database in automated tests.
+- Storage documentation explains baseline overhead and why database size cannot be extrapolated from the number of uploaded files.
+
+---
+
 ## 4. Workflow Engine & Automation
 
 ### ISSUE-14: Granular `file.updated` vs `item.updated` Events
@@ -927,9 +1104,18 @@ graph TD
         D6[FEAT-01: Standalone Single Binary Executable]
     end
 
+    subgraph Phase 5: Storage Growth and Database Efficiency
+        E1[ISSUE-25: Maintenance Retention] --> E2[ISSUE-26: Compact Step Storage]
+        E2 --> E3[ISSUE-27: Durable Payload Deduplication]
+        E3 --> E4[ISSUE-28: Retention Policies]
+        E4 --> E5[ISSUE-29: WAL Controls]
+        E5 --> E6[ISSUE-30: Storage Diagnostics and Growth Coverage]
+    end
+
     Phase 1 --> Phase 2
     Phase 2 --> Phase 3
     Phase 3 --> Phase 4
+    Phase 4 --> Phase 5
 ```
 
 ### Phase Summary:
@@ -937,5 +1123,6 @@ graph TD
 2. **Phase 2 (Automation Core)**: Introduce `file.updated` to prevent redundant AI re-chunking, enable manual workflow execution on selected items, add trigger cardinality contracts and item workflow history, and support file renaming and upload conflict resolution.
 3. **Phase 3 (Productivity & UX)**: Deliver right-click context menus, drag-and-drop folder moves, currency combobox presets, smart folders complete rework, and relationship discovery in search.
 4. **Phase 4 (Integrations & Distribution)**: Deliver Docker network egress, native zvec in the NPM sample, admin integration tokens and asynchronous previews. ISSUE-23 (`sqlite3def` migrations) and FEAT-01 (standalone single-binary distribution) are deferred.
+5. **Phase 5 (Storage Growth & Database Efficiency)**: Bound maintenance execution retention (ISSUE-25), compact step-result storage (ISSUE-26), reduce repeated durable payloads (ISSUE-27), tune operational retention and cleanup cadence (ISSUE-28), control retained WAL allocation (ISSUE-29), and establish storage diagnostics and growth regression coverage (ISSUE-30). Add measurement coverage alongside each change and complete the combined soak workload in ISSUE-30. Evidence and measured copy experiments are recorded in the [sample storage analysis](reports/database-storage-analysis.md).
 
 **Deferred (unscheduled): ISSUE-24 — Changing Any Field in a List Schema.** Design general schema editing across field types and properties before implementing individual identity changes.
