@@ -21,6 +21,19 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl git python3 python3-pip pkg-config sqlite3 sudo \
     && rm -rf /var/lib/apt/lists/*
 
+# The release planner is a build tool, never a production runtime dependency.
+ARG TARGETARCH
+RUN set -eu; \
+    case "$TARGETARCH" in \
+      amd64) checksum=7ef1cadbbaca6f12543c00edd3abe6b607ec69f30239517c47e36f86b580e378 ;; \
+      arm64) checksum=40c75c6ddb38cbf080bd6766f1e39afa9e6b08785a55fbcf20207e6622bb1873 ;; \
+      *) exit 1 ;; \
+    esac; \
+    curl -fsSL --retry 3 "https://github.com/sqldef/sqldef/releases/download/v3.11.26/sqlite3def_linux_${TARGETARCH}.tar.gz" -o /tmp/sqlite3def.tar.gz; \
+    echo "$checksum  /tmp/sqlite3def.tar.gz" | sha256sum --check; \
+    tar -xzf /tmp/sqlite3def.tar.gz -C /usr/local/bin sqlite3def; \
+    rm /tmp/sqlite3def.tar.gz
+
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=atlas /out/atlas /usr/local/bin/atlas

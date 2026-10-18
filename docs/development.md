@@ -1,7 +1,7 @@
 # Development environment
 
 PaperGo's [devcontainer](../.devcontainer/devcontainer.json) provides Go 1.27.2,
-Node.js 24.15.0 with npm, Atlas Community 1.3.0, Python 3, SQLite's CLI and a C
+Node.js 24.15.0 with npm, Atlas Community 1.3.0, Python 3, SQLite's CLI, sqlite3def 3.11.26 and a C
 compiler, pkg-config and CMake 3.31.10. Go matches CI and the application Docker build; Node uses the same
 major version. Atlas is built from checksum-verified Community source with
 `sqlite_fts5` enabled so it can apply PaperGo's full-text search tables; the
@@ -155,6 +155,11 @@ Edit the single `migrations/20261007000100_schema.sql` in place, keep
 go generate ./ent
 atlas migrate hash --dir file://migrations
 ```
+
+Release planning uses sqlite3def 3.11.26, installed in the development container.
+Outside the container, install the pinned executable on `PATH` or set `SQLITE3DEF`.
+The release planner tests execute the real CLI against the full PaperGo schema.
+See [release history and validation](releases.md#release-only-database-history).
 
 Stop the API or debugger before resetting local data. Local databases and blobs
 are disposable: delete `data/`, recreate the directory with `mkdir -p data/blobs`,

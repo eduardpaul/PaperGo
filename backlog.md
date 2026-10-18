@@ -91,7 +91,7 @@ Scope: ISSUE-21, ISSUE-22, ISSUE-20 and ISSUE-19. ISSUE-23 and FEAT-01 are defer
 - [x] **ISSUE-19** — Default file-preview system workflow renders first-page PDF/TIFF and static-image WebP renditions under 100,000 bytes and 800 pixels asynchronously, with separate bounded preview work. Authorized viewing follows the caller’s visible revision, preserves originals, shares identical bytes and supports pending/unavailable placeholders. Gallery/board/content/selection views use previews. Packages, backup and cleanup preserve their lifecycle. Validation: 21.9 MB source → 77 KB in about 0.6 s, PDF/TIFF bounds, ACL/publication tests, asynchronous reuse/replacement and worker starvation tests, package/backup/cleanup regressions and preview UI tests.
 
 
-**Completed the four selected Phase 4 issues on 2026-10-17.** Final validation: all 1,000 Go test cases passed (15 optional integration cases skipped), all 171 frontend tests and all 56 Python tests passed, with frontend typecheck/lint, production API/admin/frontend builds, full Go vet/staticcheck, module checksum verification, reproducible Ent generation, Atlas validation and regenerated sample packages. The built Docker image passed fresh-volume startup, native zvec indexing, outbound calendar DNS/HTTPS, scoped service-token authentication/revocation and asynchronous preview/original-preservation checks. ISSUE-23 and FEAT-01 remain deferred.
+**Completed the four selected Phase 4 issues on 2026-10-17.** Final validation: all 1,000 Go test cases passed (15 optional integration cases skipped), all 171 frontend tests and all 56 Python tests passed, with frontend typecheck/lint, production API/admin/frontend builds, full Go vet/staticcheck, module checksum verification, reproducible Ent generation, Atlas validation and regenerated sample packages. The built Docker image passed fresh-volume startup, native zvec indexing, outbound calendar DNS/HTTPS, scoped service-token authentication/revocation and asynchronous preview/original-preservation checks. FEAT-01 remains deferred; ISSUE-23 is tracked below.
 
 **CI follow-up 2026-10-17:** The module minimum and documented build requirement are Go 1.27, matching the workflow JSON API and the Go 1.27.2 CI/container toolchain. Full-project vet, CI-pinned Staticcheck, complete race-test discovery and reproducible Ent generation pass under Go 1.27.2 without local experiment flags.
 
@@ -493,61 +493,19 @@ This occurs if publishing was enabled and subsequently disabled in a library, or
 
 ### ISSUE-23: Simplified SQLite Migrations via sqlite3def (sqldef) and Embedded Sequential Upgrades
 
-**Status: Deferred; excluded from the current Phase 4 scope.**
+**Status: Done.** Development retains the single editable Atlas schema and no development upgrade history.
 
-#### Problem Statement
-Currently, PaperGo development maintains a single `migrations/20261007000100_schema.sql` file. During releases, an ephemeral `release.json` bundle is generated using a custom release planner (`internal/releaseplan`) that relies on Atlas Go libraries and custom SQL catalog inspection to compute upgrade statements.
-This setup has significant drawbacks:
-1. The custom schema diff planner is complex, brittle with SQLite table alterations/foreign keys, and requires maintaining custom AST diffing logic.
-2. Developers want declarative, reliable schema diffing using standard, battle-tested tools (`sqlite3def`).
-3. When a release tag is cut, the release pipeline should calculate the exact idempotent diff between the previous released schema and the current target schema using `sqlite3def`, store the resulting migration script directly into the git repository, and embed all migration steps into the compiled application binary.
-4. On application startup, the binary inspects the database's current version (e.g., via `PRAGMA user_version` or `schema_version` table), verifies what migrations are pending, and sequentially applies them inside an atomic transaction until the database schema matches the expected version.
+#### Implementation
+- Pinned, checksum-verified sqlite3def 3.11.26 is installed in release CI, verification CI and the development container. The generator uses its offline `--dry-run --enable-drop` SQL instead of custom table-copy/AST diff generation.
+- Complete snapshots are loaded into disposable SQLite databases. SQLite exports table/index/view DDL for sqlite3def. Recursive trigger CTEs exceed its parser support, so the generator enumerates and replaces triggers directly through SQLite's catalog.
+- The generated program executes against the prior snapshot. Independent Atlas inspection verifies target structure and rejects alterations sqlite3def omits, including unsupported type, nullability and CHECK changes. Seed changes block automatic generation. The pinned tool has no general SQLite table-rebuild support; unsupported differences block publication.
+- Before compilation, tag CI commits each cumulative `release-database.json` and immutable source commit to `migrations/releases/{tag}/` on the `release-migrations` artifact branch. Retry checks enforce exact bytes and unchanged source; new bundles retain committed parent history. Application branches and version tags remain unchanged.
+- Release binaries/images embed that same cumulative structured SQL history through `migrations/release.json`. The development placeholder remains `{}`.
+- Startup matches the database's explicit `papergo_release` version and checksum against the embedded chain before any runner or HTTP service starts. It snapshots the database, applies pending steps in semantic-version order on one dedicated connection inside `BEGIN IMMEDIATE`, checks foreign keys/integrity after each step, and records each version. The whole pending chain rolls back on failure.
+- Fresh databases execute the latest complete schema directly and record the latest release. Repeated startup is a no-op; unknown versions and downgrades are rejected, including releases sharing the same schema checksum.
 
-#### Technical Analysis
-- **sqlite3def (`sqldef`)**:
-  - `sqldef` (specifically `sqlite3def`) is a declarative schema management tool for SQLite. It takes the target schema SQL and the current database (or previous schema SQL) and outputs the minimal, exact DDL required to transform the current schema into the target schema (`--dry-run`).
-  - It cleanly handles table creations, column additions, index alterations, and SQLite-compatible table rebuilds.
-- **Release Tag Pipeline Workflow**:
-  - In CI/CD when a tag `vX.Y.Z` is triggered:
-    1. Retrieve previous released tag `vA.B.C` and its target schema snapshot (`schema.sql`).
-    2. Run `sqlite3def --dry-run` comparing previous schema to new `schema.sql`.
-    3. Generate the migration SQL diff: `migrations/versions/vX.Y.Z.sql` (or structured entry in `migrations/migrations.json`).
-    4. Save the generated migration into the repository and commit it before building the release binary.
-- **Embedded In-Binary Sequential Migrations**:
-  - Using Go `//go:embed versions/*.sql` or `migrations/migrations.json`.
-  - On startup in `cmd/api/main.go` / `database.Open`:
-    1. Query current database version ($V_{db}$) from the database (`PRAGMA user_version` or `schema_version` table).
-    2. If $V_{db} < V_{target}$, identify all sequential migration steps $V_{db} \to \dots \to V_{target}$.
-    3. For each step:
-       - Open dedicated connection with `PRAGMA foreign_keys = OFF`.
-       - Run `BEGIN IMMEDIATE`.
-       - Execute statements.
-       - Run `PRAGMA foreign_key_check` and `PRAGMA quick_check`.
-       - Update recorded version to step version.
-       - `COMMIT`.
-    4. Database is guaranteed to be at expected version $V_{target}$ before any HTTP handlers or workflow runners start.
-
-#### Proposed Specification
-1. **Tooling Integration**:
-   - Install `sqlite3def` in development environment and CI release workflows.
-   - Replace `internal/releaseplan` Atlas AST diff generator with `sqlite3def` diff generation.
-2. **Release Pipeline Script (`scripts/release-migrations.sh` / `scripts/release-metadata.py`)**:
-   - On release tag:
-     - Diff `previous_schema.sql` and `current_schema.sql` with `sqlite3def`.
-     - Output versioned migration file: `migrations/versions/{tag}.sql`.
-     - Save diff in git repo prior to compilation.
-3. **Application Embedded Engine (`migrations/embed.go`, `internal/database/migrations.go`)**:
-   - Embed all migration files via `//go:embed versions/*.sql`.
-   - On boot: read current schema version, sequentially execute all unapplied migrations in chronological version order, and verify schema integrity.
-4. **Development Workflow**:
-   - Developers continue editing the single source schema in development.
-   - Migration diffs are generated exclusively at release tag time, keeping the repository clean of messy day-to-day migration thrash while guaranteeing seamless sequential upgrades in production binaries.
-
-#### Acceptance Criteria
-- Release pipeline automatically runs `sqlite3def` on version tag, produces the SQL diff between previous and current schema, and commits it to the repository before compiling.
-- Compiled binary embeds all historical migration diffs.
-- Booting an existing database from an older release version applies all intermediate migrations sequentially in order until reaching the binary's target schema version.
-- Fresh database initialization executes the complete current schema in one shot and records the latest version.
+#### Validation
+Release tests cover the real PaperGo schema, trigger CTEs, DDL changes, missing tooling and unsupported alterations; runtime fixtures cover skipped releases, fresh initialization, data/sequence preservation, integrity, rollback and same-schema version tracking. Git tests cover durable history, immutable retries, source binding, parent preservation and remote failures. Final checks on 2026-10-18: full Go suite, scoped race tests/vet/staticcheck, all 43 Python script tests, reproducible Ent generation, Atlas validation, Actions lint and development Dockerfile checks passed. Two compiled release binaries passed fresh initialization, workspace preservation, version advancement, no-op restart and same-schema downgrade rejection against disposable data. See [release operations](docs/releases.md).
 
 ---
 

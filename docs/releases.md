@@ -3,8 +3,10 @@
 Development keeps one editable schema: `migrations/20261007000100_schema.sql`.
 Keep Ent in sync, regenerate its code and rehash Atlas as described in the README.
 Do not create development migrations or preserve disposable development databases.
-The source `migrations/release.json` is an empty build-input placeholder (`{}`),
-not a history to maintain or commit. Tag CI replaces it in its temporary checkout.
+The source `migrations/release.json` is an empty build-input placeholder (`{}`).
+Tag CI generates the cumulative bundle and commits the exact bytes to the
+`release-migrations` branch before any binary or image build starts. Feature
+branches keep the placeholder; they contain no sequential development migrations.
 
 ## Publish a version
 
@@ -80,34 +82,56 @@ the next; GitHub concurrency can replace older pending runs. Draft releases and 
 Release candidates participate in one linear history, so a stable version follows
 its candidates and maintenance release branches are not supported by this pipeline.
 
-The generator works from SQLite's actual catalog rather than only Ent tables.
-It retains the raw SQL for constraints, indexes, views and triggers. Changed
-ordinary tables are copied transactionally, preserving existing columns, rowids
-and AUTOINCREMENT high-water marks. New nullable/defaulted columns and tables
-are generated automatically. Triggers are disabled during copying and installed
-from the target schema; external-content FTS5 indexes are rebuilt. The generator
-applies its program to a disposable database and checks that every resulting
-SQLite definition exactly matches the target schema.
+Release tooling requires [sqlite3def 3.11.26](https://github.com/sqldef/sqldef/releases/tag/v3.11.26).
+CI and the development container install checksum-pinned binaries. For another
+development environment, install that version on `PATH`, or set `SQLITE3DEF` to
+its executable. sqlite3def is a release build tool; installed PaperGo needs no
+external migration executable, SQL files or network connection.
 
-Table/column removals and renames, type or primary-key changes, generated-column
-rebuilds, virtual-table definition changes, and changed seed statements block
-automatic publication. They cannot be inferred safely from snapshots. Constraint
-changes can also fail on customer data; the runtime checks them and rolls back.
-A successful empty-database check cannot prove that all customer data satisfies
-new constraints. Changes to derived projections or business meaning can need
-explicit data transformations even when table shapes remain compatible. These
-need release-specific implementation and review before publishing; the pipeline
-does not guess or silently discard data. Feature development still has no
-migration history to manage.
+The generator creates disposable SQLite databases from both complete snapshots.
+It exports tables, indexes and views from SQLite's catalog and invokes
+`sqlite3def --dry-run --enable-drop --file target.sql previous.sql` in offline
+mode. It removes the tool's transaction wrapper so the startup engine controls
+the transaction. Recursive CTEs inside PaperGo's triggers are outside the tool's
+parser support: SQLite enumerates those triggers separately, and the generated
+step drops the old triggers before DDL and installs the target triggers afterward.
+There is no custom table-copy or AST diff generator.
 
-The published bundle contains the cumulative snapshots and SQL steps, and is
-embedded in both executables. Customers need neither Atlas nor external SQL
-files or network access. Retain release assets permanently: future publications
-require the previous bundle. Keep the source placeholder empty in feature commits.
-`go run ./cmd/release --version vX.Y.Z --previous /path/to/release-database.json`
-can reproduce the preparation step locally; it writes `migrations/release.json`.
-Restore that file to `{}` after local release builds; do not commit the generated
-bundle. Omit `--previous` for the first release.
+The generator executes the SQL against the disposable prior snapshot and uses
+Atlas inspection to verify the resulting tables, columns, constraints and indexes
+against the target. Atlas does not generate the upgrade SQL. sqlite3def does not
+implement every SQLite alteration: some type, nullability and CHECK changes are
+silently omitted by the tool, and there is no general table-rebuild support in
+this pinned version. Independent verification rejects such differences and blocks
+publication. Seed changes are also rejected. SQLite syntax in the complete schema
+must be accepted by the pinned parser; CI exercises the actual PaperGo schema.
+Changes to business meaning or derived data still require explicit review; an
+empty fixture cannot prove that existing data satisfies new constraints.
+
+`release-database.json` contains the ordered release versions, complete schema
+snapshots, checksums and SQL steps. The same cumulative bundle is embedded in
+all binaries and images. Before building, the prepare job commits it at
+`migrations/releases/vX.Y.Z/release-database.json` on the artifact-only
+`release-migrations` branch, alongside `source.txt` containing the immutable
+source tag's commit. It never moves version tags or changes the application
+branch. Existing history entries must match byte for byte on retry, and a new
+bundle must retain every committed parent step. Writes are fast-forward only;
+remote access failures block the build. Completed-release image retries verify
+published assets against this history without writing it. Allow the prepare
+job's `GITHUB_TOKEN` to create/update this branch, and protect it against manual
+rewrites and deletion. The prepare job needs `contents: write` for that operation.
+
+Retain the history branch and published release assets. Future releases download
+and checksum-verify the previous published bundle, then verify its cumulative
+history against Git. To reproduce generation locally:
+
+```sh
+go run ./cmd/release --version vX.Y.Z --previous /path/to/release-database.json
+```
+
+Omit `--previous` for the first release. This writes `migrations/release.json`;
+restore the `{}` placeholder after local builds. The release workflow persists
+it automatically before building; developers do not commit it to feature branches.
 
 ## Install or upgrade
 
@@ -129,7 +153,9 @@ For an upgrade:
 4. Restart the service. The new binary acquires the exclusive data lease, saves
    a WAL-consistent SQLite snapshot in `papergo-pre-upgrade-*/database.sqlite`
    beside the database, and applies every pending published step in one
-   transaction. Foreign keys and integrity are checked before committing. Only
+   transaction. Each step records its release version and schema checksum in
+   `papergo_release`; foreign keys and integrity are checked after each step before
+   committing the chain. Only
    then does it start the runner and HTTP server and permit online backups.
 5. Check `/health/ready` and the startup logs. Keep snapshots and full backups
    until the new release has been validated; remove them according to your
@@ -140,8 +166,9 @@ A failed upgrade prevents serving requests and rolls back the whole schema/data
 transaction. Logs identify the error and retained snapshot. Unknown schemas,
 development databases with edited schema checksums, and database downgrades are
 rejected. Skipping releases is supported through the cumulative bundle. Restart
-with the same schema is a no-op and creates no extra snapshot. Releases that
-share a schema hash need no database changes.
+with the same release version and schema checksum is a no-op and creates no
+extra snapshot. Releases that share a schema checksum still advance the recorded
+version, so a downgrade to an older version is rejected even with identical DDL.
 
 The automatic snapshot contains only SQLite, including runner state. It does not
 replace the full database-plus-blobs backup. DBOS maintains its own runner tables

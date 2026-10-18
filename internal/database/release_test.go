@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"papergo/internal/database"
-	"papergo/internal/releaseplan"
 	"papergo/migrations"
 )
 
@@ -23,10 +22,7 @@ func TestReleaseUpgradePreservesDataAndRollsBack(t *testing.T) {
 	to = strings.Replace(to, "CREATE TABLE empty_seq(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT);", "CREATE TABLE empty_seq(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, added TEXT);", 1)
 	a := migrations.Release{Version: "v1.0.0", Schema: from, Hash: migrations.Hash(from)}
 	b := migrations.Release{Version: "v1.1.0", Schema: to, Hash: migrations.Hash(to)}
-	b.Statements, err = releaseplan.Generate(t.Context(), from, to)
-	if err != nil {
-		t.Fatal(err)
-	}
+	b.Statements = []string{"ALTER TABLE records ADD COLUMN added TEXT NOT NULL DEFAULT 'default'", "ALTER TABLE empty_seq ADD COLUMN added TEXT"}
 	if _, err = db.ApplyRelease(t.Context(), path, migrations.Bundle{Format: 1, Releases: []migrations.Release{a}}); err != nil {
 		t.Fatal(err)
 	}
@@ -75,8 +71,8 @@ func TestReleaseUpgradePreservesDataAndRollsBack(t *testing.T) {
 	if err = db.SQL.QueryRow("SELECT count(*) FROM sqlite_master WHERE name='future'").Scan(&count); err != nil || count != 0 {
 		t.Fatal("DDL was not rolled back", count, err)
 	}
-	var hash string
-	if err = db.SQL.QueryRow("SELECT hash FROM atlas_schema_revisions").Scan(&hash); err != nil || hash != b.Hash {
+	var version, hash string
+	if err = db.SQL.QueryRow("SELECT version,schema_hash FROM papergo_release").Scan(&version, &hash); err != nil || hash != b.Hash || version != b.Version {
 		t.Fatal("hash changed after failure", hash, err)
 	}
 	var fk int
@@ -109,5 +105,92 @@ func TestUpgradeChecksReferencesBeforeCommit(t *testing.T) {
 	var count int
 	if err = conn.QueryRowContext(t.Context(), "SELECT count(*) FROM child").Scan(&count); err != nil || count != 0 {
 		t.Fatal(count, err)
+	}
+}
+
+func TestReleaseChainTracksVersionsAndInitializesLatest(t *testing.T) {
+	a := migrations.Release{Version: "v1.0.0", Schema: `CREATE TABLE records(id INTEGER PRIMARY KEY,name TEXT);`}
+	a.Hash = migrations.Hash(a.Schema)
+	b := migrations.Release{Version: "v1.1.0", Schema: `CREATE TABLE records(id INTEGER PRIMARY KEY,name TEXT,note TEXT);`, Statements: []string{`ALTER TABLE records ADD COLUMN note TEXT`}}
+	b.Hash = migrations.Hash(b.Schema)
+	c := migrations.Release{Version: "v1.2.0", Schema: b.Schema, Statements: []string{`UPDATE records SET note='step two'`}}
+	c.Hash = b.Hash
+	d := migrations.Release{Version: "v1.3.0", Schema: c.Schema + `CREATE INDEX records_note ON records(note);`, Statements: []string{`UPDATE records SET note=note || ' -> step three'`, `CREATE INDEX records_note ON records(note)`}}
+	d.Hash = migrations.Hash(d.Schema)
+	bundle := migrations.Bundle{Format: 1, Releases: []migrations.Release{a, b, c, d}}
+	for _, fresh := range []bool{false, true} {
+		t.Run(map[bool]string{false: "skip releases", true: "fresh latest"}[fresh], func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "test.db")
+			db, err := database.Open(t.Context(), path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			if !fresh {
+				if _, err = db.ApplyRelease(t.Context(), path, migrations.Bundle{Format: 1, Releases: []migrations.Release{a}}); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = db.SQL.Exec(`INSERT INTO records VALUES(1,'keep')`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err = db.ApplyRelease(t.Context(), path, bundle); err != nil {
+				t.Fatal(err)
+			}
+			var version, hash string
+			if err = db.SQL.QueryRow(`SELECT version,schema_hash FROM papergo_release`).Scan(&version, &hash); err != nil || version != d.Version || hash != d.Hash {
+				t.Fatal(version, hash, err)
+			}
+			if !fresh {
+				var note string
+				if err = db.SQL.QueryRow(`SELECT note FROM records WHERE id=1`).Scan(&note); err != nil || note != "step two -> step three" {
+					t.Fatal(note, err)
+				}
+			}
+			if snapshot, err := db.ApplyRelease(t.Context(), path, bundle); err != nil || snapshot != "" {
+				t.Fatal(snapshot, err)
+			}
+			// A downgrade is rejected even when the requested and installed hashes match.
+			same := d
+			same.Version = "v1.4.0"
+			same.Statements = nil
+			bundle.Releases = append(bundle.Releases, same)
+			if _, err = db.ApplyRelease(t.Context(), path, bundle); err != nil {
+				t.Fatal(err)
+			}
+			bundle.Releases = bundle.Releases[:len(bundle.Releases)-1]
+			if _, err = db.ApplyRelease(t.Context(), path, bundle); err == nil {
+				t.Fatal("same-schema downgrade accepted")
+			}
+		})
+	}
+}
+
+func TestReleaseChainRollsBackEarlierSteps(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	db, err := database.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	a := migrations.Release{Version: "v1.0.0", Schema: `CREATE TABLE records(id INTEGER PRIMARY KEY);`}
+	a.Hash = migrations.Hash(a.Schema)
+	b := migrations.Release{Version: "v1.1.0", Schema: a.Schema + `CREATE TABLE second(id INTEGER);`, Statements: []string{`CREATE TABLE second(id INTEGER)`}}
+	b.Hash = migrations.Hash(b.Schema)
+	c := migrations.Release{Version: "v1.2.0", Schema: b.Schema + `CREATE TABLE third(id INTEGER);`, Statements: []string{`INSERT INTO missing VALUES(1)`}}
+	c.Hash = migrations.Hash(c.Schema)
+	if _, err = db.ApplyRelease(t.Context(), path, migrations.Bundle{Format: 1, Releases: []migrations.Release{a}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ApplyRelease(t.Context(), path, migrations.Bundle{Format: 1, Releases: []migrations.Release{a, b, c}}); err == nil {
+		t.Fatal("broken chain accepted")
+	}
+	var count int
+	if err = db.SQL.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name='second'`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("earlier step committed", count, err)
+	}
+	var version string
+	if err = db.SQL.QueryRow(`SELECT version FROM papergo_release`).Scan(&version); err != nil || version != a.Version {
+		t.Fatal(version, err)
 	}
 }

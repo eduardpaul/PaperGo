@@ -24,6 +24,8 @@ jobs:
     with:
       ref: ${{ inputs.tag || github.ref_name }}
   prepare:
+    permissions:
+      contents: write
     needs: [verify, dependencies]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -49,6 +51,7 @@ jobs:
           go-version: '1.27.2'
           cache: true
       - uses: ./.github/actions/native
+      - uses: ./.github/actions/sqlite3def
       - name: Validate tag and published history
         id: metadata
         env:
@@ -86,6 +89,15 @@ jobs:
           gh release download "$RELEASE_TAG" --pattern release-database.json --pattern SHA256SUMS --dir release-assets
           python3 scripts/release-checksum.py release-assets --verify release-database.json
           python3 -c 'import json,os; b=json.load(open("release-assets/release-database.json")); assert b["releases"][-1]["version"] == os.environ["RELEASE_TAG"]'
+      - name: Commit or verify immutable database history before building
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
+          RELEASE_COMMIT: ${{ steps.metadata.outputs.commit }}
+          RELEASE_STATE: ${{ steps.metadata.outputs.state }}
+        run: |
+          args=()
+          if [[ "$RELEASE_STATE" == 'complete' ]]; then args+=(--check); fi
+          python3 scripts/release-migrations.py release-assets/release-database.json "${args[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: release-database

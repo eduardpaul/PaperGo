@@ -1,296 +1,211 @@
-// Package releaseplan creates upgrade SQL from two complete release snapshots.
-// Development keeps one schema file. Only publication creates a history.
+// Package releaseplan generates release SQL with the pinned sqlite3def CLI.
 package releaseplan
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	atl "ariga.io/atlas/sql/sqlite"
 	"papergo/internal/database"
 )
 
-type column struct {
-	Name, Type           string
-	Required, PK, Hidden int
-	Default              sql.NullString
-}
-type object struct{ Kind, Name, SQL string }
-type catalog struct {
-	Objects []object
-	Tables  map[string]object
-	Columns map[string][]column
-	Kinds   map[string]string
-	Seeds   []string
-}
+const SQLite3DefVersion = "3.11.26"
 
-func quote(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
-
-func inspect(ctx context.Context, db *sql.DB, source string) (catalog, error) {
-	c := catalog{Tables: map[string]object{}, Columns: map[string][]column{}, Kinds: map[string]string{}}
-	rows, err := db.QueryContext(ctx, "SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type,name")
-	if err != nil {
-		return c, err
-	}
-	for rows.Next() {
-		var o object
-		if err = rows.Scan(&o.Kind, &o.Name, &o.SQL); err != nil {
-			rows.Close()
-			return c, err
-		}
-		c.Objects = append(c.Objects, o)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return c, err
-	}
-	rows, err = db.QueryContext(ctx, "PRAGMA table_list")
-	if err != nil {
-		return c, err
-	}
-	for rows.Next() {
-		var schema, name, kind string
-		var n, wr, strict int
-		if err = rows.Scan(&schema, &name, &kind, &n, &wr, &strict); err != nil {
-			rows.Close()
-			return c, err
-		}
-		if schema == "main" {
-			c.Kinds[name] = kind
-		}
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return c, err
-	}
-	for _, o := range c.Objects {
-		if o.Kind != "table" || c.Kinds[o.Name] == "shadow" {
-			continue
-		}
-		c.Tables[o.Name] = o
-		rows, err = db.QueryContext(ctx, "PRAGMA table_xinfo("+quote(o.Name)+")")
-		if err != nil {
-			return c, err
-		}
-		for rows.Next() {
-			var cid int
-			var col column
-			if err = rows.Scan(&cid, &col.Name, &col.Type, &col.Required, &col.Default, &col.PK, &col.Hidden); err != nil {
-				rows.Close()
-				return c, err
-			}
-			c.Columns[o.Name] = append(c.Columns[o.Name], col)
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return c, err
-		}
-	}
-	drv, _ := atl.Open(db)
-	stmts, err := drv.(*atl.Driver).ScanStmts(source)
-	if err != nil {
-		return c, err
-	}
-	for _, stmt := range stmts {
-		upper := strings.ToUpper(strings.TrimSpace(stmt.Text))
-		if strings.HasPrefix(upper, "INSERT INTO ") {
-			c.Seeds = append(c.Seeds, stmt.Text)
-			continue
-		}
-		if !strings.HasPrefix(upper, "CREATE ") {
-			return c, fmt.Errorf("release snapshot contains unsupported statement: %s", stmt.Text)
-		}
-	}
-	return c, nil
-}
-
-func snapshot(ctx context.Context, path, source string) (*database.Database, catalog, error) {
-	db, err := database.Open(ctx, path)
-	if err != nil {
-		return nil, catalog{}, err
-	}
-	if _, err = db.SQL.ExecContext(ctx, source); err != nil {
-		db.Close()
-		return nil, catalog{}, err
-	}
-	c, err := inspect(ctx, db.SQL, source)
-	if err != nil {
-		db.Close()
-		return nil, c, err
-	}
-	return db, c, nil
-}
-
-// Generate refuses column/table removals, type changes, primary key changes and
-// new required columns without defaults. Tightened constraints are checked on
-// the customer's data by the atomic runtime transaction.
+// Generate uses complete SQLite snapshots, never a customer's database. Triggers
+// are installed separately because sqlite3def cannot parse recursive trigger CTEs.
+// Atlas inspects the result only to reject changes sqlite3def silently omits;
+// it never generates migration SQL.
 func Generate(ctx context.Context, from, to string) ([]string, error) {
+	tool := os.Getenv("SQLITE3DEF")
+	if tool == "" {
+		tool = "sqlite3def"
+	}
+	version, err := exec.CommandContext(ctx, tool, "--version").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("sqlite3def %s is required: %w: %s", SQLite3DefVersion, err, version)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(string(version)), SQLite3DefVersion+" ") && strings.TrimSpace(string(version)) != SQLite3DefVersion {
+		return nil, fmt.Errorf("expected sqlite3def %s, got %s", SQLite3DefVersion, bytes.TrimSpace(version))
+	}
 	root, err := os.MkdirTemp("", "papergo-release-plan-")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(root)
-	old, a, err := snapshot(ctx, filepath.Join(root, "old.db"), from)
+	old, err := database.Open(ctx, filepath.Join(root, "old.db"))
 	if err != nil {
 		return nil, err
 	}
 	defer old.Close()
-	next, b, err := snapshot(ctx, filepath.Join(root, "new.db"), to)
+	next, err := database.Open(ctx, filepath.Join(root, "new.db"))
 	if err != nil {
 		return nil, err
 	}
 	defer next.Close()
-	if strings.Join(a.Seeds, "\n") != strings.Join(b.Seeds, "\n") {
-		return nil, fmt.Errorf("seed data changes need an explicit release transformation; automatic publication is blocked")
-	}
-	for name, table := range a.Tables {
-		target, ok := b.Tables[name]
-		if !ok {
-			return nil, fmt.Errorf("automatic release would drop table %s", name)
-		}
-		if a.Kinds[name] != b.Kinds[name] {
-			return nil, fmt.Errorf("table kind changed: %s", name)
-		}
-		if a.Kinds[name] == "virtual" && table.SQL != target.SQL {
-			return nil, fmt.Errorf("virtual table definition changed: %s", name)
-		}
-		cols := map[string]column{}
-		for _, c := range b.Columns[name] {
-			cols[c.Name] = c
-		}
-		for _, c := range a.Columns[name] {
-			n, ok := cols[c.Name]
-			if !ok {
-				return nil, fmt.Errorf("automatic release would drop column %s.%s", name, c.Name)
-			}
-			if !strings.EqualFold(c.Type, n.Type) || c.PK != n.PK || c.Hidden != n.Hidden {
-				return nil, fmt.Errorf("column identity changed: %s.%s", name, c.Name)
-			}
-			if c.Hidden != 0 && table.SQL != target.SQL {
-				return nil, fmt.Errorf("generated column rebuild requires review: %s.%s", name, c.Name)
-			}
-			delete(cols, c.Name)
-		}
-		for _, c := range cols {
-			if c.Required != 0 && !c.Default.Valid && c.Hidden == 0 {
-				return nil, fmt.Errorf("new required column %s.%s has no default", name, c.Name)
-			}
+	for _, snapshot := range []struct {
+		db     *sql.DB
+		source string
+	}{{old.SQL, from}, {next.SQL, to}} {
+		if _, err = snapshot.db.ExecContext(ctx, snapshot.source); err != nil {
+			return nil, fmt.Errorf("initialize release snapshot: %w", err)
 		}
 	}
-	if from == to {
-		return nil, nil
+	driver, err := atl.Open(old.SQL)
+	if err != nil {
+		return nil, err
+	}
+	// Seed changes cannot be inferred by a DDL tool. Keep them explicit.
+	seeds := func(source string) (string, error) {
+		stmts, e := driver.(*atl.Driver).ScanStmts(source)
+		if e != nil {
+			return "", e
+		}
+		var inserts []string
+		for _, stmt := range stmts {
+			upper := strings.ToUpper(strings.TrimSpace(stmt.Text))
+			switch {
+			case strings.HasPrefix(upper, "INSERT INTO "):
+				inserts = append(inserts, stmt.Text)
+			case strings.HasPrefix(upper, "CREATE "):
+			default:
+				return "", fmt.Errorf("unsupported snapshot statement: %s", stmt.Text)
+			}
+		}
+		return strings.Join(inserts, "\n"), nil
+	}
+	a, err := seeds(from)
+	if err != nil {
+		return nil, err
+	}
+	b, err := seeds(to)
+	if err != nil {
+		return nil, err
+	}
+	if a != b {
+		return nil, fmt.Errorf("seed changes require an explicit release transformation")
+	}
+	// Use SQLite itself to separate triggers from the DDL; no SQL AST rewriting.
+	ddl := func(db *sql.DB) (string, []string, error) {
+		rows, e := db.QueryContext(ctx, `SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'view' THEN 2 ELSE 3 END,name`)
+		if e != nil {
+			return "", nil, e
+		}
+		defer rows.Close()
+		var source strings.Builder
+		var triggers []string
+		for rows.Next() {
+			var kind, name, text string
+			if e = rows.Scan(&kind, &name, &text); e != nil {
+				return "", nil, e
+			}
+			if kind == "trigger" {
+				triggers = append(triggers, text)
+				continue
+			}
+			source.WriteString(text + ";\n")
+		}
+		return source.String(), triggers, rows.Err()
+	}
+	oldDDL, oldTriggers, err := ddl(old.SQL)
+	if err != nil {
+		return nil, err
+	}
+	newDDL, newTriggers, err := ddl(next.SQL)
+	if err != nil {
+		return nil, err
+	}
+	oldFile, newFile := filepath.Join(root, "previous.sql"), filepath.Join(root, "target.sql")
+	if err = os.WriteFile(oldFile, []byte(oldDDL), 0600); err != nil {
+		return nil, err
+	}
+	if err = os.WriteFile(newFile, []byte(newDDL), 0600); err != nil {
+		return nil, err
+	}
+	// Enable drops so the tool emits the complete desired diff instead of silently
+	// skipping removals. Publication verifies that diff before embedding it.
+	cmd := exec.CommandContext(ctx, tool, "--dry-run", "--enable-drop", "--file", newFile, oldFile)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	raw, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("sqlite3def: %w: %s", err, stderr.String())
+	}
+	stmts, err := driver.(*atl.Driver).ScanStmts(string(raw))
+	if err != nil {
+		return nil, err
 	}
 	var out []string
-	for _, o := range a.Objects {
-		if o.Kind == "trigger" || o.Kind == "view" || o.Kind == "index" {
-			out = append(out, "DROP "+strings.ToUpper(o.Kind)+" "+quote(o.Name))
-		}
-	}
-	// Save AUTOINCREMENT high-water marks even when the largest row was deleted.
-	out = append(out, `CREATE TEMP TABLE "__papergo_release_sequences" (name TEXT,seq INTEGER)`)
-	var hasSequence int
-	if err = old.SQL.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE name='sqlite_sequence'").Scan(&hasSequence); err != nil {
-		return nil, err
-	}
-	if hasSequence != 0 {
-		out = append(out, `INSERT INTO "__papergo_release_sequences" SELECT name,seq FROM sqlite_sequence`)
-	}
-	names := make([]string, 0, len(b.Tables))
-	for name := range b.Tables {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		target := b.Tables[name]
-		prior, exists := a.Tables[name]
-		if exists && prior.SQL == target.SQL {
+	for i, stmt := range stmts {
+		text := strings.TrimSpace(stmt.Text)
+		upper := strings.TrimSuffix(strings.ToUpper(text), ";")
+		if (i == 0 && upper == "BEGIN") || (i == len(stmts)-1 && upper == "COMMIT") {
 			continue
 		}
-		if !exists {
-			out = append(out, target.SQL)
-			continue
+		if !strings.HasPrefix(upper, "CREATE ") && !strings.HasPrefix(upper, "ALTER ") && !strings.HasPrefix(upper, "DROP ") && !strings.HasPrefix(upper, "INSERT ") {
+			return nil, fmt.Errorf("unexpected sqlite3def statement: %s", text)
 		}
-		var cols []string
-		// Preserve rowids used by external FTS tables and application projections.
-		if !strings.Contains(strings.ToUpper(prior.SQL), "WITHOUT ROWID") {
-			hasRowID := false
-			for _, c := range a.Columns[name] {
-				if strings.EqualFold(c.Name, "rowid") {
-					hasRowID = true
-				}
+		out = append(out, text)
+	}
+	if len(out) > 0 || strings.Join(oldTriggers, "\n") != strings.Join(newTriggers, "\n") {
+		rows, e := old.SQL.QueryContext(ctx, "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name")
+		if e != nil {
+			return nil, e
+		}
+		var drops []string
+		for rows.Next() {
+			var name string
+			if e = rows.Scan(&name); e != nil {
+				rows.Close()
+				return nil, e
 			}
-			if !hasRowID {
-				cols = append(cols, "rowid")
-			}
+			drops = append(drops, `DROP TRIGGER "`+strings.ReplaceAll(name, `"`, `""`)+`"`)
 		}
-		for _, c := range a.Columns[name] {
-			if c.Hidden == 0 {
-				cols = append(cols, quote(c.Name))
-			}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
 		}
-		joined := strings.Join(cols, ",")
-		temp := quote("__papergo_release_" + name)
-		out = append(out, "CREATE TEMP TABLE "+temp+" AS SELECT "+joined+" FROM "+quote(name), "DROP TABLE "+quote(name), target.SQL, "INSERT INTO "+quote(name)+" ("+joined+") SELECT "+joined+" FROM "+temp, "DROP TABLE "+temp)
+		out = append(drops, out...)
+		out = append(out, newTriggers...)
 	}
-	for _, o := range b.Objects {
-		if o.Kind == "index" || o.Kind == "view" {
-			out = append(out, o.SQL)
-		}
-	}
-	var targetSequence int
-	if err = next.SQL.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE name='sqlite_sequence'").Scan(&targetSequence); err != nil {
-		return nil, err
-	}
-	if targetSequence != 0 {
-		out = append(out, `UPDATE sqlite_sequence SET seq=max(seq,coalesce((SELECT seq FROM "__papergo_release_sequences" s WHERE s.name=sqlite_sequence.name),seq))`)
-	}
-	out = append(out, `DROP TABLE "__papergo_release_sequences"`)
-	for _, o := range b.Objects {
-		if o.Kind == "trigger" {
-			out = append(out, o.SQL)
-		}
-	}
-	for _, name := range names {
-		if b.Kinds[name] == "virtual" {
-			sql := strings.ToLower(b.Tables[name].SQL)
-			if !strings.Contains(sql, "using fts5") || !strings.Contains(sql, "content=") {
-				return nil, fmt.Errorf("only external-content FTS5 virtual tables can be rebuilt: %s", name)
-			}
-			out = append(out, "INSERT INTO "+quote(name)+" ("+quote(name)+") VALUES ('rebuild')")
-		}
-	}
-	// Verify the generated program reconstructs every SQLite definition exactly.
 	conn, err := old.SQL.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
-	if err = database.ExecuteUpgrade(ctx, conn, out); err != nil {
-		return nil, fmt.Errorf("verify generated upgrade: %w", err)
+	err = database.ExecuteUpgrade(ctx, conn, out)
+	conn.Close()
+	if err != nil {
+		return nil, fmt.Errorf("verify sqlite3def migration: %w", err)
 	}
-	actual, err := inspect(ctx, old.SQL, to)
+	actual, err := driver.InspectSchema(ctx, "main", nil)
 	if err != nil {
 		return nil, err
 	}
-	objects := func(c catalog) string {
-		var values []string
-		for _, o := range c.Objects {
-			if c.Kinds[o.Name] != "shadow" {
-				values = append(values, o.Kind+"\x00"+o.Name+"\x00"+o.SQL)
-			}
-		}
-		return strings.Join(values, "\n")
+	targetDriver, err := atl.Open(next.SQL)
+	if err != nil {
+		return nil, err
 	}
-	if objects(actual) != objects(b) {
-		return nil, fmt.Errorf("generated upgrade does not reproduce target SQLite schema")
+	target, err := targetDriver.InspectSchema(ctx, "main", nil)
+	if err != nil {
+		return nil, err
+	}
+	// Atlas normalizes implicit UNIQUE index names on the desired side. Inspect
+	// both sides through that normalization before comparing two live catalogs.
+	if _, err = driver.SchemaDiff(target, actual); err != nil {
+		return nil, err
+	}
+	changes, err := driver.SchemaDiff(actual, target)
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) > 0 {
+		return nil, fmt.Errorf("sqlite3def did not reproduce the target schema (%d differences); unsupported alterations require an explicit reviewed release transformation", len(changes))
 	}
 	return out, nil
 }

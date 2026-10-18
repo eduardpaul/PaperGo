@@ -4,7 +4,7 @@ Direct Go modules and the licences they ship under. Add a row when a change adds
 
 | Module | Used for | Licence |
 | --- | --- | --- |
-| `ariga.io/atlas` | migration directory validation and checksums | Apache-2.0 |
+| `ariga.io/atlas` | development schema validation/checksums and release-result verification | Apache-2.0 |
 | `entgo.io/ent` | data access and generated models | Apache-2.0 |
 | `github.com/blevesearch/snowballstem` | word stems for search in the `SEARCH_LANGUAGES` (`internal/search` only): the Snowball project's generated stemmers | BSD-3-Clause |
 | `github.com/coreos/go-oidc/v3` | OIDC bearer token verification | Apache-2.0 |
@@ -69,3 +69,5 @@ See [model build/install](../scripts/decision-model/README.md). Python and PyTor
 are model-build dependencies; they are not application runtime dependencies.
 
 Standalone API builds also include the pinned EmbeddingGemma 2 (Google DeepMind, Apache-2.0) and Harrier-OSS-v1-0.6B (Microsoft, MIT) text-only Q4 exports. Their model cards ship beside the extracted weights; license texts and attribution ship under `notices/models`. Revisions and file hashes are in `scripts/fetch-embedding-models.py`.
+
+Release tooling uses the MIT-licensed [sqlite3def 3.11.26](https://github.com/sqldef/sqldef/releases/tag/v3.11.26) CLI for SQLite schema diff SQL. It is installed in CI and the development container and is not a production runtime dependency.

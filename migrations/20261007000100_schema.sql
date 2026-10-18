@@ -59,10 +59,10 @@ CREATE TABLE `field_definitions` (`id` text NOT NULL, `created_at` datetime NOT 
 CREATE TABLE blob_deletions (id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, object_key TEXT NOT NULL UNIQUE);
 -- Reusable results: namespaces own their keys and opaque JSON payloads.
 CREATE TABLE cached_results (id TEXT PRIMARY KEY NOT NULL, namespace TEXT NOT NULL CHECK(length(namespace) BETWEEN 1 AND 64),
- scope TEXT NOT NULL CHECK(length(scope) BETWEEN 1 AND 255), key TEXT NOT NULL CHECK(length(key) BETWEEN 1 AND 4096),
- payload TEXT NOT NULL CHECK(json_valid(payload) AND length(CAST(payload AS BLOB))<=1048576),
+ scope TEXT NOT NULL CHECK(length(scope) BETWEEN 1 AND 255), "key" TEXT NOT NULL CHECK(length("key") BETWEEN 1 AND 4096),
+ payload TEXT NOT NULL CHECK(json_valid(payload) AND octet_length(payload)<=1048576),
  created_at DATETIME NOT NULL, used_at DATETIME NOT NULL, expires_at DATETIME NOT NULL CHECK(expires_at>used_at));
-CREATE UNIQUE INDEX cachedresult_namespace_scope_key ON cached_results (namespace,scope,key);
+CREATE UNIQUE INDEX cachedresult_namespace_scope_key ON cached_results (namespace,scope,"key");
 CREATE INDEX cachedresult_expires_at ON cached_results (expires_at);
 -- Text read from file bytes (by SHA-256), once per reading settings; the
 -- page texts are a JSON object in the blob store that the row pins.
@@ -85,7 +85,7 @@ CREATE TABLE blob_previews (
 );
 CREATE UNIQUE INDEX blobpreview_sha256 ON blob_previews(sha256);
 CREATE INDEX blobpreview_object_key ON blob_previews(object_key);
-CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, personal_owner_id TEXT REFERENCES identity_users(id) CHECK(personal_owner_id IS NULL OR kind='workspace'), system_key TEXT CHECK(system_key IS NULL OR (kind='library' AND system_key IN ('home.documents','home.inbox'))), `kind` text NOT NULL, `name` text NOT NULL, default_currency TEXT NOT NULL DEFAULT '' CHECK(default_currency='' OR (kind='workspace' AND length(default_currency)=3 AND default_currency NOT GLOB '*[^A-Z]*')), `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind IN ('workspace','list','library') OR description='')), allow_folders BOOLEAN NOT NULL DEFAULT 1 CHECK(allow_folders IN (0,1) AND (kind IN ('list','library') OR allow_folders=1)), `keywords` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, versioning TEXT NOT NULL DEFAULT 'off' CHECK(versioning IN ('off','major') AND (kind IN ('list','library') OR versioning='off')), max_versions INTEGER NOT NULL DEFAULT 50 CHECK(max_versions BETWEEN 1 AND 500 AND (kind IN ('list','library') OR max_versions=50)), webdav_enabled BOOLEAN NOT NULL DEFAULT 0, duplicate_policy TEXT NOT NULL DEFAULT 'warn' CHECK(duplicate_policy IN ('allow','warn','block') AND (kind='library' OR duplicate_policy='warn')), name_key TEXT NULL, deleted_at DATETIME NULL, deleted_by TEXT NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind IN ('item','folder'))=(content_type_id IS NOT NULL)), FOREIGN KEY(content_type_id) REFERENCES content_types(id));
+CREATE TABLE `resources` (`id` text NOT NULL, `created_at` datetime NOT NULL, `workspace_id` text NOT NULL, personal_owner_id TEXT REFERENCES identity_users(id) CHECK(personal_owner_id IS NULL OR kind='workspace'), system_key TEXT CHECK(system_key IS NULL OR (kind='library' AND system_key IN ('home.documents','home.inbox'))), `kind` text NOT NULL, `name` text NOT NULL, default_currency TEXT NOT NULL DEFAULT '' CHECK(default_currency='' OR (kind='workspace' AND length(default_currency)=3 AND glob('*[^A-Z]*',default_currency)=0)), `description` text NOT NULL DEFAULT '' CHECK(length(description)<=2000 AND (kind IN ('workspace','list','library') OR description='')), allow_folders BOOLEAN NOT NULL DEFAULT 1 CHECK(allow_folders IN (0,1) AND (kind IN ('list','library') OR allow_folders=1)), `keywords` json NOT NULL, `values` json NOT NULL, `inherit_permissions` bool NOT NULL DEFAULT (true), `version` integer NOT NULL DEFAULT (1), `updated_at` datetime NOT NULL, `scope_id` text NULL, `parent_id` text NULL, `container_id` text NULL, head_revision_id TEXT REFERENCES item_revisions(id), published_revision_id TEXT REFERENCES item_revisions(id), schema_head_id TEXT REFERENCES schema_revisions(id), next_revision_number INTEGER NOT NULL DEFAULT 1, publishing_enabled BOOLEAN NOT NULL DEFAULT 0, versioning TEXT NOT NULL DEFAULT 'off' CHECK(versioning IN ('off','major') AND (kind IN ('list','library') OR versioning='off')), max_versions INTEGER NOT NULL DEFAULT 50 CHECK(max_versions BETWEEN 1 AND 500 AND (kind IN ('list','library') OR max_versions=50)), webdav_enabled BOOLEAN NOT NULL DEFAULT 0, duplicate_policy TEXT NOT NULL DEFAULT 'warn' CHECK(duplicate_policy IN ('allow','warn','block') AND (kind='library' OR duplicate_policy='warn')), name_key TEXT NULL, deleted_at DATETIME NULL, deleted_by TEXT NULL, created_by TEXT NOT NULL DEFAULT '', updated_by TEXT NOT NULL DEFAULT '', content_type_id TEXT NULL, template_keys JSON NOT NULL DEFAULT '[]' CHECK(json_valid(template_keys) AND json_type(template_keys)='array' AND json_array_length(template_keys)<=100 AND (kind IN ('list','library') OR json_array_length(template_keys)=0)), PRIMARY KEY (`id`), CONSTRAINT `resources_resources_children` FOREIGN KEY (`parent_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CONSTRAINT `resources_resources_contained_items` FOREIGN KEY (`container_id`) REFERENCES `resources` (`id`) ON DELETE SET NULL, CHECK(deleted_at IS NULL OR name_key IS NULL), CHECK((kind IN ('item','folder'))=(content_type_id IS NOT NULL)), FOREIGN KEY(content_type_id) REFERENCES content_types(id));
 CREATE TABLE resource_keywords (
   resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
   keyword TEXT NOT NULL REFERENCES terms(id),
@@ -97,7 +97,7 @@ CREATE TABLE schema_revisions (
 );
 CREATE TABLE content_types (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
- key TEXT NOT NULL, name TEXT NOT NULL, template_key TEXT NULL,
+ "key" TEXT NOT NULL, name TEXT NOT NULL, template_key TEXT NULL,
  field_ids JSON NOT NULL CHECK(json_valid(field_ids) AND json_type(field_ids)='array'),
  rules JSON NOT NULL CHECK(json_valid(rules) AND json_type(rules)='array'),
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
@@ -110,7 +110,7 @@ CREATE TABLE collection_types (
 CREATE TABLE business_keys (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
  container_id TEXT NOT NULL REFERENCES resources(id), item_id TEXT NOT NULL REFERENCES resources(id),
- field_key TEXT NOT NULL, value TEXT NOT NULL
+ field_key TEXT NOT NULL, "value" TEXT NOT NULL
 );
 CREATE TABLE item_revisions (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL,
@@ -148,14 +148,14 @@ CREATE TABLE "field_values" (
  CHECK((value_text IS NOT NULL)+(value_integer IS NOT NULL)+(value_boolean IS NOT NULL)=1),
  CHECK((field_type IN ('text','note','email','url','date','lookup','person','term','keywords','choice','datetime') AND value_text IS NOT NULL)
  OR (field_type IN ('integer','decimal') AND value_integer IS NOT NULL)
- OR (field_type IN ('number','currency') AND value_text IS NOT NULL AND length(value_text)=58 AND substr(value_text,1,1) IN ('0','1') AND value_text NOT GLOB '*[^0-9]*')
+ OR (field_type IN ('number','currency') AND value_text IS NOT NULL AND length(value_text)=58 AND substr(value_text,1,1) IN ('0','1') AND glob('*[^0-9]*',value_text)=0)
  OR (field_type='boolean' AND value_boolean IS NOT NULL AND value_boolean IN (0,1))),
  CHECK(scale BETWEEN 0 AND 9 AND (field_type='decimal' OR scale=0)),
  CHECK(value_integer IS NULL OR typeof(value_integer)='integer')
 );
 CREATE TABLE schema_templates (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,workspace_id TEXT NOT NULL REFERENCES resources(id),
- key TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',definition JSON NOT NULL CHECK(json_valid(definition) AND json_type(definition)='object'),
+ "key" TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',definition JSON NOT NULL CHECK(json_valid(definition) AND json_type(definition)='object'),
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
 );
 CREATE TABLE term_groups (
@@ -165,7 +165,7 @@ CREATE TABLE term_groups (
 CREATE TABLE term_sets (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,
  group_id TEXT NOT NULL REFERENCES term_groups(id),
- key TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',is_open BOOLEAN NOT NULL DEFAULT 0,is_keywords BOOLEAN NOT NULL DEFAULT 0,
+ "key" TEXT NOT NULL,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',is_open BOOLEAN NOT NULL DEFAULT 0,is_keywords BOOLEAN NOT NULL DEFAULT 0,
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
  CHECK(NOT is_keywords OR is_open)
 );
@@ -173,16 +173,16 @@ CREATE TABLE terms (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,term_set_id TEXT NOT NULL REFERENCES term_sets(id),
  parent_id TEXT REFERENCES terms(id),name TEXT NOT NULL,normalized_name TEXT NOT NULL,
  labels JSON NOT NULL CHECK(json_valid(labels) AND json_type(labels)='object'),synonyms JSON NOT NULL CHECK(json_valid(synonyms) AND json_type(synonyms)='array'),
- description TEXT NOT NULL DEFAULT '',color TEXT CHECK(color IS NULL OR (length(color)=7 AND color GLOB '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]')),
+ description TEXT NOT NULL DEFAULT '',color TEXT CHECK(color IS NULL OR (length(color)=7 AND glob('#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]',color))),
  sort_order INTEGER NOT NULL DEFAULT 0,path TEXT NOT NULL CHECK(path LIKE '/%/'),
  merged_into_id TEXT REFERENCES terms(id),available_as_keyword BOOLEAN NOT NULL DEFAULT 0,
  deprecated BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
- CHECK(merged_into_id IS NULL OR deprecated), CHECK(merged_into_id IS NOT id)
+ CHECK(merged_into_id IS NULL OR deprecated), CHECK(merged_into_id IS DISTINCT FROM id)
 );
 CREATE TABLE list_views (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,container_id TEXT NOT NULL REFERENCES resources(id),
  name TEXT NOT NULL,columns JSON NOT NULL CHECK(json_valid(columns) AND json_type(columns)='array'),
- query JSON NOT NULL CHECK(json_valid(query) AND json_type(query)='object'),layout TEXT NOT NULL DEFAULT 'table' CHECK(layout IN ('table','board','calendar','gallery')),
+ "query" JSON NOT NULL CHECK(json_valid("query") AND json_type("query")='object'),layout TEXT NOT NULL DEFAULT 'table' CHECK(layout IN ('table','board','calendar','gallery')),
  is_default BOOLEAN NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0)
 );
 CREATE TABLE operations (
@@ -231,7 +231,7 @@ CREATE TABLE domain_events (
 );
 CREATE TABLE workflows (
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
- workspace_id TEXT NOT NULL REFERENCES resources(id), key TEXT NOT NULL CHECK(length(key) BETWEEN 1 AND 100),
+ workspace_id TEXT NOT NULL REFERENCES resources(id), "key" TEXT NOT NULL CHECK(length("key") BETWEEN 1 AND 100),
  name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', automatic_enabled BOOLEAN NOT NULL DEFAULT 0 CHECK(automatic_enabled IN (0,1)), manual_enabled BOOLEAN NOT NULL DEFAULT 1 CHECK(manual_enabled IN (0,1)), automatic_provider BOOLEAN NOT NULL DEFAULT 0 CHECK(automatic_provider IN (0,1)), state TEXT NOT NULL DEFAULT 'published' CHECK(state IN ('draft','published','archived')),
  builtin_key TEXT, collection_id TEXT REFERENCES resources(id),
  parameters JSON NOT NULL DEFAULT '{}' CHECK(json_valid(parameters) AND json_type(parameters)='object'),
@@ -275,7 +275,7 @@ CREATE TABLE staged_files (
 );
 CREATE TABLE tasks (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,version INTEGER NOT NULL DEFAULT 1 CHECK(version>0),
- workspace_id TEXT NOT NULL,item_id TEXT,kind TEXT NOT NULL DEFAULT 'task' CHECK(kind IN ('task','approval')),key TEXT NOT NULL DEFAULT '' CHECK(length(key)<=64),
+ workspace_id TEXT NOT NULL,item_id TEXT,kind TEXT NOT NULL DEFAULT 'task' CHECK(kind IN ('task','approval')),"key" TEXT NOT NULL DEFAULT '' CHECK(length("key")<=64),
  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 500),description TEXT NOT NULL DEFAULT '' CHECK(length(description)<=4000),
  assignees JSON NOT NULL CHECK(json_valid(assignees) AND json_type(assignees)='array'),
  completion TEXT NOT NULL DEFAULT 'any' CHECK(completion IN ('any','all')),
@@ -286,21 +286,21 @@ CREATE TABLE tasks (
  source TEXT NOT NULL CHECK(source IN ('workflow','user','system')),workflow_id TEXT,run_id TEXT,node TEXT,
  wait BOOLEAN NOT NULL DEFAULT 0,
  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','completed','cancelled','expired')),
- outcome TEXT,completed_by TEXT,completed_at DATETIME,comment TEXT NOT NULL DEFAULT '' CHECK(length(comment)<=4000),
- input JSON CHECK(input IS NULL OR json_valid(input)),created_by TEXT NOT NULL,
+ outcome TEXT,completed_by TEXT,completed_at DATETIME,"comment" TEXT NOT NULL DEFAULT '' CHECK(length("comment")<=4000),
+ "input" JSON CHECK("input" IS NULL OR json_valid("input")),created_by TEXT NOT NULL,
  CHECK(source<>'workflow' OR (workflow_id IS NOT NULL AND run_id IS NOT NULL AND node IS NOT NULL)),
  CHECK((status='open')=(completed_at IS NULL))
 );
 CREATE TABLE task_responses (
  id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
- subject TEXT NOT NULL,assignee TEXT NOT NULL,outcome TEXT NOT NULL,comment TEXT NOT NULL DEFAULT '' CHECK(length(comment)<=4000),
- input JSON CHECK(input IS NULL OR json_valid(input))
+ subject TEXT NOT NULL,assignee TEXT NOT NULL,outcome TEXT NOT NULL,"comment" TEXT NOT NULL DEFAULT '' CHECK(length("comment")<=4000),
+ "input" JSON CHECK("input" IS NULL OR json_valid("input"))
 );
 -- Rowid table: a WITHOUT ROWID composite key puts variable JSON outputs on
 -- overflow pages and leaves most of each page unused. The primary key remains
 -- the unique index on (run_id, step_id).
 CREATE TABLE runner_step_results (
- run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, output BLOB NOT NULL,
+ run_id TEXT NOT NULL, step_id INTEGER NOT NULL, step TEXT NOT NULL, "output" BLOB NOT NULL,
  PRIMARY KEY (run_id, step_id)
 );
 -- Waits are completion rendezvous owned by real workflow runs. DBOS owns
@@ -310,7 +310,7 @@ CREATE TABLE workflow_waits (
  queue TEXT NOT NULL DEFAULT '',payload_id TEXT NOT NULL DEFAULT '',
  id TEXT PRIMARY KEY NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
  kind TEXT NOT NULL CHECK(length(kind) BETWEEN 1 AND 64),
- key TEXT NOT NULL CHECK(length(key) BETWEEN 1 AND 128),
+ "key" TEXT NOT NULL CHECK(length("key") BETWEEN 1 AND 128),
  workspace_id TEXT NOT NULL, run_id TEXT NOT NULL, node TEXT NOT NULL,
  execution_id TEXT NOT NULL CHECK(length(execution_id) BETWEEN 1 AND 128),
  data JSON NOT NULL DEFAULT '{}' CHECK(json_valid(data) AND json_type(data)='object' AND length(data)<=16384),
@@ -319,7 +319,7 @@ CREATE TABLE workflow_waits (
  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','completed','closed')),
  parking BOOLEAN NOT NULL DEFAULT 0 CHECK(parking IN (0,1))
 );
-CREATE UNIQUE INDEX workflow_wait_kind_key ON workflow_waits(kind, key);
+CREATE UNIQUE INDEX workflow_wait_kind_key ON workflow_waits(kind, "key");
 CREATE INDEX workflow_wait_open_kind_workspace ON workflow_waits(kind, workspace_id, created_at) WHERE status='open';
 CREATE INDEX workflow_wait_queue ON workflow_waits(kind,queue,status,id);
 CREATE INDEX workflow_wait_run ON workflow_waits(run_id);
@@ -327,11 +327,11 @@ CREATE INDEX workflow_wait_parking ON workflow_waits(status, deadline) WHERE par
 
 -- Durable activity state and references are separate from reusable answers.
 CREATE TABLE activity_records (id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,
- namespace TEXT NOT NULL,scope TEXT NOT NULL,key TEXT NOT NULL,owner_id TEXT NOT NULL DEFAULT '',
+ namespace TEXT NOT NULL,scope TEXT NOT NULL,"key" TEXT NOT NULL,owner_id TEXT NOT NULL DEFAULT '',
  payload JSON NOT NULL CHECK(json_valid(payload) AND length(payload)<=1048576),state TEXT NOT NULL DEFAULT 'pending',
  expires_at DATETIME,lease_owner TEXT,lease_token TEXT,lease_until DATETIME);
-CREATE UNIQUE INDEX activityrecord_namespace_scope_key ON activity_records(namespace,scope,key);
-CREATE INDEX activityrecord_namespace_scope_state_key ON activity_records(namespace,scope,state,key);
+CREATE UNIQUE INDEX activityrecord_namespace_scope_key ON activity_records(namespace,scope,"key");
+CREATE INDEX activityrecord_namespace_scope_state_key ON activity_records(namespace,scope,state,"key");
 CREATE INDEX activityrecord_expires_at ON activity_records(expires_at);
 CREATE TABLE activity_references(id TEXT PRIMARY KEY NOT NULL,created_at DATETIME NOT NULL,owner_id TEXT NOT NULL,record_id TEXT NOT NULL);
 CREATE UNIQUE INDEX activityreference_owner_id_record_id ON activity_references(owner_id,record_id);
@@ -348,7 +348,7 @@ CREATE INDEX `blob_sha256_item_id` ON `blobs` (`sha256`, `item_id`);
 CREATE INDEX `blob_object_key` ON `blobs` (`object_key`);
 CREATE INDEX blob_reclaim_after ON blobs(reclaim_after) WHERE availability='pending';
 CREATE UNIQUE INDEX `blob_item_id_version` ON `blobs` (`item_id`, `version`);
-CREATE INDEX fielddefinition_key ON field_definitions(key);
+CREATE INDEX fielddefinition_key ON field_definitions("key");
 CREATE UNIQUE INDEX `grant_resource_id_principal_type_principal_id_action` ON `grants` (`resource_id`, `principal_type`, `principal_id`, `action`);
 CREATE INDEX `grant_principal_type_principal_id_resource_id` ON `grants` (`principal_type`, `principal_id`, `resource_id`);
 CREATE INDEX `relationship_source_id_type_id_id` ON `relationships` (`source_id`, `type_id`, `id`);
@@ -366,12 +366,12 @@ CREATE INDEX `resource_parent_id_kind_id_scope_id` ON `resources` (`parent_id`, 
 CREATE INDEX `resource_container_id_id` ON `resources` (`container_id`, `id`);
 CREATE INDEX resource_container_id_content_type_id_id ON resources(container_id,content_type_id,id);
 CREATE INDEX resource_container_id_scope_id ON resources(container_id,scope_id);
-CREATE INDEX contenttype_key ON content_types(key);
+CREATE INDEX contenttype_key ON content_types("key");
 CREATE UNIQUE INDEX contenttype_template_key ON content_types(template_key);
 CREATE UNIQUE INDEX collectiontype_container_id_content_type_id ON collection_types(container_id,content_type_id);
 CREATE INDEX collectiontype_content_type_id_container_id ON collection_types(content_type_id,container_id);
 CREATE UNIQUE INDEX collectiontype_container_id ON collection_types(container_id) WHERE is_default=1;
-CREATE UNIQUE INDEX businesskey_container_id_field_key_value ON business_keys(container_id,field_key,value);
+CREATE UNIQUE INDEX businesskey_container_id_field_key_value ON business_keys(container_id,field_key,"value");
 CREATE INDEX businesskey_item_id ON business_keys(item_id);
 CREATE INDEX resource_keywords_by_resource ON resource_keywords(resource_id,keyword);
 CREATE INDEX resource_workspace_id_id_scope_id ON resources(workspace_id,id,scope_id);
@@ -398,10 +398,10 @@ CREATE UNIQUE INDEX fieldvalue_surface_id_field_key_ordinal ON field_values(surf
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_integer_item_id ON field_values(container_id,surface,field_key,value_integer,item_id);
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_text_item_id ON field_values(container_id,surface,field_key,value_text,item_id);
 CREATE INDEX fieldvalue_container_id_surface_field_key_value_boolean_item_id ON field_values(container_id,surface,field_key,value_boolean,item_id);
-CREATE UNIQUE INDEX schematemplate_workspace_id_key ON schema_templates(workspace_id,key);
+CREATE UNIQUE INDEX schematemplate_workspace_id_key ON schema_templates(workspace_id,"key");
 CREATE UNIQUE INDEX termgroup_name ON term_groups(name);
 CREATE UNIQUE INDEX termgroup_system ON term_groups(is_system) WHERE is_system;
-CREATE UNIQUE INDEX termset_key ON term_sets(key);
+CREATE UNIQUE INDEX termset_key ON term_sets("key");
 CREATE UNIQUE INDEX termset_group_id_name ON term_sets(group_id,name);
 CREATE UNIQUE INDEX termset_keywords ON term_sets(is_keywords) WHERE is_keywords;
 CREATE UNIQUE INDEX term_active_sibling_name ON terms(term_set_id,ifnull(parent_id,''),normalized_name) WHERE merged_into_id IS NULL;
@@ -422,7 +422,7 @@ CREATE INDEX relationship_type_id_target_id ON relationships(type_id,target_id);
 
 CREATE INDEX domainevent_created_at_id ON domain_events(created_at,id) WHERE dispatched_at IS NULL;
 CREATE INDEX domainevent_dispatched_at ON domain_events(dispatched_at) WHERE dispatched_at IS NOT NULL;
-CREATE UNIQUE INDEX workflow_workspace_id_key ON workflows(workspace_id,key) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX workflow_workspace_id_key ON workflows(workspace_id,"key") WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX workflow_workspace_id_name ON workflows(workspace_id,name) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX workflow_workspace_id_builtin_key_collection_id ON workflows(workspace_id,builtin_key,ifnull(collection_id,'')) WHERE builtin_key IS NOT NULL AND deleted_at IS NULL;
 CREATE INDEX workflow_workspace_id_id ON workflows(workspace_id,id);
@@ -471,11 +471,11 @@ CREATE TRIGGER resource_scope_inheritance AFTER UPDATE OF inherit_permissions ON
    ) SELECT id FROM sub);
 END;
 CREATE TRIGGER resource_keywords_insert AFTER INSERT ON resources BEGIN
-  INSERT INTO resource_keywords(resource_id,keyword) SELECT new.id,value FROM json_each(new.keywords);
+  INSERT INTO resource_keywords(resource_id,keyword) SELECT new.id,"value" FROM json_each(new.keywords);
 END;
 CREATE TRIGGER resource_keywords_update AFTER UPDATE OF keywords ON resources BEGIN
   DELETE FROM resource_keywords WHERE resource_id=old.id;
-  INSERT INTO resource_keywords(resource_id,keyword) SELECT new.id,value FROM json_each(new.keywords);
+  INSERT INTO resource_keywords(resource_id,keyword) SELECT new.id,"value" FROM json_each(new.keywords);
 END;
 CREATE TRIGGER resource_validate_insert BEFORE INSERT ON resources BEGIN
   SELECT CASE WHEN new.kind IN ('item','folder') AND NOT EXISTS(SELECT 1 FROM collection_types WHERE container_id=new.container_id AND content_type_id=new.content_type_id) THEN RAISE(ABORT,'content type must be attached to its collection') END;
@@ -581,35 +581,35 @@ CREATE TRIGGER audit_retained BEFORE DELETE ON audit_events BEGIN
   SELECT RAISE(ABORT,'audit events are retained');
 END;
 CREATE TRIGGER publication_immutable BEFORE UPDATE ON publications BEGIN SELECT RAISE(ABORT,'publication snapshots are immutable'); END;
-CREATE TRIGGER item_surface_keywords_insert AFTER INSERT ON item_surfaces BEGIN INSERT INTO item_surface_keywords SELECT new.id,value FROM json_each(new.keywords); END;
+CREATE TRIGGER item_surface_keywords_insert AFTER INSERT ON item_surfaces BEGIN INSERT INTO item_surface_keywords SELECT new.id,"value" FROM json_each(new.keywords); END;
 CREATE TRIGGER item_surface_keywords_update AFTER UPDATE OF keywords ON item_surfaces BEGIN
  DELETE FROM item_surface_keywords WHERE surface_id=old.id;
- INSERT INTO item_surface_keywords SELECT new.id,value FROM json_each(new.keywords);
+ INSERT INTO item_surface_keywords SELECT new.id,"value" FROM json_each(new.keywords);
 END;
 -- Live counts of single-choice values per collection and surface, kept by
 -- triggers, so board columns count without reading every item. The row with
 -- an empty field_key counts the surfaces themselves (items and folders).
-CREATE TABLE group_counts(container_id TEXT NOT NULL,surface TEXT NOT NULL,field_key TEXT NOT NULL,value TEXT NOT NULL,count INTEGER NOT NULL,PRIMARY KEY(container_id,surface,field_key,value)) WITHOUT ROWID;
+CREATE TABLE group_counts(container_id TEXT NOT NULL,surface TEXT NOT NULL,field_key TEXT NOT NULL,"value" TEXT NOT NULL,count INTEGER NOT NULL,PRIMARY KEY(container_id,surface,field_key,"value")) WITHOUT ROWID;
 CREATE TRIGGER group_counts_surface_insert AFTER INSERT ON item_surfaces BEGIN
  INSERT INTO group_counts VALUES(new.container_id,new.surface,'','',1) ON CONFLICT DO UPDATE SET count=count+1;
 END;
 CREATE TRIGGER group_counts_surface_delete AFTER DELETE ON item_surfaces BEGIN
- UPDATE group_counts SET count=count-1 WHERE container_id=old.container_id AND surface=old.surface AND field_key='' AND value='';
+ UPDATE group_counts SET count=count-1 WHERE container_id=old.container_id AND surface=old.surface AND field_key='' AND "value"='';
 END;
 CREATE TRIGGER group_counts_surface_update AFTER UPDATE OF container_id,surface ON item_surfaces WHEN old.container_id<>new.container_id OR old.surface<>new.surface BEGIN
- UPDATE group_counts SET count=count-1 WHERE container_id=old.container_id AND surface=old.surface AND field_key='' AND value='';
+ UPDATE group_counts SET count=count-1 WHERE container_id=old.container_id AND surface=old.surface AND field_key='' AND "value"='';
  INSERT INTO group_counts VALUES(new.container_id,new.surface,'','',1) ON CONFLICT DO UPDATE SET count=count+1;
 END;
 CREATE TRIGGER group_counts_value_insert AFTER INSERT ON field_values WHEN new.field_type='choice' AND new.ordinal=0 AND new.value_text IS NOT NULL BEGIN
  INSERT INTO group_counts VALUES(new.container_id,new.surface,new.field_key,new.value_text,1) ON CONFLICT DO UPDATE SET count=count+1;
 END;
 CREATE TRIGGER group_counts_value_delete AFTER DELETE ON field_values WHEN old.field_type='choice' AND old.ordinal=0 AND old.value_text IS NOT NULL BEGIN
- UPDATE group_counts SET count=count-1 WHERE container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND value=old.value_text;
- DELETE FROM group_counts WHERE container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND value=old.value_text AND count<=0;
+ UPDATE group_counts SET count=count-1 WHERE container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND "value"=old.value_text;
+ DELETE FROM group_counts WHERE container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND "value"=old.value_text AND count<=0;
 END;
 CREATE TRIGGER group_counts_value_update AFTER UPDATE ON field_values WHEN old.field_type='choice' OR new.field_type='choice' BEGIN
- UPDATE group_counts SET count=count-1 WHERE old.field_type='choice' AND old.ordinal=0 AND container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND value=old.value_text;
- DELETE FROM group_counts WHERE container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND value=old.value_text AND count<=0;
+ UPDATE group_counts SET count=count-1 WHERE old.field_type='choice' AND old.ordinal=0 AND container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND "value"=old.value_text;
+ DELETE FROM group_counts WHERE container_id=old.container_id AND surface=old.surface AND field_key=old.field_key AND "value"=old.value_text AND count<=0;
  INSERT INTO group_counts SELECT new.container_id,new.surface,new.field_key,new.value_text,1 WHERE new.field_type='choice' AND new.ordinal=0 AND new.value_text IS NOT NULL ON CONFLICT DO UPDATE SET count=count+1;
 END;
 CREATE TRIGGER schema_revision_validate BEFORE INSERT ON schema_revisions BEGIN
@@ -619,19 +619,19 @@ CREATE TRIGGER schema_revision_immutable BEFORE UPDATE ON schema_revisions BEGIN
 CREATE TRIGGER schema_revision_retained BEFORE DELETE ON schema_revisions WHEN NOT EXISTS(SELECT 1 FROM resources c JOIN resources w ON w.id=c.workspace_id WHERE c.id=old.container_id AND w.personal_owner_id IS NOT NULL AND w.deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'schema revisions are retained'); END;
 CREATE TRIGGER item_revision_validate BEFORE INSERT ON item_revisions BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.item_id AND kind IN ('item','folder') AND container_id=new.container_id AND content_type_id=new.content_type_id)
- OR NOT EXISTS(SELECT 1 FROM schema_revisions s, json_each(s.definition,'$.content_types') t WHERE s.id=new.schema_revision_id AND json_extract(t.value,'$.id')=new.content_type_id)
+ OR NOT EXISTS(SELECT 1 FROM schema_revisions s, json_each(s.definition,'$.content_types') t WHERE s.id=new.schema_revision_id AND json_extract(t."value",'$.id')=new.content_type_id)
  OR (new.blob_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM blobs WHERE id=new.blob_id AND item_id=new.item_id))
  THEN RAISE(ABORT,'invalid revision ownership') END;
 END;
 CREATE TRIGGER collection_type_validate BEFORE INSERT ON collection_types BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.container_id AND kind IN ('list','library')) THEN RAISE(ABORT,'invalid content type collection') END;
- SELECT CASE WHEN EXISTS(SELECT 1 FROM collection_types a JOIN content_types t ON t.id=a.content_type_id JOIN content_types n ON n.id=new.content_type_id WHERE a.container_id=new.container_id AND t.key=n.key) THEN RAISE(ABORT,'duplicate collection content type key') END;
+ SELECT CASE WHEN EXISTS(SELECT 1 FROM collection_types a JOIN content_types t ON t.id=a.content_type_id JOIN content_types n ON n.id=new.content_type_id WHERE a.container_id=new.container_id AND t."key"=n."key") THEN RAISE(ABORT,'duplicate collection content type key') END;
 END;
 CREATE TRIGGER collection_type_identity BEFORE UPDATE OF id,container_id,content_type_id ON collection_types BEGIN
  SELECT CASE WHEN new.id IS NOT old.id OR new.container_id IS NOT old.container_id OR new.content_type_id IS NOT old.content_type_id THEN RAISE(ABORT,'content type attachment identity is immutable') END;
 END;
-CREATE TRIGGER content_type_identity BEFORE UPDATE OF id,key ON content_types BEGIN
- SELECT CASE WHEN new.id IS NOT old.id OR new.key IS NOT old.key THEN RAISE(ABORT,'content type identity is immutable') END;
+CREATE TRIGGER content_type_identity BEFORE UPDATE OF id,"key" ON content_types BEGIN
+ SELECT CASE WHEN new.id IS NOT old.id OR new."key" IS NOT old."key" THEN RAISE(ABORT,'content type identity is immutable') END;
 END;
 CREATE TRIGGER business_key_validate BEFORE INSERT ON business_keys BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.item_id AND kind IN ('item','folder') AND container_id=new.container_id AND deleted_at IS NULL)
@@ -660,8 +660,8 @@ END;
 CREATE TRIGGER resource_revision_counter BEFORE UPDATE OF next_revision_number ON resources BEGIN
  SELECT CASE WHEN new.next_revision_number<old.next_revision_number OR new.next_revision_number<1 THEN RAISE(ABORT,'revision counter cannot decrease') END;
 END;
-CREATE TRIGGER field_identity_immutable BEFORE UPDATE OF key,type,scale ON field_definitions BEGIN
- SELECT CASE WHEN new.key IS NOT old.key OR new.type IS NOT old.type OR new.scale IS NOT old.scale
+CREATE TRIGGER field_identity_immutable BEFORE UPDATE OF "key",type,scale ON field_definitions BEGIN
+ SELECT CASE WHEN new."key" IS NOT old."key" OR new.type IS NOT old.type OR new.scale IS NOT old.scale
  THEN RAISE(ABORT,'field keys, types and scales are immutable') END;
 END;
 CREATE TRIGGER item_surface_validate_insert BEFORE INSERT ON item_surfaces BEGIN
@@ -722,14 +722,14 @@ END;
 CREATE TRIGGER schema_templates_workspace_validate BEFORE INSERT ON schema_templates BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND kind='workspace') THEN RAISE(ABORT,'configuration requires a workspace') END;
 END;
-CREATE TRIGGER schema_templates_identity_immutable BEFORE UPDATE OF workspace_id,key ON schema_templates BEGIN
- SELECT CASE WHEN new.workspace_id IS NOT old.workspace_id OR new.key IS NOT old.key THEN RAISE(ABORT,'configuration identity is immutable') END;
+CREATE TRIGGER schema_templates_identity_immutable BEFORE UPDATE OF workspace_id,"key" ON schema_templates BEGIN
+ SELECT CASE WHEN new.workspace_id IS NOT old.workspace_id OR new."key" IS NOT old."key" THEN RAISE(ABORT,'configuration identity is immutable') END;
 END;
-CREATE TRIGGER term_sets_identity_immutable BEFORE UPDATE OF key,group_id,is_keywords ON term_sets BEGIN
- SELECT CASE WHEN new.key IS NOT old.key OR new.group_id IS NOT old.group_id OR new.is_keywords IS NOT old.is_keywords THEN RAISE(ABORT,'configuration identity is immutable') END;
+CREATE TRIGGER term_sets_identity_immutable BEFORE UPDATE OF "key",group_id,is_keywords ON term_sets BEGIN
+ SELECT CASE WHEN new."key" IS NOT old."key" OR new.group_id IS NOT old.group_id OR new.is_keywords IS NOT old.is_keywords THEN RAISE(ABORT,'configuration identity is immutable') END;
 END;
 CREATE TRIGGER relationship_types_term_validate BEFORE INSERT ON relationship_types BEGIN
- SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM terms t JOIN term_sets s ON s.id=t.term_set_id WHERE t.id=new.id AND s.key='relationship_types' AND t.deprecated=0 AND t.merged_into_id IS NULL) THEN RAISE(ABORT,'relationship type requires an active predicate term') END;
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM terms t JOIN term_sets s ON s.id=t.term_set_id WHERE t.id=new.id AND s."key"='relationship_types' AND t.deprecated=0 AND t.merged_into_id IS NULL) THEN RAISE(ABORT,'relationship type requires an active predicate term') END;
 END;
 CREATE TRIGGER relationship_type_validate BEFORE INSERT ON relationships BEGIN
  SELECT CASE WHEN (new.type_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM relationship_types p JOIN terms t ON t.id=p.id WHERE p.id=new.type_id AND p.directed=new.directed AND t.deprecated=0 AND t.merged_into_id IS NULL))
@@ -760,7 +760,7 @@ CREATE TRIGGER workflow_validate BEFORE INSERT ON workflows BEGIN
  SELECT RAISE(ABORT,'workflow workspace must be a workspace') WHERE NOT EXISTS(SELECT 1 FROM resources WHERE id=new.workspace_id AND kind='workspace');
  SELECT RAISE(ABORT,'workflow collection must be a list or library of its workspace') WHERE new.collection_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM resources WHERE id=new.collection_id AND workspace_id=new.workspace_id AND kind IN ('list','library'));
 END;
-CREATE TRIGGER workflow_identity BEFORE UPDATE OF id,workspace_id,key,builtin_key,collection_id,role,created_by ON workflows BEGIN SELECT RAISE(ABORT,'workflow identity is immutable'); END;
+CREATE TRIGGER workflow_identity BEFORE UPDATE OF id,workspace_id,"key",builtin_key,collection_id,role,created_by ON workflows BEGIN SELECT RAISE(ABORT,'workflow identity is immutable'); END;
 CREATE TRIGGER workflow_tombstone BEFORE UPDATE ON workflows WHEN old.deleted_at IS NOT NULL BEGIN SELECT RAISE(ABORT,'deleted workflows are final'); END;
 CREATE TRIGGER workflow_retained BEFORE DELETE ON workflows WHEN NOT EXISTS(SELECT 1 FROM resources WHERE id=old.workspace_id AND personal_owner_id IS NOT NULL AND deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'workflows are retained; delete sets deleted_at'); END;
 CREATE TRIGGER domain_event_immutable BEFORE UPDATE OF id,created_at,type,workspace_id,collection_id,resource_id,actor,data,depth,cause_run_id ON domain_events BEGIN SELECT RAISE(ABORT,'domain events are immutable'); END;
@@ -840,18 +840,18 @@ END;
 -- One organization term store exists before any workspace is created.
 INSERT INTO term_groups(id,created_at,updated_at,name,description,is_system,version)
 VALUES('00000000-0000-4000-8000-000000000001',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'System','Term sets managed by PaperGo.',1,1);
-INSERT INTO term_sets(id,created_at,updated_at,group_id,key,name,description,is_open,is_keywords,version)
+INSERT INTO term_sets(id,created_at,updated_at,group_id,"key",name,description,is_open,is_keywords,version)
 VALUES('00000000-0000-4000-8000-000000000002',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'00000000-0000-4000-8000-000000000001','keywords','Keywords','Free keywords that people add while tagging items.',1,1,1);
 
 -- Durable per-caller visibility ranges and short-lived delta pages.
-CREATE TABLE sync_views(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,subject TEXT NOT NULL,container_id TEXT NOT NULL,sequence INTEGER NOT NULL DEFAULT 0 CHECK(sequence>=0));
+CREATE TABLE sync_views(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,subject TEXT NOT NULL,container_id TEXT NOT NULL,"sequence" INTEGER NOT NULL DEFAULT 0 CHECK("sequence">=0));
 CREATE UNIQUE INDEX syncview_subject_container_id ON sync_views(subject,container_id);
 CREATE TABLE sync_states(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,view_id TEXT NOT NULL REFERENCES sync_views(id),item_id TEXT NOT NULL,from_sequence INTEGER NOT NULL CHECK(from_sequence>0),to_sequence INTEGER CHECK(to_sequence>from_sequence),fingerprint TEXT NOT NULL CHECK(length(fingerprint)=64));
 CREATE UNIQUE INDEX syncstate_view_id_item_id_from_sequence ON sync_states(view_id,item_id,from_sequence);
 CREATE UNIQUE INDEX syncstate_view_id_item_id ON sync_states(view_id,item_id) WHERE to_sequence IS NULL;
 CREATE INDEX syncstate_view_id_from_sequence_to_sequence ON sync_states(view_id,from_sequence,to_sequence);
-CREATE TABLE sync_tokens(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,view_id TEXT NOT NULL REFERENCES sync_views(id),sequence INTEGER NOT NULL CHECK(sequence>0),changes JSON NOT NULL DEFAULT '[]' CHECK(json_valid(changes) AND json_type(changes)='array'),page_expires_at DATETIME NOT NULL,expires_at DATETIME NOT NULL);
-CREATE INDEX synctoken_view_id_sequence ON sync_tokens(view_id,sequence);
+CREATE TABLE sync_tokens(id TEXT NOT NULL PRIMARY KEY,created_at DATETIME NOT NULL,view_id TEXT NOT NULL REFERENCES sync_views(id),"sequence" INTEGER NOT NULL CHECK("sequence">0),changes JSON NOT NULL DEFAULT '[]' CHECK(json_valid(changes) AND json_type(changes)='array'),page_expires_at DATETIME NOT NULL,expires_at DATETIME NOT NULL);
+CREATE INDEX synctoken_view_id_sequence ON sync_tokens(view_id,"sequence");
 CREATE INDEX synctoken_expires_at ON sync_tokens(expires_at);
 CREATE INDEX synctoken_page_expires_at ON sync_tokens(page_expires_at);
 

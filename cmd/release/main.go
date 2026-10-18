@@ -1,4 +1,4 @@
-// release prepares the ephemeral build input and published database artifact.
+// release prepares the cumulative embedded database history for publication.
 package main
 
 import (
@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"regexp"
 	"time"
 
 	"papergo/internal/releaseplan"
@@ -20,8 +19,8 @@ func main() {
 	previous := flag.String("previous", "", "previous published release bundle")
 	output := flag.String("output", "migrations/release.json", "generated release bundle")
 	flag.Parse()
-	if !regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?$`).MatchString(*version) {
-		log.Fatal("invalid version tag")
+	if _, err := migrations.CompareVersions(*version, *version); err != nil {
+		log.Fatal(err)
 	}
 	b := migrations.Bundle{Format: 1}
 	if *previous != "" {
@@ -34,9 +33,13 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	for _, r := range b.Releases {
-		if r.Version == *version {
-			log.Fatal("release tag already exists in the published history")
+	if len(b.Releases) > 0 {
+		order, err := migrations.CompareVersions(b.Releases[len(b.Releases)-1].Version, *version)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if order >= 0 {
+			log.Fatal("release must be newer than its published parent")
 		}
 	}
 	r := migrations.Release{Version: *version, Hash: migrations.SchemaHash(), Schema: migrations.SchemaSQL}
@@ -45,14 +48,19 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+	from := r.Schema
 	if len(b.Releases) > 0 {
-		var err error
-		r.Statements, err = releaseplan.Generate(ctx, b.Releases[len(b.Releases)-1].Schema, r.Schema)
-		if err != nil {
-			log.Fatal(err)
-		}
+		from = b.Releases[len(b.Releases)-1].Schema
+	}
+	var err error
+	r.Statements, err = releaseplan.Generate(ctx, from, r.Schema)
+	if err != nil {
+		log.Fatal(err)
 	}
 	b.Releases = append(b.Releases, r)
+	if err = b.Validate(); err != nil {
+		log.Fatal(err)
+	}
 	raw, err := json.MarshalIndent(b, "", "  ")
 	if err != nil {
 		log.Fatal(err)

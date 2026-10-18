@@ -11,7 +11,8 @@ import (
 
 const SchemaFile = "20261007000100_schema.sql"
 
-// Release history is a build input generated in tag CI, never development SQL.
+// Tag CI persists this cumulative build input on the release-migrations branch.
+// Development keeps the empty placeholder and edits only the complete schema.
 //
 //go:embed release.json
 var releaseJSON []byte
@@ -40,17 +41,37 @@ func DecodeBundle(data []byte) (Bundle, error) {
 	if err := json.Unmarshal(data, &b); err != nil {
 		return b, err
 	}
-	if b.Format != 1 || len(b.Releases) == 0 {
-		return b, fmt.Errorf("invalid release bundle")
-	}
-	seen := map[string]bool{}
-	for _, r := range b.Releases {
-		if r.Version == "" || seen[r.Version] || r.Hash != Hash(r.Schema) {
-			return b, fmt.Errorf("invalid release snapshot %q", r.Version)
-		}
-		seen[r.Version] = true
+	if err := b.Validate(); err != nil {
+		return b, err
 	}
 	return b, nil
+}
+
+func (b Bundle) Validate() error {
+	if b.Format != 1 || len(b.Releases) == 0 {
+		return fmt.Errorf("invalid release bundle")
+	}
+	for i, r := range b.Releases {
+		if _, err := CompareVersions(r.Version, r.Version); err != nil {
+			return err
+		}
+		if r.Schema == "" || r.Hash != Hash(r.Schema) {
+			return fmt.Errorf("invalid release snapshot %q", r.Version)
+		}
+		if i == 0 && len(r.Statements) != 0 {
+			return fmt.Errorf("first release must initialize from its complete schema")
+		}
+		if i > 0 {
+			order, err := CompareVersions(b.Releases[i-1].Version, r.Version)
+			if err != nil {
+				return err
+			}
+			if order >= 0 {
+				return fmt.Errorf("release history is not strictly increasing at %q", r.Version)
+			}
+		}
+	}
+	return nil
 }
 
 func Published() bool { return !bytes.Equal(bytes.TrimSpace(releaseJSON), []byte("{}")) }

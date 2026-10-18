@@ -1,0 +1,16 @@
+name: sqlite3def
+description: Install the pinned SQLite release schema planner (Linux amd64)
+runs:
+  using: composite
+  steps:
+    - name: Install sqlite3def 3.11.26
+      shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/sqlite3def"
+        curl --fail --silent --show-error --location --retry 3 \
+          https://github.com/sqldef/sqldef/releases/download/v3.11.26/sqlite3def_linux_amd64.tar.gz \
+          --output "$RUNNER_TEMP/sqlite3def.tar.gz"
+        echo "7ef1cadbbaca6f12543c00edd3abe6b607ec69f30239517c47e36f86b580e378  $RUNNER_TEMP/sqlite3def.tar.gz" | sha256sum --check
+        tar -xzf "$RUNNER_TEMP/sqlite3def.tar.gz" -C "$RUNNER_TEMP/sqlite3def"
+        "$RUNNER_TEMP/sqlite3def/sqlite3def" --version
+        echo "$RUNNER_TEMP/sqlite3def" >> "$GITHUB_PATH"
