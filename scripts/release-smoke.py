@@ -50,8 +50,6 @@ def upload(base, library, name, data):
 
 def exercise_native(base, workspace):
     library = json.loads(request(base, f'/v1/resources/{workspace}/children', {'kind': 'library', 'name': 'Scans'}))['id']
-    request(base, f'/v1/workspaces/{workspace}/workflow-builtins/search.content',
-            {'collection_id': library, 'enabled': True}, method='PUT')
     # PDFium and statically linked WebP must render a PDF preview.
     pdf, offsets = bytearray(b'%PDF-1.4\n'), []
     stream = 'BT /F1 14 Tf 40 700 Td (Standalone PDF) Tj ET'
@@ -115,7 +113,7 @@ def exercise_native(base, workspace):
         raise RuntimeError(f'shared Laya workflow did not complete: {run}')
     # A blank PNG exercises ONNX Runtime and the shared PaddleOCR models.
     flow = json.loads(request(base, f'/v1/workspaces/{workspace}/workflow-builtins/documents.optimize',
-                              {'collection_id': library, 'enabled': True}, method='PUT'))
+                              {'collection_id': library, 'automatic_enabled': True}, method='PUT'))
     def chunk(kind, data):
         return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
     png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 800, 600, 8, 0, 0, 0, 0)) +

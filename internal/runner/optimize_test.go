@@ -323,13 +323,13 @@ func TestPhotosToPDFRefusesChangedAndUnsupportedPhotos(t *testing.T) {
 	other := f.upload(t, lib.ID, "page-2.png", "image/png", scan(t, 300, 400))
 	pdf := f.upload(t, lib.ID, "contract.pdf", "application/pdf", []byte("%PDF-1.7 test"))
 
-	runs, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{photo.ID, pdf.ID}, PrimaryItemID: photo.ID})
+	_, err = f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{photo.ID, pdf.ID}, PrimaryItemID: photo.ID})
 	if err == nil || !strings.Contains(err.Error(), "Requires a JPEG, PNG or WebP") {
 		t.Fatalf("unsupported selections must be rejected before queueing: %v", err)
 	}
 
 	// A photo replaced while the review waits cannot be promoted.
-	runs, err = f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{photo.ID, other.ID}, PrimaryItemID: photo.ID})
+	runs, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{photo.ID, other.ID}, PrimaryItemID: photo.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

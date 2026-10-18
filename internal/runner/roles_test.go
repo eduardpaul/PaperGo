@@ -158,6 +158,10 @@ func TestManualSystemRunsAreVisiblePagedAndRetained(t *testing.T) {
 	if root.AutomaticEnabled {
 		t.Fatal(root)
 	}
+	// Drive dispatch and status observation explicitly so paging is independent
+	// of the background dispatcher's timing.
+	f.r.stop()
+	<-f.r.stopped
 	ids := []string{}
 	for range 2 {
 		queued, err := f.wf.StartRuns(ctx, "alice", root.ID, workflow.Start{ItemIDs: []string{item.ID}})
@@ -169,6 +173,10 @@ func TestManualSystemRunsAreVisiblePagedAndRetained(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.status(t, queued[0], "completed")
+	}
+	// Run reads the engine directly; status filters use the observed status.
+	if err := f.r.SyncLiveRuns(ctx); err != nil {
+		t.Fatal(err)
 	}
 	page, err := f.r.Runs(ctx, "alice", f.ws.ID, RunFilter{Origin: "manual", Status: "completed", Limit: 1})
 	if err != nil || len(page.Data) != 1 || page.Data[0].ID != ids[1] || page.NextCursor == "" {

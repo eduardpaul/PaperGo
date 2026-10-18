@@ -393,7 +393,7 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 		if err != nil {
 			return err
 		}
-		def, raw, err := checkDefinition(ctx, t, subject, workspaceID, filled)
+		_, raw, err := checkDefinition(ctx, t, subject, workspaceID, filled)
 		if err != nil {
 			return dms.Invalid("parameters: " + err.Error())
 		}
@@ -421,7 +421,7 @@ func (s *Service) UpdateBuiltIn(ctx context.Context, subject, workspaceID, key s
 			if err != nil {
 				return err
 			}
-			def, err = ParseDefinition(raw)
+			def, err := ParseDefinition(raw)
 			if err != nil {
 				return err
 			}
