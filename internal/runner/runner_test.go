@@ -707,6 +707,7 @@ func (f *fixture) wait(t testing.TB, id string, done func(Run) bool) Run {
 			return run
 		}
 		if time.Now().After(deadline) {
+			t.Log(f.logs.String())
 			t.Fatalf("run %s: %+v", id, run)
 		}
 		time.Sleep(20 * time.Millisecond)

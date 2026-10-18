@@ -29,10 +29,19 @@ func TestLLMInputsAndOutputsPopulateFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := setup(t, configure, func(tools *workflow.Tools) { workflowai.Configure(tools, workflowai.Runtime{Chat: chat, Batch: batch}) })
-	f.searchOff(t)
 	lib, err := f.dms.Create(ctx, "alice", f.ws.ID, dms.CreateResource{Kind: "library", Name: "LLM inputs", WebDAVEnabled: true})
 	if err != nil {
 		t.Fatal(err)
+	}
+	// These manual workflows exercise text extraction and chunk snapshots
+	// themselves. Keep automatic indexing and previews from processing the
+	// same uploads alongside each case.
+	f.searchOff(t)
+	for _, key := range []string{"search.content", "documents.preview"} {
+		w := f.builtIn(t, key, lib.ID)
+		if _, err := f.wf.UpdateBuiltIn(ctx, "alice", f.ws.ID, key, workflow.SetBuiltIn{CollectionID: lib.ID, Version: w.Version, AutomaticEnabled: false}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	for _, field := range []dms.CreateField{{Key: "source", Label: "Source", Type: "text"}, {Key: "answer", Label: "Answer", Type: "text"}, {Key: "amount", Label: "Amount", Type: "number"}} {
 		if _, err = f.dms.CreateField(ctx, "alice", lib.ID, field); err != nil {
@@ -84,6 +93,9 @@ func TestLLMInputsAndOutputsPopulateFields(t *testing.T) {
 					w := f.workflow(t, fmt.Sprintf("%s-%s-%v", mode, source, structured), string(definition))
 					ids, err := f.wf.StartRuns(ctx, "alice", w.ID, workflow.Start{ItemIDs: []string{file.ID}})
 					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := f.r.Dispatch(ctx); err != nil {
 						t.Fatal(err)
 					}
 					if mode == "batch" {
