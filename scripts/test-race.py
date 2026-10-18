@@ -52,14 +52,15 @@ def main():
     report.with_suffix(".discovery.log").write_text(listing.stdout, encoding="utf-8")
     names = shard_names(listing.stdout, args.shard, args.shards)
     print(f"Race shard {args.shard}/{args.shards}: {len(names)} test names", flush=True)
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, str(Path(__file__).with_name("go-test.py")),
          "--output", str(report),
          "--preparation-seconds", str(time.monotonic() - started), "--",
          *flags, "-run", run_pattern(names), "./..."],
-        check=True,
+        check=False,
     )
+    return result.returncode
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

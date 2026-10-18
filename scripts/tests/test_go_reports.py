@@ -46,6 +46,10 @@ class GoReportsTests(unittest.TestCase):
                                         cwd=root, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                 self.assertIn(expected, result.stdout + result.stderr)
+                if 'TestFailure' in source:
+                    self.assertRegex(result.stderr, r'FAILED sample/TestFailure \(\d+\.\d+s\)')
+                else:
+                    self.assertIn('BUILD FAILED sample', result.stderr)
                 report = json.loads(stem.with_suffix('.json').read_text())
                 self.assertEqual(report['exit_code'], 1)
                 self.assertGreater(report['wall_seconds'], 0)

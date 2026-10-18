@@ -65,6 +65,7 @@ class RaceShardTests(unittest.TestCase):
         with patch.object(race.subprocess, "run") as run, \
                 patch("sys.argv", ["test-race.py", "--shard", "1", "--shards", "3"]):
             run.return_value.stdout = self.listing
+            run.return_value.returncode = 0
             race.main()
         listing, execution = [call.args[0] for call in run.call_args_list]
         self.assertEqual(listing[:5], ["go", "test", "-race", "-count=1", "-timeout=15m"])
@@ -76,7 +77,18 @@ class RaceShardTests(unittest.TestCase):
         self.assertIn("--preparation-seconds", execution)
         self.assertIn("-list", listing)
         self.assertNotIn("/", execution[execution.index("-run") + 1])
-        self.assertTrue(all(call.kwargs["check"] for call in run.call_args_list))
+        self.assertTrue(run.call_args_list[0].kwargs["check"])
+        self.assertFalse(run.call_args_list[1].kwargs["check"])
+
+    def test_test_failure_propagates_without_dumping_the_regex_command(self):
+        with patch.object(race.subprocess, "run") as run, \
+                patch("sys.argv", ["test-race.py", "--shard", "1", "--shards", "3"]):
+            run.side_effect = [
+                subprocess.CompletedProcess([], 0, stdout=self.listing),
+                subprocess.CompletedProcess([], 1),
+            ]
+            self.assertEqual(race.main(), 1)
+        self.assertFalse(run.call_args_list[1].kwargs["check"])
 
     def test_discovery_failure_keeps_diagnostics_without_running_tests(self):
         error = subprocess.CalledProcessError(1, ['go', 'test'], output='compile failure detail')

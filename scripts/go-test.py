@@ -97,6 +97,11 @@ def main():
                 with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
                     summary.write(rendered + '\n')
     print(f"Go tests: {report['wall_seconds']:.2f}s; reports: {args.output}.*", flush=True)
+    for row in report['tests']:
+        if row['Action'] == 'fail':
+            print(f"FAILED {row['Package']}/{row['Test']} ({row.get('Elapsed', 0):.2f}s)", file=sys.stderr, flush=True)
+    for package in report['build_failures']:
+        print(f"BUILD FAILED {package}", file=sys.stderr, flush=True)
     return exit_code
 
 
