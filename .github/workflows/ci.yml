@@ -215,6 +215,7 @@ jobs:
           go-version: '1.27.2'
           cache: true
       - uses: ./.github/actions/native
+      - uses: ./.github/actions/sqlite3def
       - uses: actions/download-artifact@v4
         with:
           name: embedded-frontend

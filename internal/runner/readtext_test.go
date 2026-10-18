@@ -67,6 +67,11 @@ func TestReadTextOfPDFsScansAndPhotos(t *testing.T) {
 	scanned := f.upload(t, lib.ID, "scan.pdf", "application/pdf", pdfOf(t))
 	composedPDF := f.upload(t, lib.ID, "receipt.pdf", "application/pdf", pdfOf(t, "Receipt 42"))
 	image := f.upload(t, lib.ID, "photo.png", "image/png", photo.Bytes())
+	// Background file processing can hold the SQLite writer under race
+	// instrumentation. Dispatch every upload before starting the execution wait.
+	if _, err = f.r.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
 	runs := f.runs(t, w.ID, 4)
 	for _, run := range runs {
 		if run.Status != "completed" {
@@ -96,6 +101,9 @@ func TestReadTextOfPDFsScansAndPhotos(t *testing.T) {
 	// The same bytes again reuse the text.
 	before, _ := f.text(t, textPDF.ID)
 	copyOf := f.upload(t, lib.ID, "copy.pdf", "application/pdf", doctexttest.TextPDF("Invoice March", "Page two"))
+	if _, err = f.r.Dispatch(ctx); err != nil {
+		t.Fatal(err)
+	}
 	f.runs(t, w.ID, 5)
 	if again, _ := f.text(t, copyOf.ID); again != before {
 		t.Fatalf("identical bytes read again: %s, %s", again, before)

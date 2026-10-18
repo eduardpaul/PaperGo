@@ -220,6 +220,7 @@ func (f *fixture) runs(t testing.TB, workflowID string, want int) []Run {
 			return page.Data
 		}
 		if len(page.Data) > want || time.Now().After(deadline) {
+			t.Log(f.logs.String())
 			t.Fatalf("workflow %s: %d runs (%d finished), want %d: %+v", workflowID, len(page.Data), done, want, page.Data)
 		}
 		time.Sleep(20 * time.Millisecond)
