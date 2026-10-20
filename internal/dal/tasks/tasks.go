@@ -73,12 +73,12 @@ type ResponseInput struct {
 
 // Filter selects tasks. Offset applies only together with Limit.
 type Filter struct {
-	Status                                   Status
-	Kind                                     Kind
+	Status                                                     Status
+	Kind                                                       Kind
 	Key, WorkspaceID, ItemID, WorkflowID, OperationID, Subject string
-	Groups                                   []string
-	AssignedOnly, Waiting                    bool
-	Offset, Limit                            int
+	Groups                                                     []string
+	AssignedOnly, Waiting                                      bool
+	Offset, Limit                                              int
 }
 
 // Queries are the statements a driver runs for tasks. Each method executes on

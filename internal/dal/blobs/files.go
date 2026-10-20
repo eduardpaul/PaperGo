@@ -124,7 +124,7 @@ type FileQueries interface {
 // the runs of a workflow, except those of ExceptRunID. It selects at least
 // one of them.
 type StagedSelection struct {
-	RunIDs                           []string
+	RunIDs                          []string
 	ItemID, WorkflowID, ExceptRunID string
 }
 
