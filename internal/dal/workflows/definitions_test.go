@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"papergo/internal/dal/daltest"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,8 +21,9 @@ func TestWorkflowDefinitions_Postgres(t *testing.T) {
 func testWorkflowDefinitions(t *testing.T, s *dal.Store) {
 	ctx := context.Background()
 	f := daltest.NewFixture(t, s)
-	original := []byte(`{"flow":{"start":"done","nodes":{"done":{"activity":"end"}}}}`)
-	wf, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "review", Name: "Review", AutomaticEnabled: true, ManualEnabled: true, Definition: original, CreatedBy: "alice"})
+	original := daltest.Script
+	original.Definition = []byte(`{"triggers":[{"type":"schedule","cron":"0 * * * *"}]}`)
+	wf, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "review", Name: "Review", AutomaticEnabled: true, ManualEnabled: true, Content: original, CreatedBy: "alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,20 +37,24 @@ func testWorkflowDefinitions(t *testing.T, s *dal.Store) {
 	}
 	name := "Renamed"
 	parameters := map[string]any{"exact": "9007199254740993"}
-	edited, version, err := s.Workflows().Revise(ctx, wf.ID, wf.Version, "bob", []byte(`{ "flow": {"nodes":{"done":{"activity":"end"}},"start":"done"} }`), workflows.Changes{Name: &name, Parameters: &parameters})
+	same := original
+	same.Definition = []byte(`{ "triggers": [ {"cron":"0 * * * *", "type":"schedule"} ] }`)
+	edited, version, err := s.Workflows().Revise(ctx, wf.ID, wf.Version, "bob", same, workflows.Changes{Name: &name, Parameters: &parameters})
 	if err != nil || edited.Version != 2 || version.Number != 1 || version.CreatedBy != "alice" || edited.Name != name {
 		t.Fatalf("metadata-only edit: %+v %+v %v", edited, version, err)
 	}
 	if _, _, err := s.Workflows().Revise(ctx, wf.ID, wf.Version, "carol", original, workflows.Changes{}); !errors.Is(err, dberr.ErrConcurrentUpdate) {
 		t.Fatalf("stale edit accepted: %v", err)
 	}
-	changed := []byte(`{"flow":{"start":"finish","nodes":{"finish":{"activity":"end"}}}}`)
+	changed := original
+	changed.Source, changed.Bundle, changed.BundleHash = "export default { triggers: [] }", "changed", strings.Repeat("1", 64)
 	edited, version, err = s.Workflows().Revise(ctx, wf.ID, edited.Version, "bob", changed, workflows.Changes{})
 	if err != nil || edited.CurrentVersion != 2 || version.Number != 2 || version.CreatedBy != "bob" {
 		t.Fatalf("new immutable version: %+v %+v %v", edited, version, err)
 	}
 	history, err := s.Workflows().Versions(ctx, wf.ID)
-	if err != nil || len(history) != 2 || history[1].Number != 1 || !jsonutil.Equal(history[1].Definition, original) {
+	if err != nil || len(history) != 2 || history[1].Number != 1 || !jsonutil.Equal(history[1].Definition, original.Definition) || history[1].Source != original.Source ||
+		history[0].Source != changed.Source || history[0].Bundle != changed.Bundle || history[0].BundleHash != changed.BundleHash {
 		t.Fatalf("immutable history changed: %+v %v", history, err)
 	}
 	tx, err := s.SQLDB().BeginTx(ctx, nil)

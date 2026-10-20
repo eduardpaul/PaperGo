@@ -92,9 +92,10 @@ func TestAccountDeletionPurgesHomeAndRetainsSharedContent(t *testing.T) {
 	}{
 		{"operations", daltest.Row{"id": "home-op", "created_at": now, "updated_at": now, "container_id": home.InboxLibraryID, "kind": "test", "trace_id": "trace", "created_by": "alice"}},
 		{"workflows", daltest.Row{"id": "home-flow", "created_at": now, "updated_at": now, "workspace_id": home.WorkspaceID, "key": "test", "name": "Test", "current_version": 1, "created_by": "alice", "updated_by": "alice"}},
-		{"workflow_versions", daltest.Row{"id": "home-version", "created_at": now, "workflow_id": "home-flow", "number": 1, "definition": "{}", "created_by": "alice"}},
+		{"workflow_versions", daltest.Row{"id": "home-version", "created_at": now, "workflow_id": "home-flow", "number": 1, "definition": "{}", "source": "export default {}", "bundle": "export default {}", "bundle_hash": strings.Repeat("0", 64), "created_by": "alice"}},
+		{"operations", daltest.Row{"id": "home-run", "created_at": now, "updated_at": now, "container_id": home.WorkspaceID, "workspace_id": home.WorkspaceID, "kind": OperationKindRun, "trace_id": "trace", "created_by": "alice"}},
 		{"workflow_runs", daltest.Row{"id": "home-run", "created_at": now, "workflow_id": "home-flow", "workflow_version": 1, "workspace_id": home.WorkspaceID, "item_id": home.InboxLibraryID, "event_id": "event", "event_type": "item.created", "depth": 0, "actor": "alice"}},
-		{"runner_step_results", daltest.Row{"run_id": "home-run", "step_id": 1, "step": "private", "output": []byte("private output")}},
+		{"workflow_steps", daltest.Row{"run_id": "home-run", "seq": 0, "kind": "request", "name": "private", "input_hash": strings.Repeat("0", 64), "status": "completed", "output": []byte("private output"), "started_at": now, "completed_at": now}},
 	} {
 		daltest.Insert(t, s.DAL, seed.table, seed.row)
 	}
@@ -110,7 +111,7 @@ func TestAccountDeletionPurgesHomeAndRetainsSharedContent(t *testing.T) {
 		{"group_inboxes", daltest.Row{"library_id": home.InboxLibraryID}},
 		{"workflow_runs", daltest.Row{"workspace_id": home.WorkspaceID}},
 		{"schema_revisions", daltest.Row{"container_id": home.InboxLibraryID}},
-		{"operations", nil}, {"workflows", nil}, {"workflow_versions", nil}, {"runner_step_results", nil},
+		{"operations", nil}, {"workflows", nil}, {"workflow_versions", nil}, {"workflow_steps", nil},
 	} {
 		if n := daltest.Count(t, s.DAL, left.table, left.match); n != 0 {
 			t.Fatal(left.table, n)

@@ -54,9 +54,6 @@ func (q Queries) Tasks(ctx context.Context, f tasks.Filter) ([]tasks.Task, error
 	if f.RunID != "" {
 		query.Apply(w.RunID.EQ(f.RunID))
 	}
-	if f.WaitOnly {
-		query.Apply(w.Wait.EQ(true))
-	}
 	c := models.Tasks.Columns
 	if f.Status == tasks.StatusOpen {
 		query.Apply(sm.OrderBy(c.DueAt).Asc().NullsLast(), sm.OrderBy(c.CreatedAt), sm.OrderBy(c.ID))
@@ -100,7 +97,7 @@ func (q Queries) InsertTask(ctx context.Context, t tasks.Task) error {
 		Completion: omit.From(string(t.Completion)), Outcomes: omit.From(types.NewJSON(t.Outcomes)),
 		InputSchema: nullable.Object(t.InputSchema), Values: nullable.Object(t.Values), Review: nullable.Object(t.Review),
 		Priority: omit.From(string(t.Priority)), DueAt: nullable.Time(t.DueAt), Source: omit.From(string(t.Source)),
-		WorkflowID: nullable.String(t.WorkflowID), RunID: nullable.String(t.RunID), Node: nullable.String(t.Node), Wait: omit.From(t.Wait),
+		WorkflowID: nullable.String(t.WorkflowID), RunID: nullable.String(t.RunID), OperationID: nullable.String(t.OperationID),
 		Status: omit.From(string(t.Status)), Outcome: nullable.String(t.Outcome), CompletedBy: nullable.String(t.CompletedBy),
 		CompletedAt: nullable.Time(t.CompletedAt), Comment: omit.From(t.Comment), Input: nullable.JSON(t.Input), CreatedBy: omit.From(t.CreatedBy),
 	}).Exec(ctx, q.exec)
@@ -157,7 +154,7 @@ func taskRecord(r *models.Task) tasks.Task {
 		Assignees: r.Assignees.Val, Completion: tasks.Completion(r.Completion), Outcomes: r.Outcomes.Val,
 		InputSchema: r.InputSchema.GetOrZero().Val, Values: r.Values.GetOrZero().Val, Review: r.Review.GetOrZero().Val,
 		Priority: tasks.Priority(r.Priority), DueAt: nullable.UTC(r.DueAt), Source: tasks.Source(r.Source),
-		WorkflowID: r.WorkflowID.GetOrZero(), RunID: r.RunID.GetOrZero(), Node: r.Node.GetOrZero(), Wait: r.Wait,
+		WorkflowID: r.WorkflowID.GetOrZero(), RunID: r.RunID.GetOrZero(), OperationID: r.OperationID.GetOrZero(),
 		Status: tasks.Status(r.Status), Outcome: r.Outcome.GetOrZero(), CompletedBy: r.CompletedBy.GetOrZero(), CompletedAt: nullable.UTC(r.CompletedAt),
 		Comment: r.Comment, Input: r.Input.GetOrZero().Val, CreatedBy: r.CreatedBy,
 		CreatedAt: r.CreatedAt.UTC(), UpdatedAt: r.UpdatedAt.UTC(), Version: r.Version,

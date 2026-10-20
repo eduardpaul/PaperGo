@@ -29,9 +29,10 @@ type Task struct {
 	Priority                    Priority
 	DueAt                       *time.Time
 	Source                      Source
-	WorkflowID, RunID, Node     string
-	Wait                        bool
-	Status                      Status
+	// WorkflowID and RunID are the workflow run that created the task, and
+	// OperationID the operation its answer ends, which the run waits on.
+	WorkflowID, RunID, OperationID string
+	Status                         Status
 	Outcome, CompletedBy        string
 	CompletedAt                 *time.Time
 	Comment                     string
@@ -61,9 +62,8 @@ type CreateInput struct {
 	Priority                    Priority
 	DueAt                       *time.Time
 	Source                      Source
-	WorkflowID, RunID, Node     string
-	Wait                        bool
-	CreatedBy                   string
+	WorkflowID, RunID, OperationID string
+	CreatedBy                      string
 }
 
 type ResponseInput struct {
@@ -77,7 +77,7 @@ type Filter struct {
 	Kind                                     Kind
 	Key, WorkspaceID, ItemID, RunID, Subject string
 	Groups                                   []string
-	AssignedOnly, Waiting, WaitOnly          bool
+	AssignedOnly, Waiting                    bool
 	Offset, Limit                            int
 }
 
@@ -184,17 +184,17 @@ func (r *Repo) Create(ctx context.Context, in CreateInput) (Task, error) {
 			if err != nil {
 				return err
 			}
-			if wf.Deleted || wf.WorkspaceID != in.WorkspaceID || !matches || in.Node == "" {
+			if wf.Deleted || wf.WorkspaceID != in.WorkspaceID || !matches || in.OperationID == "" {
 				return fmt.Errorf("%w: task workflow and run must belong to its workspace", dberr.ErrInvalidReference)
 			}
-		} else if in.WorkflowID != "" || in.RunID != "" || in.Node != "" || in.Wait {
-			return fmt.Errorf("%w: only workflow tasks may have a workflow, run, node or wait", dberr.ErrInvalidReference)
+		} else if in.WorkflowID != "" || in.RunID != "" || in.OperationID != "" {
+			return fmt.Errorf("%w: only workflow tasks may have a workflow, run or operation", dberr.ErrInvalidReference)
 		}
 		now := Now()
 		created = Task{
 			ID: in.ID, WorkspaceID: in.WorkspaceID, ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title, Description: in.Description,
 			Assignees: in.Assignees, Completion: in.Completion, Outcomes: in.Outcomes, InputSchema: in.InputSchema, Values: in.Values, Review: in.Review,
-			Priority: in.Priority, DueAt: utc(in.DueAt), Source: in.Source, WorkflowID: in.WorkflowID, RunID: in.RunID, Node: in.Node, Wait: in.Wait,
+			Priority: in.Priority, DueAt: utc(in.DueAt), Source: in.Source, WorkflowID: in.WorkflowID, RunID: in.RunID, OperationID: in.OperationID,
 			Status: StatusOpen, CreatedBy: in.CreatedBy, CreatedAt: now, UpdatedAt: now, Version: 1,
 		}
 		return q.InsertTask(ctx, created)

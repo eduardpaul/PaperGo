@@ -28,10 +28,12 @@ type Artifact struct {
 // sdkModule stands for @papergo/workflow inside a bundle.
 var sdkModule = "module.exports = globalThis.__papergoSdk;"
 
-// entry calls the engine's start function with the script's default export.
+// entry gives the engine the SDK's start and manifest functions, bound to
+// the script's default export.
 const entry = `import definition from "workflow:script";
-import { __start } from "@papergo/workflow";
-globalThis.__papergoMain = (runId, input) => __start(definition, runId, input);
+import { __start, __manifest } from "@papergo/workflow";
+globalThis.__papergoMain = (run) => __start(definition, run);
+globalThis.__papergoManifest = (params) => __manifest(definition, params);
 `
 
 // BundleError lists what is wrong with a script, one problem per line.

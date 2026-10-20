@@ -49,9 +49,6 @@ type Config struct {
 	MaxInFlight int
 	// RequestTimeout cancels API reads that outlive it; mutations and blob transfers are exempt.
 	RequestTimeout time.Duration
-	// NodeID identifies this process to the workflow runner; a restarted
-	// node recovers the runs it was executing.
-	NodeID string
 	// RunRetention is how long finished workflow runs, dispatched events
 	// and failed runs are kept.
 	RunRetention time.Duration
@@ -111,9 +108,6 @@ type Config struct {
 	AIExecution string
 	// BatchDeadline is how long a parked batch request waits.
 	BatchDeadline time.Duration
-	// BatchWorkspace is the workspace whose AI batch coordinator admits
-	// installation queues. Empty leaves the coordinator off.
-	BatchWorkspace    string
 	ProxySecret       string
 	ProxyTrustedCIDRs []netip.Prefix
 	// AdminPassword is the local administrator's initial password. It is
@@ -165,7 +159,7 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 		}
 		return fallback
 	}
-	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, NodeID: value("NODE_ID", "local"), RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
+	c := Config{Env: value("APP_ENV", "development"), Address: value("HTTP_ADDR", "127.0.0.1:8080"), DatabasePath: value("DATABASE_PATH", "data/papergo.db"), BlobPath: value("BLOB_PATH", "data/blobs"), AuthMode: value("AUTH_MODE", "local"), DevToken: lookup("DEV_TOKEN"), DevSubject: value("DEV_SUBJECT", "local-admin"), Issuer: lookup("OIDC_ISSUER"), Audience: lookup("OIDC_AUDIENCE"), MaxUpload: 64 * 1024 * 1024, MaxInFlight: 32, RequestTimeout: 30 * time.Second, RunRetention: 30 * 24 * time.Hour, SystemRunRetention: 24 * time.Hour, ResultCacheTTL: 30 * 24 * time.Hour}
 	c.DatabaseURL = lookup("DATABASE_URL")
 	if c.DatabaseURL != "" {
 		if u, err := url.Parse(c.DatabaseURL); err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" {
@@ -316,9 +310,6 @@ func loadFrom(getenv func(string) string, yamlText, directory string) (Config, e
 			return c, fmt.Errorf("PUBLIC_URL must be an http or https origin without a path, such as https://docs.example.com")
 		}
 		c.PublicURL = &url.URL{Scheme: u.Scheme, Host: u.Host}
-	}
-	if strings.TrimSpace(c.NodeID) == "" || len(c.NodeID) > 100 {
-		return c, fmt.Errorf("NODE_ID needs 1 to 100 characters")
 	}
 	if c.Env != "development" && c.Env != "test" && c.Env != "production" {
 		return c, fmt.Errorf("invalid APP_ENV")
@@ -644,8 +635,7 @@ type OperationQuotas struct {
 
 // loadBatch reads AI_BATCH_*: an independent provider, endpoint, model and
 // credential file. AI_EXECUTION is the default for remote LLM actions.
-// AI_BATCH_DEADLINE bounds a parked request. AI_BATCH_WORKSPACE selects the
-// workspace that owns the installation coordinator.
+// AI_BATCH_DEADLINE bounds a parked request.
 func (c *Config) loadBatch() error {
 	batch := ai.BatchConfig{
 		Provider: strings.ToLower(value("AI_BATCH_PROVIDER", ai.ProviderNone)),
@@ -685,7 +675,6 @@ func (c *Config) loadBatch() error {
 		}
 		c.BatchDeadline = d
 	}
-	c.BatchWorkspace = strings.TrimSpace(os.Getenv("AI_BATCH_WORKSPACE"))
 	return nil
 }
 

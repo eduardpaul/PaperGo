@@ -114,14 +114,16 @@ type Item struct {
 // PayloadField and PayloadValue match a top-level payload string.
 type Filter struct {
 	ContainerID, FieldID, CreatedBy, AfterID string
-	IDs, Kinds                               []string
+	IDs, Kinds, ExcludeKinds                 []string
 	Statuses                                 []Status
 	Finished                                 bool
 	UpdatedThrough, DeadlineBefore           *time.Time
 	OwnedBy                                  string
 	SharedKinds                              []string
 	PayloadField, PayloadValue               string
-	Limit                                    int
+	// ExecutionID selects the members of a module execution.
+	ExecutionID string
+	Limit       int
 }
 
 // Ready selects the pending operations of Kinds a worker may claim at Now:
@@ -245,15 +247,19 @@ func UTC(t time.Time) time.Time { return t.UTC().Truncate(time.Microsecond) }
 // distinct inputs.
 const claimScan = 1000
 
-// Accept records a pending operation and notifies clients. An operation
-// accepted with an ExecutionID starts parked: that execution, such as a
+// Accept records a pending operation and notifies clients; a missing ID is
+// generated. An operation accepted with an ExecutionID starts parked: that execution, such as a
 // task, ends it. An operation with an idempotency key returns the one the
 // key already names with the same payload digest, reporting it as
 // replayed, and ErrIdempotencyConflict when the digest differs.
 func (r *Repo) Accept(ctx context.Context, in Operation, now time.Time) (op Operation, replayed bool, err error) {
 	at := UTC(now)
+	id := in.ID
+	if id == "" {
+		id = uuid.NewString()
+	}
 	op = Operation{
-		ID: uuid.NewString(), ContainerID: in.ContainerID, WorkspaceID: in.WorkspaceID, FieldID: in.FieldID, Kind: in.Kind, TraceID: in.TraceID,
+		ID: id, ContainerID: in.ContainerID, WorkspaceID: in.WorkspaceID, FieldID: in.FieldID, Kind: in.Kind, TraceID: in.TraceID,
 		CreatedBy: in.CreatedBy, CredentialID: in.CredentialID, CredentialScopes: in.CredentialScopes, Payload: in.Payload, Result: json.RawMessage(`{}`),
 		Status: StatusPending, Surface: refs.SurfaceHead, Failures: []model.OperationFailure{}, CreatedAt: at, UpdatedAt: at, AttemptAt: at,
 		GroupKey: in.GroupKey, InputKey: in.InputKey, Deadline: in.Deadline, IdempotencyKey: in.IdempotencyKey, PayloadDigest: in.PayloadDigest,
@@ -292,6 +298,20 @@ func (r *Repo) Accept(ctx context.Context, in Operation, now time.Time) (op Oper
 		return Operation{}, false, err
 	}
 	return op, replayed, nil
+}
+
+// Delete removes operations with their items, whatever their status; what
+// they own goes with them.
+func (r *Repo) Delete(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.write(ctx, func(q Queries) error {
+		if err := q.DeleteOperationItems(ctx, ids); err != nil {
+			return err
+		}
+		return q.DeleteOperations(ctx, ids)
+	})
 }
 
 func (r *Repo) Find(ctx context.Context, id string) (Operation, error) {
@@ -455,6 +475,15 @@ func (r *Repo) Checkpoint(ctx context.Context, op *Operation, now time.Time) err
 	})
 }
 
+// Sleep gives the operation back until at, after an execution that made
+// progress and continues then, without counting the attempt.
+func (r *Repo) Sleep(ctx context.Context, id string, c Claim, at, now time.Time) error {
+	next := UTC(at)
+	return r.write(ctx, func(q Queries) error {
+		return r.fenced(ctx, q, Fence{IDs: []string{id}, Token: c.Token, Now: now}, Change{ClearClaim: true, AttemptAt: &next, Attempts: -1})
+	})
+}
+
 // Finish ends an operation under its claim with its terminal status and
 // result, and releases what it retained.
 func (r *Repo) Finish(ctx context.Context, op *Operation, now time.Time) error {
@@ -462,13 +491,14 @@ func (r *Repo) Finish(ctx context.Context, op *Operation, now time.Time) error {
 }
 
 // Park makes claimed operations members of the durable module execution
-// executionID, releasing their claims.
+// executionID, releasing their claims. Parking does not count as an
+// attempt: the execution made progress.
 func (r *Repo) Park(ctx context.Context, ids []string, c Claim, executionID string, now time.Time) error {
 	if executionID == "" {
 		return errors.New("parking needs an execution")
 	}
 	return r.write(ctx, func(q Queries) error {
-		return r.fenced(ctx, q, Fence{IDs: ids, Token: c.Token, Now: now}, Change{ClearClaim: true, ExecutionID: &executionID})
+		return r.fenced(ctx, q, Fence{IDs: ids, Token: c.Token, Now: now}, Change{ClearClaim: true, ExecutionID: &executionID, Attempts: -1})
 	})
 }
 
@@ -624,11 +654,11 @@ func (r *Repo) NextAttempt(ctx context.Context, kinds []string, now time.Time) (
 
 // CollectExpired deletes at most limit finished operations not updated since
 // the cutoff, with their item queues, and reports how many it deleted.
-func (r *Repo) CollectExpired(ctx context.Context, cutoff time.Time, limit int) (int, error) {
+func (r *Repo) CollectExpired(ctx context.Context, cutoff time.Time, keep []string, limit int) (int, error) {
 	n := 0
 	err := r.write(ctx, func(q Queries) error {
 		through := cutoff.UTC()
-		rows, err := q.Operations(ctx, Filter{Finished: true, UpdatedThrough: &through, Limit: limit})
+		rows, err := q.Operations(ctx, Filter{Finished: true, UpdatedThrough: &through, ExcludeKinds: keep, Limit: limit})
 		if err != nil || len(rows) == 0 {
 			return err
 		}

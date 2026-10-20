@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/runs"
@@ -57,6 +58,11 @@ func (e *Effects) Request(ctx context.Context, run script.Run, unsaved []runs.St
 			return errRejected
 		}
 		step.Output = script.ResponseOutput(response)
+		// An operation the request started is the run's, which cancelling
+		// the run cancels.
+		if location := response.Header["Location"]; response.Status == http.StatusAccepted && strings.HasPrefix(location, "/v1/operations/") {
+			step.Operations = []string{strings.TrimPrefix(location, "/v1/operations/")}
+		}
 		return t.DAL.Runs().RecordSteps(ctx, append(unsaved, step))
 	})
 	if errors.Is(err, errRejected) {
@@ -114,4 +120,19 @@ func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step,
 		return t.DAL.Runs().RecordSteps(ctx, append(unsaved, step))
 	})
 	return done, err
+}
+
+// Sleep records a sleep step; the run's worker makes it wait until then.
+func (e *Effects) Sleep(ctx context.Context, run script.Run, unsaved []runs.Step, step runs.Step) error {
+	return e.DMS.Write(ctx, func(t *dms.Service) error {
+		return t.DAL.Runs().RecordSteps(ctx, append(unsaved, step))
+	})
+}
+
+// Wake completes a pending sleep step whose time came.
+func (e *Effects) Wake(ctx context.Context, run script.Run, seq int) error {
+	return e.DMS.Write(ctx, func(t *dms.Service) error {
+		_, err := t.DAL.Runs().FinishStep(ctx, run.ID, seq, nil, "")
+		return err
+	})
 }

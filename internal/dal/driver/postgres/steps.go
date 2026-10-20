@@ -3,18 +3,21 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"time"
+
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/driver/nullable"
+	"papergo/internal/dal/driver/postgres/models"
+	"papergo/internal/dal/operations"
+	"papergo/internal/dal/runs"
 
 	"github.com/aarondl/opt/omit"
 	"github.com/aarondl/opt/omitnull"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
-	"papergo/internal/dal/dberr"
-	"papergo/internal/dal/driver/nullable"
-	"papergo/internal/dal/driver/postgres/models"
-	"papergo/internal/dal/operations"
-	"papergo/internal/dal/runs"
+	"github.com/stephenafamo/scan"
 )
 
 func (q Queries) RunSteps(ctx context.Context, runID string) ([]runs.Step, error) {
@@ -58,7 +61,7 @@ func (q Queries) FinishRunStep(ctx context.Context, runID string, seq int, statu
 	return n == 1, dberr.Translate(err)
 }
 
-func (q Queries) ReleaseWaits(ctx context.Context, operationIDs []string, at time.Time) (int64, error) {
+func (q Queries) ReleaseWaits(ctx context.Context, operationIDs []string, at time.Time) ([]string, error) {
 	args := []any{string(runs.StepCompleted), at, string(runs.StepPending), string(runs.StepWait)}
 	waiting := ""
 	if len(operationIDs) > 0 {
@@ -67,15 +70,36 @@ func (q Queries) ReleaseWaits(ctx context.Context, operationIDs []string, at tim
 		args = append(args, anys(operationIDs)...)
 	}
 	args = append(args, string(operations.StatusPending))
-	result, err := bob.Exec(ctx, q.exec, psql.RawQuery(`UPDATE workflow_steps SET status = ?, completed_at = ?
+	released, err := bob.All(ctx, q.exec, psql.RawQuery(`UPDATE workflow_steps SET status = ?, completed_at = ?
 WHERE status = ? AND kind = ?`+waiting+`
   AND NOT EXISTS (SELECT 1 FROM workflow_step_operations l JOIN operations o ON o.id = l.operation_id
-    WHERE l.run_id = workflow_steps.run_id AND l.seq = workflow_steps.seq AND o.status = ?)`, args...))
+    WHERE l.run_id = workflow_steps.run_id AND l.seq = workflow_steps.seq AND o.status = ?)
+RETURNING run_id`, args...), scan.SingleColumnMapper[string])
+	return released, dberr.Translate(err)
+}
+
+func (q Queries) StepOperations(ctx context.Context, runID string) ([]string, error) {
+	rows, err := models.WorkflowStepOperations.Query(models.SelectWhere.WorkflowStepOperations.RunID.EQ(runID)).All(ctx, q.exec)
 	if err != nil {
-		return 0, dberr.Translate(err)
+		return nil, dberr.Translate(err)
 	}
-	n, err := result.RowsAffected()
-	return n, dberr.Translate(err)
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		if !slices.Contains(out, r.OperationID) {
+			out = append(out, r.OperationID)
+		}
+	}
+	return out, nil
+}
+
+func (q Queries) CopyRunSteps(ctx context.Context, target, source string, before int) error {
+	if _, err := bob.Exec(ctx, q.exec, psql.RawQuery(`INSERT INTO workflow_steps (run_id, seq, kind, name, input_hash, status, "input", "output", error, started_at, completed_at)
+SELECT ?, seq, kind, name, input_hash, status, "input", "output", error, started_at, completed_at FROM workflow_steps WHERE run_id = ? AND seq < ?`, target, source, before)); err != nil {
+		return dberr.Translate(err)
+	}
+	_, err := bob.Exec(ctx, q.exec, psql.RawQuery(`INSERT INTO workflow_step_operations (run_id, seq, operation_id)
+SELECT ?, seq, operation_id FROM workflow_step_operations WHERE run_id = ? AND seq < ?`, target, source, before))
+	return dberr.Translate(err)
 }
 
 func stepOutput(output json.RawMessage) omitnull.Val[[]byte] {

@@ -155,7 +155,7 @@ func (q Queries) WorkflowVersion(ctx context.Context, workflowID string, number 
 func (q Queries) InsertWorkflowVersion(ctx context.Context, v workflows.Version) error {
 	_, err := models.WorkflowVersions.Insert(&models.WorkflowVersionSetter{
 		ID: omit.From(v.ID), CreatedAt: omit.From(v.CreatedAt), WorkflowID: omit.From(v.WorkflowID), Number: omit.From(int64(v.Number)),
-		Definition: omit.From(types.NewJSON(v.Definition)), CreatedBy: omit.From(v.CreatedBy),
+		Definition: omit.From(types.NewJSON(v.Definition)), Source: omit.From(v.Source), Bundle: omit.From(v.Bundle), BundleHash: omit.From(v.BundleHash), CreatedBy: omit.From(v.CreatedBy),
 	}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
@@ -225,7 +225,8 @@ func workflowRecord(r *models.Workflow) workflows.Workflow {
 }
 
 func versionRecord(r *models.WorkflowVersion) workflows.Version {
-	return workflows.Version{ID: r.ID, WorkflowID: r.WorkflowID, CreatedBy: r.CreatedBy, Number: int(r.Number), Definition: r.Definition.Val, CreatedAt: r.CreatedAt.UTC()}
+	return workflows.Version{ID: r.ID, WorkflowID: r.WorkflowID, CreatedBy: r.CreatedBy, Number: int(r.Number),
+		Content: workflows.Content{Definition: r.Definition.Val, Source: r.Source, Bundle: r.Bundle, BundleHash: r.BundleHash}, CreatedAt: r.CreatedAt.UTC()}
 }
 
 func (q Queries) TriggeredWorkflows(ctx context.Context, collectionID string) ([]string, error) {

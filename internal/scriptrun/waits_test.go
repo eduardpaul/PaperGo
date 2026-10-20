@@ -28,15 +28,18 @@ func TestReconcileReleasesMissedWaits(t *testing.T) {
 	if err = f.s.DAL.Runs().RecordSteps(ctx, []runs.Step{wait}); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := ReconcileWaits(ctx, f.s); err != nil || n != 0 {
-		t.Fatalf("released a wait for pending work: %d %v", n, err)
+	if err := ReconcileWaits(ctx, f.s); err != nil {
+		t.Fatal(err)
+	}
+	if waiting, err := f.s.DAL.Runs().Waiting(ctx, run.ID); err != nil || !waiting {
+		t.Fatalf("released a wait for pending work: %v %v", waiting, err)
 	}
 	// Ending the operation outside the service runs no hook.
 	if ok, err := f.s.DAL.Operations().Cancel(ctx, op.ID, time.Now()); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
-	if n, err := ReconcileWaits(ctx, f.s); err != nil || n != 1 {
-		t.Fatalf("reconciled %d waits: %v", n, err)
+	if err := ReconcileWaits(ctx, f.s); err != nil {
+		t.Fatal(err)
 	}
 	steps, err := f.s.DAL.Runs().Steps(ctx, run.ID)
 	if err != nil || len(steps) != 1 || steps[0].Status != runs.StepCompleted {

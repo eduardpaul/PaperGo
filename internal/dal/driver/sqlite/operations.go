@@ -43,6 +43,9 @@ func operationsMatching(f operations.Filter) []dialect.Expression {
 	if len(f.Kinds) > 0 {
 		where = append(where, c.Kind.In(sqlite.Arg(anys(f.Kinds)...)))
 	}
+	if len(f.ExcludeKinds) > 0 {
+		where = append(where, c.Kind.NotIn(sqlite.Arg(anys(f.ExcludeKinds)...)))
+	}
 	if len(f.Statuses) > 0 {
 		statuses := make([]any, len(f.Statuses))
 		for i, s := range f.Statuses {
@@ -58,6 +61,9 @@ func operationsMatching(f operations.Filter) []dialect.Expression {
 	}
 	if f.DeadlineBefore != nil {
 		where = append(where, c.Deadline.LT(sqlite.Arg(f.DeadlineBefore.UTC())))
+	}
+	if f.ExecutionID != "" {
+		where = append(where, c.ExecutionID.EQ(sqlite.Arg(f.ExecutionID)))
 	}
 	if f.OwnedBy != "" {
 		where = append(where, sqlite.Or(c.CreatedBy.EQ(sqlite.Arg(f.OwnedBy)), c.Kind.In(sqlite.Arg(anys(f.SharedKinds)...))))

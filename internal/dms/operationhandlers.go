@@ -22,6 +22,10 @@ import (
 
 const OperationKindFieldIndex = "field_index"
 const OperationKindBulkUpdate = "bulk_update"
+
+// OperationKindRun executes a workflow run; the workflow runtime
+// registers its handler.
+const OperationKindRun = "script.run"
 const OperationRetention = 30 * 24 * time.Hour
 
 // A step performs one bounded, transactional batch and persists its resume
@@ -54,6 +58,10 @@ type OperationHandler struct {
 	// External operations are never executed: a domain action ends them,
 	// such as the response that completes a task. They are accepted parked.
 	External bool
+	// KeepFinished keeps finished operations past OperationRetention:
+	// their owner deletes them, such as workflow runs, whose history has
+	// its own retention.
+	KeepFinished bool
 	// MaxAttempts bounds the executions an operation may begin, including
 	// those a stopped process or a retry ended; zero means
 	// DefaultMaxAttempts. Past it the operation fails with
@@ -316,6 +324,9 @@ func (s *Service) accept(ctx context.Context, op operations.Operation, quota boo
 		}
 	}
 	handler := s.ops.handlers[op.Kind]
+	if handler.External {
+		op.ExecutionID = externalExecution
+	}
 	if handler.Deadline > 0 && op.Deadline == nil {
 		deadline := now.Add(handler.Deadline)
 		op.Deadline = &deadline
@@ -344,6 +355,41 @@ func (s *Service) accept(ctx context.Context, op operations.Operation, quota boo
 	}
 	s.wakeOperations()
 	return stored, false, nil
+}
+
+// externalExecution parks external operations until a domain action ends
+// them.
+const externalExecution = "external"
+
+// AcceptOperation accepts an operation PaperGo starts itself for
+// op.CreatedBy, such as a workflow run or the operation a task's answer
+// ends: the caller authorized it, so it is neither validated nor counted
+// toward quotas. A given ID names it. Call it on a service bound to a
+// write.
+func (s *Service) AcceptOperation(ctx context.Context, op operations.Operation) (operations.Operation, error) {
+	if _, ok := s.ops.handlers[op.Kind]; !ok {
+		return operations.Operation{}, invalid("no handler runs operation kind " + op.Kind)
+	}
+	stored, _, err := s.accept(ctx, op, false)
+	return stored, err
+}
+
+// EndExternalOperation ends a pending external operation with status, a
+// result or a message. An operation that already ended is left alone.
+// Call it on a service bound to a write.
+func (s *Service) EndExternalOperation(ctx context.Context, id string, status operations.Status, result json.RawMessage, message string) error {
+	op, err := s.DAL.Operations().Find(ctx, id)
+	if err != nil {
+		return err
+	}
+	if op.Status != operations.StatusPending {
+		return nil
+	}
+	op.Status, op.Result, op.Error = status, result, message
+	if err = s.FinishParkedOperation(ctx, &op, externalExecution); errors.Is(err, operations.ErrClaimLost) {
+		return nil
+	}
+	return err
 }
 
 // checkOperationQuota counts the pending operations, including any this
@@ -469,6 +515,28 @@ func (s *Service) ParkOperations(ctx context.Context, ops []*operations.Operatio
 	return nil
 }
 
+// SleepOperation gives a claimed operation back until at, without counting
+// the attempt: an execution that made progress and continues then, such
+// as a workflow run that sleeps. Call it on a service bound to a write.
+func (s *Service) SleepOperation(ctx context.Context, op *operations.Operation, at time.Time) error {
+	if err := s.DAL.Operations().Sleep(ctx, op.ID, op.Claim, at, time.Now()); err != nil {
+		return err
+	}
+	op.Claim = operations.Claim{}
+	return nil
+}
+
+// ReleaseOperation gives a claimed operation back, ready at once, without
+// counting the attempt. Call it on a service bound to a write.
+func (s *Service) ReleaseOperation(ctx context.Context, op *operations.Operation) error {
+	if err := s.DAL.Operations().Release(ctx, op.ID, op.Claim, time.Now()); err != nil {
+		return err
+	}
+	op.Claim = operations.Claim{}
+	s.wakeOperations()
+	return nil
+}
+
 // FinishParkedOperation ends op, a pending member of executionID, with its
 // terminal status. operations.ErrClaimLost means it ended or left the
 // execution meanwhile.
@@ -512,8 +580,9 @@ func (s *Service) CancelOperation(ctx context.Context, subject, id string) (out 
 		}
 		// Index maintenance and PaperGo's own work complete what scheduled
 		// them.
+		// External operations end with what they stand for, such as a task.
 		handler, startable := t.ops.handlers[op.Kind]
-		if !startable || handler.Validate == nil && op.Kind != OperationKindBulkUpdate || op.CreatedBy == systemSubject {
+		if !startable || handler.External || handler.Validate == nil && op.Kind != OperationKindBulkUpdate || op.CreatedBy == systemSubject {
 			return ErrForbidden
 		}
 		if op.CreatedBy != subject {
@@ -525,22 +594,12 @@ func (s *Service) CancelOperation(ctx context.Context, subject, id string) (out 
 				return e
 			}
 		}
-		cancelled, e := t.DAL.Operations().Cancel(ctx, id, time.Now())
+		ended, cancelled, e := t.cancelOperation(ctx, id)
 		if e != nil {
 			return e
 		}
 		if !cancelled {
 			return ErrConflict
-		}
-		t.operationsFinished(id)
-		ended, e := t.DAL.Operations().Find(ctx, id)
-		if e != nil {
-			return e
-		}
-		if handler.Cancelled != nil {
-			if e = handler.Cancelled(ctx, t, &ended); e != nil {
-				return e
-			}
 		}
 		out = viewOperation(ended, time.Now())
 		return t.auditCatalog(ctx, subject, "operation.cancel", map[string]any{"operation_id": id})
@@ -548,15 +607,55 @@ func (s *Service) CancelOperation(ctx context.Context, subject, id string) (out 
 	return
 }
 
+// cancelOperation ends a pending operation as cancelled, with its handler's
+// cleanup, and reports whether it was pending.
+func (s *Service) cancelOperation(ctx context.Context, id string) (operations.Operation, bool, error) {
+	cancelled, err := s.DAL.Operations().Cancel(ctx, id, time.Now())
+	if err != nil || !cancelled {
+		return operations.Operation{}, false, err
+	}
+	s.operationsFinished(id)
+	ended, err := s.DAL.Operations().Find(ctx, id)
+	if err != nil {
+		return operations.Operation{}, false, err
+	}
+	if handler := s.ops.handlers[ended.Kind]; handler.Cancelled != nil {
+		if err = handler.Cancelled(ctx, s, &ended); err != nil {
+			return operations.Operation{}, false, err
+		}
+	}
+	return ended, true, nil
+}
+
+// CancelOperations cancels the pending operations among ids that PaperGo
+// ends itself, such as a replaced workflow run or the work a cancelled run
+// started, with their handlers' cleanup; those that ended are left. It
+// checks no permissions. Call it on a service bound to a write.
+func (s *Service) CancelOperations(ctx context.Context, ids []string) error {
+	for _, id := range ids {
+		if _, _, err := s.cancelOperation(ctx, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Terminal payloads/results expire together. Pending work is retained for resume.
 // Each pass deletes operationPurgePage rows and continues until the expired set is drained.
+// Kinds whose handlers keep finished operations are left to their owners.
 func (s *Service) CollectExpiredOperations(ctx context.Context, now time.Time) error {
 	cutoff := now.UTC().Add(-OperationRetention)
+	var keep []string
+	for kind, handler := range s.ops.handlers {
+		if handler.KeepFinished {
+			keep = append(keep, kind)
+		}
+	}
 	for {
 		var n int
 		err := s.write(ctx, func(t *Service) error {
 			var err error
-			n, err = t.DAL.Operations().CollectExpired(ctx, cutoff, operationPurgePage)
+			n, err = t.DAL.Operations().CollectExpired(ctx, cutoff, keep, operationPurgePage)
 			return err
 		})
 		if err != nil || n < operationPurgePage {

@@ -2199,6 +2199,15 @@ export function createTaskAnswerFromDiscriminatorValue(parseNode: ParseNode | un
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {TaskCreate_review}
+ */
+// @ts-ignore
+export function createTaskCreate_reviewFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoTaskCreate_review;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {TaskCreate_values}
  */
 // @ts-ignore
@@ -5067,7 +5076,7 @@ export function deserializeIntoTask(task: Partial<Task> | undefined = {}) : Reco
         "item_id": n => { task.itemId = n.getStringValue(); },
         "key": n => { task.key = n.getStringValue(); },
         "kind": n => { task.kind = n.getEnumValue<Task_kind>(Task_kindObject); },
-        "node": n => { task.node = n.getStringValue(); },
+        "operation_id": n => { task.operationId = n.getStringValue(); },
         "outcome": n => { task.outcome = n.getStringValue(); },
         "outcomes": n => { task.outcomes = n.getCollectionOfObjectValues<TaskOutcome>(createTaskOutcomeFromDiscriminatorValue); },
         "priority": n => { task.priority = n.getEnumValue<Task_priority>(Task_priorityObject); },
@@ -5160,8 +5169,21 @@ export function deserializeIntoTaskCreate(taskCreate: Partial<TaskCreate> | unde
         "kind": n => { taskCreate.kind = n.getEnumValue<TaskCreate_kind>(TaskCreate_kindObject); },
         "outcomes": n => { taskCreate.outcomes = n.getCollectionOfObjectValues<TaskOutcome>(createTaskOutcomeFromDiscriminatorValue); },
         "priority": n => { taskCreate.priority = n.getEnumValue<TaskCreate_priority>(TaskCreate_priorityObject); },
+        "review": n => { taskCreate.review = n.getObjectValue<TaskCreate_review>(createTaskCreate_reviewFromDiscriminatorValue); },
         "title": n => { taskCreate.title = n.getStringValue(); },
         "values": n => { taskCreate.values = n.getObjectValue<TaskCreate_values>(createTaskCreate_valuesFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param TaskCreate_review The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoTaskCreate_review(taskCreate_review: Partial<TaskCreate_review> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "staged_file_id": n => { taskCreate_review.stagedFileId = n.getStringValue(); },
+        "type": n => { taskCreate_review.type = n.getEnumValue<TaskCreate_review_type>(TaskCreate_review_typeObject); },
     }
 }
 /**
@@ -10183,7 +10205,7 @@ export function serializeTask(writer: SerializationWriter, task: Partial<Task> |
     writer.writeStringValue("item_id", task.itemId);
     writer.writeStringValue("key", task.key);
     writer.writeEnumValue<Task_kind>("kind", task.kind);
-    writer.writeStringValue("node", task.node);
+    writer.writeStringValue("operation_id", task.operationId);
     writer.writeStringValue("outcome", task.outcome);
     writer.writeCollectionOfObjectValues<TaskOutcome>("outcomes", task.outcomes, serializeTaskOutcome);
     writer.writeEnumValue<Task_priority>("priority", task.priority);
@@ -10282,8 +10304,21 @@ export function serializeTaskCreate(writer: SerializationWriter, taskCreate: Par
     writer.writeEnumValue<TaskCreate_kind>("kind", taskCreate.kind);
     writer.writeCollectionOfObjectValues<TaskOutcome>("outcomes", taskCreate.outcomes, serializeTaskOutcome);
     writer.writeEnumValue<TaskCreate_priority>("priority", taskCreate.priority);
+    writer.writeObjectValue<TaskCreate_review>("review", taskCreate.review, serializeTaskCreate_review);
     writer.writeStringValue("title", taskCreate.title);
     writer.writeObjectValue<TaskCreate_values>("values", taskCreate.values, serializeTaskCreate_values);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param TaskCreate_review The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeTaskCreate_review(writer: SerializationWriter, taskCreate_review: Partial<TaskCreate_review> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!taskCreate_review || isSerializingDerivedType) { return; }
+    writer.writeStringValue("staged_file_id", taskCreate_review.stagedFileId);
+    writer.writeEnumValue<TaskCreate_review_type>("type", taskCreate_review.type);
 }
 /**
  * Serializes information the current object
@@ -11454,9 +11489,9 @@ export interface Task extends AdditionalDataHolder, Parsable {
      */
     kind?: Task_kind | null;
     /**
-     * The node property
+     * A workflow's task: the operation its answer ends, which the run waits on with ctx.wait. It succeeds with the task's result when the task completes and is cancelled with the task.
      */
-    node?: string | null;
+    operationId?: string | null;
     /**
      * The outcome property
      */
@@ -11610,6 +11645,10 @@ export interface TaskCreate extends Parsable {
      */
     priority?: TaskCreate_priority | null;
     /**
+     * A staged file of the calling workflow run for the assignees to review: beside the item's current file (file.compare) or alone (file.preview).
+     */
+    review?: TaskCreate_review | null;
+    /**
      * The title property
      */
     title?: string | null;
@@ -11621,6 +11660,20 @@ export interface TaskCreate extends Parsable {
 export type TaskCreate_completion = (typeof TaskCreate_completionObject)[keyof typeof TaskCreate_completionObject];
 export type TaskCreate_kind = (typeof TaskCreate_kindObject)[keyof typeof TaskCreate_kindObject];
 export type TaskCreate_priority = (typeof TaskCreate_priorityObject)[keyof typeof TaskCreate_priorityObject];
+/**
+ * A staged file of the calling workflow run for the assignees to review: beside the item's current file (file.compare) or alone (file.preview).
+ */
+export interface TaskCreate_review extends Parsable {
+    /**
+     * The staged_file_id property
+     */
+    stagedFileId?: string | null;
+    /**
+     * The type property
+     */
+    type?: TaskCreate_review_type | null;
+}
+export type TaskCreate_review_type = (typeof TaskCreate_review_typeObject)[keyof typeof TaskCreate_review_typeObject];
 export interface TaskCreate_values extends AdditionalDataHolder, Parsable {
 }
 export interface TaskList extends AdditionalDataHolder, Parsable {
@@ -12943,6 +12996,10 @@ export const TaskCreate_priorityObject = {
     Low: "low",
     Normal: "normal",
     High: "high",
+} as const;
+export const TaskCreate_review_typeObject = {
+    FileCompare: "file.compare",
+    FilePreview: "file.preview",
 } as const;
 export const TaskOutcome_commentObject = {
     None: "none",

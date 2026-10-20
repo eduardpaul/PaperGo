@@ -36,7 +36,6 @@ import (
 	"papergo/internal/dal/tasks"
 	"papergo/internal/dal/taxonomy"
 	"papergo/internal/dal/views"
-	"papergo/internal/dal/waits"
 	"papergo/internal/dal/workflows"
 )
 
@@ -83,7 +82,6 @@ type queries interface {
 	tasks.Queries
 	taxonomy.Queries
 	views.Queries
-	waits.Queries
 	workflows.Queries
 }
 
@@ -229,12 +227,6 @@ func (s *Store) Taxonomy() *taxonomy.Repo {
 // transaction when WithTx was used.
 func (s *Store) Views() *views.Repo {
 	return views.NewRepo(s.bind(s.exec()), writer[views.Queries](s))
-}
-
-// Waits returns the workflow wait repository, bound to the store's
-// transaction when WithTx was used.
-func (s *Store) Waits() *waits.Repo {
-	return waits.NewRepo(s.bind(s.exec()), writer[waits.Queries](s))
 }
 
 // Workflows returns the workflow definition repository, bound to the store's

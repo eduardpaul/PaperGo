@@ -56,7 +56,6 @@ func Where[Q sqlite.Filterable]() struct {
 	Relationships           relationshipWhere[Q]
 	ResourceKeywords        resourceKeywordWhere[Q]
 	Resources               resourceWhere[Q]
-	RunnerStepResults       runnerStepResultWhere[Q]
 	SchemaRevisions         schemaRevisionWhere[Q]
 	SchemaTemplates         schemaTemplateWhere[Q]
 	SmartFolders            smartFolderWhere[Q]
@@ -75,7 +74,6 @@ func Where[Q sqlite.Filterable]() struct {
 	WorkflowSteps           workflowStepWhere[Q]
 	WorkflowTriggers        workflowTriggerWhere[Q]
 	WorkflowVersions        workflowVersionWhere[Q]
-	WorkflowWaits           workflowWaitWhere[Q]
 	Workflows               workflowWhere[Q]
 } {
 	return struct {
@@ -118,7 +116,6 @@ func Where[Q sqlite.Filterable]() struct {
 		Relationships           relationshipWhere[Q]
 		ResourceKeywords        resourceKeywordWhere[Q]
 		Resources               resourceWhere[Q]
-		RunnerStepResults       runnerStepResultWhere[Q]
 		SchemaRevisions         schemaRevisionWhere[Q]
 		SchemaTemplates         schemaTemplateWhere[Q]
 		SmartFolders            smartFolderWhere[Q]
@@ -137,7 +134,6 @@ func Where[Q sqlite.Filterable]() struct {
 		WorkflowSteps           workflowStepWhere[Q]
 		WorkflowTriggers        workflowTriggerWhere[Q]
 		WorkflowVersions        workflowVersionWhere[Q]
-		WorkflowWaits           workflowWaitWhere[Q]
 		Workflows               workflowWhere[Q]
 	}{
 		AccessTokens:            buildAccessTokenWhere[Q](AccessTokens.Columns),
@@ -179,7 +175,6 @@ func Where[Q sqlite.Filterable]() struct {
 		Relationships:           buildRelationshipWhere[Q](Relationships.Columns),
 		ResourceKeywords:        buildResourceKeywordWhere[Q](ResourceKeywords.Columns),
 		Resources:               buildResourceWhere[Q](Resources.Columns),
-		RunnerStepResults:       buildRunnerStepResultWhere[Q](RunnerStepResults.Columns),
 		SchemaRevisions:         buildSchemaRevisionWhere[Q](SchemaRevisions.Columns),
 		SchemaTemplates:         buildSchemaTemplateWhere[Q](SchemaTemplates.Columns),
 		SmartFolders:            buildSmartFolderWhere[Q](SmartFolders.Columns),
@@ -198,7 +193,6 @@ func Where[Q sqlite.Filterable]() struct {
 		WorkflowSteps:           buildWorkflowStepWhere[Q](WorkflowSteps.Columns),
 		WorkflowTriggers:        buildWorkflowTriggerWhere[Q](WorkflowTriggers.Columns),
 		WorkflowVersions:        buildWorkflowVersionWhere[Q](WorkflowVersions.Columns),
-		WorkflowWaits:           buildWorkflowWaitWhere[Q](WorkflowWaits.Columns),
 		Workflows:               buildWorkflowWhere[Q](Workflows.Columns),
 	}
 }

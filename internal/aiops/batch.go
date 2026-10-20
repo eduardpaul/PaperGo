@@ -402,3 +402,21 @@ func fail(ctx context.Context, s *dms.Service, op *operations.Operation, message
 		return t.SaveOperation(ctx, op)
 	})
 }
+
+// Collect deletes the provider batch records past their expiry and the
+// cached answers idle past ResultTTL. It is a maintenance task.
+func (a *Assistant) Collect(ctx context.Context, now time.Time) error {
+	if a.Records != nil {
+		if err := a.Records.Purge(ctx, now); err != nil {
+			return err
+		}
+	}
+	if results, ok := a.Results.(interface {
+		PurgeExpired(context.Context, time.Time) (int64, error)
+	}); ok {
+		if _, err := results.PurgeExpired(ctx, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}

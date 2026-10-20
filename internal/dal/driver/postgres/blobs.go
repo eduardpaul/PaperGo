@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
+	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/dberr"
+	"papergo/internal/dal/driver/postgres/models"
+
 	"github.com/aarondl/opt/omit"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/im"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
 	"github.com/stephenafamo/scan"
-	"papergo/internal/dal/blobs"
-	"papergo/internal/dal/dberr"
-	"papergo/internal/dal/driver/nullable"
-	"papergo/internal/dal/driver/postgres/models"
 )
 
 func (q Queries) BytesHeld(ctx context.Context, sha256 string) (bool, error) {
@@ -97,18 +97,8 @@ func (q Queries) DeleteDeletion(ctx context.Context, id string) error {
 
 func (q Queries) InsertBlobLease(ctx context.Context, l blobs.Lease) error {
 	_, err := models.BlobLeases.Insert(&models.BlobLeaseSetter{
-		ID: omit.From(l.ID), CreatedAt: omit.From(l.CreatedAt), OwnerID: omit.From(l.OwnerID), RunID: nullable.String(l.RunID), OperationID: nullable.String(l.OperationID), BlobID: omit.From(l.BlobID),
-	}, im.OnConflict("owner_id", "blob_id").DoNothing()).Exec(ctx, q.exec)
-	return dberr.Translate(err)
-}
-
-func (q Queries) DeleteOwnerBlobLeases(ctx context.Context, ownerID string) error {
-	_, err := models.BlobLeases.Delete(models.DeleteWhere.BlobLeases.OwnerID.EQ(ownerID)).Exec(ctx, q.exec)
-	return dberr.Translate(err)
-}
-
-func (q Queries) DeleteRunBlobLeases(ctx context.Context, runID string) error {
-	_, err := models.BlobLeases.Delete(models.DeleteWhere.BlobLeases.RunID.EQ(runID)).Exec(ctx, q.exec)
+		ID: omit.From(l.ID), CreatedAt: omit.From(l.CreatedAt), OperationID: omit.From(l.OperationID), BlobID: omit.From(l.BlobID),
+	}, im.OnConflict("operation_id", "blob_id").DoNothing()).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 

@@ -83,12 +83,11 @@ func claimRole(ctx context.Context, t *dms.Service, subject string, w *workflows
 		return err
 	}
 	for _, other := range others {
-		other, _, err = revise(ctx, t, subject, other, mustCurrent(ctx, t, other), func(u *workflows.Changes) { u.AutomaticEnabled = boolPtr(false) })
+		v, err := current(ctx, t, other)
 		if err != nil {
 			return err
 		}
-		v, err := current(ctx, t, other)
-		if err != nil {
+		if other, v, err = revise(ctx, t, subject, other, v.Content, func(u *workflows.Changes) { u.AutomaticEnabled = boolPtr(false) }); err != nil {
 			return err
 		}
 		def, err := ParseDefinition(v.Definition)

@@ -17,12 +17,10 @@ import (
 	"papergo/internal/dms"
 	"papergo/internal/identity"
 	"papergo/internal/requestmeta"
-	"papergo/internal/runner"
 	"papergo/internal/storage"
 	"papergo/internal/transfer"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
-	_ "papergo/internal/workflowai" // ai activities for catalog tests that do not import the runner
 	"papergo/web"
 	"strconv"
 	"strings"
@@ -32,7 +30,6 @@ import (
 type API struct {
 	DMS       *dms.Service
 	Workflows *workflow.Service
-	Runner    *runner.Runner
 	Auth      auth.Authenticator
 	Storage   storage.Store
 	Logger    *slog.Logger

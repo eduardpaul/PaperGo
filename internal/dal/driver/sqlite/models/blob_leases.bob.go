@@ -9,9 +9,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/aarondl/opt/null"
 	"github.com/aarondl/opt/omit"
-	"github.com/aarondl/opt/omitnull"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/sqlite"
 	"github.com/stephenafamo/bob/dialect/sqlite/dialect"
@@ -25,12 +23,10 @@ import (
 
 // BlobLease is an object representing the database table.
 type BlobLease struct {
-	ID          string           `db:"id,pk" `
-	CreatedAt   time.Time        `db:"created_at" `
-	OwnerID     string           `db:"owner_id" `
-	RunID       null.Val[string] `db:"run_id" `
-	OperationID null.Val[string] `db:"operation_id" `
-	BlobID      string           `db:"blob_id" `
+	ID          string    `db:"id,pk" `
+	CreatedAt   time.Time `db:"created_at" `
+	OperationID string    `db:"operation_id" `
+	BlobID      string    `db:"blob_id" `
 
 	R blobLeaseR `db:"-" `
 }
@@ -47,9 +43,8 @@ type BlobLeasesQuery = *sqlite.ViewQuery[*BlobLease, BlobLeaseSlice]
 
 // blobLeaseR is where relationships are stored.
 type blobLeaseR struct {
-	Blob           *Blob        // fk_blob_leases_0
-	Operation      *Operation   // fk_blob_leases_1
-	RunWorkflowRun *WorkflowRun // fk_blob_leases_2
+	Blob      *Blob      // fk_blob_leases_0
+	Operation *Operation // fk_blob_leases_1
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -58,14 +53,13 @@ type blobLeaseR struct {
 
 // blobLeaseRLoaded tracks which relationships on BlobLease have been loaded.
 type blobLeaseRLoaded struct {
-	Blob           bool // fk_blob_leases_0
-	Operation      bool // fk_blob_leases_1
-	RunWorkflowRun bool // fk_blob_leases_2
+	Blob      bool // fk_blob_leases_0
+	Operation bool // fk_blob_leases_1
 }
 
 func buildBlobLeaseColumns(tableName string) blobLeaseColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "owner_id", "run_id", "operation_id", "blob_id",
+		"id", "created_at", "operation_id", "blob_id",
 	)
 
 	if tableName != "" {
@@ -77,8 +71,6 @@ func buildBlobLeaseColumns(tableName string) blobLeaseColumns {
 		tableAlias:  tableName,
 		ID:          buildBlobLeaseColumn(tableName, "id"),
 		CreatedAt:   buildBlobLeaseColumn(tableName, "created_at"),
-		OwnerID:     buildBlobLeaseColumn(tableName, "owner_id"),
-		RunID:       buildBlobLeaseColumn(tableName, "run_id"),
 		OperationID: buildBlobLeaseColumn(tableName, "operation_id"),
 		BlobID:      buildBlobLeaseColumn(tableName, "blob_id"),
 	}
@@ -89,8 +81,6 @@ type blobLeaseColumns struct {
 	tableAlias  string
 	ID          blobLeaseColumn
 	CreatedAt   blobLeaseColumn
-	OwnerID     blobLeaseColumn
-	RunID       blobLeaseColumn
 	OperationID blobLeaseColumn
 	BlobID      blobLeaseColumn
 }
@@ -138,29 +128,21 @@ func (c blobLeaseColumn) ShouldOmitParens() bool {
 // All values are optional, and do not have to be set
 // Generated columns are not included
 type BlobLeaseSetter struct {
-	ID          omit.Val[string]     `db:"id,pk" `
-	CreatedAt   omit.Val[time.Time]  `db:"created_at" `
-	OwnerID     omit.Val[string]     `db:"owner_id" `
-	RunID       omitnull.Val[string] `db:"run_id" `
-	OperationID omitnull.Val[string] `db:"operation_id" `
-	BlobID      omit.Val[string]     `db:"blob_id" `
+	ID          omit.Val[string]    `db:"id,pk" `
+	CreatedAt   omit.Val[time.Time] `db:"created_at" `
+	OperationID omit.Val[string]    `db:"operation_id" `
+	BlobID      omit.Val[string]    `db:"blob_id" `
 }
 
 func (s BlobLeaseSetter) SetColumns() []string {
-	vals := make([]string, 0, 6)
+	vals := make([]string, 0, 4)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
 	if s.CreatedAt.IsValue() {
 		vals = append(vals, "created_at")
 	}
-	if s.OwnerID.IsValue() {
-		vals = append(vals, "owner_id")
-	}
-	if s.RunID.IsValue() || s.RunID.IsNull() {
-		vals = append(vals, "run_id")
-	}
-	if s.OperationID.IsValue() || s.OperationID.IsNull() {
+	if s.OperationID.IsValue() {
 		vals = append(vals, "operation_id")
 	}
 	if s.BlobID.IsValue() {
@@ -176,14 +158,8 @@ func (s BlobLeaseSetter) Overwrite(t *BlobLease) {
 	if s.CreatedAt.IsValue() {
 		t.CreatedAt = s.CreatedAt.MustGet()
 	}
-	if s.OwnerID.IsValue() {
-		t.OwnerID = s.OwnerID.MustGet()
-	}
-	if s.RunID.IsValue() || s.RunID.IsNull() {
-		t.RunID = s.RunID.MustGetNull()
-	}
-	if s.OperationID.IsValue() || s.OperationID.IsNull() {
-		t.OperationID = s.OperationID.MustGetNull()
+	if s.OperationID.IsValue() {
+		t.OperationID = s.OperationID.MustGet()
 	}
 	if s.BlobID.IsValue() {
 		t.BlobID = s.BlobID.MustGet()
@@ -220,26 +196,12 @@ func (s *BlobLeaseSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.CreatedAt.MustGet()).WriteSQL(ctx, w, d, start)
 			}))
-		case "owner_id":
-			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-				if s.OwnerID.IsUnset() {
-					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
-				}
-				return sqlite.Arg(s.OwnerID.MustGet()).WriteSQL(ctx, w, d, start)
-			}))
-		case "run_id":
-			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-				if s.RunID.IsUnset() {
-					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
-				}
-				return sqlite.Arg(s.RunID.MustGetNull()).WriteSQL(ctx, w, d, start)
-			}))
 		case "operation_id":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 				if s.OperationID.IsUnset() {
 					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
 				}
-				return sqlite.Arg(s.OperationID.MustGetNull()).WriteSQL(ctx, w, d, start)
+				return sqlite.Arg(s.OperationID.MustGet()).WriteSQL(ctx, w, d, start)
 			}))
 		case "blob_id":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
@@ -259,7 +221,7 @@ func (s BlobLeaseSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s BlobLeaseSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 6)
+	exprs := make([]bob.Expression, 0, 4)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -275,21 +237,7 @@ func (s BlobLeaseSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
-	if s.OwnerID.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			sqlite.Quote(append(prefix, "owner_id")...),
-			sqlite.Arg(s.OwnerID),
-		}})
-	}
-
-	if s.RunID.IsValue() || s.RunID.IsNull() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			sqlite.Quote(append(prefix, "run_id")...),
-			sqlite.Arg(s.RunID),
-		}})
-	}
-
-	if s.OperationID.IsValue() || s.OperationID.IsNull() {
+	if s.OperationID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			sqlite.Quote(append(prefix, "operation_id")...),
 			sqlite.Arg(s.OperationID),
@@ -313,17 +261,13 @@ func blobLeaseScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, f
 		idx int
 		dst func(o *BlobLease) any
 	}
-	targets := make([]target, 0, 6)
+	targets := make([]target, 0, 4)
 	for i, col := range cols {
 		switch col {
 		case "id":
 			targets = append(targets, target{i, func(o *BlobLease) any { return &o.ID }})
 		case "created_at":
 			targets = append(targets, target{i, func(o *BlobLease) any { return &o.CreatedAt }})
-		case "owner_id":
-			targets = append(targets, target{i, func(o *BlobLease) any { return &o.OwnerID }})
-		case "run_id":
-			targets = append(targets, target{i, func(o *BlobLease) any { return &o.RunID }})
 		case "operation_id":
 			targets = append(targets, target{i, func(o *BlobLease) any { return &o.OperationID }})
 		case "blob_id":
@@ -611,25 +555,6 @@ func (os BlobLeaseSlice) Operation(mods ...bob.Mod[*dialect.SelectQuery]) Operat
 	)...)
 }
 
-// RunWorkflowRun starts a query for related objects on workflow_runs
-func (o *BlobLease) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
-	return WorkflowRuns.Query(append(mods,
-		sm.Where(WorkflowRuns.Columns.ID.EQ(sqlite.Arg(o.RunID))),
-	)...)
-}
-
-func (os BlobLeaseSlice) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
-	PKArgSlice := make([]bob.Expression, len(os))
-	for i, o := range os {
-		PKArgSlice[i] = sqlite.ArgGroup(o.RunID)
-	}
-	PKArgExpr := sqlite.Group(PKArgSlice...)
-
-	return WorkflowRuns.Query(append(mods,
-		sm.Where(sqlite.Group(WorkflowRuns.Columns.ID).OP("IN", PKArgExpr)),
-	)...)
-}
-
 func attachBlobLeaseBlob0(ctx context.Context, exec bob.Executor, count int, blobLease0 *BlobLease, blob1 *Blob) (*BlobLease, error) {
 	setter := &BlobLeaseSetter{
 		BlobID: omit.From(blob1.ID),
@@ -678,7 +603,7 @@ func (blobLease0 *BlobLease) AttachBlob(ctx context.Context, exec bob.Executor, 
 
 func attachBlobLeaseOperation0(ctx context.Context, exec bob.Executor, count int, blobLease0 *BlobLease, operation1 *Operation) (*BlobLease, error) {
 	setter := &BlobLeaseSetter{
-		OperationID: omitnull.From(operation1.ID),
+		OperationID: omit.From(operation1.ID),
 	}
 
 	err := blobLease0.Update(ctx, exec, setter)
@@ -722,59 +647,11 @@ func (blobLease0 *BlobLease) AttachOperation(ctx context.Context, exec bob.Execu
 	return nil
 }
 
-func attachBlobLeaseRunWorkflowRun0(ctx context.Context, exec bob.Executor, count int, blobLease0 *BlobLease, workflowRun1 *WorkflowRun) (*BlobLease, error) {
-	setter := &BlobLeaseSetter{
-		RunID: omitnull.From(workflowRun1.ID),
-	}
-
-	err := blobLease0.Update(ctx, exec, setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachBlobLeaseRunWorkflowRun0: %w", err)
-	}
-
-	return blobLease0, nil
-}
-
-func (blobLease0 *BlobLease) InsertRunWorkflowRun(ctx context.Context, exec bob.Executor, related *WorkflowRunSetter) error {
-	var err error
-
-	workflowRun1, err := WorkflowRuns.Insert(related).One(ctx, exec)
-	if err != nil {
-		return fmt.Errorf("inserting related objects: %w", err)
-	}
-
-	_, err = attachBlobLeaseRunWorkflowRun0(ctx, exec, 1, blobLease0, workflowRun1)
-	if err != nil {
-		return err
-	}
-
-	blobLease0.R.RunWorkflowRun = workflowRun1
-	blobLease0.R.Loaded.RunWorkflowRun = true
-
-	return nil
-}
-
-func (blobLease0 *BlobLease) AttachRunWorkflowRun(ctx context.Context, exec bob.Executor, workflowRun1 *WorkflowRun) error {
-	var err error
-
-	_, err = attachBlobLeaseRunWorkflowRun0(ctx, exec, 1, blobLease0, workflowRun1)
-	if err != nil {
-		return err
-	}
-
-	blobLease0.R.RunWorkflowRun = workflowRun1
-	blobLease0.R.Loaded.RunWorkflowRun = true
-
-	return nil
-}
-
 type blobLeaseWhere[Q sqlite.Filterable] struct {
 	cols        blobLeaseColumns
 	ID          sqlite.WhereMod[Q, string]
 	CreatedAt   sqlite.WhereMod[Q, time.Time]
-	OwnerID     sqlite.WhereMod[Q, string]
-	RunID       sqlite.WhereNullMod[Q, string]
-	OperationID sqlite.WhereNullMod[Q, string]
+	OperationID sqlite.WhereMod[Q, string]
 	BlobID      sqlite.WhereMod[Q, string]
 	R           blobLeaseWhereR[Q]
 }
@@ -788,9 +665,7 @@ func buildBlobLeaseWhere[Q sqlite.Filterable](cols blobLeaseColumns) blobLeaseWh
 		cols:        cols,
 		ID:          sqlite.Where[Q, string](cols.ID.Expression),
 		CreatedAt:   sqlite.Where[Q, time.Time](cols.CreatedAt.Expression),
-		OwnerID:     sqlite.Where[Q, string](cols.OwnerID.Expression),
-		RunID:       sqlite.WhereNull[Q, string](cols.RunID.Expression),
-		OperationID: sqlite.WhereNull[Q, string](cols.OperationID.Expression),
+		OperationID: sqlite.Where[Q, string](cols.OperationID.Expression),
 		BlobID:      sqlite.Where[Q, string](cols.BlobID.Expression),
 		R:           blobLeaseWhereR[Q]{cols: cols},
 	}
@@ -826,20 +701,6 @@ func (w blobLeaseWhereR[Q]) HasOperation(filters ...bob.Mod[*dialect.SelectQuery
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(Operations.NameExpr()),
 		sm.Where(Operations.Columns.ID.EQ(w.cols.OperationID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: sqlite.Exists(q)}
-}
-
-// HasRunWorkflowRun filters parents that have a matching RunWorkflowRun using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to WorkflowRuns).
-func (w blobLeaseWhereR[Q]) HasRunWorkflowRun(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := sqlite.Select(
-		sm.Columns(sqlite.Raw("1")),
-		sm.From(WorkflowRuns.NameExpr()),
-		sm.Where(WorkflowRuns.Columns.ID.EQ(w.cols.RunID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

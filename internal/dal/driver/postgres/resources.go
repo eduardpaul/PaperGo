@@ -318,7 +318,7 @@ func (q Queries) ClearWorkspace(ctx context.Context, workspaceID, actor string, 
 	views := "SELECT id FROM sync_views WHERE container_id IN (" + sub + ")"
 	statements := []string{
 		"DELETE FROM relationships WHERE source_id IN (" + sub + ") OR target_id IN (" + sub + ")",
-		"DELETE FROM runner_step_results WHERE run_id IN (" + runs + ")",
+		"DELETE FROM workflow_steps WHERE run_id IN (" + runs + ")",
 		"DELETE FROM workflow_run_items WHERE run_id IN (" + runs + ")",
 		"DELETE FROM workflow_runs WHERE workspace_id = $1",
 		"DELETE FROM workflow_triggers WHERE workspace_id = $1",

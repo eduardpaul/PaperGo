@@ -72,13 +72,12 @@ func testBlobFiles(t *testing.T, s *dal.Store) {
 	}
 
 	// Staged files keep the blobs they were made from.
-	definition := []byte(`{"flow":{"start":"done","nodes":{"done":{"activity":"end"}}}}`)
-	wf, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "optimize", Name: "Optimize", CreatedBy: "alice", Definition: definition})
+	wf, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "optimize", Name: "Optimize", CreatedBy: "alice", Content: daltest.Script})
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, err := s.Runs().Create(ctx, runstore.CreateInput{ID: "run", WorkflowID: wf.ID, WorkspaceID: f.Workspace, ItemID: f.Item, EventID: "event", EventType: "manual", Actor: "alice", WorkflowVersion: 1})
-	if err != nil {
+	run := runstore.CreateInput{ID: "run", WorkflowID: wf.ID, WorkspaceID: f.Workspace, ItemID: f.Item, EventID: "event", EventType: "manual", Actor: "alice", WorkflowVersion: 1}
+	if err = daltest.Run(ctx, s, run); err != nil {
 		t.Fatal(err)
 	}
 	staged, err := r.Stage(ctx, blobs.StagedFile{WorkspaceID: f.Workspace, ItemID: f.Item, RunID: run.ID, Sources: []model.StagedSource{{ItemID: f.Item, BlobID: second.ID}},

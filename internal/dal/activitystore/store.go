@@ -12,8 +12,6 @@ import (
 
 	"github.com/google/uuid"
 	"papergo/internal/dal/operations"
-	"papergo/internal/dal/runs"
-	"papergo/internal/dal/waits"
 	"papergo/internal/jsonutil"
 )
 
@@ -162,29 +160,19 @@ func (s *Store) List(ctx context.Context, namespace, scope, state, after string,
 type OwnerKind string
 
 const (
-	OwnerRun       OwnerKind = "run"
-	OwnerWait      OwnerKind = "wait"
 	OwnerRecord    OwnerKind = "record"
 	OwnerOperation OwnerKind = "operation"
 )
 
-func (k OwnerKind) Valid() bool {
-	switch k {
-	case OwnerRun, OwnerWait, OwnerRecord, OwnerOperation:
-		return true
-	}
-	return false
-}
+func (k OwnerKind) Valid() bool { return k == OwnerRecord || k == OwnerOperation }
 
-// Owner holds references: a workflow run, a workflow wait, another activity
-// record or an operation, by ID.
+// Owner holds references: another activity record or an operation, such
+// as a workflow run, by ID.
 type Owner struct {
 	Kind OwnerKind
 	ID   string
 }
 
-func RunOwner(id string) Owner       { return Owner{OwnerRun, id} }
-func WaitOwner(id string) Owner      { return Owner{OwnerWait, id} }
 func RecordOwner(id string) Owner    { return Owner{OwnerRecord, id} }
 func OperationOwner(id string) Owner { return Owner{OwnerOperation, id} }
 
@@ -283,17 +271,12 @@ func (s *Store) Purge(ctx context.Context, now time.Time) error {
 	}
 	// Owners release their references when they end. A cancelled worker
 	// may still write after that cleanup, so retention also drops the
-	// references of owners that ended or no longer exist: finished or
-	// deleted runs, closed or deleted waits, ended or deleted operations,
-	// and expired or deleted records.
+	// references of owners that ended or no longer exist: ended or deleted
+	// operations, and expired or deleted records.
 	for _, statement := range []struct {
 		sql  string
 		args []any
 	}{
-		{`DELETE FROM activity_references WHERE owner_kind=$1 AND NOT EXISTS(SELECT 1 FROM workflow_runs r WHERE r.id=activity_references.owner_id AND r.live_status NOT IN ($2,$3,$4))`,
-			[]any{string(OwnerRun), string(runs.StatusCompleted), string(runs.StatusFailed), string(runs.StatusCancelled)}},
-		{`DELETE FROM activity_references WHERE owner_kind=$1 AND NOT EXISTS(SELECT 1 FROM workflow_waits w WHERE w.id=activity_references.owner_id AND w.status<>$2)`,
-			[]any{string(OwnerWait), string(waits.StatusClosed)}},
 		{`DELETE FROM activity_references WHERE owner_kind=$1 AND NOT EXISTS(SELECT 1 FROM operations o WHERE o.id=activity_references.owner_id AND o.status=$2)`,
 			[]any{string(OwnerOperation), string(operations.StatusPending)}},
 		{`DELETE FROM activity_references WHERE owner_kind=$1 AND (owner_id IN (SELECT id FROM activity_records WHERE expires_at<=$2 AND NOT EXISTS(SELECT 1 FROM activity_references WHERE record_id=activity_records.id) AND (lease_until IS NULL OR lease_until<=$3)) OR NOT EXISTS(SELECT 1 FROM activity_records r WHERE r.id=activity_references.owner_id))`,

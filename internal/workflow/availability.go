@@ -153,20 +153,8 @@ func (s *Service) manualReadiness(ctx context.Context, t *dms.Service, w *workfl
 				}
 			}
 		}
-	}
-	for _, node := range def.Flow.Nodes {
-		switch node.Activity {
-		case "file.optimize_image", "file.compose_pdf":
-			if s.Tools.OCR == nil {
-				return issue("needs_setup", "Needs setup: image text detection is unavailable.")
-			}
-			if s.Tools.Storage == nil {
-				return issue("needs_setup", "Needs setup: file storage is unavailable.")
-			}
-		case "file.preview", "document.read_text":
-			if s.Tools.Storage == nil {
-				return issue("needs_setup", "Needs setup: file storage is unavailable.")
-			}
+		if b := builtins[w.BuiltinKey]; b != nil && b.NeedsOCR && !s.OCR {
+			return issue("needs_setup", "Needs setup: image text detection is unavailable.")
 		}
 	}
 	return nil

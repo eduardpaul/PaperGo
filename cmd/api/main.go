@@ -29,15 +29,14 @@ import (
 	"papergo/internal/httpapi"
 	"papergo/internal/identity"
 	"papergo/internal/integration"
+	"papergo/internal/ocr"
 	"papergo/internal/readiness"
-	"papergo/internal/runner"
 	"papergo/internal/scriptrun"
 	"papergo/internal/search"
 	"papergo/internal/searchcontent"
 	"papergo/internal/storage"
 	"papergo/internal/webdav"
 	"papergo/internal/workflow"
-	"papergo/internal/workflowai"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -217,13 +216,9 @@ func run(log *slog.Logger) error {
 		defer decisions.Close()
 		log.Info("local decisions enabled", "model", decisions.ID())
 	}
-	tools := workflow.Tools{Storage: store, MaxFileBytes: c.MaxUpload, Search: index, Embeddings: embeddings, Results: resultcache.New(db.SQL), ResultTTL: c.ResultCacheTTL, Languages: c.SearchLanguages}
-	workflowai.Configure(&tools, workflowai.Runtime{Chat: chat, Batch: batch, DefaultExecution: c.AIExecution, BatchDeadline: c.BatchDeadline})
-	if decisions != nil {
-		tools.Decisions = decisions
-	}
-	tools.PDF = pdfium.New()
-	log.Info("pdf reading enabled", "reader", tools.PDF.Name())
+	pdf := pdfium.New()
+	log.Info("pdf reading enabled", "reader", pdf.Name())
+	var reader ocr.Engine
 	if c.OCRLibrary != "" {
 		engine, e := openOCR(c)
 		if e != nil {
@@ -233,18 +228,18 @@ func run(log *slog.Logger) error {
 			log.Info("ocr disabled", "models", c.OCRModels)
 		} else {
 			defer engine.Close()
-			tools.OCR = engine
+			reader = engine
 			log.Info("ocr enabled", "engine", engine.Info().Engine, "library", c.OCRLibrary, "models", c.OCRModels)
 		}
 	}
-	workflows := &workflow.Service{DMS: service, Tools: tools}
+	workflows := &workflow.Service{DMS: service, OCR: reader != nil}
 	feats := features{
-		text:    &documenttext.Reader{Storage: store, PDF: tools.PDF, OCR: tools.OCR, Languages: c.SearchLanguages},
-		preview: &documentpreview.Renderer{Storage: store, PDF: tools.PDF},
+		text:    &documenttext.Reader{Storage: store, PDF: pdf, OCR: reader, Languages: c.SearchLanguages},
+		preview: &documentpreview.Renderer{Storage: store, PDF: pdf},
 		search:  &searchcontent.Indexer{Storage: store, Search: index, Embeddings: embeddings},
 		ai: &aiops.Assistant{Storage: store, Chat: chat, Batch: batch, Results: resultcache.New(db.SQL), ResultTTL: c.ResultCacheTTL,
 			Records: activitystore.New(db.SQL), DefaultExecution: c.AIExecution, BatchDeadline: c.BatchDeadline},
-		files: &documentfiles.Maker{Storage: store, OCR: tools.OCR, MaxFileBytes: c.MaxUpload},
+		files: &documentfiles.Maker{Storage: store, OCR: reader, MaxFileBytes: c.MaxUpload},
 	}
 	if decisions != nil {
 		feats.ai.Decisions = decisions
@@ -252,46 +247,11 @@ func run(log *slog.Logger) error {
 	if err = feats.register(service); err != nil {
 		return err
 	}
-	service.OnIntegrationCreated(workflows.EnsureIntegrationWorkflow)
-	if c.BatchWorkspace != "" && batch != nil {
-		subject := c.AdminSubject
-		if subject == "" {
-			subject = c.DevSubject
-		}
-		if err = workflowai.EnsureCoordinator(startup, workflows, subject, c.BatchWorkspace); err != nil {
-			return fmt.Errorf("enable the AI batch coordinator: %w", err)
-		}
-		log.Info("ai batch coordinator enabled", "workspace", c.BatchWorkspace, "queue", "shared")
+	if err = workflows.SyncBuiltIns(startup); err != nil {
+		return fmt.Errorf("update built-in workflows: %w", err)
 	}
-	run, err := runner.New(runner.Config{DatabasePath: c.DatabasePath, DatabaseURL: c.DatabaseURL, NodeID: c.NodeID, Retention: c.RunRetention, SystemRetention: c.SystemRunRetention, Logger: log}, db.SQL, service, workflows)
-	if err != nil {
-		return err
-	}
-	// Workflows and scripts waiting on an operation continue as soon as it
-	// ends; waits whose release a stopped process missed are reconciled at
-	// startup and by maintenance.
-	releaseWaits := scriptrun.ReleaseWaits(service, log)
-	service.OnOperationsFinished(func(ids []string) {
-		releaseWaits(ids)
-		run.Wake()
-	})
-	if _, err = scriptrun.ReconcileWaits(startup, service); err != nil {
-		return err
-	}
-	if err = run.Launch(startup); err != nil {
-		return err
-	}
-	// The runner stops after the server, so requests in flight can still start runs.
-	defer func() {
-		if err := run.Shutdown(10 * time.Second); err != nil {
-			log.Error("runner shutdown", "error", err)
-		}
-	}()
-	a := &httpapi.API{DMS: service, Workflows: workflows, Modules: feats.modules(), Runner: run, Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
+	a := &httpapi.API{DMS: service, Workflows: workflows, Modules: feats.modules(), Auth: verifier, Storage: store, Logger: log, MaxUpload: c.MaxUpload, MaxInFlight: c.MaxInFlight, RequestTimeout: c.RequestTimeout, Ready: func(ctx context.Context) error {
 		if err := db.SQL.PingContext(ctx); err != nil {
-			return err
-		}
-		if err := run.Ready(ctx); err != nil {
 			return err
 		}
 		return db.CheckSchema(ctx)
@@ -302,12 +262,24 @@ func run(log *slog.Logger) error {
 	if c.PublicURL != nil {
 		a.WebDAV.PublicHost = c.PublicURL.Host
 	}
+	// Runs call the API in-process, so the runner registers once it exists.
+	runs := &scriptrun.Runner{DMS: service, API: a, Log: log, Retention: c.RunRetention, SystemRetention: c.SystemRunRetention}
+	if err = runs.Register(service); err != nil {
+		return err
+	}
+	// Runs waiting on an operation continue as soon as it ends; waits whose
+	// release a stopped process missed are reconciled at startup and by
+	// maintenance.
+	service.OnOperationsFinished(scriptrun.ReleaseWaits(service, log))
+	if err = scriptrun.ReconcileWaits(startup, service); err != nil {
+		return err
+	}
 	// Content uploads/downloads extend these deadlines while data keeps flowing.
 	if err = a.Validate(); err != nil {
 		return err
 	}
 	server := &http.Server{Addr: c.Address, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 60 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
-	runtime := workers(service, store, feats, log)
+	runtime := workers(service, store, feats, runs, log)
 	if err = configure(runtime, c.Workers); err != nil {
 		return err
 	}

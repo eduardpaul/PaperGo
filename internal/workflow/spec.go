@@ -1,8 +1,8 @@
-// Package workflow is PaperGo's automation model: workflow definitions with
-// triggers, a condition and a flow of activity nodes, their immutable
-// versions, built-in workflows, and the interpreter that runs a version. It
-// does not depend on the runner engine; internal/runner executes runs.
-// docs/workflows.md is the user documentation.
+// Package workflow is PaperGo's automation model: workflows are scripts
+// whose export declares their triggers, condition and forms, with immutable
+// versions, built-in workflows and roles, and the matching of events and
+// schedules to runs. internal/scriptrun executes runs. docs/workflows.md is
+// the user documentation.
 package workflow
 
 import (
@@ -11,13 +11,13 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
-	"github.com/robfig/cron/v3"
 	"papergo/internal/dms"
 	"papergo/internal/forms"
 	"papergo/internal/model"
 	"papergo/internal/tasks"
+
+	"github.com/robfig/cron/v3"
 )
 
 // Trigger types. Item triggers react to committed item writes, schedule
@@ -36,42 +36,33 @@ var FolderTriggers = []string{dms.EventFolderCreated, dms.EventFolderUpdated, dm
 
 // Limits keep definitions and runs bounded.
 const (
-	// MaxRunOutputBytes bounds a run's outputs: large data travels as
+	// MaxRunOutputBytes bounds what a run returns: large data travels as
 	// references, such as IDs, never as content.
 	MaxRunOutputBytes = 16 * 1024
 	MaxTriggers       = 20
-	MaxNodes          = 100
 	MaxDepth          = 5
-	// MaxNodeVisits bounds the nodes a run visits outside forEach passes,
-	// and those of each pass; MaxRunVisits bounds them all.
-	MaxNodeVisits  = 1000
-	MaxRunVisits   = 100_000
-	MaxOutputBytes = 64 * 1024
-	MaxRetries     = 10
-	MaxRetryDelay  = 24 * time.Hour
-	MaxScheduled   = 500
+	MaxScheduled      = 500
+	// MaxSourceBytes bounds a workflow script.
+	MaxSourceBytes = 1 << 20
 )
 
-// Definition is the content of a workflow version.
+// Definition is what a workflow version's script declares in its export.
 type Definition struct {
 	Triggers  []Trigger       `json:"triggers"`
 	Condition *dms.FilterExpr `json:"condition,omitempty"`
-	// InputSchema is the launch form of manual starts (see forms.go).
+	// InputSchema is the launch form of manual starts (see forms.go); its
+	// values are the run's input.
 	InputSchema map[string]any `json:"input_schema,omitempty"`
-	Variables   map[string]any `json:"variables,omitempty"`
 	// Concurrency decides what a start does while a run of the workflow on
 	// the same item is still active: parallel (the default) starts anyway,
 	// skip starts nothing, replace cancels the active run, and coalesce starts
 	// nothing while a run is queued and otherwise queues one run that starts
 	// when the active one ends. Selection runs compare every member.
 	Concurrency string `json:"concurrency,omitempty"`
-	Flow        Flow   `json:"flow"`
-	// OutputSchema is the form of what a completed run returns; Outputs maps
-	// its properties to values, usually tokens. Outputs are evaluated when the
-	// run completes, checked against the schema and carried in
-	// wf.{key}.completed as data.outputs, so other workflows can follow.
+	// OutputSchema is the form of what a completed run returns. The output
+	// is checked against it and carried in wf.{key}.completed as
+	// data.outputs, so other workflows can follow.
 	OutputSchema map[string]any `json:"output_schema,omitempty"`
-	Outputs      map[string]any `json:"outputs,omitempty"`
 }
 
 // Concurrency policies.
@@ -168,37 +159,9 @@ const (
 	SelectionAll     = "selection"
 )
 
-// Flow is a graph of nodes; a run starts at Start and follows the port each
-// node's outcome selects.
-type Flow struct {
-	Start string          `json:"start"`
-	Nodes map[string]Node `json:"nodes"`
-}
-
-// Node runs one activity. Next maps outcome ports to node names.
-type Node struct {
-	Activity string            `json:"activity"`
-	Inputs   map[string]any    `json:"inputs,omitempty"`
-	Next     map[string]string `json:"next,omitempty"`
-	Retry    *Retry            `json:"retry,omitempty"`
-}
-
-// Retry runs a failed node again after Delay, up to Attempts times in all.
-type Retry struct {
-	Attempts int    `json:"attempts"`
-	Delay    string `json:"delay,omitempty"`
-}
-
-// Ports every node has besides its activity's outcomes.
-const (
-	PortDone  = "done"
-	PortError = "error"
-)
-
 var (
-	keyPattern      = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
-	eventPattern    = regexp.MustCompile(`^wf\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)$`)
-	nodeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 _-]{0,99}$`)
+	keyPattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+	eventPattern = regexp.MustCompile(`^wf\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)$`)
 )
 
 // WorkflowEvent is the event type a run of workflow key raises.
@@ -245,9 +208,9 @@ func (t Trigger) schedule() (cron.Schedule, error) {
 	return schedule, nil
 }
 
-// validate checks everything that needs no database: shapes, limits, the
-// flow graph and each node's inputs. References to collections, content
-// types and fields are checked by the store.
+// validate checks everything that needs no database: shapes and limits.
+// References to collections, content types and fields are checked by the
+// store.
 func (d Definition) validate() error {
 	if len(d.Triggers) == 0 || len(d.Triggers) > MaxTriggers {
 		return dms.Invalid(fmt.Sprintf("a workflow needs 1 to %d triggers", MaxTriggers))
@@ -407,104 +370,9 @@ func (d Definition) validate() error {
 	default:
 		return dms.Invalid("concurrency is parallel, skip, replace or coalesce")
 	}
-	for name := range d.Variables {
-		if !forms.NamePattern.MatchString(name) {
-			return dms.Invalid("invalid variable name " + name)
-		}
-	}
-	if err := d.validateOutputs(); err != nil {
-		return err
-	}
-	return d.Flow.validate()
-}
-
-// validateOutputs checks the output form and that every output names one of
-// its properties. Values are usually tokens, so their types are checked when a
-// run completes.
-func (d Definition) validateOutputs() error {
-	if d.OutputSchema == nil {
-		if d.Outputs != nil {
-			return dms.Invalid("outputs need an output_schema")
-		}
-		return nil
-	}
-	if err := forms.Validate(d.OutputSchema, "output_schema"); err != nil {
-		return dms.Invalid(err.Error())
-	}
-	props, _ := d.OutputSchema["properties"].(map[string]any)
-	for name := range d.Outputs {
-		if _, ok := props[name]; !ok {
-			return dms.Invalid("outputs." + name + " is not a property of output_schema")
-		}
-	}
-	return nil
-}
-
-func (f Flow) validate() error {
-	if len(f.Nodes) == 0 || len(f.Nodes) > MaxNodes {
-		return dms.Invalid(fmt.Sprintf("a flow needs 1 to %d nodes", MaxNodes))
-	}
-	if _, ok := f.Nodes[f.Start]; !ok {
-		return dms.Invalid("flow start must name a node")
-	}
-	for name, n := range f.Nodes {
-		at := "node " + name + ": "
-		if !nodeNamePattern.MatchString(name) {
-			return dms.Invalid(at + "names use letters, digits, spaces, '_' and '-' (at most 100)")
-		}
-		a := activities[n.Activity]
-		if a == nil {
-			return dms.Invalid(at + "unknown activity " + n.Activity)
-		}
-		ports := map[string]bool{PortDone: true, PortError: true}
-		for _, p := range a.NodePorts(n.Inputs) {
-			ports[p] = true
-		}
-		for port, target := range n.Next {
-			if !ports[port] {
-				return dms.Invalid(at + "activity " + n.Activity + " has no port " + port)
-			}
-			if _, ok := f.Nodes[target]; !ok {
-				return dms.Invalid(at + "port " + port + " leads to unknown node " + target)
-			}
-		}
-		if n.Activity == forEachKey && n.Next[portBody] == "" {
-			return dms.Invalid(at + "forEach needs its body port connected")
-		}
-		if a.Terminal && len(n.Next) > 0 {
-			return dms.Invalid(at + n.Activity + " ends the run and has no next nodes")
-		}
-		if n.Retry != nil {
-			if n.Retry.Attempts < 1 || n.Retry.Attempts > MaxRetries {
-				return dms.Invalid(fmt.Sprintf("%sretry attempts must be 1 to %d", at, MaxRetries))
-			}
-			if n.Retry.Delay != "" {
-				d, err := time.ParseDuration(n.Retry.Delay)
-				if err != nil || d < 0 || d > MaxRetryDelay {
-					return dms.Invalid(at + "retry delay must be a duration up to 24h")
-				}
-			}
-		}
-		if err := a.Validate(n.Inputs); err != nil {
-			return dms.Invalid(at + err.Error())
-		}
-	}
-	reached := map[string]bool{}
-	for queue := []string{f.Start}; len(queue) > 0; queue = queue[1:] {
-		name := queue[0]
-		if reached[name] {
-			continue
-		}
-		reached[name] = true
-		for _, next := range f.Nodes[name].Next {
-			queue = append(queue, next)
-		}
-	}
-	if len(reached) != len(f.Nodes) {
-		for name := range f.Nodes {
-			if !reached[name] {
-				return dms.Invalid("node " + name + " cannot be reached from start")
-			}
+	if d.OutputSchema != nil {
+		if err := forms.Validate(d.OutputSchema, "output_schema"); err != nil {
+			return dms.Invalid(err.Error())
 		}
 	}
 	return nil

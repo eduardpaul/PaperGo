@@ -12,7 +12,7 @@ import (
 
 	"papergo/internal/dal"
 	"papergo/internal/dal/dberr"
-	runstore "papergo/internal/dal/runs"
+	"papergo/internal/dal/operations"
 	taskstore "papergo/internal/dal/tasks"
 	"papergo/internal/dal/workflows"
 )
@@ -25,15 +25,17 @@ func runDALTaskSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		workflow, err := s.Workflows().Create(ctx, workflows.CreateInput{ID: "workflow", WorkspaceID: ws.ID, Key: "review", Name: "Review", CreatedBy: "alice"})
+		workflow, err := s.Workflows().Create(ctx, workflows.CreateInput{ID: "workflow", WorkspaceID: ws.ID, Key: "review", Name: "Review", Content: daltest.Script, CreatedBy: "alice"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		run, err := s.Runs().Create(ctx, runstore.CreateInput{ID: "run", WorkflowID: workflow.ID, WorkspaceID: ws.ID, ItemID: "", EventID: "event", EventType: "manual", Actor: "alice", WorkflowVersion: 1})
-		if err != nil {
+		if err := daltest.WorkflowRun(ctx, s, "run", workflow.ID, ws.ID, "alice", 1); err != nil {
 			t.Fatal(err)
 		}
-		in.Source, in.WorkflowID, in.RunID, in.Node, in.Wait = "workflow", workflow.ID, run.ID, "review", true
+		if _, _, err := s.Operations().Accept(ctx, operations.Operation{ID: "response", Kind: "task.response", ContainerID: ws.ID, WorkspaceID: ws.ID, CreatedBy: "alice", TraceID: "response"}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		in.Source, in.WorkflowID, in.RunID, in.OperationID = "workflow", workflow.ID, "run", "response"
 		if _, err := s.Tasks().Create(ctx, in); !errors.Is(err, dberr.ErrInvalidReference) {
 			t.Fatalf("cross-workspace workflow task accepted: %v", err)
 		}
@@ -42,7 +44,7 @@ func runDALTaskSuite(t *testing.T, newStore func(testing.TB) *dal.Store) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !created.Wait || created.RunID != run.ID {
+		if created.OperationID != "response" || created.RunID != "run" {
 			t.Fatalf("workflow source lost: %+v", created)
 		}
 	})

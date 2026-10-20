@@ -128,7 +128,6 @@ type resourceR struct {
 	WorkspaceWorkflowRuns         WorkflowRunSlice     // workflow_runs.workflow_runs_workspace_id_fkey
 	CollectionWorkflowTriggers    WorkflowTriggerSlice // workflow_triggers.workflow_triggers_collection_id_fkey
 	WorkspaceWorkflowTriggers     WorkflowTriggerSlice // workflow_triggers.workflow_triggers_workspace_id_fkey
-	WorkspaceWorkflowWaits        WorkflowWaitSlice    // workflow_waits.workflow_waits_workspace_id_fkey
 	CollectionWorkflows           WorkflowSlice        // workflows.workflows_collection_id_fkey
 	WorkspaceWorkflows            WorkflowSlice        // workflows.workflows_workspace_id_fkey
 	// Loaded reports whether each relationship has been loaded.
@@ -189,7 +188,6 @@ type resourceRLoaded struct {
 	WorkspaceWorkflowRuns         bool // workflow_runs.workflow_runs_workspace_id_fkey
 	CollectionWorkflowTriggers    bool // workflow_triggers.workflow_triggers_collection_id_fkey
 	WorkspaceWorkflowTriggers     bool // workflow_triggers.workflow_triggers_workspace_id_fkey
-	WorkspaceWorkflowWaits        bool // workflow_waits.workflow_waits_workspace_id_fkey
 	CollectionWorkflows           bool // workflows.workflows_collection_id_fkey
 	WorkspaceWorkflows            bool // workflows.workflows_workspace_id_fkey
 }
@@ -2568,29 +2566,6 @@ func (os ResourceSlice) WorkspaceWorkflowTriggers(mods ...bob.Mod[*dialect.Selec
 
 	return WorkflowTriggers.Query(append(mods,
 		sm.Where(WorkflowTriggers.Columns.WorkspaceID.EQ(PKArgExpr)),
-	)...)
-}
-
-// WorkspaceWorkflowWaits starts a query for related objects on workflow_waits
-func (o *Resource) WorkspaceWorkflowWaits(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowWaitsQuery {
-	return WorkflowWaits.Query(append(mods,
-		sm.Where(WorkflowWaits.Columns.WorkspaceID.EQ(psql.Arg(o.ID))),
-	)...)
-}
-
-func (os ResourceSlice) WorkspaceWorkflowWaits(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowWaitsQuery {
-	pkID := make(pgtypes.Array[string], 0, len(os))
-
-	for _, o := range os {
-		if o == nil {
-			continue
-		}
-		pkID = append(pkID, o.ID)
-	}
-	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "text[]"))
-
-	return WorkflowWaits.Query(append(mods,
-		sm.Where(WorkflowWaits.Columns.WorkspaceID.EQ(PKArgExpr)),
 	)...)
 }
 
@@ -5543,67 +5518,6 @@ func (resource0 *Resource) AttachWorkspaceWorkflowTriggers(ctx context.Context, 
 	return nil
 }
 
-func insertResourceWorkspaceWorkflowWaits0(ctx context.Context, exec bob.Executor, workflowWaits1 []*WorkflowWaitSetter, resource0 *Resource) (WorkflowWaitSlice, error) {
-	for i := range workflowWaits1 {
-		workflowWaits1[i].WorkspaceID = omit.From(resource0.ID)
-	}
-
-	ret, err := WorkflowWaits.Insert(bob.ToMods(workflowWaits1...)).All(ctx, exec)
-	if err != nil {
-		return ret, fmt.Errorf("insertResourceWorkspaceWorkflowWaits0: %w", err)
-	}
-
-	return ret, nil
-}
-
-func attachResourceWorkspaceWorkflowWaits0(ctx context.Context, exec bob.Executor, count int, workflowWaits1 WorkflowWaitSlice, resource0 *Resource) (WorkflowWaitSlice, error) {
-	setter := &WorkflowWaitSetter{
-		WorkspaceID: omit.From(resource0.ID),
-	}
-
-	err := workflowWaits1.UpdateAll(ctx, exec, *setter)
-	if err != nil {
-		return nil, fmt.Errorf("attachResourceWorkspaceWorkflowWaits0: %w", err)
-	}
-
-	return workflowWaits1, nil
-}
-
-func (resource0 *Resource) InsertWorkspaceWorkflowWaits(ctx context.Context, exec bob.Executor, related ...*WorkflowWaitSetter) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-
-	workflowWaits1, err := insertResourceWorkspaceWorkflowWaits0(ctx, exec, related, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.WorkspaceWorkflowWaits = append(resource0.R.WorkspaceWorkflowWaits, workflowWaits1...)
-
-	return nil
-}
-
-func (resource0 *Resource) AttachWorkspaceWorkflowWaits(ctx context.Context, exec bob.Executor, related ...*WorkflowWait) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-	workflowWaits1 := WorkflowWaitSlice(related)
-
-	_, err = attachResourceWorkspaceWorkflowWaits0(ctx, exec, len(related), workflowWaits1, resource0)
-	if err != nil {
-		return err
-	}
-
-	resource0.R.WorkspaceWorkflowWaits = append(resource0.R.WorkspaceWorkflowWaits, workflowWaits1...)
-
-	return nil
-}
-
 func insertResourceCollectionWorkflows0(ctx context.Context, exec bob.Executor, workflows1 []*WorkflowSetter, resource0 *Resource) (WorkflowSlice, error) {
 	for i := range workflows1 {
 		workflows1[i].CollectionID = omitnull.From(resource0.ID)
@@ -6522,20 +6436,6 @@ func (w resourceWhereR[Q]) HasWorkspaceWorkflowTriggers(filters ...bob.Mod[*dial
 		sm.Columns(psql.Raw("1")),
 		sm.From(WorkflowTriggers.NameExpr()),
 		sm.Where(WorkflowTriggers.Columns.WorkspaceID.EQ(w.cols.ID)),
-	)
-	q.Apply(filters...)
-	return mods.Where[Q]{E: psql.Exists(q)}
-}
-
-// HasWorkspaceWorkflowWaits filters parents that have a matching WorkspaceWorkflowWaits using a
-// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
-// multiply parent rows, so no DISTINCT is needed. The optional filters are
-// applied to the subquery (i.e. to WorkflowWaits).
-func (w resourceWhereR[Q]) HasWorkspaceWorkflowWaits(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
-	q := psql.Select(
-		sm.Columns(psql.Raw("1")),
-		sm.From(WorkflowWaits.NameExpr()),
-		sm.Where(WorkflowWaits.Columns.WorkspaceID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}

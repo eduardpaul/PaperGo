@@ -7,6 +7,7 @@ import (
 	"papergo/internal/documentfiles"
 	"papergo/internal/documentpreview"
 	"papergo/internal/documenttext"
+	"papergo/internal/scriptrun"
 	"papergo/internal/searchcontent"
 	"strings"
 	"testing"
@@ -34,7 +35,11 @@ func TestWorkersCoverEveryKind(t *testing.T) {
 	if err = f.register(service); err != nil {
 		t.Fatal(err)
 	}
-	rt := workers(service, store, f, slog.Default())
+	runs := &scriptrun.Runner{DMS: service}
+	if err = runs.Register(service); err != nil {
+		t.Fatal(err)
+	}
+	rt := workers(service, store, f, runs, slog.Default())
 	if err = configure(rt, nil); err != nil {
 		t.Fatal(err)
 	}

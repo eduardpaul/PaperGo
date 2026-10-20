@@ -168,6 +168,10 @@ replacements:
     match:
       name: "definition"
     replace: "types.JSON[json.RawMessage]"
+  - tables: ["workflow_runs"]
+    match:
+      name: "logs"
+    replace: "types.JSON[json.RawMessage]"
   - tables: ["operations"]
     match:
       name: "credential_scopes"

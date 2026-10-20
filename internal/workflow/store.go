@@ -21,15 +21,17 @@ import (
 	"papergo/internal/forms"
 )
 
-// Service manages workflow definitions on top of the DMS: the same writer,
-// authorization and audit trail as every other change.
+// Service manages workflows and their runs on top of the DMS: the same
+// writer, authorization and audit trail as every other change.
 type Service struct {
 	DMS *dms.Service
-	// Tools are what activities with heavy work use outside transactions.
-	Tools Tools
+	// OCR says the deployment reads text in images, which built-ins that
+	// need it require.
+	OCR bool
 }
 
-// Workflow is a workflow with its current definition.
+// Workflow is a workflow with its current version's script and the
+// definition its export declares.
 type Workflow struct {
 	ExecutionAuthor   string         `json:"execution_author"`
 	ID                string         `json:"id"`
@@ -46,6 +48,7 @@ type Workflow struct {
 	CollectionID      *string        `json:"collection_id,omitempty"`
 	Parameters        map[string]any `json:"parameters,omitempty"`
 	CurrentVersion    int            `json:"current_version"`
+	Source            string         `json:"source"`
 	Definition        Definition     `json:"definition"`
 	CreatedBy         string         `json:"created_by"`
 	UpdatedBy         string         `json:"updated_by"`
@@ -54,24 +57,30 @@ type Workflow struct {
 	Version           int            `json:"version"`
 }
 
-// Version is one immutable definition of a workflow.
+// Version is one immutable version of a workflow: its script and the
+// definition read from it.
 type Version struct {
 	Number     int        `json:"number"`
+	Source     string     `json:"source"`
 	Definition Definition `json:"definition"`
 	CreatedBy  string     `json:"created_by"`
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
 // Save creates or replaces a workflow. Key is optional on create (it is made
-// from the name) and immutable afterwards.
+// from the name) and immutable afterwards. Source is the workflow's script,
+// whose export declares its triggers and forms.
 type Save struct {
-	Key              string          `json:"key,omitempty"`
-	Name             string          `json:"name"`
-	Description      string          `json:"description"`
-	AutomaticEnabled *bool           `json:"automatic_enabled,omitempty"`
-	ManualEnabled    *bool           `json:"manual_enabled,omitempty"`
-	State            string          `json:"state,omitempty"`
-	Definition       json.RawMessage `json:"definition"`
+	Key              string `json:"key,omitempty"`
+	Name             string `json:"name"`
+	Description      string `json:"description"`
+	AutomaticEnabled *bool  `json:"automatic_enabled,omitempty"`
+	ManualEnabled    *bool  `json:"manual_enabled,omitempty"`
+	State            string `json:"state,omitempty"`
+	Source           string `json:"source"`
+	// Parameters are what the script reads as ctx.params; an update without
+	// them keeps the workflow's.
+	Parameters map[string]any `json:"parameters,omitempty"`
 	// Role makes the workflow a filler of that role (see Role), in the
 	// collection (CollectionID). Both are set when
 	// the workflow is created.
@@ -105,11 +114,32 @@ func toWorkflow(w *workflows.Workflow, v *workflows.Version) (Workflow, error) {
 		return Workflow{}, err
 	}
 	out := Workflow{ExecutionAuthor: v.CreatedBy, ID: w.ID, WorkspaceID: w.WorkspaceID, Key: w.Key, Name: w.Name, Description: w.Description, AutomaticEnabled: w.AutomaticEnabled, ManualEnabled: w.ManualEnabled, State: string(w.State), AutomaticProvider: w.AutomaticProvider, BuiltInKey: optional(w.BuiltinKey), Role: optional(w.Role), CollectionID: optional(w.CollectionID),
-		CurrentVersion: w.CurrentVersion, Definition: def, CreatedBy: w.CreatedBy, UpdatedBy: w.UpdatedBy, CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, Version: w.Version}
-	if w.BuiltinKey != "" {
+		CurrentVersion: w.CurrentVersion, Source: v.Source, Definition: def, CreatedBy: w.CreatedBy, UpdatedBy: w.UpdatedBy, CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, Version: w.Version}
+	if len(w.Parameters) > 0 {
 		out.Parameters = w.Parameters
 	}
 	return out, nil
+}
+
+// workflowParams are the parameters a workflow's script is read and run
+// with: its parameters and, for a workflow of one collection, that
+// collection.
+func workflowParams(params map[string]any, collectionID string) map[string]any {
+	out := map[string]any{}
+	for k, v := range params {
+		out[k] = v
+	}
+	if collectionID != "" {
+		out["collection"] = collectionID
+	}
+	return out
+}
+
+func jsonObject(v map[string]any) (json.RawMessage, error) {
+	if v == nil {
+		v = map[string]any{}
+	}
+	return json.Marshal(v)
 }
 
 func current(ctx context.Context, t *dms.Service, w *workflows.Workflow) (*workflows.Version, error) {
@@ -189,7 +219,7 @@ func (s *Service) Versions(ctx context.Context, subject, id string) ([]Version, 
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, Version{Number: v.Number, Definition: def, CreatedBy: v.CreatedBy, CreatedAt: v.CreatedAt})
+			out = append(out, Version{Number: v.Number, Source: v.Source, Definition: def, CreatedBy: v.CreatedBy, CreatedAt: v.CreatedAt})
 		}
 		return out, nil
 	})
@@ -223,8 +253,11 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 		if err := validName(in.Name); err != nil {
 			return err
 		}
-		def, raw, err := checkDefinition(ctx, t, subject, workspaceID, in.Definition)
+		def, content, err := compile(ctx, in.Source, workflowParams(in.Parameters, in.CollectionID))
 		if err != nil {
+			return err
+		}
+		if err = checkDefinition(ctx, t, subject, workspaceID, def); err != nil {
 			return err
 		}
 		if err = checkRole(ctx, t, subject, workspaceID, in.Role, in.CollectionID, def); err != nil {
@@ -236,6 +269,10 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 				return dms.Invalid("key must be lowercase letters, digits, '-' or '_' (at most 100)")
 			}
 		} else if key, err = freeKey(ctx, t, workspaceID, keyFromName(in.Name)); err != nil {
+			return err
+		}
+		params, err := jsonObject(in.Parameters)
+		if err != nil {
 			return err
 		}
 		state := workflows.State(in.State)
@@ -254,7 +291,7 @@ func (s *Service) create(ctx context.Context, t *dms.Service, subject, workspace
 			}
 		}
 
-		w, err := createWorkflow(ctx, t, workflows.CreateInput{WorkspaceID: workspaceID, Key: key, Name: in.Name, Description: in.Description, AutomaticEnabled: in.AutomaticEnabled != nil && *in.AutomaticEnabled, ManualEnabled: in.ManualEnabled == nil || *in.ManualEnabled, State: state, Role: in.Role, CollectionID: in.CollectionID, AutomaticProvider: in.Role != "" && in.AutomaticEnabled != nil && *in.AutomaticEnabled && state == workflows.StatePublished, Definition: raw, CreatedBy: subject})
+		w, err := createWorkflow(ctx, t, workflows.CreateInput{WorkspaceID: workspaceID, Key: key, Name: in.Name, Description: in.Description, AutomaticEnabled: in.AutomaticEnabled != nil && *in.AutomaticEnabled, ManualEnabled: in.ManualEnabled == nil || *in.ManualEnabled, State: state, Role: in.Role, CollectionID: in.CollectionID, AutomaticProvider: in.Role != "" && in.AutomaticEnabled != nil && *in.AutomaticEnabled && state == workflows.StatePublished, Content: content, Parameters: params, CreatedBy: subject})
 		if err != nil {
 			return err
 		}
@@ -291,39 +328,29 @@ func audit(ctx context.Context, t *dms.Service, subject, action string, w *workf
 	return t.RecordEntity(ctx, subject, action, dms.AuditTarget{WorkspaceID: w.WorkspaceID, ResourceID: w.WorkspaceID, Kind: "workspace"}, details)
 }
 
-// check validates a definition, including the collections, content types
-// and condition it references, and returns it with its normalized JSON.
-func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID string, raw json.RawMessage) (Definition, json.RawMessage, error) {
-	if len(raw) == 0 {
-		return Definition{}, nil, dms.Invalid("definition is required")
-	}
-	def, err := ParseDefinition(raw)
-	if err != nil {
-		return def, nil, err
-	}
-	if err = def.validate(); err != nil {
-		return def, nil, err
-	}
+// checkDefinition checks the collections, content types, terms, condition
+// and forms a definition references, as subject in a workspace.
+func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID string, def Definition) error {
 	checked := map[string]bool{}
 	for i, tr := range def.Triggers {
 		at := fmt.Sprintf("triggers[%d]: ", i)
 		if tr.Type == dms.EventTermChanged {
 			if err := t.RequireScope(ctx, subject, "taxonomy.read"); err != nil {
-				return def, nil, fmt.Errorf("%sterm.changed requires taxonomy.read: %w", at, err)
+				return fmt.Errorf("%sterm.changed requires taxonomy.read: %w", at, err)
 			}
 		}
 		if tr.CollectionID != "" && !checked[tr.CollectionID] {
 			c, err := t.Authorize(ctx, subject, tr.CollectionID, "read")
 			if err != nil {
-				return def, nil, dms.Invalid(at + "collection_id must be a readable list or library")
+				return dms.Invalid(at + "collection_id must be a readable list or library")
 			}
 			if c.WorkspaceID != workspaceID || (c.Kind != "list" && c.Kind != "library") {
-				return def, nil, dms.Invalid(at + "collection_id must be a list or library of the workflow's workspace")
+				return dms.Invalid(at + "collection_id must be a list or library of the workflow's workspace")
 			}
 			if def.Condition != nil {
 				// Compiling the condition checks its fields exist and are indexed.
 				if _, err = t.Query(ctx, subject, tr.CollectionID, dms.QueryRequest{Query: dms.QuerySpec{Filter: def.Condition}, Surface: "head", Limit: 1}); err != nil {
-					return def, nil, dms.Invalid(at + "condition: " + err.Error())
+					return dms.Invalid(at + "condition: " + err.Error())
 				}
 			}
 			checked[tr.CollectionID] = true
@@ -331,19 +358,19 @@ func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID s
 		if tr.ContentTypeID != "" {
 			ok, err := t.DAL.Catalog().Accepts(ctx, tr.CollectionID, tr.ContentTypeID)
 			if err != nil {
-				return def, nil, err
+				return err
 			}
 			if !ok {
-				return def, nil, dms.Invalid(at + "content_type_id must belong to collection_id")
+				return dms.Invalid(at + "content_type_id must belong to collection_id")
 			}
 		}
 		for _, id := range tr.Terms {
 			ok, err := t.DAL.Taxonomy().TermExists(ctx, id)
 			if err != nil {
-				return def, nil, err
+				return err
 			}
 			if !ok {
-				return def, nil, dms.Invalid(at + "terms must exist in the organization term store")
+				return dms.Invalid(at + "terms must exist in the organization term store")
 			}
 		}
 		if m := eventPattern.FindStringSubmatch(tr.Type); m != nil && m[2] != "completed" && m[2] != "failed" {
@@ -353,24 +380,11 @@ func checkDefinition(ctx context.Context, t *dms.Service, subject, workspaceID s
 		}
 	}
 	if def.InputSchema != nil {
-		if err = forms.CheckConfig(ctx, t, subject, workspaceID, def.InputSchema, "input_schema"); err != nil {
-			return def, nil, err
+		if err := forms.CheckConfig(ctx, t, subject, workspaceID, def.InputSchema, "input_schema"); err != nil {
+			return err
 		}
 	}
-	for name, node := range def.Flow.Nodes {
-		if node.Activity == "taxonomy.decide" {
-			if err = checkStaticTaxonomyDecision(ctx, t, subject, node.Inputs); err != nil {
-				return def, nil, fmt.Errorf("flow.nodes.%s: %w", name, err)
-			}
-		}
-		if schema, ok := node.Inputs["input_schema"].(map[string]any); ok && (node.Activity == "task" || node.Activity == "approval") {
-			if err = forms.CheckConfig(ctx, t, subject, workspaceID, schema, "flow.nodes."+name+".inputs.input_schema"); err != nil {
-				return def, nil, err
-			}
-		}
-	}
-	normalized, err := json.Marshal(def)
-	return def, normalized, err
+	return nil
 }
 
 // Update replaces a workflow's name, description, enabled state and, when it
@@ -389,7 +403,7 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 			return dms.ErrPreconditionFailed
 		}
 		if w.BuiltinKey != "" {
-			return dms.Invalid("built-in workflows change through their parameters; copy one to edit its definition")
+			return dms.Invalid("built-in workflows change through their parameters; copy one to edit its script")
 		}
 		if in.Key != "" && in.Key != w.Key {
 			return dms.Invalid("key is immutable")
@@ -400,8 +414,15 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 		if err = validName(in.Name); err != nil {
 			return err
 		}
-		def, raw, err := checkDefinition(ctx, t, subject, w.WorkspaceID, in.Definition)
+		params := w.Parameters
+		if in.Parameters != nil {
+			params = in.Parameters
+		}
+		def, content, err := compile(ctx, in.Source, workflowParams(params, w.CollectionID))
 		if err != nil {
+			return err
+		}
+		if err = checkDefinition(ctx, t, subject, w.WorkspaceID, def); err != nil {
 			return err
 		}
 		if w.Role != "" {
@@ -428,8 +449,12 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 				return err
 			}
 		}
-		w, v, err := revise(ctx, t, subject, w, raw, func(u *workflows.Changes) {
+		w, v, err := revise(ctx, t, subject, w, content, func(u *workflows.Changes) {
 			u.Name, u.Description, u.AutomaticEnabled = &in.Name, &in.Description, &enabled
+			if in.Parameters != nil {
+				values := in.Parameters
+				u.Parameters = &values
+			}
 			if enabled && nextState == "published" && w.Role != "" {
 				yes := true
 				u.AutomaticProvider = &yes
@@ -459,12 +484,12 @@ func (s *Service) Update(ctx context.Context, subject, id string, version int, i
 	return
 }
 
-// revise applies change to w and adds a version when raw differs from the
-// current definition.
-func revise(ctx context.Context, t *dms.Service, subject string, w *workflows.Workflow, raw json.RawMessage, change func(*workflows.Changes)) (*workflows.Workflow, *workflows.Version, error) {
+// revise applies change to w and adds a version when content differs from
+// the current version's.
+func revise(ctx context.Context, t *dms.Service, subject string, w *workflows.Workflow, content workflows.Content, change func(*workflows.Changes)) (*workflows.Workflow, *workflows.Version, error) {
 	changes := workflows.Changes{}
 	change(&changes)
-	out, version, err := t.DAL.Workflows().Revise(ctx, w.ID, w.Version, subject, raw, changes)
+	out, version, err := t.DAL.Workflows().Revise(ctx, w.ID, w.Version, subject, content, changes)
 	if errors.Is(err, dberr.ErrConcurrentUpdate) {
 		return nil, nil, dms.ErrPreconditionFailed
 	}
@@ -695,22 +720,21 @@ func (s *Service) planStart(ctx context.Context, t *dms.Service, subject, id str
 	return
 }
 
-// Match finds the runs that logged events start, records them, and returns
-// their inputs for the runner to enqueue in the dispatch transaction. The
-// dispatcher calls it for undispatched events, on whichever node claims
-// them. Events at MaxDepth or deeper start nothing, which stops workflows
-// that keep triggering each other. A condition that cannot be evaluated
-// (a field no longer indexed, the author lost access) still starts the run,
-// which then fails with the reason, so the problem is visible.
-func Match(ctx context.Context, t *dms.Service, events []dms.Event, active ActiveFunc) ([]RunInput, []string, error) {
-	var out []RunInput
-	var cancel []string
-	// started are the runs this call starts, with their members, by workflow.
+// Match starts the runs that logged events start, in the dispatch
+// transaction: each is a run operation with its provenance. It returns the
+// runs it started and the active runs that replacing runs cancel. The
+// dispatcher calls it for undispatched events. Events at MaxDepth or deeper
+// start nothing, which stops workflows that keep triggering each other. A
+// condition that cannot be evaluated (a field no longer indexed, the author
+// lost access) still starts the run, which then fails with the reason, so
+// the problem is visible.
+func Match(ctx context.Context, t *dms.Service, events []dms.Event) (started []string, cancel []string, err error) {
+	// batch are the runs this call starts, with their members, by workflow.
 	type startedRun struct {
 		id      string
 		members []string
 	}
-	started := map[string][]startedRun{}
+	batch := map[string][]startedRun{}
 	versions := map[string]*matchable{}
 	// A bulk write raises many events of few kinds; look each kind up once.
 	lookups := map[[3]string][]*workflows.Workflow{}
@@ -828,16 +852,19 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 					}
 				}
 			}
+			// A coalescing workflow runs one item at a time: a run that starts
+			// while another is active waits for it.
+			waiting := false
 			if c := m.def.Concurrency; c != "" && c != ConcurrencyParallel && len(members) > 0 {
-				busy, err := activeRuns(ctx, t, w.ID, members, active)
+				busy, err := activeRuns(ctx, t, w.ID, members)
 				if err != nil {
 					return nil, nil, err
 				}
 				delete(busy, RunID(w.ID, e.ID))
-				// Runs this batch starts are not in the runner's statuses yet.
-				for _, earlier := range started[w.ID] {
+				// Runs this batch starts are queued.
+				for _, earlier := range batch[w.ID] {
 					if overlaps(earlier.members, members) {
-						busy[earlier.id] = runstore.StatusQueued
+						busy[earlier.id] = runstore.Run{ID: earlier.id, Status: runstore.StatusQueued}
 					}
 				}
 				switch c {
@@ -858,16 +885,17 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 				case ConcurrencyCoalesce:
 					// A queued run will read the item as it is when it starts.
 					queued := false
-					for _, state := range busy {
-						queued = queued || state == runstore.StatusQueued
+					for _, run := range busy {
+						queued = queued || run.Status == runstore.StatusQueued || strings.HasPrefix(run.ExecutionID, SerialExecution(""))
 					}
 					if queued && e.Type != TriggerManual {
 						continue
 					}
+					waiting = len(busy) > 0
 				}
 			}
 			runID := RunID(w.ID, e.ID)
-			started[w.ID] = append(started[w.ID], startedRun{id: runID, members: members})
+			batch[w.ID] = append(batch[w.ID], startedRun{id: runID, members: members})
 			exists, err := t.DAL.Runs().Exists(ctx, w.ID, e.ID)
 			if err != nil {
 				return nil, nil, err
@@ -875,36 +903,39 @@ func Match(ctx context.Context, t *dms.Service, events []dms.Event, active Activ
 			if exists {
 				continue
 			}
-			if _, err = t.DAL.Runs().Create(ctx, runstore.CreateInput{ID: runID, WorkflowID: w.ID, WorkflowVersion: m.v.Number, WorkspaceID: w.WorkspaceID, EventID: e.ID, EventType: e.Type, Depth: e.Depth, Actor: e.Actor, ItemID: eventItemID(e)}); err != nil {
-				return nil, nil, err
-			}
-			in := RunInput{RunID: runID, WorkflowID: w.ID, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: e, StartError: startError, System: systemWorkflow(w.BuiltinKey)}
+			payload := RunPayload{WorkflowID: w.ID, Key: w.Key, Version: m.v.Number, WorkspaceID: w.WorkspaceID, ItemID: eventItemID(e), Event: runEvent(e),
+				Params: m.params(), Role: w.Role, System: systemWorkflow(w.BuiltinKey), StartError: startError}
 			if m.def.Concurrency == ConcurrencyCoalesce && len(members) > 0 {
-				in.Partition = w.ID + ":" + members[0]
+				payload.Serial = w.ID + ":" + members[0]
 			}
 			if e.Type == TriggerManual {
 				if inputs, ok := e.Data["inputs"].(map[string]any); ok {
-					in.Inputs = inputs
+					payload.Input = inputs
 				}
-				members, _ := e.Data["items"].([]any)
-				for position, m := range members {
+				list, _ := e.Data["items"].([]any)
+				for _, m := range list {
 					itemID, _ := m.(string)
-					in.Items = append(in.Items, itemID)
-					if err = t.DAL.Runs().AddItem(ctx, runID, itemID, position); err != nil {
-						return nil, nil, err
-					}
+					payload.Items = append(payload.Items, itemID)
 				}
 			}
-			out = append(out, in)
+			run := runstore.CreateInput{ID: runID, WorkflowID: w.ID, WorkflowVersion: m.v.Number, WorkspaceID: w.WorkspaceID, EventID: e.ID, EventType: e.Type, Depth: e.Depth, Actor: e.Actor, ItemID: eventItemID(e)}
+			if err = newRun(ctx, t, m.v.CreatedBy, run, payload, waiting); err != nil {
+				return nil, nil, err
+			}
+			started = append(started, runID)
 		}
 	}
-	return out, cancel, nil
+	return started, cancel, nil
 }
 
-// ActiveFunc reports the status of the given runs that are still active:
-// queued, running or waiting. Runs that are not active are left out. It
-// reads in t's transaction.
-type ActiveFunc func(ctx context.Context, t *dms.Service, runIDs []string) (map[string]runstore.Status, error)
+// runEvent is how a run's script sees the event that started it.
+func runEvent(e dms.Event) RunEvent {
+	data := e.Data
+	if data == nil {
+		data = map[string]any{}
+	}
+	return RunEvent{ID: e.ID, Type: e.Type, WorkspaceID: e.WorkspaceID, CollectionID: e.CollectionID, ResourceID: e.ResourceID, Actor: e.Actor, Depth: e.Depth, Data: data}
+}
 
 // eventMembers are the items a run started by e works on.
 func eventMembers(e dms.Event) []string {
@@ -942,31 +973,33 @@ func overlaps(a, b []string) bool {
 }
 
 // activeRuns returns the queued, running or waiting runs of a workflow that
-// work on any of items, as primary item or selection member. Recorded
-// statuses lag behind the runner, so active confirms them.
-func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []string, active ActiveFunc) (map[string]runstore.Status, error) {
+// work on any of items, as primary item or selection member.
+func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []string) (map[string]runstore.Run, error) {
 	rows, err := t.DAL.Runs().List(ctx, runstore.Filter{WorkflowID: workflowID, Statuses: runstore.Active, ItemIDs: items})
-	out := map[string]runstore.Status{}
-	if err != nil || len(rows) == 0 {
-		return out, err
+	out := make(map[string]runstore.Run, len(rows))
+	for _, row := range rows {
+		out[row.ID] = row
 	}
-	if active == nil {
-		for _, row := range rows {
-			out[row.ID] = row.Status
-		}
-		return out, nil
-	}
-	ids := make([]string, len(rows))
-	for i, row := range rows {
-		ids[i] = row.ID
-	}
-	return active(ctx, t, ids)
+	return out, err
 }
 
 type matchable struct {
 	w   *workflows.Workflow
 	v   *workflows.Version
 	def Definition
+}
+
+// params are the parameters a run of m's workflow gets: a built-in's, with
+// its collection.
+func (m *matchable) params() map[string]any {
+	out := map[string]any{}
+	for k, v := range m.w.Parameters {
+		out[k] = v
+	}
+	if m.w.CollectionID != "" {
+		out["collection"] = m.w.CollectionID
+	}
+	return out
 }
 
 // accepts reports whether any trigger of e's type accepts e.
@@ -1265,4 +1298,24 @@ func createWorkflow(ctx context.Context, t *dms.Service, in workflows.CreateInpu
 		return nil, err
 	}
 	return &w, nil
+}
+
+// matches reports whether an item of a collection meets filter, read as
+// subject on its head surface.
+func matches(ctx context.Context, t *dms.Service, subject, collectionID, itemID string, filter *dms.FilterExpr) (bool, error) {
+	id, _ := json.Marshal(itemID)
+	f := dms.FilterExpr{And: []dms.FilterExpr{{Field: "$id", Op: "eq", Value: id}, *filter}}
+	res, err := t.Query(ctx, subject, collectionID, dms.QueryRequest{Query: dms.QuerySpec{Filter: &f}, Surface: "head", Limit: 1})
+	if err != nil {
+		return false, err
+	}
+	return len(res.Data) == 1, nil
+}
+
+// optional returns nil for an empty string.
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

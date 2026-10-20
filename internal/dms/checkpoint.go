@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"papergo/internal/dal"
 	"papergo/internal/dal/activitystore"
 	auditstore "papergo/internal/dal/audit"
 	"papergo/internal/dal/database"
@@ -17,7 +16,8 @@ import (
 // dispatched events uses it so the figure has a documented window.
 const storageStatusRunRetention = 30 * 24 * time.Hour
 
-// StorageRunCount is how many workflow executions share a name and status.
+// StorageRunCount is how many workflow runs have a status. Name is the
+// operation kind runs are executed as.
 type StorageRunCount struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
@@ -130,12 +130,17 @@ func (s *Service) StorageStatus(ctx context.Context, subject string) (StorageSta
 }
 
 func storageRuns(ctx context.Context, s *Service) ([]StorageRunCount, error) {
-	counts, err := dal.NewDurableStore(s.db, s.DAL.Dialect(), "dbos").RunCounts(ctx)
-	out := make([]StorageRunCount, len(counts))
-	for i, c := range counts {
-		out[i] = StorageRunCount{Name: c.Name, Status: c.Status, Count: c.Count}
+	out := []StorageRunCount{}
+	for _, status := range []operations.Status{operations.StatusPending, operations.StatusSucceeded, operations.StatusFailed, operations.StatusCancelled} {
+		n, err := s.DAL.Operations().Count(ctx, operations.Filter{Kinds: []string{OperationKindRun}, Statuses: []operations.Status{status}})
+		if err != nil {
+			return nil, err
+		}
+		if n > 0 {
+			out = append(out, StorageRunCount{Name: OperationKindRun, Status: string(status), Count: n})
+		}
 	}
-	return out, err
+	return out, nil
 }
 
 // count converts a repository count to a status counter.

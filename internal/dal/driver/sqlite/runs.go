@@ -2,18 +2,18 @@ package sqlite
 
 import (
 	"context"
-
 	"encoding/json"
-	"time"
 
-	"github.com/aarondl/opt/omit"
-	"github.com/stephenafamo/bob/dialect/sqlite"
-	"github.com/stephenafamo/bob/dialect/sqlite/im"
-	"github.com/stephenafamo/bob/dialect/sqlite/sm"
 	"papergo/internal/dal/dberr"
 	"papergo/internal/dal/driver/nullable"
 	"papergo/internal/dal/driver/sqlite/models"
+	"papergo/internal/dal/operations"
 	"papergo/internal/dal/runs"
+
+	"github.com/aarondl/opt/omit"
+	"github.com/stephenafamo/bob/dialect/sqlite"
+	"github.com/stephenafamo/bob/dialect/sqlite/sm"
+	"github.com/stephenafamo/bob/types"
 )
 
 func (q Queries) VersionExists(ctx context.Context, workflowID string, number int64) (bool, error) {
@@ -36,7 +36,7 @@ func (q Queries) WorkflowRunExists(ctx context.Context, workflowID, eventID stri
 	return ok, dberr.Translate(err)
 }
 
-func (q Queries) WorkflowRuns(ctx context.Context, f runs.Filter) ([]runs.Run, error) {
+func (q Queries) WorkflowRuns(ctx context.Context, f runs.Filter, statuses []operations.Status) ([]runs.Run, error) {
 	query := models.WorkflowRuns.Query()
 	w := models.SelectWhere.WorkflowRuns
 	c := models.WorkflowRuns.Columns
@@ -52,12 +52,14 @@ func (q Queries) WorkflowRuns(ctx context.Context, f runs.Filter) ([]runs.Run, e
 	if f.AfterID != "" {
 		query.Apply(w.ID.GT(f.AfterID))
 	}
-	if len(f.Statuses) > 0 {
-		statuses := make([]string, len(f.Statuses))
-		for i, s := range f.Statuses {
-			statuses[i] = string(s)
+	if len(statuses) > 0 {
+		values := make([]any, len(statuses))
+		for i, status := range statuses {
+			values[i] = string(status)
 		}
-		query.Apply(w.LiveStatus.In(statuses...))
+		oc := models.Operations.Columns
+		matching := models.Operations.Query(sm.Columns(oc.ID), sm.Where(oc.Status.In(sqlite.Arg(values...))))
+		query.Apply(sm.Where(sqlite.Raw(`"workflow_runs"."id" IN ?`, matching)))
 	}
 	if len(f.ExcludeEventTypes) > 0 {
 		query.Apply(w.EventType.NotIn(f.ExcludeEventTypes...))
@@ -125,28 +127,7 @@ func (q Queries) InsertWorkflowRun(ctx context.Context, r runs.Run) error {
 		ID: omit.From(r.ID), CreatedAt: omit.From(r.CreatedAt), WorkflowID: omit.From(r.WorkflowID), WorkflowVersion: omit.From(int64(r.WorkflowVersion)),
 		WorkspaceID: omit.From(r.WorkspaceID), ItemID: nullable.String(r.ItemID), EventID: omit.From(r.EventID), EventType: omit.From(r.EventType),
 		Depth: omit.From(int64(r.Depth)), Actor: omit.From(r.Actor), RetryOf: nullable.String(r.RetryOf),
-		LiveStatus: omit.From(string(r.Status)), LiveUpdatedAt: omit.From(r.StatusAt),
 	}).Exec(ctx, q.exec)
-	return dberr.Translate(err)
-}
-
-func (q Queries) SetRunStatus(ctx context.Context, id string, status runs.Status, at time.Time, activeOnly bool) (int64, error) {
-	set := &models.WorkflowRunSetter{LiveStatus: omit.From(string(status)), LiveUpdatedAt: omit.From(at)}
-	w := models.UpdateWhere.WorkflowRuns
-	update := models.WorkflowRuns.Update(set.UpdateMod(), w.ID.EQ(id))
-	if activeOnly {
-		active := make([]string, len(runs.Active))
-		for i, s := range runs.Active {
-			active[i] = string(s)
-		}
-		update.Apply(w.LiveStatus.In(active...))
-	}
-	n, err := update.Exec(ctx, q.exec)
-	return n, dberr.Translate(err)
-}
-
-func (q Queries) DeleteWorkflowRuns(ctx context.Context, ids []string) error {
-	_, err := models.WorkflowRuns.Delete(models.DeleteWhere.WorkflowRuns.ID.In(ids...)).Exec(ctx, q.exec)
 	return dberr.Translate(err)
 }
 
@@ -178,52 +159,26 @@ func (q Queries) InsertRunItem(ctx context.Context, i runs.Item) error {
 	return dberr.Translate(err)
 }
 
-func (q Queries) StepResult(ctx context.Context, runID string, step int) (string, []byte, error) {
-	row, err := models.FindRunnerStepResult(ctx, q.exec, runID, int64(step))
-	if err != nil {
-		return "", nil, dberr.Translate(err)
-	}
-	return row.Step, row.Output, nil
-}
-
-func (q Queries) InsertStepResult(ctx context.Context, runID string, step int, name string, body []byte) error {
-	_, err := models.RunnerStepResults.Insert(&models.RunnerStepResultSetter{
-		RunID: omit.From(runID), StepID: omit.From(int64(step)), Step: omit.From(name), Output: omit.From(body),
-	}).Exec(ctx, q.exec)
-	return dberr.Translate(err)
-}
-
-func (q Queries) StepBodies(ctx context.Context, runID string) (map[int]json.RawMessage, error) {
-	rows, err := models.RunnerStepResults.Query(models.SelectWhere.RunnerStepResults.RunID.EQ(runID)).All(ctx, q.exec)
-	if err != nil {
-		return nil, dberr.Translate(err)
-	}
-	out := make(map[int]json.RawMessage, len(rows))
-	for _, row := range rows {
-		out[int(row.StepID)] = row.Output
-	}
-	return out, nil
-}
-
-func (q Queries) CopyStepResults(ctx context.Context, target, source string, before int) error {
-	c := models.RunnerStepResults.Columns
-	w := models.SelectWhere.RunnerStepResults
-	_, err := sqlite.Insert(
-		im.Into(models.RunnerStepResults.Name(), "run_id", "step_id", "step", "output"),
-		im.Query(models.RunnerStepResults.Query(sm.Columns(sqlite.Arg(target), c.StepID, c.Step, c.Output), w.RunID.EQ(source), w.StepID.LT(int64(before)))),
-	).Exec(ctx, q.exec)
-	return dberr.Translate(err)
-}
-
-func (q Queries) DeleteStepResults(ctx context.Context, runIDs []string) error {
-	_, err := models.RunnerStepResults.Delete(models.DeleteWhere.RunnerStepResults.RunID.In(runIDs...)).Exec(ctx, q.exec)
-	return dberr.Translate(err)
-}
-
 func runRecord(r *models.WorkflowRun) runs.Run {
 	return runs.Run{
 		ID: r.ID, WorkflowID: r.WorkflowID, WorkspaceID: r.WorkspaceID, ItemID: r.ItemID.GetOrZero(), EventID: r.EventID, EventType: r.EventType,
 		Actor: r.Actor, RetryOf: r.RetryOf.GetOrZero(), WorkflowVersion: int(r.WorkflowVersion), Depth: int(r.Depth),
-		Status: runs.Status(r.LiveStatus), CreatedAt: r.CreatedAt.UTC(), StatusAt: r.LiveUpdatedAt.UTC(),
+		CreatedAt: r.CreatedAt.UTC(), Logs: runLogs(r.Logs.Val),
 	}
+}
+
+func runLogs(raw json.RawMessage) []runs.Log {
+	var out []runs.Log
+	_ = json.Unmarshal(raw, &out)
+	return out
+}
+
+func (q Queries) SetRunLogs(ctx context.Context, id string, logs []runs.Log) error {
+	raw, err := json.Marshal(logs)
+	if err != nil {
+		return err
+	}
+	set := &models.WorkflowRunSetter{Logs: omit.From(types.NewJSON(json.RawMessage(raw)))}
+	_, err = models.WorkflowRuns.Update(set.UpdateMod(), models.UpdateWhere.WorkflowRuns.ID.EQ(id)).Exec(ctx, q.exec)
+	return dberr.Translate(err)
 }

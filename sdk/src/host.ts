@@ -20,6 +20,11 @@ interface Host {
    * while it waits and replayed when the last one finishes.
    */
   wait(operationIds: string[]): void;
+  /**
+   * Returns at or after a time, given in milliseconds since the epoch. The
+   * run is unloaded while it sleeps.
+   */
+  sleep(until: number): void;
   uuid(): string;
   log(level: LogLevel, message: string): void;
 }
@@ -29,6 +34,7 @@ declare const __papergo: Host;
 export const host: Host = {
   request: (method, url, headers, body) => __papergo.request(method, url, headers, body),
   wait: (operationIds) => __papergo.wait(operationIds),
+  sleep: (until) => __papergo.sleep(until),
   uuid: () => __papergo.uuid(),
   log: (level, message) => __papergo.log(level, message),
 };

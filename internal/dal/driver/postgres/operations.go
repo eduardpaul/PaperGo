@@ -43,6 +43,9 @@ func operationsMatching(f operations.Filter) []dialect.Expression {
 	if len(f.Kinds) > 0 {
 		where = append(where, c.Kind.In(psql.Arg(anys(f.Kinds)...)))
 	}
+	if len(f.ExcludeKinds) > 0 {
+		where = append(where, c.Kind.NotIn(psql.Arg(anys(f.ExcludeKinds)...)))
+	}
 	if len(f.Statuses) > 0 {
 		statuses := make([]any, len(f.Statuses))
 		for i, s := range f.Statuses {
@@ -58,6 +61,9 @@ func operationsMatching(f operations.Filter) []dialect.Expression {
 	}
 	if f.DeadlineBefore != nil {
 		where = append(where, c.Deadline.LT(psql.Arg(f.DeadlineBefore.UTC())))
+	}
+	if f.ExecutionID != "" {
+		where = append(where, c.ExecutionID.EQ(psql.Arg(f.ExecutionID)))
 	}
 	if f.OwnedBy != "" {
 		where = append(where, psql.Or(c.CreatedBy.EQ(psql.Arg(f.OwnedBy)), c.Kind.In(psql.Arg(anys(f.SharedKinds)...))))

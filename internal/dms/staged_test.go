@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"papergo/internal/dal/blobs"
+	"papergo/internal/dal/daltest"
 	runstore "papergo/internal/dal/runs"
 	"papergo/internal/dal/workflows"
 	"testing"
@@ -224,12 +225,12 @@ func TestStagedFilesPromoteDiscardAndCollect(t *testing.T) {
 // stagingRuns records runs of a new workflow, which staged files belong to.
 func stagingRuns(t *testing.T, s *Service, workspaceID string, ids ...string) {
 	t.Helper()
-	wf, err := s.DAL.Workflows().Create(testContext, workflows.CreateInput{WorkspaceID: workspaceID, Key: "staging", Name: "Staging", CreatedBy: "alice"})
+	wf, err := s.DAL.Workflows().Create(testContext, workflows.CreateInput{WorkspaceID: workspaceID, Key: "staging", Name: "Staging", Content: daltest.Script, CreatedBy: "alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range ids {
-		if _, err = s.DAL.Runs().Create(testContext, runstore.CreateInput{ID: id, WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: workspaceID, EventID: id, EventType: "manual", Actor: "alice"}); err != nil {
+		if err = daltest.Run(testContext, s.DAL, runstore.CreateInput{ID: id, WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: workspaceID, EventID: id, EventType: "manual", Actor: "alice"}); err != nil {
 			t.Fatal(err)
 		}
 	}

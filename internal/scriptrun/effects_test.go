@@ -2,15 +2,16 @@ package scriptrun
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"papergo/internal/worker"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/runs"
@@ -19,6 +20,8 @@ import (
 	"papergo/internal/script"
 	"papergo/internal/storage"
 	"papergo/internal/testutil/searchstore"
+
+	"github.com/google/uuid"
 )
 
 func TestMain(m *testing.M) { daltest.Main(m) }
@@ -91,7 +94,7 @@ func setup(t *testing.T, configure ...func(*httpapi.API)) *fixture {
 	}
 	f := &fixture{s: s, api: api, blobs: blobs, workspaceID: ws.ID, workflowID: uuid.NewString()}
 	daltest.Insert(t, s.DAL, "workflows", daltest.Row{"id": f.workflowID, "workspace_id": ws.ID, "key": "review", "name": "Review", "current_version": 1, "created_by": "alice", "updated_by": "alice"})
-	daltest.Insert(t, s.DAL, "workflow_versions", daltest.Row{"id": uuid.NewString(), "workflow_id": f.workflowID, "number": 1, "definition": "{}", "created_by": "alice"})
+	daltest.Insert(t, s.DAL, "workflow_versions", daltest.Row{"id": uuid.NewString(), "workflow_id": f.workflowID, "number": 1, "definition": "{}", "source": "export default {}", "bundle": "export default {}", "bundle_hash": strings.Repeat("0", 64), "created_by": "alice"})
 	return f
 }
 
@@ -106,7 +109,11 @@ func (f *fixture) run(t *testing.T, source, input string) script.Run {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return script.Run{ID: id, Author: "alice", Artifact: artifact, Input: []byte(input)}
+	var value any
+	if err = json.Unmarshal([]byte(input), &value); err != nil {
+		t.Fatal(err)
+	}
+	return script.Run{ID: id, Author: "alice", Artifact: artifact, Context: map[string]any{"input": value}}
 }
 
 // work runs the operation worker until done reports true.
@@ -177,7 +184,7 @@ func TestScriptRunsThroughTheAPIExactlyOnce(t *testing.T) {
 		}
 		return steps[3].Status == runs.StepCompleted
 	})
-	pending, err := s.DAL.Operations().List(ctx, operations.Filter{Statuses: []operations.Status{operations.StatusPending}})
+	pending, err := s.DAL.Operations().List(ctx, operations.Filter{ExcludeKinds: []string{dms.OperationKindRun}, Statuses: []operations.Status{operations.StatusPending}})
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("pending operations: %v, %v", pending, err)
 	}

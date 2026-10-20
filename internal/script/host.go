@@ -40,11 +40,15 @@ type host struct {
 	next     int
 	unsaved  []runs.Step
 	logs     []Log
-	// suspended is set when the run waits for operations; abort when the
-	// slice must stop for another reason. Either interrupts the runtime,
-	// which JavaScript cannot catch.
+	// suspended is set when the run waits for operations or sleeps, until
+	// until; abort when the slice must stop for another reason. Either
+	// interrupts the runtime, which JavaScript cannot catch.
 	suspended bool
+	until     *time.Time
 	abort     error
+	// manifest is set while a version's definition is read: the script
+	// makes no effects then.
+	manifest bool
 }
 
 // runtime returns a runtime with the globals scripts may use: ECMAScript,
@@ -61,6 +65,7 @@ func (h *host) runtime() *goja.Runtime {
 	papergo := rt.NewObject()
 	_ = papergo.Set("request", h.request)
 	_ = papergo.Set("wait", h.wait)
+	_ = papergo.Set("sleep", h.sleep)
 	_ = papergo.Set("uuid", h.uuid)
 	_ = papergo.Set("log", func(level, message string) { h.log(level, message) })
 	_ = rt.Set("__papergo", papergo)
@@ -212,6 +217,7 @@ func (h *host) request(method, rawURL string, headers map[string]string, body go
 	if h.abort != nil || h.suspended {
 		return goja.Undefined()
 	}
+	h.effect()
 	method = strings.ToUpper(method)
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme+"://"+u.Host != apiOrigin || u.User != nil || u.Fragment != "" {
@@ -284,6 +290,7 @@ func (h *host) wait(ids []string) goja.Value {
 	if h.abort != nil || h.suspended {
 		return goja.Undefined()
 	}
+	h.effect()
 	if len(ids) == 0 || len(ids) > maxWaits {
 		panic(h.rt.NewTypeError("ctx.wait takes 1 to %d operations", maxWaits))
 	}
@@ -328,6 +335,53 @@ func (h *host) wait(ids []string) goja.Value {
 	default:
 		return h.stop(errSuspended)
 	}
+}
+
+// effect refuses effects while a definition is read.
+func (h *host) effect() {
+	if h.manifest {
+		panic(h.rt.NewTypeError("a workflow definition is read without running it: requests, waits and sleeps belong in run"))
+	}
+}
+
+// sleep replays or records a sleep until a time in milliseconds since the
+// epoch. A sleep whose time has not come suspends the run until then.
+func (h *host) sleep(untilMillis int64) goja.Value {
+	if h.abort != nil || h.suspended {
+		return goja.Undefined()
+	}
+	h.effect()
+	until := time.UnixMilli(untilMillis).UTC()
+	stamp := until.Format(time.RFC3339Nano)
+	hash := digest(string(runs.StepWait), "sleep", stamp)
+	recorded, err := h.replay(runs.StepWait, "sleep", hash)
+	if err != nil {
+		return h.stop(err)
+	}
+	h.watch.pause()
+	defer h.watch.resume()
+	due := !time.Now().Before(until)
+	if recorded == nil {
+		step := h.newStep(runs.StepWait, "sleep", hash)
+		step.Input, _ = json.Marshal(map[string]string{"until": stamp})
+		if !due {
+			step.Status = runs.StepPending
+		}
+		if err = h.effects.Sleep(h.ctx, h.run, h.unsaved, step); err != nil {
+			return h.stop(err)
+		}
+		h.unsaved = nil
+	} else if recorded.Status == runs.StepPending && due {
+		if err = h.effects.Wake(h.ctx, h.run, recorded.Seq); err != nil {
+			return h.stop(err)
+		}
+	}
+	h.next++
+	if due || recorded != nil && recorded.Status == runs.StepCompleted {
+		return goja.Undefined()
+	}
+	h.until = &until
+	return h.stop(errSuspended)
 }
 
 // textCodecs defines UTF-8 TextEncoder and TextDecoder.

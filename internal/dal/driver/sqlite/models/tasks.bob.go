@@ -49,8 +49,7 @@ type Task struct {
 	Source      string                                `db:"source" `
 	WorkflowID  null.Val[string]                      `db:"workflow_id" `
 	RunID       null.Val[string]                      `db:"run_id" `
-	Node        null.Val[string]                      `db:"node" `
-	Wait        bool                                  `db:"wait" `
+	OperationID null.Val[string]                      `db:"operation_id" `
 	Status      string                                `db:"status" `
 	Outcome     null.Val[string]                      `db:"outcome" `
 	CompletedBy null.Val[string]                      `db:"completed_by" `
@@ -75,10 +74,11 @@ type TasksQuery = *sqlite.ViewQuery[*Task, TaskSlice]
 // taskR is where relationships are stored.
 type taskR struct {
 	TaskResponses     TaskResponseSlice // fk_task_responses_0
-	RunWorkflowRun    *WorkflowRun      // fk_tasks_0
-	Workflow          *Workflow         // fk_tasks_1
-	ItemResource      *Resource         // fk_tasks_2
-	WorkspaceResource *Resource         // fk_tasks_3
+	Operation         *Operation        // fk_tasks_0
+	RunWorkflowRun    *WorkflowRun      // fk_tasks_1
+	Workflow          *Workflow         // fk_tasks_2
+	ItemResource      *Resource         // fk_tasks_3
+	WorkspaceResource *Resource         // fk_tasks_4
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -88,15 +88,16 @@ type taskR struct {
 // taskRLoaded tracks which relationships on Task have been loaded.
 type taskRLoaded struct {
 	TaskResponses     bool // fk_task_responses_0
-	RunWorkflowRun    bool // fk_tasks_0
-	Workflow          bool // fk_tasks_1
-	ItemResource      bool // fk_tasks_2
-	WorkspaceResource bool // fk_tasks_3
+	Operation         bool // fk_tasks_0
+	RunWorkflowRun    bool // fk_tasks_1
+	Workflow          bool // fk_tasks_2
+	ItemResource      bool // fk_tasks_3
+	WorkspaceResource bool // fk_tasks_4
 }
 
 func buildTaskColumns(tableName string) taskColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "updated_at", "version", "workspace_id", "item_id", "kind", "key", "title", "description", "assignees", "completion", "outcomes", "input_schema", "values", "review", "priority", "due_at", "source", "workflow_id", "run_id", "node", "wait", "status", "outcome", "completed_by", "completed_at", "comment", "input", "created_by",
+		"id", "created_at", "updated_at", "version", "workspace_id", "item_id", "kind", "key", "title", "description", "assignees", "completion", "outcomes", "input_schema", "values", "review", "priority", "due_at", "source", "workflow_id", "run_id", "operation_id", "status", "outcome", "completed_by", "completed_at", "comment", "input", "created_by",
 	)
 
 	if tableName != "" {
@@ -127,8 +128,7 @@ func buildTaskColumns(tableName string) taskColumns {
 		Source:      buildTaskColumn(tableName, "source"),
 		WorkflowID:  buildTaskColumn(tableName, "workflow_id"),
 		RunID:       buildTaskColumn(tableName, "run_id"),
-		Node:        buildTaskColumn(tableName, "node"),
-		Wait:        buildTaskColumn(tableName, "wait"),
+		OperationID: buildTaskColumn(tableName, "operation_id"),
 		Status:      buildTaskColumn(tableName, "status"),
 		Outcome:     buildTaskColumn(tableName, "outcome"),
 		CompletedBy: buildTaskColumn(tableName, "completed_by"),
@@ -163,8 +163,7 @@ type taskColumns struct {
 	Source      taskColumn
 	WorkflowID  taskColumn
 	RunID       taskColumn
-	Node        taskColumn
-	Wait        taskColumn
+	OperationID taskColumn
 	Status      taskColumn
 	Outcome     taskColumn
 	CompletedBy taskColumn
@@ -238,8 +237,7 @@ type TaskSetter struct {
 	Source      omit.Val[string]                          `db:"source" `
 	WorkflowID  omitnull.Val[string]                      `db:"workflow_id" `
 	RunID       omitnull.Val[string]                      `db:"run_id" `
-	Node        omitnull.Val[string]                      `db:"node" `
-	Wait        omit.Val[bool]                            `db:"wait" `
+	OperationID omitnull.Val[string]                      `db:"operation_id" `
 	Status      omit.Val[string]                          `db:"status" `
 	Outcome     omitnull.Val[string]                      `db:"outcome" `
 	CompletedBy omitnull.Val[string]                      `db:"completed_by" `
@@ -250,7 +248,7 @@ type TaskSetter struct {
 }
 
 func (s TaskSetter) SetColumns() []string {
-	vals := make([]string, 0, 30)
+	vals := make([]string, 0, 29)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -314,11 +312,8 @@ func (s TaskSetter) SetColumns() []string {
 	if s.RunID.IsValue() || s.RunID.IsNull() {
 		vals = append(vals, "run_id")
 	}
-	if s.Node.IsValue() || s.Node.IsNull() {
-		vals = append(vals, "node")
-	}
-	if s.Wait.IsValue() {
-		vals = append(vals, "wait")
+	if s.OperationID.IsValue() || s.OperationID.IsNull() {
+		vals = append(vals, "operation_id")
 	}
 	if s.Status.IsValue() {
 		vals = append(vals, "status")
@@ -408,11 +403,8 @@ func (s TaskSetter) Overwrite(t *Task) {
 	if s.RunID.IsValue() || s.RunID.IsNull() {
 		t.RunID = s.RunID.MustGetNull()
 	}
-	if s.Node.IsValue() || s.Node.IsNull() {
-		t.Node = s.Node.MustGetNull()
-	}
-	if s.Wait.IsValue() {
-		t.Wait = s.Wait.MustGet()
+	if s.OperationID.IsValue() || s.OperationID.IsNull() {
+		t.OperationID = s.OperationID.MustGetNull()
 	}
 	if s.Status.IsValue() {
 		t.Status = s.Status.MustGet()
@@ -600,19 +592,12 @@ func (s *TaskSetter) Apply(q *dialect.InsertQuery) {
 				}
 				return sqlite.Arg(s.RunID.MustGetNull()).WriteSQL(ctx, w, d, start)
 			}))
-		case "node":
+		case "operation_id":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-				if s.Node.IsUnset() {
+				if s.OperationID.IsUnset() {
 					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
 				}
-				return sqlite.Arg(s.Node.MustGetNull()).WriteSQL(ctx, w, d, start)
-			}))
-		case "wait":
-			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-				if s.Wait.IsUnset() {
-					return sqlite.Arg(nil).WriteSQL(ctx, w, d, start)
-				}
-				return sqlite.Arg(s.Wait.MustGet()).WriteSQL(ctx, w, d, start)
+				return sqlite.Arg(s.OperationID.MustGetNull()).WriteSQL(ctx, w, d, start)
 			}))
 		case "status":
 			vals = append(vals, bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
@@ -674,7 +659,7 @@ func (s TaskSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s TaskSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 30)
+	exprs := make([]bob.Expression, 0, 29)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -823,17 +808,10 @@ func (s TaskSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
-	if s.Node.IsValue() || s.Node.IsNull() {
+	if s.OperationID.IsValue() || s.OperationID.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			sqlite.Quote(append(prefix, "node")...),
-			sqlite.Arg(s.Node),
-		}})
-	}
-
-	if s.Wait.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			sqlite.Quote(append(prefix, "wait")...),
-			sqlite.Arg(s.Wait),
+			sqlite.Quote(append(prefix, "operation_id")...),
+			sqlite.Arg(s.OperationID),
 		}})
 	}
 
@@ -896,7 +874,7 @@ func taskScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func(a
 		idx int
 		dst func(o *Task) any
 	}
-	targets := make([]target, 0, 30)
+	targets := make([]target, 0, 29)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -941,10 +919,8 @@ func taskScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func(a
 			targets = append(targets, target{i, func(o *Task) any { return &o.WorkflowID }})
 		case "run_id":
 			targets = append(targets, target{i, func(o *Task) any { return &o.RunID }})
-		case "node":
-			targets = append(targets, target{i, func(o *Task) any { return &o.Node }})
-		case "wait":
-			targets = append(targets, target{i, func(o *Task) any { return &o.Wait }})
+		case "operation_id":
+			targets = append(targets, target{i, func(o *Task) any { return &o.OperationID }})
 		case "status":
 			targets = append(targets, target{i, func(o *Task) any { return &o.Status }})
 		case "outcome":
@@ -1223,6 +1199,25 @@ func (os TaskSlice) TaskResponses(mods ...bob.Mod[*dialect.SelectQuery]) TaskRes
 	)...)
 }
 
+// Operation starts a query for related objects on operations
+func (o *Task) Operation(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	return Operations.Query(append(mods,
+		sm.Where(Operations.Columns.ID.EQ(sqlite.Arg(o.OperationID))),
+	)...)
+}
+
+func (os TaskSlice) Operation(mods ...bob.Mod[*dialect.SelectQuery]) OperationsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.OperationID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Operations.Query(append(mods,
+		sm.Where(sqlite.Group(Operations.Columns.ID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 // RunWorkflowRun starts a query for related objects on workflow_runs
 func (o *Task) RunWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
 	return WorkflowRuns.Query(append(mods,
@@ -1356,6 +1351,52 @@ func (task0 *Task) AttachTaskResponses(ctx context.Context, exec bob.Executor, r
 	}
 
 	task0.R.TaskResponses = append(task0.R.TaskResponses, taskResponses1...)
+
+	return nil
+}
+
+func attachTaskOperation0(ctx context.Context, exec bob.Executor, count int, task0 *Task, operation1 *Operation) (*Task, error) {
+	setter := &TaskSetter{
+		OperationID: omitnull.From(operation1.ID),
+	}
+
+	err := task0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachTaskOperation0: %w", err)
+	}
+
+	return task0, nil
+}
+
+func (task0 *Task) InsertOperation(ctx context.Context, exec bob.Executor, related *OperationSetter) error {
+	var err error
+
+	operation1, err := Operations.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachTaskOperation0(ctx, exec, 1, task0, operation1)
+	if err != nil {
+		return err
+	}
+
+	task0.R.Operation = operation1
+	task0.R.Loaded.Operation = true
+
+	return nil
+}
+
+func (task0 *Task) AttachOperation(ctx context.Context, exec bob.Executor, operation1 *Operation) error {
+	var err error
+
+	_, err = attachTaskOperation0(ctx, exec, 1, task0, operation1)
+	if err != nil {
+		return err
+	}
+
+	task0.R.Operation = operation1
+	task0.R.Loaded.Operation = true
 
 	return nil
 }
@@ -1567,8 +1608,7 @@ type taskWhere[Q sqlite.Filterable] struct {
 	Source      sqlite.WhereMod[Q, string]
 	WorkflowID  sqlite.WhereNullMod[Q, string]
 	RunID       sqlite.WhereNullMod[Q, string]
-	Node        sqlite.WhereNullMod[Q, string]
-	Wait        sqlite.WhereMod[Q, bool]
+	OperationID sqlite.WhereNullMod[Q, string]
 	Status      sqlite.WhereMod[Q, string]
 	Outcome     sqlite.WhereNullMod[Q, string]
 	CompletedBy sqlite.WhereNullMod[Q, string]
@@ -1607,8 +1647,7 @@ func buildTaskWhere[Q sqlite.Filterable](cols taskColumns) taskWhere[Q] {
 		Source:      sqlite.Where[Q, string](cols.Source.Expression),
 		WorkflowID:  sqlite.WhereNull[Q, string](cols.WorkflowID.Expression),
 		RunID:       sqlite.WhereNull[Q, string](cols.RunID.Expression),
-		Node:        sqlite.WhereNull[Q, string](cols.Node.Expression),
-		Wait:        sqlite.Where[Q, bool](cols.Wait.Expression),
+		OperationID: sqlite.WhereNull[Q, string](cols.OperationID.Expression),
 		Status:      sqlite.Where[Q, string](cols.Status.Expression),
 		Outcome:     sqlite.WhereNull[Q, string](cols.Outcome.Expression),
 		CompletedBy: sqlite.WhereNull[Q, string](cols.CompletedBy.Expression),
@@ -1636,6 +1675,20 @@ func (w taskWhereR[Q]) HasTaskResponses(filters ...bob.Mod[*dialect.SelectQuery]
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(TaskResponses.NameExpr()),
 		sm.Where(TaskResponses.Columns.TaskID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasOperation filters parents that have a matching Operation using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Operations).
+func (w taskWhereR[Q]) HasOperation(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Operations.NameExpr()),
+		sm.Where(Operations.Columns.ID.EQ(w.cols.OperationID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

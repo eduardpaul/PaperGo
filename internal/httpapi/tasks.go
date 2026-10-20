@@ -74,6 +74,7 @@ type taskCreate struct {
 	Values      map[string]any       `json:"values"`
 	Priority    taskstore.Priority   `json:"priority"`
 	DueAt       *time.Time           `json:"due_at"`
+	Review      map[string]any       `json:"review"`
 }
 
 func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
@@ -81,9 +82,9 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	out, err := a.tasks().Create(r.Context(), subject(r), tasks.Input{WorkspaceID: r.PathValue("id"), ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title,
+	out, err := a.tasks().Create(r.Context(), subject(r), runOf(r), tasks.Input{WorkspaceID: r.PathValue("id"), ItemID: in.ItemID, Kind: in.Kind, Key: in.Key, Title: in.Title,
 		Description: in.Description, Assignees: in.Assignees, Completion: in.Completion, Outcomes: in.Outcomes, InputSchema: in.InputSchema, Values: in.Values,
-		Priority: in.Priority, DueAt: in.DueAt, Actor: subject(r)})
+		Priority: in.Priority, DueAt: in.DueAt, Review: in.Review, Actor: subject(r)})
 	if err != nil {
 		a.failure(w, r, err)
 		return
@@ -130,7 +131,7 @@ func (a *API) reassignTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) cancelTask(w http.ResponseWriter, r *http.Request) {
-	out, err := a.tasks().Cancel(r.Context(), subject(r), r.PathValue("id"))
+	out, err := a.tasks().Cancel(r.Context(), subject(r), runOf(r), r.PathValue("id"))
 	if err != nil {
 		a.failure(w, r, err)
 		return

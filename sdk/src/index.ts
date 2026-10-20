@@ -1,29 +1,25 @@
 // @papergo/workflow is the API a PaperGo workflow script is written against.
-// A script's default export is a workflow():
+// A script's default export is a workflow(): when it runs, and what it does.
 //
 //   import { workflow } from "@papergo/workflow";
 //
 //   export default workflow({
-//     async run(ctx, input: { listId: string }) {
-//       const item = await ctx.api.v1.resources.byId(input.listId).children.post({
-//         kind: "item",
-//         name: "Created by a workflow",
-//       });
-//       return { id: item?.id };
+//     triggers: [{ type: "file.added", media_types: ["application/pdf"] }],
+//     async run(ctx) {
+//       const read = await ctx.api.v1.items.byId(ctx.itemId!).text.post({});
+//       await ctx.wait(read!);
+//       return { read: read!.id };
 //     },
 //   });
 //
 // Long work, such as OCR or an approval, is an API call that returns a
-// pending operation. ctx.wait(operation) unloads the run until it finishes:
-//
-//   const bulk = await ctx.api.v1.resources.byId(listId).bulkUpdate.post({ values: { status: "done" } });
-//   const finished = await ctx.wait(bulk!);
+// pending operation. ctx.wait(operation) unloads the run until it finishes.
 //
 // The engine replays a run from the start each time it resumes it. Every API
-// call, wait, clock read and random value is a recorded step: on replay it
-// returns the recorded result instead of happening again. Keep scripts
-// deterministic: read time, randomness and data only through ctx and the
-// globals the runtime replaces (Date, Math.random, crypto.randomUUID).
+// call, wait, sleep, clock read and random value is a recorded step: on
+// replay it returns the recorded result instead of happening again. Keep
+// scripts deterministic: read time, randomness and data only through ctx and
+// the globals the runtime replaces (Date, Math.random, crypto.randomUUID).
 
 import { isUntypedArray, isUntypedNode, isUntypedObject, type UntypedNode } from "@microsoft/kiota-abstractions";
 import { createPaperGoClient, type PaperGoClient } from "./client/paperGoClient.js";
@@ -34,31 +30,100 @@ import { host } from "./host.js";
 export type { PaperGoClient } from "./client/paperGoClient.js";
 export * as models from "./client/models/index.js";
 
-export interface Context {
-  /** The run being executed. */
+/**
+ * When a workflow runs. Item and folder events, schedules, manual starts,
+ * task events, permission changes, term changes, and events of other
+ * workflows (wf.{key}.completed) are trigger types; docs/workflows.md lists
+ * them with their options.
+ */
+export interface Trigger {
+  type: string;
+  disabled?: boolean;
+  collection_id?: string;
+  content_type_id?: string;
+  cron?: string;
+  time_zone?: string;
+  surface?: "head" | "published";
+  selection?: "per_item" | "selection";
+  terms?: string[];
+  term_change?: "present" | "added" | "removed";
+  sources?: string[];
+  media_types?: string[];
+  task_key?: string;
+  actions?: string[];
+}
+
+/** What a start does while a run on the same item is active. */
+export type Concurrency = "parallel" | "skip" | "replace" | "coalesce";
+
+/** The event that started a run. */
+export interface RunEvent {
+  id: string;
+  type: string;
+  workspace_id: string;
+  collection_id?: string;
+  resource_id?: string;
+  actor: string;
+  depth: number;
+  data: Record<string, unknown>;
+}
+
+/** The run being executed. */
+export interface Run<P = Record<string, unknown>> {
+  id: string;
+  workflow: { id: string; key: string; version: number };
+  workspace_id: string;
+  /** The run's item; a selection run's primary item. */
+  item_id?: string;
+  /** A selection run's items, in order. */
+  items: string[];
+  event: RunEvent;
+  /** Who caused the run. */
+  actor: string;
+  params: P;
+}
+
+export interface Context<P = Record<string, unknown>> {
   readonly runId: string;
+  readonly run: Run<P>;
+  /** The workflow's parameters, such as a built-in's settings. */
+  readonly params: P;
+  /** The run's item, when it has one. */
+  readonly itemId?: string;
   /** The PaperGo REST API, acting as the workflow version's author. Each call is one exactly-once step. */
   readonly api: PaperGoClient;
   /**
-   * Waits until operations the run started have finished and returns them
-   * as they ended. The run is unloaded while it waits. Waiting for several
-   * at once lets them run in parallel. A failed or superseded operation
+   * Waits until operations have finished and returns them as they ended:
+   * operations the API returned, or their IDs, such as a task's
+   * operation_id. The run is unloaded while it waits. Waiting for several
+   * at once lets them run in parallel. A failed or cancelled operation
    * throws an OperationError.
    */
-  wait(operation: Operation): Promise<Operation>;
-  wait(operations: Operation[]): Promise<Operation[]>;
+  wait(operation: Operation | string): Promise<Operation>;
+  wait(operations: (Operation | string)[]): Promise<Operation[]>;
+  /** Unloads the run for ms milliseconds, or until a time. */
+  sleep(duration: number | { until: Date | string }): Promise<void>;
   /** Writes to the run's log. A replay does not repeat earlier entries. */
   log(...values: unknown[]): void;
   warn(...values: unknown[]): void;
   error(...values: unknown[]): void;
 }
 
-export interface Workflow<I = unknown, O = unknown> {
-  run(ctx: Context, input: I): O | Promise<O>;
+export interface Workflow<I = unknown, O = unknown, P = Record<string, unknown>> {
+  /** When the workflow runs; a function of the parameters for built-ins. */
+  triggers?: Trigger[] | ((params: P) => Trigger[]);
+  /** A filter items must meet, as in POST /v1/resources/{id}/query; a function of the parameters for built-ins. */
+  condition?: Record<string, unknown> | ((params: P) => Record<string, unknown>);
+  /** The launch form of manual starts; its values are the run's input. */
+  input_schema?: Record<string, unknown>;
+  /** The form of what run returns, checked when the run completes. */
+  output_schema?: Record<string, unknown>;
+  concurrency?: Concurrency;
+  run(ctx: Context<P>, input: I): O | Promise<O>;
 }
 
 /** Declares a workflow. A script's default export must be one. */
-export function workflow<I = unknown, O = unknown>(definition: Workflow<I, O>): Workflow<I, O> {
+export function workflow<I = unknown, O = unknown, P = Record<string, unknown>>(definition: Workflow<I, O, P>): Workflow<I, O, P> {
   return definition;
 }
 
@@ -110,10 +175,11 @@ const api = createPaperGoClient(new HostRequestAdapter());
   error: (...values: unknown[]) => host.log("error", format(values)),
 };
 
-async function wait(operations: Operation[]): Promise<Operation[]> {
+async function wait(operations: (Operation | string)[]): Promise<Operation[]> {
   const ids = operations.map((op) => {
-    if (!op?.id) throw new TypeError("ctx.wait needs operations returned by the API");
-    return op.id;
+    const id = typeof op === "string" ? op : op?.id;
+    if (!id) throw new TypeError("ctx.wait needs operations returned by the API, or their IDs");
+    return id;
   });
   host.wait(ids);
   const finished: Operation[] = [];
@@ -127,26 +193,65 @@ async function wait(operations: Operation[]): Promise<Operation[]> {
   return finished;
 }
 
-function context(runId: string): Context {
+async function sleep(duration: number | { until: Date | string }): Promise<void> {
+  let until: number;
+  if (typeof duration === "number") {
+    if (!(duration >= 0)) throw new TypeError("ctx.sleep takes milliseconds or { until }");
+    until = Date.now() + duration;
+  } else {
+    until = new Date(duration.until).getTime();
+    if (Number.isNaN(until)) throw new TypeError("ctx.sleep until must be a date");
+  }
+  host.sleep(until);
+}
+
+function context<P>(run: Run<P>): Context<P> {
   return {
-    runId,
+    runId: run.id,
+    run,
+    params: run.params,
+    itemId: run.item_id,
     api,
-    wait: ((operations: Operation | Operation[]) =>
-      Array.isArray(operations) ? wait(operations) : wait([operations]).then((all) => all[0])) as Context["wait"],
+    wait: ((operations: Operation | string | (Operation | string)[]) =>
+      Array.isArray(operations) ? wait(operations) : wait([operations]).then((all) => all[0])) as Context<P>["wait"],
+    sleep,
     log: (...values) => host.log("info", format(values)),
     warn: (...values) => host.log("warn", format(values)),
     error: (...values) => host.log("error", format(values)),
   };
 }
 
-/**
- * Runs definition for the engine; scripts do not call it. It resolves to the
- * run's output as JSON text.
- */
-export async function __start(definition: unknown, runId: string, input: string): Promise<string> {
+function check(definition: unknown): Workflow {
   if (!definition || typeof (definition as Workflow).run !== "function") {
     throw new TypeError("the script's default export must be workflow({ run })");
   }
-  const output = await (definition as Workflow).run(context(runId), JSON.parse(input));
+  return definition as Workflow;
+}
+
+/**
+ * Runs definition for the engine; scripts do not call it. run is the run's
+ * JSON with its input; the promise resolves to the output as JSON text.
+ */
+export async function __start(definition: unknown, run: string): Promise<string> {
+  const { input, ...info } = JSON.parse(run) as Run & { input: unknown };
+  const output = await check(definition).run(context(info), input);
   return JSON.stringify(output ?? null);
+}
+
+/**
+ * Returns, as JSON text, what the engine reads when a version is saved:
+ * the triggers for params and the other settings. run is not called.
+ */
+export function __manifest(definition: unknown, params: string): string {
+  const w = check(definition);
+  const p = JSON.parse(params);
+  const triggers = typeof w.triggers === "function" ? w.triggers(p) : w.triggers;
+  const condition = typeof w.condition === "function" ? w.condition(p) : w.condition;
+  return JSON.stringify({
+    triggers: triggers ?? [],
+    condition,
+    input_schema: w.input_schema,
+    output_schema: w.output_schema,
+    concurrency: w.concurrency,
+  });
 }

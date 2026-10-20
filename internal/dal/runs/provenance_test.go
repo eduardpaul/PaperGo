@@ -20,12 +20,12 @@ func TestExecutionProvenance_Postgres(t *testing.T) {
 func testExecutionProvenance(t *testing.T, s *dal.Store) {
 	ctx := context.Background()
 	f := daltest.NewFixture(t, s)
-	wf, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "provenance", Name: "Provenance", CreatedBy: "alice"})
+	wf, err := s.Workflows().Create(ctx, workflows.CreateInput{WorkspaceID: f.Workspace, Key: "provenance", Name: "Provenance", Content: daltest.Script, CreatedBy: "alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, err := s.Runs().Create(ctx, runstore.CreateInput{ID: "source-run", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, ItemID: f.Item, EventID: "source-event", EventType: "manual", Actor: "alice"})
-	if err != nil {
+	run := runstore.CreateInput{ID: "source-run", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, ItemID: f.Item, EventID: "source-event", EventType: "manual", Actor: "alice"}
+	if err := daltest.Run(ctx, s, run); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Runs().AddItem(ctx, run.ID, f.Item, 0); err != nil {
@@ -58,14 +58,14 @@ func testExecutionProvenance(t *testing.T, s *dal.Store) {
 	if err := s.Events().Append(ctx, []events.Event{event}); err != nil {
 		t.Fatalf("purge event rejected: %v", err)
 	}
-	retry, err := s.Runs().Create(ctx, runstore.CreateInput{ID: "retry", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, EventID: "retry-event", EventType: "manual", Actor: "alice", RetryOf: run.ID})
-	if err != nil {
+	retry := runstore.CreateInput{ID: "retry", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, EventID: "retry-event", EventType: "manual", Actor: "alice", RetryOf: run.ID}
+	if err := daltest.Run(ctx, s, retry); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Runs().Create(ctx, runstore.CreateInput{ID: "bad-retry", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, EventID: "bad-retry-event", EventType: "manual", Actor: "alice", RetryOf: "missing"}); !errors.Is(err, dberr.ErrInvalidReference) {
+	if err := daltest.Run(ctx, s, runstore.CreateInput{ID: "bad-retry", WorkflowID: wf.ID, WorkflowVersion: 1, WorkspaceID: f.Workspace, EventID: "bad-retry-event", EventType: "manual", Actor: "alice", RetryOf: "missing"}); !errors.Is(err, dberr.ErrInvalidReference) {
 		t.Fatalf("missing retry origin accepted: %v", err)
 	}
-	if err := s.Runs().Delete(ctx, []string{run.ID}); err != nil {
+	if err := s.Operations().Delete(ctx, []string{run.ID}); err != nil {
 		t.Fatal(err)
 	}
 	found, err = s.Runs().Find(ctx, retry.ID)

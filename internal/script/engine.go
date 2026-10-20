@@ -29,11 +29,13 @@ type Response struct {
 }
 
 // Run identifies the run a slice executes, who it acts as and what it runs.
+// Context is the run as the script's ctx.run sees it, with its input; the
+// engine adds the ID.
 type Run struct {
 	ID       string
 	Author   string
 	Artifact Artifact
-	Input    json.RawMessage
+	Context  map[string]any
 }
 
 // Effects performs a run's side effects durably. Steps passed as unsaved are
@@ -53,6 +55,10 @@ type Effects interface {
 	// until the last one finishes. It reports whether the wait is over.
 	// An operation the author cannot read is ErrUnknownOperation.
 	Wait(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step) (bool, error)
+	// Sleep records a sleep step, pending unless step is completed.
+	Sleep(ctx context.Context, run Run, unsaved []runs.Step, step runs.Step) error
+	// Wake completes a pending sleep step whose time came.
+	Wake(ctx context.Context, run Run, seq int) error
 }
 
 // ErrUnknownOperation reports a wait for an operation that does not exist or
@@ -65,7 +71,8 @@ type OutcomeStatus string
 const (
 	// Completed: the workflow returned Output.
 	Completed OutcomeStatus = "completed"
-	// Suspended: the run waits for operations and holds no runtime.
+	// Suspended: the run waits for operations, or until Until, and holds
+	// no runtime.
 	Suspended OutcomeStatus = "suspended"
 	// Failed: the script threw, broke a limit or replayed differently.
 	Failed OutcomeStatus = "failed"
@@ -76,6 +83,8 @@ type Outcome struct {
 	Status OutcomeStatus
 	Output json.RawMessage
 	Error  string
+	// Until is when a run that sleeps continues.
+	Until *time.Time
 	// Logs are the entries this slice wrote after replaying earlier ones.
 	Logs []Log
 }
@@ -141,9 +150,14 @@ func (e *Engine) Execute(ctx context.Context, run Run) (Outcome, error) {
 	if err != nil {
 		return Outcome{}, err
 	}
-	input := run.Input
-	if len(input) == 0 {
-		input = json.RawMessage("null")
+	info := map[string]any{}
+	for k, v := range run.Context {
+		info[k] = v
+	}
+	info["id"] = run.ID
+	raw, err := json.Marshal(info)
+	if err != nil {
+		return Outcome{}, err
 	}
 	h := &host{ctx: ctx, run: run, effects: e.effects, recorded: recorded}
 	rt := h.runtime()
@@ -163,9 +177,50 @@ func (e *Engine) Execute(ctx context.Context, run Run) (Outcome, error) {
 		if !ok {
 			return nil, errors.New("the script has no workflow entry point")
 		}
-		return main(goja.Undefined(), rt.ToValue(run.ID), rt.ToValue(string(input)))
+		return main(goja.Undefined(), rt.ToValue(string(raw)))
 	}()
 	return h.outcome(value, err)
+}
+
+// manifestSlice bounds the JavaScript a manifest evaluation runs.
+const manifestSlice = time.Second
+
+// Manifest evaluates a script's export with params and returns what its
+// workflow() declares: triggers, condition, input_schema, output_schema and
+// concurrency, as JSON. The run function is not called, and the script may
+// make no requests, waits or sleeps.
+func (e *Engine) Manifest(ctx context.Context, artifact Artifact, params map[string]any) (json.RawMessage, error) {
+	sdkCode, err := sdkProgram()
+	if err != nil {
+		return nil, fmt.Errorf("compile the workflow SDK: %w", err)
+	}
+	program, err := e.cache.get(artifact)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+	h := &host{ctx: ctx, manifest: true}
+	rt := h.runtime()
+	h.watch = newWatchdog(manifestSlice, func() { rt.Interrupt(errSlice) })
+	defer h.watch.stop()
+	if _, err = rt.RunProgram(sdkCode); err != nil {
+		return nil, err
+	}
+	if _, err = rt.RunProgram(program); err != nil {
+		return nil, errors.New(failure(err))
+	}
+	manifest, ok := goja.AssertFunction(rt.Get("__papergoManifest"))
+	if !ok {
+		return nil, errors.New("the script has no workflow entry point")
+	}
+	value, err := manifest(goja.Undefined(), rt.ToValue(string(raw)))
+	if err != nil {
+		return nil, errors.New(failure(err))
+	}
+	return json.RawMessage(value.String()), nil
 }
 
 func (h *host) outcome(value goja.Value, err error) (Outcome, error) {
@@ -176,7 +231,7 @@ func (h *host) outcome(value goja.Value, err error) (Outcome, error) {
 	case h.abort != nil:
 		return Outcome{}, h.abort
 	case h.suspended:
-		return Outcome{Status: Suspended, Logs: logs}, nil
+		return Outcome{Status: Suspended, Until: h.until, Logs: logs}, nil
 	}
 	if err != nil {
 		var interrupted *goja.InterruptedError

@@ -35,18 +35,15 @@ func TestWorkflowsOperationsAndLiveChangesPruning(t *testing.T) {
 			WorkspaceID: ws.ID,
 			Key:         "ocr-pipeline",
 			Name:        "OCR Pipeline",
+			Content:     daltest.Script,
 			CreatedBy:   "u1",
 		})
 		if err != nil {
 			t.Fatalf("CreateWorkflow: %v", err)
 		}
 
-		run, err := s.Runs().Create(ctx, runstore.CreateInput{ID: "run-1", WorkflowID: wf.ID, WorkspaceID: ws.ID, ItemID: "", EventID: "evt-1", EventType: "item.created", Actor: "u1", WorkflowVersion: 1})
-		if err != nil {
+		if err := daltest.Run(ctx, s, runstore.CreateInput{ID: "run-1", WorkflowID: wf.ID, WorkspaceID: ws.ID, ItemID: "", EventID: "evt-1", EventType: "item.created", Actor: "u1", WorkflowVersion: 1}); err != nil {
 			t.Fatalf("CreateWorkflowRun: %v", err)
-		}
-		if err := s.Runs().Observe(ctx, run.ID, runstore.StatusRunning, time.Now(), false); err != nil {
-			t.Fatalf("observe run: %v", err)
 		}
 
 		now := time.Now()

@@ -5702,7 +5702,7 @@
       "get": {
         "summary": "Workflow catalog",
         "operationId": "workflowCatalog",
-        "description": "Trigger types, activities with their inputs and ports, and the built-in workflows of this release.",
+        "description": "Trigger types, roles and the built-in workflows of this release.",
         "parameters": [],
         "responses": {
           "200": {
@@ -14639,7 +14639,7 @@
       "post": {
         "summary": "Create Task",
         "operationId": "createTask",
-        "description": "Creates a task without a workflow. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names.",
+        "description": "Creates a task. The creator needs read access to the workspace, and write access to the item when it concerns one. Assignees are recipient entries; none means the workspace's owners. Unknown recipients fail with their names. A task a workflow run creates is that workflow's: its operation_id is the operation its answer ends, which the run waits on, it may review a staged file of the run, and it is cancelled with the run.",
         "parameters": [
           {
             "name": "id",
@@ -16863,535 +16863,6 @@
           },
           "500": {
             "$ref": "#/components/responses/Problem"
-          }
-        }
-      }
-    },
-    "/v1/workflow-waits": {
-      "get": {
-        "summary": "List open workflow waits",
-        "operationId": "listWorkflowWaits",
-        "description": "Managing a workspace requires workspace manage permission. Omitting workspace_id requires organization.manage. Claims expire after ten minutes; updates by a claim holder require its current unexpired token.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowWaitPage"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "in": "query",
-            "name": "kind",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "queue",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "workspace_id",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "$skiptoken",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "$top",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 100
-            }
-          }
-        ]
-      },
-      "patch": {
-        "summary": "Update open wait data",
-        "operationId": "updateWorkflowWait",
-        "description": "Managing a workspace requires workspace manage permission. Omitting workspace_id requires organization.manage. Claims expire after ten minutes; updates by a claim holder require its current unexpired token.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "updated": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateWorkflowWait"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/workflow-waits/claim": {
-      "post": {
-        "summary": "Claim open workflow waits",
-        "operationId": "claimWorkflowWaits",
-        "description": "Managing a workspace requires workspace manage permission. Omitting workspace_id requires organization.manage. Claims expire after ten minutes; updates by a claim holder require its current unexpired token.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "value": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/WorkflowWait"
-                      }
-                    },
-                    "claim_token": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClaimWorkflowWaits"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/workflow-waits/complete": {
-      "post": {
-        "summary": "Complete a workflow wait",
-        "operationId": "completeWorkflowWait",
-        "description": "Managing a workspace requires workspace manage permission. Omitting workspace_id requires organization.manage. Claims expire after ten minutes; updates by a claim holder require its current unexpired token.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "completed": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompleteWorkflowWait"
-              }
-            }
           }
         }
       }
@@ -23753,69 +23224,6 @@
         ],
         "additionalProperties": false
       },
-      "WorkflowRetry": {
-        "type": "object",
-        "properties": {
-          "attempts": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 10
-          },
-          "delay": {
-            "type": "string",
-            "description": "Go duration, at most 24h."
-          }
-        },
-        "required": [
-          "attempts"
-        ],
-        "additionalProperties": false
-      },
-      "WorkflowNode": {
-        "type": "object",
-        "description": "A catalog activity with literal or token inputs. ai.decide accepts exactly one source (input, JSON data, or text_id with blob_id) and ordered typed questions. taxonomy.decide accepts the same sources and a managed term_set_id, returning term_ids and provenance guards. item.update accepts expected_version, expected_blob_id and expected_taxonomy as transactional preconditions. See docs/decisions.md and the catalog input/output schemas.",
-        "properties": {
-          "activity": {
-            "type": "string"
-          },
-          "inputs": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "next": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "retry": {
-            "$ref": "#/components/schemas/WorkflowRetry"
-          }
-        },
-        "required": [
-          "activity"
-        ],
-        "additionalProperties": false
-      },
-      "WorkflowFlow": {
-        "type": "object",
-        "properties": {
-          "start": {
-            "type": "string"
-          },
-          "nodes": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/WorkflowNode"
-            }
-          }
-        },
-        "required": [
-          "start",
-          "nodes"
-        ],
-        "additionalProperties": false
-      },
       "WorkflowDefinition": {
         "type": "object",
         "properties": {
@@ -23828,10 +23236,6 @@
           "condition": {
             "$ref": "#/components/schemas/FilterExpr"
           },
-          "variables": {
-            "type": "object",
-            "additionalProperties": true
-          },
           "concurrency": {
             "type": "string",
             "enum": [
@@ -23841,9 +23245,6 @@
               "coalesce"
             ],
             "description": "While a run on the same item (or selection member) is active: start anyway (parallel, default), start nothing (skip), cancel the active run (replace), or coalesce: start nothing while a run is queued, otherwise queue one run that starts when the active run ends. Selection workflows cannot coalesce."
-          },
-          "flow": {
-            "$ref": "#/components/schemas/WorkflowFlow"
           },
           "input_schema": {
             "allOf": [
@@ -23859,19 +23260,14 @@
                 "$ref": "#/components/schemas/WorkflowForm"
               }
             ],
-            "description": "Form of what a completed run returns. Every output must be one of its properties."
-          },
-          "outputs": {
-            "type": "object",
-            "additionalProperties": true,
-            "description": "Values of the output_schema's properties, usually tokens. Evaluated when a run completes, checked against output_schema (defaults applied, at most 16 KB), and carried as result.outputs and as data.outputs of wf.{key}.completed."
+            "description": "Form of what a completed run returns: the run's output is checked against it and carried as data.outputs of wf.{key}.completed."
           }
         },
         "required": [
-          "triggers",
-          "flow"
+          "triggers"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "What a workflow version's script declares in its export: workflow({ triggers, condition, input_schema, output_schema, concurrency, run }). Read when the version is saved; run never runs then."
       },
       "WorkflowInputBody": {
         "type": "object",
@@ -23885,12 +23281,9 @@
           "description": {
             "type": "string"
           },
-          "definition": {
-            "$ref": "#/components/schemas/WorkflowDefinition"
-          },
           "role": {
             "type": "string",
-            "description": "Make the workflow a filler of this role; set at creation. Its outputs must fill the role's output_schema."
+            "description": "Make the workflow a filler of this role; set at creation. Its output_schema must fill the role's."
           },
           "collection_id": {
             "type": "string",
@@ -23914,11 +23307,22 @@
               "archived"
             ],
             "default": "published"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1048576,
+            "description": "The script: TypeScript or JavaScript whose default export is a @papergo/workflow workflow(). It may import only @papergo/workflow. Its definition is read when it is saved: a script that does not bundle, or whose definition is invalid, is refused with 422."
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "What the script reads as ctx.params; an update without them keeps the workflow's."
           }
         },
         "required": [
           "name",
-          "definition"
+          "source"
         ],
         "additionalProperties": false
       },
@@ -23948,13 +23352,15 @@
           },
           "parameters": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "description": "What the script reads as ctx.params, such as a built-in's settings. A workflow of one collection also gets collection."
           },
           "current_version": {
             "type": "integer"
           },
           "definition": {
-            "$ref": "#/components/schemas/WorkflowDefinition"
+            "$ref": "#/components/schemas/WorkflowDefinition",
+            "description": "What the current version's script declares."
           },
           "created_by": {
             "type": "string"
@@ -24004,7 +23410,11 @@
           "execution_author": {
             "type": "string",
             "readOnly": true,
-            "description": "Author of the current immutable definition version; steps execute with this identity."
+            "description": "Author of the current version; runs act as this identity."
+          },
+          "source": {
+            "type": "string",
+            "description": "The current version's script: TypeScript or JavaScript whose default export is a @papergo/workflow workflow()."
           }
         },
         "required": [
@@ -24061,10 +23471,14 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "source": {
+            "type": "string"
           }
         },
         "required": [
           "number",
+          "source",
           "definition"
         ],
         "additionalProperties": false
@@ -24132,53 +23546,6 @@
         },
         "required": [
           "run_ids"
-        ],
-        "additionalProperties": false
-      },
-      "WorkflowActivity": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "flow",
-              "action"
-            ]
-          },
-          "ports": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "terminal": {
-            "type": "boolean"
-          },
-          "input_schema": {
-            "$ref": "#/components/schemas/WorkflowForm"
-          },
-          "output_schema": {
-            "$ref": "#/components/schemas/WorkflowForm"
-          },
-          "ports_from": {
-            "type": "string",
-            "enum": [
-              "outcomes"
-            ],
-            "description": "A node's ports come from this input instead of ports: a task node's outcomes."
-          }
-        },
-        "required": [
-          "key",
-          "kind",
-          "ports",
-          "input_schema"
         ],
         "additionalProperties": false
       },
@@ -24265,12 +23632,6 @@
               "additionalProperties": false
             }
           },
-          "activities": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowActivity"
-            }
-          },
           "builtins": {
             "type": "array",
             "items": {
@@ -24286,7 +23647,6 @@
         },
         "required": [
           "triggers",
-          "activities",
           "builtins",
           "roles"
         ],
@@ -24449,13 +23809,42 @@
       "WorkflowRunStep": {
         "type": "object",
         "properties": {
-          "id": {
+          "seq": {
             "type": "integer"
           },
-          "name": {
-            "type": "string"
+          "kind": {
+            "type": "string",
+            "enum": [
+              "request",
+              "wait",
+              "value"
+            ]
           },
-          "output": {},
+          "name": {
+            "type": "string",
+            "description": "A request's method and path, operations or sleep for a wait, or what a value is (now, random, uuid)."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "failed"
+            ]
+          },
+          "input": {
+            "description": "What a wait waits for."
+          },
+          "output": {
+            "description": "A request's response (status, headers, body), or a value."
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The operations a request started or a wait waits for."
+          },
           "error": {
             "type": "string"
           },
@@ -24469,9 +23858,12 @@
           }
         },
         "required": [
-          "id",
-          "name"
+          "seq",
+          "kind",
+          "name",
+          "status"
         ],
+        "description": "One recorded step of a run's script: a replay returns its output instead of repeating it.",
         "additionalProperties": false
       },
       "WorkflowRun": {
@@ -24516,7 +23908,8 @@
               "completed",
               "failed",
               "cancelled"
-            ]
+            ],
+            "description": "queued until its script first ran; running while it runs or can continue; waiting while it waits for operations, a time, or the active run of a coalescing workflow on its item."
           },
           "error": {
             "type": "string"
@@ -24529,7 +23922,9 @@
             "type": "string",
             "format": "date-time"
           },
-          "result": {},
+          "result": {
+            "description": "What the script returned (run detail only)."
+          },
           "steps": {
             "type": "array",
             "items": {
@@ -24548,12 +23943,56 @@
             "additionalProperties": true,
             "description": "Launch form values of a manual run, defaults applied (run detail only)."
           },
-          "outcome": {
+          "error_code": {
             "type": "string",
             "enum": [
-              "unchanged"
-            ],
-            "description": "Successful execution reported an explicit no-change reason."
+              "deadline_exceeded",
+              "retries_exhausted",
+              "forbidden"
+            ]
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "waiting_until": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When a run waiting for a time continues."
+          },
+          "logs": {
+            "type": "array",
+            "description": "What the script logged, oldest first, up to the last 500 entries (run detail only).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warn",
+                    "error"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "level",
+                "message",
+                "at"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -24566,7 +24005,8 @@
           "status",
           "created_at"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "A workflow run: a script.run operation, whose status, error and result it shows, with its provenance."
       },
       "WorkflowRunPage": {
         "type": "object",
@@ -26442,9 +25882,6 @@
           "run_id": {
             "type": "string"
           },
-          "node": {
-            "type": "string"
-          },
           "status": {
             "type": "string",
             "enum": [
@@ -26505,6 +25942,10 @@
           "can_reassign": {
             "type": "boolean",
             "description": "Whether the caller may change the open task's assignees; set when one task is read."
+          },
+          "operation_id": {
+            "type": "string",
+            "description": "A workflow's task: the operation its answer ends, which the run waits on with ctx.wait. It succeeds with the task's result when the task completes and is cancelled with the task."
           }
         },
         "required": [
@@ -26682,6 +26123,27 @@
           "due_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "review": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "file.compare",
+                  "file.preview"
+                ]
+              },
+              "staged_file_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "staged_file_id"
+            ],
+            "description": "A staged file of the calling workflow run for the assignees to review: beside the item's current file (file.compare) or alone (file.preview).",
+            "additionalProperties": false
           }
         },
         "required": [
@@ -27790,212 +27252,6 @@
             "description": "Include items, folders, retained revisions/publications and file bytes. False exports configuration only."
           }
         }
-      },
-      "WorkflowCompletion": {
-        "type": "object",
-        "properties": {
-          "output": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "port": {
-            "type": "string"
-          },
-          "error": {
-            "type": "string"
-          }
-        }
-      },
-      "WorkflowWait": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "workspace_id": {
-            "type": "string"
-          },
-          "run_id": {
-            "type": "string"
-          },
-          "node": {
-            "type": "string"
-          },
-          "execution_id": {
-            "type": "string"
-          },
-          "queue": {
-            "type": "string"
-          },
-          "payload_id": {
-            "type": "string"
-          },
-          "claim_run_id": {
-            "type": "string"
-          },
-          "claim_token": {
-            "type": "string"
-          },
-          "data": {
-            "type": "object",
-            "additionalProperties": true
-          },
-          "completion": {
-            "$ref": "#/components/schemas/WorkflowCompletion"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "open",
-              "completed",
-              "closed"
-            ]
-          },
-          "parking": {
-            "type": "boolean"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "deadline": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "claim_until": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "notified_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "kind",
-          "key",
-          "workspace_id",
-          "run_id",
-          "node",
-          "execution_id",
-          "data",
-          "status",
-          "parking",
-          "created_at",
-          "updated_at"
-        ]
-      },
-      "WorkflowWaitPage": {
-        "type": "object",
-        "properties": {
-          "value": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkflowWait"
-            }
-          },
-          "@odata.nextLink": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "value"
-        ]
-      },
-      "ClaimWorkflowWaits": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "workspace_id": {
-            "type": "string"
-          },
-          "holder": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 80
-          },
-          "limit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100,
-            "default": 100
-          }
-        },
-        "required": [
-          "kind",
-          "holder"
-        ]
-      },
-      "UpdateWorkflowWait": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "workspace_id": {
-            "type": "string"
-          },
-          "holder": {
-            "type": "string"
-          },
-          "claim_token": {
-            "type": "string"
-          },
-          "data": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        },
-        "required": [
-          "kind",
-          "key",
-          "holder",
-          "data"
-        ]
-      },
-      "CompleteWorkflowWait": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "workspace_id": {
-            "type": "string"
-          },
-          "completion": {
-            "$ref": "#/components/schemas/WorkflowCompletion"
-          }
-        },
-        "required": [
-          "kind",
-          "key",
-          "completion"
-        ]
       },
       "SmartFolderPreview": {
         "type": "object",

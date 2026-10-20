@@ -67,6 +67,9 @@ type Maintenance struct {
 	Name  string
 	Every time.Duration
 	Run   func(ctx context.Context, now time.Time) error
+	// Wake, when set, runs the task again as soon as it receives, before
+	// Every passes.
+	Wake <-chan struct{}
 }
 
 // Runtime runs the workers and maintenance tasks of one process.
@@ -255,17 +258,22 @@ func (r *Runtime) Run(ctx context.Context) error {
 	return nil
 }
 
-// maintain runs m at once and then every m.Every until ctx ends.
+// maintain runs m at once and then every m.Every, or when m.Wake
+// receives, until ctx ends.
 func (r *Runtime) maintain(ctx context.Context, m Maintenance) {
 	for {
 		if err := m.Run(ctx, r.now()); err != nil && ctx.Err() == nil {
 			r.log.Error("maintenance failed", "task", m.Name, "error", err)
 		}
+		timer := time.NewTimer(m.Every)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-time.After(m.Every):
+		case <-m.Wake:
+		case <-timer.C:
 		}
+		timer.Stop()
 	}
 }
 

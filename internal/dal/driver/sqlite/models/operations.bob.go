@@ -86,6 +86,8 @@ type operationR struct {
 	OperationItems    OperationItemSlice // fk_operation_items_1
 	WorkspaceResource *Resource          // fk_operations_0
 	ContainerResource *Resource          // fk_operations_1
+	Tasks             TaskSlice          // fk_tasks_0
+	IDWorkflowRun     *WorkflowRun       // fk_workflow_runs_2
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -98,6 +100,8 @@ type operationRLoaded struct {
 	OperationItems    bool // fk_operation_items_1
 	WorkspaceResource bool // fk_operations_0
 	ContainerResource bool // fk_operations_1
+	Tasks             bool // fk_tasks_0
+	IDWorkflowRun     bool // fk_workflow_runs_2
 }
 
 func buildOperationColumns(tableName string) operationColumns {
@@ -1486,9 +1490,47 @@ func (os OperationSlice) ContainerResource(mods ...bob.Mod[*dialect.SelectQuery]
 	)...)
 }
 
+// Tasks starts a query for related objects on tasks
+func (o *Operation) Tasks(mods ...bob.Mod[*dialect.SelectQuery]) TasksQuery {
+	return Tasks.Query(append(mods,
+		sm.Where(Tasks.Columns.OperationID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os OperationSlice) Tasks(mods ...bob.Mod[*dialect.SelectQuery]) TasksQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return Tasks.Query(append(mods,
+		sm.Where(sqlite.Group(Tasks.Columns.OperationID).OP("IN", PKArgExpr)),
+	)...)
+}
+
+// IDWorkflowRun starts a query for related objects on workflow_runs
+func (o *Operation) IDWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
+	return WorkflowRuns.Query(append(mods,
+		sm.Where(WorkflowRuns.Columns.ID.EQ(sqlite.Arg(o.ID))),
+	)...)
+}
+
+func (os OperationSlice) IDWorkflowRun(mods ...bob.Mod[*dialect.SelectQuery]) WorkflowRunsQuery {
+	PKArgSlice := make([]bob.Expression, len(os))
+	for i, o := range os {
+		PKArgSlice[i] = sqlite.ArgGroup(o.ID)
+	}
+	PKArgExpr := sqlite.Group(PKArgSlice...)
+
+	return WorkflowRuns.Query(append(mods,
+		sm.Where(sqlite.Group(WorkflowRuns.Columns.ID).OP("IN", PKArgExpr)),
+	)...)
+}
+
 func insertOperationBlobLeases0(ctx context.Context, exec bob.Executor, blobLeases1 []*BlobLeaseSetter, operation0 *Operation) (BlobLeaseSlice, error) {
 	for i := range blobLeases1 {
-		blobLeases1[i].OperationID = omitnull.From(operation0.ID)
+		blobLeases1[i].OperationID = omit.From(operation0.ID)
 	}
 
 	ret, err := BlobLeases.Insert(bob.ToMods(blobLeases1...)).All(ctx, exec)
@@ -1501,7 +1543,7 @@ func insertOperationBlobLeases0(ctx context.Context, exec bob.Executor, blobLeas
 
 func attachOperationBlobLeases0(ctx context.Context, exec bob.Executor, count int, blobLeases1 BlobLeaseSlice, operation0 *Operation) (BlobLeaseSlice, error) {
 	setter := &BlobLeaseSetter{
-		OperationID: omitnull.From(operation0.ID),
+		OperationID: omit.From(operation0.ID),
 	}
 
 	err := blobLeases1.UpdateAll(ctx, exec, *setter)
@@ -1700,6 +1742,119 @@ func (operation0 *Operation) AttachContainerResource(ctx context.Context, exec b
 	return nil
 }
 
+func insertOperationTasks0(ctx context.Context, exec bob.Executor, tasks1 []*TaskSetter, operation0 *Operation) (TaskSlice, error) {
+	for i := range tasks1 {
+		tasks1[i].OperationID = omitnull.From(operation0.ID)
+	}
+
+	ret, err := Tasks.Insert(bob.ToMods(tasks1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertOperationTasks0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachOperationTasks0(ctx context.Context, exec bob.Executor, count int, tasks1 TaskSlice, operation0 *Operation) (TaskSlice, error) {
+	setter := &TaskSetter{
+		OperationID: omitnull.From(operation0.ID),
+	}
+
+	err := tasks1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationTasks0: %w", err)
+	}
+
+	return tasks1, nil
+}
+
+func (operation0 *Operation) InsertTasks(ctx context.Context, exec bob.Executor, related ...*TaskSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	tasks1, err := insertOperationTasks0(ctx, exec, related, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Tasks = append(operation0.R.Tasks, tasks1...)
+
+	return nil
+}
+
+func (operation0 *Operation) AttachTasks(ctx context.Context, exec bob.Executor, related ...*Task) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	tasks1 := TaskSlice(related)
+
+	_, err = attachOperationTasks0(ctx, exec, len(related), tasks1, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.Tasks = append(operation0.R.Tasks, tasks1...)
+
+	return nil
+}
+
+func insertOperationIDWorkflowRun0(ctx context.Context, exec bob.Executor, workflowRun1 *WorkflowRunSetter, operation0 *Operation) (*WorkflowRun, error) {
+	workflowRun1.ID = omit.From(operation0.ID)
+
+	ret, err := WorkflowRuns.Insert(workflowRun1).One(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertOperationIDWorkflowRun0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachOperationIDWorkflowRun0(ctx context.Context, exec bob.Executor, count int, workflowRun1 *WorkflowRun, operation0 *Operation) (*WorkflowRun, error) {
+	setter := &WorkflowRunSetter{
+		ID: omit.From(operation0.ID),
+	}
+
+	err := workflowRun1.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachOperationIDWorkflowRun0: %w", err)
+	}
+
+	return workflowRun1, nil
+}
+
+func (operation0 *Operation) InsertIDWorkflowRun(ctx context.Context, exec bob.Executor, related *WorkflowRunSetter) error {
+	var err error
+
+	workflowRun1, err := insertOperationIDWorkflowRun0(ctx, exec, related, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.IDWorkflowRun = workflowRun1
+	operation0.R.Loaded.IDWorkflowRun = true
+
+	return nil
+}
+
+func (operation0 *Operation) AttachIDWorkflowRun(ctx context.Context, exec bob.Executor, workflowRun1 *WorkflowRun) error {
+	var err error
+
+	_, err = attachOperationIDWorkflowRun0(ctx, exec, 1, workflowRun1, operation0)
+	if err != nil {
+		return err
+	}
+
+	operation0.R.IDWorkflowRun = workflowRun1
+	operation0.R.Loaded.IDWorkflowRun = true
+
+	return nil
+}
+
 type operationWhere[Q sqlite.Filterable] struct {
 	cols             operationColumns
 	ID               sqlite.WhereMod[Q, string]
@@ -1850,6 +2005,34 @@ func (w operationWhereR[Q]) HasContainerResource(filters ...bob.Mod[*dialect.Sel
 		sm.Columns(sqlite.Raw("1")),
 		sm.From(Resources.NameExpr()),
 		sm.Where(Resources.Columns.ID.EQ(w.cols.ContainerID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasTasks filters parents that have a matching Tasks using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Tasks).
+func (w operationWhereR[Q]) HasTasks(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(Tasks.NameExpr()),
+		sm.Where(Tasks.Columns.OperationID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: sqlite.Exists(q)}
+}
+
+// HasIDWorkflowRun filters parents that have a matching IDWorkflowRun using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to WorkflowRuns).
+func (w operationWhereR[Q]) HasIDWorkflowRun(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := sqlite.Select(
+		sm.Columns(sqlite.Raw("1")),
+		sm.From(WorkflowRuns.NameExpr()),
+		sm.Where(WorkflowRuns.Columns.ID.EQ(w.cols.ID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: sqlite.Exists(q)}

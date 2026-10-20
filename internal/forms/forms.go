@@ -338,6 +338,10 @@ func WholeNumber(v any) (int, bool) {
 	return int(f), true
 }
 
+// Defaults returns the defaults of a form's fields, without checking that
+// required fields have values.
+func Defaults(s map[string]any) map[string]any { return withDefaults(s, nil) }
+
 // withDefaults returns values with the schema's defaults filled in, nested
 // objects included.
 func withDefaults(s map[string]any, values map[string]any) map[string]any {

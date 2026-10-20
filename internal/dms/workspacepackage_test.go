@@ -144,7 +144,7 @@ func TestWorkspacePackageRoundTripIntoPopulatedInstance(t *testing.T) {
 		definition, _ := json.Marshal(map[string]any{"triggers": []any{map[string]any{"type": "item.created", "collection_id": invoices.ID, "terms": []string{term.ID}}, map[string]any{"type": "schedule", "collection_id": invoices.ID, "cron": "0 12 * * *", "time_zone": "Europe/Madrid"}}, "flow": map[string]any{"start": "done", "nodes": map[string]any{"done": map[string]any{"activity": "end"}}}, "variables": map[string]any{"assignee": "group:" + staff.ID}})
 		parameters, _ := json.Marshal(map[string]any{"list": invoices.ID})
 		var err error
-		flow, err = tx.DAL.Workflows().Create(ctx, workflows.CreateInput{AutomaticEnabled: true, WorkspaceID: ws.ID, Key: "copy-test", Name: "Copy test", CreatedBy: "alice", Parameters: parameters, Definition: definition})
+		flow, err = tx.DAL.Workflows().Create(ctx, workflows.CreateInput{AutomaticEnabled: true, WorkspaceID: ws.ID, Key: "copy-test", Name: "Copy test", CreatedBy: "alice", Parameters: parameters, Content: workflows.Content{Definition: definition, Source: "export default {}", Bundle: "export default {}", BundleHash: strings.Repeat("0", 64)}})
 		if err != nil {
 			return err
 		}

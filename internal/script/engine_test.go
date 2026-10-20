@@ -109,6 +109,29 @@ func (m *memory) finish(id, status string) {
 	}
 }
 
+func (m *memory) Sleep(_ context.Context, _ Run, unsaved []runs.Step, step runs.Step) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.record(append(unsaved, step)...)
+	return nil
+}
+
+func (m *memory) Wake(_ context.Context, run Run, seq int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.steps[run.ID][seq].Status = runs.StepCompleted
+	return nil
+}
+
+// withInput is a run context with input, given as JSON.
+func withInput(input string) map[string]any {
+	var v any
+	if err := json.Unmarshal([]byte(input), &v); err != nil {
+		panic(err)
+	}
+	return map[string]any{"input": v}
+}
+
 func bundle(t *testing.T, source string) Artifact {
 	t.Helper()
 	a, err := Bundle("workflow.ts", source)
@@ -146,7 +169,7 @@ func TestRequestsReplayWithoutRepeating(t *testing.T) {
 		return jsonResponse(404, `{"code":"not_found","detail":"route not found"}`)
 	})
 	e := New(m, 0)
-	run := Run{ID: "run-1", Input: json.RawMessage(`{"list":"0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01"}`), Artifact: bundle(t, `
+	run := Run{ID: "run-1", Context: withInput(`{"list":"0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01"}`), Artifact: bundle(t, `
 import { workflow } from "@papergo/workflow";
 
 export default workflow({
@@ -198,7 +221,7 @@ const listID = "0b0e3e2a-6f39-4a39-9a0e-2a7b5d1c9f01"
 func TestWaitsSuspendAndResume(t *testing.T) {
 	m := newMemory(nil)
 	e := New(m, 0)
-	run := Run{ID: "run-3", Input: json.RawMessage(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+	run := Run{ID: "run-3", Context: withInput(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
 import { workflow, plain } from "@papergo/workflow";
 export default workflow({
   async run(ctx, input: { list: string }) {
@@ -233,7 +256,7 @@ export default workflow({
 func TestWaitingForSeveralOperationsSuspendsOnce(t *testing.T) {
 	m := newMemory(nil)
 	e := New(m, 0)
-	run := Run{ID: "run-parallel", Input: json.RawMessage(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+	run := Run{ID: "run-parallel", Context: withInput(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
 import { workflow } from "@papergo/workflow";
 export default workflow({
   async run(ctx, input: { list: string }) {
@@ -277,7 +300,7 @@ export default workflow({
 func TestFailedOperationsThrow(t *testing.T) {
 	m := newMemory(nil)
 	e := New(m, 0)
-	run := Run{ID: "run-5", Input: json.RawMessage(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+	run := Run{ID: "run-5", Context: withInput(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
 import { workflow, OperationError } from "@papergo/workflow";
 export default workflow({
   async run(ctx, input: { list: string }) {
@@ -320,7 +343,7 @@ export default workflow({
 
 func TestSuspensionCannotBeCaught(t *testing.T) {
 	m := newMemory(nil)
-	run := Run{ID: "run-4", Input: json.RawMessage(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
+	run := Run{ID: "run-4", Context: withInput(`{"list":"` + listID + `"}`), Artifact: bundle(t, `
 import { workflow } from "@papergo/workflow";
 export default workflow({
   async run(ctx, input: { list: string }) {
@@ -606,5 +629,86 @@ func TestBundleRejectsOtherImports(t *testing.T) {
 	}
 	if _, err = Bundle("workflow.ts", `export default {`); err == nil || !strings.Contains(err.Error(), "workflow.ts:1:") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// A version's definition is read from its export without running it:
+// triggers may depend on parameters, and effects are refused.
+func TestManifest(t *testing.T) {
+	ctx := context.Background()
+	e := New(newMemory(nil), 0)
+	art := bundle(t, `
+import { workflow } from "@papergo/workflow";
+
+export default workflow({
+  triggers: (p: { collection: string }) => [{ type: "file.added", collection_id: p.collection }, { type: "manual" }],
+  concurrency: "coalesce",
+  output_schema: { type: "object", properties: { pages: { type: "integer" } } },
+  async run() { throw new Error("run is not called"); },
+});
+`)
+	raw, err := e.Manifest(ctx, art, map[string]any{"collection": "lib-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Triggers []struct {
+			Type         string `json:"type"`
+			CollectionID string `json:"collection_id"`
+		} `json:"triggers"`
+		Concurrency  string         `json:"concurrency"`
+		OutputSchema map[string]any `json:"output_schema"`
+	}
+	if err = json.Unmarshal(raw, &m); err != nil || len(m.Triggers) != 2 || m.Triggers[0].CollectionID != "lib-1" || m.Concurrency != "coalesce" || m.OutputSchema == nil {
+		t.Fatalf("%s %v", raw, err)
+	}
+	effects := bundle(t, `
+import { workflow } from "@papergo/workflow";
+const side = (globalThis as any).__papergo.request("GET", "http://papergo.workflow/v1/workspaces", {}, undefined);
+export default workflow({ async run() { return side; } });
+`)
+	if _, err = e.Manifest(ctx, effects, nil); err == nil || !strings.Contains(err.Error(), "requests, waits and sleeps belong in run") {
+		t.Fatalf("an effect at load time: %v", err)
+	}
+	if _, err = e.Manifest(ctx, bundle(t, `export default 1;`), nil); err == nil {
+		t.Fatal("a script without workflow() was read")
+	}
+}
+
+// A sleep suspends the run until its time; the resumed run continues past
+// it, and a sleep whose time came is over at once.
+func TestSleep(t *testing.T) {
+	m := newMemory(nil)
+	e := New(m, 0)
+	run := Run{ID: "sleeper", Artifact: bundle(t, `
+import { workflow } from "@papergo/workflow";
+
+export default workflow({
+  async run(ctx) {
+    await ctx.sleep(60_000);
+    await ctx.sleep(0);
+    return "awake";
+  },
+});
+`)}
+	out := execute(t, e, run)
+	if out.Status != Suspended || out.Until == nil || out.Until.Before(time.Now().Add(50*time.Second)) {
+		t.Fatalf("%+v", out)
+	}
+	if steps := m.steps["sleeper"]; len(steps) != 2 || steps[1].Status != runs.StepPending || steps[0].Kind != runs.StepValue {
+		t.Fatalf("%+v", steps)
+	}
+	if out = execute(t, e, run); out.Status != Suspended {
+		t.Fatalf("woke early: %+v", out)
+	}
+	// Time passes: the recorded wake time is in the past.
+	m.steps["sleeper"][1].Input = json.RawMessage(`{"until":"2000-01-01T00:00:00Z"}`)
+	m.steps["sleeper"][0].Output = json.RawMessage(fmt.Sprint(time.Date(1999, 12, 31, 23, 59, 0, 0, time.UTC).UnixNano()))
+	m.steps["sleeper"][1].InputHash = digest(string(runs.StepWait), "sleep", "2000-01-01T00:00:00Z")
+	if out = execute(t, e, run); out.Status != Completed || string(out.Output) != `"awake"` {
+		t.Fatalf("%+v", out)
+	}
+	if steps := m.steps["sleeper"]; steps[1].Status != runs.StepCompleted || len(steps) != 4 || steps[3].Status != runs.StepCompleted {
+		t.Fatalf("%+v", steps)
 	}
 }

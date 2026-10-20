@@ -94,7 +94,7 @@ func testRecords(t *testing.T, s *dal.Store) {
 	if finished, err := ops.Finished(ctx, []string{refresh.ID, index.ID}); err != nil || len(finished) != 1 || finished[0].ID != refresh.ID {
 		t.Fatalf("finished: %+v %v", finished, err)
 	}
-	if n, err := ops.CollectExpired(ctx, time.Now().Add(time.Hour), 10); err != nil || n != 1 {
+	if n, err := ops.CollectExpired(ctx, time.Now().Add(time.Hour), nil, 10); err != nil || n != 1 {
 		t.Fatalf("expired operations: %d %v", n, err)
 	}
 	if _, err := ops.Find(ctx, refresh.ID); !dberr.IsNotFound(err) {

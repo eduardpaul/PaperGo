@@ -145,22 +145,24 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 				} else {
 					return
 				}
-			case live.KindOperation:
+			case live.KindOperation, live.KindRun:
+				// A run is an operation: its manager follows it as a run.
+				if a.Workflows != nil {
+					run, e := a.Workflows.RunUpdate(r.Context(), subject(r), change.EntityID)
+					if e == nil {
+						if err = frame("run", position, run); err != nil {
+							return
+						}
+					} else if !errors.Is(e, dms.ErrForbidden) && !errors.Is(e, dms.ErrNotFound) {
+						return
+					}
+				}
+				if change.Kind == live.KindRun {
+					continue
+				}
 				op, e := a.DMS.Operation(r.Context(), subject(r), change.EntityID)
 				if e == nil {
 					if err = frame("operation", position, op); err != nil {
-						return
-					}
-				} else if !errors.Is(e, dms.ErrForbidden) && !errors.Is(e, dms.ErrNotFound) {
-					return
-				}
-			case live.KindRun:
-				if a.Runner == nil {
-					continue
-				}
-				run, e := a.Runner.RunUpdate(r.Context(), subject(r), change.EntityID)
-				if e == nil {
-					if err = frame("run", position, run); err != nil {
 						return
 					}
 				} else if !errors.Is(e, dms.ErrForbidden) && !errors.Is(e, dms.ErrNotFound) {

@@ -48,8 +48,8 @@ type Step struct {
 	Error       string
 	StartedAt   time.Time
 	CompletedAt *time.Time
-	// Operations are the operations a wait step waits for. The step is
-	// released once none of them is pending.
+	// Operations are the operations a wait step waits for, released once
+	// none of them is pending, or those a request step started.
 	Operations []string
 }
 
@@ -64,8 +64,13 @@ type StepQueries interface {
 	FinishRunStep(ctx context.Context, runID string, seq int, status StepStatus, output json.RawMessage, message string, at time.Time) (bool, error)
 	// ReleaseWaits completes the pending waits for any of operationIDs, or
 	// every pending wait when there are none, whose operations have all
-	// ended, and counts them.
-	ReleaseWaits(ctx context.Context, operationIDs []string, at time.Time) (int64, error)
+	// ended, and returns the runs whose waits it completed.
+	ReleaseWaits(ctx context.Context, operationIDs []string, at time.Time) ([]string, error)
+	// StepOperations returns the operations a run's steps name.
+	StepOperations(ctx context.Context, runID string) ([]string, error)
+	// CopyRunSteps copies a run's steps before a position, with the
+	// operations they name, to another run.
+	CopyRunSteps(ctx context.Context, target, source string, before int) error
 }
 
 // Steps returns a run's recorded steps in order.
@@ -74,15 +79,16 @@ func (r *Repo) Steps(ctx context.Context, runID string) ([]Step, error) {
 }
 
 // RecordSteps appends steps to their runs. Only a wait can be pending, and
-// only a wait names operations; any other step is recorded complete.
+// only waits and requests name operations; any other step is recorded
+// complete.
 func (r *Repo) RecordSteps(ctx context.Context, steps []Step) error {
 	at := now()
 	for _, s := range steps {
 		if !s.Kind.Valid() || !s.Status.Valid() || s.Seq < 0 || s.Name == "" || s.InputHash == "" {
 			return fmt.Errorf("invalid step %d of %s", s.Seq, s.RunID)
 		}
-		if (s.Status == StepPending || len(s.Operations) > 0) && s.Kind != StepWait {
-			return fmt.Errorf("step %d of %s: only waits can be pending or name operations", s.Seq, s.RunID)
+		if s.Status == StepPending && s.Kind != StepWait || len(s.Operations) > 0 && s.Kind == StepValue {
+			return fmt.Errorf("step %d of %s: only waits can be pending, and values name no operations", s.Seq, s.RunID)
 		}
 	}
 	return r.write(ctx, func(q Queries) error {
@@ -122,15 +128,42 @@ func (r *Repo) FinishStep(ctx context.Context, runID string, seq int, output jso
 }
 
 // ReleaseWaits completes the pending waits for any of operationIDs whose
-// operations have all ended, and reports how many it completed. Without
-// IDs it reconciles every pending wait, for waits whose last operation
-// ended while nobody released them, such as before a crash.
-func (r *Repo) ReleaseWaits(ctx context.Context, operationIDs []string) (int, error) {
-	var n int64
+// operations have all ended, and returns the runs whose waits it
+// completed, which can continue. Without IDs it reconciles every pending
+// wait, for waits whose last operation ended while nobody released them,
+// such as before a crash.
+func (r *Repo) ReleaseWaits(ctx context.Context, operationIDs []string) ([]string, error) {
+	var released []string
 	err := r.write(ctx, func(q Queries) error {
 		var err error
-		n, err = q.ReleaseWaits(ctx, operationIDs, now())
+		released, err = q.ReleaseWaits(ctx, operationIDs, now())
 		return err
 	})
-	return int(n), err
+	return released, err
+}
+
+// Waiting reports whether a run has a pending wait.
+func (r *Repo) Waiting(ctx context.Context, runID string) (bool, error) {
+	steps, err := r.read.RunSteps(ctx, runID)
+	if err != nil {
+		return false, err
+	}
+	for _, s := range steps {
+		if s.Status == StepPending {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ForkSteps gives a run the steps another recorded before a position, so
+// its script replays them instead of repeating them.
+func (r *Repo) ForkSteps(ctx context.Context, target, source string, before int) error {
+	return r.write(ctx, func(q Queries) error { return q.CopyRunSteps(ctx, target, source, before) })
+}
+
+// StepOperations returns the operations a run's steps started or waited
+// for.
+func (r *Repo) StepOperations(ctx context.Context, runID string) ([]string, error) {
+	return r.read.StepOperations(ctx, runID)
 }

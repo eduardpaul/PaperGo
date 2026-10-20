@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/google/uuid"
 	"papergo/internal/ai"
 	"papergo/internal/dal"
 	"papergo/internal/dal/access"
@@ -23,6 +22,8 @@ import (
 	"papergo/internal/search"
 	"strings"
 	"sync/atomic"
+
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -48,8 +49,6 @@ type Service struct {
 	integrations           *integrationRuntime
 	integrationWrite       bool
 	pendingIntegrationData *IntegrationData
-	runPurger              func(context.Context, *sql.Tx, string) error
-	runSealer              func(context.Context, []string) error
 	// batch is set while one request applies many operations in a transaction.
 	batch *batchCache
 	// search is the search store, set with SetSearch.
@@ -124,7 +123,7 @@ func (s *Service) write(ctx context.Context, fn func(*Service) error) error {
 func (s *Service) inTx(ctx context.Context, tx *sql.Tx, finished *[]string, accepted *bool, fn func(*Service) error) (int, error) {
 	ctx = requestmeta.EnsureTrace(ctx)
 	var pending []Event
-	t := &Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, pending: &pending, finished: finished, accepted: accepted, collectionTemplates: s.collectionTemplates, ops: s.ops, runPurger: s.runPurger, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}
+	t := &Service{DAL: s.DAL.WithTx(tx), db: s.db, writer: s.writer, transaction: true, tx: tx, pending: &pending, finished: finished, accepted: accepted, collectionTemplates: s.collectionTemplates, ops: s.ops, search: s.search, embeddings: s.embeddings, searchRebuild: s.searchRebuild}
 	t.integrations = s.integrations
 	t.traceID = requestmeta.Trace(ctx)
 	t.auditProperties = map[string]map[string]bool{}

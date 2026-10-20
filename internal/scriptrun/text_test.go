@@ -93,7 +93,7 @@ func TestScriptsReadTextThroughOperations(t *testing.T) {
 			t.Fatalf("first slice: %+v, %v", out, err)
 		}
 		f.work(t, func() bool {
-			pending, err := f.s.DAL.Operations().List(ctx, operations.Filter{Statuses: []operations.Status{operations.StatusPending}})
+			pending, err := f.s.DAL.Operations().List(ctx, operations.Filter{ExcludeKinds: []string{dms.OperationKindRun}, Statuses: []operations.Status{operations.StatusPending}})
 			if err != nil {
 				t.Fatal(err)
 			}
