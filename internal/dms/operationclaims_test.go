@@ -88,6 +88,14 @@ func TestOperationCancellation(t *testing.T) {
 	if worked, err := s.operationStep(testContext); worked || err != nil {
 		t.Fatal("cancelled operation ran", worked, err)
 	}
+	// PaperGo's own work completes what scheduled it.
+	rebuild, _, err := s.DAL.Operations().Accept(testContext, operations.Operation{Kind: OperationKindSearchReindex, CreatedBy: systemSubject}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.CancelOperation(testContext, "alice", rebuild.ID); !errors.Is(err, ErrForbidden) {
+		t.Fatal("system operation cancelled", err)
+	}
 }
 
 func TestOperationExecutionsAreFenced(t *testing.T) {

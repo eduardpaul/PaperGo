@@ -335,7 +335,8 @@ func (s *Service) operationsFinished(ids ...string) {
 }
 
 // CancelOperation ends a pending operation for its creator, or for an
-// organization manager. Index maintenance cannot be cancelled.
+// organization manager. Index maintenance and PaperGo's own operations
+// cannot be cancelled.
 func (s *Service) CancelOperation(ctx context.Context, subject, id string) (out *OperationView, err error) {
 	err = s.write(ctx, func(t *Service) error {
 		op, e := t.DAL.Operations().Find(ctx, id)
@@ -345,8 +346,10 @@ func (s *Service) CancelOperation(ctx context.Context, subject, id string) (out 
 		if e != nil {
 			return e
 		}
+		// Index maintenance and PaperGo's own work complete what scheduled
+		// them.
 		handler, startable := t.ops.handlers[op.Kind]
-		if !startable || handler.Validate == nil && op.Kind != OperationKindBulkUpdate {
+		if !startable || handler.Validate == nil && op.Kind != OperationKindBulkUpdate || op.CreatedBy == systemSubject {
 			return ErrForbidden
 		}
 		if op.CreatedBy != subject {
@@ -404,6 +407,11 @@ const operationPurgePage = 200
 // their handlers' failure cleanup.
 func (s *Service) ExpireOperations(ctx context.Context, now time.Time) error {
 	kinds := s.operationKinds()
+	at := now.UTC()
+	// Checking first keeps an idle loop off the writer.
+	if due, err := s.DAL.Operations().Exists(ctx, operations.Filter{Kinds: kinds, Statuses: []operations.Status{operations.StatusPending}, DeadlineBefore: &at}); err != nil || !due {
+		return err
+	}
 	for {
 		var n int
 		err := s.write(ctx, func(t *Service) error {

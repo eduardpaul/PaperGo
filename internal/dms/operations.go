@@ -62,7 +62,7 @@ const operationClaim = 2 * time.Minute
 // RunOperations processes pending operations until ctx ends, resuming any left
 // by an earlier process.
 func (s *Service) RunOperations(ctx context.Context, log *slog.Logger) {
-	nextCleanup := time.Time{}
+	nextCleanup, nextExpiry := time.Time{}, time.Time{}
 	for {
 		if now := time.Now().UTC(); !now.Before(nextCleanup) {
 			if err := s.CollectExpiredOperations(ctx, now); err != nil && ctx.Err() == nil {
@@ -76,8 +76,11 @@ func (s *Service) RunOperations(ctx context.Context, log *slog.Logger) {
 			}
 			nextCleanup = now.Add(time.Hour)
 		}
-		if err := s.ExpireOperations(ctx, time.Now()); err != nil && ctx.Err() == nil {
-			log.Error("operation deadlines failed", "error", err)
+		if now := time.Now(); !now.Before(nextExpiry) {
+			if err := s.ExpireOperations(ctx, now); err != nil && ctx.Err() == nil {
+				log.Error("operation deadlines failed", "error", err)
+			}
+			nextExpiry = now.Add(time.Minute)
 		}
 		worked, err := s.operationStep(ctx)
 		if ctx.Err() != nil {
@@ -213,14 +216,12 @@ func (s *Service) executeClaimed(ctx context.Context, execute func(context.Conte
 			case <-ticker.C:
 				now := time.Now()
 				until := now.Add(operationClaim)
-				if err := s.write(run, func(t *Service) error { return t.DAL.Operations().Renew(run, op.ID, op.Claim, until, now) }); err != nil {
-					if errors.Is(err, operations.ErrClaimLost) {
-						cancel(err)
-						return
-					}
-					continue
+				// The token fences the execution's writes; its expiry lives
+				// only in the database.
+				if err := s.write(run, func(t *Service) error { return t.DAL.Operations().Renew(run, op.ID, op.Claim, until, now) }); errors.Is(err, operations.ErrClaimLost) {
+					cancel(err)
+					return
 				}
-				op.Claim.Until = operations.UTC(until)
 			}
 		}
 	}()
