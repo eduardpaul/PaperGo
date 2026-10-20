@@ -3,6 +3,7 @@ package aiops_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -284,6 +285,52 @@ func TestBatchRetriesExhaustAttempts(t *testing.T) {
 	}
 }
 
+// A submission that stops once the provider holds its batch leaves its
+// members with the batch, which Poll finds by its tag: they are never sent
+// in a second batch.
+func TestBatchSubmissionStoppingAfterCreate(t *testing.T) {
+	ctx := context.Background()
+	f := setup(t)
+	f.batch.crash = true
+	op := f.start(t, "/v1/ai/completions", `{"prompt":"Classify","input":"one","workspace_id":"`+f.ws+`","execution":"batch"}`)
+	if _, err := f.s.RunOperationGroup(ctx, aiops.KindBatch, "shared", nil, 20); err == nil {
+		t.Fatal("the submission did not stop")
+	}
+	f.batch.crash = false
+	if parked := f.operation(t, op.ID); parked.Status != operations.StatusPending || parked.Waiting != dms.WaitingRemote {
+		t.Fatalf("the member left its batch: %+v", parked)
+	}
+	if worked, err := f.s.RunOperationGroup(ctx, aiops.KindBatch, "shared", nil, 20); err != nil || worked {
+		t.Fatal("the member was claimable again", worked, err)
+	}
+	f.batch.finish()
+	if err := f.a.Poll(ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if done := f.operation(t, op.ID); done.Status != operations.StatusSucceeded || len(f.batch.batches) != 1 {
+		t.Fatalf("%d batches: %+v", len(f.batch.batches), done)
+	}
+}
+
+// A batch the provider refuses gives its members back with the reason, to
+// try again after the poll interval.
+func TestBatchRefusedByProvider(t *testing.T) {
+	ctx := context.Background()
+	f := setup(t)
+	f.batch.refuse = true
+	op := f.start(t, "/v1/ai/completions", `{"prompt":"Classify","input":"one","workspace_id":"`+f.ws+`","execution":"batch"}`)
+	if worked, err := f.s.RunOperationGroup(ctx, aiops.KindBatch, "shared", nil, 20); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	back := f.operation(t, op.ID)
+	if back.Status != operations.StatusPending || back.Waiting == dms.WaitingRemote || back.Attempts != 1 || !strings.Contains(back.Error, "refused") {
+		t.Fatalf("%+v", back)
+	}
+	if worked, err := f.s.RunOperationGroup(ctx, aiops.KindBatch, "shared", nil, 20); err != nil || worked {
+		t.Fatal("the member was retried before its delay", worked, err)
+	}
+}
+
 func TestDecision(t *testing.T) {
 	ctx := context.Background()
 	f := setup(t)
@@ -336,6 +383,9 @@ type fakeBatch struct {
 	files   []string
 	batches map[string]*fakeBatchJob
 	failing string
+	// crash stops the submission once the provider created the batch;
+	// refuse makes the provider refuse to create it.
+	crash, refuse bool
 }
 
 func (*fakeBatch) Key() string        { return "fake-batch" }
@@ -352,9 +402,15 @@ func (b *fakeBatch) Upload(_ context.Context, jsonl []byte) (string, error) {
 func (b *fakeBatch) Create(_ context.Context, file, tag string) (string, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.refuse {
+		return "", errors.New("the provider refused the batch")
+	}
 	var n int
 	fmt.Sscanf(file, "file-%d", &n)
 	b.batches[tag] = &fakeBatchJob{lines: []byte(b.files[n-1])}
+	if b.crash {
+		panic("the process stopped")
+	}
 	return tag, nil
 }
 

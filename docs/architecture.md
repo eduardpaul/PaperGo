@@ -28,7 +28,19 @@ Reads bind authorization, publication visibility, page selection and hydration t
 
 The chosen publishing policy belongs to the collection. Automatic mode immediately publishes each content change. Explicit mode retains the previous published revision while editors change head. Unpublish removes the published projection, retaining immutable content and lifecycle events. Policy changes require manage access; switching to automatic mode publishes existing heads in one transaction.
 
-Blob bytes are written through the storage port before the database transaction. Metadata pins immutable object keys; failures clean up newly staged objects. A crash between object persistence and metadata commit can leave an orphan, so production reconciliation needs a grace period. This is the only cross-system transaction gap in the current local storage path.
+## Durability boundaries
+
+Database effects are transactional: a write's rows, its audit and domain events, an operation's state and a workflow step's journal entry commit together or not at all. Everything else commits on its own, so work that reaches beyond the database is **repeatable**: it runs at least once, and each module makes a repeat harmless by recording its intent first, making its effect idempotent, and reconciling an uncertain outcome before doing the work again. An operation's completion is fenced by its claim: an execution that lost its claim cannot end it, and the operation runs again.
+
+| Boundary | Effect | Recovery protocol |
+| --- | --- | --- |
+| Object storage | Uploads, file versions, previews, extracted text, staged files, package exports and imports | Bytes are written under a new immutable key before the transaction that references them. A crash in between leaves an unreferenced object, which the object sweep deletes after an hour's grace; a repeat writes a new object. |
+| Search store | Documents, staged chunks, vectors and publication | The store is derived and its writes are idempotent: documents carry their write stamp, staging replaces a part's chunks, vectors are keyed by input hash, and publishing a generation never replaces a newer published one (`search.ErrSuperseded`), so publishing again or out of order is safe. A reindex rebuilds it from the database. |
+| Immediate AI completions | One provider call | The answer is cached by request before the operation ends; a repeat after that reuses it, a repeat before it calls the provider again. |
+| Batch AI completions | A provider batch | A submission record and the members' parking commit before the batch is created, so a crash leaves the members with their batch. Polling finds an unconfirmed batch by its submission tag before anything is sent again; see [AI batches](ai.md#batches). |
+| Embeddings and decisions | Local or provider computation | Results are written idempotently (vectors by input hash, decisions as the operation's result); a repeat recomputes. |
+| List integrations | Fetching a remote calendar | Reading is repeatable; reconciliation commits in one transaction. |
+| Workflow requests | API calls of a script | The request's database writes and its step commit together: a replay answers from the journal. Work a request starts runs as its own operation under the protocols above. |
 
 ## Search stores
 

@@ -38,5 +38,5 @@ func release(ctx context.Context, t *dms.Service, operationIDs []string) error {
 	if err != nil || len(runs) == 0 {
 		return err
 	}
-	return t.UnparkOperations(ctx, waitExecution, runs, time.Now())
+	return t.UnparkOperations(ctx, waitExecution, runs, time.Now(), "")
 }

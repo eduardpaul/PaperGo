@@ -220,7 +220,7 @@ func finished(ctx context.Context, t *dms.Service, p workflow.RunPayload) error 
 	for i, op := range next {
 		ids[i] = op.ID
 	}
-	return t.UnparkOperations(ctx, execution, ids, time.Now())
+	return t.UnparkOperations(ctx, execution, ids, time.Now(), "")
 }
 
 // raise raises wf.{key}.{status} for a run that ended, unless it is a test, and the role event

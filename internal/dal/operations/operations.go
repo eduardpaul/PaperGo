@@ -256,7 +256,8 @@ func (r *Repo) Accept(ctx context.Context, in Operation, now time.Time) (op Oper
 	at := UTC(now)
 	id := in.ID
 	if id == "" {
-		id = uuid.NewString()
+		// Generated IDs order by creation, as search generations rely on.
+		id = uuid.Must(uuid.NewV7()).String()
 	}
 	op = Operation{
 		ID: id, ContainerID: in.ContainerID, WorkspaceID: in.WorkspaceID, FieldID: in.FieldID, Kind: in.Kind, TraceID: in.TraceID,
@@ -525,11 +526,16 @@ func (r *Repo) Park(ctx context.Context, ids []string, c Claim, in Parking, now 
 }
 
 // Unpark returns the pending members of executionID among ids to the
-// queue, ready at at. Members that ended meanwhile stay ended.
-func (r *Repo) Unpark(ctx context.Context, executionID string, ids []string, at, now time.Time) error {
+// queue, ready at at, with cause as their error when it is not empty.
+// Members that ended meanwhile stay ended.
+func (r *Repo) Unpark(ctx context.Context, executionID string, ids []string, at time.Time, cause string, now time.Time) error {
 	next, none := UTC(at), ""
+	change := Change{ExecutionID: &none, AttemptAt: &next, UpdatedAt: UTC(now)}
+	if cause != "" {
+		change.Error = &cause
+	}
 	return r.write(ctx, func(q Queries) error {
-		_, err := q.UpdateFenced(ctx, Fence{IDs: ids, ExecutionID: executionID, Now: UTC(now)}, Change{ExecutionID: &none, AttemptAt: &next, UpdatedAt: UTC(now)})
+		_, err := q.UpdateFenced(ctx, Fence{IDs: ids, ExecutionID: executionID, Now: UTC(now)}, change)
 		return err
 	})
 }

@@ -116,23 +116,28 @@ func (a *Assistant) submit(ctx context.Context, s *dms.Service, ops []*operation
 	if err != nil {
 		return a.abandon(ctx, tag, dms.Retry(err, pollEvery))
 	}
-	f.Status = flightUncertain
-	if err = putFlight(ctx, records, tag, f); err != nil {
-		return err
-	}
-	if f.BatchID, err = a.Batch.Create(ctx, fileID, tag); err != nil && !errors.Is(err, ai.ErrUncertain) {
-		return a.abandon(ctx, tag, dms.Retry(err, pollEvery))
-	}
-	if err == nil {
-		f.Status = flightSubmitted
-	}
-	f.NextPoll = time.Now().UTC().Add(pollEvery)
-	return s.Write(ctx, func(t *dms.Service) error {
+	// From here the provider may hold the batch, so its members belong to
+	// the flight before it is created: a crash leaves them parked for Poll
+	// to reconcile by the tag, never claimable for a second batch.
+	f.Status, f.NextPoll = flightUncertain, time.Now().UTC().Add(pollEvery)
+	if err = s.Write(ctx, func(t *dms.Service) error {
 		if err := t.ParkOperations(ctx, send, operations.Parking{ExecutionID: f.Execution, CountAttempt: true}); err != nil {
 			return err
 		}
 		return putFlight(ctx, records.WithTx(t.SQLTx()), tag, f)
-	})
+	}); err != nil {
+		return err
+	}
+	f.BatchID, err = a.Batch.Create(ctx, fileID, tag)
+	switch {
+	case errors.Is(err, ai.ErrUncertain):
+		return nil
+	case err != nil:
+		// The provider refused the batch: its members try again later.
+		return a.release(ctx, tag, f, f.Members, time.Now().Add(pollEvery), err.Error())
+	}
+	f.Status = flightSubmitted
+	return putFlight(ctx, records, tag, f)
 }
 
 // abandon forgets a submission that never reached the provider and returns
@@ -214,7 +219,17 @@ func (a *Assistant) Poll(ctx context.Context, now time.Time) error {
 			if err = json.Unmarshal(r.Payload, &f); err != nil {
 				return err
 			}
-			if f.Status == flightPrepared || f.NextPoll.After(now) {
+			if f.Status == flightPrepared {
+				// A submission that stopped before its batch could exist
+				// parked nothing; its record goes.
+				if now.Sub(f.Since) > unconfirmed {
+					if err = doneFlight(ctx, a.Records, r.Key); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			if f.NextPoll.After(now) {
 				continue
 			}
 			if err = a.poll(ctx, r.Key, f, now); err != nil {
@@ -232,7 +247,7 @@ func (a *Assistant) poll(ctx context.Context, tag string, f flight, now time.Tim
 		}
 		if !found {
 			if now.Sub(f.Since) > unconfirmed {
-				return a.release(ctx, tag, f, f.Members)
+				return a.release(ctx, tag, f, f.Members, time.Now(), "the provider never confirmed the batch")
 			}
 			f.NextPoll = now.Add(pollEvery)
 			return putFlight(ctx, a.Records, tag, f)
@@ -294,14 +309,15 @@ func (a *Assistant) poll(ctx context.Context, tag string, f flight, now time.Tim
 			return err
 		}
 	}
-	return a.release(ctx, tag, f, retry)
+	return a.release(ctx, tag, f, retry, time.Now(), "the provider batch did not answer the request")
 }
 
-// release returns members of a flight to the queue and ends the flight.
-func (a *Assistant) release(ctx context.Context, tag string, f flight, ids []string) error {
+// release returns members of a flight to the queue, ready at at with
+// cause as their error, and ends the flight.
+func (a *Assistant) release(ctx context.Context, tag string, f flight, ids []string, at time.Time, cause string) error {
 	return a.svc.Write(ctx, func(t *dms.Service) error {
 		if len(ids) > 0 {
-			if err := t.UnparkOperations(ctx, f.Execution, ids, time.Now()); err != nil {
+			if err := t.UnparkOperations(ctx, f.Execution, ids, at, cause); err != nil {
 				return err
 			}
 		}

@@ -311,7 +311,7 @@ func testMembership(t *testing.T, s *dal.Store) {
 	if err := ops.Park(ctx, []string{three.ID}, got[0].Claim, operations.Parking{ExecutionID: "retry"}, start); err != nil {
 		t.Fatal(err)
 	}
-	if err := ops.Unpark(ctx, "retry", []string{three.ID}, start.Add(time.Minute), start); err != nil {
+	if err := ops.Unpark(ctx, "retry", []string{three.ID}, start.Add(time.Minute), "", start); err != nil {
 		t.Fatal(err)
 	}
 	if got := claim(t, ops, "batch", 1, start.Add(time.Minute)); len(got) != 1 || got[0].ID != three.ID || got[0].Attempts != 1 || !got[0].CreatedAt.Equal(start) {

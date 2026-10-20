@@ -479,10 +479,17 @@ func (x *Indexer) publish(ctx context.Context, s *dms.Service, op *operations.Op
 	case !slices.Contains(files, j.BlobID):
 		res.Reason = "A newer file replaced the one the content was made from."
 	default:
-		if err = x.Search.PublishContent(ctx, j.ItemID, j.BlobID, j.Generation); err != nil {
+		// Publishing again, or after a newer generation, is safe: the
+		// store refuses a generation older than the published one.
+		err = x.Search.PublishContent(ctx, j.ItemID, j.BlobID, j.Generation)
+		switch {
+		case errors.Is(err, search.ErrSuperseded):
+			res.Reason = "A newer generation of the file's content is published."
+		case err != nil:
 			return err
+		default:
+			res.Published = true
 		}
-		res.Published = true
 	}
 	return finish(ctx, s, op, res)
 }

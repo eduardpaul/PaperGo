@@ -549,9 +549,10 @@ func (s *Service) FinishParkedOperation(ctx context.Context, op *operations.Oper
 }
 
 // UnparkOperations returns the pending members of executionID among ids
-// to the queue, ready at at; members that ended stay ended.
-func (s *Service) UnparkOperations(ctx context.Context, executionID string, ids []string, at time.Time) error {
-	if err := s.DAL.Operations().Unpark(ctx, executionID, ids, at, time.Now()); err != nil {
+// to the queue, ready at at with cause as their error when there is one;
+// members that ended stay ended.
+func (s *Service) UnparkOperations(ctx context.Context, executionID string, ids []string, at time.Time, cause string) error {
+	if err := s.DAL.Operations().Unpark(ctx, executionID, ids, at, cause, time.Now()); err != nil {
 		return err
 	}
 	s.wakeOperations()

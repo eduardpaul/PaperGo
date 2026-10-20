@@ -82,7 +82,14 @@ func (s *Store) StageContent(ctx context.Context, itemID, blobID, generation str
 
 func (s *Store) PublishContent(ctx context.Context, itemID, blobID, generation string) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
-		if err := deleteChunks(ctx, tx, `item_id=? AND blob_id=? AND generation<>?`, itemID, blobID, generation); err != nil {
+		var newer bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM chunks WHERE item_id=? AND blob_id=? AND generation>? AND published=1)`, itemID, blobID, generation).Scan(&newer); err != nil {
+			return err
+		}
+		if newer {
+			return search.ErrSuperseded
+		}
+		if err := deleteChunks(ctx, tx, `item_id=? AND blob_id=? AND generation<?`, itemID, blobID, generation); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE chunks SET published=1 WHERE item_id=? AND blob_id=? AND generation=?`, itemID, blobID, generation); err != nil {
