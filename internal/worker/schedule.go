@@ -81,7 +81,8 @@ func (s *Schedule) Due(last, now time.Time) (time.Time, bool) {
 	return next, true
 }
 
-// Window admits executions between From and To, times of day in Location.
+// Window admits executions between From and To, minute-precision local
+// times of day in Location.
 // A window whose To is before its From spans midnight.
 type Window struct {
 	Location *time.Location
@@ -115,25 +116,36 @@ func (w *Window) validate() error {
 	if w.Location == nil || w.From == w.To {
 		return errors.New("a window needs a time zone and different start and end times")
 	}
+	if w.From < 0 || w.From >= 24*time.Hour || w.To < 0 || w.To >= 24*time.Hour {
+		return errors.New("window times must be within one day")
+	}
+	if w.From%time.Minute != 0 || w.To%time.Minute != 0 {
+		return errors.New("window times must use whole minutes")
+	}
 	return nil
 }
 
 // Open reports whether t is inside the window, and otherwise when it next
 // opens.
 func (w *Window) Open(t time.Time) (bool, time.Time) {
-	local := t.In(w.Location)
-	midnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, w.Location)
-	since := local.Sub(midnight)
-	inside := since >= w.From && since < w.To
-	if w.To < w.From {
-		inside = since >= w.From || since < w.To
-	}
-	if inside {
+	if w.contains(t) {
 		return true, time.Time{}
 	}
-	opens := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, w.Location).Add(w.From)
-	if !opens.After(local) {
-		opens = time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, w.Location).Add(w.From)
+	// Windows have minute precision. Walk minute boundaries in real time
+	// so the next opening also accounts for skipped and repeated local hours.
+	local := t.In(w.Location)
+	opens := local.Add(time.Minute - time.Duration(local.Second())*time.Second - time.Duration(local.Nanosecond()))
+	for !w.contains(opens) {
+		opens = opens.Add(time.Minute)
 	}
 	return false, opens.UTC()
+}
+
+func (w *Window) contains(t time.Time) bool {
+	local := t.In(w.Location)
+	clock := time.Duration(local.Hour())*time.Hour + time.Duration(local.Minute())*time.Minute
+	if w.To < w.From {
+		return clock >= w.From || clock < w.To
+	}
+	return clock >= w.From && clock < w.To
 }
