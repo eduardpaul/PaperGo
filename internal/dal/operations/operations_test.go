@@ -145,6 +145,12 @@ func testClaims(t *testing.T, s *dal.Store) {
 		t.Fatalf("oldest claimed first: %+v", got)
 	}
 	a := got[0]
+	if err := ops.CheckClaim(ctx, a.ID, a.Claim, start.Add(3*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := ops.CheckClaim(ctx, a.ID, operations.Claim{}, start.Add(3*time.Second)); !errors.Is(err, operations.ErrClaimLost) {
+		t.Fatalf("missing claim: %v", err)
+	}
 	// A claimed operation is not ready for anyone else.
 	if got := claim(t, ops, "worker-b", 5, start.Add(3*time.Second)); len(got) != 1 || got[0].ID != second.ID {
 		t.Fatalf("second claimer: %+v", got)
@@ -165,6 +171,9 @@ func testClaims(t *testing.T, s *dal.Store) {
 	}
 	if err := ops.Renew(ctx, a.ID, a.Claim, expired.Add(time.Hour), expired); !errors.Is(err, operations.ErrClaimLost) {
 		t.Fatalf("stale renew: %v", err)
+	}
+	if err := ops.CheckClaim(ctx, a.ID, a.Claim, expired); !errors.Is(err, operations.ErrClaimLost) {
+		t.Fatalf("stale effect: %v", err)
 	}
 	if err := ops.Checkpoint(ctx, &a, expired); !errors.Is(err, operations.ErrClaimLost) {
 		t.Fatalf("stale checkpoint: %v", err)

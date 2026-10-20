@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"time"
 
 	"papergo/internal/dal/operations"
 	"papergo/internal/dal/runs"
@@ -33,6 +34,17 @@ type Effects struct {
 
 var _ script.Effects = (*Effects)(nil)
 
+// write commits an effect only while this execution still owns the run.
+// Checking after fn also fences effects whose claim expired while they ran.
+func (e *Effects) write(ctx context.Context, run script.Run, fn func(*dms.Service) error) error {
+	return e.DMS.Write(ctx, func(t *dms.Service) error {
+		if err := fn(t); err != nil {
+			return err
+		}
+		return t.DAL.Operations().CheckClaim(ctx, run.ID, run.Claim, time.Now())
+	})
+}
+
 func (e *Effects) Steps(ctx context.Context, run script.Run) ([]runs.Step, error) {
 	return e.DMS.DAL.Runs().Steps(ctx, run.ID)
 }
@@ -46,7 +58,7 @@ var errRejected = errors.New("the API refused the request")
 // recorded: the slice fails and the request runs again when the run resumes.
 func (e *Effects) Request(ctx context.Context, run script.Run, unsaved []runs.Step, step runs.Step, req script.Request) (script.Response, error) {
 	var response script.Response
-	err := e.DMS.Write(ctx, func(t *dms.Service) error {
+	err := e.write(ctx, run, func(t *dms.Service) error {
 		var err error
 		if response, err = serve(ctx, e.API.Loopback(t, run.Author, run.ID), req); err != nil {
 			return err
@@ -67,7 +79,7 @@ func (e *Effects) Request(ctx context.Context, run script.Run, unsaved []runs.St
 	})
 	if errors.Is(err, errRejected) {
 		step.Output = script.ResponseOutput(response)
-		err = e.DMS.Write(ctx, func(t *dms.Service) error {
+		err = e.write(ctx, run, func(t *dms.Service) error {
 			return t.DAL.Runs().RecordSteps(ctx, append(unsaved, step))
 		})
 	}
@@ -100,7 +112,7 @@ func serve(ctx context.Context, handler http.Handler, req script.Request) (scrip
 // one ends, and ReconcileWaits if that release was missed.
 func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step, step runs.Step) (bool, error) {
 	done := true
-	err := e.DMS.Write(ctx, func(t *dms.Service) error {
+	err := e.write(ctx, run, func(t *dms.Service) error {
 		done = true
 		for _, id := range step.Operations {
 			op, err := t.Operation(ctx, run.Author, id)
@@ -124,14 +136,14 @@ func (e *Effects) Wait(ctx context.Context, run script.Run, unsaved []runs.Step,
 
 // Sleep records a sleep step; the run's worker makes it wait until then.
 func (e *Effects) Sleep(ctx context.Context, run script.Run, unsaved []runs.Step, step runs.Step) error {
-	return e.DMS.Write(ctx, func(t *dms.Service) error {
+	return e.write(ctx, run, func(t *dms.Service) error {
 		return t.DAL.Runs().RecordSteps(ctx, append(unsaved, step))
 	})
 }
 
 // Wake completes a pending sleep step whose time came.
 func (e *Effects) Wake(ctx context.Context, run script.Run, seq int) error {
-	return e.DMS.Write(ctx, func(t *dms.Service) error {
+	return e.write(ctx, run, func(t *dms.Service) error {
 		_, err := t.DAL.Runs().FinishStep(ctx, run.ID, seq, nil, "")
 		return err
 	})

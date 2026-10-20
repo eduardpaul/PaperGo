@@ -14,6 +14,7 @@ import (
 
 	"papergo/internal/dal/daltest"
 	"papergo/internal/dal/operations"
+	"papergo/internal/dal/resources"
 	"papergo/internal/dal/runs"
 	"papergo/internal/dms"
 	"papergo/internal/httpapi"
@@ -105,6 +106,12 @@ func (f *fixture) run(t *testing.T, source, input string) script.Run {
 	if err := daltest.WorkflowRun(context.Background(), f.s.DAL, id, f.workflowID, f.workspaceID, "alice", 1); err != nil {
 		t.Fatal(err)
 	}
+	claimed, err := f.s.DAL.Operations().Claim(context.Background(), operations.ClaimRequest{
+		Ready: operations.Ready{Kinds: []string{daltest.RunKind}, IDs: []string{id}, Now: time.Now(), Limit: 1}, Holder: "test", TTL: time.Hour,
+	})
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim run: %+v %v", claimed, err)
+	}
 	artifact, err := script.Bundle("workflow.ts", source)
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +120,68 @@ func (f *fixture) run(t *testing.T, source, input string) script.Run {
 	if err = json.Unmarshal([]byte(input), &value); err != nil {
 		t.Fatal(err)
 	}
-	return script.Run{ID: id, Author: "alice", Artifact: artifact, Context: map[string]any{"input": value}}
+	return script.Run{ID: id, Author: "alice", Claim: claimed[0].Claim, Artifact: artifact, Context: map[string]any{"input": value}}
+}
+
+func TestEffectsRejectLostClaims(t *testing.T) {
+	for _, lost := range []string{"cancelled", "expired", "replaced"} {
+		t.Run(lost, func(t *testing.T) {
+			ctx := context.Background()
+			f := setup(t)
+			run := f.run(t, `export default {}`, `{}`)
+			list, err := f.s.Create(ctx, "alice", f.workspaceID, dms.CreateResource{Kind: "list", Name: "Invoices"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if lost == "cancelled" {
+				_, err = f.s.DAL.Operations().Cancel(ctx, run.ID, time.Now())
+			} else {
+				err = f.s.DAL.Operations().Renew(ctx, run.ID, run.Claim, time.Now().Add(-time.Minute), time.Now())
+				if err == nil && lost == "replaced" {
+					var claimed []operations.Operation
+					claimed, err = f.s.DAL.Operations().Claim(ctx, operations.ClaimRequest{
+						Ready: operations.Ready{Kinds: []string{daltest.RunKind}, IDs: []string{run.ID}, Now: time.Now(), Limit: 1}, Holder: "replacement", TTL: time.Hour,
+					})
+					if err == nil && len(claimed) != 1 {
+						t.Fatal("replacement did not claim run")
+					}
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			e := &Effects{DMS: f.s, API: f.api}
+			step := runs.Step{RunID: run.ID, Kind: runs.StepRequest, Name: "request", InputHash: strings.Repeat("a", 64), Status: runs.StepCompleted}
+			_, err = e.Request(ctx, run, nil, step, script.Request{Method: "POST", URL: "/v1/resources/" + list.ID + "/children", Header: map[string]string{"Content-Type": "application/json"}, Body: []byte(`{"kind":"item","name":"Stale"}`)})
+			if !errors.Is(err, operations.ErrClaimLost) {
+				t.Fatalf("request: %v", err)
+			}
+			items, err := f.s.DAL.Resources().Resources(ctx, resources.Filter{ParentID: list.ID})
+			if err != nil || len(items) != 0 {
+				t.Fatalf("stale request committed: %+v %v", items, err)
+			}
+			// Rejected responses use a separate recording transaction, which
+			// must be fenced too.
+			_, err = e.Request(ctx, run, nil, step, script.Request{Method: "GET", URL: "/v1/resources/missing"})
+			if !errors.Is(err, operations.ErrClaimLost) {
+				t.Fatalf("rejected request: %v", err)
+			}
+			step.Kind, step.Name, step.Status = runs.StepWait, "sleep", runs.StepPending
+			if err = e.Sleep(ctx, run, nil, step); !errors.Is(err, operations.ErrClaimLost) {
+				t.Fatalf("sleep: %v", err)
+			}
+			if _, err = e.Wait(ctx, run, nil, step); !errors.Is(err, operations.ErrClaimLost) {
+				t.Fatalf("wait: %v", err)
+			}
+			if err = e.Wake(ctx, run, 0); !errors.Is(err, operations.ErrClaimLost) {
+				t.Fatalf("wake: %v", err)
+			}
+			steps, err := e.Steps(ctx, run)
+			if err != nil || len(steps) != 0 {
+				t.Fatalf("stale journal committed: %+v %v", steps, err)
+			}
+		})
+	}
 }
 
 // work runs the operation worker until done reports true.

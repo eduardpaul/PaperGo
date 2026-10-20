@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
+	"papergo/internal/dal/operations"
 	"papergo/internal/dal/runs"
 	"papergo/sdk"
 )
@@ -34,6 +35,7 @@ type Response struct {
 type Run struct {
 	ID       string
 	Author   string
+	Claim    operations.Claim
 	Artifact Artifact
 	Context  map[string]any
 }

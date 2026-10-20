@@ -86,7 +86,7 @@ func (r *Runner) slice(ctx context.Context, s *dms.Service, op *operations.Opera
 	if err != nil {
 		return err
 	}
-	out, err := r.engine.Execute(ctx, script.Run{ID: op.ID, Author: op.CreatedBy, Artifact: workflow.Artifact(v), Context: p.Context()})
+	out, err := r.engine.Execute(ctx, script.Run{ID: op.ID, Author: op.CreatedBy, Claim: op.Claim, Artifact: workflow.Artifact(v), Context: p.Context()})
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()

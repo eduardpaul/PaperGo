@@ -434,6 +434,17 @@ func (r *Repo) fenced(ctx context.Context, q Queries, f Fence, c Change) error {
 	return nil
 }
 
+// CheckClaim fences a transaction's writes without changing the operation's
+// progress or extending its claim. Call it in the transaction being fenced.
+func (r *Repo) CheckClaim(ctx context.Context, id string, c Claim, now time.Time) error {
+	if c.Token == "" {
+		return ErrClaimLost
+	}
+	return r.write(ctx, func(q Queries) error {
+		return r.fenced(ctx, q, Fence{IDs: []string{id}, Token: c.Token, Now: now}, Change{})
+	})
+}
+
 // Renew extends a claim to until.
 func (r *Repo) Renew(ctx context.Context, id string, c Claim, until, now time.Time) error {
 	renewed := Claim{Holder: c.Holder, Token: c.Token, Until: UTC(until)}
