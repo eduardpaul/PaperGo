@@ -16,7 +16,12 @@ import (
 )
 
 func (q Queries) InsertLiveChange(ctx context.Context, c live.Change) error {
-	_, err := models.LiveChanges.Insert(&models.LiveChangeSetter{
+	position, err := bob.One(ctx, q.exec, sqlite.RawQuery(`UPDATE live_change_position SET position = position + 1 WHERE id = 1 RETURNING position`), scan.SingleColumnMapper[int64])
+	if err != nil {
+		return dberr.Translate(err)
+	}
+	_, err = models.LiveChanges.Insert(&models.LiveChangeSetter{
+		ID:        omit.From(position),
 		CreatedAt: omit.From(c.CreatedAt), Kind: omit.From(string(c.Kind)), EntityID: omit.From(c.EntityID), Action: omit.From(string(c.Action)),
 	}).Exec(ctx, q.exec)
 	return dberr.Translate(err)
@@ -35,10 +40,10 @@ func (q Queries) LiveChanges(ctx context.Context, after int64, limit int) ([]liv
 }
 
 // LiveBounds reads the bounds in one statement, so both come from one
-// snapshot. sqlite_sequence keeps the highest ID AUTOINCREMENT assigned.
+// snapshot. The counter survives collecting the entire journal.
 func (q Queries) LiveBounds(ctx context.Context) (int64, int64, error) {
 	type bounds struct{ Earliest, Latest int64 }
-	b, err := bob.One(ctx, q.exec, sqlite.RawQuery(`SELECT coalesce((SELECT min(id) FROM live_changes), 0) AS earliest, coalesce((SELECT seq FROM sqlite_sequence WHERE name = 'live_changes'), 0) AS latest`), scan.StructMapper[bounds]())
+	b, err := bob.One(ctx, q.exec, sqlite.RawQuery(`SELECT coalesce((SELECT min(id) FROM live_changes), 0) AS earliest, position AS latest FROM live_change_position WHERE id = 1`), scan.StructMapper[bounds]())
 	return b.Earliest, b.Latest, dberr.Translate(err)
 }
 

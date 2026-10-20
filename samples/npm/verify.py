@@ -87,7 +87,6 @@ def main():
     spoofed = request("GET", "/v1/identity/me", headers={"X-Papergo-Subject": "forged-admin", "X-Papergo-Proxy-Secret": "forged"})
     assert spoofed["subject"] == me["subject"]
     request("GET", "/v1/identity/me/tokens", expected=404)
-    request("GET", "/v1/webdav-credentials", expected=404)
     batch = request("POST", "/v1/$batch", {"requests": [{"id": "me", "method": "GET", "url": "identity/me"}]})
     assert batch["responses"][0]["status"] == 200 and batch["responses"][0]["body"]["subject"] == me["subject"]
     request("POST", "/v1/$batch", {"requests": [{"id": "me", "method": "GET", "url": "identity/me", "headers": {"X-Papergo-Subject": "forged"}}]}, expected=400)

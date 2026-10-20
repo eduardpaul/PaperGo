@@ -40,7 +40,7 @@ establish that the application runs on PostgreSQL.
 
 ## Master schema requirements
 
-The DAL schemas define 62 tables with declarative foreign keys and checks and
+The DAL schemas define 63 tables with declarative foreign keys and checks and
 no triggers. Cross-table invariants, projections, lifecycle rules and change
 notifications must execute in repository transactions. In particular:
 

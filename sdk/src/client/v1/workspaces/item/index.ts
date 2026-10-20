@@ -6,7 +6,7 @@ import { KeywordsRequestBuilderRequestsMetadata, type KeywordsRequestBuilder } f
 // @ts-ignore
 import { MembersRequestBuilderNavigationMetadata, MembersRequestBuilderRequestsMetadata, type MembersRequestBuilder } from './members/index.js';
 // @ts-ignore
-import { RelationshipsRequestBuilderRequestsMetadata, type RelationshipsRequestBuilder } from './relationships/index.js';
+import { RelationshipsRequestBuilderNavigationMetadata, RelationshipsRequestBuilderRequestsMetadata, type RelationshipsRequestBuilder } from './relationships/index.js';
 // @ts-ignore
 import { SmartFoldersRequestBuilderNavigationMetadata, type SmartFoldersRequestBuilder } from './smartFolders/index.js';
 // @ts-ignore
@@ -62,6 +62,7 @@ export const WorkspacesItemRequestBuilderNavigationMetadata: Record<Exclude<keyo
     },
     relationships: {
         requestsMetadata: RelationshipsRequestBuilderRequestsMetadata,
+        navigationMetadata: RelationshipsRequestBuilderNavigationMetadata,
     },
     smartFolders: {
         navigationMetadata: SmartFoldersRequestBuilderNavigationMetadata,

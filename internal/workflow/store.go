@@ -963,14 +963,6 @@ func activeRuns(ctx context.Context, t *dms.Service, workflowID string, items []
 	return active(ctx, t, ids)
 }
 
-func anyStrings(v []string) []any {
-	out := make([]any, len(v))
-	for i, s := range v {
-		out[i] = s
-	}
-	return out
-}
-
 type matchable struct {
 	w   *workflows.Workflow
 	v   *workflows.Version

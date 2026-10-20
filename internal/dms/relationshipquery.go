@@ -2,8 +2,6 @@ package dms
 
 import (
 	"context"
-	"papergo/internal/dal/content"
-	"papergo/internal/dal/refs"
 	"papergo/internal/dal/resources"
 
 	"papergo/internal/dal/relationships"
@@ -18,11 +16,6 @@ type LocatedItem struct {
 type RelationshipView struct {
 	RelationshipRecord
 	RelatedItem LocatedItem `json:"related_item"`
-}
-type WorkspaceRelationshipView struct {
-	RelationshipRecord
-	SourceItem LocatedItem `json:"source_item"`
-	TargetItem LocatedItem `json:"target_item"`
 }
 
 func (s *Service) locateRelationshipItem(ctx context.Context, subject, id string) (LocatedItem, error) {
@@ -57,53 +50,5 @@ func (s *Service) Relationship(ctx context.Context, subject, itemID, edgeID stri
 			return RelationshipView{}, err
 		}
 		return t.relationshipView(ctx, subject, itemID, edge)
-	})
-}
-func (s *Service) WorkspaceRelationships(ctx context.Context, subject, workspaceID, typeValue string, directed *bool, filter, after string, limit int) (Page[WorkspaceRelationshipView], error) {
-	return read(ctx, s, func(t *Service) (Page[WorkspaceRelationshipView], error) {
-		out := Page[WorkspaceRelationshipView]{Data: []WorkspaceRelationshipView{}}
-		if err := t.RequireScope(ctx, subject, "list.read"); err != nil {
-			return out, err
-		}
-		w, err := t.authorize(ctx, subject, workspaceID, "read")
-		if err != nil {
-			return out, err
-		}
-		if w.Kind != refs.KindWorkspace {
-			return out, invalid("workspace_id must reference a workspace")
-		}
-		query := content.Links{Reader: principal(ctx, subject), WorkspaceID: workspaceID, Directed: directed, AfterID: after}
-		if typeValue != "" {
-			predicate, found, err := t.resolveRelationshipTerm(ctx, subject, typeValue, false)
-			if err != nil {
-				return out, err
-			}
-			if !found {
-				return out, nil
-			}
-			query.TypeID = predicate.ID
-		}
-		if filter != "" {
-			if query.Filter, err = relationshipFilter(filter); err != nil {
-				return out, err
-			}
-		}
-		page, err := t.visibleRelationships(ctx, query, limit)
-		if err != nil {
-			return out, err
-		}
-		out.NextCursor = page.NextCursor
-		for _, edge := range page.Data {
-			source, err := t.locateRelationshipItem(ctx, subject, edge.SourceID)
-			if err != nil {
-				return out, err
-			}
-			target, err := t.locateRelationshipItem(ctx, subject, edge.TargetID)
-			if err != nil {
-				return out, err
-			}
-			out.Data = append(out.Data, WorkspaceRelationshipView{viewRelationship(edge), source, target})
-		}
-		return out, nil
 	})
 }

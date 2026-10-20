@@ -14,7 +14,7 @@ PaperGo runs at the root of one public host behind a TLS-terminating reverse pro
 | Groups | Local groups are administered in PaperGo. OIDC groups synchronize from provider claims; their direct memberships are managed by the provider. |
 | Roles and ACLs | Both group sources use the same persisted role assignments, nested-group expansion and content grants. |
 | First administrator | Exactly one of `ADMIN_SUBJECT` and `ADMIN_GROUP` is required in OIDC mode and applied once at initialization. |
-| WebDAV | OIDC deployments use provider bearer tokens or Basic app passwords. Proxy deployments use proxy-verified usernames. App-password requests preserve stored memberships. |
+| WebDAV | OIDC deployments use provider bearer tokens or personal access tokens with Basic or Bearer authentication. Proxy deployments use proxy-verified usernames. Access-token requests preserve stored memberships. |
 | Public links | `PUBLIC_URL` supplies the public scheme and host for absolute continuation links. Without it, links use the request origin. |
 | WebDAV destinations | COPY/MOVE accept the request host or the configured public host, within the same library. |
 | Trusted proxy identities | `AUTH_MODE=proxy` accepts a verified username only from configured peers carrying the shared proxy secret. Generic `Remote-User`, `Remote-Groups` and forwarded client-address headers are ignored. |
@@ -29,7 +29,7 @@ NPM validates Basic credentials and overwrites `X-Papergo-Subject` with `$remote
 
 NPM Access List usernames are the stable PaperGo subjects. NPM management accounts administer the proxy; they do not become application users. Groups, profiles and roles are managed in PaperGo. Removing access-list credentials blocks subsequent requests; disabling the PaperGo account also revokes active application access. Rename usernames by explicitly creating a different identity rather than transferring another user's permissions.
 
-In this mode REST, WebDAV and browser clients use their NPM Basic credentials over HTTPS. The frontend reads the public `/auth/config` capability endpoint and loads `/v1/identity/me` without requiring a stored bearer token. Protect the UI, `/auth/config`, frontend assets and API routes with the same NPM Access List. The UI hides personal-token creation and shows proxy WebDAV instructions. Sign-in state belongs to the proxy and browser; PaperGo has no proxy logout endpoint. PaperGo personal access-token and WebDAV app-password endpoints are unavailable (404), and OIDC settings and `ADMIN_GROUP` are rejected. The sample provisions a dedicated backend network, static trusted proxy address, shared secret, TLS, persistent volumes and health checks.
+In this mode REST, WebDAV and browser clients use their NPM Basic credentials over HTTPS. The frontend reads the public `/auth/config` capability endpoint and loads `/v1/identity/me` without requiring a stored bearer token. Protect the UI, `/auth/config`, frontend assets and API routes with the same NPM Access List. The UI hides personal-token creation and shows proxy WebDAV instructions. Sign-in state belongs to the proxy and browser; PaperGo has no proxy logout endpoint. PaperGo personal access-token endpoints are unavailable (404), and OIDC settings and `ADMIN_GROUP` are rejected. The sample provisions a dedicated backend network, static trusted proxy address, shared secret, TLS, persistent volumes and health checks.
 
 ## Public origin
 
@@ -199,7 +199,7 @@ For any IdP: decode a real access token (`jwt.io`-style, locally) and check `iss
 
 ## WebDAV through a proxy
 
-- Clients use **access tokens** (`POST /v1/identity/me/tokens` with `webdav.access` scope) with Basic or Bearer auth. The proxy must pass `Authorization` (rule 1). In OIDC mode, people create them with their bearer token. In proxy mode, clients use NPM Access List credentials instead.
+- Clients use **access tokens** (`POST /v1/identity/me/tokens` with `list.read` and `document.read`, plus `list.write` and `document.write` for writes; `expires_in_days` sets the lifetime) with Basic or Bearer auth. The proxy must pass `Authorization` (rule 1). In OIDC mode, people create them with their bearer token. In proxy mode, clients use NPM Access List credentials instead.
 - Windows' WebClient sends Basic credentials only over HTTPS (default `BasicAuthLevel=1`), which the proxy provides, and limits downloads to 50 MB by default (`FileSizeLimitInBytes`).
 - Group sync does not run on access-token requests: they carry no OIDC token. Their memberships are whatever the user's last token set.
 

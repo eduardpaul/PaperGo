@@ -6,3 +6,5 @@ Warning: KiotaBuilder OpenAPI warning: #/components/schemas/DeltaPage/properties
 Warning: KiotaBuilder OpenAPI warning: #/components/schemas/AuditPage/properties/@odata.nextLink - The format uri is not supported by Kiota and the string type will be used.
 Warning: KiotaBuilder OpenAPI warning: #/components/schemas/CreateListIntegration/properties/configuration/properties/url - The format uri is not supported by Kiota and the string type will be used.
 Warning: KiotaBuilder OpenAPI warning: #/components/schemas/UpdateListIntegration/properties/configuration/properties/url - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/WorkspaceRelationshipTypePage/properties/@odata.nextLink - The format uri is not supported by Kiota and the string type will be used.
+Warning: KiotaBuilder OpenAPI warning: #/components/schemas/RelationshipEndpointPage/properties/@odata.nextLink - The format uri is not supported by Kiota and the string type will be used.

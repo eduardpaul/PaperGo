@@ -26,6 +26,15 @@ func (d Dialect) Elements(array, alias string) string {
 	return `json_each(` + array + `) ` + alias
 }
 
+// ObjectValues is a table expression of the text values of a JSON object,
+// named alias with a column value.
+func (d Dialect) ObjectValues(object, alias string) string {
+	if d.Postgres {
+		return `jsonb_each_text(` + object + `) AS ` + alias
+	}
+	return `json_each(` + object + `) ` + alias
+}
+
 // OrderedJoin joins a table in the order written: SQLite's CROSS JOIN keeps
 // its planner from reordering the tables, PostgreSQL plans an inner join.
 func (d Dialect) OrderedJoin() string {
@@ -70,7 +79,9 @@ func (d Dialect) HasPrefix(text, prefix string) string {
 // Fold lowers text for every script, as Go's strings.ToLower does.
 func (d Dialect) Fold(text string) string {
 	if d.Postgres {
-		return `lower(` + text + `)`
+		// pg_c_utf8 lowers every script whatever the database locale, and
+		// orders by code point, as the C sort columns and SQLite do.
+		return `lower(` + text + ` COLLATE "pg_c_utf8")`
 	}
 	return `unicode_lower(` + text + `)`
 }

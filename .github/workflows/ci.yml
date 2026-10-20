@@ -197,7 +197,8 @@ jobs:
         # This upstream revision supports Go 1.27.2's export format.
         run: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45
       - name: Analyze code and tests
-        run: staticcheck ./...
+        # Generated Bob models assign hook contexts they do not use.
+        run: staticcheck $(go list ./... | grep -v -E '/internal/dal/driver/[^/]+/models$')
   docker-smoke:
     needs: models
     name: Docker build and startup

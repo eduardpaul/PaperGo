@@ -5,6 +5,7 @@ package refs
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -67,3 +68,7 @@ const (
 )
 
 func (s Surface) Valid() bool { return s == SurfaceHead || s == SurfacePublished }
+
+// FoldName is the case-insensitive form of a name: item surfaces store it as
+// folded_name, and name searches fold their text the same way.
+func FoldName(name string) string { return strings.ToLower(name) }

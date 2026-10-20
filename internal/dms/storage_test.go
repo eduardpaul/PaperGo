@@ -29,10 +29,13 @@ func TestStorageStatusReconcilesAndSeparatesContent(t *testing.T) {
 		daltest.Insert(t, s.DAL, "blobs", daltest.Row{"id": uuid.NewString(), "created_at": time.Now().UTC(), "version": i + 1, "object_key": uuid.NewString(), "filename": "scan.pdf", "content_type": "application/pdf", "size": size, "sha256": sha, "item_id": item.ID, "availability": "available"})
 	}
 	past := time.Now().UTC().Add(-8 * 24 * time.Hour)
-	change := func(entity string, at time.Time) {
-		daltest.Insert(t, s.DAL, "live_changes", daltest.Row{"created_at": at, "kind": "item", "entity_id": entity, "action": "updated"})
+	change := func(at time.Time) {
+		if err := s.DAL.Resources().Touch(ctx, item.ID, 0, "alice"); err != nil {
+			t.Fatal(err)
+		}
+		daltest.Update(t, s.DAL, "live_changes", daltest.Row{"created_at": at}, daltest.Row{"entity_id": item.ID})
 	}
-	change("item-1", past)
+	change(past)
 	daltest.Insert(t, s.DAL, "cached_results", daltest.Row{"id": uuid.NewString(), "namespace": "answers", "scope": "scope", "key": "key", "payload": `{}`, "created_at": past, "used_at": past, "expires_at": past.Add(time.Hour)})
 	before, err := s.StorageStatus(ctx, "alice")
 	if err != nil {
@@ -85,7 +88,7 @@ func TestStorageStatusReconcilesAndSeparatesContent(t *testing.T) {
 	if n, err := s.DAL.WithTx(reader).Resources().Count(ctx, resources.Filter{}); err != nil || n < 1 {
 		t.Fatal(n, err)
 	}
-	change("item-2", time.Now().UTC())
+	change(time.Now().UTC())
 	stalled, err := s.StorageStatus(ctx, "alice")
 	if err != nil || !stalled.Incomplete || stalled.JournalBytes == 0 {
 		t.Fatalf("%+v %v", stalled.Checkpoint, err)
@@ -93,7 +96,7 @@ func TestStorageStatusReconcilesAndSeparatesContent(t *testing.T) {
 	if err = reader.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	change("item-3", time.Now().UTC())
+	change(time.Now().UTC())
 	settled, err := s.StorageStatus(ctx, "alice")
 	if err != nil || settled.Incomplete {
 		t.Fatalf("%+v %v", settled.Checkpoint, err)

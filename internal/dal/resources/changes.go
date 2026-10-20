@@ -693,14 +693,23 @@ func (r *Repo) SetPublished(ctx context.Context, id, revisionID string, explicit
 			}
 			set.Version = row.Version + 1
 		}
-		return update(ctx, q, id, 0, set)
+		if err := update(ctx, q, id, 0, set); err != nil {
+			return err
+		}
+		if explicit {
+			return live.Notify(ctx, q, live.KindItem, id, live.ActionUpdated)
+		}
+		return nil
 	})
 }
 
 // Unpublish withdraws the published revision of the item at version.
 func (r *Repo) Unpublish(ctx context.Context, id string, version int) error {
 	return r.write(ctx, func(q Queries) error {
-		return update(ctx, q, id, version, Set{PublishedRevisionID: ptr(""), Version: version + 1})
+		if err := update(ctx, q, id, version, Set{PublishedRevisionID: ptr(""), Version: version + 1}); err != nil {
+			return err
+		}
+		return live.Notify(ctx, q, live.KindItem, id, live.ActionUpdated)
 	})
 }
 
@@ -720,7 +729,13 @@ func (r *Repo) Touch(ctx context.Context, id string, version int, actor string) 
 		if actor != "" {
 			set.UpdatedBy = &actor
 		}
-		return update(ctx, q, id, row.Version, set)
+		if err := update(ctx, q, id, row.Version, set); err != nil {
+			return err
+		}
+		if row.Content() {
+			return live.Notify(ctx, q, live.KindItem, id, live.ActionUpdated)
+		}
+		return nil
 	})
 }
 

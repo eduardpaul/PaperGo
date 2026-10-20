@@ -225,6 +225,9 @@ func (a *API) registerFoundation(m *http.ServeMux) {
 		return a.DMS.Relationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"))
 	}))
 	m.HandleFunc("GET /v1/workspaces/{id}/relationships", a.workspaceRelationships)
+	m.HandleFunc("GET /v1/workspaces/{id}/relationships/types", a.workspaceRelationshipTypes)
+	m.HandleFunc("GET /v1/workspaces/{id}/relationships/items", a.workspaceRelationshipItems)
+	m.HandleFunc("GET /v1/workspaces/{id}/relationships/neighborhood", a.workspaceRelationshipNeighborhood)
 	m.HandleFunc("PATCH /v1/items/{id}/relationships/{linkID}", foundationMutation(a, 200, true, func(r *http.Request, in dms.UpdateRelationship, v int) (any, error) {
 		return a.DMS.UpdateRelationship(r.Context(), subject(r), r.PathValue("id"), r.PathValue("linkID"), v, in)
 	}))

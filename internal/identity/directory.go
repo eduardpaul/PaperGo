@@ -173,13 +173,13 @@ func (d Directory) Initialize(ctx context.Context, administrator, adminGroup str
 			if err := ensureUser(ctx, d.store(tx), administrator); err != nil {
 				return err
 			}
-			return repo.SetAssignment(ctx, AdministratorRole, Principal{directory.PrincipalUser, administrator}, false)
+			return repo.SetAssignment(ctx, AdministratorRole, Principal{Type: directory.PrincipalUser, ID: administrator}, false)
 		}
 		g, err := repo.CreateGroup(ctx, "", adminGroup, "", directory.SourceOIDC)
 		if err != nil {
 			return err
 		}
-		return repo.SetAssignment(ctx, AdministratorRole, Principal{directory.PrincipalGroup, g.ID}, false)
+		return repo.SetAssignment(ctx, AdministratorRole, Principal{Type: directory.PrincipalGroup, ID: g.ID}, false)
 	})
 }
 
@@ -404,7 +404,7 @@ func ensureUser(ctx context.Context, store *dal.Store, subject string) error {
 	if _, err := repo.CreateUser(ctx, subject, "", "", true, false); err != nil {
 		return err
 	}
-	return repo.SetAssignment(ctx, MemberRole, Principal{directory.PrincipalUser, subject}, false)
+	return repo.SetAssignment(ctx, MemberRole, Principal{Type: directory.PrincipalUser, ID: subject}, false)
 }
 func (d Directory) CreateUser(ctx context.Context, actor string, in UserInput) (UserProfile, error) {
 	var out UserProfile

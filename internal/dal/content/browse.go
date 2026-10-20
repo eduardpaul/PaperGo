@@ -145,7 +145,7 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 		p, _ := json.Marshal(nonNil(b.Search.Published))
 		head, published = string(h), string(p)
 		candidates = append(candidates, candidate{
-			"SELECT value FROM " + r.d.Elements(r.d.JSONArg(), "h") + " UNION ALL SELECT value FROM " + r.d.Elements(r.d.JSONArg(), "p") + " UNION ALL SELECT id FROM resources WHERE kind IN ('workspace','list','library') AND " + r.d.Contains("lower(name)", "?"),
+			"SELECT value FROM " + r.d.Elements(r.d.JSONArg(), "h") + " UNION ALL SELECT value FROM " + r.d.Elements(r.d.JSONArg(), "p") + " UNION ALL SELECT id FROM resources WHERE kind IN ('workspace','list','library') AND " + r.d.Contains(r.d.Fold("name"), "?"),
 			[]any{head, published, b.Search.Name},
 		})
 	}
@@ -175,7 +175,7 @@ func (r *Repo) BrowseIDs(ctx context.Context, b Browse) ([]string, error) {
 	if b.Search != nil {
 		selected, selectedArgs := r.acl.Surface("r.id", b.Reader, b.Surface)
 		// An entry matches on the surface the reader reads.
-		cond := "(r.kind NOT IN ('item','folder') AND " + r.d.Contains("lower(r.name)", "?") + " OR r.kind IN ('item','folder') AND r.id IN (SELECT value FROM " + r.d.Elements("CASE "+selected+" WHEN 'head' THEN "+r.d.JSONArg()+" ELSE "+r.d.JSONArg()+" END", "matched") + "))"
+		cond := "(r.kind NOT IN ('item','folder') AND " + r.d.Contains(r.d.Fold("r.name"), "?") + " OR r.kind IN ('item','folder') AND r.id IN (SELECT value FROM " + r.d.Elements("CASE "+selected+" WHEN 'head' THEN "+r.d.JSONArg()+" ELSE "+r.d.JSONArg()+" END", "matched") + "))"
 		a := append([]any{b.Search.Name}, selectedArgs...)
 		add(cond, append(a, head, published)...)
 	}

@@ -161,8 +161,6 @@ Every `/v1` request requires authentication: HTTP Basic or a session cookie in l
 | GET / PATCH | `/v1/organization` | Organization identity and profile; edits require organization.manage and ETag |
 | POST / GET | `/v1/identity/me/tokens` | Issue/list scoped expiring personal access tokens |
 | DELETE | `/v1/identity/me/tokens/{id}` | Revoke a personal access token |
-| POST / GET | `/v1/webdav-credentials` | Issue / list the caller's WebDAV app passwords |
-| DELETE | `/v1/webdav-credentials/{id}` | Revoke one of the caller's WebDAV app passwords |
 | WebDAV | `/webdav/{libraryID}/...` | A WebDAV-enabled library as a network drive; see [WebDAV](#webdav) |
 | GET | `/health/live`, `/health/ready` | Process liveness / database and migration readiness |
 | GET | `/v1/storage/status` | Main-file allocation, passive journal checkpoint, search and distinct blob bytes; requires organization.manage |
@@ -233,7 +231,7 @@ Move a folder or item with PATCH `{"parent_id":"<folder or collection id>"}`: th
 
 A library created with `"webdav_enabled": true`, or updated to it by a manager, is also served at `https://<host>/webdav/<libraryID>/` (RFC 4918 class 1 and 2). Its folders are collections and its items are files whose bytes are the caller's visible revision: head for draft readers, published for ordinary readers. Every request runs through the same service as the REST API, so permissions, publishing, validation, revisions and audit events are identical. Libraries without the flag and paths the caller cannot read return 404.
 
-In proxy mode, WebDAV clients use their NPM Access List username and password over HTTPS. In OIDC/development deployments, WebDAV accepts provider bearer tokens or HTTP Basic app passwords. Windows Explorer and macOS Finder only use Basic, so users in these deployments issue an app password with `POST /v1/webdav-credentials` and `{"label":"Laptop"}` (optionally `expires_at`). The response shows `password` once; sign in with any user name and that password. Only its SHA-256 is stored, each principal can hold 20, and `DELETE /v1/webdav-credentials/{id}` revokes one.
+In proxy mode, WebDAV clients use their NPM Access List username and password over HTTPS. In local, OIDC and development deployments, users create a personal access token in **Settings → WebDAV** or with `POST /v1/identity/me/tokens` and `{"name":"Laptop","scopes":["list.read","list.write","document.read","document.write"],"expires_in_days":90}`. Request only scopes your account holds; read-only access needs `list.read` and `document.read`. Windows Explorer and macOS Finder use the token secret as their Basic password with the account subject as username. WebDAV also accepts the token as a Bearer credential, or an OIDC provider bearer token. The response shows `secret` once; only its SHA-256 is stored. Each user can hold 100 active personal tokens, and `DELETE /v1/identity/me/tokens/{id}` revokes one.
 
 To connect from Windows, choose **Map network drive** in Explorer and enter `https://<host>/webdav/<libraryID>/`, or run `net use Z: https://<host>/webdav/<libraryID>/ /user:me <password>`. Windows sends Basic credentials only over HTTPS unless `BasicAuthLevel` is set to `2` under `HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`, which local HTTP development needs (restart the WebClient service afterwards). The Windows client also rejects files above its `FileSizeLimitInBytes` (50 MB by default); the server limit is `MAX_UPLOAD_BYTES`.
 

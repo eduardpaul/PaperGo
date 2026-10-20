@@ -4,32 +4,68 @@
 // @ts-ignore
 import { createProblemFromDiscriminatorValue, createWorkspaceRelationshipPageFromDiscriminatorValue, type Problem, type WorkspaceRelationshipPage } from '../../../../models/index.js';
 // @ts-ignore
-import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
+import { ItemsRequestBuilderRequestsMetadata, type ItemsRequestBuilder } from './items/index.js';
+// @ts-ignore
+import { NeighborhoodRequestBuilderRequestsMetadata, type NeighborhoodRequestBuilder } from './neighborhood/index.js';
+// @ts-ignore
+import { type TypesRequestBuilder, TypesRequestBuilderRequestsMetadata } from './types/index.js';
+// @ts-ignore
+import { type BaseRequestBuilder, type Guid, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
 
+export type GetDirectionQueryParameterType = (typeof GetDirectionQueryParameterTypeObject)[keyof typeof GetDirectionQueryParameterTypeObject];
+export type GetScopeQueryParameterType = (typeof GetScopeQueryParameterTypeObject)[keyof typeof GetScopeQueryParameterTypeObject];
 /**
  * Builds and executes requests for operations under /v1/workspaces/{id}/relationships
  */
 export interface RelationshipsRequestBuilder extends BaseRequestBuilder<RelationshipsRequestBuilder> {
     /**
-     * Both endpoints must be readable and visible. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+     * The items property
+     */
+    get items(): ItemsRequestBuilder;
+    /**
+     * The neighborhood property
+     */
+    get neighborhood(): NeighborhoodRequestBuilder;
+    /**
+     * The types property
+     */
+    get types(): TypesRequestBuilder;
+    /**
+     * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<WorkspaceRelationshipPage>}
      * @throws {Problem} error when the service returns a 4XX or 5XX status code
      */
      get(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined) : Promise<WorkspaceRelationshipPage | undefined>;
     /**
-     * Both endpoints must be readable and visible. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+     * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
      toGetRequestInformation(requestConfiguration?: RequestConfiguration<RelationshipsRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
 }
 /**
- * Both endpoints must be readable and visible. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
+ * Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.
  */
 export interface RelationshipsRequestBuilderGetQueryParameters {
+    /**
+     * Require an endpoint in this list or library of the starting workspace.
+     */
+    collectionId?: Guid;
     directed?: boolean;
+    /**
+     * Incoming and outgoing select directed edges relative to item_id; symmetric selects undirected edges.
+     */
+    direction?: GetDirectionQueryParameterType;
     filter?: string;
+    /**
+     * Focus on an incident item, including an external endpoint. Results still touch the workspace in the path. Incoming/outgoing direction requires this parameter.
+     */
+    itemId?: Guid;
+    /**
+     * All connections, both endpoints in this workspace, or an endpoint outside it.
+     */
+    scope?: GetScopeQueryParameterType;
     /**
      * Opaque continuation token supplied by @odata.nextLink.
      */
@@ -42,11 +78,26 @@ export interface RelationshipsRequestBuilderGetQueryParameters {
      * Relationship term ID or label, including synonyms and localized labels.
      */
     type?: string;
+    /**
+     * Select untyped links only. Cannot be combined with type.
+     */
+    untyped?: boolean;
 }
 /**
  * Uri template for the request builder.
  */
-export const RelationshipsRequestBuilderUriTemplate = "{+baseurl}/v1/workspaces/{id}/relationships{?%24filter*,%24skiptoken*,%24top*,directed*,type*}";
+export const RelationshipsRequestBuilderUriTemplate = "{+baseurl}/v1/workspaces/{id}/relationships{?%24filter*,%24skiptoken*,%24top*,collection_id*,directed*,direction*,item_id*,scope*,type*,untyped*}";
+export const GetDirectionQueryParameterTypeObject = {
+    Both: "both",
+    Incoming: "incoming",
+    Outgoing: "outgoing",
+    Symmetric: "symmetric",
+} as const;
+export const GetScopeQueryParameterTypeObject = {
+    All: "all",
+    Internal: "internal",
+    External: "external",
+} as const;
 /**
  * Mapper for query parameters from symbol name to serialization name represented as a constant.
  */
@@ -54,6 +105,22 @@ const RelationshipsRequestBuilderGetQueryParametersMapper: Record<string, string
     "filter": "%24filter",
     "skiptoken": "%24skiptoken",
     "top": "%24top",
+    "collectionId": "collection_id",
+    "itemId": "item_id",
+};
+/**
+ * Metadata for all the navigation properties in the request builder.
+ */
+export const RelationshipsRequestBuilderNavigationMetadata: Record<Exclude<keyof RelationshipsRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+    items: {
+        requestsMetadata: ItemsRequestBuilderRequestsMetadata,
+    },
+    neighborhood: {
+        requestsMetadata: NeighborhoodRequestBuilderRequestsMetadata,
+    },
+    types: {
+        requestsMetadata: TypesRequestBuilderRequestsMetadata,
+    },
 };
 /**
  * Metadata for all the requests in the request builder.

@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '@/api/http';
 import { authenticationMode } from '@/api/auth';
-import { meQuery, tokens } from '@/api/queries';
+import { meQuery, scopes, tokens } from '@/api/queries';
 import type { CreatedAccessToken } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,23 +36,28 @@ function BearerWebDAV() {
   const format = useFormat();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ['tokens'], queryFn: tokens });
+  const mine = useQuery({ queryKey: ['my-scopes'], queryFn: scopes });
   const [label, setLabel] = useState('');
-  const [expires, setExpires] = useState('');
+  const [days, setDays] = useState('90');
   const [created, setCreated] = useState<CreatedAccessToken | null>(null);
+  const tokenScopes = ['list.read', 'list.write', 'document.read', 'document.write'].filter(scope => mine.data?.includes(scope));
+  const canRead = tokenScopes.includes('list.read') && tokenScopes.includes('document.read');
+  const expires = Number(days);
+  const validExpiry = Number.isInteger(expires) && expires >= 1 && expires <= 3650;
   const issue = useMutation({
     mutationFn: () =>
       api<CreatedAccessToken>('/v1/identity/me/tokens', {
         method: 'POST',
         body: {
           name: label.trim(),
-          scopes: ['webdav.access'],
-          expires_at: expires ? new Date(expires).toISOString() : undefined,
+          scopes: tokenScopes,
+          expires_in_days: expires,
         },
       }).then((result) => result.data),
     onSuccess: async (credential) => {
       setCreated(credential);
       setLabel('');
-      setExpires('');
+      setDays('90');
       await queryClient.invalidateQueries({ queryKey: ['tokens'] });
     },
   });
@@ -66,7 +71,7 @@ function BearerWebDAV() {
         title="New WebDAV access token"
         description="Use this token as the password with your account subject to open a library in Explorer or Finder. It is shown once."
         actions={
-          <Button variant="primary" disabled={issue.isPending || !label.trim()} onClick={() => issue.mutate()}>
+          <Button variant="primary" disabled={issue.isPending || !label.trim() || !canRead || !validExpiry} onClick={() => issue.mutate()}>
             Create token
           </Button>
         }
@@ -74,14 +79,17 @@ function BearerWebDAV() {
         <SettingRow id="dav-label" label="Label">
           <Input id="dav-label" value={label} onChange={(event) => setLabel(event.target.value)} />
         </SettingRow>
-        <SettingRow id="dav-expires" label="Expires" hint="Optional.">
+        <SettingRow id="dav-expires" label="Expires in days" hint="1–3650 days.">
           <Input
             id="dav-expires"
-            type="datetime-local"
-            value={expires}
-            onChange={(event) => setExpires(event.target.value)}
+            type="number"
+            min={1}
+            max={3650}
+            value={days}
+            onChange={(event) => setDays(event.target.value)}
           />
         </SettingRow>
+        {mine.isSuccess && !canRead && <p className="text-sm text-muted">Library and document read access is required to create a WebDAV token.</p>}
         {created?.secret && <CopyField label="Password" value={created.secret} />}
       </SettingsSection>
       <SettingsSection title="Access tokens">

@@ -431,41 +431,6 @@ func (s *Store) Savepoint(ctx context.Context, name string, fn func() (undo bool
 	return dberr.Translate(err)
 }
 
-// lockWorkspaces serializes resource invariants within each affected workspace.
-// Lock in ID order so moves involving two workspaces cannot deadlock. SQLite's
-// transaction already owns the single writer lock.
-func (s *Store) lockWorkspaces(ctx context.Context, exec bob.Executor, resourceIDs ...string) error {
-	if s.dialect != DialectPostgres || len(resourceIDs) == 0 {
-		return nil
-	}
-	args := make([]any, len(resourceIDs))
-	placeholders := make([]string, len(resourceIDs))
-	for i, id := range resourceIDs {
-		args[i] = id
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-	}
-	return lockRows(ctx, exec, `SELECT id FROM resources WHERE id IN (
-		SELECT workspace_id FROM resources WHERE id IN (`+strings.Join(placeholders, ",")+`)
-	) ORDER BY id FOR UPDATE`, args...)
-}
-
-func lockRows(ctx context.Context, exec bob.Executor, query string, args ...any) error {
-	rows, err := exec.QueryContext(ctx, query, args...)
-	if err != nil {
-		return dberr.Translate(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		// Consume every row so all locks are acquired and driver errors observed.
-	}
-	return dberr.Translate(rows.Err())
-}
-
-// notify inserts a change notification inside the mutation running on exec.
-func (s *Store) notify(ctx context.Context, exec bob.Executor, kind live.Kind, entityID string, action live.Action) error {
-	return live.Notify(ctx, s.bind(exec), kind, entityID, action)
-}
-
 // SchemaHash identifies the authoritative schema for this store's engine.
 func (s *Store) SchemaHash() string {
 	schema := SQLiteSchema

@@ -51,8 +51,8 @@ type Queries interface {
 	InsertLiveChange(ctx context.Context, c Change) error
 	// LiveChanges returns at most limit changes after an ID, in ID order.
 	LiveChanges(ctx context.Context, after int64, limit int) ([]Change, error)
-	// LiveBounds returns the lowest stored ID and the highest ID ever
-	// assigned, or zero for each when there is none.
+	// LiveBounds returns the lowest stored ID and the highest committed ID,
+	// or zero for each when there is none.
 	LiveBounds(ctx context.Context) (earliest, latest int64, err error)
 	// CountLiveChanges counts changes created at or before through.
 	CountLiveChanges(ctx context.Context, through time.Time) (int64, error)
@@ -83,7 +83,7 @@ func (r *Repo) After(ctx context.Context, after int64) ([]Change, error) {
 	return r.q.LiveChanges(ctx, after, pageSize)
 }
 
-// Bounds returns the lowest stored ID and the highest ID ever assigned.
+// Bounds returns the lowest stored ID and the highest committed ID.
 func (r *Repo) Bounds(ctx context.Context) (earliest, latest int64, err error) {
 	return r.q.LiveBounds(ctx)
 }

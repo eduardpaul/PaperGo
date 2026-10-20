@@ -34,6 +34,7 @@ type ItemSurface struct {
 	Surface       string                      `db:"surface" `
 	RevisionID    string                      `db:"revision_id" `
 	Name          string                      `db:"name" `
+	FoldedName    string                      `db:"folded_name" `
 	Keywords      types.JSON[[]string]        `db:"keywords" `
 	Payload       types.JSON[json.RawMessage] `db:"payload" `
 	ItemCreatedAt time.Time                   `db:"item_created_at" `
@@ -80,7 +81,7 @@ type itemSurfaceRLoaded struct {
 
 func buildItemSurfaceColumns(tableName string) itemSurfaceColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "created_at", "item_id", "container_id", "workspace_id", "surface", "revision_id", "name", "keywords", "payload", "item_created_at", "item_created_by", "modified_at", "modified_by",
+		"id", "created_at", "item_id", "container_id", "workspace_id", "surface", "revision_id", "name", "folded_name", "keywords", "payload", "item_created_at", "item_created_by", "modified_at", "modified_by",
 	)
 
 	if tableName != "" {
@@ -98,6 +99,7 @@ func buildItemSurfaceColumns(tableName string) itemSurfaceColumns {
 		Surface:       buildItemSurfaceColumn(tableName, "surface"),
 		RevisionID:    buildItemSurfaceColumn(tableName, "revision_id"),
 		Name:          buildItemSurfaceColumn(tableName, "name"),
+		FoldedName:    buildItemSurfaceColumn(tableName, "folded_name"),
 		Keywords:      buildItemSurfaceColumn(tableName, "keywords"),
 		Payload:       buildItemSurfaceColumn(tableName, "payload"),
 		ItemCreatedAt: buildItemSurfaceColumn(tableName, "item_created_at"),
@@ -118,6 +120,7 @@ type itemSurfaceColumns struct {
 	Surface       itemSurfaceColumn
 	RevisionID    itemSurfaceColumn
 	Name          itemSurfaceColumn
+	FoldedName    itemSurfaceColumn
 	Keywords      itemSurfaceColumn
 	Payload       itemSurfaceColumn
 	ItemCreatedAt itemSurfaceColumn
@@ -177,6 +180,7 @@ type ItemSurfaceSetter struct {
 	Surface       omit.Val[string]                      `db:"surface" `
 	RevisionID    omit.Val[string]                      `db:"revision_id" `
 	Name          omit.Val[string]                      `db:"name" `
+	FoldedName    omit.Val[string]                      `db:"folded_name" `
 	Keywords      omit.Val[types.JSON[[]string]]        `db:"keywords" `
 	Payload       omit.Val[types.JSON[json.RawMessage]] `db:"payload" `
 	ItemCreatedAt omit.Val[time.Time]                   `db:"item_created_at" `
@@ -186,7 +190,7 @@ type ItemSurfaceSetter struct {
 }
 
 func (s ItemSurfaceSetter) SetColumns() []string {
-	vals := make([]string, 0, 14)
+	vals := make([]string, 0, 15)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -210,6 +214,9 @@ func (s ItemSurfaceSetter) SetColumns() []string {
 	}
 	if s.Name.IsValue() {
 		vals = append(vals, "name")
+	}
+	if s.FoldedName.IsValue() {
+		vals = append(vals, "folded_name")
 	}
 	if s.Keywords.IsValue() {
 		vals = append(vals, "keywords")
@@ -256,6 +263,9 @@ func (s ItemSurfaceSetter) Overwrite(t *ItemSurface) {
 	}
 	if s.Name.IsValue() {
 		t.Name = s.Name.MustGet()
+	}
+	if s.FoldedName.IsValue() {
+		t.FoldedName = s.FoldedName.MustGet()
 	}
 	if s.Keywords.IsValue() {
 		t.Keywords = s.Keywords.MustGet()
@@ -324,6 +334,11 @@ func (s *ItemSurfaceSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.Name.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.FoldedName.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.FoldedName.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.Keywords.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -361,7 +376,7 @@ func (s ItemSurfaceSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s ItemSurfaceSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 14)
+	exprs := make([]bob.Expression, 0, 15)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -419,6 +434,13 @@ func (s ItemSurfaceSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.FoldedName.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "folded_name")...),
+			psql.Arg(s.FoldedName),
+		}})
+	}
+
 	if s.Keywords.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "keywords")...),
@@ -471,7 +493,7 @@ func itemSurfaceScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 		idx int
 		dst func(o *ItemSurface) any
 	}
-	targets := make([]target, 0, 14)
+	targets := make([]target, 0, 15)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -490,6 +512,8 @@ func itemSurfaceScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc,
 			targets = append(targets, target{i, func(o *ItemSurface) any { return &o.RevisionID }})
 		case "name":
 			targets = append(targets, target{i, func(o *ItemSurface) any { return &o.Name }})
+		case "folded_name":
+			targets = append(targets, target{i, func(o *ItemSurface) any { return &o.FoldedName }})
 		case "keywords":
 			targets = append(targets, target{i, func(o *ItemSurface) any { return &o.Keywords }})
 		case "payload":
@@ -1261,6 +1285,7 @@ type itemSurfaceWhere[Q psql.Filterable] struct {
 	Surface       psql.WhereMod[Q, string]
 	RevisionID    psql.WhereMod[Q, string]
 	Name          psql.WhereMod[Q, string]
+	FoldedName    psql.WhereMod[Q, string]
 	Keywords      psql.WhereMod[Q, types.JSON[[]string]]
 	Payload       psql.WhereMod[Q, types.JSON[json.RawMessage]]
 	ItemCreatedAt psql.WhereMod[Q, time.Time]
@@ -1285,6 +1310,7 @@ func buildItemSurfaceWhere[Q psql.Filterable](cols itemSurfaceColumns) itemSurfa
 		Surface:       psql.Where[Q, string](cols.Surface.Expression),
 		RevisionID:    psql.Where[Q, string](cols.RevisionID.Expression),
 		Name:          psql.Where[Q, string](cols.Name.Expression),
+		FoldedName:    psql.Where[Q, string](cols.FoldedName.Expression),
 		Keywords:      psql.Where[Q, types.JSON[[]string]](cols.Keywords.Expression),
 		Payload:       psql.Where[Q, types.JSON[json.RawMessage]](cols.Payload.Expression),
 		ItemCreatedAt: psql.Where[Q, time.Time](cols.ItemCreatedAt.Expression),

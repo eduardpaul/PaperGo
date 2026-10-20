@@ -411,6 +411,7 @@ CREATE TABLE item_surfaces (
     surface TEXT NOT NULL CHECK (surface IN ('head', 'published')),
     revision_id TEXT NOT NULL REFERENCES item_revisions(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
+    folded_name TEXT NOT NULL,
     keywords TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(keywords) AND json_type(keywords) = 'array'),
     payload TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(payload) AND json_type(payload) = 'object'),
     item_created_at DATETIME NOT NULL,
@@ -421,6 +422,7 @@ CREATE TABLE item_surfaces (
 CREATE UNIQUE INDEX itemsurface_item_id_surface ON item_surfaces(item_id, surface);
 CREATE INDEX itemsurface_workspace_id_surface_item_id ON item_surfaces(workspace_id, surface, item_id);
 CREATE INDEX itemsurface_container_id_surface_item_id ON item_surfaces(container_id, surface, item_id);
+CREATE INDEX itemsurface_folded_name_item_id_surface ON item_surfaces(folded_name, item_id, surface);
 CREATE INDEX itemsurface_revision_id ON item_surfaces(revision_id);
 CREATE INDEX itemsurface_container_id_surface_modified_at_item_id ON item_surfaces(container_id, surface, modified_at, item_id);
 CREATE INDEX itemsurface_container_id_surface_modified_by_item_id ON item_surfaces(container_id, surface, modified_by, item_id);
@@ -525,6 +527,7 @@ CREATE TABLE relationships (
 CREATE INDEX relationship_source_id_id ON relationships(source_id, id);
 CREATE INDEX relationship_source_id_type_id_id ON relationships(source_id, type_id, id);
 CREATE INDEX relationship_target_id_id ON relationships(target_id, id);
+CREATE INDEX relationship_type_id_id ON relationships(type_id, id);
 CREATE INDEX relationship_target_id_type_id_id ON relationships(target_id, type_id, id);
 CREATE UNIQUE INDEX relationship_type_id_source_id_target_id_directed ON relationships(type_id, source_id, target_id, directed);
 CREATE UNIQUE INDEX relationship_source_id_target_id_directed ON relationships(source_id, target_id, directed) WHERE type_id IS NULL;
@@ -1025,8 +1028,15 @@ CREATE INDEX auditevent_created_at_id ON audit_events(created_at, id);
 CREATE INDEX auditevent_subject_created_at ON audit_events(subject, created_at);
 CREATE INDEX auditevent_entity_type_entity_id_created_at ON audit_events(entity_type, entity_id, created_at);
 
+-- A transactional counter orders notifications by commit and survives retention.
+CREATE TABLE live_change_position (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    position INTEGER NOT NULL CHECK (position >= 0)
+);
+INSERT INTO live_change_position (id, position) VALUES (1, 0);
+
 CREATE TABLE live_changes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id INTEGER PRIMARY KEY NOT NULL CHECK (id > 0),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     kind TEXT NOT NULL CHECK (kind IN ('item', 'operation', 'run', 'access')),
     entity_id TEXT NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 200),

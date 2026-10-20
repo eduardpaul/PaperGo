@@ -309,8 +309,8 @@ func termWhere(f taxonomy.TermFilter) bob.Expression {
 	}
 	if f.Search != "" {
 		where = append(where, psql.Raw(`(strpos("terms"."normalized_name", ?) > 0
- OR EXISTS(SELECT 1 FROM jsonb_array_elements_text("terms"."synonyms") v(value) WHERE strpos(lower(v.value), ?) > 0)
- OR EXISTS(SELECT 1 FROM jsonb_each_text("terms"."labels") l WHERE strpos(lower(l.value), ?) > 0))`, f.Search, f.Search, f.Search))
+ OR EXISTS(SELECT 1 FROM jsonb_array_elements_text("terms"."synonyms") v(value) WHERE strpos(lower(v.value COLLATE "pg_c_utf8"), ?) > 0)
+ OR EXISTS(SELECT 1 FROM jsonb_each_text("terms"."labels") l WHERE strpos(lower(l.value COLLATE "pg_c_utf8"), ?) > 0))`, f.Search, f.Search, f.Search))
 	}
 	if f.Match != "" {
 		either := []bob.Expression{}
@@ -318,10 +318,10 @@ func termWhere(f taxonomy.TermFilter) bob.Expression {
 			either = append(either, c.NormalizedName.EQ(psql.Arg(f.Match)))
 		}
 		if f.In&taxonomy.MatchLabels != 0 {
-			either = append(either, psql.Raw(`EXISTS(SELECT 1 FROM jsonb_each_text("terms"."labels") l WHERE lower(l.value) = ?)`, f.Match))
+			either = append(either, psql.Raw(`EXISTS(SELECT 1 FROM jsonb_each_text("terms"."labels") l WHERE lower(l.value COLLATE "pg_c_utf8") = ?)`, f.Match))
 		}
 		if f.In&taxonomy.MatchSynonyms != 0 {
-			either = append(either, psql.Raw(`EXISTS(SELECT 1 FROM jsonb_array_elements_text("terms"."synonyms") v(value) WHERE lower(v.value) = ?)`, f.Match))
+			either = append(either, psql.Raw(`EXISTS(SELECT 1 FROM jsonb_array_elements_text("terms"."synonyms") v(value) WHERE lower(v.value COLLATE "pg_c_utf8") = ?)`, f.Match))
 		}
 		where = append(where, psql.Or(either...))
 	}

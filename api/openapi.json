@@ -389,7 +389,7 @@
       ],
       "get": {
         "summary": "Query visible edges incident to a workspace",
-        "description": "Both endpoints must be readable and visible. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.",
+        "description": "Both endpoints must be readable on their selected content surface. Returns compact endpoint navigation summaries and resolved relationship labels; load full metadata through the per-item relationship read. All results touch the starting workspace even when item_id belongs elsewhere. Filter scalar attributes/key, id or directed using eq/ne and numeric gt/ge/lt/le, and/or/not and parentheses. Filters are limited to 4096 bytes, 32 nodes and depth 6. Example: attributes/amount gt 100. Required module scope: list.read.",
         "parameters": [
           {
             "name": "$skiptoken",
@@ -432,6 +432,62 @@
               "type": "string",
               "maxLength": 4096
             }
+          },
+          {
+            "name": "item_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Focus on an incident item, including an external endpoint. Results still touch the workspace in the path. Incoming/outgoing direction requires this parameter."
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Require an endpoint in this list or library of the starting workspace."
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "internal",
+                "external"
+              ],
+              "default": "all"
+            },
+            "description": "All connections, both endpoints in this workspace, or an endpoint outside it."
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "both",
+                "incoming",
+                "outgoing",
+                "symmetric"
+              ],
+              "default": "both"
+            },
+            "description": "Incoming and outgoing select directed edges relative to item_id; symmetric selects undirected edges."
+          },
+          {
+            "name": "untyped",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Select untyped links only. Cannot be combined with type."
           }
         ],
         "responses": {
@@ -18003,6 +18059,336 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{id}/relationships/types": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "workspaceRelationshipTypes",
+        "summary": "Discover relationship types used in a workspace",
+        "description": "Pages types having a readable, visible incident relationship in the anchored workspace. q matches names, localized labels and synonyms as literal case-insensitive substrings. Sorts by lower-case name and ID; no exact usage totals are calculated.",
+        "parameters": [
+          {
+            "name": "$skiptoken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Require an endpoint in this list or library of the starting workspace."
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "internal",
+                "external"
+              ],
+              "default": "all"
+            },
+            "description": "All connections, both endpoints in this workspace, or an endpoint outside it."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "description": "Search text, limited to 256 UTF-8 bytes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRelationshipTypePage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "list.read",
+          "taxonomy.read"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/relationships/items": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "workspaceRelationshipItems",
+        "summary": "Find workspace relationship endpoints",
+        "description": "Pages unique readable endpoints of qualifying anchored relationships, including external peers. q is a case-insensitive item-name prefix on the selected surface. item_id locates one qualifying endpoint. With neither a nonempty q nor item_id, returns an empty page. Sorts by lower-case name and ID.",
+        "parameters": [
+          {
+            "name": "$skiptoken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque continuation token supplied by @odata.nextLink."
+          },
+          {
+            "name": "$top",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Page size; values are clamped to 1\u2013500. Missing or invalid values use 50."
+          },
+          {
+            "name": "item_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Focus on an incident item, including an external endpoint. Results still touch the workspace in the path. Incoming/outgoing direction requires this parameter."
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Require an endpoint in this list or library of the starting workspace."
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "internal",
+                "external"
+              ],
+              "default": "all"
+            },
+            "description": "All connections, both endpoints in this workspace, or an endpoint outside it."
+          },
+          {
+            "name": "untyped",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Select untyped links only. Cannot be combined with type."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "description": "Search text, limited to 256 UTF-8 bytes."
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Relationship term ID or label, including synonyms and localized labels."
+          },
+          {
+            "name": "directed",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipEndpointPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ]
+      }
+    },
+    "/v1/workspaces/{id}/relationships/neighborhood": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "workspaceRelationshipNeighborhood",
+        "summary": "Read a bounded relationship neighborhood",
+        "description": "Requires item_id. Reads a bounded ID-ordered window of incident relationships, always touching the starting workspace. Returns at most 25 nodes and 50 edges, with a truncation flag when connections are omitted. Does not expand automatically beyond one hop.",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Focus on an incident item, including an external endpoint. Results still touch the workspace in the path. Incoming/outgoing direction requires this parameter.",
+            "required": true
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Require an endpoint in this list or library of the starting workspace."
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "internal",
+                "external"
+              ],
+              "default": "all"
+            },
+            "description": "All connections, both endpoints in this workspace, or an endpoint outside it."
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "both",
+                "incoming",
+                "outgoing",
+                "symmetric"
+              ],
+              "default": "both"
+            },
+            "description": "Incoming and outgoing select directed edges relative to item_id; symmetric selects undirected edges."
+          },
+          {
+            "name": "untyped",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Select untyped links only. Cannot be combined with type."
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Relationship term ID or label, including synonyms and localized labels."
+          },
+          {
+            "name": "directed",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "$filter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipNeighborhood"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-module-scopes": [
+          "list.read"
+        ]
+      }
     }
   },
   "components": {
@@ -18247,25 +18633,54 @@
         ]
       },
       "WorkspaceRelationshipView": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Relationship"
+        "type": "object",
+        "description": "A compact workspace relationship. Untyped links omit type_id and use the label Untyped. Full edge metadata and version are available through the per-item relationship read.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
           },
-          {
-            "type": "object",
-            "properties": {
-              "source_item": {
-                "$ref": "#/components/schemas/LocatedItem"
-              },
-              "target_item": {
-                "$ref": "#/components/schemas/LocatedItem"
-              }
-            },
-            "required": [
-              "source_item",
-              "target_item"
-            ]
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type_name": {
+            "type": "string"
+          },
+          "inverse_label": {
+            "type": "string"
+          },
+          "directed": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source_item": {
+            "$ref": "#/components/schemas/RelationshipEndpoint"
+          },
+          "target_item": {
+            "$ref": "#/components/schemas/RelationshipEndpoint"
           }
+        },
+        "required": [
+          "id",
+          "source_id",
+          "target_id",
+          "type_name",
+          "directed",
+          "created_at",
+          "source_item",
+          "target_item"
         ]
       },
       "RelationshipView": {
@@ -25972,6 +26387,136 @@
           "eligible",
           "code",
           "reason"
+        ]
+      },
+      "RelationshipEndpoint": {
+        "type": "object",
+        "description": "Compact navigation information from the endpoint surface visible to the reader.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workspace_name": {
+            "type": "string"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "workspace_id",
+          "workspace_name",
+          "collection_id",
+          "collection_name"
+        ]
+      },
+      "WorkspaceRelationshipType": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "directed": {
+            "type": "boolean"
+          },
+          "inverse_label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "directed"
+        ]
+      },
+      "WorkspaceRelationshipTypePage": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceRelationshipType"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
+        },
+        "required": [
+          "value",
+          "@odata.nextLink"
+        ]
+      },
+      "RelationshipEndpointPage": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationshipEndpoint"
+            }
+          },
+          "@odata.nextLink": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
+        },
+        "required": [
+          "value",
+          "@odata.nextLink"
+        ]
+      },
+      "RelationshipNeighborhood": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationshipEndpoint"
+            },
+            "maxItems": 25
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceRelationshipView"
+            },
+            "maxItems": 50
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "More qualifying connections exist than this neighborhood displays. Use the paginated list or refine filters."
+          }
+        },
+        "required": [
+          "nodes",
+          "edges",
+          "truncated"
         ]
       },
       "ReadText": {

@@ -1360,11 +1360,38 @@ export function createRelationship_metadataFromDiscriminatorValue(parseNode: Par
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {RelationshipEndpoint}
+ */
+// @ts-ignore
+export function createRelationshipEndpointFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoRelationshipEndpoint;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {RelationshipEndpointPage}
+ */
+// @ts-ignore
+export function createRelationshipEndpointPageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoRelationshipEndpointPage;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {Relationship}
  */
 // @ts-ignore
 export function createRelationshipFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoRelationship;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {RelationshipNeighborhood}
+ */
+// @ts-ignore
+export function createRelationshipNeighborhoodFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoRelationshipNeighborhood;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -2254,6 +2281,24 @@ export function createWorkspaceMemberFromDiscriminatorValue(parseNode: ParseNode
 // @ts-ignore
 export function createWorkspaceRelationshipPageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoWorkspaceRelationshipPage;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {WorkspaceRelationshipType}
+ */
+// @ts-ignore
+export function createWorkspaceRelationshipTypeFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoWorkspaceRelationshipType;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {WorkspaceRelationshipTypePage}
+ */
+// @ts-ignore
+export function createWorkspaceRelationshipTypePageFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoWorkspaceRelationshipTypePage;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -3601,6 +3646,47 @@ export function deserializeIntoRelationship_metadata(relationship_metadata: Part
 }
 /**
  * The deserialization information for the current model
+ * @param RelationshipEndpoint The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoRelationshipEndpoint(relationshipEndpoint: Partial<RelationshipEndpoint> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "collection_id": n => { relationshipEndpoint.collectionId = n.getGuidValue(); },
+        "collection_name": n => { relationshipEndpoint.collectionName = n.getStringValue(); },
+        "id": n => { relationshipEndpoint.id = n.getGuidValue(); },
+        "name": n => { relationshipEndpoint.name = n.getStringValue(); },
+        "workspace_id": n => { relationshipEndpoint.workspaceId = n.getGuidValue(); },
+        "workspace_name": n => { relationshipEndpoint.workspaceName = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param RelationshipEndpointPage The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoRelationshipEndpointPage(relationshipEndpointPage: Partial<RelationshipEndpointPage> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "@odata.nextLink": n => { relationshipEndpointPage.odataNextLink = n.getStringValue(); },
+        "value": n => { relationshipEndpointPage.value = n.getCollectionOfObjectValues<RelationshipEndpoint>(createRelationshipEndpointFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param RelationshipNeighborhood The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoRelationshipNeighborhood(relationshipNeighborhood: Partial<RelationshipNeighborhood> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "edges": n => { relationshipNeighborhood.edges = n.getCollectionOfObjectValues<WorkspaceRelationshipView>(createWorkspaceRelationshipViewFromDiscriminatorValue); },
+        "nodes": n => { relationshipNeighborhood.nodes = n.getCollectionOfObjectValues<RelationshipEndpoint>(createRelationshipEndpointFromDiscriminatorValue); },
+        "truncated": n => { relationshipNeighborhood.truncated = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param RelationshipType The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -4927,15 +5013,48 @@ export function deserializeIntoWorkspaceRelationshipPage(workspaceRelationshipPa
 }
 /**
  * The deserialization information for the current model
+ * @param WorkspaceRelationshipType The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoWorkspaceRelationshipType(workspaceRelationshipType: Partial<WorkspaceRelationshipType> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "directed": n => { workspaceRelationshipType.directed = n.getBooleanValue(); },
+        "id": n => { workspaceRelationshipType.id = n.getGuidValue(); },
+        "inverse_label": n => { workspaceRelationshipType.inverseLabel = n.getStringValue(); },
+        "name": n => { workspaceRelationshipType.name = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param WorkspaceRelationshipTypePage The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoWorkspaceRelationshipTypePage(workspaceRelationshipTypePage: Partial<WorkspaceRelationshipTypePage> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "@odata.nextLink": n => { workspaceRelationshipTypePage.odataNextLink = n.getStringValue(); },
+        "value": n => { workspaceRelationshipTypePage.value = n.getCollectionOfObjectValues<WorkspaceRelationshipType>(createWorkspaceRelationshipTypeFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param WorkspaceRelationshipView The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
 // @ts-ignore
 export function deserializeIntoWorkspaceRelationshipView(workspaceRelationshipView: Partial<WorkspaceRelationshipView> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        ...deserializeIntoRelationship(workspaceRelationshipView),
-        "source_item": n => { workspaceRelationshipView.sourceItem = n.getObjectValue<LocatedItem>(createLocatedItemFromDiscriminatorValue); },
-        "target_item": n => { workspaceRelationshipView.targetItem = n.getObjectValue<LocatedItem>(createLocatedItemFromDiscriminatorValue); },
+        "created_at": n => { workspaceRelationshipView.createdAt = n.getDateValue(); },
+        "directed": n => { workspaceRelationshipView.directed = n.getBooleanValue(); },
+        "id": n => { workspaceRelationshipView.id = n.getGuidValue(); },
+        "inverse_label": n => { workspaceRelationshipView.inverseLabel = n.getStringValue(); },
+        "source_id": n => { workspaceRelationshipView.sourceId = n.getGuidValue(); },
+        "source_item": n => { workspaceRelationshipView.sourceItem = n.getObjectValue<RelationshipEndpoint>(createRelationshipEndpointFromDiscriminatorValue); },
+        "target_id": n => { workspaceRelationshipView.targetId = n.getGuidValue(); },
+        "target_item": n => { workspaceRelationshipView.targetItem = n.getObjectValue<RelationshipEndpoint>(createRelationshipEndpointFromDiscriminatorValue); },
+        "type_id": n => { workspaceRelationshipView.typeId = n.getGuidValue(); },
+        "type_name": n => { workspaceRelationshipView.typeName = n.getStringValue(); },
     }
 }
 export interface DocumentMetadata extends Parsable {
@@ -6098,6 +6217,59 @@ export interface Relationship extends AdditionalDataHolder, Parsable {
     version?: number | null;
 }
 export interface Relationship_metadata extends AdditionalDataHolder, Parsable {
+}
+/**
+ * Compact navigation information from the endpoint surface visible to the reader.
+ */
+export interface RelationshipEndpoint extends AdditionalDataHolder, Parsable {
+    /**
+     * The collection_id property
+     */
+    collectionId?: Guid | null;
+    /**
+     * The collection_name property
+     */
+    collectionName?: string | null;
+    /**
+     * The id property
+     */
+    id?: Guid | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+    /**
+     * The workspace_id property
+     */
+    workspaceId?: Guid | null;
+    /**
+     * The workspace_name property
+     */
+    workspaceName?: string | null;
+}
+export interface RelationshipEndpointPage extends AdditionalDataHolder, Parsable {
+    /**
+     * The OdataNextLink property
+     */
+    odataNextLink?: string | null;
+    /**
+     * The value property
+     */
+    value?: RelationshipEndpoint[] | null;
+}
+export interface RelationshipNeighborhood extends AdditionalDataHolder, Parsable {
+    /**
+     * The edges property
+     */
+    edges?: WorkspaceRelationshipView[] | null;
+    /**
+     * The nodes property
+     */
+    nodes?: RelationshipEndpoint[] | null;
+    /**
+     * More qualifying connections exist than this neighborhood displays. Use the paginated list or refine filters.
+     */
+    truncated?: boolean | null;
 }
 /**
  * Graph policy whose ID is an organization taxonomy term ID. Vocabulary identity, names, labels and synonyms live in term. Existing policy semantics cannot be changed by ensure.
@@ -8040,6 +8212,50 @@ export function serializeRelationship_metadata(writer: SerializationWriter, rela
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param RelationshipEndpoint The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeRelationshipEndpoint(writer: SerializationWriter, relationshipEndpoint: Partial<RelationshipEndpoint> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!relationshipEndpoint || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("collection_id", relationshipEndpoint.collectionId);
+    writer.writeStringValue("collection_name", relationshipEndpoint.collectionName);
+    writer.writeGuidValue("id", relationshipEndpoint.id);
+    writer.writeStringValue("name", relationshipEndpoint.name);
+    writer.writeGuidValue("workspace_id", relationshipEndpoint.workspaceId);
+    writer.writeStringValue("workspace_name", relationshipEndpoint.workspaceName);
+    writer.writeAdditionalData(relationshipEndpoint.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param RelationshipEndpointPage The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeRelationshipEndpointPage(writer: SerializationWriter, relationshipEndpointPage: Partial<RelationshipEndpointPage> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!relationshipEndpointPage || isSerializingDerivedType) { return; }
+    writer.writeStringValue("@odata.nextLink", relationshipEndpointPage.odataNextLink);
+    writer.writeCollectionOfObjectValues<RelationshipEndpoint>("value", relationshipEndpointPage.value, serializeRelationshipEndpoint);
+    writer.writeAdditionalData(relationshipEndpointPage.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param RelationshipNeighborhood The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeRelationshipNeighborhood(writer: SerializationWriter, relationshipNeighborhood: Partial<RelationshipNeighborhood> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!relationshipNeighborhood || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<WorkspaceRelationshipView>("edges", relationshipNeighborhood.edges, serializeWorkspaceRelationshipView);
+    writer.writeCollectionOfObjectValues<RelationshipEndpoint>("nodes", relationshipNeighborhood.nodes, serializeRelationshipEndpoint);
+    writer.writeBooleanValue("truncated", relationshipNeighborhood.truncated);
+    writer.writeAdditionalData(relationshipNeighborhood.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param RelationshipType The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -9395,15 +9611,51 @@ export function serializeWorkspaceRelationshipPage(writer: SerializationWriter, 
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param WorkspaceRelationshipType The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeWorkspaceRelationshipType(writer: SerializationWriter, workspaceRelationshipType: Partial<WorkspaceRelationshipType> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!workspaceRelationshipType || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("directed", workspaceRelationshipType.directed);
+    writer.writeGuidValue("id", workspaceRelationshipType.id);
+    writer.writeStringValue("inverse_label", workspaceRelationshipType.inverseLabel);
+    writer.writeStringValue("name", workspaceRelationshipType.name);
+    writer.writeAdditionalData(workspaceRelationshipType.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param WorkspaceRelationshipTypePage The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeWorkspaceRelationshipTypePage(writer: SerializationWriter, workspaceRelationshipTypePage: Partial<WorkspaceRelationshipTypePage> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!workspaceRelationshipTypePage || isSerializingDerivedType) { return; }
+    writer.writeStringValue("@odata.nextLink", workspaceRelationshipTypePage.odataNextLink);
+    writer.writeCollectionOfObjectValues<WorkspaceRelationshipType>("value", workspaceRelationshipTypePage.value, serializeWorkspaceRelationshipType);
+    writer.writeAdditionalData(workspaceRelationshipTypePage.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param WorkspaceRelationshipView The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
 // @ts-ignore
 export function serializeWorkspaceRelationshipView(writer: SerializationWriter, workspaceRelationshipView: Partial<WorkspaceRelationshipView> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!workspaceRelationshipView || isSerializingDerivedType) { return; }
-    serializeRelationship(writer, workspaceRelationshipView, isSerializingDerivedType)
-    writer.writeObjectValue<LocatedItem>("source_item", workspaceRelationshipView.sourceItem, serializeLocatedItem);
-    writer.writeObjectValue<LocatedItem>("target_item", workspaceRelationshipView.targetItem, serializeLocatedItem);
+    writer.writeDateValue("created_at", workspaceRelationshipView.createdAt);
+    writer.writeBooleanValue("directed", workspaceRelationshipView.directed);
+    writer.writeGuidValue("id", workspaceRelationshipView.id);
+    writer.writeStringValue("inverse_label", workspaceRelationshipView.inverseLabel);
+    writer.writeGuidValue("source_id", workspaceRelationshipView.sourceId);
+    writer.writeObjectValue<RelationshipEndpoint>("source_item", workspaceRelationshipView.sourceItem, serializeRelationshipEndpoint);
+    writer.writeGuidValue("target_id", workspaceRelationshipView.targetId);
+    writer.writeObjectValue<RelationshipEndpoint>("target_item", workspaceRelationshipView.targetItem, serializeRelationshipEndpoint);
+    writer.writeGuidValue("type_id", workspaceRelationshipView.typeId);
+    writer.writeStringValue("type_name", workspaceRelationshipView.typeName);
+    writer.writeAdditionalData(workspaceRelationshipView.additionalData);
 }
 export interface SetWorkspaceMember extends Parsable {
     /**
@@ -10725,15 +10977,78 @@ export interface WorkspaceRelationshipPage extends AdditionalDataHolder, Parsabl
      */
     value?: WorkspaceRelationshipView[] | null;
 }
-export interface WorkspaceRelationshipView extends Parsable, Relationship {
+export interface WorkspaceRelationshipType extends AdditionalDataHolder, Parsable {
     /**
-     * The source_item property
+     * The directed property
      */
-    sourceItem?: LocatedItem | null;
+    directed?: boolean | null;
     /**
-     * The target_item property
+     * The id property
      */
-    targetItem?: LocatedItem | null;
+    id?: Guid | null;
+    /**
+     * The inverse_label property
+     */
+    inverseLabel?: string | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+}
+export interface WorkspaceRelationshipTypePage extends AdditionalDataHolder, Parsable {
+    /**
+     * The OdataNextLink property
+     */
+    odataNextLink?: string | null;
+    /**
+     * The value property
+     */
+    value?: WorkspaceRelationshipType[] | null;
+}
+/**
+ * A compact workspace relationship. Untyped links omit type_id and use the label Untyped. Full edge metadata and version are available through the per-item relationship read.
+ */
+export interface WorkspaceRelationshipView extends AdditionalDataHolder, Parsable {
+    /**
+     * The created_at property
+     */
+    createdAt?: Date | null;
+    /**
+     * The directed property
+     */
+    directed?: boolean | null;
+    /**
+     * The id property
+     */
+    id?: Guid | null;
+    /**
+     * The inverse_label property
+     */
+    inverseLabel?: string | null;
+    /**
+     * The source_id property
+     */
+    sourceId?: Guid | null;
+    /**
+     * Compact navigation information from the endpoint surface visible to the reader.
+     */
+    sourceItem?: RelationshipEndpoint | null;
+    /**
+     * The target_id property
+     */
+    targetId?: Guid | null;
+    /**
+     * Compact navigation information from the endpoint surface visible to the reader.
+     */
+    targetItem?: RelationshipEndpoint | null;
+    /**
+     * The type_id property
+     */
+    typeId?: Guid | null;
+    /**
+     * The type_name property
+     */
+    typeName?: string | null;
 }
 export const Blob_content_typeObject = {
     ApplicationPdf: "application/pdf",
